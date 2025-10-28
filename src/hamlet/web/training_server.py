@@ -174,8 +174,8 @@ class TrainingBroadcaster:
                 episode_reward += reward
                 step += 1
 
-                # Track agent position for heat map
-                agent_pos = (next_obs["position"]["x"], next_obs["position"]["y"])
+                # Track agent position for heat map (position is numpy array [x, y])
+                agent_pos = (int(next_obs["position"][0]), int(next_obs["position"][1]))
                 self.position_visits[agent_pos] = self.position_visits.get(agent_pos, 0) + 1
 
                 # Broadcast state if this is a broadcast episode
