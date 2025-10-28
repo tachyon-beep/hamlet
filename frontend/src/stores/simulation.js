@@ -15,6 +15,13 @@ export const useSimulationStore = defineStore('simulation', () => {
   const isConnecting = ref(false)
   const connectionError = ref(null)
 
+  // Server availability detection
+  const serverAvailability = ref({
+    inference: false,
+    training: false,
+    checked: false
+  })
+
   // Simulation state
   const currentEpisode = ref(0)
   const currentStep = ref(0)
@@ -57,6 +64,42 @@ export const useSimulationStore = defineStore('simulation', () => {
     const sum = episodeHistory.value.reduce((acc, ep) => acc + ep.steps, 0)
     return Math.round(sum / episodeHistory.value.length)
   })
+
+  // Check which servers are available
+  async function checkServerAvailability() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.hostname
+    const port = 8765
+
+    const checkEndpoint = (endpoint) => {
+      return new Promise((resolve) => {
+        const wsUrl = `${protocol}//${host}:${port}${endpoint}`
+        const testWs = new WebSocket(wsUrl)
+
+        const timeout = setTimeout(() => {
+          testWs.close()
+          resolve(false)
+        }, 2000) // 2 second timeout
+
+        testWs.onopen = () => {
+          clearTimeout(timeout)
+          testWs.close()
+          resolve(true)
+        }
+
+        testWs.onerror = () => {
+          clearTimeout(timeout)
+          resolve(false)
+        }
+      })
+    }
+
+    serverAvailability.value.inference = await checkEndpoint('/ws')
+    serverAvailability.value.training = await checkEndpoint('/ws/training')
+    serverAvailability.value.checked = true
+
+    console.log('Server availability:', serverAvailability.value)
+  }
 
   // WebSocket connection
   function connect(connectionMode = 'inference') {
@@ -350,6 +393,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     isConnected,
     isConnecting,
     connectionError,
+    serverAvailability,
     mode,
     currentEpisode,
     currentStep,
@@ -371,6 +415,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     trainingMetrics,
 
     // Actions
+    checkServerAvailability,
     connect,
     disconnect,
     play,

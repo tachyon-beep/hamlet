@@ -10,20 +10,22 @@
         <button
           @click="selectedMode = 'inference'"
           :class="['mode-button', { active: selectedMode === 'inference' }]"
-          :disabled="props.isConnected"
+          :disabled="props.isConnected || (!props.serverAvailability.inference && props.serverAvailability.checked)"
           role="radio"
           :aria-checked="selectedMode === 'inference'"
           aria-label="Inference mode"
+          :title="!props.serverAvailability.inference && props.serverAvailability.checked ? 'Inference server not running (start with: uv run python demo_visualization.py)' : 'Run trained agent inference'"
         >
           Inference
         </button>
         <button
           @click="selectedMode = 'training'"
           :class="['mode-button', { active: selectedMode === 'training' }]"
-          :disabled="props.isConnected"
+          :disabled="props.isConnected || (!props.serverAvailability.training && props.serverAvailability.checked)"
           role="radio"
           :aria-checked="selectedMode === 'training'"
           aria-label="Training mode"
+          :title="!props.serverAvailability.training && props.serverAvailability.checked ? 'Training server not running (requires separate training server)' : 'Live training visualization'"
         >
           Training
         </button>
@@ -322,6 +324,14 @@ const props = defineProps({
       avgLoss5: 0,
       epsilon: 1.0,
       bufferSize: 0
+    })
+  },
+  serverAvailability: {
+    type: Object,
+    default: () => ({
+      inference: false,
+      training: false,
+      checked: false
     })
   }
 })

@@ -64,6 +64,7 @@
           :current-episode="store.currentEpisode"
           :total-episodes="store.totalEpisodes"
           :training-metrics="store.trainingMetrics"
+          :server-availability="store.serverAvailability"
           @connect="handleConnect"
           @disconnect="store.disconnect"
           @play="store.play"
@@ -80,7 +81,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useSimulationStore } from './stores/simulation'
 import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
@@ -94,7 +95,10 @@ const isConnected = computed(() => store.isConnected)
 const isConnecting = computed(() => store.isConnecting)
 const connectionError = computed(() => store.connectionError)
 
-// User will connect manually via Controls panel
+// Check which servers are available on mount
+onMounted(() => {
+  store.checkServerAvailability()
+})
 
 // ✅ Retry connection on error
 function retryConnection() {
