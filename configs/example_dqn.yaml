@@ -1,0 +1,72 @@
+# Example DQN Training Configuration for Hamlet
+# BASELINE: Standard Q-Network with shaped rewards
+# Use this as comparison baseline for advanced architectures
+
+experiment:
+  name: hamlet_dqn_baseline
+  description: "Baseline DQN with standard Q-Network and shaped rewards"
+  tracking_uri: "mlruns"  # Local MLflow tracking
+
+environment:
+  grid_width: 8
+  grid_height: 8
+
+  # Initial meter values
+  initial_energy: 100.0
+  initial_hygiene: 100.0
+  initial_satiation: 100.0
+  initial_money: 50.0
+
+  # Depletion rates
+  energy_depletion: 0.5
+  hygiene_depletion: 0.3
+  satiation_depletion: 0.4
+
+  # Affordance positions (x, y)
+  affordance_positions:
+    Bed: [1, 1]
+    Shower: [6, 1]
+    Fridge: [1, 6]
+    Job: [6, 6]
+
+agents:
+  - agent_id: agent_0
+    algorithm: dqn
+    state_dim: 70
+    action_dim: 5
+    learning_rate: 0.00025  # Atari DQN standard (reduced from 0.001)
+    gamma: 0.99
+    epsilon: 1.0
+    epsilon_min: 0.01
+    epsilon_decay: 0.995
+    device: auto  # auto, cpu, or cuda
+    network_type: qnetwork  # Standard Q-Network (baseline)
+    grid_size: 8
+
+training:
+  num_episodes: 1000
+  max_steps_per_episode: 500
+  batch_size: 64
+  learning_starts: 1000  # Steps before learning begins
+  target_update_frequency: 100  # Episodes between target network updates
+  replay_buffer_size: 10000
+
+  # Checkpointing
+  save_frequency: 100  # Episodes between checkpoints
+  checkpoint_dir: "checkpoints/"
+
+  # Logging
+  log_frequency: 10  # Episodes between logging
+
+  # Environment rendering
+  render_mode: null  # null, "human", or "rgb_array"
+
+metrics:
+  tensorboard: true
+  tensorboard_dir: "runs"
+  database: true
+  database_path: "metrics.db"
+  replay_storage: true
+  replay_dir: "replays"
+  replay_sample_rate: 0.1  # Fraction of episodes to save (10%)
+  live_broadcast: false  # Enable WebSocket broadcasting

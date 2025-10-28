@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hamlet - DRL Demonstrator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Hamlet</h1>
+            <p>Deep Reinforcement Learning Survival Simulator</p>
+        </header>
+
+        <div class="main-content">
+            <div class="grid-container">
+                <h2>Environment</h2>
+                <div id="grid" class="grid">
+                    <!-- Grid will be rendered here by JavaScript -->
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h2>Agent Status</h2>
+                <div id="meters" class="meters">
+                    <div class="meter">
+                        <span class="meter-label">Energy:</span>
+                        <div class="meter-bar">
+                            <div id="energy-bar" class="meter-fill" style="width: 100%"></div>
+                        </div>
+                        <span id="energy-value" class="meter-value">100</span>
+                    </div>
+                    <div class="meter">
+                        <span class="meter-label">Hygiene:</span>
+                        <div class="meter-bar">
+                            <div id="hygiene-bar" class="meter-fill" style="width: 100%"></div>
+                        </div>
+                        <span id="hygiene-value" class="meter-value">100</span>
+                    </div>
+                    <div class="meter">
+                        <span class="meter-label">Satiation:</span>
+                        <div class="meter-bar">
+                            <div id="satiation-bar" class="meter-fill" style="width: 100%"></div>
+                        </div>
+                        <span id="satiation-value" class="meter-value">100</span>
+                    </div>
+                    <div class="meter">
+                        <span class="meter-label">Money:</span>
+                        <div class="meter-bar">
+                            <div id="money-bar" class="meter-fill" style="width: 50%"></div>
+                        </div>
+                        <span id="money-value" class="meter-value">50</span>
+                    </div>
+                </div>
+
+                <h2>Episode Info</h2>
+                <div id="episode-info" class="episode-info">
+                    <div><strong>Episode:</strong> <span id="episode-num">0</span></div>
+                    <div><strong>Step:</strong> <span id="step-num">0</span></div>
+                    <div><strong>Total Reward:</strong> <span id="total-reward">0.0</span></div>
+                </div>
+
+                <h2>Controls</h2>
+                <div class="controls">
+                    <button id="start-btn" class="btn btn-primary">Start</button>
+                    <button id="pause-btn" class="btn btn-secondary">Pause</button>
+                    <button id="reset-btn" class="btn btn-secondary">Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
