@@ -1,36 +1,73 @@
 <template>
-  <div class="stats-panel">
-    <h3>Episode Info</h3>
+  <!-- ✅ Semantic HTML: section instead of div -->
+  <section class="stats-panel" aria-labelledby="stats-heading">
+    <h3 id="stats-heading">Episode Info</h3>
 
     <div class="stats-grid">
       <div class="stat-item">
         <span class="stat-label">Episode</span>
-        <span class="stat-value">#{{ currentEpisode }}</span>
+        <!-- ✅ ARIA live region for real-time updates -->
+        <span
+          class="stat-value"
+          aria-live="polite"
+          aria-atomic="true"
+          role="status"
+        >
+          #{{ props.currentEpisode }}
+        </span>
       </div>
 
       <div class="stat-item">
         <span class="stat-label">Steps</span>
-        <span class="stat-value">{{ currentStep }}</span>
+        <!-- ✅ ARIA live region for real-time updates -->
+        <span
+          class="stat-value"
+          aria-live="polite"
+          aria-atomic="true"
+          role="status"
+        >
+          {{ props.currentStep }}
+        </span>
       </div>
 
       <div class="stat-item">
         <span class="stat-label">Reward</span>
-        <span class="stat-value" :class="{ positive: cumulativeReward > 0, negative: cumulativeReward < 0 }">
-          {{ cumulativeReward.toFixed(1) }}
+        <!-- ✅ ARIA live region for real-time updates -->
+        <span
+          class="stat-value"
+          :class="{ positive: props.cumulativeReward > 0, negative: props.cumulativeReward < 0 }"
+          aria-live="polite"
+          aria-atomic="true"
+          role="status"
+        >
+          {{ formattedReward }}
         </span>
       </div>
 
       <div class="stat-item">
         <span class="stat-label">Action</span>
-        <span class="stat-value action">{{ formatAction(lastAction) }}</span>
+        <!-- ✅ ARIA live region for real-time updates -->
+        <span
+          class="stat-value action"
+          aria-live="polite"
+          aria-atomic="true"
+          role="status"
+        >
+          {{ formatAction(props.lastAction) }}
+        </span>
       </div>
     </div>
 
-    <div v-if="episodeHistory.length > 0" class="history">
+    <div v-if="props.episodeHistory.length > 0" class="history">
       <h4>Performance</h4>
 
-      <div class="history-chart">
-        <svg viewBox="0 0 300 100" class="chart-svg">
+      <!-- ✅ Chart with accessibility: role="img" and aria-label -->
+      <div
+        class="history-chart"
+        role="img"
+        :aria-label="`Episode performance chart showing survival time over last ${chartData.length} episodes, ranging from ${minSurvival} to ${maxSurvival} steps`"
+      >
+        <svg viewBox="0 0 300 100" class="chart-svg" aria-hidden="true">
           <!-- Grid lines -->
           <line
             v-for="i in 5"
@@ -39,7 +76,7 @@
             :y1="i * 20"
             :x2="300"
             :y2="i * 20"
-            stroke="#3a3a4e"
+            stroke="var(--color-chart-grid)"
             stroke-width="1"
           />
 
@@ -47,7 +84,7 @@
           <polyline
             :points="chartPoints"
             fill="none"
-            stroke="#3b82f6"
+            stroke="var(--color-chart-primary)"
             stroke-width="2"
           />
 
@@ -58,9 +95,16 @@
             :cx="point.x"
             :cy="point.y"
             r="3"
-            fill="#3b82f6"
+            fill="var(--color-chart-primary)"
           />
         </svg>
+
+        <!-- ✅ Screen reader alternative text -->
+        <div class="sr-only">
+          Chart data: Last {{ chartData.length }} episodes with survival times ranging from
+          {{ minSurvival }} to {{ maxSurvival }} steps.
+          Average survival: {{ averageSurvivalTime }} steps.
+        </div>
       </div>
 
       <div class="history-stats">
@@ -74,32 +118,72 @@
         </div>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { useSimulationStore } from '../stores/simulation'
+import { ACTION_ICONS } from '../utils/constants'
 
-const store = useSimulationStore()
+// ✅ Props First: Receive data from parent instead of importing store
+const props = defineProps({
+  currentEpisode: {
+    type: Number,
+    default: 0
+  },
+  currentStep: {
+    type: Number,
+    default: 0
+  },
+  cumulativeReward: {
+    type: Number,
+    default: 0
+  },
+  lastAction: {
+    type: String,
+    default: null
+  },
+  episodeHistory: {
+    type: Array,
+    default: () => []
+  }
+})
 
-const currentEpisode = computed(() => store.currentEpisode)
-const currentStep = computed(() => store.currentStep)
-const cumulativeReward = computed(() => store.cumulativeReward)
-const lastAction = computed(() => store.lastAction)
-const episodeHistory = computed(() => store.episodeHistory)
-const averageSurvivalTime = computed(() => store.averageSurvivalTime)
+// Computed for derived values
+const averageSurvivalTime = computed(() => {
+  if (props.episodeHistory.length === 0) return 0
+  const sum = props.episodeHistory.reduce((acc, ep) => acc + ep.steps, 0)
+  return Math.round(sum / props.episodeHistory.length)
+})
+
+// ✅ Extract toFixed() from template to computed property
+const formattedReward = computed(() => {
+  return props.cumulativeReward.toFixed(1)
+})
 
 const lastEpisodeSteps = computed(() => {
-  if (episodeHistory.value.length === 0) return 0
-  return episodeHistory.value[episodeHistory.value.length - 1].steps
+  if (props.episodeHistory.length === 0) return 0
+  return props.episodeHistory[props.episodeHistory.length - 1].steps
+})
+
+// ✅ Min/max survival for accessibility aria-label
+const minSurvival = computed(() => {
+  if (props.episodeHistory.length === 0) return 0
+  const history = props.episodeHistory.slice(-10)
+  return Math.min(...history.map(ep => ep.steps))
+})
+
+const maxSurvival = computed(() => {
+  if (props.episodeHistory.length === 0) return 0
+  const history = props.episodeHistory.slice(-10)
+  return Math.max(...history.map(ep => ep.steps))
 })
 
 // Chart data processing
 const chartData = computed(() => {
-  if (episodeHistory.value.length === 0) return []
+  if (props.episodeHistory.length === 0) return []
 
-  const history = episodeHistory.value.slice(-10) // Last 10 episodes
+  const history = props.episodeHistory.slice(-10) // Last 10 episodes
   const maxSteps = Math.max(...history.map(ep => ep.steps), 1)
 
   return history.map((ep, i) => ({
@@ -112,89 +196,82 @@ const chartPoints = computed(() => {
   return chartData.value.map(p => `${p.x},${p.y}`).join(' ')
 })
 
+// ✅ Use imported constant from utils
 function formatAction(action) {
   if (!action) return '—'
-
-  const actionIcons = {
-    'up': '↑ Up',
-    'down': '↓ Down',
-    'left': '← Left',
-    'right': '→ Right',
-    'interact': '⚡ Interact'
-  }
-
-  return actionIcons[action] || action
+  return ACTION_ICONS[action] || action
 }
 </script>
 
 <style scoped>
+/* ✅ Refactored to use design tokens */
 .stats-panel {
-  background: #2a2a3e;
-  border-radius: 8px;
-  padding: 1.5rem;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-lg);
 }
 
 .stats-panel h3 {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #e0e0e0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .stat-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  color: #a0a0b0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .stat-value {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #e0e0e0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .stat-value.positive {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .stat-value.negative {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .stat-value.action {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
 }
 
 .history h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e0e0e0;
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .history-chart {
-  background: #1e1e2e;
-  border-radius: 6px;
-  padding: 1rem;
-  margin-bottom: 1rem;
+  background: var(--color-bg-primary);
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .chart-svg {
@@ -205,21 +282,34 @@ function formatAction(action) {
 .history-stats {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .history-stat {
   display: flex;
   justify-content: space-between;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
 }
 
 .history-stat .label {
-  color: #a0a0b0;
+  color: var(--color-text-secondary);
 }
 
 .history-stat .value {
-  color: #e0e0e0;
-  font-weight: 600;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ✅ Screen reader only utility class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 </style>

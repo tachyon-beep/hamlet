@@ -11,6 +11,10 @@ export const useSimulationStore = defineStore('simulation', () => {
   const mode = ref('inference') // 'inference' or 'training'
   const manualDisconnect = ref(false) // Track if user manually disconnected
 
+  // ✅ Connection states for UI feedback
+  const isConnecting = ref(false)
+  const connectionError = ref(null)
+
   // Simulation state
   const currentEpisode = ref(0)
   const currentStep = ref(0)
@@ -59,6 +63,10 @@ export const useSimulationStore = defineStore('simulation', () => {
     mode.value = connectionMode
     manualDisconnect.value = false // User is connecting, not disconnecting
 
+    // ✅ Set connecting state and clear previous errors
+    isConnecting.value = true
+    connectionError.value = null
+
     // Use same host as frontend, allowing remote access
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.hostname
@@ -75,12 +83,14 @@ export const useSimulationStore = defineStore('simulation', () => {
     ws.value.onopen = () => {
       console.log('WebSocket connected')
       isConnected.value = true
+      isConnecting.value = false  // ✅ Stop loading state
       reconnectAttempts.value = 0
     }
 
     ws.value.onclose = () => {
       console.log('WebSocket disconnected')
       isConnected.value = false
+      isConnecting.value = false  // ✅ Stop loading state
 
       // Only attempt reconnection if it wasn't a manual disconnect
       if (!manualDisconnect.value && reconnectAttempts.value < maxReconnectAttempts) {
@@ -92,13 +102,25 @@ export const useSimulationStore = defineStore('simulation', () => {
       } else if (manualDisconnect.value) {
         console.log('Manual disconnect - not reconnecting')
         reconnectAttempts.value = 0
+        connectionError.value = null  // ✅ Clear error on manual disconnect
       } else {
         console.error('Max reconnect attempts reached')
+        // ✅ Set error state when max reconnects reached
+        connectionError.value = {
+          title: 'Connection Lost',
+          message: `Failed to reconnect after ${maxReconnectAttempts} attempts. Please check if the backend server is running.`
+        }
       }
     }
 
     ws.value.onerror = (error) => {
       console.error('WebSocket error:', error)
+      // ✅ Set error state for UI feedback
+      connectionError.value = {
+        title: 'Connection Failed',
+        message: `Could not connect to ${connectionMode} server. Please check if the backend server is running on port 8765.`
+      }
+      isConnecting.value = false  // ✅ Stop loading state
     }
 
     ws.value.onmessage = (event) => {
@@ -110,6 +132,7 @@ export const useSimulationStore = defineStore('simulation', () => {
   function disconnect() {
     if (ws.value) {
       manualDisconnect.value = true // Mark as manual disconnect
+      connectionError.value = null  // ✅ Clear error state
       ws.value.close()
       ws.value = null
     }
@@ -325,6 +348,8 @@ export const useSimulationStore = defineStore('simulation', () => {
   return {
     // State
     isConnected,
+    isConnecting,
+    connectionError,
     mode,
     currentEpisode,
     currentStep,

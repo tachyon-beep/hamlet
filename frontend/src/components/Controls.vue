@@ -1,34 +1,42 @@
 <template>
-  <div class="controls-panel">
-    <h3>Controls</h3>
+  <!-- ✅ Semantic HTML: section instead of div -->
+  <section class="controls-panel" aria-labelledby="controls-heading">
+    <h3 id="controls-heading">Controls</h3>
 
-    <!-- Mode Selector -->
-    <div class="mode-selector">
-      <label>Mode:</label>
-      <div class="mode-buttons">
+    <!-- ✅ Mode Selector with proper fieldset -->
+    <fieldset class="mode-selector">
+      <legend class="sr-only">Simulation Mode</legend>
+      <div class="mode-buttons" role="radiogroup" aria-label="Select simulation mode">
         <button
           @click="selectedMode = 'inference'"
           :class="['mode-button', { active: selectedMode === 'inference' }]"
-          :disabled="isConnected"
+          :disabled="props.isConnected"
+          role="radio"
+          :aria-checked="selectedMode === 'inference'"
+          aria-label="Inference mode"
         >
           Inference
         </button>
         <button
           @click="selectedMode = 'training'"
           :class="['mode-button', { active: selectedMode === 'training' }]"
-          :disabled="isConnected"
+          :disabled="props.isConnected"
+          role="radio"
+          :aria-checked="selectedMode === 'training'"
+          aria-label="Training mode"
         >
           Training
         </button>
       </div>
-    </div>
+    </fieldset>
 
-    <!-- Connection Control -->
+    <!-- ✅ Connection Control with better semantics -->
     <div class="connection-control">
       <button
-        v-if="!isConnected"
+        v-if="!props.isConnected"
         @click="connect"
         class="primary-button"
+        aria-label="Connect to simulation server"
       >
         Connect
       </button>
@@ -36,44 +44,45 @@
         v-else
         @click="disconnect"
         class="secondary-button"
+        aria-label="Disconnect from simulation server"
       >
         Disconnect
       </button>
     </div>
 
-    <!-- Inference Mode Controls -->
-    <div v-if="selectedMode === 'inference' && isConnected" class="inference-controls">
-      <div class="button-group">
+    <!-- ✅ Inference Mode Controls with ARIA labels -->
+    <div v-if="selectedMode === 'inference' && props.isConnected" class="inference-controls">
+      <div class="button-group" role="group" aria-label="Playback controls">
         <button
-          @click="store.play()"
+          @click="emit('play')"
           class="control-button play"
-          title="Play"
+          aria-label="Play simulation"
         >
-          ▶
+          <span aria-hidden="true">▶</span>
         </button>
 
         <button
-          @click="store.pause()"
+          @click="emit('pause')"
           class="control-button pause"
-          title="Pause"
+          aria-label="Pause simulation"
         >
-          ⏸
+          <span aria-hidden="true">⏸</span>
         </button>
 
         <button
-          @click="store.step()"
+          @click="emit('step')"
           class="control-button step"
-          title="Step Forward"
+          aria-label="Step forward one action"
         >
-          ⏭
+          <span aria-hidden="true">⏭</span>
         </button>
 
         <button
-          @click="store.reset()"
+          @click="emit('reset')"
           class="control-button reset"
-          title="Reset Episode"
+          aria-label="Reset episode"
         >
-          ↻
+          <span aria-hidden="true">↻</span>
         </button>
       </div>
 
@@ -97,7 +106,7 @@
         </div>
       </div>
 
-      <div v-if="availableModels.length > 0" class="model-selector">
+      <div v-if="props.availableModels.length > 0" class="model-selector">
         <label for="model">Model:</label>
         <select
           id="model"
@@ -105,118 +114,173 @@
           @change="onModelChange"
           class="model-select"
         >
-          <option v-for="model in availableModels" :key="model" :value="model">
+          <option v-for="model in props.availableModels" :key="model" :value="model">
             {{ model }}
           </option>
         </select>
       </div>
     </div>
 
-    <!-- Training Mode Controls -->
-    <div v-if="selectedMode === 'training' && isConnected" class="training-controls">
-      <div v-if="!isTraining" class="training-config">
-        <div class="form-group">
-          <label for="num-episodes">Episodes:</label>
-          <input
-            id="num-episodes"
-            v-model.number="trainingConfig.numEpisodes"
-            type="number"
-            min="1"
-            max="10000"
-            class="number-input"
-          />
-        </div>
+    <!-- ✅ Training Mode Controls with semantic form -->
+    <div v-if="selectedMode === 'training' && props.isConnected" class="training-controls">
+      <form v-if="!props.isTraining" class="training-config" @submit.prevent="startTraining">
+        <fieldset>
+          <legend class="sr-only">Training Configuration</legend>
 
-        <div class="form-group">
-          <label for="batch-size">Batch Size:</label>
-          <input
-            id="batch-size"
-            v-model.number="trainingConfig.batchSize"
-            type="number"
-            min="1"
-            max="256"
-            class="number-input"
-          />
-        </div>
+          <div class="form-group">
+            <label for="num-episodes">Episodes:</label>
+            <input
+              id="num-episodes"
+              v-model.number="trainingConfig.numEpisodes"
+              type="number"
+              min="1"
+              max="10000"
+              class="number-input"
+              aria-required="true"
+            />
+          </div>
 
-        <div class="form-group">
-          <label for="buffer-capacity">Buffer Capacity:</label>
-          <input
-            id="buffer-capacity"
-            v-model.number="trainingConfig.bufferCapacity"
-            type="number"
-            min="1000"
-            max="100000"
-            step="1000"
-            class="number-input"
-          />
-        </div>
+          <div class="form-group">
+            <label for="batch-size">Batch Size:</label>
+            <input
+              id="batch-size"
+              v-model.number="trainingConfig.batchSize"
+              type="number"
+              min="1"
+              max="256"
+              class="number-input"
+              aria-required="true"
+            />
+          </div>
 
-        <div class="form-group">
-          <label for="show-every">Show Every N Episodes:</label>
-          <input
-            id="show-every"
-            v-model.number="trainingConfig.showEvery"
-            type="number"
-            min="1"
-            max="100"
-            class="number-input"
-          />
-          <span class="hint">1 = show all episodes, 5 = show every 5th episode (faster)</span>
-        </div>
+          <div class="form-group">
+            <label for="buffer-capacity">Buffer Capacity:</label>
+            <input
+              id="buffer-capacity"
+              v-model.number="trainingConfig.bufferCapacity"
+              type="number"
+              min="1000"
+              max="100000"
+              step="1000"
+              class="number-input"
+              aria-required="true"
+            />
+          </div>
 
-        <div class="form-group">
-          <label for="step-delay">Step Delay (seconds):</label>
-          <input
-            id="step-delay"
-            v-model.number="trainingConfig.stepDelay"
-            type="number"
-            min="0.05"
-            max="2"
-            step="0.05"
-            class="number-input"
-          />
-          <span class="hint">Time between steps when visualizing (0.2s = smooth)</span>
-        </div>
+          <div class="form-group">
+            <label for="show-every">Show Every N Episodes:</label>
+            <input
+              id="show-every"
+              v-model.number="trainingConfig.showEvery"
+              type="number"
+              min="1"
+              max="100"
+              class="number-input"
+              aria-required="true"
+              aria-describedby="show-every-hint"
+            />
+            <span id="show-every-hint" class="hint">1 = show all episodes, 5 = show every 5th episode (faster)</span>
+          </div>
 
-        <button @click="startTraining" class="primary-button">
-          Start Training
-        </button>
-      </div>
+          <div class="form-group">
+            <label for="step-delay">Step Delay (seconds):</label>
+            <input
+              id="step-delay"
+              v-model.number="trainingConfig.stepDelay"
+              type="number"
+              min="0.05"
+              max="2"
+              step="0.05"
+              class="number-input"
+              aria-required="true"
+              aria-describedby="step-delay-hint"
+            />
+            <span id="step-delay-hint" class="hint">Time between steps when visualizing (0.2s = smooth)</span>
+          </div>
 
+          <button type="submit" class="primary-button">
+            Start Training
+          </button>
+        </fieldset>
+      </form>
+
+      <!-- ✅ Training status with accessibility -->
       <div v-else class="training-status">
         <div class="training-progress">
-          <div class="progress-text">
-            Episode {{ currentEpisode }} / {{ totalEpisodes }}
+          <!-- ✅ Progress text with live region -->
+          <div
+            class="progress-text"
+            aria-live="polite"
+            aria-atomic="true"
+            role="status"
+          >
+            Episode {{ props.currentEpisode }} / {{ props.totalEpisodes }}
           </div>
-          <div class="progress-bar">
+          <!-- ✅ Progress bar with proper role and ARIA -->
+          <div class="progress-bar-container">
             <div
-              class="progress-fill"
-              :style="{ width: `${(currentEpisode / totalEpisodes) * 100}%` }"
+              class="progress-bar"
+              role="progressbar"
+              :aria-valuenow="props.currentEpisode"
+              aria-valuemin="0"
+              :aria-valuemax="props.totalEpisodes"
+              :aria-label="`Training progress: ${props.currentEpisode} of ${props.totalEpisodes} episodes completed`"
+              :style="{ width: `${trainingProgressPercentage}%` }"
             ></div>
           </div>
         </div>
 
+        <!-- ✅ Training metrics with ARIA live regions -->
         <div class="training-metrics">
           <div class="metric">
             <span class="metric-label">Avg Reward (5):</span>
-            <span class="metric-value">{{ trainingMetrics.avgReward5.toFixed(2) }}</span>
+            <span
+              class="metric-value"
+              aria-live="polite"
+              role="status"
+            >
+              {{ formattedAvgReward }}
+            </span>
           </div>
           <div class="metric">
             <span class="metric-label">Avg Length (5):</span>
-            <span class="metric-value">{{ trainingMetrics.avgLength5.toFixed(1) }}</span>
+            <span
+              class="metric-value"
+              aria-live="polite"
+              role="status"
+            >
+              {{ formattedAvgLength }}
+            </span>
           </div>
           <div class="metric">
             <span class="metric-label">Avg Loss (5):</span>
-            <span class="metric-value">{{ trainingMetrics.avgLoss5.toFixed(4) }}</span>
+            <span
+              class="metric-value"
+              aria-live="polite"
+              role="status"
+            >
+              {{ formattedAvgLoss }}
+            </span>
           </div>
           <div class="metric">
             <span class="metric-label">Epsilon:</span>
-            <span class="metric-value">{{ trainingMetrics.epsilon.toFixed(3) }}</span>
+            <span
+              class="metric-value"
+              aria-live="polite"
+              role="status"
+            >
+              {{ formattedEpsilon }}
+            </span>
           </div>
           <div class="metric">
             <span class="metric-label">Buffer Size:</span>
-            <span class="metric-value">{{ trainingMetrics.bufferSize }}</span>
+            <span
+              class="metric-value"
+              aria-live="polite"
+              role="status"
+            >
+              {{ trainingMetrics.bufferSize }}
+            </span>
           </div>
         </div>
       </div>
@@ -226,16 +290,54 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useSimulationStore } from '../stores/simulation'
+import { formatTrainingMetric } from '../utils/formatting'
 
-const store = useSimulationStore()
+// ✅ Props First: Receive data from parent instead of importing store
+const props = defineProps({
+  isConnected: {
+    type: Boolean,
+    default: false
+  },
+  isTraining: {
+    type: Boolean,
+    default: false
+  },
+  availableModels: {
+    type: Array,
+    default: () => []
+  },
+  currentEpisode: {
+    type: Number,
+    default: 0
+  },
+  totalEpisodes: {
+    type: Number,
+    default: 0
+  },
+  trainingMetrics: {
+    type: Object,
+    default: () => ({
+      avgReward5: 0,
+      avgLength5: 0,
+      avgLoss5: 0,
+      epsilon: 1.0,
+      bufferSize: 0
+    })
+  }
+})
 
-const isConnected = computed(() => store.isConnected)
-const availableModels = computed(() => store.availableModels)
-const isTraining = computed(() => store.isTraining)
-const currentEpisode = computed(() => store.currentEpisode)
-const totalEpisodes = computed(() => store.totalEpisodes)
-const trainingMetrics = computed(() => store.trainingMetrics)
+// ✅ Emit events instead of calling store methods directly
+const emit = defineEmits([
+  'connect',
+  'disconnect',
+  'play',
+  'pause',
+  'step',
+  'reset',
+  'set-speed',
+  'load-model',
+  'start-training'
+])
 
 const selectedMode = ref('inference')
 const speedValue = ref(1.0)
@@ -249,96 +351,131 @@ const trainingConfig = ref({
   stepDelay: 0.2,  // 200ms delay between steps
 })
 
+// ✅ Extract toFixed() from template to computed properties
+const trainingProgressPercentage = computed(() => {
+  if (props.totalEpisodes === 0) return 0
+  return (props.currentEpisode / props.totalEpisodes) * 100
+})
+
+// ✅ Use imported formatting utility
+const formattedAvgReward = computed(() => {
+  return formatTrainingMetric(props.trainingMetrics.avgReward5, 'reward')
+})
+
+const formattedAvgLength = computed(() => {
+  return formatTrainingMetric(props.trainingMetrics.avgLength5, 'length')
+})
+
+const formattedAvgLoss = computed(() => {
+  return formatTrainingMetric(props.trainingMetrics.avgLoss5, 'loss')
+})
+
+const formattedEpsilon = computed(() => {
+  return formatTrainingMetric(props.trainingMetrics.epsilon, 'epsilon')
+})
+
 // Set initial model when available
-if (availableModels.value.length > 0) {
-  selectedModel.value = availableModels.value[0]
+if (props.availableModels.length > 0) {
+  selectedModel.value = props.availableModels[0]
 }
 
+// ✅ Emit events instead of calling store methods
 function connect() {
-  store.connect(selectedMode.value)
+  emit('connect', selectedMode.value)
 }
 
 function disconnect() {
-  store.disconnect()
+  emit('disconnect')
 }
 
 function startTraining() {
-  store.startTraining(
-    trainingConfig.value.numEpisodes,
-    trainingConfig.value.batchSize,
-    trainingConfig.value.bufferCapacity,
-    trainingConfig.value.showEvery,
-    trainingConfig.value.stepDelay
-  )
+  emit('start-training', {
+    numEpisodes: trainingConfig.value.numEpisodes,
+    batchSize: trainingConfig.value.batchSize,
+    bufferCapacity: trainingConfig.value.bufferCapacity,
+    showEvery: trainingConfig.value.showEvery,
+    stepDelay: trainingConfig.value.stepDelay
+  })
 }
 
 function onSpeedChange() {
-  store.setSpeed(speedValue.value)
+  emit('set-speed', speedValue.value)
 }
 
 function onModelChange() {
   if (selectedModel.value) {
-    store.loadModel(selectedModel.value)
+    emit('load-model', selectedModel.value)
   }
 }
 </script>
 
 <style scoped>
+/* ✅ Mobile-first: Refactored to use design tokens */
 .controls-panel {
-  background: #2a2a3e;
-  border-radius: 8px;
-  padding: 1.5rem;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-md);
+}
+
+@media (min-width: 768px) {
+  .controls-panel {
+    padding: var(--spacing-lg);
+    gap: var(--spacing-lg);
+  }
 }
 
 .controls-panel h3 {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #e0e0e0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 /* Mode Selector */
 .mode-selector {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
+  border: none; /* Remove default fieldset border */
+  padding: 0;
+  margin: 0;
 }
 
 .mode-selector label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #a0a0b0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .mode-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .mode-button {
-  padding: 0.75rem;
-  background: #3a3a4e;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-tertiary);
   border: 2px solid transparent;
-  border-radius: 6px;
-  color: #a0a0b0;
-  font-size: 0.875rem;
-  font-weight: 500;
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .mode-button:hover:not(:disabled) {
-  background: #4a4a5e;
+  background: var(--color-interactive-disabled);
 }
 
 .mode-button.active {
-  background: #3b82f6;
+  background: var(--color-mode-inference);
   color: #ffffff;
-  border-color: #60a5fa;
+  border-color: var(--color-interactive-focus);
 }
 
 .mode-button:disabled {
@@ -353,19 +490,19 @@ function onModelChange() {
 
 .primary-button {
   width: 100%;
-  padding: 0.75rem;
-  background: #10b981;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-success);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius-sm);
   color: #ffffff;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .primary-button:hover {
-  background: #059669;
+  background: var(--color-interactive-hover);
   transform: translateY(-1px);
 }
 
@@ -375,15 +512,15 @@ function onModelChange() {
 
 .secondary-button {
   width: 100%;
-  padding: 0.75rem;
-  background: #ef4444;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-error);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius-sm);
   color: #ffffff;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .secondary-button:hover {
@@ -399,28 +536,41 @@ function onModelChange() {
 .inference-controls {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-md);
 }
 
+@media (min-width: 768px) {
+  .inference-controls {
+    gap: var(--spacing-lg);
+  }
+}
+
+/* ✅ Mobile-first: 2x2 grid on mobile, 4 columns on tablet+ */
 .button-group {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-sm);
+}
+
+@media (min-width: 768px) {
+  .button-group {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .control-button {
-  padding: 0.75rem;
-  font-size: 1.25rem;
-  background: #3a3a4e;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-xl);
+  background: var(--color-bg-tertiary);
   border: none;
-  border-radius: 6px;
-  color: #e0e0e0;
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .control-button:hover:not(:disabled) {
-  background: #4a4a5e;
+  background: var(--color-interactive-disabled);
   transform: translateY(-1px);
 }
 
@@ -434,38 +584,38 @@ function onModelChange() {
 }
 
 .control-button.play:hover:not(:disabled) {
-  background: #10b981;
+  background: var(--color-success);
 }
 
 .control-button.pause:hover:not(:disabled) {
-  background: #f59e0b;
+  background: var(--color-warning);
 }
 
 .control-button.step:hover:not(:disabled) {
-  background: #3b82f6;
+  background: var(--color-info);
 }
 
 .control-button.reset:hover:not(:disabled) {
-  background: #ef4444;
+  background: var(--color-error);
 }
 
 .speed-control {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .speed-control label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #a0a0b0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .speed-slider {
   width: 100%;
   height: 6px;
-  border-radius: 3px;
-  background: #3a3a4e;
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-tertiary);
   outline: none;
   -webkit-appearance: none;
 }
@@ -475,28 +625,28 @@ function onModelChange() {
   appearance: none;
   width: 18px;
   height: 18px;
-  border-radius: 50%;
-  background: #3b82f6;
+  border-radius: var(--border-radius-full);
+  background: var(--color-info);
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--transition-base);
 }
 
 .speed-slider::-webkit-slider-thumb:hover {
-  background: #60a5fa;
+  background: var(--color-interactive-focus);
 }
 
 .speed-slider::-moz-range-thumb {
   width: 18px;
   height: 18px;
-  border-radius: 50%;
-  background: #3b82f6;
+  border-radius: var(--border-radius-full);
+  background: var(--color-info);
   cursor: pointer;
   border: none;
-  transition: background 0.2s ease;
+  transition: background var(--transition-base);
 }
 
 .speed-slider::-moz-range-thumb:hover {
-  background: #60a5fa;
+  background: var(--color-interactive-focus);
 }
 
 .speed-slider:disabled {
@@ -507,35 +657,43 @@ function onModelChange() {
 .speed-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
-  color: #6a6a7a;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
 }
 
 .model-selector {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .model-selector label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #a0a0b0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
+/* ✅ Mobile-friendly: proper touch target sizing */
 .model-select {
-  padding: 0.5rem;
-  background: #3a3a4e;
-  border: 1px solid #4a4a5e;
-  border-radius: 6px;
-  color: #e0e0e0;
-  font-size: 0.875rem;
+  padding: var(--spacing-sm);
+  min-height: var(--a11y-min-touch-target);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-interactive-disabled);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
   cursor: pointer;
   outline: none;
 }
 
+@media (min-width: 768px) {
+  .model-select {
+    font-size: var(--font-size-sm);
+  }
+}
+
 .model-select:hover:not(:disabled) {
-  border-color: #5a5a6e;
+  border-color: var(--color-text-tertiary);
 }
 
 .model-select:disabled {
@@ -547,108 +705,139 @@ function onModelChange() {
 .training-controls {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .training-config {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
+}
+
+.training-config fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .form-group label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #a0a0b0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
+/* ✅ Mobile-friendly: proper touch target sizing */
 .number-input {
-  padding: 0.5rem;
-  background: #3a3a4e;
-  border: 1px solid #4a4a5e;
-  border-radius: 6px;
-  color: #e0e0e0;
-  font-size: 0.875rem;
+  padding: var(--spacing-sm);
+  min-height: var(--a11y-min-touch-target);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-interactive-disabled);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
   outline: none;
 }
 
+@media (min-width: 768px) {
+  .number-input {
+    font-size: var(--font-size-sm);
+  }
+}
+
 .number-input:focus {
-  border-color: #3b82f6;
+  border-color: var(--color-info);
 }
 
 .number-input:hover:not(:disabled) {
-  border-color: #5a5a6e;
+  border-color: var(--color-text-tertiary);
 }
 
 .hint {
-  font-size: 0.75rem;
-  color: #6a6a7a;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
   font-style: italic;
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-xs);
 }
 
 /* Training Status */
 .training-status {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .training-progress {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .progress-text {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #e0e0e0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
   text-align: center;
 }
 
-.progress-bar {
+/* ✅ Updated to match template changes */
+.progress-bar-container {
   height: 8px;
-  background: #3a3a4e;
-  border-radius: 4px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--border-radius-sm);
   overflow: hidden;
 }
 
-.progress-fill {
+.progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #10b981);
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--color-info), var(--color-success));
+  border-radius: var(--border-radius-sm);
+  transition: width var(--transition-base);
 }
 
 .training-metrics {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: #1e1e2e;
-  border-radius: 6px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-bg-primary);
+  border-radius: var(--border-radius-sm);
 }
 
 .metric {
   display: flex;
   justify-content: space-between;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
 }
 
 .metric-label {
-  color: #a0a0b0;
+  color: var(--color-text-secondary);
 }
 
 .metric-value {
-  color: #e0e0e0;
-  font-weight: 600;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
   font-family: 'Monaco', 'Courier New', monospace;
+}
+
+/* ✅ Screen reader only utility class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 </style>

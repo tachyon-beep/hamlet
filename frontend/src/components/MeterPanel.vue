@@ -1,27 +1,45 @@
 <template>
-  <div class="meter-panel">
-    <h3>Agent Meters</h3>
+  <!-- ✅ Semantic HTML: section instead of div -->
+  <section class="meter-panel" aria-labelledby="meter-heading">
+    <h3 id="meter-heading">Agent Meters</h3>
 
-    <div v-if="meters" class="meters">
+    <!-- ✅ Meters as semantic list -->
+    <div v-if="meters" class="meters" role="list">
       <div
         v-for="(value, name) in meters"
         :key="name"
         class="meter"
+        role="listitem"
         :class="{
           critical: isCritical(name, value),
           'strobe-slow': name === 'stress' && isLonely() && !isHighStress(),
           'strobe-fast': name === 'stress' && isLonely() && isHighStress()
         }"
+        :aria-label="`${capitalize(name)}: ${formatMeterValue(name, value)}`"
       >
         <div class="meter-header">
           <span class="meter-name">{{ capitalize(name) }}</span>
-          <span class="meter-value">{{ formatValue(name, value) }}</span>
+          <!-- ✅ ARIA live region for real-time meter updates -->
+          <span
+            class="meter-value"
+            aria-live="polite"
+            aria-atomic="true"
+            role="status"
+          >
+            {{ formatMeterValue(name, value) }}
+          </span>
         </div>
+        <!-- ✅ Meter bar as progressbar with ARIA attributes -->
         <div class="meter-bar-container">
           <div
             class="meter-bar"
+            role="progressbar"
+            :aria-valuenow="getMeterPercentage(name, value)"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-label="`${capitalize(name)} level: ${getMeterPercentage(name, value).toFixed(0)}%`"
             :style="{
-              width: getPercentage(name, value) + '%',
+              width: getMeterPercentage(name, value) + '%',
               background: getMeterColor(name, value)
             }"
           ></div>
@@ -29,47 +47,36 @@
       </div>
     </div>
 
-    <div v-else class="no-data">
-      Waiting for simulation data...
-    </div>
-  </div>
+    <!-- ✅ Empty state when no meter data available -->
+    <EmptyState
+      v-else
+      icon="📊"
+      title="No Agent Data"
+      message="Connect to the simulation to see agent meters."
+    />
+  </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { useSimulationStore } from '../stores/simulation'
+import EmptyState from './EmptyState.vue'
+import { capitalize, formatMeterValue, getMeterPercentage } from '../utils/formatting'
 
-const store = useSimulationStore()
+// ✅ Props First: Receive data from parent instead of importing store
+const props = defineProps({
+  agentMeters: {
+    type: Object,
+    default: () => ({})
+  }
+})
 
 const meters = computed(() => {
-  const agent = store.agentMeters['agent_0']
+  const agent = props.agentMeters['agent_0']
   return agent ? agent.meters : null
 })
 
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1)
-}
-
-function formatValue(name, value) {
-  if (name === 'money') {
-    return `$${Math.round(value)}`
-  }
-  if (name === 'stress') {
-    // Stress is 0-100 (higher = worse)
-    return `${Math.round(value)}`
-  }
-  // Other meters are normalized 0-1, convert to percentage
-  return `${Math.round(value * 100)}%`
-}
-
-function getPercentage(name, value) {
-  if (name === 'money' || name === 'stress') {
-    // Money and stress are already 0-100
-    return Math.max(0, Math.min(100, value))
-  }
-  // Other meters are normalized 0-1, convert to percentage
-  return Math.max(0, Math.min(100, value * 100))
-}
+// ✅ Use imported formatting utilities
+// (capitalize, formatMeterValue, getMeterPercentage are imported above)
 
 function isCritical(name, value) {
   const percentage = name === 'money' ? value : (name === 'stress' ? value : value * 100)
@@ -95,17 +102,42 @@ function isHighStress() {
   return stress > 80
 }
 
+// ✅ Extract meter color logic using CSS variables
 function getMeterColor(name, value) {
   const percentage = name === 'money' ? value : (name === 'stress' ? value : value * 100)
 
-  // Color mapping
+  // Color mapping using CSS custom properties
   const colors = {
-    energy: { high: '#10b981', mid: '#f59e0b', low: '#ef4444' },
-    hygiene: { high: '#06b6d4', mid: '#f59e0b', low: '#ef4444' },
-    satiation: { high: '#f59e0b', mid: '#f59e0b', low: '#ef4444' },
-    money: { high: '#8b5cf6', mid: '#a78bfa', low: '#ef4444' },
-    stress: { low: '#10b981', mid: '#f59e0b', high: '#ef4444' },  // Stress: low=green, high=red
-    social: { high: '#ec4899', mid: '#f472b6', low: '#ef4444' }   // Pink - social connections
+    energy: {
+      high: 'var(--color-meter-energy)',
+      mid: 'var(--color-warning)',
+      low: 'var(--color-error)'
+    },
+    hygiene: {
+      high: 'var(--color-meter-hygiene)',
+      mid: 'var(--color-warning)',
+      low: 'var(--color-error)'
+    },
+    satiation: {
+      high: 'var(--color-meter-satiation)',
+      mid: 'var(--color-warning)',
+      low: 'var(--color-error)'
+    },
+    money: {
+      high: 'var(--color-meter-money)',
+      mid: 'var(--color-meter-money)',
+      low: 'var(--color-error)'
+    },
+    stress: {
+      low: 'var(--color-meter-stress-low)',
+      mid: 'var(--color-meter-stress-mid)',
+      high: 'var(--color-meter-stress-high)'
+    },
+    social: {
+      high: 'var(--color-meter-social)',
+      mid: 'var(--color-meter-social)',
+      low: 'var(--color-error)'
+    }
   }
 
   const colorSet = colors[name] || colors.energy
@@ -125,29 +157,30 @@ function getMeterColor(name, value) {
 </script>
 
 <style scoped>
+/* ✅ Refactored to use design tokens */
 .meter-panel {
-  background: #2a2a3e;
-  border-radius: 8px;
-  padding: 1.5rem;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg);
 }
 
 .meter-panel h3 {
-  margin: 0 0 1rem 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #e0e0e0;
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .meters {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .meter {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .meter.critical {
@@ -208,34 +241,28 @@ function getMeterColor(name, value) {
 }
 
 .meter-name {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #a0a0b0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .meter-value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e0e0e0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .meter-bar-container {
   width: 100%;
   height: 20px;
-  background: #1e1e2e;
-  border-radius: 10px;
+  background: var(--color-bg-primary);
+  border-radius: var(--border-radius-full);
   overflow: hidden;
 }
 
 .meter-bar {
   height: 100%;
-  border-radius: 10px;
-  transition: width 0.3s ease, background 0.3s ease;
-}
-
-.no-data {
-  color: #a0a0b0;
-  font-size: 0.875rem;
-  font-style: italic;
+  border-radius: var(--border-radius-full);
+  transition: width var(--transition-base), background var(--transition-base);
 }
 </style>

@@ -1,0 +1,122 @@
+/**
+ * CSS Custom Properties - Auto-generated from tokens.js
+ *
+ * Usage in Vue components:
+ *   color: var(--color-text-primary);
+ *   padding: var(--spacing-md);
+ */
+
+:root {
+  /* Colors */
+  --color-bg-primary: #1e1e2e;
+  --color-bg-secondary: #2a2a3e;
+  --color-bg-tertiary: #3a3a4e;
+
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #a0a0b0;
+  --color-text-tertiary: #808090;
+  --color-text-muted: #6a6a7a;
+
+  --color-interactive: #10b981;
+  --color-interactive-hover: #34d399;
+  --color-interactive-focus: #6ee7b7;
+  --color-interactive-disabled: #4a4a5e;
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  --color-chart-primary: #3b82f6;
+  --color-chart-secondary: #8b5cf6;
+  --color-chart-grid: #3a3a4e;
+
+  --color-meter-energy: #10b981;
+  --color-meter-hygiene: #06b6d4;
+  --color-meter-satiation: #f59e0b;
+  --color-meter-money: #8b5cf6;
+  --color-meter-stress-low: #10b981;
+  --color-meter-stress-mid: #f59e0b;
+  --color-meter-stress-high: #ef4444;
+  --color-meter-social: #ec4899;
+
+  --color-mode-inference: #3b82f6;
+  --color-mode-training: #3b82f6;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* Typography */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Layout */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-full: 9999px;
+
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.5s ease;
+
+  /* Dimensions */
+  --layout-left-panel-width: 320px;
+  --layout-right-panel-width: 380px;
+  --layout-max-grid-size: 600px;
+  --layout-header-height: 70px;
+
+  /* Accessibility */
+  --a11y-min-touch-target: 44px;
+  --a11y-focus-outline-width: 2px;
+  --a11y-focus-outline-offset: 2px;
+
+  /* Z-index */
+  --z-index-base: 1;
+  --z-index-dropdown: 10;
+  --z-index-modal: 100;
+  --z-index-toast: 1000;
+
+  /* Responsive Breakpoints (for use in media queries) */
+  --breakpoint-mobile: 768px;
+  --breakpoint-tablet: 1024px;
+  --breakpoint-desktop: 1280px;
+}
+
+/* Accessibility - Touch targets MUST be 44x44px minimum */
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+a.button,
+.button,
+.control-button,
+.mode-button {
+  min-height: var(--a11y-min-touch-target);
+  min-width: var(--a11y-min-touch-target);
+}
+
+/* Focus indicators must be visible */
+*:focus-visible {
+  outline: var(--a11y-focus-outline-width) solid var(--color-interactive-focus);
+  outline-offset: var(--a11y-focus-outline-offset);
+}
+
+/* Never remove outlines */
+*:focus {
+  outline-color: var(--color-interactive-focus);
+}

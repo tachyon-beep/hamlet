@@ -1,23 +1,29 @@
 <template>
   <div class="grid-container">
-    <!-- Heat map toggle button -->
+    <!-- ✅ Heat map toggle with keyboard accessibility -->
     <button
-      v-if="Object.keys(heatMap).length > 0"
-      @click="showHeatMap = !showHeatMap"
+      v-if="Object.keys(props.heatMap).length > 0"
+      @click="toggleHeatMap"
       class="heat-map-toggle"
       :class="{ active: showHeatMap }"
+      :aria-label="`${showHeatMap ? 'Hide' : 'Show'} heat map showing position visit frequency. Keyboard shortcut: H`"
+      :aria-pressed="showHeatMap"
+      title="Toggle heat map (Keyboard: H)"
     >
       {{ showHeatMap ? 'Hide' : 'Show' }} Heat Map
     </button>
 
+    <!-- ✅ SVG with role and comprehensive aria-label -->
     <svg
-      :viewBox="`0 0 ${gridWidth * cellSize} ${gridHeight * cellSize}`"
+      :viewBox="`0 0 ${props.gridWidth * cellSize} ${props.gridHeight * cellSize}`"
       class="grid-svg"
+      role="img"
+      :aria-label="gridAriaLabel"
     >
       <!-- Grid cells -->
-      <g v-for="y in gridHeight" :key="`row-${y}`">
+      <g v-for="y in props.gridHeight" :key="`row-${y}`">
         <rect
-          v-for="x in gridWidth"
+          v-for="x in props.gridWidth"
           :key="`cell-${x}-${y}`"
           :x="(x - 1) * cellSize"
           :y="(y - 1) * cellSize"
@@ -28,9 +34,9 @@
       </g>
 
       <!-- Heat map overlay (position visit frequency) -->
-      <g v-if="showHeatMap && Object.keys(heatMap).length > 0" class="heat-map-layer">
+      <g v-if="showHeatMap && Object.keys(props.heatMap).length > 0" class="heat-map-layer">
         <rect
-          v-for="(intensity, key) in heatMap"
+          v-for="(intensity, key) in props.heatMap"
           :key="`heat-${key}`"
           :x="getHeatX(key) * cellSize"
           :y="getHeatY(key) * cellSize"
@@ -43,7 +49,7 @@
       </g>
 
       <!-- Affordances -->
-    <g v-for="affordance in affordances" :key="`affordance-${affordance.x}-${affordance.y}`">
+    <g v-for="affordance in props.affordances" :key="`affordance-${affordance.x}-${affordance.y}`">
       <rect
         :x="affordance.x * cellSize + cellSize * 0.1"
         :y="affordance.y * cellSize + cellSize * 0.1"
@@ -64,7 +70,7 @@
     </g>
 
     <!-- Agents -->
-    <g v-for="agent in agents" :key="agent.id" class="agent-group">
+    <g v-for="agent in validAgents" :key="agent.id" class="agent-group">
       <circle
         :cx="agent.x * cellSize + cellSize / 2"
         :cy="agent.y * cellSize + cellSize / 2"
@@ -87,31 +93,79 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useSimulationStore } from '../stores/simulation'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { CELL_SIZE, AFFORDANCE_ICONS } from '../utils/constants'
 
-const store = useSimulationStore()
+// ✅ Props First: Receive data from parent instead of importing store
+const props = defineProps({
+  gridWidth: {
+    type: Number,
+    default: 8
+  },
+  gridHeight: {
+    type: Number,
+    default: 8
+  },
+  agents: {
+    type: Array,
+    default: () => []
+  },
+  affordances: {
+    type: Array,
+    default: () => []
+  },
+  heatMap: {
+    type: Object,
+    default: () => ({})
+  }
+})
 
-const gridWidth = computed(() => store.gridWidth)
-const gridHeight = computed(() => store.gridHeight)
-const agents = computed(() => (store.agents || []).filter(a => a && a.id))
-const affordances = computed(() => store.affordances)
-const heatMap = computed(() => store.heatMap || {})
+// Filter valid agents
+const validAgents = computed(() => (props.agents || []).filter(a => a && a.id))
 
-const cellSize = 75 // pixels per cell
+// ✅ Use imported constant
+const cellSize = CELL_SIZE
+
 const showHeatMap = ref(true) // Show heat map by default
 
-function getAffordanceIcon(type) {
-  const icons = {
-    'Bed': '🛏️',
-    'Shower': '🚿',
-    'HomeMeal': '🥘',    // Home cooking - cheap, healthy
-    'FastFood': '🍔',    // Fast food - expensive, convenient
-    'Job': '💼',
-    'Recreation': '🎮',
-    'Bar': '🍺'  // Beer mug - social gathering
+// ✅ Computed aria-label for screen readers
+const gridAriaLabel = computed(() => {
+  const agentCount = validAgents.value.length
+  const affordanceCount = props.affordances.length
+  const heatMapStatus = showHeatMap.value ? 'Heat map is visible showing agent movement patterns' : 'Heat map is hidden'
+
+  return `${props.gridWidth} by ${props.gridHeight} simulation grid. ${agentCount} agent${agentCount !== 1 ? 's' : ''} visible. ${affordanceCount} affordance${affordanceCount !== 1 ? 's' : ''} available: ${props.affordances.map(a => a.type).join(', ')}. ${heatMapStatus}.`
+})
+
+// ✅ Toggle heat map function
+function toggleHeatMap() {
+  showHeatMap.value = !showHeatMap.value
+}
+
+// ✅ Keyboard shortcut handler
+function handleKeyPress(event) {
+  // H key toggles heat map
+  if (event.key === 'h' || event.key === 'H') {
+    // Only trigger if not typing in an input
+    if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'TEXTAREA') {
+      toggleHeatMap()
+      event.preventDefault()
+    }
   }
-  return icons[type] || '?'
+}
+
+// ✅ Add/remove keyboard listener
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyPress)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyPress)
+})
+
+// ✅ Use imported constant from utils
+function getAffordanceIcon(type) {
+  return AFFORDANCE_ICONS[type] || '?'
 }
 
 // Heat map helpers
@@ -148,6 +202,7 @@ function getHeatColor(intensity) {
 </script>
 
 <style scoped>
+/* ✅ Refactored to use design tokens */
 .grid-container {
   position: relative;
   width: 100%;
@@ -160,87 +215,102 @@ function getHeatColor(intensity) {
 
 .heat-map-toggle {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  padding: 0.5rem 1rem;
-  background: #3a3a4e;
-  color: #a0a0b0;
-  border: 1px solid #4a4a5e;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-interactive-disabled);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
-  z-index: 10;
+  transition: all var(--transition-base);
+  z-index: var(--z-index-dropdown);
 }
 
 .heat-map-toggle:hover {
-  background: #4a4a5e;
-  color: #e0e0e0;
-  border-color: #5a5a6e;
+  background: var(--color-interactive-disabled);
+  color: var(--color-text-primary);
+  border-color: var(--color-text-tertiary);
 }
 
 .heat-map-toggle.active {
-  background: #10b981;
+  background: var(--color-success);
   color: white;
-  border-color: #34d399;
+  border-color: var(--color-interactive-hover);
 }
 
+/* ✅ Mobile-first: responsive grid sizing */
 .grid-svg {
   width: 100%;
-  height: 100%;
-  max-width: 600px;
-  max-height: 600px;
+  height: auto;
+  max-width: 100%;
+  max-height: 400px;
+}
+
+@media (min-width: 768px) {
+  .grid-svg {
+    max-height: 500px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-svg {
+    max-width: var(--layout-max-grid-size);
+    max-height: var(--layout-max-grid-size);
+  }
 }
 
 .grid-cell {
-  fill: #2a2a3e;
-  stroke: #3a3a4e;
+  fill: var(--color-bg-secondary);
+  stroke: var(--color-bg-tertiary);
   stroke-width: 1;
 }
 
 .heat-map-cell {
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--transition-base);
 }
 
 .affordance {
   stroke-width: 2;
-  transition: all 0.3s ease;
+  transition: all var(--transition-base);
 }
 
+/* Affordance colors - using semantic colors */
 .affordance-bed {
   fill: #6366f1;
   stroke: #818cf8;
 }
 
 .affordance-shower {
-  fill: #06b6d4;
+  fill: var(--color-meter-hygiene);
   stroke: #22d3ee;
 }
 
 .affordance-homemeal {
-  fill: #f59e0b;
+  fill: var(--color-meter-satiation);
   stroke: #fbbf24;
 }
 
 .affordance-fastfood {
-  fill: #ef4444;
+  fill: var(--color-error);
   stroke: #f87171;
 }
 
 .affordance-job {
-  fill: #8b5cf6;
+  fill: var(--color-meter-money);
   stroke: #a78bfa;
 }
 
 .affordance-recreation {
-  fill: #10b981;
-  stroke: #34d399;
+  fill: var(--color-success);
+  stroke: var(--color-interactive-hover);
 }
 
 .affordance-bar {
-  fill: #ec4899;
+  fill: var(--color-meter-social);
   stroke: #f472b6;
 }
 
@@ -251,7 +321,7 @@ function getHeatColor(intensity) {
 }
 
 .agent-group {
-  transition: all 0.3s ease-out;
+  transition: all var(--transition-base);
 }
 
 .agent-circle {
@@ -260,8 +330,8 @@ function getHeatColor(intensity) {
 
 .agent-label {
   fill: white;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
   pointer-events: none;
   user-select: none;
 }
