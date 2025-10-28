@@ -48,6 +48,10 @@ class TrainingBroadcaster:
         self.total_episodes = 0
         self.episode_metrics = []
 
+        # Position heat map tracking (grid_size x grid_size)
+        self.position_visits = {}  # Dict[(x, y), count]
+        self.grid_size = 8
+
     async def connect(self, websocket: WebSocket):
         """Accept new WebSocket connection."""
         await websocket.accept()
@@ -102,6 +106,9 @@ class TrainingBroadcaster:
         self.current_episode = 0
         self.total_episodes = num_episodes
         self.episode_metrics = []
+
+        # Reset position heat map
+        self.position_visits = {}
 
         # Broadcast training started
         await self.broadcast({
@@ -167,6 +174,10 @@ class TrainingBroadcaster:
                 episode_reward += reward
                 step += 1
 
+                # Track agent position for heat map
+                agent_pos = (next_obs["position"]["x"], next_obs["position"]["y"])
+                self.position_visits[agent_pos] = self.position_visits.get(agent_pos, 0) + 1
+
                 # Broadcast state if this is a broadcast episode
                 if broadcast_episode:
                     # Use Renderer for proper formatting (like inference mode)
@@ -195,6 +206,12 @@ class TrainingBroadcaster:
                             agent_data["last_action"] = action_name
                             agent_data["reward"] = reward
 
+                    # Normalize heat map data (0-1 scale)
+                    max_visits = max(self.position_visits.values()) if self.position_visits else 1
+                    heat_map = {}
+                    for (x, y), count in self.position_visits.items():
+                        heat_map[f"{x},{y}"] = count / max_visits
+
                     await self.broadcast({
                         "type": "state_update",
                         "episode": episode + 1,
@@ -210,6 +227,7 @@ class TrainingBroadcaster:
                         "agents": agents_list,  # Array for Grid component
                         "agent_meters": rendered["agents"],  # Dict for MeterPanel
                         "affordances": rendered["grid"]["affordances"],
+                        "heat_map": heat_map,  # Position visit frequencies (normalized 0-1)
                     })
 
                     # Delay so humans can watch (configurable)

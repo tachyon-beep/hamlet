@@ -81,10 +81,12 @@ function isCritical(name, value) {
 }
 
 function isLonely() {
-  // Check if social is at 0 (causes stress to increase)
+  // Check if social is at 0 (causes stress to increase) AND stress is high
   if (!meters.value) return false
   const social = meters.value.social
-  return social <= 0.01  // Close to zero (normalized value)
+  const stress = meters.value.stress
+  // Only strobe when BOTH lonely (social ≈ 0) AND stressed (stress > 80)
+  return social <= 0.01 && stress > 80
 }
 
 function getMeterColor(name, value) {

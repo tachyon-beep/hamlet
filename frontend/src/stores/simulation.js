@@ -37,6 +37,9 @@ export const useSimulationStore = defineStore('simulation', () => {
   // Agent meters
   const agentMeters = ref({})
 
+  // Heat map (position visit frequencies)
+  const heatMap = ref({})
+
   // History
   const episodeHistory = ref([])
   const maxHistoryLength = 10
@@ -214,6 +217,11 @@ export const useSimulationStore = defineStore('simulation', () => {
         agentMeters.value = message.agents
       }
     }
+
+    // Handle heat map data
+    if (message.heat_map) {
+      heatMap.value = message.heat_map
+    }
   }
 
   function handleEpisodeComplete(message) {
@@ -327,6 +335,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     agents,
     affordances,
     agentMeters,
+    heatMap,
     episodeHistory,
     availableModels,
     averageSurvivalTime,

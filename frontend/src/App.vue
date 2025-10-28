@@ -8,14 +8,20 @@
     </header>
 
     <div class="main-container">
+      <!-- Left Panel: Meters + Episode Info -->
+      <div class="left-panel">
+        <MeterPanel />
+        <StatsPanel />
+      </div>
+
+      <!-- Center: Grid -->
       <div class="grid-container">
         <Grid />
       </div>
 
-      <div class="side-panel">
-        <MeterPanel />
+      <!-- Right Panel: Controls -->
+      <div class="right-panel">
         <Controls />
-        <StatsPanel />
       </div>
     </div>
   </div>
@@ -75,9 +81,17 @@ const isConnected = computed(() => store.isConnected)
 .main-container {
   flex: 1;
   display: flex;
-  gap: 2rem;
+  gap: 1.5rem;
   padding: 2rem;
   overflow: hidden;
+}
+
+.left-panel {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
 }
 
 .grid-container {
@@ -88,10 +102,11 @@ const isConnected = computed(() => store.isConnected)
   background: #2a2a3e;
   border-radius: 8px;
   padding: 2rem;
+  min-width: 0; /* Allow flex shrinking */
 }
 
-.side-panel {
-  width: 400px;
+.right-panel {
+  width: 380px;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
