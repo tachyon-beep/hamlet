@@ -281,27 +281,27 @@ function getHeatColor(intensity) {
 /* Affordance colors - using semantic colors */
 .affordance-bed {
   fill: #6366f1;
-  stroke: #818cf8;
+  stroke: var(--color-affordance-bed-stroke);
 }
 
 .affordance-shower {
   fill: var(--color-meter-hygiene);
-  stroke: #22d3ee;
+  stroke: var(--color-affordance-shower-stroke);
 }
 
 .affordance-homemeal {
   fill: var(--color-meter-satiation);
-  stroke: #fbbf24;
+  stroke: var(--color-affordance-homemeal-stroke);
 }
 
 .affordance-fastfood {
   fill: var(--color-error);
-  stroke: #f87171;
+  stroke: var(--color-affordance-fastfood-stroke);
 }
 
 .affordance-job {
   fill: var(--color-meter-money);
-  stroke: #a78bfa;
+  stroke: var(--color-affordance-job-stroke);
 }
 
 .affordance-recreation {
@@ -311,7 +311,7 @@ function getHeatColor(intensity) {
 
 .affordance-bar {
   fill: var(--color-meter-social);
-  stroke: #f472b6;
+  stroke: var(--color-affordance-bar-stroke);
 }
 
 .affordance-label {

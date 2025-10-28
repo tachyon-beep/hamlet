@@ -83,7 +83,7 @@ defineEmits(['retry'])
 }
 
 .retry-button:hover {
-  background: #dc2626;
+  background: var(--color-error-hover);
   transform: translateY(-1px);
 }
 

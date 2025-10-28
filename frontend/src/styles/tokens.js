@@ -21,6 +21,7 @@ export const tokens = {
     textSecondary: '#a0a0b0',         // Labels, secondary info
     textTertiary: '#808090',          // Disabled, hints
     textMuted: '#6a6a7a',             // Very subtle text
+    textOnDark: '#ffffff',            // White text on dark backgrounds
 
     // Interactive elements
     interactive: '#10b981',            // Primary interactive (green)
@@ -32,6 +33,8 @@ export const tokens = {
     success: '#10b981',                // Success state
     warning: '#f59e0b',                // Warning state
     error: '#ef4444',                  // Error state
+    errorHover: '#dc2626',             // Error hover state (darker red)
+    errorDark: '#b91c1c',              // Error dark state (darkest red)
     info: '#3b82f6',                   // Info state (blue)
 
     // Chart colors
@@ -50,6 +53,14 @@ export const tokens = {
       high: '#ef4444',                 // High stress = red
     },
     meterSocial: '#ec4899',            // Pink
+
+    // Affordance stroke colors (for Grid.vue affordances)
+    affordanceBedStroke: '#818cf8',    // Light indigo
+    affordanceShowerStroke: '#22d3ee', // Cyan
+    affordanceHomeMealStroke: '#fbbf24', // Amber
+    affordanceFastFoodStroke: '#f87171', // Light red
+    affordanceJobStroke: '#a78bfa',    // Light purple
+    affordanceBarStroke: '#f472b6',    // Pink
 
     // Mode-specific colors
     modeInference: '#3b82f6',          // Blue

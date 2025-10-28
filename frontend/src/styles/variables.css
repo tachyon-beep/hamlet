@@ -16,6 +16,7 @@
   --color-text-secondary: #a0a0b0;
   --color-text-tertiary: #808090;
   --color-text-muted: #6a6a7a;
+  --color-text-on-dark: #ffffff;
 
   --color-interactive: #10b981;
   --color-interactive-hover: #34d399;
@@ -25,6 +26,8 @@
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
+  --color-error-hover: #dc2626;
+  --color-error-dark: #b91c1c;
   --color-info: #3b82f6;
 
   --color-chart-primary: #3b82f6;
@@ -39,6 +42,13 @@
   --color-meter-stress-mid: #f59e0b;
   --color-meter-stress-high: #ef4444;
   --color-meter-social: #ec4899;
+
+  --color-affordance-bed-stroke: #818cf8;
+  --color-affordance-shower-stroke: #22d3ee;
+  --color-affordance-homemeal-stroke: #fbbf24;
+  --color-affordance-fastfood-stroke: #f87171;
+  --color-affordance-job-stroke: #a78bfa;
+  --color-affordance-bar-stroke: #f472b6;
 
   --color-mode-inference: #3b82f6;
   --color-mode-training: #3b82f6;

@@ -474,7 +474,7 @@ function onModelChange() {
 
 .mode-button.active {
   background: var(--color-mode-inference);
-  color: #ffffff;
+  color: var(--color-text-on-dark);
   border-color: var(--color-interactive-focus);
 }
 
@@ -494,7 +494,7 @@ function onModelChange() {
   background: var(--color-success);
   border: none;
   border-radius: var(--border-radius-sm);
-  color: #ffffff;
+  color: var(--color-text-on-dark);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
@@ -516,7 +516,7 @@ function onModelChange() {
   background: var(--color-error);
   border: none;
   border-radius: var(--border-radius-sm);
-  color: #ffffff;
+  color: var(--color-text-on-dark);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
@@ -524,7 +524,7 @@ function onModelChange() {
 }
 
 .secondary-button:hover {
-  background: #dc2626;
+  background: var(--color-error-hover);
   transform: translateY(-1px);
 }
 
