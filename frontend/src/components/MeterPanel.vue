@@ -81,12 +81,12 @@ function isCritical(name, value) {
 }
 
 function isLonely() {
-  // Check if social is at 0 (causes stress to increase) AND stress is high
+  // Check if social is at 0 (causes stress to increase)
+  // Strobe stress meter to show the causal relationship
   if (!meters.value) return false
   const social = meters.value.social
-  const stress = meters.value.stress
-  // Only strobe when BOTH lonely (social ≈ 0) AND stressed (stress > 80)
-  return social <= 0.01 && stress > 80
+  // Strobe stress whenever social is zero (shows linked nature)
+  return social <= 0.01
 }
 
 function getMeterColor(name, value) {
