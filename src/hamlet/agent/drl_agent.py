@@ -201,6 +201,38 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
         }
         torch.save(checkpoint, filepath)
 
+    @staticmethod
+    def detect_network_type(filepath: str) -> str:
+        """
+        Detect network architecture type from checkpoint file.
+
+        Args:
+            filepath: Path to checkpoint file
+
+        Returns:
+            Network type string ('qnetwork', 'dueling', 'spatial', 'spatial_dueling', 'relational')
+        """
+        checkpoint = torch.load(filepath, map_location='cpu')
+        q_network_keys = set(checkpoint["q_network"].keys())
+
+        # Check for RelationalQNetwork (attention-based)
+        if "meter_embeddings.0.0.weight" in q_network_keys:
+            return "relational"
+
+        # Check for Spatial networks (CNN-based)
+        if any("conv" in key for key in q_network_keys):
+            # Check if it's dueling
+            if "value_stream.0.weight" in q_network_keys:
+                return "spatial_dueling"
+            return "spatial"
+
+        # Check for Dueling network
+        if "value_stream.0.weight" in q_network_keys:
+            return "dueling"
+
+        # Default to basic QNetwork
+        return "qnetwork"
+
     def load(self, filepath: str):
         """
         Load agent networks and parameters.

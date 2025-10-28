@@ -118,7 +118,30 @@ async def inference_endpoint(websocket: WebSocket):
     await inference_manager.connect(websocket)
 
     try:
-        await inference_manager.handle_client(websocket)
+        # Keep connection alive and handle incoming commands
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            # Handle control commands
+            if message.get("type") == "control":
+                command = message.get("command")
+
+                if command == "play":
+                    inference_manager.play()
+                elif command == "pause":
+                    inference_manager.pause()
+                elif command == "step":
+                    inference_manager.step()
+                elif command == "reset":
+                    inference_manager.reset()
+                elif command == "set_speed":
+                    speed = message.get("speed", 1.0)
+                    inference_manager.set_speed(speed)
+                elif command == "load_model":
+                    model = message.get("model")
+                    await inference_manager.load_model(model)
+
     except WebSocketDisconnect:
         await inference_manager.disconnect(websocket)
     except Exception as e:
