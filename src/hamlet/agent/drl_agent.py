@@ -233,6 +233,32 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
         # Default to basic QNetwork
         return "qnetwork"
 
+    @staticmethod
+    def detect_config(filepath: str) -> dict:
+        """
+        Detect agent configuration from checkpoint file.
+
+        Args:
+            filepath: Path to checkpoint file
+
+        Returns:
+            Dictionary with network_type, state_dim, action_dim
+        """
+        checkpoint = torch.load(filepath, map_location='cpu')
+
+        # Detect network type
+        network_type = DRLAgent.detect_network_type(filepath)
+
+        # Get dimensions from checkpoint if available
+        state_dim = checkpoint.get("state_dim", 70)  # Default to 70
+        action_dim = checkpoint.get("action_dim", 5)  # Default to 5
+
+        return {
+            "network_type": network_type,
+            "state_dim": state_dim,
+            "action_dim": action_dim
+        }
+
     def load(self, filepath: str):
         """
         Load agent networks and parameters.

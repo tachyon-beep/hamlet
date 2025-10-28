@@ -69,19 +69,25 @@ class SimulationRunner:
 
         agent_file = Path(self.agent_path)
 
-        # Auto-detect network type from checkpoint if it exists
+        # Auto-detect configuration from checkpoint if it exists
         network_type = "qnetwork"  # Default
+        state_dim = self.state_dim
+        action_dim = self.action_dim
+
         if agent_file.exists():
-            network_type = DRLAgent.detect_network_type(str(agent_file))
-            print(f"Detected network type: {network_type}")
+            config = DRLAgent.detect_config(str(agent_file))
+            network_type = config["network_type"]
+            state_dim = config["state_dim"]
+            action_dim = config["action_dim"]
+            print(f"Detected config: network_type={network_type}, state_dim={state_dim}, action_dim={action_dim}")
         else:
             print(f"Warning: Agent checkpoint not found at {self.agent_path}, using untrained agent")
 
-        # Create agent with correct architecture
+        # Create agent with correct architecture and dimensions
         self.agent = DRLAgent(
             agent_id="visualizer",
-            state_dim=self.state_dim,
-            action_dim=self.action_dim,
+            state_dim=state_dim,
+            action_dim=action_dim,
             device="cpu",
             network_type=network_type,
             grid_size=8  # Standard grid size for Hamlet
