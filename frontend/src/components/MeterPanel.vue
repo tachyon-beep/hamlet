@@ -9,7 +9,8 @@
         class="meter"
         :class="{
           critical: isCritical(name, value),
-          strobe: name === 'stress' && isLonely()
+          'strobe-slow': name === 'stress' && isLonely() && !isHighStress(),
+          'strobe-fast': name === 'stress' && isLonely() && isHighStress()
         }"
       >
         <div class="meter-header">
@@ -82,11 +83,16 @@ function isCritical(name, value) {
 
 function isLonely() {
   // Check if social is at 0 (causes stress to increase)
-  // Strobe stress meter to show the causal relationship
   if (!meters.value) return false
   const social = meters.value.social
-  // Strobe stress whenever social is zero (shows linked nature)
   return social <= 0.01
+}
+
+function isHighStress() {
+  // Check if stress is dangerously high
+  if (!meters.value) return false
+  const stress = meters.value.stress
+  return stress > 80
 }
 
 function getMeterColor(name, value) {
@@ -148,8 +154,12 @@ function getMeterColor(name, value) {
   animation: pulse 1s ease-in-out infinite;
 }
 
-.meter.strobe {
-  animation: strobe 0.5s ease-in-out infinite !important;
+.meter.strobe-slow {
+  animation: strobe-slow 2s ease-in-out infinite !important;
+}
+
+.meter.strobe-fast {
+  animation: strobe-fast 0.6s ease-in-out infinite !important;
 }
 
 @keyframes pulse {
@@ -161,7 +171,22 @@ function getMeterColor(name, value) {
   }
 }
 
-@keyframes strobe {
+@keyframes strobe-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  25% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes strobe-fast {
   0%, 100% {
     opacity: 1;
   }
