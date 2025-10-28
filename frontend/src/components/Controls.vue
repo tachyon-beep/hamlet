@@ -279,7 +279,7 @@
               aria-live="polite"
               role="status"
             >
-              {{ trainingMetrics.bufferSize }}
+              {{ formatNumber(trainingMetrics.bufferSize) }}
             </span>
           </div>
         </div>
@@ -290,7 +290,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { formatTrainingMetric } from '../utils/formatting'
+import { formatTrainingMetric, formatNumber } from '../utils/formatting'
 
 // ✅ Props First: Receive data from parent instead of importing store
 const props = defineProps({

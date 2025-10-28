@@ -159,8 +159,67 @@ export const tokens = {
  * Usage in your CSS:
  *   import { tokensToCSS } from '@/styles/tokens'
  *   :root { tokensToCSS() }
+ *
+ * Note: variables.css is manually maintained for better control and readability.
+ * This function is provided as a convenience for programmatic generation if needed.
  */
 export function tokensToCSS() {
-  // This will be implemented in subtask 1.1.2
-  return ''
+  const cssVars = []
+
+  // Helper to convert camelCase to kebab-case
+  const toKebab = (str) => str.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+
+  // Process colors
+  Object.entries(tokens.colors).forEach(([key, value]) => {
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      // Handle nested objects like meterStress
+      Object.entries(value).forEach(([subKey, subValue]) => {
+        cssVars.push(`  --color-${toKebab(key)}-${toKebab(subKey)}: ${subValue};`)
+      })
+    } else {
+      cssVars.push(`  --color-${toKebab(key)}: ${value};`)
+    }
+  })
+
+  // Process spacing
+  Object.entries(tokens.spacing).forEach(([key, value]) => {
+    cssVars.push(`  --spacing-${key}: ${value};`)
+  })
+
+  // Process font sizes
+  Object.entries(tokens.fontSize).forEach(([key, value]) => {
+    cssVars.push(`  --font-size-${key}: ${value};`)
+  })
+
+  // Process font weights
+  Object.entries(tokens.fontWeight).forEach(([key, value]) => {
+    cssVars.push(`  --font-weight-${key}: ${value};`)
+  })
+
+  // Process border radius
+  Object.entries(tokens.borderRadius).forEach(([key, value]) => {
+    cssVars.push(`  --border-radius-${key}: ${value};`)
+  })
+
+  // Process transitions
+  Object.entries(tokens.transition).forEach(([key, value]) => {
+    cssVars.push(`  --transition-${key}: ${value};`)
+  })
+
+  // Process layout dimensions
+  Object.entries(tokens.layout).forEach(([key, value]) => {
+    cssVars.push(`  --layout-${toKebab(key)}: ${value};`)
+  })
+
+  // Process accessibility
+  Object.entries(tokens.accessibility).forEach(([key, value]) => {
+    cssVars.push(`  --a11y-${toKebab(key)}: ${value};`)
+  })
+
+  // Process z-index
+  Object.entries(tokens.zIndex).forEach(([key, value]) => {
+    cssVars.push(`  --z-index-${key}: ${value};`)
+  })
+
+  return cssVars.join('\n')
 }
