@@ -113,6 +113,49 @@ def test_env_reward_calculation():
     assert info.get("failure_reason") is None
 
 
+def test_env_reward_mode_default_shaped():
+    """Environment defaults to shaped rewards."""
+    env = HamletEnv()
+    assert env.reward_mode == "shaped"
+    assert env.use_shaped_rewards is True
+
+
+def test_env_sparse_reward_survival_bonus():
+    """Sparse mode gives configured survival bonus while agent alive."""
+    config = EnvironmentConfig(
+        reward_mode="sparse",
+        sparse_survival_reward=0.2,
+        sparse_healthy_meter_bonus=0.0,
+    )
+    env = HamletEnv(config=config)
+    env.reset()
+
+    _, reward, done, _ = env.step(HamletEnv.ACTION_RIGHT)
+
+    assert done is False
+    assert reward == pytest.approx(0.2)
+
+
+def test_env_sparse_reward_failure_penalty():
+    """Sparse mode applies terminal penalty when agent dies."""
+    config = EnvironmentConfig(
+        reward_mode="sparse",
+        sparse_survival_reward=0.0,
+        sparse_terminal_reward_failure=-55.0,
+    )
+    env = HamletEnv(config=config)
+    env.reset()
+
+    agent = env.agents["agent_0"]
+    agent.meters.get("energy").value = agent.meters.get("energy").min_value
+
+    _, reward, done, info = env.step(HamletEnv.ACTION_RIGHT)
+
+    assert done is True
+    assert reward == pytest.approx(-55.0)
+    assert info.get("failure_reason") == "energy_depleted"
+
+
 def test_env_termination_meter_zero():
     """Test that episode ends when meter hits zero."""
     env = HamletEnv()

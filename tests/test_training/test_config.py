@@ -29,6 +29,11 @@ def test_environment_config_defaults():
     config = EnvironmentConfig()
     assert config.grid_width == 8
     assert config.grid_height == 8
+    assert config.reward_mode == "shaped"
+    assert config.sparse_survival_reward == pytest.approx(0.1)
+    assert config.sparse_healthy_meter_threshold == pytest.approx(0.75)
+    assert config.sparse_healthy_meter_bonus == pytest.approx(0.05)
+    assert config.sparse_terminal_reward_failure == pytest.approx(-100.0)
     assert config.initial_energy == 100.0
     assert "Bed" in config.affordance_positions
     assert "Job" in config.affordance_positions
@@ -78,6 +83,7 @@ experiment:
 environment:
   grid_width: 16
   grid_height: 16
+  reward_mode: sparse
 
 agents:
   - agent_id: agent_0
@@ -105,6 +111,7 @@ metrics:
 
         assert config.experiment.name == "test_experiment"
         assert config.environment.grid_width == 16
+        assert config.environment.reward_mode == "sparse"
         assert len(config.agents) == 2
         assert config.agents[0].agent_id == "agent_0"
         assert config.agents[1].agent_id == "agent_1"
@@ -136,6 +143,12 @@ def test_full_config_to_yaml():
 
     finally:
         Path(temp_path).unlink()
+
+
+def test_environment_config_invalid_reward_mode():
+    """Invalid reward mode should raise a ValueError."""
+    with pytest.raises(ValueError):
+        EnvironmentConfig(reward_mode="invalid-mode")
 
 
 def test_full_config_to_dict():

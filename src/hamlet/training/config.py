@@ -61,6 +61,14 @@ class EnvironmentConfig:
     grid_width: int = 8
     grid_height: int = 8
 
+    # Reward configuration
+    reward_mode: str = "shaped"  # 'shaped' (dense) or 'sparse'
+    sparse_survival_reward: float = 0.1  # Per-step survival bonus in sparse mode
+    sparse_healthy_meter_threshold: float = 0.75  # Threshold for optional healthy bonus
+    sparse_healthy_meter_bonus: float = 0.05  # Bonus when key meters stay healthy
+    sparse_terminal_reward_success: float = 100.0  # Not yet used (no success condition)
+    sparse_terminal_reward_failure: float = -100.0  # Failure penalty in sparse mode
+
     # Initial meter values
     initial_energy: float = 100.0
     initial_hygiene: float = 100.0
@@ -87,6 +95,14 @@ class EnvironmentConfig:
 
     def __post_init__(self):
         """Set default affordance positions if not provided."""
+        if not self.reward_mode:
+            self.reward_mode = "shaped"
+        self.reward_mode = self.reward_mode.lower()
+        if self.reward_mode not in {"shaped", "sparse"}:
+            raise ValueError(
+                f"Invalid reward_mode '{self.reward_mode}'. Expected 'shaped' or 'sparse'."
+            )
+
         if self.affordance_positions is None:
             # Default positions - can be overridden
             # Spatial clustering: Home zone, Work zone, distant Bar and Recreation

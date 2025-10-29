@@ -78,8 +78,10 @@ class HamletEnv:
         }
 
         # Reward shaping config
-        self.use_shaped_rewards = True  # Enable improved reward function
-        self.use_proximity_shaping = True  # Enable proximity guidance
+        self.reward_mode = self.config.reward_mode
+        self.use_shaped_rewards = self.reward_mode == "shaped"
+        # Proximity shaping only applies when dense rewards are enabled
+        self.use_proximity_shaping = self.use_shaped_rewards
 
     def reset(self) -> Dict:
         """Reset the environment to initial state."""
@@ -167,21 +169,25 @@ class HamletEnv:
         # Apply social-driven mood penalty when lonely
         self._apply_social_mood_penalty(agent)
 
-        # Calculate reward with shaped rewards
-        if self.use_shaped_rewards:
-            step_reward = self._calculate_shaped_reward(agent, prev_meters, interaction_affordance)
-        else:
-            step_reward = self._calculate_reward(agent)  # Legacy reward function
-
-        reward += step_reward
-
-        # Check termination
+        # Determine termination before assigning rewards so sparse mode can respond
         done, failure_reason = self._check_done(agent)
         self.last_failure_reason = failure_reason
 
-        # Death penalty
-        if done:
-            reward -= 100.0
+        if self.reward_mode == "shaped":
+            reward += self._calculate_shaped_reward(
+                agent,
+                prev_meters,
+                interaction_affordance
+            )
+            if done:
+                reward -= 100.0  # Preserve strong penalty for failure in dense mode
+        elif self.reward_mode == "sparse":
+            reward += self._calculate_sparse_reward(agent, done, failure_reason)
+        else:
+            # Fallback to legacy reward if reward_mode is misconfigured at runtime
+            reward += self._calculate_reward(agent)
+            if done:
+                reward -= 100.0
 
         self.current_step += 1
 
@@ -390,6 +396,40 @@ class HamletEnv:
             dist = self._distance_to_affordances(agent, ["HomeMeal", "FastFood"])
             max_dist = self.grid.width + self.grid.height
             reward -= urgency * (dist / max_dist) * 2.0
+
+        return reward
+
+    def _calculate_sparse_reward(
+        self,
+        agent: Agent,
+        done: bool,
+        failure_reason: Optional[str]
+    ) -> float:
+        """
+        Calculate sparse reward signal.
+
+        Sparse mode focuses on survival time and terminal outcomes.
+        Optional healthy-meter bonus encourages maintaining a buffer
+        without providing dense directional feedback.
+        """
+        reward = 0.0
+
+        if not done:
+            reward += self.config.sparse_survival_reward
+
+            if self.config.sparse_healthy_meter_bonus > 0:
+                healthy_threshold = self.config.sparse_healthy_meter_threshold
+                key_meters = ["energy", "hygiene", "satiation", "mood", "social"]
+                if all(
+                    agent.meters.get(meter_name).normalize() >= healthy_threshold
+                    for meter_name in key_meters
+                ):
+                    reward += self.config.sparse_healthy_meter_bonus
+        else:
+            if failure_reason is None:
+                reward += self.config.sparse_terminal_reward_success
+            else:
+                reward += self.config.sparse_terminal_reward_failure
 
         return reward
 
