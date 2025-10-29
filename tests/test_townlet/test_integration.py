@@ -222,3 +222,63 @@ def test_integration_with_adversarial_curriculum():
     # Verify curriculum tracker is being updated
     assert curriculum.tracker is not None
     assert curriculum.tracker.episode_steps.sum() > 0, "Curriculum tracker should have recorded steps"
+
+
+@pytest.mark.integration
+def test_integration_with_adaptive_intrinsic_and_replay():
+    """VectorizedPopulation should work with AdaptiveIntrinsic and ReplayBuffer."""
+    from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+    from townlet.training.replay_buffer import ReplayBuffer
+    from townlet.curriculum.static import StaticCurriculum
+
+    device = torch.device('cpu')
+    num_agents = 3
+
+    # Create adaptive intrinsic exploration
+    exploration = AdaptiveIntrinsicExploration(
+        obs_dim=70,
+        embed_dim=128,
+        initial_intrinsic_weight=1.0,
+        variance_threshold=10.0,
+        survival_window=10,
+        device=device,
+    )
+
+    # Create environment
+    env = VectorizedHamletEnv(num_agents=num_agents, grid_size=8, device=device)
+
+    # Create curriculum
+    curriculum = StaticCurriculum(difficulty_level=0.5)
+
+    # Create population with replay buffer
+    population = VectorizedPopulation(
+        env=env,
+        curriculum=curriculum,
+        exploration=exploration,
+        agent_ids=[f'agent_{i}' for i in range(num_agents)],
+        device=device,
+        replay_buffer_capacity=1000,
+    )
+
+    # Verify replay buffer created
+    assert hasattr(population, 'replay_buffer')
+    assert isinstance(population.replay_buffer, ReplayBuffer)
+
+    # Reset and run 200 steps
+    population.reset()
+
+    for _ in range(200):
+        agent_state = population.step_population(env)
+        population.update_curriculum_tracker(agent_state.rewards, agent_state.dones)
+
+    # Verify replay buffer has transitions
+    assert len(population.replay_buffer) > 0
+
+    # Verify can sample from buffer
+    if len(population.replay_buffer) >= 64:
+        batch = population.replay_buffer.sample(
+            batch_size=64,
+            intrinsic_weight=exploration.get_intrinsic_weight(),
+        )
+        assert batch['observations'].shape == (64, 70)
+        assert batch['rewards'].shape == (64,)

@@ -8,11 +8,15 @@ Manages Q-networks, replay buffers, and training loops.
 from typing import List, TYPE_CHECKING
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from townlet.population.base import PopulationManager
 from townlet.training.state import BatchedAgentState, PopulationCheckpoint
 from townlet.curriculum.base import CurriculumManager
 from townlet.exploration.base import ExplorationStrategy
+from townlet.training.replay_buffer import ReplayBuffer
+from townlet.exploration.rnd import RNDExploration
+from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 
 if TYPE_CHECKING:
     from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -52,6 +56,9 @@ class VectorizedPopulation(PopulationManager):
         device: torch.device,
         obs_dim: int = 70,
         action_dim: int = 5,
+        learning_rate: float = 0.00025,
+        gamma: float = 0.99,
+        replay_buffer_capacity: int = 10000,
     ):
         """
         Initialize vectorized population.
@@ -64,6 +71,9 @@ class VectorizedPopulation(PopulationManager):
             device: PyTorch device
             obs_dim: Observation dimension
             action_dim: Action dimension
+            learning_rate: Learning rate for Q-network optimizer
+            gamma: Discount factor
+            replay_buffer_capacity: Maximum number of transitions in replay buffer
         """
         self.env = env
         self.curriculum = curriculum
@@ -71,9 +81,18 @@ class VectorizedPopulation(PopulationManager):
         self.agent_ids = agent_ids
         self.num_agents = len(agent_ids)
         self.device = device
+        self.gamma = gamma
 
         # Q-network (shared across all agents for now)
         self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
+        self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
+
+        # Replay buffer
+        self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity, device=device)
+
+        # Training counters
+        self.total_steps = 0
+        self.train_frequency = 4  # Train Q-network every N steps
 
         # Current state
         self.current_obs: torch.Tensor = None
@@ -83,8 +102,15 @@ class VectorizedPopulation(PopulationManager):
     def reset(self) -> None:
         """Reset all environments and state."""
         self.current_obs = self.env.reset()
+
+        # Get epsilon from exploration strategy (handle both direct and composed)
+        if isinstance(self.exploration, AdaptiveIntrinsicExploration):
+            epsilon = self.exploration.rnd.epsilon
+        else:
+            epsilon = self.exploration.epsilon
+
         self.current_epsilons = torch.full(
-            (self.num_agents,), self.exploration.epsilon, device=self.device
+            (self.num_agents,), epsilon, device=self.device
         )
 
     def step_population(
@@ -138,17 +164,76 @@ class VectorizedPopulation(PopulationManager):
         # 5. Step environment
         next_obs, rewards, dones, info = envs.step(actions)
 
-        # 6. Compute intrinsic rewards
-        intrinsic_rewards = self.exploration.compute_intrinsic_rewards(next_obs)
+        # 6. Compute intrinsic rewards (if RND-based exploration)
+        intrinsic_rewards = torch.zeros_like(rewards)
+        if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
+            intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs)
 
-        # 7. Update current state
+        # 7. Store transition in replay buffer
+        self.replay_buffer.push(
+            observations=self.current_obs,
+            actions=actions,
+            rewards_extrinsic=rewards,
+            rewards_intrinsic=intrinsic_rewards,
+            next_observations=next_obs,
+            dones=dones,
+        )
+
+        # 8. Train RND predictor (if applicable)
+        if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
+            rnd = self.exploration.rnd if isinstance(self.exploration, AdaptiveIntrinsicExploration) else self.exploration
+            # Accumulate observations in RND buffer
+            for i in range(self.num_agents):
+                rnd.obs_buffer.append(self.current_obs[i].cpu())
+            # Train predictor if buffer is full
+            loss = rnd.update_predictor()
+
+        # 9. Train Q-network from replay buffer (every train_frequency steps)
+        self.total_steps += 1
+        if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= 64:
+            intrinsic_weight = (
+                self.exploration.get_intrinsic_weight()
+                if isinstance(self.exploration, AdaptiveIntrinsicExploration)
+                else 1.0
+            )
+            batch = self.replay_buffer.sample(batch_size=64, intrinsic_weight=intrinsic_weight)
+
+            # Standard DQN update (simplified, no target network for now)
+            q_pred = self.q_network(batch['observations']).gather(1, batch['actions'].unsqueeze(1)).squeeze()
+
+            with torch.no_grad():
+                q_next = self.q_network(batch['next_observations']).max(1)[0]
+                q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+
+            loss = F.mse_loss(q_pred, q_target)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+        # 10. Update current state
         self.current_obs = next_obs
 
-        # 8. Construct BatchedAgentState
+        # 11. Handle episode resets (for adaptive intrinsic annealing)
+        if dones.any():
+            reset_indices = torch.where(dones)[0]
+            for idx in reset_indices:
+                # Update adaptive intrinsic annealing
+                if isinstance(self.exploration, AdaptiveIntrinsicExploration):
+                    survival_time = info['step_counts'][idx].item()
+                    self.exploration.update_on_episode_end(survival_time=survival_time)
+
+        # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
+        total_rewards = rewards + intrinsic_rewards * (
+            self.exploration.get_intrinsic_weight()
+            if isinstance(self.exploration, AdaptiveIntrinsicExploration)
+            else 1.0
+        )
+
         state = BatchedAgentState(
             observations=next_obs,
             actions=actions,
-            rewards=rewards,
+            rewards=total_rewards,
             dones=dones,
             epsilons=self.current_epsilons,
             intrinsic_rewards=intrinsic_rewards,
