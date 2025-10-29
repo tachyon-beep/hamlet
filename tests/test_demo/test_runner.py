@@ -58,3 +58,37 @@ def test_checkpoint_save_load():
         loaded_episode = runner2.load_checkpoint()
 
         assert loaded_episode == 42
+
+
+def test_runner_integration_short_run():
+    """Integration test: Run 2-3 episodes to catch API bugs."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_path = Path(__file__).parent.parent.parent / "configs" / "townlet" / "sparse_adaptive.yaml"
+        db_path = Path(tmpdir) / "demo.db"
+
+        runner = DemoRunner(
+            config_path=config_path,
+            db_path=db_path,
+            checkpoint_dir=Path(tmpdir) / "checkpoints",
+            max_episodes=3  # Just run 3 episodes
+        )
+
+        # This will catch:
+        # - VectorizedPopulation constructor API mismatch
+        # - reset() method signature bugs
+        # - Initialization order bugs
+        runner.run()
+
+        # Verify training completed
+        assert runner.current_episode == 3
+
+        # Verify checkpoint was saved (should save at episode 0, final)
+        checkpoint_files = list(Path(tmpdir).joinpath("checkpoints").glob("checkpoint_ep*.pt"))
+        assert len(checkpoint_files) >= 1
+
+        # Verify episodes were logged (open fresh connection since runner.db is closed)
+        from hamlet.demo.database import DemoDatabase
+        db = DemoDatabase(db_path)
+        episodes = db.get_latest_episodes(limit=10)
+        assert len(episodes) == 3
+        db.close()
