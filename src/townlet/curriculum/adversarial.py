@@ -150,27 +150,71 @@ class AdversarialCurriculum(CurriculumManager):
         """Get reward mode for stage."""
         return STAGE_CONFIGS[stage - 1].reward_mode
 
+    def _should_advance(self, agent_idx: int, entropy: float) -> bool:
+        """Check if agent should advance to next stage."""
+        if self.tracker.agent_stages[agent_idx] >= 5:
+            return False  # Already at max stage
+
+        # Check minimum steps at stage
+        if self.tracker.steps_at_stage[agent_idx] < self.min_steps_at_stage:
+            return False
+
+        # Calculate metrics
+        survival_rate = self.tracker.get_survival_rate(self.max_steps_per_episode)[agent_idx]
+        learning_progress = self.tracker.get_learning_progress()[agent_idx]
+
+        # Multi-signal decision
+        high_survival = survival_rate > self.survival_advance_threshold
+        positive_learning = learning_progress > 0
+        converged = entropy < self.entropy_gate
+
+        return high_survival and positive_learning and converged
+
     def get_batch_decisions(
         self,
         agent_states: BatchedAgentState,
         agent_ids: List[str],
     ) -> List[CurriculumDecision]:
         """Generate curriculum decisions for batch of agents."""
-        # For now, return same decision for all agents (will add per-agent logic in Task 2)
-        stage = self.tracker.agent_stages[0].item() if self.tracker else 1
-        config = STAGE_CONFIGS[stage - 1]
+        if self.tracker is None:
+            raise RuntimeError("Must call initialize_population before get_batch_decisions")
 
-        difficulty_level = stage
+        # Calculate entropy for each agent
+        entropies = self._calculate_action_entropy(agent_states)
 
-        decision = CurriculumDecision(
-            difficulty_level=difficulty_level,
-            active_meters=config.active_meters,
-            depletion_multiplier=config.depletion_multiplier,
-            reward_mode=config.reward_mode,
-            reason=config.description,
-        )
+        decisions = []
+        for i, agent_id in enumerate(agent_ids):
+            # Check for advancement
+            if self._should_advance(i, entropies[i].item()):
+                self.tracker.agent_stages[i] += 1
+                self.tracker.steps_at_stage[i] = 0
+                self.tracker.update_baseline()
 
-        return [decision] * len(agent_ids)
+            # Get current stage
+            stage = self.tracker.agent_stages[i].item()
+            config = STAGE_CONFIGS[stage - 1]
+
+            # Normalize stage (1-5) to difficulty_level (0.0-1.0)
+            difficulty_level = (stage - 1) / 4.0  # Stage 1 -> 0.0, Stage 5 -> 1.0
+
+            decision = CurriculumDecision(
+                difficulty_level=difficulty_level,
+                active_meters=config.active_meters,
+                depletion_multiplier=config.depletion_multiplier,
+                reward_mode=config.reward_mode,
+                reason=f"{config.description} (agent {agent_id})",
+            )
+            decisions.append(decision)
+
+        # Update step counter
+        self.tracker.steps_at_stage += 1
+
+        return decisions
+
+    def _calculate_action_entropy(self, agent_states: BatchedAgentState) -> torch.Tensor:
+        """Calculate action distribution entropy (stub for Task 4)."""
+        # Placeholder - will implement in Task 4
+        return torch.zeros(agent_states.observations.shape[0], device=self.device)
 
     def checkpoint_state(self) -> Dict[str, Any]:
         """Return serializable state for checkpoint saving."""
