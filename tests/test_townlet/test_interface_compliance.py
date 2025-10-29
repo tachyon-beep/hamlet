@@ -10,6 +10,7 @@ import torch
 
 from townlet.training.state import BatchedAgentState, CurriculumDecision
 from townlet.curriculum.static import StaticCurriculum
+from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 
 
 # Curriculum Manager Compliance Tests
@@ -49,13 +50,42 @@ def test_curriculum_manager_compliance(curriculum_class):
 # Exploration Strategy Compliance Tests
 
 @pytest.mark.parametrize("exploration_class", [
-    # Add implementations here:
-    # EpsilonGreedyExploration,
+    EpsilonGreedyExploration,
+    # Add more implementations here:
     # RNDExploration,
 ])
 def test_exploration_strategy_compliance(exploration_class):
     """Verify exploration implementations satisfy interface contract."""
-    pytest.skip("No exploration implementations yet (Phase 1)")
+    exploration = exploration_class()
+
+    # Should have all required methods
+    assert hasattr(exploration, 'select_actions')
+    assert hasattr(exploration, 'compute_intrinsic_rewards')
+    assert hasattr(exploration, 'update')
+
+    # select_actions should return tensor
+    q_values = torch.randn(3, 5)
+    state = create_mock_batched_state(batch_size=3)
+    actions = exploration.select_actions(q_values, state)
+
+    assert isinstance(actions, torch.Tensor)
+    assert actions.shape == (3,)
+
+    # compute_intrinsic_rewards should return tensor
+    observations = torch.randn(3, 70)
+    intrinsic = exploration.compute_intrinsic_rewards(observations)
+
+    assert isinstance(intrinsic, torch.Tensor)
+    assert intrinsic.shape == (3,)
+
+    # update should not raise
+    batch = {'states': torch.randn(10, 70)}
+    exploration.update(batch)  # Should not raise
+
+    # checkpoint/restore should work
+    checkpoint = exploration.checkpoint_state()
+    assert isinstance(checkpoint, dict)
+    exploration.load_state(checkpoint)  # Should not raise
 
 
 # Population Manager Compliance Tests
