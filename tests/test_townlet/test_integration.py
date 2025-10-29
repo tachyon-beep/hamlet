@@ -156,3 +156,69 @@ def test_train_on_gpu():
         # Verify tensors are on GPU
         assert state.observations.device.type == 'cuda'
         assert state.rewards.device.type == 'cuda'
+
+
+@pytest.mark.integration
+def test_integration_with_adversarial_curriculum():
+    """VectorizedPopulation should work with AdversarialCurriculum."""
+    from townlet.curriculum.adversarial import AdversarialCurriculum
+
+    device = torch.device('cpu')
+    num_agents = 3
+
+    # Create curriculum
+    curriculum = AdversarialCurriculum(
+        max_steps_per_episode=500,
+        survival_advance_threshold=0.7,
+        min_steps_at_stage=10,  # Low for fast testing
+        device=device,
+    )
+
+    # Create environment
+    env = VectorizedHamletEnv(num_agents=num_agents, grid_size=8, device=device)
+
+    # Initialize curriculum with population size
+    curriculum.initialize_population(num_agents=num_agents)
+
+    # Create exploration strategy
+    exploration = EpsilonGreedyExploration(epsilon=0.5, epsilon_decay=1.0)
+
+    # Create population with curriculum
+    population = VectorizedPopulation(
+        env=env,
+        curriculum=curriculum,
+        exploration=exploration,
+        agent_ids=[f'agent_{i}' for i in range(num_agents)],
+        device=device,
+    )
+
+    # Reset and run steps
+    population.reset()
+
+    # Run 50 steps
+    for step in range(50):
+        agent_state = population.step_population(env)
+
+        # Verify state is returned
+        assert agent_state is not None
+        assert agent_state.observations.shape[0] == num_agents
+
+        # Update curriculum tracker (REQUIRED for adversarial curriculum)
+        population.update_curriculum_tracker(agent_state.rewards, agent_state.dones)
+
+    # Verify curriculum decisions are being made
+    assert hasattr(population, 'current_curriculum_decisions'), \
+        "VectorizedPopulation must store current_curriculum_decisions"
+    assert len(population.current_curriculum_decisions) == num_agents, \
+        f"Expected {num_agents} curriculum decisions, got {len(population.current_curriculum_decisions)}"
+
+    # Verify decisions have correct structure
+    for decision in population.current_curriculum_decisions:
+        assert hasattr(decision, 'difficulty_level')
+        assert hasattr(decision, 'active_meters')
+        assert hasattr(decision, 'reward_mode')
+        assert decision.difficulty_level >= 0.0
+
+    # Verify curriculum tracker is being updated
+    assert curriculum.tracker is not None
+    assert curriculum.tracker.episode_steps.sum() > 0, "Curriculum tracker should have recorded steps"

@@ -78,6 +78,7 @@ class VectorizedPopulation(PopulationManager):
         # Current state
         self.current_obs: torch.Tensor = None
         self.current_epsilons: torch.Tensor = None
+        self.current_curriculum_decisions: List = []  # Store curriculum decisions
 
     def reset(self) -> None:
         """Reset all environments and state."""
@@ -103,7 +104,7 @@ class VectorizedPopulation(PopulationManager):
         with torch.no_grad():
             q_values = self.q_network(self.current_obs)
 
-        # 2. Create temporary agent state for action selection
+        # 2. Create temporary agent state for curriculum decision
         temp_state = BatchedAgentState(
             observations=self.current_obs,
             actions=torch.zeros(self.num_agents, dtype=torch.long, device=self.device),
@@ -116,19 +117,34 @@ class VectorizedPopulation(PopulationManager):
             device=self.device,
         )
 
-        # 3. Select actions via exploration strategy
+        # 3. Get curriculum decisions (pass Q-values if curriculum supports it)
+        if hasattr(self.curriculum, 'get_batch_decisions_with_qvalues'):
+            # AdversarialCurriculum - pass Q-values for entropy calculation
+            self.current_curriculum_decisions = self.curriculum.get_batch_decisions_with_qvalues(
+                temp_state,
+                self.agent_ids,
+                q_values,
+            )
+        else:
+            # StaticCurriculum or other curricula - no Q-values needed
+            self.current_curriculum_decisions = self.curriculum.get_batch_decisions(
+                temp_state,
+                self.agent_ids,
+            )
+
+        # 4. Select actions via exploration strategy
         actions = self.exploration.select_actions(q_values, temp_state)
 
-        # 4. Step environment
+        # 5. Step environment
         next_obs, rewards, dones, info = envs.step(actions)
 
-        # 5. Compute intrinsic rewards
+        # 6. Compute intrinsic rewards
         intrinsic_rewards = self.exploration.compute_intrinsic_rewards(next_obs)
 
-        # 6. Update current state
+        # 7. Update current state
         self.current_obs = next_obs
 
-        # 7. Construct BatchedAgentState
+        # 8. Construct BatchedAgentState
         state = BatchedAgentState(
             observations=next_obs,
             actions=actions,
@@ -142,6 +158,18 @@ class VectorizedPopulation(PopulationManager):
         )
 
         return state
+
+    def update_curriculum_tracker(self, rewards: torch.Tensor, dones: torch.Tensor):
+        """Update curriculum performance tracking after step.
+
+        Call this after step_population if using AdversarialCurriculum.
+
+        Args:
+            rewards: Rewards from environment step
+            dones: Done flags from environment step
+        """
+        if hasattr(self.curriculum, 'tracker') and self.curriculum.tracker is not None:
+            self.curriculum.tracker.update_step(rewards, dones)
 
     def get_checkpoint(self) -> PopulationCheckpoint:
         """
