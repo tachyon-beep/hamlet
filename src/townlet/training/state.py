@@ -46,3 +46,45 @@ class CurriculumDecision(BaseModel):
         min_length=1,
         description="Human-readable explanation for this decision"
     )
+
+
+class ExplorationConfig(BaseModel):
+    """
+    Cold path: Configuration for exploration strategy.
+
+    Defines parameters for epsilon-greedy, RND, or adaptive intrinsic exploration.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    strategy_type: str = Field(
+        ...,
+        pattern=r'^(epsilon_greedy|rnd|adaptive_intrinsic)$',
+        description="Exploration strategy: epsilon_greedy, rnd, or adaptive_intrinsic"
+    )
+    epsilon: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Epsilon for epsilon-greedy (0.0 = greedy, 1.0 = random)"
+    )
+    epsilon_decay: float = Field(
+        default=0.995,
+        gt=0.0,
+        le=1.0,
+        description="Epsilon decay per episode (0.995 = ~1% decay)"
+    )
+    intrinsic_weight: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Weight for intrinsic motivation rewards"
+    )
+    rnd_hidden_dim: int = Field(
+        default=256,
+        gt=0,
+        description="Hidden dimension for RND networks"
+    )
+    rnd_learning_rate: float = Field(
+        default=0.0001,
+        gt=0.0,
+        description="Learning rate for RND predictor network"
+    )
