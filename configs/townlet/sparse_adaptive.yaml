@@ -1,0 +1,52 @@
+# Sparse reward learning with adaptive intrinsic motivation
+# Multi-day tech demo configuration
+
+experiment:
+  name: sparse_adaptive_demo
+  description: Multi-day demo of sparse reward learning with RND and adaptive annealing
+
+curriculum:
+  type: adversarial
+  max_steps_per_episode: 500
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 1000
+  device: cuda
+
+exploration:
+  type: adaptive_intrinsic
+  obs_dim: 70
+  embed_dim: 128
+  rnd_learning_rate: 0.0001
+  rnd_training_batch_size: 128
+  initial_intrinsic_weight: 1.0
+  min_intrinsic_weight: 0.0
+  variance_threshold: 10.0
+  survival_window: 100
+  decay_rate: 0.99
+  epsilon_start: 1.0
+  epsilon_min: 0.01
+  epsilon_decay: 0.995
+
+population:
+  num_agents: 10
+  state_dim: 70
+  action_dim: 5
+  grid_size: 8
+  replay_buffer_capacity: 10000
+  batch_size: 64
+  learning_rate: 0.00025
+  gamma: 0.99
+  train_frequency: 4
+
+training:
+  num_episodes: 10000
+  max_steps_per_episode: 500
+  device: cuda
+
+visualization:
+  enabled: true
+  websocket_host: localhost
+  websocket_port: 8765
+  update_frequency: 1  # Stream every step
