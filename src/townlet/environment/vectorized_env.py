@@ -122,10 +122,13 @@ class VectorizedHamletEnv:
         # 2. Deplete meters
         self._deplete_meters()
 
-        # 3. Check terminal conditions
+        # 3. Apply social-mood penalty
+        self._apply_social_mood_penalty()
+
+        # 4. Check terminal conditions
         self._check_dones()
 
-        # 4. Calculate rewards (shaped rewards for now)
+        # 5. Calculate rewards (shaped rewards for now)
         rewards = self._calculate_shaped_rewards()
 
         # 5. Increment step counts
@@ -165,6 +168,21 @@ class VectorizedHamletEnv:
         new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
 
         self.positions = new_positions
+
+        # Apply movement costs (matching Hamlet exactly)
+        # Movement costs: energy -0.5%, hygiene -0.3%, satiation -0.4%
+        movement_mask = (actions < 4)  # Actions 0-3 are movement
+        if movement_mask.any():
+            movement_costs = torch.tensor([
+                0.005,  # energy: -0.5%
+                0.003,  # hygiene: -0.3%
+                0.004,  # satiation: -0.4%
+                0.0,    # money: no cost
+                0.0,    # mood: no cost
+                0.0,    # social: no cost
+            ], device=self.device)
+            self.meters[movement_mask] -= movement_costs.unsqueeze(0)
+            self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
         interact_mask = (actions == 4)
@@ -224,6 +242,37 @@ class VectorizedHamletEnv:
         self.meters = torch.clamp(
             self.meters - depletions, 0.0, 1.0
         )
+
+    def _apply_social_mood_penalty(self) -> None:
+        """
+        Apply additional mood drain when socially isolated.
+
+        Matches Hamlet's social-mood coupling where low social causes
+        additional mood penalties.
+        """
+        # Constants from EnvironmentConfig
+        mood_social_penalty = 5.0  # max additional mood drop per step
+        mood_social_threshold = 0.3  # below this social level, apply penalty
+
+        social_values = self.meters[:, 5]  # social meter
+        mood_values = self.meters[:, 4]    # mood meter
+
+        # Calculate penalty only for agents below threshold
+        below_threshold = social_values < mood_social_threshold
+
+        if below_threshold.any():
+            # deficit_ratio = (threshold - social) / threshold
+            # Capped to prevent division issues
+            threshold = max(mood_social_threshold, 1e-6)
+            deficit_ratio = (threshold - social_values[below_threshold]) / threshold
+            mood_penalty = mood_social_penalty * deficit_ratio / 100.0  # Normalize to [0, 1]
+
+            # Apply penalty to mood
+            self.meters[below_threshold, 4] = torch.clamp(
+                mood_values[below_threshold] - mood_penalty,
+                0.0,
+                1.0
+            )
 
     def _check_dones(self) -> None:
         """Check terminal conditions."""
@@ -317,7 +366,98 @@ class VectorizedHamletEnv:
         # Critical social (<=0.2): -1.2
         rewards += torch.where(social_values <= 0.2, -1.2, 0.0)
 
+        # Tier 2: Proximity shaping (simplified version)
+        # Add small reward for being near needed affordances
+        proximity_rewards = self._calculate_proximity_rewards()
+        rewards += proximity_rewards
+
+        # Urgency penalty: when satiation is low and far from food, subtract
+        satiation_values = self.meters[:, 2]
+        low_satiation = satiation_values < 0.4
+        if low_satiation.any():
+            # Calculate distance to food affordances for agents with low satiation
+            for agent_idx in range(self.num_agents):
+                if not low_satiation[agent_idx]:
+                    continue
+
+                # Find nearest food affordance (HomeMeal or FastFood)
+                food_affordances = ['HomeMeal', 'FastFood']
+                min_dist = float('inf')
+                for food_name in food_affordances:
+                    if food_name in self.affordances:
+                        food_pos = self.affordances[food_name]
+                        dist = torch.abs(self.positions[agent_idx] - food_pos).sum().item()
+                        min_dist = min(min_dist, dist)
+
+                if min_dist < float('inf'):
+                    urgency = min(1.0, (0.4 - satiation_values[agent_idx].item()) / 0.4)
+                    max_dist = self.grid_size * 2
+                    rewards[agent_idx] -= urgency * (min_dist / max_dist) * 2.0
+
         # Terminal penalty
         rewards = torch.where(self.dones, -100.0, rewards)
+
+        return rewards
+
+    def _calculate_proximity_rewards(self) -> torch.Tensor:
+        """
+        Calculate proximity shaping rewards (simplified).
+
+        Returns small positive reward for being near needed affordances.
+
+        Returns:
+            proximity_rewards: [num_agents]
+        """
+        rewards = torch.zeros(self.num_agents, device=self.device)
+
+        # Meter index to affordance name mapping
+        meter_to_affordance = {
+            0: 'Bed',       # energy
+            1: 'Shower',    # hygiene
+            2: 'HomeMeal',  # satiation
+            3: 'Job',       # money
+            4: 'Gym',       # mood
+            5: 'Bar',       # social
+        }
+
+        # For each agent, find most critical meter and reward proximity
+        for agent_idx in range(self.num_agents):
+            # Find most critical meter (highest urgency = lowest value)
+            meter_vals = self.meters[agent_idx]
+            urgency = 1.0 - meter_vals  # Higher when meter is lower
+
+            # Only consider meters below threshold
+            threshold = torch.tensor([0.5, 0.5, 0.5, 0.4, 0.5, 0.5], device=self.device)
+            below_threshold = meter_vals < threshold
+
+            if not below_threshold.any():
+                continue
+
+            # Find most urgent meter below threshold
+            urgency_masked = urgency * below_threshold.float()
+            most_urgent_idx = urgency_masked.argmax().item()
+
+            if urgency_masked[most_urgent_idx] == 0:
+                continue
+
+            # Get target affordance
+            affordance_name = meter_to_affordance.get(most_urgent_idx)
+            if affordance_name is None or affordance_name not in self.affordances:
+                continue
+
+            # Calculate Manhattan distance to target
+            target_pos = self.affordances[affordance_name]
+            agent_pos = self.positions[agent_idx]
+            distance = torch.abs(agent_pos - target_pos).sum().float()
+
+            # Max distance on grid
+            max_dist = self.grid_size * 2
+
+            # Proximity (higher when closer)
+            proximity = 1.0 - (distance / max_dist)
+
+            # Reward = urgency × proximity × scaling (max ~0.5)
+            urgency_val = urgency_masked[most_urgent_idx]
+            rewards[agent_idx] = urgency_val * proximity * 0.5
 
         return rewards
