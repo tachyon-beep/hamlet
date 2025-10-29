@@ -139,11 +139,9 @@ class RNDExploration(ExplorationStrategy):
         """
         with torch.no_grad():
             target_features = self.fixed_network(observations)
-
-        predicted_features = self.predictor_network(observations)
-
-        # MSE per sample (high error = novel = high reward)
-        mse_per_sample = ((target_features - predicted_features) ** 2).mean(dim=1)
+            predicted_features = self.predictor_network(observations)
+            # MSE per sample (high error = novel = high reward)
+            mse_per_sample = ((target_features - predicted_features) ** 2).mean(dim=1)
 
         return mse_per_sample
 
