@@ -72,8 +72,9 @@ class VectorizedHamletEnv:
 
         # Initial meter values (normalized to [0, 1])
         # [energy, hygiene, satiation, money, mood, social]
+        # NOTE: money=0.75 corresponds to Hamlet's money=50 in range [-100, 100]
         self.meters = torch.tensor([
-            [1.0, 1.0, 1.0, 0.5, 1.0, 0.5]  # Default initial values
+            [1.0, 1.0, 1.0, 0.75, 1.0, 0.5]  # Default initial values
         ], device=self.device).repeat(self.num_agents, 1)
 
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
@@ -89,10 +90,11 @@ class VectorizedHamletEnv:
             observations: [num_agents, observation_dim]
         """
         # Grid encoding: one-hot position
+        # positions[:, 0] = x (column), positions[:, 1] = y (row)
         grid_encoding = torch.zeros(
             self.num_agents, self.grid_size * self.grid_size, device=self.device
         )
-        flat_indices = self.positions[:, 0] * self.grid_size + self.positions[:, 1]
+        flat_indices = self.positions[:, 1] * self.grid_size + self.positions[:, 0]
         grid_encoding.scatter_(1, flat_indices.unsqueeze(1), 1.0)
 
         # Concatenate grid + meters
@@ -151,12 +153,13 @@ class VectorizedHamletEnv:
             actions: [num_agents] tensor
                 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=INTERACT
         """
-        # Movement deltas
+        # Movement deltas (x, y) coordinates
+        # x = horizontal (column), y = vertical (row)
         deltas = torch.tensor([
-            [-1, 0],  # UP
-            [1, 0],   # DOWN
-            [0, -1],  # LEFT
-            [0, 1],   # RIGHT
+            [0, -1],  # UP - decreases y, x unchanged
+            [0, 1],   # DOWN - increases y, x unchanged
+            [-1, 0],  # LEFT - decreases x, y unchanged
+            [1, 0],   # RIGHT - increases x, y unchanged
             [0, 0],   # INTERACT (no movement)
         ], device=self.device)
 
@@ -206,23 +209,24 @@ class VectorizedHamletEnv:
                 continue
 
             # Apply affordance effects (matching Hamlet exactly)
+            # NOTE: Money is in range [-100, 100], so $X = X/200 in normalized [0, 1]
             if affordance_name == 'Bed':
                 self.meters[at_affordance, 0] = torch.clamp(
                     self.meters[at_affordance, 0] + 0.5, 0.0, 1.0
                 )  # Energy +50%
-                self.meters[at_affordance, 3] -= 0.05  # Money -$5
+                self.meters[at_affordance, 3] -= 0.025  # Money -$5 = -5/200
             elif affordance_name == 'Shower':
                 self.meters[at_affordance, 1] = torch.clamp(
                     self.meters[at_affordance, 1] + 0.4, 0.0, 1.0
                 )  # Hygiene +40%
-                self.meters[at_affordance, 3] -= 0.03  # Money -$3
+                self.meters[at_affordance, 3] -= 0.015  # Money -$3 = -3/200
             elif affordance_name == 'HomeMeal':
                 self.meters[at_affordance, 2] = torch.clamp(
                     self.meters[at_affordance, 2] + 0.45, 0.0, 1.0
                 )  # Satiation +45%
-                self.meters[at_affordance, 3] -= 0.03  # Money -$3
+                self.meters[at_affordance, 3] -= 0.015  # Money -$3 = -3/200
             elif affordance_name == 'Job':
-                self.meters[at_affordance, 3] += 0.225  # Money +$22.5 (simplified from dynamic $15-30)
+                self.meters[at_affordance, 3] += 0.1125  # Money +$22.5 = 22.5/200
                 self.meters[at_affordance, 0] = torch.clamp(
                     self.meters[at_affordance, 0] - 0.15, 0.0, 1.0
                 )  # Energy -15%

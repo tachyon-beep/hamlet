@@ -36,7 +36,8 @@ def test_shaped_rewards_match_hamlet():
     hamlet_agent.y = 4
 
     # Set same meter values
-    initial_meters = [1.0, 1.0, 1.0, 0.5, 1.0, 0.5]
+    # NOTE: money=0.75 in Townlet corresponds to money=50 in Hamlet (range [-100, 100])
+    initial_meters = [1.0, 1.0, 1.0, 0.75, 1.0, 0.5]
     townlet_env.meters[0] = torch.tensor(initial_meters)
     hamlet_agent.meters.meters["energy"].value = 100.0
     hamlet_agent.meters.meters["hygiene"].value = 100.0
@@ -95,16 +96,16 @@ def test_meter_depletion_matches_hamlet():
         townlet_env.step(torch.tensor([action]))
         hamlet_env.step(action)
 
-    # Compare meter values
+    # Compare meter values (use normalize() to handle different ranges)
     townlet_meters = townlet_env.meters[0].cpu().numpy()
     hamlet_agent = hamlet_env.agents["agent_0"]
     hamlet_meters = np.array([
-        hamlet_agent.meters.meters["energy"].value / 100.0,
-        hamlet_agent.meters.meters["hygiene"].value / 100.0,
-        hamlet_agent.meters.meters["satiation"].value / 100.0,
-        hamlet_agent.meters.meters["money"].value / 100.0,
-        hamlet_agent.meters.meters["mood"].value / 100.0,
-        hamlet_agent.meters.meters["social"].value / 100.0,
+        hamlet_agent.meters.meters["energy"].normalize(),
+        hamlet_agent.meters.meters["hygiene"].normalize(),
+        hamlet_agent.meters.meters["satiation"].normalize(),
+        hamlet_agent.meters.meters["money"].normalize(),
+        hamlet_agent.meters.meters["mood"].normalize(),
+        hamlet_agent.meters.meters["social"].normalize(),
     ])
 
     # Should match within 1e-2 tolerance
