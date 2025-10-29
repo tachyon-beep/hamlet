@@ -94,6 +94,9 @@ class VectorizedPopulation(PopulationManager):
         self.total_steps = 0
         self.train_frequency = 4  # Train Q-network every N steps
 
+        # Episode step counters (reset on done)
+        self.episode_step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=device)
+
         # Current state
         self.current_obs: torch.Tensor = None
         self.current_epsilons: torch.Tensor = None
@@ -209,10 +212,14 @@ class VectorizedPopulation(PopulationManager):
 
             self.optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
             self.optimizer.step()
 
         # 10. Update current state
         self.current_obs = next_obs
+
+        # Track episode steps
+        self.episode_step_counts += 1
 
         # 11. Handle episode resets (for adaptive intrinsic annealing)
         if dones.any():
@@ -220,8 +227,10 @@ class VectorizedPopulation(PopulationManager):
             for idx in reset_indices:
                 # Update adaptive intrinsic annealing
                 if isinstance(self.exploration, AdaptiveIntrinsicExploration):
-                    survival_time = info['step_counts'][idx].item()
+                    survival_time = self.episode_step_counts[idx].item()
                     self.exploration.update_on_episode_end(survival_time=survival_time)
+                # Reset episode counter
+                self.episode_step_counts[idx] = 0
 
         # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
         total_rewards = rewards + intrinsic_rewards * (
