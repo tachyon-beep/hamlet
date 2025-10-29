@@ -66,3 +66,45 @@ def test_advancement_when_mastery_achieved():
     assert curriculum.tracker.agent_stages[0].item() == 2
     assert decisions[0].difficulty_level == 0.25  # Stage 2 -> (2-1)/4 = 0.25
     assert decisions[0].active_meters == ['energy', 'hygiene', 'satiation']
+
+
+def test_retreat_when_struggling():
+    """Agents should retreat when survival low or learning negative."""
+    curriculum = AdversarialCurriculum(
+        max_steps_per_episode=500,
+        survival_retreat_threshold=0.3,
+        min_steps_at_stage=100,
+        device=torch.device('cpu'),
+    )
+    curriculum.initialize_population(num_agents=2)
+
+    # Start at stage 3 (will retreat to 2)
+    curriculum.tracker.agent_stages = torch.tensor([3, 3], dtype=torch.long)
+
+    # Simulate struggle: low survival + negative learning
+    curriculum.tracker.episode_steps = torch.tensor([100.0, 120.0])  # Low survival
+    curriculum.tracker.episode_rewards = torch.tensor([-50.0, -40.0])  # Bad rewards
+    curriculum.tracker.prev_avg_reward = torch.tensor([0.5, 0.5])  # Was doing better
+    curriculum.tracker.steps_at_stage = torch.tensor([150.0, 150.0])  # Enough steps
+
+    agent_states = BatchedAgentState(
+        observations=torch.zeros(2, 70),
+        actions=torch.zeros(2, dtype=torch.long),
+        rewards=torch.zeros(2),
+        dones=torch.zeros(2, dtype=torch.bool),
+        epsilons=torch.tensor([0.2, 0.2]),
+        intrinsic_rewards=torch.zeros(2),
+        survival_times=torch.tensor([100.0, 120.0]),
+        curriculum_difficulties=torch.tensor([0.5, 0.5]),  # Stage 3 -> (3-1)/4 = 0.5
+        device=torch.device('cpu'),
+    )
+
+    # Mock entropy (doesn't matter for retreat)
+    curriculum._calculate_action_entropy = lambda s: torch.tensor([0.5, 0.5])
+
+    decisions = curriculum.get_batch_decisions(agent_states, ['agent_0', 'agent_1'])
+
+    # Should retreat to stage 2
+    assert curriculum.tracker.agent_stages[0].item() == 2
+    assert decisions[0].difficulty_level == 0.25  # Stage 2 -> (2-1)/4 = 0.25
+    assert decisions[0].active_meters == ['energy', 'hygiene', 'satiation']

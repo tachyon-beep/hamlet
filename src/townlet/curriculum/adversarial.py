@@ -174,6 +174,29 @@ class AdversarialCurriculum(CurriculumManager):
 
         return high_survival and positive_learning and converged
 
+    def _should_retreat(self, agent_idx: int) -> bool:
+        """Check if agent should retreat to previous stage."""
+        # Bounds checking
+        if not (0 <= agent_idx < self.tracker.num_agents):
+            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
+
+        if self.tracker.agent_stages[agent_idx] <= 1:
+            return False  # Already at minimum stage
+
+        # Check minimum steps at stage
+        if self.tracker.steps_at_stage[agent_idx] < self.min_steps_at_stage:
+            return False
+
+        # Calculate metrics
+        survival_rate = self.tracker.get_survival_rate(self.max_steps_per_episode)[agent_idx]
+        learning_progress = self.tracker.get_learning_progress()[agent_idx]
+
+        # Retreat conditions
+        low_survival = survival_rate < self.survival_retreat_threshold
+        negative_learning = learning_progress < 0
+
+        return low_survival or negative_learning
+
     def get_batch_decisions(
         self,
         agent_states: BatchedAgentState,
@@ -188,8 +211,15 @@ class AdversarialCurriculum(CurriculumManager):
 
         decisions = []
         for i, agent_id in enumerate(agent_ids):
-            # Check for advancement
-            if self._should_advance(i, entropies[i].item()):
+            # Check for retreat first (takes priority)
+            if self._should_retreat(i):
+                self.tracker.agent_stages[i] -= 1
+                self.tracker.steps_at_stage[i] = 0
+                # Update baseline for retreating agent only
+                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
+                self.tracker.prev_avg_reward[i] = current_avg_i
+            # Then check for advancement
+            elif self._should_advance(i, entropies[i].item()):
                 self.tracker.agent_stages[i] += 1
                 self.tracker.steps_at_stage[i] = 0
                 # Update baseline for advancing agent only (not all agents)
