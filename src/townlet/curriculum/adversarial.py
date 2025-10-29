@@ -289,7 +289,8 @@ class AdversarialCurriculum(CurriculumManager):
         entropy = -torch.sum(probs * log_probs, dim=-1)
 
         # Normalize to [0, 1] range (max entropy for 5 actions = log(5) ≈ 1.609)
-        normalized_entropy = entropy / torch.log(torch.tensor(q_values.shape[-1], dtype=torch.float32))
+        num_actions = torch.tensor(q_values.shape[-1], dtype=torch.float32, device=q_values.device)
+        normalized_entropy = entropy / torch.log(num_actions)
 
         return normalized_entropy
 
