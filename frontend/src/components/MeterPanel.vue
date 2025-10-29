@@ -12,8 +12,8 @@
         role="listitem"
         :class="{
           critical: isCritical(name, value),
-          'strobe-slow': name === 'stress' && isLonely() && !isHighStress(),
-          'strobe-fast': name === 'stress' && isLonely() && isHighStress()
+          'strobe-slow': name === 'mood' && isLonely() && !isMoodCritical(),
+          'strobe-fast': name === 'mood' && isLonely() && isMoodCritical()
         }"
         :aria-label="`${capitalize(name)}: ${formatMeterValue(name, value)}`"
       >
@@ -79,32 +79,28 @@ const meters = computed(() => {
 // (capitalize, formatMeterValue, getMeterPercentage are imported above)
 
 function isCritical(name, value) {
-  const percentage = name === 'money' ? value : (name === 'stress' ? value : value * 100)
-  // Stress counts UP - high stress (>80) is critical
-  if (name === 'stress') {
-    return percentage > 80
-  }
-  // Other meters - low values (<20) are critical
+  const percentage = name === 'money' || name === 'mood' ? value : value * 100
+  // Low mood or other meters trigger critical state when percentage < 20
   return percentage < 20
 }
 
 function isLonely() {
-  // Check if social is at 0 (causes stress to increase)
+  // Check if social is at 0 (causes mood to drop rapidly)
   if (!meters.value) return false
   const social = meters.value.social
   return social <= 0.01
 }
 
-function isHighStress() {
-  // Check if stress is dangerously high
+function isMoodCritical() {
+  // Check if mood is dangerously low
   if (!meters.value) return false
-  const stress = meters.value.stress
-  return stress > 80
+  const mood = meters.value.mood
+  return mood < 20
 }
 
 // ✅ Extract meter color logic using CSS variables
 function getMeterColor(name, value) {
-  const percentage = name === 'money' ? value : (name === 'stress' ? value : value * 100)
+  const percentage = name === 'money' || name === 'mood' ? value : value * 100
 
   // Color mapping using CSS custom properties
   const colors = {
@@ -128,10 +124,10 @@ function getMeterColor(name, value) {
       mid: 'var(--color-meter-money)',
       low: 'var(--color-error)'
     },
-    stress: {
-      low: 'var(--color-meter-stress-low)',
-      mid: 'var(--color-meter-stress-mid)',
-      high: 'var(--color-meter-stress-high)'
+    mood: {
+      high: 'var(--color-meter-mood-high)',
+      mid: 'var(--color-meter-mood-mid)',
+      low: 'var(--color-meter-mood-low)'
     },
     social: {
       high: 'var(--color-meter-social)',
@@ -141,13 +137,6 @@ function getMeterColor(name, value) {
   }
 
   const colorSet = colors[name] || colors.energy
-
-  // Stress counts UP (0 = good, 100 = bad)
-  if (name === 'stress') {
-    if (percentage < 30) return colorSet.low   // Low stress (0-30) = green
-    if (percentage < 70) return colorSet.mid   // Medium stress (30-70) = yellow
-    return colorSet.high                       // High stress (70-100) = red
-  }
 
   // Normal meters - HIGH is good
   if (percentage > 60) return colorSet.high

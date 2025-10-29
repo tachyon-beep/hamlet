@@ -178,7 +178,15 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
 
     def update_target_network(self):
         """Copy weights from Q-network to target network."""
-        self.target_network.load_state_dict(self.q_network.state_dict())
+        network_class = self._get_network_class(self.network_type)
+        new_target = self._create_network(
+            network_class,
+            self.state_dim,
+            self.action_dim,
+            self.grid_size,
+        ).to(self.device)
+        new_target.load_state_dict(self.q_network.state_dict())
+        self.target_network = new_target
 
     def decay_epsilon(self):
         """Decay exploration rate."""
@@ -250,7 +258,7 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
         network_type = DRLAgent.detect_network_type(filepath)
 
         # Get dimensions from checkpoint if available
-        state_dim = checkpoint.get("state_dim", 70)  # Default to 70
+        state_dim = checkpoint.get("state_dim", 72)  # Default to 72 (8x8 grid)
         action_dim = checkpoint.get("action_dim", 5)  # Default to 5
 
         return {

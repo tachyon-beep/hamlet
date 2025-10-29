@@ -24,7 +24,8 @@ export const AFFORDANCE_ICONS = {
   FastFood: '🍔',
   Job: '💼',
   Recreation: '🎮',
-  Bar: '🍺'
+  Bar: '🍺',
+  Gym: '💪'
 }
 
 // Meter thresholds
@@ -35,9 +36,9 @@ export const METER_THRESHOLDS = {
   HEALTHY: 80      // Above this = healthy (green)
 }
 
-// Stress meter thresholds (inverted - higher is worse)
-export const STRESS_THRESHOLDS = {
-  LOW: 30,         // Below this = low stress (green)
-  MODERATE: 70,    // Below this = moderate stress (yellow)
-  HIGH: 80         // Above this = high stress (red)
+// Mood meter thresholds (higher is better)
+export const MOOD_THRESHOLDS = {
+  LOW: 30,         // Below this = low mood (red)
+  MODERATE: 60,    // Between LOW and MODERATE = warning
+  HIGH: 80         // Above this = healthy mood
 }

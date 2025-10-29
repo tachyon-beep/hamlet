@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Optional
 import numpy as np
 
 from hamlet.environment.hamlet_env import HamletEnv
-from hamlet.agent.observation_utils import preprocess_observation
+from hamlet.agent.observation_utils import preprocess_observation, get_state_dim
 from hamlet.training.config import FullConfig
 from hamlet.training.agent_manager import AgentManager
 from hamlet.training.metrics_manager import MetricsManager
@@ -66,6 +66,16 @@ class Trainer:
             metric_mode="max",
         )
 
+        # Ensure agent configs align with environment observation space
+        state_dim = get_state_dim(
+            self.config.environment.grid_width,
+            self.config.environment.grid_height,
+        )
+
+        for agent_config in self.config.agents:
+            agent_config.state_dim = state_dim
+            agent_config.grid_size = self.config.environment.grid_width
+
         # Create agents from config
         for agent_config in config.agents:
             self.agent_manager.add_agent(agent_config)
@@ -79,6 +89,8 @@ class Trainer:
         for agent_id in self.agent_manager.get_agent_ids():
             self.episode_rewards[agent_id] = []
             self.episode_lengths[agent_id] = []
+
+        self.latest_failure_reason = {agent_id: None for agent_id in self.agent_manager.get_agent_ids()}
 
     def train(self):
         """
@@ -175,6 +187,7 @@ class Trainer:
         episode_reward = 0.0
         episode_length = 0
         trajectory = []  # For replay storage
+        episode_failure_reason = None
 
         # Optional terminal visualization
         if self.enable_terminal_viz:
@@ -248,6 +261,7 @@ class Trainer:
                     ))
 
             if done:
+                episode_failure_reason = info.get("failure_reason")
                 break
 
         # Save episode replay
@@ -259,6 +273,10 @@ class Trainer:
         # Track episode metrics
         self.episode_rewards[agent_id].append(episode_reward)
         self.episode_lengths[agent_id].append(episode_length)
+
+        # Persist failure information for analysis
+        self.metrics_manager.log_failure_reason(episode, agent_id, episode_failure_reason)
+        self.latest_failure_reason[agent_id] = episode_failure_reason
 
         # Return episode metrics
         metrics = {
@@ -296,12 +314,15 @@ class Trainer:
 
             # Print progress
             if episode % self.config.training.log_frequency == 0:
+                failure_reason = self.latest_failure_reason.get(agent_id)
+                failure_text = f" | Failure: {failure_reason}" if failure_reason else ""
                 print(
                     f"Episode {episode:4d} | "
                     f"Reward: {metrics['total_reward']:7.2f} | "
                     f"Length: {metrics['episode_length']:4d} | "
                     f"Epsilon: {metrics['epsilon']:.3f} | "
-                    f"Buffer: {metrics['buffer_size']:5d}"
+                    f"Buffer: {metrics['buffer_size']:5d}" 
+                    f"{failure_text}"
                 )
 
     def _save_checkpoint(

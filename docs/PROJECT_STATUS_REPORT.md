@@ -45,9 +45,10 @@ We've successfully built a **production-ready DRL training infrastructure** for 
 
 **Metrics Outputs:**
 1. **TensorBoard** - Real-time training visualization
-2. **SQLite Database** - Structured storage for analysis queries
+2. **SQLite Database** - Structured storage for analysis queries (`metrics` table)
 3. **Episode Replays** - Full trajectory storage (JSON)
 4. **Live WebSocket Broadcasting** - For web UI (infrastructure ready)
+5. **Failure Events Table** - `failure_events` records why each episode ended
 
 **Coverage**: 98% test coverage
 
@@ -58,6 +59,9 @@ tensorboard --logdir runs
 
 # Query database
 sqlite3 metrics.db "SELECT episode, AVG(value) FROM metrics WHERE metric_name='total_reward' GROUP BY episode/10"
+
+# Summarise failure reasons
+python analyze_failures.py --summary --db metrics.db
 ```
 
 ---

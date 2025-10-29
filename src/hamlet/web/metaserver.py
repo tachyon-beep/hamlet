@@ -24,6 +24,8 @@ import uvicorn
 # Import existing managers
 from hamlet.web.websocket import WebSocketManager
 from hamlet.web.training_server import TrainingBroadcaster
+from hamlet.training.config import MetricsConfig
+from hamlet.training.metrics_manager import MetricsManager
 
 
 app = FastAPI(
@@ -44,6 +46,21 @@ app.add_middleware(
 # Global managers
 inference_manager = WebSocketManager()  # Handles /ws endpoint
 training_broadcaster = TrainingBroadcaster()  # Handles /ws/training endpoint
+
+
+def _create_metrics_manager(db_path: Path) -> MetricsManager | None:
+    if not db_path.exists():
+        return None
+
+    config = MetricsConfig(
+        tensorboard=False,
+        tensorboard_dir="/tmp/unused",
+        database=True,
+        database_path=str(db_path),
+        replay_storage=False,
+        live_broadcast=False,
+    )
+    return MetricsManager(config, experiment_name="metaserver_api")
 
 
 @app.on_event("startup")
@@ -101,6 +118,58 @@ async def list_models():
         "models": models,
         "count": len(models)
     }
+
+
+@app.get("/api/failures")
+async def list_failures(
+    agent: str | None = None,
+    reason: str | None = None,
+    min_episode: int | None = None,
+    max_episode: int | None = None,
+    limit: int | None = 20,
+    db_path: str = "metrics.db",
+):
+    manager = _create_metrics_manager(Path(db_path))
+    if manager is None:
+        return {"failures": []}
+
+    try:
+        failures = manager.query_failure_events(
+            agent_id=agent,
+            reason=reason,
+            min_episode=min_episode,
+            max_episode=max_episode,
+            limit=limit,
+        )
+        return {"failures": failures}
+    finally:
+        manager.close()
+
+
+@app.get("/api/failure_summary")
+async def failure_summary(
+    agent: str | None = None,
+    reason: str | None = None,
+    min_episode: int | None = None,
+    max_episode: int | None = None,
+    top: int | None = 10,
+    db_path: str = "metrics.db",
+):
+    manager = _create_metrics_manager(Path(db_path))
+    if manager is None:
+        return {"summary": []}
+
+    try:
+        summary = manager.get_failure_summary(
+            agent_id=agent,
+            reason=reason,
+            min_episode=min_episode,
+            max_episode=max_episode,
+            top_n=top,
+        )
+        return {"summary": summary}
+    finally:
+        manager.close()
 
 
 @app.websocket("/ws")

@@ -108,18 +108,29 @@
         </div>
       </div>
 
-      <div v-if="props.availableModels.length > 0" class="model-selector">
-        <label for="model">Model:</label>
-        <select
-          id="model"
-          v-model="selectedModel"
-          @change="onModelChange"
-          class="model-select"
+      <div class="model-controls">
+        <div v-if="props.availableModels.length > 0" class="model-selector">
+          <label for="model">Model:</label>
+          <select
+            id="model"
+            v-model="selectedModel"
+            @change="onModelChange"
+            class="model-select"
+          >
+            <option v-for="model in props.availableModels" :key="model" :value="model">
+              {{ model }}
+            </option>
+          </select>
+        </div>
+
+        <button
+          type="button"
+          class="control-button load-model"
+          :disabled="!props.isConnected"
+          @click="loadDefaultModel"
         >
-          <option v-for="model in props.availableModels" :key="model" :value="model">
-            {{ model }}
-          </option>
-        </select>
+          Reload trained_agent.pt
+        </button>
       </div>
     </div>
 
@@ -352,6 +363,7 @@ const emit = defineEmits([
 const selectedMode = ref('inference')
 const speedValue = ref(1.0)
 const selectedModel = ref(null)
+const defaultModelName = 'trained_agent.pt'
 
 const trainingConfig = ref({
   numEpisodes: 100,
@@ -415,6 +427,17 @@ function onSpeedChange() {
 function onModelChange() {
   if (selectedModel.value) {
     emit('load-model', selectedModel.value)
+  }
+}
+
+function loadDefaultModel() {
+  if (props.availableModels.includes(defaultModelName)) {
+    emit('load-model', defaultModelName)
+    selectedModel.value = defaultModelName
+  } else if (selectedModel.value) {
+    emit('load-model', selectedModel.value)
+  } else {
+    emit('load-model', defaultModelName)
   }
 }
 </script>

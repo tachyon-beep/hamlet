@@ -30,8 +30,21 @@ uv sync
 # Run tests
 uv run pytest
 
+# Inspect failure reasons recorded during training
+python analyze_failures.py --summary --db metrics.db
+
 # Start the web interface (when implemented)
 uv run python -m hamlet.web.server
+```
+
+### Failure Analysis Cheatsheet
+
+```bash
+# Show the last five failures for the default agent
+python analyze_failures.py --agent agent_0 --limit 5 --db metrics.db
+
+# Focus on bankruptcy episodes only
+python analyze_failures.py --summary --reason bankrupt --db metrics.db
 ```
 
 ### Development Installation

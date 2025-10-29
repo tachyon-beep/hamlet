@@ -50,7 +50,7 @@ You should see:
 ### In the Browser
 - **Live grid updates** every 5 episodes (configurable)
 - **Agent moving** around the grid 🤖
-- **Meter bars** showing energy, hygiene, satiation, money, stress, social
+- **Meter bars** showing energy, hygiene, satiation, money, mood, social
 - **Affordances**: Bed 🛏️, Shower 🚿, HomeMeal 🥘, FastFood 🍔, Job 💼, Recreation 🎮, Bar 🍺
 
 ### In the UI (Controls Panel)

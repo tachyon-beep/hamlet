@@ -17,13 +17,17 @@ environment:
   affordance_positions:
     Bed: [1, 1]
     Shower: [6, 1]
-    Fridge: [1, 6]
+    HomeMeal: [1, 6]
+    FastFood: [5, 6]
     Job: [6, 6]
+    Gym: [7, 3]
+    Bar: [7, 0]
+    Recreation: [0, 7]
 
 agents:
   - agent_id: agent_0
     algorithm: dqn
-    state_dim: 70
+    state_dim: 72
     action_dim: 5
     learning_rate: 0.001
     gamma: 0.99

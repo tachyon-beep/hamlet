@@ -66,11 +66,21 @@ class EnvironmentConfig:
     initial_hygiene: float = 100.0
     initial_satiation: float = 100.0
     initial_money: float = 50.0
+    initial_mood: float = 100.0
+    initial_social: float = 50.0
 
     # Depletion rates
     energy_depletion: float = 0.5
     hygiene_depletion: float = 0.3
     satiation_depletion: float = 0.4
+    money_depletion: float = 0.0
+    mood_depletion: float = 0.1
+    social_depletion: float = 0.6
+
+    # Meter bounds / interactions
+    money_min: float = -100.0
+    mood_social_penalty: float = 5.0  # Max additional mood drop per step when social is 0
+    mood_social_threshold: float = 0.3  # Below this social level, apply mood penalty
 
     # Affordance positions (will be set during environment creation)
     affordance_positions: dict = None
@@ -89,10 +99,11 @@ class EnvironmentConfig:
                 # WORK ZONE (bottom-right cluster)
                 "FastFood": (5, 6),   # Expensive convenience food near work
                 "Job": (6, 6),        # Work (pays less if tired/dirty)
+                "Gym": (7, 3),        # Mood recovery near work/bar corridor
 
                 # DISTANT REWARDS (requires commitment!)
-                "Bar": (7, 0),        # TOP-RIGHT: Social + food + stress relief
-                "Recreation": (0, 7), # BOTTOM-LEFT: Entertainment (stress relief)
+                "Bar": (7, 0),        # TOP-RIGHT: Social + food + mood boost
+                "Recreation": (0, 7), # BOTTOM-LEFT: Relaxation
             }
 
 
@@ -106,7 +117,7 @@ class AgentConfig:
 
     agent_id: str = "agent_0"
     algorithm: str = "dqn"  # dqn, ppo, a2c, etc.
-    state_dim: int = 70
+    state_dim: int = 72
     action_dim: int = 5
     learning_rate: float = 0.00025  # Reduced from 1e-3 for stability (Atari DQN standard)
     gamma: float = 0.99

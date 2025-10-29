@@ -255,32 +255,29 @@ export const useSimulationStore = defineStore('simulation', () => {
     if (message.grid) {
       gridWidth.value = message.grid.width
       gridHeight.value = message.grid.height
-      affordances.value = message.affordances || []
+      affordances.value = message.affordances || message.grid.affordances || []
 
-      // Handle agents - should be an array from training server
-      if (message.agents) {
-        if (Array.isArray(message.agents)) {
-          agents.value = message.agents
-        } else {
-          // Fallback: convert dict to array
-          agents.value = Object.values(message.agents)
-        }
-
-        // Extract last action from first agent
-        const firstAgent = agents.value[0]
-        if (firstAgent) {
-          lastAction.value = firstAgent.last_action
-        }
+      const gridAgents = message.grid.agents || []
+      if (Array.isArray(gridAgents) && gridAgents.length > 0) {
+        agents.value = gridAgents
+        lastAction.value = gridAgents[0].last_action || lastAction.value
+      } else if (Array.isArray(message.agents)) {
+        agents.value = message.agents
+        lastAction.value = message.agents[0]?.last_action || lastAction.value
+      } else if (message.agents && typeof message.agents === 'object') {
+        const values = Object.values(message.agents)
+        agents.value = values
+        lastAction.value = values[0]?.last_action || lastAction.value
       } else {
         agents.value = []
       }
 
-      // Handle agent meters (separate from agents array)
       if (message.agent_meters) {
         agentMeters.value = message.agent_meters
-      } else if (message.agents && !Array.isArray(message.agents)) {
-        // Fallback for old format
+      } else if (message.agents && typeof message.agents === 'object' && !Array.isArray(message.agents)) {
         agentMeters.value = message.agents
+      } else {
+        agentMeters.value = {}
       }
     }
 

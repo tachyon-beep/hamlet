@@ -42,7 +42,7 @@ def minimal_config(temp_dir):
             AgentConfig(
                 agent_id="agent_0",
                 algorithm="dqn",
-                state_dim=70,
+                state_dim=72,
                 action_dim=5,
                 learning_rate=1e-3,
                 gamma=0.99,

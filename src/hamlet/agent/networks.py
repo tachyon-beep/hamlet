@@ -207,7 +207,7 @@ class SpatialQNetwork(nn.Module):
 
         Args:
             state: Input state tensor of shape (batch_size, state_dim) or (state_dim,)
-                   Format: [pos_x, pos_y, energy, hygiene, satiation, money, stress, social, grid...]
+                   Format: [pos_x, pos_y, energy, hygiene, satiation, money, mood, social, grid...]
 
         Returns:
             Q-values for each action of shape (batch_size, action_dim) or (action_dim,)
@@ -399,7 +399,7 @@ class RelationalQNetwork(nn.Module):
         self.meter_embed_dim = 64  # 64 = 4 heads × 16 dims per head
 
         # Embed each meter into higher-dimensional space
-        # 6 meters: energy, hygiene, satiation, money, stress, social
+        # 6 meters: energy, hygiene, satiation, money, mood, social
         self.meter_embeddings = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(1, 32),
@@ -475,7 +475,7 @@ class RelationalQNetwork(nn.Module):
 
         Args:
             state: Input state tensor of shape (batch_size, state_dim) or (state_dim,)
-                   Format: [pos_x, pos_y, energy, hygiene, satiation, money, stress, social, grid...]
+                   Format: [pos_x, pos_y, energy, hygiene, satiation, money, mood, social, grid...]
 
         Returns:
             Q-values for each action

@@ -12,6 +12,7 @@ import numpy as np
 from hamlet.agent.base_algorithm import BaseAlgorithm
 from hamlet.agent.drl_agent import DRLAgent
 from hamlet.agent.replay_buffer import ReplayBuffer
+from hamlet.agent.observation_utils import get_state_dim
 from hamlet.training.config import AgentConfig
 
 
@@ -58,9 +59,13 @@ class AgentManager:
         """
         # Create agent based on algorithm type
         if config.algorithm.lower() == "dqn":
+            expected_state_dim = get_state_dim(config.grid_size)
+            state_dim = config.state_dim
+            if state_dim != expected_state_dim:
+                state_dim = expected_state_dim
             agent = DRLAgent(
                 agent_id=config.agent_id,
-                state_dim=config.state_dim,
+                state_dim=state_dim,
                 action_dim=config.action_dim,
                 learning_rate=config.learning_rate,
                 gamma=config.gamma,

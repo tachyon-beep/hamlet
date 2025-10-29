@@ -16,7 +16,7 @@ export function capitalize(str) {
 
 /**
  * Format meter value for display
- * @param {string} name - Meter name (money, stress, or normalized meter)
+ * @param {string} name - Meter name (money, mood, or normalized meter)
  * @param {number} value - Raw meter value
  * @returns {string} Formatted display value
  */
@@ -24,9 +24,9 @@ export function formatMeterValue(name, value) {
   if (name === 'money') {
     return `$${Math.round(value)}`
   }
-  if (name === 'stress') {
-    // Stress is 0-100 (higher = worse)
-    return `${Math.round(value)}`
+  if (name === 'mood') {
+    // Mood stored as 0-100 (higher = better)
+    return `${Math.round(value)}%`
   }
   // Other meters are normalized 0-1, convert to percentage
   return `${Math.round(value * 100)}%`
@@ -39,8 +39,8 @@ export function formatMeterValue(name, value) {
  * @returns {number} Percentage value (0-100)
  */
 export function getMeterPercentage(name, value) {
-  if (name === 'money' || name === 'stress') {
-    // Money and stress are already 0-100
+  if (name === 'money' || name === 'mood') {
+    // Money and mood are already 0-100
     return Math.max(0, Math.min(100, value))
   }
   // Other meters are normalized 0-1, convert to percentage

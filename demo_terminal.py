@@ -25,7 +25,7 @@ def main():
             AgentConfig(
                 agent_id="agent_0",
                 algorithm="dqn",
-                state_dim=70,
+                state_dim=72,
                 action_dim=5,
             )
         ],

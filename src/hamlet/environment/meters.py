@@ -6,6 +6,8 @@ Meters represent agent needs that deplete over time and can be replenished
 through affordance interactions.
 """
 
+from typing import Dict, Optional
+
 
 class Meter:
     """
@@ -93,12 +95,12 @@ class Money(Meter):
         super().__init__(name="money", initial_value=50.0, min_value=-100.0, depletion_rate=0.0)
 
 
-class Stress(Meter):
-    """Stress meter: increases with work, reduced by recreation, slow passive decay."""
+class Mood(Meter):
+    """Mood meter: declines over time, boosted by recreation/socialising."""
 
     def __init__(self):
-        # Starts at 0 (no stress), slow passive decay
-        super().__init__(name="stress", initial_value=0.0, min_value=0.0, depletion_rate=-0.1)
+        # Starts high (good mood) and gently declines without upkeep
+        super().__init__(name="mood", initial_value=100.0, min_value=0.0, depletion_rate=0.1)
 
 
 class Social(Meter):
@@ -117,16 +119,43 @@ class MeterCollection:
     multiple meters simultaneously.
     """
 
-    def __init__(self):
-        """Initialize meter collection with default meters."""
+    def __init__(
+        self,
+        initial_values: Optional[Dict[str, float]] = None,
+        depletion_rates: Optional[Dict[str, float]] = None,
+        min_values: Optional[Dict[str, float]] = None,
+        max_values: Optional[Dict[str, float]] = None,
+    ):
+        """Initialize meters with optional configuration overrides."""
+
         self.meters = {
             "energy": Energy(),
             "hygiene": Hygiene(),
             "satiation": Satiation(),
             "money": Money(),
-            "stress": Stress(),
+            "mood": Mood(),
             "social": Social(),
         }
+
+        if initial_values:
+            for name, value in initial_values.items():
+                if name in self.meters:
+                    self.meters[name].value = value
+
+        if depletion_rates:
+            for name, rate in depletion_rates.items():
+                if name in self.meters:
+                    self.meters[name].depletion_rate = rate
+
+        if min_values:
+            for name, minimum in min_values.items():
+                if name in self.meters:
+                    self.meters[name].min_value = minimum
+
+        if max_values:
+            for name, maximum in max_values.items():
+                if name in self.meters:
+                    self.meters[name].max_value = maximum
 
     def get(self, name: str) -> Meter:
         """Get meter by name."""

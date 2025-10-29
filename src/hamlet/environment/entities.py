@@ -4,6 +4,8 @@ Entity definitions for Hamlet.
 Defines agents and affordances (services) that exist in the grid world.
 """
 
+from typing import Dict, Optional
+
 from .meters import MeterCollection
 
 
@@ -15,7 +17,17 @@ class Agent:
     Future: relationship tracking for multi-agent social dynamics.
     """
 
-    def __init__(self, agent_id: str, x: int, y: int):
+    def __init__(
+        self,
+        agent_id: str,
+        x: int,
+        y: int,
+        *,
+        initial_meter_values: Optional[Dict[str, float]] = None,
+        meter_depletion_rates: Optional[Dict[str, float]] = None,
+        meter_min_values: Optional[Dict[str, float]] = None,
+        meter_max_values: Optional[Dict[str, float]] = None,
+    ):
         """
         Initialize an agent.
 
@@ -27,7 +39,12 @@ class Agent:
         self.agent_id = agent_id
         self.x = x
         self.y = y
-        self.meters = MeterCollection()
+        self.meters = MeterCollection(
+            initial_values=initial_meter_values,
+            depletion_rates=meter_depletion_rates,
+            min_values=meter_min_values,
+            max_values=meter_max_values,
+        )
 
 
 class Affordance:
@@ -104,7 +121,7 @@ class FastFood(Affordance):
 
 
 class Job(Affordance):
-    """Job affordance: Money (++ varies by energy/hygiene), Energy (--), Hygiene (--), Stress (++), Social (+)"""
+    """Job affordance: Money (++ varies by energy/hygiene), Energy (--), Hygiene (--), Mood (--), Social (+)"""
 
     def __init__(self, x: int, y: int):
         super().__init__(x, y, "Job")
@@ -132,7 +149,7 @@ class Job(Affordance):
             "money": payment,
             "energy": -15.0,
             "hygiene": -10.0,
-            "stress": 25.0,
+            "mood": -25.0,
             "social": 0.05,  # Small social bump from coworker interactions
         }
 
@@ -141,14 +158,21 @@ class Job(Affordance):
 
 
 class Recreation(Affordance):
-    """Recreation affordance: Money (-), Stress (---), Energy (+)"""
+    """Recreation affordance: Money (-), Mood (+++), Energy (+)"""
 
     def __init__(self, x: int, y: int):
         super().__init__(x, y, "Recreation")
 
 
 class Bar(Affordance):
-    """Bar affordance: Energy (--), Hygiene (--), Money (---), Social (+++), Satiation (+), Stress (--)"""
+    """Bar affordance: Energy (--), Hygiene (--), Money (---), Social (+++), Satiation (+), Mood (++)"""
 
     def __init__(self, x: int, y: int):
         super().__init__(x, y, "Bar")
+
+
+class Gym(Affordance):
+    """Gym affordance: Money (-), Energy (-), Mood (+++)"""
+
+    def __init__(self, x: int, y: int):
+        super().__init__(x, y, "Gym")

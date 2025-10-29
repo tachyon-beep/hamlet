@@ -110,6 +110,7 @@ def test_env_reward_calculation():
 
     assert reward is not None
     assert isinstance(reward, (int, float))
+    assert info.get("failure_reason") is None
 
 
 def test_env_termination_meter_zero():
@@ -126,6 +127,7 @@ def test_env_termination_meter_zero():
 
     assert done is True
     assert reward < 0  # Death penalty
+    assert info.get("failure_reason") == "energy_depleted"
 
 
 def test_env_survival_reward():
@@ -136,7 +138,7 @@ def test_env_survival_reward():
     agent = env.agents["agent_0"]
 
     # Keep meters healthy
-    for meter_name in ["energy", "hygiene", "satiation"]:
+    for meter_name in ["energy", "hygiene", "satiation", "mood", "social"]:
         agent.meters.get(meter_name).value = 80.0
 
     obs, reward, done, info = env.step(0)
@@ -207,6 +209,77 @@ def test_critical_meters_give_penalty():
 
     # Should get penalty for critical meter
     assert reward < 1.0  # Less than survival bonus
+
+
+def test_env_initial_meter_config_respected():
+    """Initial meter values and bounds honour EnvironmentConfig."""
+    config = EnvironmentConfig(
+        initial_energy=75.0,
+        initial_hygiene=55.0,
+        initial_satiation=65.0,
+        initial_money=12.0,
+        initial_mood=90.0,
+        initial_social=30.0,
+        money_min=-25.0,
+    )
+
+    env = HamletEnv(config=config)
+    env.reset()
+
+    agent = env.agents["agent_0"]
+    assert agent.meters.get("energy").value == pytest.approx(75.0)
+    assert agent.meters.get("hygiene").value == pytest.approx(55.0)
+    assert agent.meters.get("satiation").value == pytest.approx(65.0)
+    assert agent.meters.get("money").value == pytest.approx(12.0)
+    assert agent.meters.get("mood").value == pytest.approx(90.0)
+    assert agent.meters.get("social").value == pytest.approx(30.0)
+    assert agent.meters.get("money").min_value == pytest.approx(-25.0)
+
+
+def test_env_meter_depletion_config_respected():
+    """Meter depletion rates can be configured from EnvironmentConfig."""
+    config = EnvironmentConfig(
+        energy_depletion=1.5,
+        hygiene_depletion=0.8,
+        satiation_depletion=1.2,
+        mood_depletion=0.4,
+        social_depletion=0.9,
+        money_depletion=0.2,
+    )
+
+    env = HamletEnv(config=config)
+    env.reset()
+
+    agent = env.agents["agent_0"]
+    assert agent.meters.get("energy").depletion_rate == pytest.approx(1.5)
+    assert agent.meters.get("hygiene").depletion_rate == pytest.approx(0.8)
+    assert agent.meters.get("satiation").depletion_rate == pytest.approx(1.2)
+    assert agent.meters.get("mood").depletion_rate == pytest.approx(0.4)
+    assert agent.meters.get("social").depletion_rate == pytest.approx(0.9)
+    assert agent.meters.get("money").depletion_rate == pytest.approx(0.2)
+
+
+def test_mood_penalty_increases_when_social_low():
+    """Loneliness should amplify mood decline."""
+    env = HamletEnv()
+
+    # Baseline mood drop with high social
+    env.reset()
+    agent = env.agents["agent_0"]
+    agent.meters.get("mood").value = 100.0
+    agent.meters.get("social").value = 100.0
+    env.step(HamletEnv.ACTION_RIGHT)
+    baseline_mood = agent.meters.get("mood").value
+
+    # Mood drop with low social should be larger
+    env.reset()
+    agent = env.agents["agent_0"]
+    agent.meters.get("mood").value = 100.0
+    agent.meters.get("social").value = 0.0
+    env.step(HamletEnv.ACTION_RIGHT)
+    lonely_mood = agent.meters.get("mood").value
+
+    assert lonely_mood < baseline_mood
 
 
 def test_full_episode():

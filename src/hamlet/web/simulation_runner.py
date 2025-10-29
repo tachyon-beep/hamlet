@@ -23,7 +23,7 @@ class SimulationRunner:
     def __init__(
         self,
         agent_path: str = "models/trained_agent.pt",
-        state_dim: int = 70,
+        state_dim: int = 72,
         action_dim: int = 5,
         base_delay: float = 0.1,  # 10 steps/second at 1x speed
     ):

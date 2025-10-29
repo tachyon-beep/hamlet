@@ -10,9 +10,9 @@ from hamlet.agent.networks import QNetwork
 
 def test_qnetwork_initialization():
     """Test that Q-Network initializes correctly."""
-    network = QNetwork(state_dim=70, action_dim=5)
+    network = QNetwork(state_dim=72, action_dim=5)
 
-    assert network.state_dim == 70
+    assert network.state_dim == 72
     assert network.action_dim == 5
     assert network.layers is not None
     assert isinstance(network.layers, nn.Sequential)
@@ -20,10 +20,10 @@ def test_qnetwork_initialization():
 
 def test_qnetwork_forward_single_state():
     """Test forward pass with single state."""
-    network = QNetwork(state_dim=70, action_dim=5)
+    network = QNetwork(state_dim=72, action_dim=5)
 
     # Single state
-    state = torch.randn(70)
+    state = torch.randn(72)
     q_values = network(state)
 
     assert q_values.shape == (5,)
@@ -32,11 +32,11 @@ def test_qnetwork_forward_single_state():
 
 def test_qnetwork_forward_batch():
     """Test forward pass with batch of states."""
-    network = QNetwork(state_dim=70, action_dim=5)
+    network = QNetwork(state_dim=72, action_dim=5)
 
     # Batch of states
     batch_size = 32
-    states = torch.randn(batch_size, 70)
+    states = torch.randn(batch_size, 72)
     q_values = network(states)
 
     assert q_values.shape == (batch_size, 5)
@@ -102,10 +102,10 @@ def test_qnetwork_gradient_flow():
 
 def test_qnetwork_different_batch_sizes():
     """Test network handles different batch sizes."""
-    network = QNetwork(state_dim=70, action_dim=5)
+    network = QNetwork(state_dim=72, action_dim=5)
 
     for batch_size in [1, 8, 32, 64]:
-        states = torch.randn(batch_size, 70)
+        states = torch.randn(batch_size, 72)
         q_values = network(states)
         assert q_values.shape == (batch_size, 5)
 
@@ -151,26 +151,26 @@ def test_qnetwork_deterministic_forward():
 
 def test_qnetwork_with_hamlet_dimensions():
     """Test network with actual Hamlet dimensions."""
-    # Hamlet: 70-dim state (2 pos + 4 meters + 64 grid), 5 actions
-    network = QNetwork(state_dim=70, action_dim=5)
+    # Hamlet: 72-dim state (2 pos + 6 meters + 64 grid), 5 actions
+    network = QNetwork(state_dim=72, action_dim=5)
 
     # Single state
-    state = torch.randn(70)
+    state = torch.randn(72)
     q_values = network(state)
     assert q_values.shape == (5,)
 
     # Batch
-    batch_states = torch.randn(32, 70)
+    batch_states = torch.randn(32, 72)
     batch_q_values = network(batch_states)
     assert batch_q_values.shape == (32, 5)
 
 
 def test_qnetwork_can_select_action():
     """Test that network output can be used for action selection."""
-    network = QNetwork(state_dim=70, action_dim=5)
+    network = QNetwork(state_dim=72, action_dim=5)
     network.eval()
 
-    state = torch.randn(70)
+    state = torch.randn(72)
 
     with torch.no_grad():
         q_values = network(state)

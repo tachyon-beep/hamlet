@@ -13,13 +13,7 @@
       <!-- ✅ Semantic HTML: aside for left panel -->
       <aside class="left-panel" aria-label="Agent status panels">
         <MeterPanel :agent-meters="store.agentMeters" />
-        <StatsPanel
-          :current-episode="store.currentEpisode"
-          :current-step="store.currentStep"
-          :cumulative-reward="store.cumulativeReward"
-          :last-action="store.lastAction"
-          :episode-history="store.episodeHistory"
-        />
+        <FailurePanel />
       </aside>
 
       <!-- ✅ Semantic HTML: region for grid visualization -->
@@ -75,6 +69,13 @@
           @load-model="store.loadModel"
           @start-training="handleStartTraining"
         />
+        <StatsPanel
+          :current-episode="store.currentEpisode"
+          :current-step="store.currentStep"
+          :cumulative-reward="store.cumulativeReward"
+          :last-action="store.lastAction"
+          :episode-history="store.episodeHistory"
+        />
       </aside>
     </main>
   </div>
@@ -87,6 +88,7 @@ import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
 import Controls from './components/Controls.vue'
 import StatsPanel from './components/StatsPanel.vue'
+import FailurePanel from './components/FailurePanel.vue'
 import LoadingState from './components/LoadingState.vue'
 import ErrorState from './components/ErrorState.vue'
 

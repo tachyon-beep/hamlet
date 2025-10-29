@@ -452,3 +452,38 @@ def test_increment_episode_counter(metrics_config):
     assert manager.episode_count == 2
 
     manager.close()
+
+
+def test_failure_event_queries_and_summary(metrics_config):
+    """Ensure failure events can be queried and summarised."""
+    manager = MetricsManager(metrics_config, experiment_name="test_exp")
+
+    manager.log_failure_reason(episode=1, agent_id="agent_0", reason="energy_depleted")
+    manager.log_failure_reason(episode=2, agent_id="agent_0", reason="money_depleted")
+    manager.log_failure_reason(episode=3, agent_id="agent_1", reason="energy_depleted")
+
+    all_events = manager.query_failure_events()
+    assert len(all_events) == 3
+
+    agent_events = manager.query_failure_events(agent_id="agent_0")
+    assert len(agent_events) == 2
+
+    limited_events = manager.query_failure_events(limit=1)
+    assert len(limited_events) == 1
+
+    summary = manager.get_failure_summary()
+    summary_map = {f"{row['agent_id']}:{row['reason']}": row for row in summary}
+    assert summary_map["agent_0:energy_depleted"]["count"] == 1
+    assert summary_map["agent_0:money_depleted"]["count"] == 1
+    assert summary_map["agent_1:energy_depleted"]["count"] == 1
+
+    top_summary = manager.get_failure_summary(top_n=1)
+    assert len(top_summary) == 1
+
+    manager.close()
+
+    # Re-open manager to ensure data is still accessible
+    reopened = MetricsManager(metrics_config, experiment_name="test_exp")
+    persisted = reopened.get_failure_summary(agent_id="agent_0")
+    assert sum(row["count"] for row in persisted) == 2
+    reopened.close()

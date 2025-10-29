@@ -104,9 +104,10 @@ batch = manager.sample_batch(batch_size=64, agent_id="agent_0")
 
 **Metrics Outputs**:
 1. **TensorBoard**: Real-time visualization during training
-2. **SQLite Database**: Structured storage for queries
+2. **SQLite Database**: Structured storage for queries (`metrics` table)
 3. **Episode Replays**: Full trajectory storage (JSON)
 4. **Live Broadcast**: WebSocket streaming (for viz)
+5. **Failure Events Table**: Tracks why episodes ended, saved in the `failure_events` table
 
 **Example Usage**:
 ```python
@@ -136,6 +137,21 @@ results = manager.query_metrics(
     min_episode=0,
     max_episode=100
 )
+
+# Query failure events
+failures = manager.query_failure_events(agent_id="agent_0")
+for row in failures:
+    print(row["episode"], row["reason"])
+```
+
+For quick analysis, use the CLI helper:
+
+```bash
+# Summarise failure reasons
+python analyze_failures.py --summary --db metrics.db
+
+# Inspect the five most recent failures for agent_0
+python analyze_failures.py --agent agent_0 --limit 5 --db metrics.db
 ```
 
 ### ExperimentManager

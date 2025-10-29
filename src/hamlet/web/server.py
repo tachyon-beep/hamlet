@@ -4,17 +4,35 @@ FastAPI web server for Hamlet visualization.
 Serves static files and provides WebSocket streaming for real-time visualization.
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 import asyncio
 
 from hamlet.web.websocket import WebSocketManager
+from hamlet.training.config import MetricsConfig
+from hamlet.training.metrics_manager import MetricsManager
+
+
+def _create_metrics_manager(db_path: Path) -> Optional[MetricsManager]:
+    """Create a MetricsManager instance for read-only queries."""
+    if not db_path.exists():
+        return None
+
+    config = MetricsConfig(
+        tensorboard=False,
+        tensorboard_dir="/tmp/unused",
+        database=True,
+        database_path=str(db_path),
+        replay_storage=False,
+        live_broadcast=False,
+    )
+    return MetricsManager(config, experiment_name="web_api")
 
 
 app = FastAPI(
@@ -105,6 +123,60 @@ async def list_models():
 
     models = [f.name for f in models_dir.glob("*.pt")]
     return {"models": models}
+
+
+@app.get("/api/failures")
+async def list_failures(
+    agent: Optional[str] = None,
+    reason: Optional[str] = None,
+    min_episode: Optional[int] = None,
+    max_episode: Optional[int] = None,
+    limit: Optional[int] = 20,
+    db_path: str = "metrics.db",
+):
+    """Return recent failure events from the metrics database."""
+    manager = _create_metrics_manager(Path(db_path))
+    if manager is None:
+        return {"failures": []}
+
+    try:
+        failures = manager.query_failure_events(
+            agent_id=agent,
+            reason=reason,
+            min_episode=min_episode,
+            max_episode=max_episode,
+            limit=limit,
+        )
+        return {"failures": failures}
+    finally:
+        manager.close()
+
+
+@app.get("/api/failure_summary")
+async def failure_summary(
+    agent: Optional[str] = None,
+    reason: Optional[str] = None,
+    min_episode: Optional[int] = None,
+    max_episode: Optional[int] = None,
+    top: Optional[int] = 10,
+    db_path: str = "metrics.db",
+):
+    """Return aggregated failure counts from the metrics database."""
+    manager = _create_metrics_manager(Path(db_path))
+    if manager is None:
+        return {"summary": []}
+
+    try:
+        summary = manager.get_failure_summary(
+            agent_id=agent,
+            reason=reason,
+            min_episode=min_episode,
+            max_episode=max_episode,
+            top_n=top,
+        )
+        return {"summary": summary}
+    finally:
+        manager.close()
 
 
 # WebSocket endpoint

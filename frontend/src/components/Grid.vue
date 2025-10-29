@@ -314,6 +314,11 @@ function getHeatColor(intensity) {
   stroke: var(--color-affordance-bar-stroke);
 }
 
+.affordance-gym {
+  fill: var(--color-meter-mood-high);
+  stroke: var(--color-affordance-gym-stroke);
+}
+
 .affordance-label {
   font-size: 32px;
   pointer-events: none;

@@ -6,7 +6,7 @@ simulation where agents learn to survive by managing multiple meters.
 """
 
 import numpy as np
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Optional
 from .grid import Grid
 from .entities import Agent
 from .affordances import create_affordance
@@ -43,6 +43,33 @@ class HamletEnv:
         self.current_step = 0
         self.num_actions = 5
 
+        # Meter configuration derived from EnvironmentConfig
+        self.initial_meter_values = {
+            "energy": self.config.initial_energy,
+            "hygiene": self.config.initial_hygiene,
+            "satiation": self.config.initial_satiation,
+            "money": self.config.initial_money,
+            "mood": self.config.initial_mood,
+            "social": self.config.initial_social,
+        }
+
+        self.meter_depletion_rates = {
+            "energy": self.config.energy_depletion,
+            "hygiene": self.config.hygiene_depletion,
+            "satiation": self.config.satiation_depletion,
+            "money": self.config.money_depletion,
+            "mood": self.config.mood_depletion,
+            "social": self.config.social_depletion,
+        }
+
+        self.meter_min_values = {
+            "money": self.config.money_min,
+        }
+
+        self.meter_max_values = {}
+
+        self.last_failure_reason: Optional[str] = None
+
         # Movement costs per step
         self.movement_cost = {
             "energy": -0.5,
@@ -66,9 +93,19 @@ class HamletEnv:
         # Create single agent at center
         center_x = self.grid.width // 2
         center_y = self.grid.height // 2
-        agent = Agent("agent_0", center_x, center_y)
+        agent = Agent(
+            "agent_0",
+            center_x,
+            center_y,
+            initial_meter_values=self.initial_meter_values,
+            meter_depletion_rates=self.meter_depletion_rates,
+            meter_min_values=self.meter_min_values,
+            meter_max_values=self.meter_max_values,
+        )
         self.agents["agent_0"] = agent
         self.grid.add_entity(agent, agent.x, agent.y)
+
+        self.last_failure_reason = None
 
         # Place affordances
         for affordance_type, (x, y) in self.config.affordance_positions.items():
@@ -127,6 +164,9 @@ class HamletEnv:
         # Apply time-based depletion
         agent.meters.deplete_all()
 
+        # Apply social-driven mood penalty when lonely
+        self._apply_social_mood_penalty(agent)
+
         # Calculate reward with shaped rewards
         if self.use_shaped_rewards:
             step_reward = self._calculate_shaped_reward(agent, prev_meters, interaction_affordance)
@@ -136,7 +176,8 @@ class HamletEnv:
         reward += step_reward
 
         # Check termination
-        done = self._check_done(agent)
+        done, failure_reason = self._check_done(agent)
+        self.last_failure_reason = failure_reason
 
         # Death penalty
         if done:
@@ -145,7 +186,10 @@ class HamletEnv:
         self.current_step += 1
 
         obs = self.observe("agent_0")
-        info = {"step": self.current_step}
+        info = {
+            "step": self.current_step,
+            "failure_reason": failure_reason,
+        }
 
         return obs, reward, done, info
 
@@ -180,9 +224,11 @@ class HamletEnv:
                 grid_array[affordance.y, affordance.x] = 6.0
             elif affordance.name == "Bar":
                 grid_array[affordance.y, affordance.x] = 7.0
+            elif affordance.name == "Gym":
+                grid_array[affordance.y, affordance.x] = 8.0
 
         # Mark agent
-        grid_array[agent.y, agent.x] = 8.0
+        grid_array[agent.y, agent.x] = 9.0
 
         obs = {
             "position": np.array([agent.x, agent.y], dtype=np.float32),
@@ -191,6 +237,26 @@ class HamletEnv:
         }
 
         return obs
+
+    def _apply_social_mood_penalty(self, agent: Agent):
+        """Apply additional mood drain when the agent is socially isolated."""
+        if self.config.mood_social_penalty <= 0:
+            return
+
+        social_meter = agent.meters.get("social")
+        mood_meter = agent.meters.get("mood")
+
+        social_level = social_meter.normalize()
+
+        if social_level >= self.config.mood_social_threshold:
+            return
+
+        threshold = max(self.config.mood_social_threshold, 1e-6)
+        deficit_ratio = (threshold - social_level) / threshold
+        mood_penalty = self.config.mood_social_penalty * deficit_ratio
+
+        if mood_penalty > 0:
+            mood_meter.update(-mood_penalty)
 
     def render(self) -> Dict:
         """
@@ -250,19 +316,45 @@ class HamletEnv:
         """
         reward = 0.0
 
-        # Tier 1: Gradient-based meter health rewards (biological + social)
-        for meter_name in ["energy", "hygiene", "satiation", "social"]:
+        essential_meters = ["energy", "hygiene", "satiation"]
+        support_meters = ["mood"]
+
+        for meter_name in essential_meters:
             meter = agent.meters.get(meter_name)
             normalized = meter.normalize()
 
             if normalized > 0.8:
-                reward += 0.5  # Healthy state
+                reward += 0.4
             elif normalized > 0.5:
-                reward += 0.2  # Okay state
-            elif normalized > 0.2:
-                reward -= 0.5  # Concerning state
+                reward += 0.15
+            elif normalized > 0.3:
+                reward -= 0.6
             else:
-                reward -= 2.0  # Critical state
+                reward -= 2.5
+
+        for meter_name in support_meters:
+            meter = agent.meters.get(meter_name)
+            normalized = meter.normalize()
+
+            if normalized > 0.8:
+                reward += 0.2
+            elif normalized > 0.5:
+                reward += 0.1
+            elif normalized > 0.2:
+                reward -= 0.3
+            else:
+                reward -= 1.0
+
+        social_meter = agent.meters.get("social")
+        social_normalized = social_meter.normalize()
+        if social_normalized > 0.8:
+            reward += 0.15
+        elif social_normalized > 0.5:
+            reward += 0.05
+        elif social_normalized > 0.2:
+            reward -= 0.3
+        else:
+            reward -= 1.2
 
         # Tier 1: Money gradient rewards (strategic buffer maintenance)
         # Different thresholds than biological meters - money is a buffer resource
@@ -278,19 +370,6 @@ class HamletEnv:
         else:
             reward -= 2.0  # Critical - work now!
 
-        # Tier 1: Stress gradient rewards (INVERTED - low stress is good)
-        stress_meter = agent.meters.get("stress")
-        stress_normalized = stress_meter.normalize()
-
-        if stress_normalized < 0.2:
-            reward += 0.5  # Low stress (healthy)
-        elif stress_normalized < 0.5:
-            reward += 0.2  # Moderate stress (manageable)
-        elif stress_normalized < 0.8:
-            reward -= 0.5  # High stress (concerning)
-        else:
-            reward -= 2.0  # Critical stress (take a break!)
-
         # Tier 1: Need-based interaction rewards
         if interaction_affordance is not None:
             interaction_reward = self._calculate_need_based_interaction_reward(
@@ -302,6 +381,15 @@ class HamletEnv:
         if self.use_proximity_shaping:
             proximity_reward = self._calculate_proximity_reward(agent)
             reward += proximity_reward
+
+        # Urgency penalty when hungry and far from food
+        satiation_meter = agent.meters.get("satiation")
+        satiation_norm = satiation_meter.normalize()
+        if satiation_norm < 0.4:
+            urgency = min(1.0, (0.4 - satiation_norm) / 0.4)
+            dist = self._distance_to_affordances(agent, ["HomeMeal", "FastFood"])
+            max_dist = self.grid.width + self.grid.height
+            reward -= urgency * (dist / max_dist) * 2.0
 
         return reward
 
@@ -361,21 +449,14 @@ class HamletEnv:
         urgency = 0.0
 
         # Check depletion-based meters (LOW is bad)
-        for meter_name in ["energy", "hygiene", "satiation", "money", "social"]:
+        for meter_name in ["energy", "hygiene", "satiation", "money", "social", "mood"]:
             meter = agent.meters.get(meter_name)
             normalized = meter.normalize()
             meter_urgency = 1.0 - normalized  # Higher when meter is lower
-            if meter_urgency > urgency and normalized < 0.5:  # Only if below 50%
+            threshold = 0.5 if meter_name != "money" else 0.4
+            if meter_urgency > urgency and normalized < threshold:
                 urgency = meter_urgency
                 critical_meter = meter_name
-
-        # Check stress meter (HIGH is bad - inverted logic)
-        stress_meter = agent.meters.get("stress")
-        stress_normalized = stress_meter.normalize()
-        stress_urgency = stress_normalized  # Higher when stress is higher
-        if stress_urgency > urgency and stress_normalized > 0.5:  # Only if above 50%
-            urgency = stress_urgency
-            critical_meter = "stress"
 
         # Only provide proximity guidance if a critical meter was found
         if critical_meter is None or urgency == 0.0:
@@ -387,7 +468,7 @@ class HamletEnv:
             "hygiene": "Shower",
             "satiation": "HomeMeal",  # Guide to cheap, healthy option (agent learns FastFood trade-off)
             "money": "Job",           # Guide toward work when money is low
-            "stress": "Recreation",   # Guide toward recreation when stress is high
+            "mood": "Gym",            # Guide toward gym when mood is low
             "social": "Bar",          # Guide toward bar when lonely (ONLY source!)
         }
 
@@ -443,7 +524,17 @@ class HamletEnv:
 
         return reward
 
-    def _check_done(self, agent: Agent) -> bool:
+    def _distance_to_affordances(self, agent: Agent, names) -> float:
+        max_dist = self.grid.width + self.grid.height
+        min_dist = max_dist
+        for affordance in self.affordances:
+            if affordance.name in names:
+                dist = abs(agent.x - affordance.x) + abs(agent.y - affordance.y)
+                if dist < min_dist:
+                    min_dist = dist
+        return float(min_dist)
+
+    def _check_done(self, agent: Agent) -> Tuple[bool, Optional[str]]:
         """
         Check if episode should terminate.
 
@@ -451,12 +542,17 @@ class HamletEnv:
             agent: Agent to check
 
         Returns:
-            True if episode should end
+            Tuple of (done flag, failure reason string)
         """
-        # Check if any biological meter is at zero
-        for meter_name in ["energy", "hygiene", "satiation"]:
-            meter = agent.meters.get(meter_name)
-            if meter.value <= 0.0:
-                return True
+        fatal_meters = ["energy", "hygiene", "satiation", "mood"]
 
-        return False
+        for meter_name in fatal_meters:
+            meter = agent.meters.get(meter_name)
+            if meter.value <= meter.min_value:
+                return True, f"{meter_name}_depleted"
+
+        money_meter = agent.meters.get("money")
+        if money_meter.value <= money_meter.min_value:
+            return True, "bankrupt"
+
+        return False, None

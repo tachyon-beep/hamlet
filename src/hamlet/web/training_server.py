@@ -14,11 +14,15 @@ import uvicorn
 import torch
 import numpy as np
 
+from pathlib import Path
+
 from hamlet.environment.hamlet_env import HamletEnv
 from hamlet.environment.renderer import Renderer
 from hamlet.agent.drl_agent import DRLAgent
 from hamlet.agent.replay_buffer import ReplayBuffer
 from hamlet.agent.observation_utils import preprocess_observation
+from hamlet.training.config import MetricsConfig
+from hamlet.training.metrics_manager import MetricsManager
 
 
 app = FastAPI(title="Hamlet Training Server")
@@ -31,6 +35,73 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _create_metrics_manager(db_path: Path) -> MetricsManager | None:
+    if not db_path.exists():
+        return None
+
+    config = MetricsConfig(
+        tensorboard=False,
+        tensorboard_dir="/tmp/unused",
+        database=True,
+        database_path=str(db_path),
+        replay_storage=False,
+        live_broadcast=False,
+    )
+    return MetricsManager(config, experiment_name="training_server_api")
+
+
+@app.get("/api/failures")
+async def list_failures(
+    agent: str | None = None,
+    reason: str | None = None,
+    min_episode: int | None = None,
+    max_episode: int | None = None,
+    limit: int | None = 20,
+    db_path: str = "metrics.db",
+):
+    manager = _create_metrics_manager(Path(db_path))
+    if manager is None:
+        return {"failures": []}
+
+    try:
+        failures = manager.query_failure_events(
+            agent_id=agent,
+            reason=reason,
+            min_episode=min_episode,
+            max_episode=max_episode,
+            limit=limit,
+        )
+        return {"failures": failures}
+    finally:
+        manager.close()
+
+
+@app.get("/api/failure_summary")
+async def failure_summary(
+    agent: str | None = None,
+    reason: str | None = None,
+    min_episode: int | None = None,
+    max_episode: int | None = None,
+    top: int | None = 10,
+    db_path: str = "metrics.db",
+):
+    manager = _create_metrics_manager(Path(db_path))
+    if manager is None:
+        return {"summary": []}
+
+    try:
+        summary = manager.get_failure_summary(
+            agent_id=agent,
+            reason=reason,
+            min_episode=min_episode,
+            max_episode=max_episode,
+            top_n=top,
+        )
+        return {"summary": summary}
+    finally:
+        manager.close()
 
 
 class TrainingBroadcaster:
@@ -51,6 +122,7 @@ class TrainingBroadcaster:
         # Position heat map tracking (grid_size x grid_size)
         self.position_visits = {}  # Dict[(x, y), count]
         self.grid_size = 8
+        self.metrics_db_path = Path("metrics.db")
 
     async def connect(self, websocket: WebSocket):
         """Accept new WebSocket connection."""
@@ -110,6 +182,18 @@ class TrainingBroadcaster:
         # Reset position heat map
         self.position_visits = {}
 
+        metrics_manager = None
+        if self.metrics_db_path:
+            config = MetricsConfig(
+                tensorboard=False,
+                tensorboard_dir="/tmp/unused",
+                database=True,
+                database_path=str(self.metrics_db_path),
+                replay_storage=False,
+                live_broadcast=False,
+            )
+            metrics_manager = MetricsManager(config, experiment_name="web_training")
+
         # Broadcast training started
         await self.broadcast({
             "type": "training_started",
@@ -150,6 +234,7 @@ class TrainingBroadcaster:
             episode_loss = []
             step = 0
             done = False
+            episode_failure_reason = None
 
             # Decide if we should broadcast this episode
             broadcast_episode = (episode % show_every == 0)
@@ -173,6 +258,8 @@ class TrainingBroadcaster:
                 next_obs, reward, done, info = env.step(action)
                 episode_reward += reward
                 step += 1
+                if done and info.get("failure_reason"):
+                    episode_failure_reason = info["failure_reason"]
 
                 # Track agent position for heat map (position is numpy array [x, y])
                 agent_pos = (int(next_obs["position"][0]), int(next_obs["position"][1]))
@@ -279,9 +366,31 @@ class TrainingBroadcaster:
                 "avg_length_5": float(np.mean(recent_lengths)),
                 "avg_loss_5": float(np.mean(recent_losses)) if recent_losses else 0,
                 "buffer_size": len(buffer),
+                "failure_reason": episode_failure_reason,
             }
 
             await self.broadcast(summary)
+
+            if metrics_manager:
+                metrics_manager.log_episode(
+                    episode=episode + 1,
+                    agent_id="agent_0",
+                    metrics={
+                        "total_reward": episode_reward,
+                        "episode_length": step,
+                        "loss": summary["loss"],
+                        "epsilon": agent.epsilon,
+                        "avg_reward_5": summary["avg_reward_5"],
+                        "avg_length_5": summary["avg_length_5"],
+                        "avg_loss_5": summary["avg_loss_5"],
+                        "buffer_size": len(buffer),
+                    },
+                )
+                metrics_manager.log_failure_reason(
+                    episode=episode + 1,
+                    agent_id="agent_0",
+                    reason=episode_failure_reason,
+                )
 
             # Print progress
             if (episode + 1) % 5 == 0:
@@ -308,6 +417,9 @@ class TrainingBroadcaster:
         })
 
         print(f"Training complete! Model saved to {save_path}")
+        if metrics_manager:
+            metrics_manager.close()
+
         self.is_training = False
 
 

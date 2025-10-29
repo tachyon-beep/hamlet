@@ -47,10 +47,10 @@ export const tokens = {
     meterHygiene: '#06b6d4',           // Cyan
     meterSatiation: '#f59e0b',         // Orange
     meterMoney: '#8b5cf6',             // Purple
-    meterStress: {
-      low: '#10b981',                  // Low stress = green
-      mid: '#f59e0b',                  // Medium stress = yellow
-      high: '#ef4444',                 // High stress = red
+    meterMood: {
+      high: '#3b82f6',                 // Positive mood = blue
+      mid: '#f59e0b',                  // Mid mood = amber
+      low: '#ef4444',                  // Low mood = red
     },
     meterSocial: '#ec4899',            // Pink
 
@@ -61,6 +61,7 @@ export const tokens = {
     affordanceFastFoodStroke: '#f87171', // Light red
     affordanceJobStroke: '#a78bfa',    // Light purple
     affordanceBarStroke: '#f472b6',    // Pink
+    affordanceGymStroke: '#34d399',    // Emerald
 
     // Mode-specific colors
     modeInference: '#3b82f6',          // Blue
@@ -172,7 +173,7 @@ export function tokensToCSS() {
   // Process colors
   Object.entries(tokens.colors).forEach(([key, value]) => {
     if (typeof value === 'object' && !Array.isArray(value)) {
-      // Handle nested objects like meterStress
+      // Handle nested objects like meterMood
       Object.entries(value).forEach(([subKey, subValue]) => {
         cssVars.push(`  --color-${toKebab(key)}-${toKebab(subKey)}: ${subValue};`)
       })

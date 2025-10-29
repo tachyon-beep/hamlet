@@ -39,7 +39,7 @@ def test_agent_config_defaults():
     config = AgentConfig()
     assert config.agent_id == "agent_0"
     assert config.algorithm == "dqn"
-    assert config.state_dim == 70
+    assert config.state_dim == 72
     assert config.action_dim == 5
 
 

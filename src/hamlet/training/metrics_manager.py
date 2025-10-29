@@ -50,10 +50,12 @@ class MetricsManager:
 
         # SQLite database
         self.db_conn: Optional[sqlite3.Connection] = None
+        self.db_path: Optional[Path] = None
+
         if config.database:
-            db_path = Path(config.database_path)
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            self.db_conn = sqlite3.connect(str(db_path))
+            self.db_path = Path(config.database_path)
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self.db_conn = sqlite3.connect(str(self.db_path))
             self._init_database()
 
         # Replay storage
@@ -204,7 +206,9 @@ class MetricsManager:
             List of metric records
         """
         if not self.db_conn:
-            return []
+            if self.db_path is None:
+                return []
+            self.db_conn = sqlite3.connect(str(self.db_path))
 
         query = "SELECT * FROM metrics WHERE 1=1"
         params = []
@@ -234,6 +238,99 @@ class MetricsManager:
 
         return results
 
+    def query_failure_events(
+        self,
+        agent_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        min_episode: Optional[int] = None,
+        max_episode: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Fetch raw failure events from the database."""
+
+        if not self.db_conn:
+            if self.db_path is None:
+                return []
+            self.db_conn = sqlite3.connect(str(self.db_path))
+
+        query = "SELECT * FROM failure_events WHERE 1=1"
+        params: List[Any] = []
+
+        if agent_id:
+            query += " AND agent_id = ?"
+            params.append(agent_id)
+
+        if reason:
+            query += " AND reason = ?"
+            params.append(reason)
+
+        if min_episode is not None:
+            query += " AND episode >= ?"
+            params.append(min_episode)
+
+        if max_episode is not None:
+            query += " AND episode <= ?"
+            params.append(max_episode)
+
+        query += " ORDER BY episode DESC, timestamp DESC"
+
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        cursor = self.db_conn.execute(query, params)
+        columns = [desc[0] for desc in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor]
+
+    def get_failure_summary(
+        self,
+        agent_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        min_episode: Optional[int] = None,
+        max_episode: Optional[int] = None,
+        top_n: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return aggregated counts for failure reasons."""
+
+        if not self.db_conn:
+            if self.db_path is None:
+                return []
+            self.db_conn = sqlite3.connect(str(self.db_path))
+
+        query = (
+            "SELECT agent_id, reason, COUNT(*) AS count, "
+            "MAX(episode) AS last_episode, MAX(timestamp) AS last_timestamp "
+            "FROM failure_events WHERE 1=1"
+        )
+        params: List[Any] = []
+
+        if agent_id:
+            query += " AND agent_id = ?"
+            params.append(agent_id)
+
+        if reason:
+            query += " AND reason = ?"
+            params.append(reason)
+
+        if min_episode is not None:
+            query += " AND episode >= ?"
+            params.append(min_episode)
+
+        if max_episode is not None:
+            query += " AND episode <= ?"
+            params.append(max_episode)
+
+        query += " GROUP BY agent_id, reason"
+        query += " ORDER BY count DESC, last_timestamp DESC"
+
+        if top_n is not None:
+            query += " LIMIT ?"
+            params.append(top_n)
+
+        cursor = self.db_conn.execute(query, params)
+        columns = [desc[0] for desc in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor]
+
     def close(self):
         """Clean up resources."""
         if self.tb_writer:
@@ -241,6 +338,7 @@ class MetricsManager:
 
         if self.db_conn:
             self.db_conn.close()
+            self.db_conn = None
 
     def _init_database(self):
         """Initialize SQLite database schema."""
@@ -255,6 +353,16 @@ class MetricsManager:
             )
         """)
 
+        self.db_conn.execute("""
+            CREATE TABLE IF NOT EXISTS failure_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                episode INTEGER NOT NULL,
+                agent_id TEXT NOT NULL,
+                reason TEXT NOT NULL
+            )
+        """)
+
         # Create indexes for common queries
         self.db_conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_episode
@@ -266,6 +374,31 @@ class MetricsManager:
             ON metrics(agent_id, metric_name)
         """)
 
+        self.db_conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_failure_agent_reason
+            ON failure_events(agent_id, reason)
+        """)
+
+        self.db_conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_failure_episode
+            ON failure_events(episode)
+        """)
+
+        self.db_conn.commit()
+
+    def log_failure_reason(self, episode: int, agent_id: str, reason: Optional[str]):
+        """Persist failure reasons for later analysis."""
+        if not self.db_conn or not reason:
+            return
+
+        timestamp = datetime.now().isoformat()
+        self.db_conn.execute(
+            """
+            INSERT INTO failure_events (timestamp, episode, agent_id, reason)
+            VALUES (?, ?, ?, ?)
+            """,
+            (timestamp, episode, agent_id, reason),
+        )
         self.db_conn.commit()
 
     def _log_to_database(

@@ -126,7 +126,7 @@ class CheckpointManager:
 
         # Load metadata
         metadata_file = checkpoint_path / "metadata.pt"
-        metadata = torch.load(metadata_file)
+        metadata = torch.load(metadata_file, weights_only=False)
 
         # Load each agent
         for agent_id in metadata["agent_ids"]:
@@ -202,7 +202,7 @@ class CheckpointManager:
             metadata_file = checkpoint_dir / "metadata.pt"
 
             if metadata_file.exists():
-                metadata = torch.load(metadata_file)
+                metadata = torch.load(metadata_file, weights_only=False)
                 checkpoints.append({
                     "path": checkpoint_dir,
                     "episode": metadata["episode"],

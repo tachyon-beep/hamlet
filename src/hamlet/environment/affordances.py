@@ -6,7 +6,7 @@ without modifying core environment code.
 """
 
 from typing import Dict, Type
-from .entities import Affordance, Bed, Shower, HomeMeal, FastFood, Job, Recreation, Bar
+from .entities import Affordance, Bed, Shower, HomeMeal, FastFood, Job, Recreation, Bar, Gym
 
 
 # Affordance registry - maps affordance types to their meter effects
@@ -31,6 +31,7 @@ AFFORDANCE_EFFECTS: Dict[str, Dict[str, float]] = {
         "money": -10.0,    # Expensive (convenience premium)
         "satiation": 45.0,
         "energy": 15.0,    # Mediocre energy (less healthy)
+        "social": 1.0,
     },
     "Job": {
         # NOTE: Job has dynamic payment ($15-30 based on energy/hygiene)
@@ -38,12 +39,13 @@ AFFORDANCE_EFFECTS: Dict[str, Dict[str, float]] = {
         "money": 30.0,
         "energy": -15.0,
         "hygiene": -10.0,
-        "stress": 25.0,
+        "mood": -25.0,
+        "social": 1.5,
     },
     "Recreation": {
-        "money": -8.0,   # Costs money (entertainment/leisure)
-        "stress": -40.0, # Significantly reduces stress
-        "energy": 10.0,  # Small energy boost (relaxing)
+        "money": -6.0,   # Costs money (entertainment/leisure)
+        "mood": 25.0,    # Moderate mood boost
+        "energy": 12.0,  # Small energy boost (relaxing)
     },
     "Bar": {
         "money": -15.0,    # Expensive night out
@@ -51,7 +53,13 @@ AFFORDANCE_EFFECTS: Dict[str, Dict[str, float]] = {
         "hygiene": -15.0,  # Get dirty/sweaty
         "social": 50.0,    # ONLY source of social (mandatory!)
         "satiation": 30.0, # Eat while there
-        "stress": -25.0,   # Social reduces stress
+        "mood": 25.0,      # Socialising boosts mood
+    },
+    "Gym": {
+        "money": -6.0,
+        "energy": -8.0,
+        "mood": 45.0,
+        "social": 2.0,
     },
 }
 
@@ -77,6 +85,7 @@ AFFORDANCE_CLASSES: Dict[str, Type[Affordance]] = {
     "Job": Job,
     "Recreation": Recreation,
     "Bar": Bar,
+    "Gym": Gym,
 }
 
 

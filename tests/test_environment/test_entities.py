@@ -3,7 +3,7 @@ Tests for Agent and Affordance classes.
 """
 
 import pytest
-from hamlet.environment.entities import Agent, Affordance, Bed, Shower, Fridge, Job
+from hamlet.environment.entities import Agent, Affordance, Bed, Shower, HomeMeal, Job, Gym
 from hamlet.environment.affordances import create_affordance
 
 
@@ -63,13 +63,13 @@ def test_shower_interaction():
     assert agent.meters.get("money").value < 50.0    # Money spent
 
 
-def test_fridge_interaction():
-    """Test interacting with fridge."""
+def test_home_meal_interaction():
+    """Test interacting with home meal affordance."""
     agent = Agent("agent_0", 3, 3)
     agent.meters.get("satiation").value = 20.0  # Hungry
 
-    fridge = create_affordance("Fridge", 3, 3)
-    changes = fridge.interact(agent)
+    home_meal = create_affordance("HomeMeal", 3, 3)
+    changes = home_meal.interact(agent)
 
     assert changes
     assert agent.meters.get("satiation").value > 20.0  # Hunger satisfied
@@ -95,7 +95,7 @@ def test_cant_afford_service():
     agent = Agent("agent_0", 1, 1)
     agent.meters.get("money").value = 2.0  # Only 2 money
 
-    bed = create_affordance("Bed", 1, 1)  # Costs 10 money
+    bed = create_affordance("Bed", 1, 1)  # Costs money
     changes = bed.interact(agent)
 
     assert not changes  # Should return empty dict
@@ -118,13 +118,31 @@ def test_affordance_meter_effects_defined():
     """Test that all affordances have meter effects defined."""
     bed = create_affordance("Bed", 0, 0)
     shower = create_affordance("Shower", 0, 0)
-    fridge = create_affordance("Fridge", 0, 0)
+    home_meal = create_affordance("HomeMeal", 0, 0)
     job = create_affordance("Job", 0, 0)
+    gym = create_affordance("Gym", 0, 0)
 
     assert bed.meter_effects
     assert shower.meter_effects
-    assert fridge.meter_effects
+    assert home_meal.meter_effects
     assert job.meter_effects
+    assert gym.meter_effects
+
+
+def test_gym_interaction_boosts_mood():
+    """Gym should improve mood at a monetary and energy cost."""
+    agent = Agent("agent_0", 6, 4)
+    agent.meters.get("mood").value = 40.0
+    agent.meters.get("money").value = 20.0
+    energy_before = agent.meters.get("energy").value
+
+    gym = create_affordance("Gym", 6, 4)
+    changes = gym.interact(agent)
+
+    assert changes
+    assert agent.meters.get("mood").value > 40.0
+    assert agent.meters.get("money").value < 20.0
+    assert agent.meters.get("energy").value < energy_before
 
 
 def test_multiple_interactions():

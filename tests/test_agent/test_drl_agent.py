@@ -10,14 +10,16 @@ import os
 from hamlet.agent.drl_agent import DRLAgent
 from hamlet.agent.replay_buffer import ReplayBuffer
 from hamlet.environment.hamlet_env import HamletEnv
+from hamlet.agent.observation_utils import preprocess_observation, get_state_dim
 
 
 def test_drl_agent_initialization():
     """Test that DRL agent initializes correctly."""
-    agent = DRLAgent("test_agent", state_dim=70, action_dim=5)
+    state_dim = get_state_dim()
+    agent = DRLAgent("test_agent", state_dim=state_dim, action_dim=5, grid_size=8)
 
     assert agent.agent_id == "test_agent"
-    assert agent.state_dim == 70
+    assert agent.state_dim == state_dim
     assert agent.action_dim == 5
     assert agent.q_network is not None
     assert agent.target_network is not None
@@ -40,19 +42,24 @@ def test_drl_agent_networks_initialized():
 
 def test_drl_agent_select_action_from_dict_observation():
     """Test action selection from dict observation."""
-    agent = DRLAgent("test_agent", state_dim=70, action_dim=5, device="cpu")
+    env = HamletEnv()
+    obs = env.reset()
 
-    # Create dict observation matching HamletEnv format
-    obs = {
-        "position": np.array([4.0, 3.0], dtype=np.float32),
-        "meters": {
-            "energy": 0.8,
-            "hygiene": 0.6,
-            "satiation": 0.9,
-            "money": 0.5,
-        },
-        "grid": np.random.rand(8, 8).astype(np.float32),
-    }
+    # Adjust meters to create a varied observation
+    obs["meters"]["energy"] = 0.8
+    obs["meters"]["hygiene"] = 0.6
+    obs["meters"]["satiation"] = 0.9
+    obs["meters"]["money"] = 0.5
+    obs["meters"]["mood"] = 0.7
+    obs["meters"]["social"] = 0.4
+
+    agent = DRLAgent(
+        "test_agent",
+        state_dim=get_state_dim(env.grid.width, env.grid.height),
+        action_dim=5,
+        device="cpu",
+        grid_size=env.grid.width,
+    )
 
     action = agent.select_action(obs)
 
@@ -62,9 +69,10 @@ def test_drl_agent_select_action_from_dict_observation():
 
 def test_drl_agent_select_action_from_array():
     """Test action selection from preprocessed array."""
-    agent = DRLAgent("test_agent", state_dim=70, action_dim=5, device="cpu")
+    state_dim = get_state_dim()
+    agent = DRLAgent("test_agent", state_dim=state_dim, action_dim=5, device="cpu", grid_size=8)
 
-    state = np.random.randn(70).astype(np.float32)
+    state = np.random.randn(state_dim).astype(np.float32)
     action = agent.select_action(state)
 
     assert isinstance(action, int)
@@ -225,7 +233,13 @@ def test_drl_agent_with_hamlet_env():
     env = HamletEnv()
     obs = env.reset()
 
-    agent = DRLAgent("test_agent", state_dim=70, action_dim=5, device="cpu")
+    agent = DRLAgent(
+        "test_agent",
+        state_dim=get_state_dim(env.grid.width, env.grid.height),
+        action_dim=5,
+        device="cpu",
+        grid_size=env.grid.width,
+    )
 
     # Agent should be able to select action
     action = agent.select_action(obs)
@@ -243,7 +257,8 @@ def test_drl_agent_with_hamlet_env():
 def test_drl_agent_full_episode_with_learning():
     """Test agent can run full episode and learn."""
     env = HamletEnv()
-    agent = DRLAgent("test_agent", state_dim=70, action_dim=5, device="cpu")
+    state_dim = get_state_dim(env.grid.width, env.grid.height)
+    agent = DRLAgent("test_agent", state_dim=state_dim, action_dim=5, device="cpu", grid_size=env.grid.width)
     buffer = ReplayBuffer(capacity=1000)
 
     obs = env.reset()
@@ -254,19 +269,8 @@ def test_drl_agent_full_episode_with_learning():
         next_obs, reward, done, info = env.step(action)
 
         # Store in buffer
-        state = np.concatenate([
-            obs["position"] / 8,
-            [obs["meters"]["energy"], obs["meters"]["hygiene"],
-             obs["meters"]["satiation"], obs["meters"]["money"]],
-            obs["grid"].flatten()
-        ]).astype(np.float32)
-
-        next_state = np.concatenate([
-            next_obs["position"] / 8,
-            [next_obs["meters"]["energy"], next_obs["meters"]["hygiene"],
-             next_obs["meters"]["satiation"], next_obs["meters"]["money"]],
-            next_obs["grid"].flatten()
-        ]).astype(np.float32)
+        state = preprocess_observation(obs)
+        next_state = preprocess_observation(next_obs)
 
         buffer.push(state, action, reward, next_state, done)
 

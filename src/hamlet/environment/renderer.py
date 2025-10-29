@@ -55,7 +55,7 @@ class Renderer:
                     "hygiene": meters["hygiene"],
                     "satiation": meters["satiation"],
                     "money": agent.meters.get("money").value,  # Money as absolute value
-                    "stress": agent.meters.get("stress").value,  # Stress level (0-100)
+                    "mood": agent.meters.get("mood").value,     # Mood level (0-100)
                     "social": meters["social"],  # Social connections (normalized)
                 },
             }
@@ -67,6 +67,7 @@ class Renderer:
                 "type": affordance.name,
                 "x": affordance.x,
                 "y": affordance.y,
+                "qualifier": getattr(affordance, "qualifier", None),
             })
 
         return {
