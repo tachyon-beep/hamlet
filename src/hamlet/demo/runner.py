@@ -205,6 +205,29 @@ class DemoRunner:
             while self.current_episode < self.max_episodes and not self.should_shutdown:
                 episode_start = time.time()
 
+                # Generalization test at episode 5000
+                if self.current_episode == 5000:
+                    logger.info("=" * 60)
+                    logger.info("GENERALIZATION TEST: Randomizing affordance positions")
+                    logger.info("=" * 60)
+
+                    # Store old positions
+                    old_positions = self.env.get_affordance_positions()
+                    logger.info(f"Old positions: {old_positions}")
+
+                    # Randomize
+                    self.env.randomize_affordance_positions()
+
+                    # Store new positions
+                    new_positions = self.env.get_affordance_positions()
+                    logger.info(f"New positions: {new_positions}")
+
+                    # Mark in database
+                    import json
+                    self.db.set_system_state('affordance_randomization_episode', '5000')
+                    self.db.set_system_state('old_affordance_positions', json.dumps(old_positions))
+                    self.db.set_system_state('new_affordance_positions', json.dumps(new_positions))
+
                 # Reset environment and population
                 self.env.reset()
                 self.population.reset()  # No argument

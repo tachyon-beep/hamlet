@@ -465,3 +465,34 @@ class VectorizedHamletEnv:
             rewards[agent_idx] = urgency_val * proximity * 0.5
 
         return rewards
+
+    def get_affordance_positions(self) -> dict[str, tuple[int, int]]:
+        """Get current affordance positions.
+
+        Returns:
+            Dictionary mapping affordance names to (x, y) positions
+        """
+        positions = {}
+        for name, pos_tensor in self.affordances.items():
+            # Convert tensor position to tuple
+            pos = pos_tensor.cpu().tolist()
+            positions[name] = (int(pos[0]), int(pos[1]))
+        return positions
+
+    def randomize_affordance_positions(self):
+        """Randomize affordance positions for generalization testing.
+
+        Ensures no two affordances occupy the same position.
+        """
+        import random
+
+        # Generate list of all grid positions
+        all_positions = [(x, y) for x in range(self.grid_size) for y in range(self.grid_size)]
+
+        # Shuffle and assign to affordances
+        random.shuffle(all_positions)
+
+        # Assign new positions to affordances
+        for i, affordance_name in enumerate(self.affordances.keys()):
+            new_pos = all_positions[i]
+            self.affordances[affordance_name] = torch.tensor(new_pos, dtype=torch.long, device=self.device)
