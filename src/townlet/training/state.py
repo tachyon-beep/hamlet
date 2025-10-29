@@ -7,6 +7,8 @@ for validation, and hot path (training loop) using PyTorch tensors.
 
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Any
+import torch
+import numpy as np
 
 
 class CurriculumDecision(BaseModel):
@@ -130,3 +132,82 @@ class PopulationCheckpoint(BaseModel):
         default_factory=dict,
         description="Summary metrics (avg_survival, avg_reward, etc.)"
     )
+
+
+class BatchedAgentState:
+    """
+    Hot path: Vectorized agent state for GPU training loops.
+
+    All data is batched tensors (batch_size = num_agents).
+    Optimized for GPU operations, minimal validation overhead.
+    Use slots for memory efficiency.
+    """
+    __slots__ = [
+        'observations', 'actions', 'rewards', 'dones',
+        'epsilons', 'intrinsic_rewards', 'survival_times',
+        'curriculum_difficulties', 'device'
+    ]
+
+    def __init__(
+        self,
+        observations: torch.Tensor,      # [batch, obs_dim]
+        actions: torch.Tensor,           # [batch]
+        rewards: torch.Tensor,           # [batch]
+        dones: torch.Tensor,             # [batch] bool
+        epsilons: torch.Tensor,          # [batch]
+        intrinsic_rewards: torch.Tensor, # [batch]
+        survival_times: torch.Tensor,    # [batch]
+        curriculum_difficulties: torch.Tensor,  # [batch]
+        device: torch.device,
+    ):
+        """
+        Construct batched agent state.
+
+        All tensors must be on the same device.
+        No validation in __init__ for performance (hot path).
+        """
+        self.observations = observations
+        self.actions = actions
+        self.rewards = rewards
+        self.dones = dones
+        self.epsilons = epsilons
+        self.intrinsic_rewards = intrinsic_rewards
+        self.survival_times = survival_times
+        self.curriculum_difficulties = curriculum_difficulties
+        self.device = device
+
+    @property
+    def batch_size(self) -> int:
+        """Get batch size from observations shape."""
+        return self.observations.shape[0]
+
+    def to(self, device: torch.device) -> 'BatchedAgentState':
+        """
+        Move all tensors to specified device.
+
+        Returns new BatchedAgentState (tensors are immutable after .to()).
+        """
+        return BatchedAgentState(
+            observations=self.observations.to(device),
+            actions=self.actions.to(device),
+            rewards=self.rewards.to(device),
+            dones=self.dones.to(device),
+            epsilons=self.epsilons.to(device),
+            intrinsic_rewards=self.intrinsic_rewards.to(device),
+            survival_times=self.survival_times.to(device),
+            curriculum_difficulties=self.curriculum_difficulties.to(device),
+            device=device,
+        )
+
+    def detach_cpu_summary(self) -> Dict[str, np.ndarray]:
+        """
+        Extract summary for telemetry (cold path).
+
+        Returns dict of numpy arrays (CPU). Used for logging, checkpoints.
+        """
+        return {
+            'rewards': self.rewards.detach().cpu().numpy(),
+            'survival_times': self.survival_times.detach().cpu().numpy(),
+            'epsilons': self.epsilons.detach().cpu().numpy(),
+            'curriculum_difficulties': self.curriculum_difficulties.detach().cpu().numpy(),
+        }
