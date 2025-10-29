@@ -8,20 +8,42 @@ Parameterized to automatically test new implementations as they're added.
 import pytest
 import torch
 
-from townlet.training.state import BatchedAgentState
+from townlet.training.state import BatchedAgentState, CurriculumDecision
+from townlet.curriculum.static import StaticCurriculum
 
 
 # Curriculum Manager Compliance Tests
 # (Will be populated as implementations are added in Phase 1+)
 
 @pytest.mark.parametrize("curriculum_class", [
-    # Add implementations here:
-    # StaticCurriculum,
+    StaticCurriculum,
+    # Add more implementations here:
     # AdversarialCurriculum,
 ])
 def test_curriculum_manager_compliance(curriculum_class):
     """Verify curriculum implementations satisfy interface contract."""
-    pytest.skip("No curriculum implementations yet (Phase 1)")
+    curriculum = curriculum_class()
+
+    # Should have all required methods
+    assert hasattr(curriculum, 'get_batch_decisions')
+    assert hasattr(curriculum, 'checkpoint_state')
+    assert hasattr(curriculum, 'load_state')
+
+    # get_batch_decisions should return list of CurriculumDecisions
+    state = create_mock_batched_state(batch_size=2)
+    decisions = curriculum.get_batch_decisions(state, ['agent_0', 'agent_1'])
+
+    assert isinstance(decisions, list)
+    assert len(decisions) == 2
+
+    for decision in decisions:
+        assert isinstance(decision, CurriculumDecision)
+
+    # checkpoint/restore should work
+    checkpoint = curriculum.checkpoint_state()
+    assert isinstance(checkpoint, dict)
+
+    curriculum.load_state(checkpoint)  # Should not raise
 
 
 # Exploration Strategy Compliance Tests
