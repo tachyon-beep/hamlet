@@ -6,6 +6,8 @@ through 5 progressive difficulty levels culminating in sparse rewards.
 
 from typing import List, Dict, Tuple, Any, Optional
 import torch
+import yaml
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 from townlet.curriculum.base import CurriculumManager
@@ -134,6 +136,34 @@ class AdversarialCurriculum(CurriculumManager):
         self.device = device
 
         self.tracker: Optional[PerformanceTracker] = None  # Set when population initialized
+
+    @classmethod
+    def from_yaml(cls, config_path: str) -> 'AdversarialCurriculum':
+        """Load curriculum from YAML config file.
+
+        Args:
+            config_path: Path to YAML config file
+
+        Returns:
+            Configured AdversarialCurriculum instance
+        """
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        curriculum_config = config.get('curriculum', {})
+
+        # Extract device config
+        device_str = curriculum_config.get('device', 'cpu')
+        device = torch.device(device_str)
+
+        return cls(
+            max_steps_per_episode=curriculum_config.get('max_steps_per_episode', 500),
+            survival_advance_threshold=curriculum_config.get('survival_advance_threshold', 0.7),
+            survival_retreat_threshold=curriculum_config.get('survival_retreat_threshold', 0.3),
+            entropy_gate=curriculum_config.get('entropy_gate', 0.5),
+            min_steps_at_stage=curriculum_config.get('min_steps_at_stage', 1000),
+            device=device,
+        )
 
     def initialize_population(self, num_agents: int):
         """Initialize performance tracking for population."""

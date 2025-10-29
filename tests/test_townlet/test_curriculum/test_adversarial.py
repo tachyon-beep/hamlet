@@ -268,3 +268,38 @@ def test_sparse_reward_transition_at_stage_5():
     assert decisions[0].active_meters == ['energy', 'hygiene', 'satiation', 'money', 'mood', 'social']
     assert decisions[0].depletion_multiplier == 1.0
     assert 'SPARSE' in decisions[0].reason
+
+
+def test_curriculum_from_yaml_config():
+    """Should load curriculum config from YAML."""
+    import yaml
+    import tempfile
+    from pathlib import Path
+
+    config = {
+        'curriculum': {
+            'type': 'adversarial',
+            'max_steps_per_episode': 400,
+            'survival_advance_threshold': 0.75,
+            'survival_retreat_threshold': 0.25,
+            'entropy_gate': 0.45,
+            'min_steps_at_stage': 500,
+        }
+    }
+
+    # Save to temp file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump(config, f)
+        config_path = f.name
+
+    try:
+        # Load curriculum from config
+        curriculum = AdversarialCurriculum.from_yaml(config_path)
+
+        assert curriculum.max_steps_per_episode == 400
+        assert curriculum.survival_advance_threshold == 0.75
+        assert curriculum.survival_retreat_threshold == 0.25
+        assert curriculum.entropy_gate == 0.45
+        assert curriculum.min_steps_at_stage == 500
+    finally:
+        Path(config_path).unlink()
