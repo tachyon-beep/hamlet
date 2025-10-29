@@ -152,3 +152,119 @@ def test_entropy_gate_prevents_premature_advancement():
     # Should NOT advance (entropy too high)
     assert curriculum.tracker.agent_stages[0].item() == 1
     assert decisions[0].difficulty_level == 0.0  # Stage 1 -> (1-1)/4 = 0.0
+
+
+def test_no_advancement_without_all_conditions():
+    """Should not advance unless ALL conditions met."""
+    curriculum = AdversarialCurriculum(
+        max_steps_per_episode=500,
+        survival_advance_threshold=0.7,
+        entropy_gate=0.5,
+        min_steps_at_stage=100,
+        device=torch.device('cpu'),
+    )
+    curriculum.initialize_population(num_agents=1)
+
+    curriculum.tracker.agent_stages = torch.tensor([1], dtype=torch.long)
+    curriculum.tracker.steps_at_stage = torch.tensor([150.0])  # Enough steps
+
+    # Test case 1: Good survival + learning, but high entropy
+    curriculum.tracker.episode_steps = torch.tensor([400.0])
+    curriculum.tracker.episode_rewards = torch.tensor([80.0])
+    curriculum.tracker.prev_avg_reward = torch.tensor([0.1])
+
+    q_values_random = torch.ones(1, 5)  # High entropy
+    agent_states = BatchedAgentState(
+        observations=torch.zeros(1, 70),
+        actions=torch.zeros(1, dtype=torch.long),
+        rewards=torch.zeros(1),
+        dones=torch.zeros(1, dtype=torch.bool),
+        epsilons=torch.tensor([0.1]),
+        intrinsic_rewards=torch.zeros(1),
+        survival_times=torch.tensor([400.0]),
+        curriculum_difficulties=torch.ones(1),
+        device=torch.device('cpu'),
+    )
+
+    decisions = curriculum.get_batch_decisions_with_qvalues(
+        agent_states, ['agent_0'], q_values_random
+    )
+    assert curriculum.tracker.agent_stages[0].item() == 1  # No advancement
+
+    # Test case 2: Good survival + low entropy, but negative learning
+    curriculum.tracker.prev_avg_reward = torch.tensor([1.0])  # Was better before
+    q_values_peaked = torch.tensor([[10.0, 0.0, 0.0, 0.0, 0.0]])  # Low entropy
+
+    decisions = curriculum.get_batch_decisions_with_qvalues(
+        agent_states, ['agent_0'], q_values_peaked
+    )
+    assert curriculum.tracker.agent_stages[0].item() == 1  # No advancement
+
+    # Test case 3: All conditions met NOW
+    curriculum.tracker.prev_avg_reward = torch.tensor([0.1])  # Reset baseline
+    decisions = curriculum.get_batch_decisions_with_qvalues(
+        agent_states, ['agent_0'], q_values_peaked
+    )
+    assert curriculum.tracker.agent_stages[0].item() == 2  # NOW advances
+
+
+def test_checkpoint_restore_preserves_state():
+    """Curriculum state should be checkpointable."""
+    curriculum = AdversarialCurriculum(
+        max_steps_per_episode=500,
+        device=torch.device('cpu'),
+    )
+    curriculum.initialize_population(num_agents=2)
+
+    # Set some state
+    curriculum.tracker.agent_stages = torch.tensor([2, 3], dtype=torch.long)
+    curriculum.tracker.episode_rewards = torch.tensor([50.0, 60.0])
+    curriculum.tracker.prev_avg_reward = torch.tensor([0.5, 0.6])
+    curriculum.tracker.steps_at_stage = torch.tensor([200.0, 300.0])
+
+    # Checkpoint
+    checkpoint = curriculum.state_dict()
+
+    # Modify state
+    curriculum.tracker.agent_stages = torch.tensor([1, 1], dtype=torch.long)
+    curriculum.tracker.episode_rewards = torch.zeros(2)
+
+    # Restore
+    curriculum.load_state_dict(checkpoint)
+
+    # Verify restoration
+    assert torch.equal(curriculum.tracker.agent_stages, torch.tensor([2, 3], dtype=torch.long))
+    assert torch.equal(curriculum.tracker.episode_rewards, torch.tensor([50.0, 60.0]))
+    assert torch.equal(curriculum.tracker.prev_avg_reward, torch.tensor([0.5, 0.6]))
+
+
+def test_sparse_reward_transition_at_stage_5():
+    """Stage 5 should switch to sparse rewards."""
+    curriculum = AdversarialCurriculum(
+        max_steps_per_episode=500,
+        device=torch.device('cpu'),
+    )
+    curriculum.initialize_population(num_agents=1)
+
+    # Jump to stage 5
+    curriculum.tracker.agent_stages = torch.tensor([5], dtype=torch.long)
+
+    agent_states = BatchedAgentState(
+        observations=torch.zeros(1, 70),
+        actions=torch.zeros(1, dtype=torch.long),
+        rewards=torch.zeros(1),
+        dones=torch.zeros(1, dtype=torch.bool),
+        epsilons=torch.tensor([0.1]),
+        intrinsic_rewards=torch.zeros(1),
+        survival_times=torch.tensor([100.0]),
+        curriculum_difficulties=torch.tensor([1.0]),  # Stage 5 -> (5-1)/4 = 1.0
+        device=torch.device('cpu'),
+    )
+
+    decisions = curriculum.get_batch_decisions(agent_states, ['agent_0'])
+
+    assert decisions[0].difficulty_level == 1.0  # Stage 5 -> (5-1)/4 = 1.0
+    assert decisions[0].reward_mode == 'sparse'
+    assert decisions[0].active_meters == ['energy', 'hygiene', 'satiation', 'money', 'mood', 'social']
+    assert decisions[0].depletion_multiplier == 1.0
+    assert 'SPARSE' in decisions[0].reason

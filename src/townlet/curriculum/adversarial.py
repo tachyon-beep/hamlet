@@ -294,12 +294,36 @@ class AdversarialCurriculum(CurriculumManager):
 
         return normalized_entropy
 
+    def state_dict(self) -> Dict:
+        """Get curriculum state for checkpointing."""
+        if self.tracker is None:
+            return {}
+
+        return {
+            'agent_stages': self.tracker.agent_stages.cpu(),
+            'episode_rewards': self.tracker.episode_rewards.cpu(),
+            'episode_steps': self.tracker.episode_steps.cpu(),
+            'prev_avg_reward': self.tracker.prev_avg_reward.cpu(),
+            'steps_at_stage': self.tracker.steps_at_stage.cpu(),
+        }
+
+    def load_state_dict(self, state_dict: Dict):
+        """Restore curriculum state from checkpoint."""
+        if self.tracker is None:
+            raise RuntimeError("Must initialize_population before loading state")
+
+        self.tracker.agent_stages = state_dict['agent_stages'].to(self.device)
+        self.tracker.episode_rewards = state_dict['episode_rewards'].to(self.device)
+        self.tracker.episode_steps = state_dict['episode_steps'].to(self.device)
+        self.tracker.prev_avg_reward = state_dict['prev_avg_reward'].to(self.device)
+        self.tracker.steps_at_stage = state_dict['steps_at_stage'].to(self.device)
+
     def checkpoint_state(self) -> Dict[str, Any]:
         """Return serializable state for checkpoint saving."""
-        # Will implement in later task
-        return {}
+        # Legacy method - use state_dict() instead
+        return self.state_dict()
 
     def load_state(self, state: Dict[str, Any]) -> None:
         """Restore curriculum manager from checkpoint."""
-        # Will implement in later task
-        pass
+        # Legacy method - use load_state_dict() instead
+        self.load_state_dict(state)
