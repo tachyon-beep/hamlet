@@ -187,25 +187,27 @@ class VectorizedHamletEnv:
             if not at_affordance.any():
                 continue
 
-            # Apply affordance effects (simplified from Hamlet)
+            # Apply affordance effects (matching Hamlet exactly)
             if affordance_name == 'Bed':
                 self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] + 0.8, 0.0, 1.0
-                )  # Energy +80%
+                    self.meters[at_affordance, 0] + 0.5, 0.0, 1.0
+                )  # Energy +50%
+                self.meters[at_affordance, 3] -= 0.05  # Money -$5
             elif affordance_name == 'Shower':
                 self.meters[at_affordance, 1] = torch.clamp(
-                    self.meters[at_affordance, 1] + 0.6, 0.0, 1.0
-                )  # Hygiene +60%
+                    self.meters[at_affordance, 1] + 0.4, 0.0, 1.0
+                )  # Hygiene +40%
+                self.meters[at_affordance, 3] -= 0.03  # Money -$3
             elif affordance_name == 'HomeMeal':
                 self.meters[at_affordance, 2] = torch.clamp(
-                    self.meters[at_affordance, 2] + 0.5, 0.0, 1.0
-                )  # Satiation +50%
-                self.meters[at_affordance, 3] -= 0.04  # Money -$4
+                    self.meters[at_affordance, 2] + 0.45, 0.0, 1.0
+                )  # Satiation +45%
+                self.meters[at_affordance, 3] -= 0.03  # Money -$3
             elif affordance_name == 'Job':
-                self.meters[at_affordance, 3] += 0.3  # Money +$30
+                self.meters[at_affordance, 3] += 0.225  # Money +$22.5 (simplified from dynamic $15-30)
                 self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] - 0.2, 0.0, 1.0
-                )  # Energy -20%
+                    self.meters[at_affordance, 0] - 0.15, 0.0, 1.0
+                )  # Energy -15%
 
     def _deplete_meters(self) -> None:
         """Deplete meters each step."""
@@ -238,25 +240,82 @@ class VectorizedHamletEnv:
         """
         rewards = torch.zeros(self.num_agents, device=self.device)
 
-        # Tier 1: Meter-based feedback
+        # Tier 1: Essential meter-based feedback (energy, hygiene, satiation)
         for i, meter_name in enumerate(['energy', 'hygiene', 'satiation']):
             meter_values = self.meters[:, i]
 
-            # Healthy (>0.8): +0.5
-            rewards += torch.where(meter_values > 0.8, 0.5, 0.0)
+            # Healthy (>0.8): +0.4
+            rewards += torch.where(meter_values > 0.8, 0.4, 0.0)
 
-            # Okay (0.5-0.8): +0.2
+            # Okay (0.5-0.8): +0.15
             rewards += torch.where(
-                (meter_values > 0.5) & (meter_values <= 0.8), 0.2, 0.0
+                (meter_values > 0.5) & (meter_values <= 0.8), 0.15, 0.0
             )
 
-            # Concerning (0.2-0.5): -0.5
+            # Concerning (0.3-0.5): -0.6
             rewards += torch.where(
-                (meter_values > 0.2) & (meter_values <= 0.5), -0.5, 0.0
+                (meter_values > 0.3) & (meter_values <= 0.5), -0.6, 0.0
             )
 
-            # Critical (<0.2): -2.0
-            rewards += torch.where(meter_values <= 0.2, -2.0, 0.0)
+            # Critical (<=0.3): -2.5
+            rewards += torch.where(meter_values <= 0.3, -2.5, 0.0)
+
+        # Money gradient rewards (strategic buffer maintenance)
+        money_values = self.meters[:, 3]
+
+        # Comfortable buffer (>0.6): +0.5
+        rewards += torch.where(money_values > 0.6, 0.5, 0.0)
+
+        # Adequate buffer (0.4-0.6): +0.2
+        rewards += torch.where(
+            (money_values > 0.4) & (money_values <= 0.6), 0.2, 0.0
+        )
+
+        # Low buffer (0.2-0.4): -0.5
+        rewards += torch.where(
+            (money_values > 0.2) & (money_values <= 0.4), -0.5, 0.0
+        )
+
+        # Critical (<=0.2): -2.0
+        rewards += torch.where(money_values <= 0.2, -2.0, 0.0)
+
+        # Mood meter rewards (support meter)
+        mood_values = self.meters[:, 4]
+
+        # High mood (>0.8): +0.2
+        rewards += torch.where(mood_values > 0.8, 0.2, 0.0)
+
+        # Good mood (0.5-0.8): +0.1
+        rewards += torch.where(
+            (mood_values > 0.5) & (mood_values <= 0.8), 0.1, 0.0
+        )
+
+        # Low mood (0.2-0.5): -0.3
+        rewards += torch.where(
+            (mood_values > 0.2) & (mood_values <= 0.5), -0.3, 0.0
+        )
+
+        # Critical mood (<=0.2): -1.0
+        rewards += torch.where(mood_values <= 0.2, -1.0, 0.0)
+
+        # Social meter rewards (support meter)
+        social_values = self.meters[:, 5]
+
+        # High social (>0.8): +0.15
+        rewards += torch.where(social_values > 0.8, 0.15, 0.0)
+
+        # Good social (0.5-0.8): +0.05
+        rewards += torch.where(
+            (social_values > 0.5) & (social_values <= 0.8), 0.05, 0.0
+        )
+
+        # Low social (0.2-0.5): -0.3
+        rewards += torch.where(
+            (social_values > 0.2) & (social_values <= 0.5), -0.3, 0.0
+        )
+
+        # Critical social (<=0.2): -1.2
+        rewards += torch.where(social_values <= 0.2, -1.2, 0.0)
 
         # Terminal penalty
         rewards = torch.where(self.dones, -100.0, rewards)
