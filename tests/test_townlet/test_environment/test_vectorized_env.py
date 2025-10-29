@@ -63,18 +63,18 @@ def test_vectorized_env_movement():
     env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=torch.device('cpu'))
     env.reset()
 
-    # Set known position
+    # Set known position (x=4, y=4)
     env.positions[0] = torch.tensor([4, 4], device=env.device)
 
-    # Move UP (action 0)
+    # Move UP (action 0) - decreases y, x unchanged
     obs, _, _, _ = env.step(torch.tensor([0]))
-    assert env.positions[0, 0] == 3  # Row decreased
-    assert env.positions[0, 1] == 4  # Column unchanged
+    assert env.positions[0, 0] == 4  # x (column) unchanged
+    assert env.positions[0, 1] == 3  # y (row) decreased
 
-    # Move RIGHT (action 3)
+    # Move RIGHT (action 3) - increases x, y unchanged
     obs, _, _, _ = env.step(torch.tensor([3]))
-    assert env.positions[0, 0] == 3  # Row unchanged
-    assert env.positions[0, 1] == 5  # Column increased
+    assert env.positions[0, 0] == 5  # x (column) increased
+    assert env.positions[0, 1] == 3  # y (row) unchanged
 
 
 def test_vectorized_env_meter_depletion():
