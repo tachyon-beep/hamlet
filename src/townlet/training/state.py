@@ -6,7 +6,7 @@ for validation, and hot path (training loop) using PyTorch tensors.
 """
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from typing import List, Dict, Any
 
 
 class CurriculumDecision(BaseModel):
@@ -87,4 +87,46 @@ class ExplorationConfig(BaseModel):
         default=0.0001,
         gt=0.0,
         description="Learning rate for RND predictor network"
+    )
+
+
+class PopulationCheckpoint(BaseModel):
+    """
+    Cold path: Serializable population state for checkpointing.
+
+    Contains all state needed to restore a population training run:
+    per-agent curriculum state, exploration state, Pareto frontier, etc.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    generation: int = Field(
+        ...,
+        ge=0,
+        description="Generation number (for genetic algorithms)"
+    )
+    num_agents: int = Field(
+        ...,
+        ge=1,
+        le=1000,
+        description="Number of agents in population (1-1000)"
+    )
+    agent_ids: List[str] = Field(
+        ...,
+        description="List of agent identifiers"
+    )
+    curriculum_states: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Per-agent curriculum manager state"
+    )
+    exploration_states: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Per-agent exploration strategy state"
+    )
+    pareto_frontier: List[str] = Field(
+        default_factory=list,
+        description="Agent IDs on Pareto frontier (non-dominated solutions)"
+    )
+    metrics_summary: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Summary metrics (avg_survival, avg_reward, etc.)"
     )
