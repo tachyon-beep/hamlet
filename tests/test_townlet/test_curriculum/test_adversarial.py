@@ -108,3 +108,47 @@ def test_retreat_when_struggling():
     assert curriculum.tracker.agent_stages[0].item() == 2
     assert decisions[0].difficulty_level == 0.25  # Stage 2 -> (2-1)/4 = 0.25
     assert decisions[0].active_meters == ['energy', 'hygiene', 'satiation']
+
+
+def test_entropy_gate_prevents_premature_advancement():
+    """High entropy (random policy) should prevent advancement even with good metrics."""
+    curriculum = AdversarialCurriculum(
+        max_steps_per_episode=500,
+        survival_advance_threshold=0.7,
+        entropy_gate=0.5,
+        min_steps_at_stage=100,
+        device=torch.device('cpu'),
+    )
+    curriculum.initialize_population(num_agents=2)
+
+    # Good survival and learning, but need Q-values to calculate real entropy
+    curriculum.tracker.episode_steps = torch.tensor([400.0, 450.0])
+    curriculum.tracker.episode_rewards = torch.tensor([80.0, 90.0])
+    curriculum.tracker.prev_avg_reward = torch.tensor([0.1, 0.1])
+    curriculum.tracker.steps_at_stage = torch.tensor([150.0, 150.0])
+
+    # High entropy: uniform Q-values (random policy)
+    q_values = torch.ones(2, 5) * 1.0  # All actions equal value
+
+    agent_states = BatchedAgentState(
+        observations=torch.zeros(2, 70),
+        actions=torch.zeros(2, dtype=torch.long),
+        rewards=torch.zeros(2),
+        dones=torch.zeros(2, dtype=torch.bool),
+        epsilons=torch.tensor([0.1, 0.1]),
+        intrinsic_rewards=torch.zeros(2),
+        survival_times=torch.tensor([400.0, 450.0]),
+        curriculum_difficulties=torch.ones(2),
+        device=torch.device('cpu'),
+    )
+
+    # Need to pass Q-values for entropy calculation
+    decisions = curriculum.get_batch_decisions_with_qvalues(
+        agent_states,
+        ['agent_0', 'agent_1'],
+        q_values,
+    )
+
+    # Should NOT advance (entropy too high)
+    assert curriculum.tracker.agent_stages[0].item() == 1
+    assert decisions[0].difficulty_level == 0.0  # Stage 1 -> (1-1)/4 = 0.0

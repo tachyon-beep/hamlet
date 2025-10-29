@@ -197,17 +197,21 @@ class AdversarialCurriculum(CurriculumManager):
 
         return low_survival or negative_learning
 
-    def get_batch_decisions(
+    def get_batch_decisions_with_qvalues(
         self,
         agent_states: BatchedAgentState,
         agent_ids: List[str],
+        q_values: torch.Tensor,
     ) -> List[CurriculumDecision]:
-        """Generate curriculum decisions for batch of agents."""
+        """Generate curriculum decisions with Q-values for entropy calculation.
+
+        This is the main entry point when called from VectorizedPopulation.
+        """
         if self.tracker is None:
             raise RuntimeError("Must call initialize_population before get_batch_decisions")
 
-        # Calculate entropy for each agent
-        entropies = self._calculate_action_entropy(agent_states)
+        # Calculate entropy from Q-values
+        entropies = self._calculate_action_entropy(q_values)
 
         decisions = []
         for i, agent_id in enumerate(agent_ids):
@@ -249,10 +253,45 @@ class AdversarialCurriculum(CurriculumManager):
 
         return decisions
 
-    def _calculate_action_entropy(self, agent_states: BatchedAgentState) -> torch.Tensor:
-        """Calculate action distribution entropy (stub for Task 4)."""
-        # Placeholder - will implement in Task 4
-        return torch.zeros(agent_states.observations.shape[0], device=self.device)
+    def get_batch_decisions(
+        self,
+        agent_states: BatchedAgentState,
+        agent_ids: List[str],
+    ) -> List[CurriculumDecision]:
+        """Generate curriculum decisions without Q-values (for testing).
+
+        Uses zero entropy (assumes converged policy).
+        """
+        # Create dummy Q-values with peaked distribution (low entropy)
+        num_agents = len(agent_ids)
+        q_values = torch.zeros(num_agents, 5, device=self.device)
+        q_values[:, 0] = 10.0  # Make action 0 dominant
+
+        return self.get_batch_decisions_with_qvalues(agent_states, agent_ids, q_values)
+
+    def _calculate_action_entropy(self, q_values: torch.Tensor) -> torch.Tensor:
+        """Calculate action distribution entropy from Q-values.
+
+        Higher entropy = more uniform distribution (exploring)
+        Lower entropy = peaked distribution (converged policy)
+
+        Args:
+            q_values: [batch_size, num_actions] Q-values
+
+        Returns:
+            [batch_size] entropy values (0 = deterministic, ~1.6 = uniform for 5 actions)
+        """
+        # Convert Q-values to probabilities (softmax with temperature=1)
+        probs = torch.softmax(q_values, dim=-1)
+
+        # Calculate entropy: -sum(p * log(p))
+        log_probs = torch.log(probs + 1e-10)  # Add epsilon for numerical stability
+        entropy = -torch.sum(probs * log_probs, dim=-1)
+
+        # Normalize to [0, 1] range (max entropy for 5 actions = log(5) ≈ 1.609)
+        normalized_entropy = entropy / torch.log(torch.tensor(q_values.shape[-1], dtype=torch.float32))
+
+        return normalized_entropy
 
     def checkpoint_state(self) -> Dict[str, Any]:
         """Return serializable state for checkpoint saving."""
