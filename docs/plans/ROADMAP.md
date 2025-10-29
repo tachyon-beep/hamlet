@@ -199,6 +199,81 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 
 ---
 
+## North Star Vision: Social Hamlet 🌟 ENDSTATE
+
+**The Big Picture:** Where Hamlet could go with infinite time and infinite coders.
+
+### Scale & Complexity
+
+**Environment:**
+- **50×50 grid** (vs current 8×8) - room to roam and form territories
+- **Dozens of agents** simultaneously (vs current single agent)
+- **Continuous affordance usage** - agents "toggle on" affordances, blocking others
+- **Multiple instances** of each affordance type (e.g., 3 jobs with different pay rates)
+- **Dynamic environment** - affordances can move, appear, disappear over time
+
+### Emergent Social Dynamics
+
+**Strategic Competition:**
+- **Agent A notices Agent B's routine:** "B goes to the high-paying job at 9 AM every morning"
+- **Agent A adapts strategically:** Arrives at 8 AM to take the job first
+- **Agent B must find alternative:** Learns new routine or competes for timing
+
+**Social Penalties:**
+- **Proximity cost:** Agents take negative reward when near each other
+- **Resource blocking:** "You're using something I want" creates tension
+- **Reputation/memory:** Agents remember who blocks them frequently
+- **Emergent territoriality:** Agents may stake out regions to avoid others
+
+**Economic Hierarchy:**
+- **Tiered housing:** Better houses give better rewards but cost more
+- **Job competition:** High-paying jobs are scarce, low-paying are plentiful
+- **Affordability trade-offs:** Save money for expensive house vs. use cheap options
+
+### Teaching Value (The Real Goal)
+
+**Novel Pedagogical Opportunities:**
+1. **Game Theory in Action:** Students see Nash equilibria emerge naturally
+2. **Social Intelligence:** Agents learn theory of mind (predicting others' actions)
+3. **Temporal Strategy:** Planning ahead ("I'll go early tomorrow") vs reactive behavior
+4. **Emergent Social Norms:** Do cooperation patterns emerge despite individual incentives?
+5. **Resource Allocation:** Market dynamics without explicit prices
+6. **Conflict Resolution:** How do agents handle competition? Avoidance? Aggression?
+
+**Specific Scenarios:**
+- "Watch Agent A steal Agent B's job every morning"
+- "See agents form 'day shift' and 'night shift' patterns to avoid each other"
+- "Agent C discovers the cheap house + cheap job is actually more profitable (less competition)"
+- "Agent D aggressively blocks others from premium resources, pays social cost"
+
+### Technical Prerequisites
+
+**What needs to exist first:**
+- ✅ Phase 3: Intrinsic motivation and curriculum (done)
+- ✅ Phase 3.5: Multi-day stability validation (next)
+- ⬜ Phase 4: POMDP + memory (agents need memory to predict others' routines)
+- ⬜ Phase 5: Optimization (50x50 grid requires GPU efficiency)
+- ⬜ Phase 6: Multi-agent coordination primitives
+- ⬜ Phase 7: Communication (agents signal intentions or negotiate)
+- ⬜ **New Phase:** Continuous affordance usage + blocking mechanics
+- ⬜ **New Phase:** Social penalty rewards + proximity sensing
+- ⬜ **New Phase:** Theory of mind networks (predict other agents)
+
+### Why Document This Now?
+
+**Good bones first:** Every phase builds toward this vision:
+- SQLite schema → extends to `agent_interactions`, `resource_ownership`, `social_graph`
+- Position heatmaps → per-agent heatmaps
+- Affordance transitions → "who arrived first" temporal data
+- Intrinsic motivation → "social novelty" (encountering new agents)
+- Curriculum → add "social complexity" stage
+
+**Avoiding overengineering:** Knowing the endstate helps us avoid premature abstraction while keeping doors open (the "for but not with" principle).
+
+**Timeline:** 2-3 years of part-time work, or 6-12 months with dedicated team. Not immediate, but worth building toward.
+
+---
+
 ## Decision Log
 
 ### 2025-10-30: Adopted 2→3→1 Strategy
