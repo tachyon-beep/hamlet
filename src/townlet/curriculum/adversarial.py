@@ -152,6 +152,10 @@ class AdversarialCurriculum(CurriculumManager):
 
     def _should_advance(self, agent_idx: int, entropy: float) -> bool:
         """Check if agent should advance to next stage."""
+        # Bounds checking
+        if not (0 <= agent_idx < self.tracker.num_agents):
+            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
+
         if self.tracker.agent_stages[agent_idx] >= 5:
             return False  # Already at max stage
 
@@ -188,14 +192,17 @@ class AdversarialCurriculum(CurriculumManager):
             if self._should_advance(i, entropies[i].item()):
                 self.tracker.agent_stages[i] += 1
                 self.tracker.steps_at_stage[i] = 0
-                self.tracker.update_baseline()
+                # Update baseline for advancing agent only (not all agents)
+                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
+                self.tracker.prev_avg_reward[i] = current_avg_i
 
             # Get current stage
             stage = self.tracker.agent_stages[i].item()
             config = STAGE_CONFIGS[stage - 1]
 
             # Normalize stage (1-5) to difficulty_level (0.0-1.0)
-            difficulty_level = (stage - 1) / 4.0  # Stage 1 -> 0.0, Stage 5 -> 1.0
+            # This maps Stage 1 -> 0.0 (easiest), Stage 5 -> 1.0 (hardest sparse rewards)
+            difficulty_level = (stage - 1) / 4.0
 
             decision = CurriculumDecision(
                 difficulty_level=difficulty_level,
@@ -206,8 +213,9 @@ class AdversarialCurriculum(CurriculumManager):
             )
             decisions.append(decision)
 
-        # Update step counter
-        self.tracker.steps_at_stage += 1
+        # NOTE: Per-agent step counting should be handled by PerformanceTracker.update_step()
+        # which is called after each environment step. Removed global increment that was
+        # incorrectly updating all agents simultaneously.
 
         return decisions
 
