@@ -82,6 +82,7 @@ class PerformanceTracker:
         """Update metrics after environment step."""
         self.episode_rewards += rewards
         self.episode_steps += 1.0
+        self.steps_at_stage += 1.0
 
         # Reset completed episodes
         self.episode_rewards = torch.where(dones, 0.0, self.episode_rewards)
