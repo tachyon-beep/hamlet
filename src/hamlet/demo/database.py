@@ -6,7 +6,13 @@ from typing import Optional, List, Dict, Any
 
 
 class DemoDatabase:
-    """Manages SQLite database for demo metrics and state."""
+    """Manages SQLite database for demo metrics and state.
+
+    Thread Safety:
+        Uses check_same_thread=False and WAL mode for concurrent access.
+        Safe for multiple readers and single writer (training process).
+        Not safe for multiple concurrent writers without external synchronization.
+    """
 
     def __init__(self, db_path: Path | str):
         """Initialize database, creating schema if needed.
@@ -144,6 +150,42 @@ class DemoDatabase:
         )
         row = cursor.fetchone()
         return row['value'] if row else None
+
+    def insert_affordance_visits(self, episode_id: int, transitions: dict[str, dict[str, int]]):
+        """Insert affordance transition counts for an episode.
+
+        Args:
+            episode_id: Episode number
+            transitions: Dict mapping from_affordance -> {to_affordance: count}
+
+        TODO: Implement in Task 2 when tracking affordance visits
+        """
+        pass
+
+    def insert_position_heatmap(self, episode_id: int, positions: dict[tuple[int, int], int], novelty: dict[tuple[int, int], float] | None = None):
+        """Insert position visit counts and novelty values for an episode.
+
+        Args:
+            episode_id: Episode number
+            positions: Dict mapping (x, y) -> visit_count
+            novelty: Optional dict mapping (x, y) -> novelty_value
+
+        TODO: Implement in Task 5 for visualization
+        """
+        pass
+
+    def get_position_heatmap(self, episode_id: int) -> list[dict[str, any]]:
+        """Get position heatmap data for an episode.
+
+        Args:
+            episode_id: Episode number
+
+        Returns:
+            List of position heatmap rows
+
+        TODO: Implement in Task 5 for visualization
+        """
+        pass
 
     def close(self):
         """Close database connection."""
