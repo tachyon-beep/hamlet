@@ -11,6 +11,8 @@ import torch
 from townlet.training.state import BatchedAgentState, CurriculumDecision
 from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.population.vectorized import VectorizedPopulation
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
 # Curriculum Manager Compliance Tests
@@ -91,12 +93,39 @@ def test_exploration_strategy_compliance(exploration_class):
 # Population Manager Compliance Tests
 
 @pytest.mark.parametrize("population_class", [
-    # Add implementations here:
-    # VectorizedPopulation,
+    VectorizedPopulation,
 ])
 def test_population_manager_compliance(population_class):
     """Verify population implementations satisfy interface contract."""
-    pytest.skip("No population implementations yet (Phase 1)")
+    # Create dependencies
+    env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=torch.device('cpu'))
+    curriculum = StaticCurriculum()
+    exploration = EpsilonGreedyExploration()
+
+    population = population_class(
+        env=env,
+        curriculum=curriculum,
+        exploration=exploration,
+        agent_ids=['agent_0'],
+        device=torch.device('cpu'),
+    )
+
+    # Should have required methods
+    assert hasattr(population, 'step_population')
+    assert hasattr(population, 'get_checkpoint')
+
+    # step_population should return BatchedAgentState
+    population.reset()
+    state = population.step_population(env)
+
+    from townlet.training.state import BatchedAgentState
+    assert isinstance(state, BatchedAgentState)
+
+    # get_checkpoint should return PopulationCheckpoint
+    checkpoint = population.get_checkpoint()
+
+    from townlet.training.state import PopulationCheckpoint
+    assert isinstance(checkpoint, PopulationCheckpoint)
 
 
 # Helper: Create mock BatchedAgentState for testing
