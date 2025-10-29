@@ -58,6 +58,9 @@ export const useSimulationStore = defineStore('simulation', () => {
   // Available models
   const availableModels = ref([])
 
+  // RND metrics (for Phase 3 visualization)
+  const rndMetrics = ref(null)
+
   // Computed
   const averageSurvivalTime = computed(() => {
     if (episodeHistory.value.length === 0) return 0
@@ -285,6 +288,11 @@ export const useSimulationStore = defineStore('simulation', () => {
     if (message.heat_map) {
       heatMap.value = message.heat_map
     }
+
+    // Handle RND metrics (Phase 3)
+    if (message.rnd_metrics) {
+      rndMetrics.value = message.rnd_metrics
+    }
   }
 
   function handleEpisodeComplete(message) {
@@ -405,6 +413,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     episodeHistory,
     availableModels,
     averageSurvivalTime,
+    rndMetrics,
 
     // Training state
     isTraining,

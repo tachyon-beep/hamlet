@@ -14,6 +14,13 @@
       <aside class="left-panel" aria-label="Agent status panels">
         <MeterPanel :agent-meters="store.agentMeters" />
         <FailurePanel />
+        <!-- Phase 3: Curriculum tracker -->
+        <CurriculumTracker
+          v-if="store.rndMetrics"
+          :current-stage="store.rndMetrics.curriculum_stage || 1"
+          :steps-at-stage="store.rndMetrics.steps_at_stage || 0"
+          :min-steps-required="1000"
+        />
       </aside>
 
       <!-- ✅ Semantic HTML: region for grid visualization -->
@@ -33,14 +40,22 @@
         />
 
         <!-- ✅ Show grid when connected -->
-        <Grid
-          v-else-if="isConnected"
-          :grid-width="store.gridWidth"
-          :grid-height="store.gridHeight"
-          :agents="store.agents"
-          :affordances="store.affordances"
-          :heat-map="store.heatMap"
-        />
+        <div v-else-if="isConnected" class="grid-wrapper">
+          <Grid
+            :grid-width="store.gridWidth"
+            :grid-height="store.gridHeight"
+            :agents="store.agents"
+            :affordances="store.affordances"
+            :heat-map="store.heatMap"
+          />
+          <!-- Phase 3: Novelty heatmap overlay -->
+          <NoveltyHeatmap
+            v-if="store.rndMetrics && store.rndMetrics.novelty_map"
+            :novelty-map="store.rndMetrics.novelty_map"
+            :grid-size="store.gridWidth"
+            :cell-size="75"
+          />
+        </div>
 
         <!-- ✅ Show empty state when not connected -->
         <div v-else class="not-connected-message">
@@ -76,13 +91,27 @@
           :last-action="store.lastAction"
           :episode-history="store.episodeHistory"
         />
+        <!-- Phase 3: Reward charts -->
+        <IntrinsicRewardChart
+          v-if="store.rndMetrics"
+          :extrinsic-history="extrinsicHistory"
+          :intrinsic-history="intrinsicHistory"
+          :width="300"
+          :height="150"
+        />
+        <SurvivalTrendChart
+          v-if="survivalTrend.length > 0"
+          :trend-data="survivalTrend"
+          :width="300"
+          :height="150"
+        />
       </aside>
     </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useSimulationStore } from './stores/simulation'
 import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
@@ -91,11 +120,45 @@ import StatsPanel from './components/StatsPanel.vue'
 import FailurePanel from './components/FailurePanel.vue'
 import LoadingState from './components/LoadingState.vue'
 import ErrorState from './components/ErrorState.vue'
+import NoveltyHeatmap from './components/NoveltyHeatmap.vue'
+import IntrinsicRewardChart from './components/IntrinsicRewardChart.vue'
+import CurriculumTracker from './components/CurriculumTracker.vue'
+import SurvivalTrendChart from './components/SurvivalTrendChart.vue'
 
 const store = useSimulationStore()
 const isConnected = computed(() => store.isConnected)
 const isConnecting = computed(() => store.isConnecting)
 const connectionError = computed(() => store.connectionError)
+
+// Phase 3: Track reward histories and survival trend
+const extrinsicHistory = ref([])
+const intrinsicHistory = ref([])
+const survivalTrend = ref([])
+
+// Watch for RND metrics updates
+watch(() => store.rndMetrics, (newMetrics) => {
+  if (newMetrics) {
+    // Update reward histories (keep last 100)
+    if (newMetrics.extrinsic_reward !== undefined) {
+      extrinsicHistory.value.push(newMetrics.extrinsic_reward)
+      if (extrinsicHistory.value.length > 100) {
+        extrinsicHistory.value.shift()
+      }
+    }
+
+    if (newMetrics.intrinsic_reward !== undefined) {
+      intrinsicHistory.value.push(newMetrics.intrinsic_reward)
+      if (intrinsicHistory.value.length > 100) {
+        intrinsicHistory.value.shift()
+      }
+    }
+
+    // Update survival trend (avg per 100 episodes)
+    if (newMetrics.avg_survival_last_100 !== undefined) {
+      survivalTrend.value.push(newMetrics.avg_survival_last_100)
+    }
+  }
+})
 
 // Check which servers are available on mount
 onMounted(() => {
@@ -217,6 +280,10 @@ function handleStartTraining(config) {
   padding: var(--spacing-md);
   min-width: 0;
   min-height: 300px;
+}
+
+.grid-wrapper {
+  position: relative;
 }
 
 .right-panel {

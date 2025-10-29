@@ -163,6 +163,11 @@ class WebSocketManager:
                         # Remove observation from message (too large)
                         del update["observation"]
 
+                    # Add RND metrics if available (Phase 3)
+                    # This will be populated when using adaptive intrinsic exploration
+                    if hasattr(self.simulation_runner, 'rnd_metrics') and self.simulation_runner.rnd_metrics:
+                        update["rnd_metrics"] = self.simulation_runner.rnd_metrics
+
                 # Broadcast to all clients
                 await self.broadcast(update)
 
