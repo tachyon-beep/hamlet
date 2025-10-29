@@ -4,7 +4,7 @@ Tracks per-agent metrics (survival, learning, entropy) and adapts stage
 through 5 progressive difficulty levels culminating in sparse rewards.
 """
 
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, Optional
 import torch
 from pydantic import BaseModel, Field
 
@@ -132,8 +132,7 @@ class AdversarialCurriculum(CurriculumManager):
         self.min_steps_at_stage = min_steps_at_stage
         self.device = device
 
-        self.current_stage = 1  # Start at stage 1
-        self.tracker: PerformanceTracker = None  # Set when population initialized
+        self.tracker: Optional[PerformanceTracker] = None  # Set when population initialized
 
     def initialize_population(self, num_agents: int):
         """Initialize performance tracking for population."""
@@ -158,11 +157,10 @@ class AdversarialCurriculum(CurriculumManager):
     ) -> List[CurriculumDecision]:
         """Generate curriculum decisions for batch of agents."""
         # For now, return same decision for all agents (will add per-agent logic in Task 2)
-        stage = self.current_stage
+        stage = self.tracker.agent_stages[0].item() if self.tracker else 1
         config = STAGE_CONFIGS[stage - 1]
 
-        # Convert stage (1-5) to difficulty level (0.0-1.0)
-        difficulty_level = (stage - 1) / 4.0  # stage 1 -> 0.0, stage 5 -> 1.0
+        difficulty_level = stage
 
         decision = CurriculumDecision(
             difficulty_level=difficulty_level,

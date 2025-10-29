@@ -13,11 +13,11 @@ def test_adversarial_curriculum_construction():
         device=torch.device('cpu'),
     )
 
-    assert curriculum.current_stage == 1
     assert curriculum.max_steps_per_episode == 500
     assert curriculum.device.type == 'cpu'
+    assert curriculum.tracker is None  # Not initialized until population set
 
-    # Stage 1 specs
+    # Stage 1 specs (stage helpers should work)
     assert curriculum._get_active_meters(1) == ['energy', 'hygiene']
     assert curriculum._get_depletion_multiplier(1) == 0.2
     assert curriculum._get_reward_mode(1) == 'shaped'
