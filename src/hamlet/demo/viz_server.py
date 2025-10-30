@@ -45,6 +45,7 @@ class VizServer:
         # Register routes and lifecycle events
         self.app.get("/")(self.serve_index)
         self.app.websocket("/ws")(self.websocket_endpoint)
+        self.app.websocket("/ws/training")(self.websocket_endpoint)  # Same as /ws for demo
         self.app.on_event("startup")(self.startup)
         self.app.on_event("shutdown")(self.shutdown)
 
@@ -123,21 +124,35 @@ class VizServer:
 
             latest = episodes[0]
 
-            # Build update message
+            # Build update message compatible with frontend expectations
             update = {
-                'type': 'state_update',
+                'type': 'episode_complete',  # Frontend expects this type
                 'episode': latest['episode_id'],
-                'timestamp': latest['timestamp'],
-                'metrics': {
-                    'survival_time': latest['survival_time'],
-                    'total_reward': latest['total_reward'],
-                    'extrinsic_reward': latest['extrinsic_reward'],
-                    'intrinsic_reward': latest['intrinsic_reward'],
+                'length': latest['survival_time'],
+                'reward': latest['total_reward'],
+                'avg_reward_5': latest['total_reward'],  # TODO: Calculate actual average
+                'avg_length_5': latest['survival_time'],  # TODO: Calculate actual average
+                'avg_loss_5': 0.0,  # Not tracked in demo
+                'epsilon': latest['epsilon'],
+                'buffer_size': 0,  # Not tracked in demo
+
+                # Also send as step update for real-time display
+                'step': latest['survival_time'],
+                'cumulative_reward': latest['total_reward'],
+
+                # Grid data (empty for demo - no live visualization)
+                'grid': {
+                    'width': 8,
+                    'height': 8,
+                    'agents': [],
+                    'affordances': []
+                },
+
+                # RND metrics for Phase 3 visualizations
+                'rnd_metrics': {
                     'intrinsic_weight': latest['intrinsic_weight'],
                     'curriculum_stage': latest['curriculum_stage'],
-                    'epsilon': latest['epsilon'],
-                },
-                # TODO: Add position_heatmap and affordance_graph
+                }
             }
 
             # Broadcast to all clients
