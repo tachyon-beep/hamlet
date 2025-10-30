@@ -1,0 +1,21 @@
+[Unit]
+Description=Hamlet Multi-Day Demo Training
+After=network.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%WORKDIR%
+ExecStart=%VENV_PYTHON% -m hamlet.demo.runner %CONFIG% %DB_PATH% %CHECKPOINT_DIR%
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (will be substituted by install script)
+Environment="HAMLET_CONFIG=%CONFIG%"
+Environment="HAMLET_DB_PATH=%DB_PATH%"
+Environment="HAMLET_CHECKPOINT_DIR=%CHECKPOINT_DIR%"
+
+[Install]
+WantedBy=multi-user.target
