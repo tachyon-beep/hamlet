@@ -37,17 +37,35 @@ class VizServer:
 
         self.db = DemoDatabase(db_path)
         self.clients = set()
+        self.broadcast_task = None
 
         # Create FastAPI app
         self.app = FastAPI(title="Hamlet Demo Visualization")
 
-        # Register routes
+        # Register routes and lifecycle events
         self.app.get("/")(self.serve_index)
         self.app.websocket("/ws")(self.websocket_endpoint)
+        self.app.on_event("startup")(self.startup)
+        self.app.on_event("shutdown")(self.shutdown)
 
         # Mount static files
         if self.frontend_dir.exists():
             self.app.mount("/assets", StaticFiles(directory=self.frontend_dir / "assets"), name="assets")
+
+    async def startup(self):
+        """Start background broadcast task."""
+        self.broadcast_task = asyncio.create_task(self.broadcast_loop())
+        logger.info("Started broadcast task")
+
+    async def shutdown(self):
+        """Stop background broadcast task."""
+        if self.broadcast_task:
+            self.broadcast_task.cancel()
+            try:
+                await self.broadcast_task
+            except asyncio.CancelledError:
+                pass
+        logger.info("Stopped broadcast task")
 
     async def serve_index(self):
         """Serve frontend index.html."""
@@ -60,19 +78,36 @@ class VizServer:
         """WebSocket endpoint for streaming updates."""
         await websocket.accept()
         self.clients.add(websocket)
+        logger.info(f"Client connected. Total clients: {len(self.clients)}")
 
         try:
+            # Keep connection alive, wait for client disconnect
             while True:
-                # Send update every 1 second
+                await websocket.receive_text()
+        except Exception as e:
+            logger.info(f"Client disconnected: {e}")
+        finally:
+            self.clients.discard(websocket)
+            logger.info(f"Client removed. Total clients: {len(self.clients)}")
+
+    async def broadcast_loop(self):
+        """Background task that broadcasts updates to all clients."""
+        logger.info("Broadcast loop started")
+        while True:
+            try:
                 await self.broadcast_update()
                 await asyncio.sleep(1)
-        except Exception as e:
-            logger.error(f"WebSocket error: {e}")
-        finally:
-            self.clients.remove(websocket)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in broadcast loop: {e}")
+                await asyncio.sleep(1)
 
     async def broadcast_update(self):
         """Query database and broadcast to all clients."""
+        if not self.clients:
+            return  # No clients, skip broadcast
+
         try:
             # Get latest episode
             episodes = self.db.get_latest_episodes(limit=1)
@@ -99,12 +134,16 @@ class VizServer:
             }
 
             # Broadcast to all clients
-            for client in list(self.clients):
+            dead_clients = set()
+            for client in self.clients:
                 try:
                     await client.send_json(update)
                 except Exception as e:
-                    logger.error(f"Failed to send to client: {e}")
-                    self.clients.remove(client)
+                    logger.warning(f"Failed to send to client: {e}")
+                    dead_clients.add(client)
+
+            # Remove dead clients
+            self.clients -= dead_clients
 
         except Exception as e:
             logger.error(f"Error broadcasting update: {e}")
