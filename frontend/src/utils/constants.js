@@ -33,7 +33,9 @@ export const AFFORDANCE_ICONS = {
   Job: '💼',
   Recreation: '🎮',
   Bar: '🍺',
-  Gym: '💪'
+  Gym: '💪',
+  Park: '🌳',       // Free generalist
+  Doctor: '⚕️'      // Health specialist
 }
 
 // Meter thresholds
