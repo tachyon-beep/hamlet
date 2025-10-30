@@ -61,6 +61,9 @@ export const useSimulationStore = defineStore('simulation', () => {
   // RND metrics (for Phase 3 visualization)
   const rndMetrics = ref(null)
 
+  // Affordance transition data (for garden path visualization)
+  const transitionData = ref(null)
+
   // Computed
   const averageSurvivalTime = computed(() => {
     if (episodeHistory.value.length === 0) return 0
@@ -293,6 +296,11 @@ export const useSimulationStore = defineStore('simulation', () => {
     if (message.rnd_metrics) {
       rndMetrics.value = message.rnd_metrics
     }
+
+    // Handle affordance transition data (garden path)
+    if (message.affordance_graph) {
+      transitionData.value = message.affordance_graph
+    }
   }
 
   function handleEpisodeComplete(message) {
@@ -414,6 +422,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     availableModels,
     averageSurvivalTime,
     rndMetrics,
+    transitionData,
 
     // Training state
     isTraining,

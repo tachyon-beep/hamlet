@@ -105,6 +105,12 @@
           :width="300"
           :height="150"
         />
+        <AffordanceGraph
+          v-if="store.transitionData"
+          :transition-data="store.transitionData"
+          :width="300"
+          :height="250"
+        />
       </aside>
     </main>
   </div>
@@ -124,6 +130,7 @@ import NoveltyHeatmap from './components/NoveltyHeatmap.vue'
 import IntrinsicRewardChart from './components/IntrinsicRewardChart.vue'
 import CurriculumTracker from './components/CurriculumTracker.vue'
 import SurvivalTrendChart from './components/SurvivalTrendChart.vue'
+import AffordanceGraph from './components/AffordanceGraph.vue'
 
 const store = useSimulationStore()
 const isConnected = computed(() => store.isConnected)
