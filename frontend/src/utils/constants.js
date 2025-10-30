@@ -30,7 +30,8 @@ export const AFFORDANCE_ICONS = {
   Fridge: '🥘',       // Main food source in current env
   HomeMeal: '🥘',    // Legacy support
   FastFood: '🍔',
-  Job: '💼',
+  Job: '💼',         // Office work
+  Labor: '🔨',       // Physical labor
   Recreation: '🎮',  // Mood restoration tier 1
   Therapist: '🧠',   // Mood restoration tier 2
   Bar: '🍺',

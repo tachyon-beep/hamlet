@@ -47,7 +47,9 @@ class VectorizedHamletEnv:
             'Shower': torch.tensor([2, 2], device=device),
             'HomeMeal': torch.tensor([1, 3], device=device),
             'FastFood': torch.tensor([5, 6], device=device),
-            'Job': torch.tensor([6, 6], device=device),
+            # Income sources
+            'Job': torch.tensor([6, 6], device=device),          # Office work
+            'Labor': torch.tensor([7, 6], device=device),        # Physical labor
             # Fitness/Social builders (secondary meters)
             'Gym': torch.tensor([7, 3], device=device),
             'Bar': torch.tensor([7, 0], device=device),
@@ -132,8 +134,9 @@ class VectorizedHamletEnv:
         # 2. Deplete meters
         self._deplete_meters()
 
-        # 3. Apply social-mood penalty
-        self._apply_social_mood_penalty()
+        # 3. Apply tertiary meter penalties
+        self._apply_social_mood_penalty()  # Low social → mood decline
+        self._apply_hygiene_penalties()     # Low hygiene → health & mood decline
 
         # 4. Check terminal conditions
         self._check_dones()
@@ -242,16 +245,32 @@ class VectorizedHamletEnv:
                 )  # Health +3%
                 self.meters[at_affordance, 3] -= 0.015  # Money -$3 = -3/200
             elif affordance_name == 'Job':
-                self.meters[at_affordance, 3] += 0.1125  # Money +$22.5 = 22.5/200
+                # Office work - sustainable income
+                self.meters[at_affordance, 3] += 0.1125  # Money +$22.5
                 self.meters[at_affordance, 0] = torch.clamp(
                     self.meters[at_affordance, 0] - 0.15, 0.0, 1.0
                 )  # Energy -15%
                 self.meters[at_affordance, 5] = torch.clamp(
                     self.meters[at_affordance, 5] + 0.02, 0.0, 1.0
-                )  # Social +2% (coworker interaction, but not as good as Bar)
+                )  # Social +2% (coworker interaction)
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] - 0.03, 0.0, 1.0
                 )  # Health -3% (work stress)
+            elif affordance_name == 'Labor':
+                # Physical labor - higher pay, higher costs
+                self.meters[at_affordance, 3] += 0.150  # Money +$30 (33% more than Job)
+                self.meters[at_affordance, 0] = torch.clamp(
+                    self.meters[at_affordance, 0] - 0.20, 0.0, 1.0
+                )  # Energy -20% (exhausting)
+                self.meters[at_affordance, 7] = torch.clamp(
+                    self.meters[at_affordance, 7] - 0.05, 0.0, 1.0
+                )  # Fitness -5% (physical wear and tear)
+                self.meters[at_affordance, 6] = torch.clamp(
+                    self.meters[at_affordance, 6] - 0.05, 0.0, 1.0
+                )  # Health -5% (injury risk)
+                self.meters[at_affordance, 5] = torch.clamp(
+                    self.meters[at_affordance, 5] + 0.01, 0.0, 1.0
+                )  # Social +1% (minimal - hard physical work)
             elif affordance_name == 'FastFood':
                 self.meters[at_affordance, 2] = torch.clamp(
                     self.meters[at_affordance, 2] + 0.45, 0.0, 1.0
@@ -409,13 +428,65 @@ class VectorizedHamletEnv:
                 1.0
             )
 
+    def _apply_hygiene_penalties(self) -> None:
+        """
+        Apply additional health and mood drain when hygiene is low.
+
+        Hygiene is a tertiary need - it doesn't kill you directly, but low hygiene
+        accelerates secondary meter decline (health and mood).
+        """
+        hygiene_penalty_multiplier = 2.0  # low hygiene doubles depletion
+        hygiene_threshold = 0.3  # below this, apply penalties
+
+        hygiene_values = self.meters[:, 1]  # hygiene meter
+        health_values = self.meters[:, 6]   # health meter
+        mood_values = self.meters[:, 4]     # mood meter
+
+        # Calculate penalty only for agents below threshold
+        below_threshold = hygiene_values < hygiene_threshold
+
+        if below_threshold.any():
+            # Deficit ratio: worse hygiene = stronger penalty
+            threshold = max(hygiene_threshold, 1e-6)
+            deficit_ratio = (threshold - hygiene_values[below_threshold]) / threshold
+
+            # Health penalty: being dirty makes you sick faster
+            health_penalty = 0.002 * deficit_ratio * hygiene_penalty_multiplier / 100.0
+            self.meters[below_threshold, 6] = torch.clamp(
+                health_values[below_threshold] - health_penalty,
+                0.0,
+                1.0
+            )
+
+            # Mood penalty: being dirty makes you feel bad
+            mood_penalty = 0.003 * deficit_ratio * hygiene_penalty_multiplier / 100.0
+            self.meters[below_threshold, 4] = torch.clamp(
+                mood_values[below_threshold] - mood_penalty,
+                0.0,
+                1.0
+            )
+
     def _check_dones(self) -> None:
-        """Check terminal conditions."""
-        # Terminal if any critical meter (energy, hygiene, satiation, mood, health) hits 0
-        critical_energy_hygiene_satiation = self.meters[:, :3]  # energy, hygiene, satiation
-        critical_mood = self.meters[:, 4:5]  # mood (mental health)
-        critical_health = self.meters[:, 6:7]  # health (physical health, slow burn)
-        critical_meters = torch.cat([critical_energy_hygiene_satiation, critical_mood, critical_health], dim=1)
+        """Check terminal conditions.
+
+        Hierarchy of needs (Maslow-inspired):
+        - **Primary** (survival): energy, satiation → death if 0
+        - **Secondary** (well-being): health, mood → death if 0
+        - **Tertiary** (quality): hygiene, social, fitness → modulate secondary meters
+          - Low hygiene → health & mood decline faster
+          - Low social → mood decline faster
+          - Low fitness → health decline faster
+        - **Resource**: money (enables affordances, not a "need")
+        """
+        # Primary needs: energy, satiation
+        primary_energy_satiation = self.meters[:, [0, 2]]  # energy, satiation
+
+        # Secondary needs: mood, health
+        secondary_mood_health = self.meters[:, [4, 6]]  # mood, health
+
+        # Death if any primary or secondary meter hits 0
+        # Tertiary meters (hygiene, social, fitness) do NOT cause death directly
+        critical_meters = torch.cat([primary_energy_satiation, secondary_mood_health], dim=1)
         self.dones = (critical_meters <= 0.0).any(dim=1)
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:

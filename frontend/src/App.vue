@@ -10,6 +10,7 @@
       <!-- ✅ Semantic HTML: aside for left panel -->
       <aside class="left-panel" aria-label="Agent status panels">
         <MeterPanel :agent-meters="store.agentMeters" />
+        <AffordanceLegend />
         <!-- Phase 3: Curriculum tracker -->
         <CurriculumTracker
           v-if="store.rndMetrics"
@@ -117,6 +118,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useSimulationStore } from './stores/simulation'
 import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
+import AffordanceLegend from './components/AffordanceLegend.vue'
 import Controls from './components/Controls.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import LoadingState from './components/LoadingState.vue'
