@@ -3,9 +3,6 @@
     <!-- ✅ Semantic HTML: header with role="banner" -->
     <header class="header" role="banner">
       <h1>HAMLET - DRL Visualization</h1>
-      <div class="connection-status" :class="{ connected: isConnected }" role="status">
-        {{ isConnected ? 'Connected' : 'Disconnected' }}
-      </div>
     </header>
 
     <!-- ✅ Semantic HTML: main with role="main" -->
@@ -242,19 +239,6 @@ function handleStartTraining(config) {
   .header h1 {
     font-size: var(--font-size-2xl);
   }
-}
-
-.connection-status {
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--border-radius-sm);
-  background: var(--color-error);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  transition: var(--transition-base);
-}
-
-.connection-status.connected {
-  background: var(--color-success);
 }
 
 /* ✅ Mobile-first responsive layout */
