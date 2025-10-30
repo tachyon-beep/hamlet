@@ -437,6 +437,8 @@ function getHeatColor(intensity) {
 
 .agent-glow {
   animation: agent-pulse 2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 @keyframes agent-pulse {
