@@ -3,6 +3,14 @@
   <section class="meter-panel" aria-labelledby="meter-heading">
     <h3 id="meter-heading">Agent Meters</h3>
 
+    <!-- ✅ Critical state alert banner -->
+    <div v-if="criticalMetersCount > 0" class="critical-alert" role="alert">
+      <span class="alert-icon">⚠️</span>
+      <span class="alert-text">
+        {{ criticalMetersCount }} critical meter{{ criticalMetersCount > 1 ? 's' : '' }}
+      </span>
+    </div>
+
     <!-- ✅ Meters as semantic list -->
     <div v-if="meters" class="meters" role="list">
       <div
@@ -73,6 +81,14 @@ const props = defineProps({
 const meters = computed(() => {
   const agent = props.agentMeters['agent_0']
   return agent ? agent.meters : null
+})
+
+// Count critical meters for alert banner
+const criticalMetersCount = computed(() => {
+  if (!meters.value) return 0
+  return Object.entries(meters.value).filter(([name, value]) =>
+    isCritical(name, value)
+  ).length
 })
 
 // ✅ Use imported formatting utilities
@@ -263,5 +279,40 @@ function getMeterColor(name, value) {
   height: 100%;
   border-radius: var(--border-radius-full);
   transition: width var(--transition-base), background var(--transition-base);
+}
+
+/* ✅ Critical alert banner */
+.critical-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-error);
+  color: white;
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-md);
+  font-weight: var(--font-weight-semibold);
+  animation: alert-pulse 1s ease-in-out infinite;
+}
+
+@keyframes alert-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.alert-icon {
+  font-size: var(--font-size-xl);
+  animation: shake 0.5s ease-in-out infinite;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.alert-text {
+  flex: 1;
+  font-size: var(--font-size-sm);
 }
 </style>

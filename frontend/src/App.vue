@@ -7,18 +7,19 @@
 
     <!-- ✅ Semantic HTML: main with role="main" -->
     <main class="main-container" role="main">
-      <!-- ✅ Semantic HTML: aside for left panel -->
-      <aside class="left-panel" aria-label="Agent status panels">
-        <MeterPanel :agent-meters="store.agentMeters" />
-        <AffordanceLegend />
-        <!-- Phase 3: Curriculum tracker -->
-        <CurriculumTracker
-          v-if="store.rndMetrics"
-          :current-stage="store.rndMetrics.curriculum_stage || 1"
-          :steps-at-stage="store.rndMetrics.steps_at_stage || 0"
-          :min-steps-required="1000"
-        />
-      </aside>
+      <!-- ✅ Top row: three-column layout -->
+      <div class="top-row">
+        <!-- ✅ Semantic HTML: aside for left panel -->
+        <aside class="left-panel" aria-label="Agent status panels">
+          <MeterPanel :agent-meters="store.agentMeters" />
+          <!-- Phase 3: Curriculum tracker -->
+          <CurriculumTracker
+            v-if="store.rndMetrics"
+            :current-stage="store.rndMetrics.curriculum_stage || 1"
+            :steps-at-stage="store.rndMetrics.steps_at_stage || 0"
+            :min-steps-required="1000"
+          />
+        </aside>
 
       <!-- ✅ Semantic HTML: region for grid visualization -->
       <div class="grid-container" role="region" aria-label="Simulation grid">
@@ -61,54 +62,58 @@
         </div>
       </div>
 
-      <!-- ✅ Semantic HTML: aside for right panel -->
-      <aside class="right-panel" aria-label="Simulation controls">
-        <Controls
-          :is-connected="store.isConnected"
-          :is-training="store.isTraining"
-          :available-models="store.availableModels"
-          :current-episode="store.currentEpisode"
-          :total-episodes="store.totalEpisodes"
-          :training-metrics="store.trainingMetrics"
-          :server-availability="store.serverAvailability"
-          @connect="handleConnect"
-          @disconnect="store.disconnect"
-          @play="store.play"
-          @pause="store.pause"
-          @step="store.step"
-          @reset="store.reset"
-          @set-speed="store.setSpeed"
-          @load-model="store.loadModel"
-          @start-training="handleStartTraining"
-        />
-        <StatsPanel
-          :current-episode="store.currentEpisode"
-          :current-step="store.currentStep"
-          :cumulative-reward="store.cumulativeReward"
-          :last-action="store.lastAction"
-          :episode-history="store.episodeHistory"
-        />
-        <!-- Phase 3: Reward charts -->
-        <IntrinsicRewardChart
-          v-if="store.rndMetrics"
-          :extrinsic-history="extrinsicHistory"
-          :intrinsic-history="intrinsicHistory"
-          :width="300"
-          :height="150"
-        />
-        <SurvivalTrendChart
-          v-if="survivalTrend.length > 0"
-          :trend-data="survivalTrend"
-          :width="300"
-          :height="150"
-        />
-        <AffordanceGraph
-          v-if="store.transitionData"
-          :transition-data="store.transitionData"
-          :width="300"
-          :height="250"
-        />
-      </aside>
+        <!-- ✅ Semantic HTML: aside for right panel -->
+        <aside class="right-panel" aria-label="Simulation controls">
+          <Controls
+            :is-connected="store.isConnected"
+            :is-training="store.isTraining"
+            :available-models="store.availableModels"
+            :current-episode="store.currentEpisode"
+            :total-episodes="store.totalEpisodes"
+            :training-metrics="store.trainingMetrics"
+            :server-availability="store.serverAvailability"
+            @connect="handleConnect"
+            @disconnect="store.disconnect"
+            @play="store.play"
+            @pause="store.pause"
+            @step="store.step"
+            @reset="store.reset"
+            @set-speed="store.setSpeed"
+            @load-model="store.loadModel"
+            @start-training="handleStartTraining"
+          />
+          <StatsPanel
+            :current-episode="store.currentEpisode"
+            :current-step="store.currentStep"
+            :cumulative-reward="store.cumulativeReward"
+            :last-action="store.lastAction"
+            :episode-history="store.episodeHistory"
+          />
+          <!-- Phase 3: Reward charts -->
+          <IntrinsicRewardChart
+            v-if="store.rndMetrics"
+            :extrinsic-history="extrinsicHistory"
+            :intrinsic-history="intrinsicHistory"
+            :width="300"
+            :height="150"
+          />
+          <SurvivalTrendChart
+            v-if="survivalTrend.length > 0"
+            :trend-data="survivalTrend"
+            :width="300"
+            :height="150"
+          />
+          <AffordanceGraph
+            v-if="store.transitionData"
+            :transition-data="store.transitionData"
+            :width="300"
+            :height="250"
+          />
+        </aside>
+      </div>
+
+      <!-- ✅ Bottom row: toggleable reference panel -->
+      <ReferencePanel />
     </main>
   </div>
 </template>
@@ -118,7 +123,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useSimulationStore } from './stores/simulation'
 import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
-import AffordanceLegend from './components/AffordanceLegend.vue'
+import ReferencePanel from './components/ReferencePanel.vue'
 import Controls from './components/Controls.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import LoadingState from './components/LoadingState.vue'
@@ -243,8 +248,18 @@ function handleStartTraining(config) {
   }
 }
 
-/* ✅ Mobile-first responsive layout */
+/* ✅ Mobile-first responsive layout - now with top row + bottom panel */
 .main-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0; /* No gap - bottom panel handles its own spacing */
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Top row contains the three-column layout */
+.top-row {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -287,7 +302,7 @@ function handleStartTraining(config) {
 
 /* ✅ Tablet breakpoint: side-by-side panels */
 @media (min-width: 768px) {
-  .main-container {
+  .top-row {
     flex-direction: row;
     gap: var(--spacing-lg);
     padding: var(--spacing-lg);
@@ -310,7 +325,7 @@ function handleStartTraining(config) {
 
 /* ✅ Desktop breakpoint: full layout */
 @media (min-width: 1024px) {
-  .main-container {
+  .top-row {
     padding: var(--spacing-xl);
   }
 
