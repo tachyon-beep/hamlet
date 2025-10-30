@@ -140,6 +140,17 @@ class DemoRunner:
         exploration_cfg = self.config.get('exploration', {})
         population_cfg = self.config.get('population', {})
 
+        # Get environment parameters from config
+        num_agents = population_cfg.get('num_agents', 1)
+        grid_size = population_cfg.get('grid_size', 8)
+
+        # Create environment FIRST (need it to auto-detect dimensions)
+        self.env = VectorizedHamletEnv(num_agents=num_agents, grid_size=grid_size, device=device)
+
+        # Auto-detect dimensions from environment (avoids hardcoded config values)
+        obs_dim = self.env.observation_dim
+        action_dim = self.env.action_dim
+
         # Create curriculum
         self.curriculum = AdversarialCurriculum(
             max_steps_per_episode=curriculum_cfg.get('max_steps_per_episode', 500),
@@ -150,9 +161,9 @@ class DemoRunner:
             device=device,
         )
 
-        # Create exploration
+        # Create exploration (use auto-detected obs_dim)
         self.exploration = AdaptiveIntrinsicExploration(
-            obs_dim=exploration_cfg.get('obs_dim', 70),
+            obs_dim=obs_dim,
             embed_dim=exploration_cfg.get('embed_dim', 128),
             initial_intrinsic_weight=exploration_cfg.get('initial_intrinsic_weight', 1.0),
             variance_threshold=exploration_cfg.get('variance_threshold', 10.0),
@@ -161,16 +172,9 @@ class DemoRunner:
         )
 
         # Get population parameters from config
-        num_agents = population_cfg.get('num_agents', 1)
-        obs_dim = population_cfg.get('state_dim', 70)
-        action_dim = population_cfg.get('action_dim', 5)
-        grid_size = population_cfg.get('grid_size', 8)
         learning_rate = population_cfg.get('learning_rate', 0.00025)
         gamma = population_cfg.get('gamma', 0.99)
         replay_buffer_capacity = population_cfg.get('replay_buffer_capacity', 10000)
-
-        # Create environment FIRST (population constructor needs it)
-        self.env = VectorizedHamletEnv(num_agents=num_agents, grid_size=grid_size, device=device)
 
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]

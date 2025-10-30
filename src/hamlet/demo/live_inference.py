@@ -97,6 +97,13 @@ class LiveInferenceServer:
 
     def _initialize_components(self):
         """Initialize environment and agent components."""
+        # Create environment FIRST (need it to auto-detect dimensions)
+        num_agents = 1
+        self.env = VectorizedHamletEnv(num_agents=num_agents, grid_size=8, device=self.device)
+
+        # Auto-detect observation dimension from environment
+        obs_dim = self.env.observation_dim
+
         # Create curriculum
         self.curriculum = AdversarialCurriculum(
             max_steps_per_episode=500,
@@ -109,7 +116,7 @@ class LiveInferenceServer:
 
         # Create exploration (for inference, we want greedy)
         self.exploration = AdaptiveIntrinsicExploration(
-            obs_dim=70,
+            obs_dim=obs_dim,  # Auto-detected from environment
             embed_dim=128,
             initial_intrinsic_weight=0.0,  # Pure exploitation for inference
             variance_threshold=10.0,
@@ -117,11 +124,7 @@ class LiveInferenceServer:
             device=self.device,
         )
 
-        # Create environment
-        num_agents = 1
-        self.env = VectorizedHamletEnv(num_agents=num_agents, grid_size=8, device=self.device)
-
-        # Create population
+        # Create population (use auto-detected dimensions)
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
         self.population = VectorizedPopulation(
             env=self.env,
@@ -129,6 +132,8 @@ class LiveInferenceServer:
             exploration=self.exploration,
             agent_ids=agent_ids,
             device=self.device,
+            obs_dim=obs_dim,
+            action_dim=self.env.action_dim,
             replay_buffer_capacity=10000,
         )
 

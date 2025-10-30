@@ -540,6 +540,7 @@ class VectorizedHamletEnv:
             3: 'Job',       # money
             4: 'Gym',       # mood
             5: 'Bar',       # social
+            6: 'Doctor',    # health
         }
 
         # For each agent, find most critical meter and reward proximity
@@ -549,7 +550,8 @@ class VectorizedHamletEnv:
             urgency = 1.0 - meter_vals  # Higher when meter is lower
 
             # Only consider meters below threshold
-            threshold = torch.tensor([0.5, 0.5, 0.5, 0.4, 0.5, 0.5], device=self.device)
+            # [energy, hygiene, satiation, money, mood, social, health]
+            threshold = torch.tensor([0.5, 0.5, 0.5, 0.4, 0.5, 0.5, 0.5], device=self.device)
             below_threshold = meter_vals < threshold
 
             if not below_threshold.any():
