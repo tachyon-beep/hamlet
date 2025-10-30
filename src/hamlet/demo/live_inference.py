@@ -310,7 +310,7 @@ class LiveInferenceServer:
 
     async def _broadcast_state_update(self, cumulative_reward: float, last_action: int):
         """Broadcast current state to all clients."""
-        # Get agent position
+        # Get agent position (unpack for frontend compatibility)
         agent_pos = self.env.positions[0].cpu().tolist()
 
         # Get meters
@@ -318,12 +318,14 @@ class LiveInferenceServer:
         for i, meter_name in enumerate(['energy', 'hygiene', 'satiation', 'money']):
             meters[meter_name] = self.env.meters[0, i].item()
 
-        # Get affordances
+        # Get affordances (unpack position for frontend compatibility)
         affordances = []
         for name, pos in self.env.affordances.items():
+            pos_list = pos.cpu().tolist()
             affordances.append({
-                'name': name,
-                'position': pos.cpu().tolist(),
+                'type': name,  # Frontend expects 'type' not 'name'
+                'x': pos_list[0],
+                'y': pos_list[1],
             })
 
         # Build state update message
@@ -336,7 +338,9 @@ class LiveInferenceServer:
                 'height': self.env.grid_size,
                 'agents': [{
                     'id': 'agent_0',
-                    'position': agent_pos,
+                    'x': agent_pos[0],  # Frontend expects x, y not position
+                    'y': agent_pos[1],
+                    'color': '#4CAF50',  # Green color for agent
                     'last_action': last_action,
                 }],
                 'affordances': affordances,
