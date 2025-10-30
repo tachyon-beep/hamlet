@@ -17,33 +17,27 @@ export function capitalize(str) {
 /**
  * Format meter value for display
  * @param {string} name - Meter name (money, mood, or normalized meter)
- * @param {number} value - Raw meter value
+ * @param {number} value - Raw meter value (all meters are 0-1 normalized from backend)
  * @returns {string} Formatted display value
  */
 export function formatMeterValue(name, value) {
   if (name === 'money') {
-    return `$${Math.round(value)}`
+    // Money is 0-1 normalized, convert to range [-100, 100]
+    const moneyValue = value * 200 - 100
+    return `$${Math.round(moneyValue)}`
   }
-  if (name === 'mood') {
-    // Mood stored as 0-100 (higher = better)
-    return `${Math.round(value)}%`
-  }
-  // Other meters are normalized 0-1, convert to percentage
+  // All meters (including mood) are normalized 0-1, convert to percentage
   return `${Math.round(value * 100)}%`
 }
 
 /**
  * Get meter percentage for progress bars
  * @param {string} name - Meter name
- * @param {number} value - Raw meter value
+ * @param {number} value - Raw meter value (all meters are 0-1 normalized)
  * @returns {number} Percentage value (0-100)
  */
 export function getMeterPercentage(name, value) {
-  if (name === 'money' || name === 'mood') {
-    // Money and mood are already 0-100
-    return Math.max(0, Math.min(100, value))
-  }
-  // Other meters are normalized 0-1, convert to percentage
+  // All meters are normalized 0-1, convert to percentage
   return Math.max(0, Math.min(100, value * 100))
 }
 

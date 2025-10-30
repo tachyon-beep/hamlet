@@ -99,15 +99,6 @@
             </option>
           </select>
         </div>
-
-        <button
-          type="button"
-          class="control-button load-model"
-          :disabled="!props.isConnected"
-          @click="loadDefaultModel"
-        >
-          Reload trained_agent.pt
-        </button>
       </div>
     </div>
 
@@ -405,17 +396,6 @@ function onSpeedChange() {
 function onModelChange() {
   if (selectedModel.value) {
     emit('load-model', selectedModel.value)
-  }
-}
-
-function loadDefaultModel() {
-  if (props.availableModels.includes(defaultModelName)) {
-    emit('load-model', defaultModelName)
-    selectedModel.value = defaultModelName
-  } else if (selectedModel.value) {
-    emit('load-model', selectedModel.value)
-  } else {
-    emit('load-model', defaultModelName)
   }
 }
 </script>
