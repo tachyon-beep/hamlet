@@ -42,8 +42,9 @@ class VectorizedHamletEnv:
 
         # Affordance positions (from Hamlet default layout)
         self.affordances = {
-            # Basic survival
-            'Bed': torch.tensor([1, 1], device=device),
+            # Basic survival (tiered)
+            'Bed': torch.tensor([1, 1], device=device),           # Energy restoration tier 1
+            'LuxuryBed': torch.tensor([2, 1], device=device),     # Energy restoration tier 2
             'Shower': torch.tensor([2, 2], device=device),
             'HomeMeal': torch.tensor([1, 3], device=device),
             'FastFood': torch.tensor([5, 6], device=device),
@@ -131,12 +132,13 @@ class VectorizedHamletEnv:
         # 1. Execute actions
         self._execute_actions(actions)
 
-        # 2. Deplete meters
+        # 2. Deplete meters (base passive decay)
         self._deplete_meters()
 
-        # 3. Apply tertiary meter penalties
-        self._apply_social_mood_penalty()  # Low social → mood decline
-        self._apply_hygiene_penalties()     # Low hygiene → health & mood decline
+        # 3. Cascading effects (coupled differential equations!)
+        self._apply_secondary_to_primary_effects()  # Satiation/Fitness/Mood → Health/Energy
+        self._apply_tertiary_to_secondary_effects() # Hygiene/Social → Satiation/Fitness/Mood
+        self._apply_tertiary_to_primary_effects()   # Hygiene/Social → Health/Energy (weak)
 
         # 4. Check terminal conditions
         self._check_dones()
@@ -224,13 +226,23 @@ class VectorizedHamletEnv:
             # Apply affordance effects (matching Hamlet exactly)
             # NOTE: Money is in range [-100, 100], so $X = X/200 in normalized [0, 1]
             if affordance_name == 'Bed':
+                # Energy restoration tier 1 (affordable)
                 self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] + 0.5, 0.0, 1.0
+                    self.meters[at_affordance, 0] + 0.50, 0.0, 1.0
                 )  # Energy +50%
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] + 0.02, 0.0, 1.0
                 )  # Health +2%
-                self.meters[at_affordance, 3] -= 0.025  # Money -$5 = -5/200
+                self.meters[at_affordance, 3] -= 0.025  # Money -$5
+            elif affordance_name == 'LuxuryBed':
+                # Energy restoration tier 2 (premium rest)
+                self.meters[at_affordance, 0] = torch.clamp(
+                    self.meters[at_affordance, 0] + 0.75, 0.0, 1.0
+                )  # Energy +75% (50% more than Bed)
+                self.meters[at_affordance, 6] = torch.clamp(
+                    self.meters[at_affordance, 6] + 0.05, 0.0, 1.0
+                )  # Health +5%
+                self.meters[at_affordance, 3] -= 0.055  # Money -$11 (2.2x cost of Bed)
             elif affordance_name == 'Shower':
                 self.meters[at_affordance, 1] = torch.clamp(
                     self.meters[at_affordance, 1] + 0.4, 0.0, 1.0
@@ -397,97 +409,161 @@ class VectorizedHamletEnv:
             self.meters[:, 6] - health_depletion, 0.0, 1.0
         )
 
-    def _apply_social_mood_penalty(self) -> None:
+    def _apply_secondary_to_primary_effects(self) -> None:
         """
-        Apply additional mood drain when socially isolated.
+        SECONDARY → PRIMARY (Aggressive effects).
 
-        Matches Hamlet's social-mood coupling where low social causes
-        additional mood penalties.
+        **Satiation is FUNDAMENTAL** (affects BOTH primaries):
+        - Low Satiation → Health decline ↑↑↑ (starving → sick → death)
+        - Low Satiation → Energy decline ↑↑↑ (hungry → exhausted → death)
+
+        **Specialized secondaries** (each affects one primary):
+        - Low Fitness → Health decline ↑↑↑ (unfit → sick → death)
+        - Low Mood → Energy decline ↑↑↑ (depressed → exhausted → death)
+
+        This creates asymmetry: FOOD FIRST, then everything else.
         """
-        # Constants from EnvironmentConfig
-        mood_social_penalty = 5.0  # max additional mood drop per step
-        mood_social_threshold = 0.3  # below this social level, apply penalty
+        threshold = 0.3  # below this, aggressive penalties apply
 
-        social_values = self.meters[:, 5]  # social meter
-        mood_values = self.meters[:, 4]    # mood meter
+        # SATIATION → BOTH PRIMARIES (fundamental need!)
+        satiation = self.meters[:, 2]
+        low_satiation = satiation < threshold
+        if low_satiation.any():
+            deficit = (threshold - satiation[low_satiation]) / threshold
 
-        # Calculate penalty only for agents below threshold
-        below_threshold = social_values < mood_social_threshold
-
-        if below_threshold.any():
-            # deficit_ratio = (threshold - social) / threshold
-            # Capped to prevent division issues
-            threshold = max(mood_social_threshold, 1e-6)
-            deficit_ratio = (threshold - social_values[below_threshold]) / threshold
-            mood_penalty = mood_social_penalty * deficit_ratio / 100.0  # Normalize to [0, 1]
-
-            # Apply penalty to mood
-            self.meters[below_threshold, 4] = torch.clamp(
-                mood_values[below_threshold] - mood_penalty,
-                0.0,
-                1.0
+            # Health damage (starving → sick)
+            health_penalty = 0.004 * deficit  # 0.4% at threshold, up to ~0.8% at 0
+            self.meters[low_satiation, 6] = torch.clamp(
+                self.meters[low_satiation, 6] - health_penalty, 0.0, 1.0
             )
 
-    def _apply_hygiene_penalties(self) -> None:
-        """
-        Apply additional health and mood drain when hygiene is low.
-
-        Hygiene is a tertiary need - it doesn't kill you directly, but low hygiene
-        accelerates secondary meter decline (health and mood).
-        """
-        hygiene_penalty_multiplier = 2.0  # low hygiene doubles depletion
-        hygiene_threshold = 0.3  # below this, apply penalties
-
-        hygiene_values = self.meters[:, 1]  # hygiene meter
-        health_values = self.meters[:, 6]   # health meter
-        mood_values = self.meters[:, 4]     # mood meter
-
-        # Calculate penalty only for agents below threshold
-        below_threshold = hygiene_values < hygiene_threshold
-
-        if below_threshold.any():
-            # Deficit ratio: worse hygiene = stronger penalty
-            threshold = max(hygiene_threshold, 1e-6)
-            deficit_ratio = (threshold - hygiene_values[below_threshold]) / threshold
-
-            # Health penalty: being dirty makes you sick faster
-            health_penalty = 0.002 * deficit_ratio * hygiene_penalty_multiplier / 100.0
-            self.meters[below_threshold, 6] = torch.clamp(
-                health_values[below_threshold] - health_penalty,
-                0.0,
-                1.0
+            # Energy damage (hungry → exhausted)
+            energy_penalty = 0.005 * deficit  # 0.5% at threshold, up to ~1.0% at 0
+            self.meters[low_satiation, 0] = torch.clamp(
+                self.meters[low_satiation, 0] - energy_penalty, 0.0, 1.0
             )
 
-            # Mood penalty: being dirty makes you feel bad
-            mood_penalty = 0.003 * deficit_ratio * hygiene_penalty_multiplier / 100.0
-            self.meters[below_threshold, 4] = torch.clamp(
-                mood_values[below_threshold] - mood_penalty,
-                0.0,
-                1.0
+        # FITNESS → HEALTH (specialized)
+        # (Already implemented in _deplete_meters via fitness-modulated health depletion)
+        # Low fitness creates 3x health depletion multiplier
+
+        # MOOD → ENERGY (specialized)
+        mood = self.meters[:, 4]
+        low_mood = mood < threshold
+        if low_mood.any():
+            deficit = (threshold - mood[low_mood]) / threshold
+            energy_penalty = 0.005 * deficit  # 0.5% at threshold, up to ~1.0% at 0
+            self.meters[low_mood, 0] = torch.clamp(
+                self.meters[low_mood, 0] - energy_penalty, 0.0, 1.0
+            )
+
+    def _apply_tertiary_to_secondary_effects(self) -> None:
+        """
+        TERTIARY → SECONDARY (Aggressive effects).
+
+        - Low Hygiene → Satiation/Fitness/Mood decline ↑↑
+        - Low Social → Mood decline ↑↑
+        """
+        threshold = 0.3
+
+        # Low hygiene → secondary meters
+        hygiene = self.meters[:, 1]
+        low_hygiene = hygiene < threshold
+        if low_hygiene.any():
+            deficit = (threshold - hygiene[low_hygiene]) / threshold
+
+            # Satiation penalty (being dirty → loss of appetite)
+            satiation_penalty = 0.002 * deficit
+            self.meters[low_hygiene, 2] = torch.clamp(
+                self.meters[low_hygiene, 2] - satiation_penalty, 0.0, 1.0
+            )
+
+            # Fitness penalty (being dirty → harder to exercise)
+            fitness_penalty = 0.002 * deficit
+            self.meters[low_hygiene, 7] = torch.clamp(
+                self.meters[low_hygiene, 7] - fitness_penalty, 0.0, 1.0
+            )
+
+            # Mood penalty (being dirty → feel bad)
+            mood_penalty = 0.003 * deficit
+            self.meters[low_hygiene, 4] = torch.clamp(
+                self.meters[low_hygiene, 4] - mood_penalty, 0.0, 1.0
+            )
+
+        # Low social → mood
+        social = self.meters[:, 5]
+        low_social = social < threshold
+        if low_social.any():
+            deficit = (threshold - social[low_social]) / threshold
+            mood_penalty = 0.004 * deficit  # Stronger than hygiene
+            self.meters[low_social, 4] = torch.clamp(
+                self.meters[low_social, 4] - mood_penalty, 0.0, 1.0
+            )
+
+    def _apply_tertiary_to_primary_effects(self) -> None:
+        """
+        TERTIARY → PRIMARY (Weak direct effects).
+
+        - Low Hygiene → Health/Energy decline ↑ (weak)
+        - Low Social → Energy decline ↑ (weak)
+        """
+        threshold = 0.3
+
+        # Low hygiene → health (weak)
+        hygiene = self.meters[:, 1]
+        low_hygiene = hygiene < threshold
+        if low_hygiene.any():
+            deficit = (threshold - hygiene[low_hygiene]) / threshold
+
+            health_penalty = 0.0005 * deficit  # Weak effect
+            self.meters[low_hygiene, 6] = torch.clamp(
+                self.meters[low_hygiene, 6] - health_penalty, 0.0, 1.0
+            )
+
+            energy_penalty = 0.0005 * deficit  # Weak effect
+            self.meters[low_hygiene, 0] = torch.clamp(
+                self.meters[low_hygiene, 0] - energy_penalty, 0.0, 1.0
+            )
+
+        # Low social → energy (weak)
+        social = self.meters[:, 5]
+        low_social = social < threshold
+        if low_social.any():
+            deficit = (threshold - social[low_social]) / threshold
+            energy_penalty = 0.0008 * deficit  # Weak effect
+            self.meters[low_social, 0] = torch.clamp(
+                self.meters[low_social, 0] - energy_penalty, 0.0, 1.0
             )
 
     def _check_dones(self) -> None:
         """Check terminal conditions.
 
-        Hierarchy of needs (Maslow-inspired):
-        - **Primary** (survival): energy, satiation → death if 0
-        - **Secondary** (well-being): health, mood → death if 0
-        - **Tertiary** (quality): hygiene, social, fitness → modulate secondary meters
-          - Low hygiene → health & mood decline faster
-          - Low social → mood decline faster
-          - Low fitness → health decline faster
-        - **Resource**: money (enables affordances, not a "need")
+        Coupled cascade architecture:
+
+        **PRIMARY (Death Conditions):**
+        - Health: Are you alive?
+        - Energy: Can you move?
+
+        **SECONDARY (Aggressive → Primary):**
+        - Satiation ──strong──> Health AND Energy (FUNDAMENTAL - affects both!)
+        - Fitness ──strong──> Health (unfit → sick → death)
+        - Mood ──strong──> Energy (depressed → exhausted → death)
+
+        **TERTIARY (Quality of Life):**
+        - Hygiene ──strong──> Secondary + weak──> Primary
+        - Social ──strong──> Secondary + weak──> Primary
+
+        **RESOURCE:**
+        - Money (Enables affordances)
+
+        **Key Insight:** Satiation is THE foundational need - hungry makes you
+        BOTH sick AND exhausted. Food must be prioritized above all else.
         """
-        # Primary needs: energy, satiation
-        primary_energy_satiation = self.meters[:, [0, 2]]  # energy, satiation
+        # Death if either PRIMARY meter hits 0
+        health_values = self.meters[:, 6]  # health
+        energy_values = self.meters[:, 0]  # energy
 
-        # Secondary needs: mood, health
-        secondary_mood_health = self.meters[:, [4, 6]]  # mood, health
-
-        # Death if any primary or secondary meter hits 0
-        # Tertiary meters (hygiene, social, fitness) do NOT cause death directly
-        critical_meters = torch.cat([primary_energy_satiation, secondary_mood_health], dim=1)
-        self.dones = (critical_meters <= 0.0).any(dim=1)
+        self.dones = ((health_values <= 0.0) | (energy_values <= 0.0))
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """

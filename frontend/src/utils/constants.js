@@ -26,6 +26,7 @@ export const ACTION_ICONS = {
 // Affordance display
 export const AFFORDANCE_ICONS = {
   Bed: '🛏️',
+  LuxuryBed: '🛌',  // Luxury bed (tier 2 rest)
   Shower: '🚿',
   Fridge: '🥘',       // Main food source in current env
   HomeMeal: '🥘',    // Legacy support

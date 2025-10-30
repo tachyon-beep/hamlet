@@ -11,7 +11,14 @@
             <span class="icon">🛏️</span>
             <div class="details">
               <strong>Bed</strong>
-              <span class="effects">+60% energy, -$5</span>
+              <span class="effects">+50% energy, +2% health, -$5</span>
+            </div>
+          </div>
+          <div class="affordance-item">
+            <span class="icon">🛌</span>
+            <div class="details">
+              <strong>Luxury Bed</strong>
+              <span class="effects">+75% energy, +5% health, -$11 (premium rest)</span>
             </div>
           </div>
           <div class="affordance-item">
@@ -132,12 +139,20 @@
 
     <!-- Strategy Notes -->
     <div class="strategy-notes">
-      <h4>Strategy Tips</h4>
+      <h4>Meter Architecture (Coupled System)</h4>
       <ul>
-        <li><strong>Primary Meters:</strong> Mood & Health need direct restoration</li>
-        <li><strong>Secondary Meters:</strong> Low Social → Mood penalty, Low Fitness → Health decline 3x faster</li>
-        <li><strong>Prevention vs Cure:</strong> Gym ($8) + Park (free) prevent expensive Hospital visits ($15)</li>
-        <li><strong>Vice Tradeoffs:</strong> Bar & FastFood solve immediate needs but damage long-term health</li>
+        <li><strong>PRIMARY (Death if 0):</strong> Health (alive?), Energy (can move?)</li>
+        <li><strong>SATIATION IS FUNDAMENTAL:</strong> Affects BOTH Health AND Energy (hungry = sick + exhausted)</li>
+        <li><strong>SECONDARY (Specialized):</strong> Fitness → Health, Mood → Energy</li>
+        <li><strong>TERTIARY → Everything:</strong> Hygiene/Social accelerate ALL pathways</li>
+        <li><strong>Cascading Death:</strong> Neglect tertiary → secondary tanks → primary fails → death</li>
+      </ul>
+      <h4>Strategic Insights</h4>
+      <ul>
+        <li><strong>FastFood Trap:</strong> Solves satiation BUT damages fitness → health pathway compromised</li>
+        <li><strong>Labor Trap:</strong> High pay BUT damages fitness/health → accelerates death while earning</li>
+        <li><strong>Prevention vs Cure:</strong> Gym ($8) prevents Hospital ($15) by maintaining fitness</li>
+        <li><strong>Quality of Life:</strong> Neglecting hygiene/social accelerates ALL pathways to death</li>
       </ul>
     </div>
   </section>
