@@ -3,34 +3,11 @@
   <section class="controls-panel" aria-labelledby="controls-heading">
     <h3 id="controls-heading">Controls</h3>
 
-    <!-- ✅ Mode Selector with proper fieldset -->
-    <fieldset class="mode-selector">
-      <legend class="sr-only">Simulation Mode</legend>
-      <div class="mode-buttons" role="radiogroup" aria-label="Select simulation mode">
-        <button
-          @click="selectedMode = 'inference'"
-          :class="['mode-button', { active: selectedMode === 'inference' }]"
-          :disabled="props.isConnected || (!props.serverAvailability.inference && props.serverAvailability.checked)"
-          role="radio"
-          :aria-checked="selectedMode === 'inference'"
-          aria-label="Inference mode"
-          :title="!props.serverAvailability.inference && props.serverAvailability.checked ? 'Inference server not running (start with: uv run python demo_visualization.py)' : 'Run trained agent inference'"
-        >
-          Inference
-        </button>
-        <button
-          @click="selectedMode = 'training'"
-          :class="['mode-button', { active: selectedMode === 'training' }]"
-          :disabled="props.isConnected || (!props.serverAvailability.training && props.serverAvailability.checked)"
-          role="radio"
-          :aria-checked="selectedMode === 'training'"
-          aria-label="Training mode"
-          :title="!props.serverAvailability.training && props.serverAvailability.checked ? 'Training server not running (requires separate training server)' : 'Live training visualization'"
-        >
-          Training
-        </button>
-      </div>
-    </fieldset>
+    <!-- Connection status indicator -->
+    <div class="connection-status" v-if="props.isConnected">
+      <span class="status-indicator connected"></span>
+      <span>Live Inference (Latest Checkpoint)</span>
+    </div>
 
     <!-- ✅ Connection Control with better semantics -->
     <div class="connection-control">
@@ -38,7 +15,7 @@
         v-if="!props.isConnected"
         @click="connect"
         class="primary-button"
-        aria-label="Connect to simulation server"
+        aria-label="Connect to live inference server"
       >
         Connect
       </button>
@@ -46,14 +23,14 @@
         v-else
         @click="disconnect"
         class="secondary-button"
-        aria-label="Disconnect from simulation server"
+        aria-label="Disconnect from live inference server"
       >
         Disconnect
       </button>
     </div>
 
-    <!-- ✅ Inference Mode Controls with ARIA labels -->
-    <div v-if="selectedMode === 'inference' && props.isConnected" class="inference-controls">
+    <!-- ✅ Playback Controls (shown when connected) -->
+    <div v-if="props.isConnected" class="inference-controls">
       <div class="button-group" role="group" aria-label="Playback controls">
         <button
           @click="emit('play')"
@@ -135,7 +112,8 @@
     </div>
 
     <!-- ✅ Training Mode Controls with semantic form -->
-    <div v-if="selectedMode === 'training' && props.isConnected" class="training-controls">
+    <!-- Training controls removed - live inference only -->
+    <div v-if="false" class="training-controls">
       <form v-if="!props.isTraining" class="training-config" @submit.prevent="startTraining">
         <fieldset>
           <legend class="sr-only">Training Configuration</legend>
@@ -360,7 +338,7 @@ const emit = defineEmits([
   'start-training'
 ])
 
-const selectedMode = ref('inference')
+// Mode removed - always run live inference on latest checkpoint
 const speedValue = ref(1.0)
 const selectedModel = ref(null)
 const defaultModelName = 'trained_agent.pt'
@@ -403,7 +381,7 @@ if (props.availableModels.length > 0) {
 
 // ✅ Emit events instead of calling store methods
 function connect() {
-  emit('connect', selectedMode.value)
+  emit('connect', 'inference')  // Always connect in inference mode
 }
 
 function disconnect() {
@@ -467,7 +445,41 @@ function loadDefaultModel() {
   color: var(--color-text-primary);
 }
 
-/* Mode Selector */
+/* Connection Status Indicator */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-indicator.connected {
+  background: var(--color-success);
+  box-shadow: 0 0 8px var(--color-success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Mode Selector (deprecated - kept for compatibility) */
 .mode-selector {
   display: flex;
   flex-direction: column;
