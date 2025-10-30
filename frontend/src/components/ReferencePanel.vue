@@ -19,6 +19,46 @@
           <div class="legend-section">
             <h3>Affordances Guide</h3>
 
+            <!-- ✅ PEDAGOGY-FIRST: Lead with Strategic Insights -->
+            <div class="strategic-insights-header">
+              <h4>🎯 Key Strategic Insights</h4>
+              <div class="insights-grid">
+                <div class="insight-card">
+                  <span class="insight-icon">⛓️</span>
+                  <div class="insight-content">
+                    <strong>Meter Coupling</strong>
+                    <p>Satiation affects Health & Energy. Tertiary meters (hygiene/social) accelerate ALL pathways.</p>
+                  </div>
+                </div>
+                <div class="insight-card">
+                  <span class="insight-icon">💀</span>
+                  <div class="insight-content">
+                    <strong>Cascading Death</strong>
+                    <p>Neglect tertiary → secondary tanks → primary fails → death spiral.</p>
+                  </div>
+                </div>
+                <div class="insight-card">
+                  <span class="insight-icon">⚠️</span>
+                  <div class="insight-content">
+                    <strong>Economic Traps</strong>
+                    <p>FastFood damages fitness. Labor pays well but damages health long-term.</p>
+                  </div>
+                </div>
+                <div class="insight-card">
+                  <span class="insight-icon">🛡️</span>
+                  <div class="insight-content">
+                    <strong>Prevention Strategy</strong>
+                    <p>Gym ($8) prevents Hospital ($15). Invest in buffers before emergencies.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="section-divider">
+              <span>Individual Affordances</span>
+            </div>
+
             <div class="legend-categories-horizontal">
               <!-- Basic Survival -->
               <div class="category-column">
@@ -118,17 +158,6 @@
                   </div>
                 </div>
               </div>
-
-              <!-- Strategy Notes (Right Column) -->
-              <div class="category-column strategy-column">
-                <h4>Strategic Insights</h4>
-                <div class="strategy-compact">
-                  <p><strong>Meter Coupling:</strong> Satiation affects Health & Energy. Tertiary meters (hygiene/social) accelerate all pathways.</p>
-                  <p><strong>Cascading Death:</strong> Neglect tertiary → secondary tanks → primary fails → death.</p>
-                  <p><strong>Traps:</strong> FastFood damages fitness pathway. Labor high pay but damages health long-term.</p>
-                  <p><strong>Prevention:</strong> Gym ($8) prevents Hospital ($15) by maintaining fitness buffer.</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -216,6 +245,90 @@ function toggleCollapse() {
   text-align: center;
 }
 
+/* ✅ Strategic Insights Header - Pedagogy First */
+.strategic-insights-header {
+  margin-bottom: var(--spacing-xl);
+}
+
+.strategic-insights-header h4 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.insight-card {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-bg-primary);
+  border-radius: var(--border-radius-md);
+  border-left: 3px solid var(--color-primary);
+  transition: all var(--transition-base);
+}
+
+.insight-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-left-color: var(--color-interactive-hover);
+}
+
+.insight-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.insight-content {
+  flex: 1;
+}
+
+.insight-content strong {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.insight-content p {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* Section Divider */
+.section-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: var(--spacing-xl) 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.section-divider span {
+  padding: 0 var(--spacing-md);
+}
+
 /* Four-column layout */
 .legend-categories-horizontal {
   display: grid;
@@ -268,32 +381,6 @@ function toggleCollapse() {
   grid-column: 2;
   color: var(--color-text-tertiary);
   font-size: 0.6875rem; /* 11px */
-}
-
-/* Strategy notes column */
-.strategy-column {
-  background: var(--color-bg-primary);
-  padding: var(--spacing-sm);
-  border-radius: var(--border-radius-sm);
-  border-left: 2px solid var(--color-primary);
-}
-
-.strategy-compact {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.strategy-compact p {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  line-height: 1.5;
-}
-
-.strategy-compact strong {
-  color: var(--color-text-secondary);
-  font-weight: var(--font-weight-semibold);
 }
 
 /* Slide-fade transition */
