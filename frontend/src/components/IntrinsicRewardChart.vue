@@ -1,16 +1,16 @@
 <template>
   <div class="intrinsic-reward-chart">
     <h3>Reward Streams (Last 100 Steps)</h3>
-    <svg :width="width" :height="height">
+    <svg :width="width" :height="height" class="chart-svg">
       <!-- Axes -->
-      <line :x1="margin" :y1="height - margin" :x2="width - margin" :y2="height - margin" stroke="#ccc" />
-      <line :x1="margin" :y1="margin" :x2="margin" :y2="height - margin" stroke="#ccc" />
+      <line :x1="margin" :y1="height - margin" :x2="width - margin" :y2="height - margin" class="axis-line" />
+      <line :x1="margin" :y1="margin" :x2="margin" :y2="height - margin" class="axis-line" />
 
       <!-- Extrinsic line (blue) -->
       <polyline
         :points="extrinsicPoints"
         fill="none"
-        stroke="#3b82f6"
+        class="line-extrinsic"
         stroke-width="2"
       />
 
@@ -18,17 +18,17 @@
       <polyline
         :points="intrinsicPoints"
         fill="none"
-        stroke="#f59e0b"
+        class="line-intrinsic"
         stroke-width="2"
       />
 
       <!-- Legend -->
       <g transform="translate(50, 20)">
-        <line x1="0" y1="0" x2="30" y2="0" stroke="#3b82f6" stroke-width="2" />
-        <text x="35" y="5" font-size="12">Extrinsic</text>
+        <line x1="0" y1="0" x2="30" y2="0" class="line-extrinsic" stroke-width="2" />
+        <text x="35" y="5" class="legend-text">Extrinsic</text>
 
-        <line x1="0" y1="20" x2="30" y2="20" stroke="#f59e0b" stroke-width="2" />
-        <text x="35" y="25" font-size="12">Intrinsic</text>
+        <line x1="0" y1="20" x2="30" y2="20" class="line-intrinsic" stroke-width="2" />
+        <text x="35" y="25" class="legend-text">Intrinsic</text>
       </g>
     </svg>
   </div>
@@ -94,9 +94,40 @@ export default {
 
 <style scoped>
 .intrinsic-reward-chart {
-  margin: 10px 0;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.intrinsic-reward-chart h3 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+}
+
+.axis-line {
+  stroke: var(--color-chart-grid);
+  stroke-width: 1;
+}
+
+.line-extrinsic {
+  stroke: var(--color-chart-primary);
+}
+
+.line-intrinsic {
+  stroke: var(--color-warning);
+}
+
+.legend-text {
+  fill: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
 }
 </style>

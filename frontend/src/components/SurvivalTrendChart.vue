@@ -1,22 +1,22 @@
 <template>
   <div class="survival-trend-chart">
     <h3>Survival Time Trend (Avg per 100 Episodes)</h3>
-    <svg :width="width" :height="height">
+    <svg :width="width" :height="height" class="chart-svg">
       <!-- Axes -->
-      <line :x1="margin" :y1="height - margin" :x2="width - margin" :y2="height - margin" stroke="#ccc" />
-      <line :x1="margin" :y1="margin" :x2="margin" :y2="height - margin" stroke="#ccc" />
+      <line :x1="margin" :y1="height - margin" :x2="width - margin" :y2="height - margin" class="axis-line" />
+      <line :x1="margin" :y1="margin" :x2="margin" :y2="height - margin" class="axis-line" />
 
       <!-- Trend line -->
       <polyline
         :points="trendPoints"
         fill="none"
-        stroke="#10b981"
+        class="trend-line"
         stroke-width="3"
       />
 
       <!-- Axis labels -->
-      <text :x="width / 2" :y="height - 5" text-anchor="middle" font-size="12">Episodes</text>
-      <text :x="10" :y="height / 2" text-anchor="middle" font-size="12" transform="rotate(-90, 10, 100)">
+      <text :x="width / 2" :y="height - 5" text-anchor="middle" class="axis-label">Episodes</text>
+      <text :x="10" :y="height / 2" text-anchor="middle" class="axis-label" transform="rotate(-90, 10, 100)">
         Avg Survival (steps)
       </text>
     </svg>
@@ -70,9 +70,36 @@ export default {
 
 <style scoped>
 .survival-trend-chart {
-  margin: 10px 0;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.survival-trend-chart h3 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+}
+
+.axis-line {
+  stroke: var(--color-chart-grid);
+  stroke-width: 1;
+}
+
+.trend-line {
+  stroke: var(--color-success);
+}
+
+.axis-label {
+  fill: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
 }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="affordance-graph">
     <h4>Learned Routines (Affordance Transitions)</h4>
-    <svg :width="width" :height="height" v-if="hasData">
+    <svg :width="width" :height="height" v-if="hasData" class="graph-svg">
       <!-- Nodes (affordances) -->
       <g v-for="(node, name) in nodes" :key="name">
         <circle
@@ -9,16 +9,14 @@
           :cy="node.y"
           :r="30"
           :fill="getNodeColor(name)"
-          stroke="#333"
+          class="node-circle"
           stroke-width="2"
         />
         <text
           :x="node.x"
           :y="node.y + 5"
           text-anchor="middle"
-          font-size="12"
-          fill="white"
-          font-weight="bold"
+          class="node-label"
         >
           {{ name }}
         </text>
@@ -48,7 +46,7 @@
           refY="3"
           orient="auto"
         >
-          <polygon points="0 0, 10 3, 0 6" fill="#666" />
+          <polygon points="0 0, 10 3, 0 6" class="arrow-head" />
         </marker>
       </defs>
     </svg>
@@ -132,13 +130,22 @@ export default {
   },
   methods: {
     getNodeColor(name) {
+      // Use CSS custom properties for colors (matches MeterPanel colors)
       const colors = {
-        'Bed': '#8b5cf6',
-        'Job': '#f59e0b',
-        'Shower': '#3b82f6',
-        'Fridge': '#10b981',
+        'Bed': 'var(--color-meter-energy)',        // Purple for energy
+        'Job': 'var(--color-meter-money)',          // Gold for money
+        'Shower': 'var(--color-meter-hygiene)',     // Blue for hygiene
+        'Fridge': 'var(--color-meter-satiation)',   // Green for satiation
       }
-      return colors[name] || '#666'
+      // Get computed style to resolve CSS variables
+      const style = getComputedStyle(document.documentElement)
+      const colorVar = colors[name] || 'var(--color-text-muted)'
+      // Extract variable name from var() syntax
+      const match = colorVar.match(/var\((--[\w-]+)\)/)
+      if (match) {
+        return style.getPropertyValue(match[1]).trim()
+      }
+      return colorVar
     },
   },
 }
@@ -146,23 +153,44 @@ export default {
 
 <style scoped>
 .affordance-graph {
-  margin: 10px 0;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #f9f9f9;
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
 }
 
-h4 {
-  margin: 0 0 10px 0;
-  font-size: 14px;
-  color: #333;
+.affordance-graph h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.graph-svg {
+  display: block;
+  width: 100%;
+}
+
+.node-circle {
+  stroke: var(--color-text-primary);
+}
+
+.node-label {
+  fill: white;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.arrow-head {
+  fill: var(--color-text-muted);
 }
 
 .no-data {
   text-align: center;
-  padding: 40px;
-  color: #999;
+  padding: var(--spacing-2xl);
+  color: var(--color-text-tertiary);
   font-style: italic;
+  font-size: var(--font-size-sm);
 }
 </style>
