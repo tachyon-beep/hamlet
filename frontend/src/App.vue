@@ -94,6 +94,12 @@
             :last-action="store.lastAction"
             :episode-history="store.episodeHistory"
           />
+          <!-- Critical Event Log -->
+          <CriticalEventLog
+            v-if="store.isConnected"
+            :events="criticalEvents"
+            @clear="clearCriticalEvents"
+          />
           <!-- Phase 3: Reward charts -->
           <IntrinsicRewardChart
             v-if="store.rndMetrics"
@@ -137,6 +143,7 @@ import NoveltyHeatmap from './components/NoveltyHeatmap.vue'
 import IntrinsicRewardChart from './components/IntrinsicRewardChart.vue'
 import CurriculumTracker from './components/CurriculumTracker.vue'
 import EpsilonProgress from './components/EpsilonProgress.vue'
+import CriticalEventLog from './components/CriticalEventLog.vue'
 import SurvivalTrendChart from './components/SurvivalTrendChart.vue'
 import AffordanceGraph from './components/AffordanceGraph.vue'
 
@@ -149,6 +156,29 @@ const connectionError = computed(() => store.connectionError)
 const extrinsicHistory = ref([])
 const intrinsicHistory = ref([])
 const survivalTrend = ref([])
+
+// Critical event log
+const criticalEvents = ref([])
+let eventIdCounter = 0
+
+// Meter tier classification for cascade detection
+const meterTiers = {
+  primary: ['energy', 'health'],
+  secondary: ['satiation', 'money'],
+  tertiary: ['hygiene', 'social', 'fitness', 'mood']
+}
+
+// Cascade explanations
+const cascadeMessages = {
+  hygiene: 'Low hygiene accelerates energy & health depletion',
+  social: 'Loneliness accelerates mood decline → health impacts',
+  fitness: 'Poor fitness → health vulnerability increases',
+  mood: 'Low mood → reduced energy recovery & health decline',
+  satiation: 'Hunger → energy & health depletion accelerates',
+  money: 'No money → cannot afford basic needs → death spiral',
+  energy: 'CRITICAL: Energy depletion → imminent death risk',
+  health: 'CRITICAL: Health failure → death imminent'
+}
 
 // Watch for RND metrics updates
 watch(() => store.rndMetrics, (newMetrics) => {
@@ -175,6 +205,45 @@ watch(() => store.rndMetrics, (newMetrics) => {
   }
 })
 
+// Watch for critical meter events
+watch(() => store.agentMeters, (newMeters) => {
+  if (!newMeters || !newMeters.agent_0) return
+
+  const meters = newMeters.agent_0.meters
+  if (!meters) return
+
+  // Check each meter for critical threshold (<20%)
+  Object.entries(meters).forEach(([meterName, value]) => {
+    const percentage = value * 100
+
+    if (percentage < 20 && percentage > 0) {
+      // Find meter tier
+      let tier = 'tertiary'
+      if (meterTiers.primary.includes(meterName)) tier = 'primary'
+      else if (meterTiers.secondary.includes(meterName)) tier = 'secondary'
+
+      // Create event
+      const event = {
+        id: eventIdCounter++,
+        meterName,
+        value: Math.round(percentage),
+        tier,
+        cascade: cascadeMessages[meterName],
+        timestamp: Date.now()
+      }
+
+      // Avoid duplicate events for same meter in quick succession
+      const recentEvent = criticalEvents.value.find(
+        e => e.meterName === meterName && (Date.now() - e.timestamp) < 5000
+      )
+
+      if (!recentEvent) {
+        criticalEvents.value.push(event)
+      }
+    }
+  })
+}, { deep: true })
+
 // Check which servers are available on mount
 onMounted(() => {
   store.checkServerAvailability()
@@ -183,6 +252,11 @@ onMounted(() => {
 // ✅ Retry connection on error
 function retryConnection() {
   store.connect(store.mode)
+}
+
+// Clear critical event log
+function clearCriticalEvents() {
+  criticalEvents.value = []
 }
 
 // ✅ Handle connect event from Controls (with mode parameter)
