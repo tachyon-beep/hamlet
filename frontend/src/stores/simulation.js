@@ -174,8 +174,12 @@ export const useSimulationStore = defineStore('simulation', () => {
     }
 
     ws.value.onmessage = (event) => {
-      const message = JSON.parse(event.data)
-      handleMessage(message)
+      try {
+        const message = JSON.parse(event.data)
+        handleMessage(message)
+      } catch (error) {
+        console.error('Error handling message:', error, event.data)
+      }
     }
   }
 
@@ -251,6 +255,9 @@ export const useSimulationStore = defineStore('simulation', () => {
       case 'error':
         console.error('Server error:', message.message)
         break
+
+      default:
+        console.warn('Unhandled message type:', message.type, message)
     }
   }
 
