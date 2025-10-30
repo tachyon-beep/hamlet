@@ -19,6 +19,11 @@
             :steps-at-stage="store.rndMetrics.steps_at_stage || 0"
             :min-steps-required="1000"
           />
+          <!-- Epsilon decay progress visualization -->
+          <EpsilonProgress
+            v-if="store.trainingMetrics && store.isConnected"
+            :epsilon="store.trainingMetrics.epsilon"
+          />
         </aside>
 
       <!-- ✅ Semantic HTML: region for grid visualization -->
@@ -131,6 +136,7 @@ import ErrorState from './components/ErrorState.vue'
 import NoveltyHeatmap from './components/NoveltyHeatmap.vue'
 import IntrinsicRewardChart from './components/IntrinsicRewardChart.vue'
 import CurriculumTracker from './components/CurriculumTracker.vue'
+import EpsilonProgress from './components/EpsilonProgress.vue'
 import SurvivalTrendChart from './components/SurvivalTrendChart.vue'
 import AffordanceGraph from './components/AffordanceGraph.vue'
 

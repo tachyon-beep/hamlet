@@ -69,12 +69,36 @@
       </text>
     </g>
 
+    <!-- Agent trails (last 3 positions with fading opacity) -->
+    <g v-for="agent in validAgents" :key="`trail-${agent.id}`" class="agent-trail-group">
+      <circle
+        v-for="(pos, index) in getAgentTrail(agent.id)"
+        :key="`trail-${agent.id}-${index}`"
+        :cx="pos.x * cellSize + cellSize / 2"
+        :cy="pos.y * cellSize + cellSize / 2"
+        :r="cellSize * 0.2"
+        :fill="agent.color"
+        :opacity="(index + 1) * 0.2"
+        class="trail-dot"
+      />
+    </g>
+
     <!-- Agents -->
     <g v-for="agent in validAgents" :key="agent.id" class="agent-group">
+      <!-- Outer glow with pulse animation -->
       <circle
         :cx="agent.x * cellSize + cellSize / 2"
         :cy="agent.y * cellSize + cellSize / 2"
-        :r="cellSize * 0.3"
+        :r="cellSize * 0.45"
+        :fill="agent.color"
+        class="agent-glow"
+        opacity="0.3"
+      />
+      <!-- Main agent circle (increased from 0.3 to 0.35) -->
+      <circle
+        :cx="agent.x * cellSize + cellSize / 2"
+        :cy="agent.y * cellSize + cellSize / 2"
+        :r="cellSize * 0.35"
         :fill="agent.color"
         class="agent-circle"
       />
@@ -93,7 +117,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { CELL_SIZE, AFFORDANCE_ICONS } from '../utils/constants'
 
 // ✅ Props First: Receive data from parent instead of importing store
@@ -123,10 +147,53 @@ const props = defineProps({
 // Filter valid agents
 const validAgents = computed(() => (props.agents || []).filter(a => a && a.id))
 
+// Agent trail tracking (last 3 positions for each agent)
+const agentTrails = ref({})
+
+// Watch for agent position changes and update trail
+watch(() => props.agents, (newAgents, oldAgents) => {
+  if (!newAgents || newAgents.length === 0) return
+
+  newAgents.forEach(agent => {
+    if (!agent || !agent.id) return
+
+    const currentPos = { x: agent.x, y: agent.y }
+
+    // Initialize trail for new agents
+    if (!agentTrails.value[agent.id]) {
+      agentTrails.value[agent.id] = []
+    }
+
+    const trail = agentTrails.value[agent.id]
+
+    // Check if position changed
+    const lastPos = trail.length > 0 ? trail[trail.length - 1] : null
+    const positionChanged = !lastPos || lastPos.x !== currentPos.x || lastPos.y !== currentPos.y
+
+    if (positionChanged) {
+      // Add current position to trail
+      trail.push(currentPos)
+
+      // Keep only last 3 positions
+      if (trail.length > 3) {
+        trail.shift()
+      }
+    }
+  })
+}, { deep: true })
+
 // ✅ Use imported constant
 const cellSize = CELL_SIZE
 
 const showHeatMap = ref(true) // Show heat map by default
+
+// Get trail positions for an agent (excluding current position)
+function getAgentTrail(agentId) {
+  const trail = agentTrails.value[agentId]
+  if (!trail || trail.length <= 1) return []
+  // Return all but the last position (last position is current agent position)
+  return trail.slice(0, -1)
+}
 
 // ✅ Computed aria-label for screen readers
 const gridAriaLabel = computed(() => {
@@ -356,8 +423,31 @@ function getHeatColor(intensity) {
   user-select: none;
 }
 
+.agent-trail-group {
+  pointer-events: none;
+}
+
+.trail-dot {
+  transition: opacity var(--transition-base);
+}
+
 .agent-group {
   transition: all var(--transition-base);
+}
+
+.agent-glow {
+  animation: agent-pulse 2s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.1);
+  }
 }
 
 .agent-circle {

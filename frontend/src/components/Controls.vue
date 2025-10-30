@@ -66,7 +66,12 @@
       </div>
 
       <div class="speed-control">
-        <label for="speed">Speed: {{ speedValue }}x</label>
+        <div class="speed-header">
+          <label for="speed">Speed: {{ speedValue }}x</label>
+          <span class="speed-category" :class="`speed-${speedCategory.toLowerCase()}`">
+            {{ speedCategory }}
+          </span>
+        </div>
         <input
           id="speed"
           type="range"
@@ -76,12 +81,13 @@
           v-model.number="speedValue"
           @input="onSpeedChange"
           class="speed-slider"
+          :class="`speed-${speedCategory.toLowerCase()}`"
         />
         <div class="speed-labels">
-          <span>0.5x</span>
-          <span>1x</span>
-          <span>5x</span>
-          <span>10x</span>
+          <span class="label-slow">Slow (0.5x)</span>
+          <span class="label-normal">Normal (1-2x)</span>
+          <span class="label-fast">Fast (2-5x)</span>
+          <span class="label-turbo">Turbo (5-10x)</span>
         </div>
       </div>
 
@@ -365,6 +371,15 @@ const formattedEpsilon = computed(() => {
   return formatTrainingMetric(props.trainingMetrics.epsilon, 'epsilon')
 })
 
+// Speed category (Slow/Normal/Fast/Turbo)
+const speedCategory = computed(() => {
+  const speed = speedValue.value
+  if (speed < 1.0) return 'Slow'
+  if (speed <= 2.0) return 'Normal'
+  if (speed <= 5.0) return 'Fast'
+  return 'Turbo'
+})
+
 // Set initial model when available
 if (props.availableModels.length > 0) {
   selectedModel.value = props.availableModels[0]
@@ -630,10 +645,52 @@ function onModelChange() {
   gap: var(--spacing-sm);
 }
 
+.speed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .speed-control label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
+}
+
+.speed-category {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 8px;
+  border-radius: var(--border-radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all var(--transition-base);
+}
+
+.speed-category.speed-slow {
+  background: #3b82f6;
+  color: white;
+}
+
+.speed-category.speed-normal {
+  background: var(--color-success);
+  color: white;
+}
+
+.speed-category.speed-fast {
+  background: var(--color-warning);
+  color: white;
+}
+
+.speed-category.speed-turbo {
+  background: var(--color-error);
+  color: white;
+  animation: turbo-pulse 1s ease-in-out infinite;
+}
+
+@keyframes turbo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .speed-slider {
@@ -645,33 +702,118 @@ function onModelChange() {
   -webkit-appearance: none;
 }
 
-.speed-slider::-webkit-slider-thumb {
+/* Dynamic thumb colors based on speed category */
+.speed-slider.speed-slow::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 18px;
   height: 18px;
   border-radius: var(--border-radius-full);
-  background: var(--color-info);
+  background: #3b82f6;
   cursor: pointer;
-  transition: background var(--transition-base);
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.4);
 }
 
-.speed-slider::-webkit-slider-thumb:hover {
-  background: var(--color-interactive-focus);
-}
-
-.speed-slider::-moz-range-thumb {
+.speed-slider.speed-normal::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
   width: 18px;
   height: 18px;
   border-radius: var(--border-radius-full);
-  background: var(--color-info);
+  background: var(--color-success);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(34, 197, 94, 0.4);
+}
+
+.speed-slider.speed-fast::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--border-radius-full);
+  background: var(--color-warning);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(234, 179, 8, 0.4);
+}
+
+.speed-slider.speed-turbo::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--border-radius-full);
+  background: var(--color-error);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.6);
+  animation: turbo-glow 1s ease-in-out infinite;
+}
+
+@keyframes turbo-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.6);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 2px 10px rgba(239, 68, 68, 0.9);
+  }
+}
+
+.speed-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+/* Firefox thumb styles */
+.speed-slider.speed-slow::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--border-radius-full);
+  background: #3b82f6;
   cursor: pointer;
   border: none;
-  transition: background var(--transition-base);
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.4);
+}
+
+.speed-slider.speed-normal::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--border-radius-full);
+  background: var(--color-success);
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(34, 197, 94, 0.4);
+}
+
+.speed-slider.speed-fast::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--border-radius-full);
+  background: var(--color-warning);
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(234, 179, 8, 0.4);
+}
+
+.speed-slider.speed-turbo::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--border-radius-full);
+  background: var(--color-error);
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.6);
 }
 
 .speed-slider::-moz-range-thumb:hover {
-  background: var(--color-interactive-focus);
+  transform: scale(1.15);
 }
 
 .speed-slider:disabled {
@@ -680,10 +822,37 @@ function onModelChange() {
 }
 
 .speed-labels {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-xs);
   font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.speed-labels span {
+  padding: 2px 4px;
+  border-radius: var(--border-radius-sm);
+  transition: all var(--transition-base);
+}
+
+.label-slow {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.label-normal {
+  color: var(--color-success);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.label-fast {
+  color: var(--color-warning);
+  background: rgba(234, 179, 8, 0.1);
+}
+
+.label-turbo {
+  color: var(--color-error);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .model-selector {
