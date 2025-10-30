@@ -313,9 +313,9 @@ class LiveInferenceServer:
         # Get agent position (unpack for frontend compatibility)
         agent_pos = self.env.positions[0].cpu().tolist()
 
-        # Get meters
+        # Get meters (all 6: energy, hygiene, satiation, money, mood, social)
         meters = {}
-        for i, meter_name in enumerate(['energy', 'hygiene', 'satiation', 'money']):
+        for i, meter_name in enumerate(['energy', 'hygiene', 'satiation', 'money', 'mood', 'social']):
             meters[meter_name] = self.env.meters[0, i].item()
 
         # Get affordances (unpack position for frontend compatibility)
