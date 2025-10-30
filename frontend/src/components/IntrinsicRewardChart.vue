@@ -1,6 +1,13 @@
 <template>
   <div class="intrinsic-reward-chart">
-    <h3>Reward Streams (Last 100 Steps)</h3>
+    <div class="chart-header">
+      <h3>Reward Streams (Last 100 Steps)</h3>
+      <InfoTooltip
+        title="What are reward streams?"
+        text="Extrinsic rewards come from the environment (meeting needs). Intrinsic rewards come from curiosity/exploration (discovering new states). Together they guide learning."
+        position="bottom"
+      />
+    </div>
 
     <!-- Empty state when no data -->
     <EmptyState
@@ -102,11 +109,13 @@
 
 <script>
 import EmptyState from './EmptyState.vue'
+import InfoTooltip from './InfoTooltip.vue'
 
 export default {
   name: 'IntrinsicRewardChart',
   components: {
-    EmptyState
+    EmptyState,
+    InfoTooltip
   },
   props: {
     extrinsicHistory: {
@@ -195,8 +204,15 @@ export default {
   background: var(--color-bg-secondary);
 }
 
+.chart-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
 .intrinsic-reward-chart h3 {
-  margin: 0 0 var(--spacing-sm) 0;
+  margin: 0;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);

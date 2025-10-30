@@ -1,7 +1,14 @@
 <template>
   <div class="epsilon-progress">
     <div class="epsilon-header">
-      <h4>Exploration → Exploitation</h4>
+      <div class="header-left">
+        <h4>Exploration → Exploitation</h4>
+        <InfoTooltip
+          title="What is Epsilon (ε)?"
+          text="Epsilon controls explore vs exploit tradeoff. High ε = random actions (exploration). Low ε = learned policy (exploitation). Decays over time as agent learns optimal strategies."
+          position="right"
+        />
+      </div>
       <span class="epsilon-value">ε = {{ epsilonFormatted }}</span>
     </div>
 
@@ -43,6 +50,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import InfoTooltip from './InfoTooltip.vue'
 
 const props = defineProps({
   epsilon: {
@@ -88,6 +96,12 @@ const epsilonColor = computed(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-sm);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .epsilon-header h4 {

@@ -1,7 +1,14 @@
 <template>
   <!-- ✅ Semantic HTML: section instead of div -->
   <section class="meter-panel" aria-labelledby="meter-heading">
-    <h3 id="meter-heading">Agent Meters</h3>
+    <div class="panel-header">
+      <h3 id="meter-heading">Agent Meters</h3>
+      <InfoTooltip
+        title="What are meters?"
+        text="Meters represent the agent's needs (0-100%). Critical (<20%) triggers death risk. Primary meters (energy, health) are survival-critical. Secondary meters (satiation, money) feed into primary. Tertiary meters (hygiene, social, fitness, mood) accelerate all pathways."
+        position="bottom"
+      />
+    </div>
 
     <!-- ✅ Critical state alert banner -->
     <div v-if="criticalMetersCount > 0" class="critical-alert" role="alert">
@@ -68,6 +75,7 @@
 <script setup>
 import { computed } from 'vue'
 import EmptyState from './EmptyState.vue'
+import InfoTooltip from './InfoTooltip.vue'
 import { capitalize, formatMeterValue, getMeterPercentage } from '../utils/formatting'
 
 // ✅ Props First: Receive data from parent instead of importing store
@@ -181,8 +189,15 @@ function getMeterColor(name, value) {
   padding: var(--spacing-lg);
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
 .meter-panel h3 {
-  margin: 0 0 var(--spacing-md) 0;
+  margin: 0;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
