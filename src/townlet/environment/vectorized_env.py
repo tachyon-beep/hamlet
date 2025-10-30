@@ -230,6 +230,54 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 0] = torch.clamp(
                     self.meters[at_affordance, 0] - 0.15, 0.0, 1.0
                 )  # Energy -15%
+            elif affordance_name == 'FastFood':
+                self.meters[at_affordance, 2] = torch.clamp(
+                    self.meters[at_affordance, 2] + 0.45, 0.0, 1.0
+                )  # Satiation +45%
+                self.meters[at_affordance, 0] = torch.clamp(
+                    self.meters[at_affordance, 0] + 0.15, 0.0, 1.0
+                )  # Energy +15%
+                self.meters[at_affordance, 5] = torch.clamp(
+                    self.meters[at_affordance, 5] + 0.01, 0.0, 1.0
+                )  # Social +1%
+                self.meters[at_affordance, 3] -= 0.05  # Money -$10 = -10/200
+            elif affordance_name == 'Bar':
+                # Key social affordance - expensive but necessary
+                self.meters[at_affordance, 5] = torch.clamp(
+                    self.meters[at_affordance, 5] + 0.5, 0.0, 1.0
+                )  # Social +50% (MAIN SOURCE)
+                self.meters[at_affordance, 2] = torch.clamp(
+                    self.meters[at_affordance, 2] + 0.3, 0.0, 1.0
+                )  # Satiation +30%
+                self.meters[at_affordance, 4] = torch.clamp(
+                    self.meters[at_affordance, 4] + 0.25, 0.0, 1.0
+                )  # Mood +25%
+                self.meters[at_affordance, 0] = torch.clamp(
+                    self.meters[at_affordance, 0] - 0.2, 0.0, 1.0
+                )  # Energy -20%
+                self.meters[at_affordance, 1] = torch.clamp(
+                    self.meters[at_affordance, 1] - 0.15, 0.0, 1.0
+                )  # Hygiene -15%
+                self.meters[at_affordance, 3] -= 0.075  # Money -$15 = -15/200
+            elif affordance_name == 'Recreation':
+                self.meters[at_affordance, 4] = torch.clamp(
+                    self.meters[at_affordance, 4] + 0.25, 0.0, 1.0
+                )  # Mood +25%
+                self.meters[at_affordance, 0] = torch.clamp(
+                    self.meters[at_affordance, 0] + 0.12, 0.0, 1.0
+                )  # Energy +12%
+                self.meters[at_affordance, 3] -= 0.03  # Money -$6 = -6/200
+            elif affordance_name == 'Gym':
+                self.meters[at_affordance, 4] = torch.clamp(
+                    self.meters[at_affordance, 4] + 0.45, 0.0, 1.0
+                )  # Mood +45%
+                self.meters[at_affordance, 0] = torch.clamp(
+                    self.meters[at_affordance, 0] - 0.08, 0.0, 1.0
+                )  # Energy -8%
+                self.meters[at_affordance, 5] = torch.clamp(
+                    self.meters[at_affordance, 5] + 0.02, 0.0, 1.0
+                )  # Social +2%
+                self.meters[at_affordance, 3] -= 0.03  # Money -$6 = -6/200
 
     def _deplete_meters(self) -> None:
         """Deplete meters each step."""
