@@ -75,7 +75,7 @@ export const useSimulationStore = defineStore('simulation', () => {
   async function checkServerAvailability() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.hostname
-    const port = 8765
+    const port = 8766  // Live inference server port
 
     const checkEndpoint = (endpoint) => {
       return new Promise((resolve) => {
@@ -100,6 +100,7 @@ export const useSimulationStore = defineStore('simulation', () => {
       })
     }
 
+    // Check both endpoints (they're the same in live_inference, but kept for compatibility)
     serverAvailability.value.inference = await checkEndpoint('/ws')
     serverAvailability.value.training = await checkEndpoint('/ws/training')
     serverAvailability.value.checked = true
@@ -120,12 +121,12 @@ export const useSimulationStore = defineStore('simulation', () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.hostname
 
-    // Both modes use port 8765, but different endpoints
-    const port = 8765
-    const endpoint = connectionMode === 'training' ? '/ws/training' : '/ws'
+    // Connect to live inference server on port 8766
+    const port = 8766
+    const endpoint = '/ws'  // Both modes use same endpoint now
     const wsUrl = `${protocol}//${host}:${port}${endpoint}`
 
-    console.log(`Connecting to ${connectionMode} mode:`, wsUrl)
+    console.log(`Connecting to live inference server:`, wsUrl)
 
     ws.value = new WebSocket(wsUrl)
 

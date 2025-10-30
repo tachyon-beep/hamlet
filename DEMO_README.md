@@ -2,116 +2,135 @@
 
 ## Architecture Overview
 
-The multi-day demo has **two independent components**:
+The multi-day demo has **three components** working together:
 
-1. **Demo Runner** (`hamlet.demo.runner`) - Autonomous training process
-2. **Viz Server** (`hamlet.demo.viz_server`) - WebSocket server streaming from SQLite
+1. **Demo Runner** (`hamlet.demo.runner`) - Fast background training (burn mode)
+2. **Live Inference Server** (`hamlet.demo.live_inference`) - Human-speed inference with latest checkpoint
+3. **Vue Frontend** - Real-time visualization of agent learning
 
-**Key difference from old training server:** The demo runner starts training immediately and runs independently. The viz server just monitors the database - it doesn't control training.
+**The Secret:** Training runs at full speed in the background. The inference server loads the latest checkpoint every ~100 episodes and runs inference at human-watchable speed (5 steps/sec). Viewers see the agent progressively improve without waiting for slow training!
 
 ## Running the Demo
 
-### Step 1: Start the Demo Runner
+### Step 1: Start the Background Training (Burn Mode)
 
 ```bash
 python -m hamlet.demo.runner configs/townlet/sparse_adaptive.yaml demo_state.db checkpoints
 ```
 
 This will:
-- Train for up to 10,000 episodes
+- Train at **full speed** (~190 episodes/hour)
 - Save checkpoints every 100 episodes
 - Log all metrics to `demo_state.db`
 - Randomize affordances at episode 5000 (generalization test)
 - Auto-resume from last checkpoint if restarted
 
-### Step 2: Start the Viz Server
+**Leave this running in the background!**
+
+### Step 2: Start the Live Inference Server
 
 ```bash
-python -m hamlet.demo.viz_server demo_state.db frontend/dist 8765
+python -m hamlet.demo.live_inference checkpoints 8766 0.2
 ```
 
-This streams episode data from SQLite to browsers via WebSocket on port 8765.
+Arguments:
+- `checkpoints` - Directory to watch for new checkpoints
+- `8766` - WebSocket port (Vue frontend will connect here)
+- `0.2` - Step delay in seconds (0.2 = 5 steps/sec, human-watchable)
 
-### Step 3: View in Browser
+This will:
+- Load the latest checkpoint
+- Run inference episodes at **human speed**
+- Stream step-by-step updates via WebSocket
+- Hot-swap to newer checkpoints automatically
+- Show the agent getting progressively smarter
 
-You have **two options**:
+### Step 3: Open the Vue Frontend
 
-#### Option A: Standalone HTML Page (Recommended)
-```
-http://localhost:8765/
-```
-
-**Pros:**
-- No build required
-- Simple, focused demo metrics
-- Real-time charts
-- Works immediately
-
-**Cons:**
-- Basic visualization only
-- No grid/agent display
-
-#### Option B: Full Vue Frontend
 ```bash
 cd frontend && npm run dev
-# Then open http://localhost:5173
 ```
 
-**Pros:**
-- All Phase 3 visualization components
-- Novelty heatmap, curriculum tracker, survival trends
-- AffordanceGraph component
-- Full UI controls
+Then open: `http://localhost:5173`
 
-**Cons:**
-- Requires npm build
-- "Start Training" button doesn't work (training runs independently)
-- Grid won't show agents (demo doesn't stream live positions)
+**What you'll see:**
+- Agent moving on grid in real-time
+- Meters updating each step
+- Survival time increasing as training progresses
+- Model checkpoint indicator (e.g., "checkpoint_ep01500")
+- Full Phase 3 visualizations
 
-## Important Notes
+**Controls:**
+- **Play/Pause**: Start/stop inference episodes
+- **Step**: Run single step
+- **Reset**: Reset episode counter
+- ~~Training/Inference toggle~~: Removed - always runs inference on latest checkpoint
 
-### "Start Training" Button Doesn't Work
+## How It Works (The "Cheat")
 
-**Why:** The demo runner starts training automatically when launched. The viz server only monitors the database - it doesn't control training.
-
-**What happens:** If you click "Start Training" in the Vue UI, the command is logged but ignored.
-
-**Solution:** Don't use the button. Just start the demo runner in a separate terminal.
-
-### UI Rendering
-
-The viz server sends these messages to make the frontend work:
-
-1. **On connection:**
-   - `connected` - Tells frontend server is ready
-   - `training_status` - Shows current episode and total
-   - `training_started` - Confirms training is running (if demo is active)
-
-2. **Every second:**
-   - `episode_start` - When a new episode begins
-   - `episode_complete` - With survival time, reward, epsilon, etc.
-
-3. **Grid visualization:** Empty (demo doesn't stream live agent positions)
-
-### Monitoring Progress
-
-**In terminal (demo runner):**
+**Training Process:**
 ```
-Episode 10/10000 | Survival: 87 steps | Reward: 12.34 | Intrinsic Weight: 0.956 | Stage: 2/5
+Episode 0 → 100 → 200 → 300 → ... → 10,000
+  ↓        ↓      ↓      ↓              ↓
+Save    Save   Save   Save    ...    Save
+checkpoint checkpoint checkpoint
+(Fast, no visualization)
 ```
 
-**In browser:**
-- Current episode number
-- Survival time (steps)
-- Total reward
-- Curriculum stage (1-5)
-- Intrinsic weight (1.0 → 0.0)
-- Exploration epsilon
-
-**In database:**
-```bash
-sqlite3 demo_state.db "SELECT episode_id, survival_time, intrinsic_weight FROM episodes ORDER BY episode_id DESC LIMIT 10"
+**Inference Process:**
 ```
+Every 30 seconds:
+1. Check checkpoints/ directory
+2. If new checkpoint found, load Q-network weights
+3. Run inference episode at 0.2s/step (5 steps/sec)
+4. Stream grid updates via WebSocket
+5. Viewers see agent behavior at this checkpoint
+6. Repeat
+```
+
+**Result:** Viewers see the agent getting progressively better over time, but training runs at full speed in the background. This is standard practice for ML demos!
+
+## What You'll See
+
+**Early training (Episodes 0-500):**
+- Agent wanders randomly
+- Dies quickly (~80-100 steps)
+- Poor affordance utilization
+
+**Mid training (Episodes 500-2000):**
+- Agent starts finding resources
+- Basic routines emerge
+- Survival time ~150 steps
+
+**Late training (Episodes 2000-5000):**
+- Clear job→bed→shower→fridge patterns
+- Survival time ~250+ steps
+- Intrinsic weight → 0 (pure exploitation)
+
+**Post-randomization (Episodes 5000+):**
+- Affordance positions randomized
+- Agent adapts to new layout
+- Tests generalization capability
+
+## Monitoring Progress
+
+**Terminal 1 (Training):**
+```
+Episode 1523/10000 | Survival: 234 steps | Reward: 45.67 | Intrinsic Weight: 0.123 | Stage: 4/5
+```
+
+**Terminal 2 (Inference):**
+```
+Loading checkpoint: checkpoint_ep01500 (episode 1500)
+Episode 42 complete: 187 steps, reward: 38.45
+```
+
+**Browser (Vue Frontend):**
+- Grid shows agent moving in real-time
+- Meters update each step (energy, hygiene, satiation, money)
+- Checkpoint indicator: "Running checkpoint_ep01500"
+- Survival trends chart shows improvement
+- Intrinsic weight chart shows annealing
 
 ## Systemd Deployment (Production)
 
@@ -135,22 +154,31 @@ The service auto-restarts on failure and resumes from last checkpoint.
 
 ## Troubleshooting
 
-### "Training" button is disabled
-- Check if viz server is running: `curl http://localhost:8765`
-- Viz server needs `/ws/training` endpoint (now included)
+### No checkpoints found
+```
+No checkpoints found in checkpoints/
+```
+**Solution:** Start the demo runner first. It will create the first checkpoint after episode 0.
 
-### No data in UI
-- Check if demo runner is writing to database: `ls -lh demo_state.db*`
-- Check runner logs for errors
-- Restart viz server after starting runner
+### Agent isn't moving in UI
+- Check that live_inference server is running
+- Click "Play" button in Vue frontend
+- Check browser console for WebSocket connection errors
 
-### "Start Training" does nothing
-- **Expected behavior** - demo runs independently
-- Just ignore the button or use standalone HTML page instead
+### Agent behavior looks random/bad
+- Check which checkpoint is loaded (shown in UI)
+- Early checkpoints (ep < 500) will be untrained
+- Wait for training to progress or manually load a later checkpoint
 
-### Grid is empty
-- **Expected behavior** - demo doesn't stream live positions
-- Use StatsPanel and charts instead of grid
+### Model not updating
+- Checkpoints saved every 100 episodes
+- Hot-swap happens automatically when new checkpoint appears
+- Check training terminal for checkpoint save messages
+
+### Training too slow
+- Training should run at ~0.5s per episode (~190 episodes/hour)
+- If slower, check CPU/GPU usage
+- Consider reducing `max_steps_per_episode` in config
 
 ## Phase 3.5 Success Criteria
 

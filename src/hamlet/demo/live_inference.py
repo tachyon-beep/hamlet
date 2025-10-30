@@ -1,0 +1,395 @@
+"""Live inference server for multi-day demo.
+
+Runs inference on the latest checkpoint while training happens in background.
+Provides step-by-step visualization at human-watchable speed.
+"""
+
+import asyncio
+import logging
+from pathlib import Path
+from typing import Optional, Set
+import time
+
+import torch
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
+from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.population.vectorized import VectorizedPopulation
+from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+
+logger = logging.getLogger(__name__)
+
+
+class LiveInferenceServer:
+    """Runs inference on latest checkpoint with step-by-step WebSocket streaming."""
+
+    def __init__(
+        self,
+        checkpoint_dir: Path | str,
+        port: int = 8766,
+        step_delay: float = 0.2,
+    ):
+        """Initialize live inference server.
+
+        Args:
+            checkpoint_dir: Directory containing training checkpoints
+            port: WebSocket port
+            step_delay: Delay between steps in seconds (0.2 = 5 steps/sec)
+        """
+        self.checkpoint_dir = Path(checkpoint_dir)
+        self.port = port
+        self.step_delay = step_delay
+
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.clients: Set[WebSocket] = set()
+
+        # Current checkpoint tracking
+        self.current_checkpoint_path: Optional[Path] = None
+        self.current_checkpoint_episode: int = 0
+
+        # Environment and agent
+        self.env: Optional[VectorizedHamletEnv] = None
+        self.population: Optional[VectorizedPopulation] = None
+        self.curriculum: Optional[AdversarialCurriculum] = None
+        self.exploration: Optional[AdaptiveIntrinsicExploration] = None
+
+        # Episode state
+        self.is_running = False
+        self.current_episode = 0
+        self.current_step = 0
+
+        # FastAPI app
+        self.app = FastAPI(title="Hamlet Live Inference Server")
+
+        # Enable CORS for frontend
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+        # Register routes
+        self.app.websocket("/ws")(self.websocket_endpoint)
+        self.app.websocket("/ws/training")(self.websocket_endpoint)  # Same endpoint, different name
+        self.app.on_event("startup")(self.startup)
+        self.app.on_event("shutdown")(self.shutdown)
+
+    async def startup(self):
+        """Initialize environment and start checkpoint monitoring."""
+        logger.info("Starting live inference server")
+
+        # Initialize environment and components
+        self._initialize_components()
+
+        # Load initial checkpoint
+        await self._check_and_load_checkpoint()
+
+        logger.info(f"Loaded checkpoint: {self.current_checkpoint_path.name if self.current_checkpoint_path else 'None'}")
+
+    async def shutdown(self):
+        """Cleanup on shutdown."""
+        self.is_running = False
+        logger.info("Live inference server shut down")
+
+    def _initialize_components(self):
+        """Initialize environment and agent components."""
+        # Create curriculum
+        self.curriculum = AdversarialCurriculum(
+            max_steps_per_episode=500,
+            survival_advance_threshold=0.7,
+            survival_retreat_threshold=0.3,
+            entropy_gate=0.5,
+            min_steps_at_stage=1000,
+            device=self.device,
+        )
+
+        # Create exploration (for inference, we want greedy)
+        self.exploration = AdaptiveIntrinsicExploration(
+            obs_dim=70,
+            embed_dim=128,
+            initial_intrinsic_weight=0.0,  # Pure exploitation for inference
+            variance_threshold=10.0,
+            survival_window=100,
+            device=self.device,
+        )
+
+        # Create environment
+        num_agents = 1
+        self.env = VectorizedHamletEnv(num_agents=num_agents, grid_size=8, device=self.device)
+
+        # Create population
+        agent_ids = [f"agent_{i}" for i in range(num_agents)]
+        self.population = VectorizedPopulation(
+            env=self.env,
+            curriculum=self.curriculum,
+            exploration=self.exploration,
+            agent_ids=agent_ids,
+            device=self.device,
+            replay_buffer_capacity=10000,
+        )
+
+        self.curriculum.initialize_population(num_agents)
+
+    async def _check_and_load_checkpoint(self) -> bool:
+        """Check for new checkpoints and load if available.
+
+        Returns:
+            True if a new checkpoint was loaded
+        """
+        # Find all checkpoints
+        checkpoints = sorted(self.checkpoint_dir.glob("checkpoint_ep*.pt"))
+        if not checkpoints:
+            logger.warning(f"No checkpoints found in {self.checkpoint_dir}")
+            return False
+
+        # Get latest checkpoint
+        latest_checkpoint = checkpoints[-1]
+
+        # Check if it's newer than current
+        if latest_checkpoint == self.current_checkpoint_path:
+            return False
+
+        # Extract episode number from filename
+        try:
+            episode_str = latest_checkpoint.stem.split("_ep")[1]
+            episode_num = int(episode_str)
+        except:
+            logger.error(f"Could not parse episode number from {latest_checkpoint.name}")
+            return False
+
+        # Load checkpoint
+        logger.info(f"Loading checkpoint: {latest_checkpoint.name} (episode {episode_num})")
+
+        checkpoint = torch.load(latest_checkpoint, weights_only=False)
+
+        # Load Q-network weights
+        if 'population_state' in checkpoint:
+            self.population.q_network.load_state_dict(checkpoint['population_state']['q_network'])
+            logger.info("Loaded Q-network weights")
+
+        # Update tracking
+        self.current_checkpoint_path = latest_checkpoint
+        self.current_checkpoint_episode = episode_num
+
+        # Broadcast model update to all clients
+        await self._broadcast_to_clients({
+            'type': 'model_loaded',
+            'model': f"checkpoint_ep{episode_num:05d}",
+            'episode': episode_num,
+            'message': f"Loaded model from episode {episode_num}"
+        })
+
+        return True
+
+    async def websocket_endpoint(self, websocket: WebSocket):
+        """WebSocket endpoint for client connections."""
+        await websocket.accept()
+        self.clients.add(websocket)
+        logger.info(f"Client connected. Total clients: {len(self.clients)}")
+
+        # Send connection message
+        await websocket.send_json({
+            'type': 'connected',
+            'message': 'Connected to live inference server',
+            'available_models': [],
+            'mode': 'inference',
+            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}" if self.current_checkpoint_path else "None"
+        })
+
+        try:
+            # Handle incoming commands
+            while True:
+                data = await websocket.receive_json()
+                await self._handle_command(websocket, data)
+        except WebSocketDisconnect:
+            logger.info("Client disconnected")
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+        finally:
+            self.clients.discard(websocket)
+            logger.info(f"Client removed. Total clients: {len(self.clients)}")
+
+    async def _handle_command(self, websocket: WebSocket, data: dict):
+        """Handle incoming WebSocket commands."""
+        command = data.get('command') or data.get('type')
+
+        if command == 'play':
+            if not self.is_running:
+                self.is_running = True
+                asyncio.create_task(self._run_inference_loop())
+                logger.info("Started inference loop")
+
+        elif command == 'pause':
+            self.is_running = False
+            logger.info("Paused inference loop")
+
+        elif command == 'step':
+            # Run a single step
+            if not self.is_running:
+                asyncio.create_task(self._run_single_episode())
+
+        elif command == 'reset':
+            # Reset episode
+            self.current_episode = 0
+            self.current_step = 0
+            logger.info("Reset episode counter")
+
+    async def _run_inference_loop(self):
+        """Main inference loop - runs episodes continuously."""
+        logger.info("Inference loop started")
+
+        while self.is_running:
+            # Check for new checkpoint before each episode
+            await self._check_and_load_checkpoint()
+
+            # Run one inference episode
+            await self._run_single_episode()
+
+            # Small delay between episodes
+            await asyncio.sleep(0.5)
+
+    async def _run_single_episode(self):
+        """Run a single inference episode with step-by-step updates."""
+        self.current_episode += 1
+        self.current_step = 0
+
+        # Reset environment
+        self.env.reset()
+        self.population.reset()
+
+        # Send episode start
+        await self._broadcast_to_clients({
+            'type': 'episode_start',
+            'episode': self.current_episode,
+            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}",
+        })
+
+        # Run episode
+        done = False
+        cumulative_reward = 0.0
+        max_steps = 500
+
+        while not done and self.current_step < max_steps:
+            # Get action from Q-network (greedy)
+            with torch.no_grad():
+                obs = self.population.current_obs
+                q_values = self.population.q_network(obs)
+                actions = q_values.argmax(dim=1)
+
+            # Step environment
+            next_obs, rewards, dones, info = self.env.step(actions)
+
+            # Update state
+            self.population.current_obs = next_obs
+            done = dones[0].item()
+            cumulative_reward += rewards[0].item()
+            self.current_step += 1
+
+            # Send state update
+            await self._broadcast_state_update(cumulative_reward, actions[0].item())
+
+            # Delay for human viewing
+            if self.is_running:
+                await asyncio.sleep(self.step_delay)
+
+        # Episode complete
+        await self._broadcast_to_clients({
+            'type': 'episode_end',
+            'episode': self.current_episode,
+            'steps': self.current_step,
+            'total_reward': cumulative_reward,
+            'reason': 'done' if done else 'max_steps',
+            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}",
+        })
+
+        logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, reward: {cumulative_reward:.2f}")
+
+    async def _broadcast_state_update(self, cumulative_reward: float, last_action: int):
+        """Broadcast current state to all clients."""
+        # Get agent position
+        agent_pos = self.env.positions[0].cpu().tolist()
+
+        # Get meters
+        meters = {}
+        for i, meter_name in enumerate(['energy', 'hygiene', 'satiation', 'money']):
+            meters[meter_name] = self.env.meters[0, i].item()
+
+        # Get affordances
+        affordances = []
+        for name, pos in self.env.affordances.items():
+            affordances.append({
+                'name': name,
+                'position': pos.cpu().tolist(),
+            })
+
+        # Build state update message
+        update = {
+            'type': 'state_update',
+            'step': self.current_step,
+            'cumulative_reward': cumulative_reward,
+            'grid': {
+                'width': self.env.grid_size,
+                'height': self.env.grid_size,
+                'agents': [{
+                    'id': 'agent_0',
+                    'position': agent_pos,
+                    'last_action': last_action,
+                }],
+                'affordances': affordances,
+            },
+            'agent_meters': {
+                'agent_0': meters
+            },
+        }
+
+        await self._broadcast_to_clients(update)
+
+    async def _broadcast_to_clients(self, message: dict):
+        """Broadcast message to all connected clients."""
+        dead_clients = set()
+        for client in self.clients:
+            try:
+                await client.send_json(message)
+            except Exception as e:
+                logger.warning(f"Failed to send to client: {e}")
+                dead_clients.add(client)
+
+        # Remove dead clients
+        self.clients -= dead_clients
+
+
+def run_server(
+    checkpoint_dir: str = "checkpoints",
+    port: int = 8766,
+    step_delay: float = 0.2,
+):
+    """Run live inference server."""
+    import uvicorn
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(asctime)s] %(levelname)s: %(message)s'
+    )
+
+    server = LiveInferenceServer(checkpoint_dir, port, step_delay)
+
+    logger.info(f"Starting live inference server on port {port}")
+    logger.info(f"Checkpoint directory: {checkpoint_dir}")
+    logger.info(f"Step delay: {step_delay}s ({1/step_delay:.1f} steps/sec)")
+    logger.info(f"Connect Vue frontend to: ws://localhost:{port}/ws")
+
+    uvicorn.run(server.app, host="0.0.0.0", port=port)
+
+
+if __name__ == '__main__':
+    import sys
+
+    checkpoint_dir = sys.argv[1] if len(sys.argv) > 1 else "checkpoints"
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8766
+    step_delay = float(sys.argv[3]) if len(sys.argv) > 3 else 0.2
+
+    run_server(checkpoint_dir, port, step_delay)
