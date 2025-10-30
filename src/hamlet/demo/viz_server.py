@@ -68,11 +68,18 @@ class VizServer:
         logger.info("Stopped broadcast task")
 
     async def serve_index(self):
-        """Serve frontend index.html."""
+        """Serve demo monitoring page."""
+        # Try standalone demo page first
+        demo_path = Path("frontend/demo.html")
+        if demo_path.exists():
+            return FileResponse(demo_path)
+
+        # Fall back to built frontend
         index_path = self.frontend_dir / "index.html"
         if index_path.exists():
             return FileResponse(index_path)
-        return {"error": "Frontend not built. Run: cd frontend && npm run build"}
+
+        return {"error": "Frontend not found. Use frontend/demo.html or build frontend: cd frontend && npm run build"}
 
     async def websocket_endpoint(self, websocket: WebSocket):
         """WebSocket endpoint for streaming updates."""

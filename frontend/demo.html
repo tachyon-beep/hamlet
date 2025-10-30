@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hamlet Multi-Day Demo Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #4fc3f7;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 500;
+            margin: 10px;
+        }
+
+        .status.connected {
+            background: #2e7d32;
+            color: white;
+        }
+
+        .status.disconnected {
+            background: #c62828;
+            color: white;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #4fc3f7;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #999;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4fc3f7;
+        }
+
+        .metric-value.success {
+            color: #66bb6a;
+        }
+
+        .metric-value.warning {
+            color: #ffa726;
+        }
+
+        .metric-value.danger {
+            color: #ef5350;
+        }
+
+        .chart-container {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #4fc3f7;
+        }
+
+        canvas {
+            max-width: 100%;
+        }
+
+        .info-banner {
+            background: #1e3a5f;
+            border-left: 4px solid #4fc3f7;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .info-banner h3 {
+            margin-bottom: 10px;
+            color: #4fc3f7;
+        }
+
+        .info-banner p {
+            color: #b0bec5;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Hamlet Multi-Day Demo Monitor</h1>
+            <div class="status" id="connection-status">Connecting...</div>
+        </header>
+
+        <div class="info-banner" id="info-banner">
+            <h3>Waiting for demo data...</h3>
+            <p>Start the demo runner to begin training: <code>python -m hamlet.demo.runner configs/townlet/sparse_adaptive.yaml demo_state.db checkpoints</code></p>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Current Episode</div>
+                <div class="metric-value" id="episode">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Survival Time</div>
+                <div class="metric-value success" id="survival">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Total Reward</div>
+                <div class="metric-value" id="reward">0.00</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Curriculum Stage</div>
+                <div class="metric-value warning" id="stage">1/5</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Intrinsic Weight</div>
+                <div class="metric-value" id="intrinsic-weight">1.000</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Exploration ε</div>
+                <div class="metric-value" id="epsilon">1.000</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">📈 Survival Time Over Episodes</div>
+            <canvas id="survivalChart" width="800" height="300"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">🎲 Intrinsic Weight Annealing</div>
+            <canvas id="intrinsicChart" width="800" height="300"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let survivalData = [];
+        let intrinsicData = [];
+        let episodes = [];
+        const maxDataPoints = 100;
+
+        // Chart contexts
+        const survivalCanvas = document.getElementById('survivalChart');
+        const survivalCtx = survivalCanvas.getContext('2d');
+        const intrinsicCanvas = document.getElementById('intrinsicChart');
+        const intrinsicCtx = intrinsicCanvas.getContext('2d');
+
+        function connect() {
+            const wsUrl = `ws://${window.location.hostname}:8765/ws`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('Connected to demo server');
+                document.getElementById('connection-status').textContent = 'Connected';
+                document.getElementById('connection-status').className = 'status connected';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'state_update') {
+                    updateMetrics(data);
+                    updateCharts(data);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from demo server');
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                document.getElementById('connection-status').className = 'status disconnected';
+                setTimeout(connect, 2000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function updateMetrics(data) {
+            const metrics = data.metrics;
+
+            // Hide info banner once we have data
+            document.getElementById('info-banner').style.display = 'none';
+
+            // Update metrics
+            document.getElementById('episode').textContent = data.episode.toLocaleString();
+            document.getElementById('survival').textContent = metrics.survival_time;
+            document.getElementById('reward').textContent = metrics.total_reward.toFixed(2);
+            document.getElementById('stage').textContent = `${metrics.curriculum_stage}/5`;
+            document.getElementById('intrinsic-weight').textContent = metrics.intrinsic_weight.toFixed(3);
+            document.getElementById('epsilon').textContent = metrics.epsilon.toFixed(3);
+
+            // Add to chart data
+            episodes.push(data.episode);
+            survivalData.push(metrics.survival_time);
+            intrinsicData.push(metrics.intrinsic_weight);
+
+            // Keep only last N data points
+            if (episodes.length > maxDataPoints) {
+                episodes.shift();
+                survivalData.shift();
+                intrinsicData.shift();
+            }
+        }
+
+        function updateCharts(data) {
+            drawChart(survivalCtx, survivalCanvas, episodes, survivalData, '#66bb6a', 'Survival Time');
+            drawChart(intrinsicCtx, intrinsicCanvas, episodes, intrinsicData, '#ffa726', 'Intrinsic Weight');
+        }
+
+        function drawChart(ctx, canvas, xData, yData, color, label) {
+            const width = canvas.width;
+            const height = canvas.height;
+            const padding = 40;
+
+            // Clear canvas
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, width, height);
+
+            if (yData.length === 0) return;
+
+            // Calculate scales
+            const xMin = Math.min(...xData);
+            const xMax = Math.max(...xData);
+            const yMin = Math.min(...yData);
+            const yMax = Math.max(...yData);
+            const xRange = xMax - xMin || 1;
+            const yRange = yMax - yMin || 1;
+
+            // Draw axes
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.lineTo(width - padding, height - padding);
+            ctx.stroke();
+
+            // Draw labels
+            ctx.fillStyle = '#999';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'right';
+            ctx.fillText(yMax.toFixed(2), padding - 5, padding + 5);
+            ctx.fillText(yMin.toFixed(2), padding - 5, height - padding);
+            ctx.textAlign = 'center';
+            ctx.fillText(xMin.toString(), padding, height - padding + 20);
+            ctx.fillText(xMax.toString(), width - padding, height - padding + 20);
+
+            // Draw line
+            if (yData.length > 1) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+
+                for (let i = 0; i < xData.length; i++) {
+                    const x = padding + ((xData[i] - xMin) / xRange) * (width - 2 * padding);
+                    const y = height - padding - ((yData[i] - yMin) / yRange) * (height - 2 * padding);
+
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+
+                ctx.stroke();
+
+                // Draw points
+                ctx.fillStyle = color;
+                for (let i = 0; i < xData.length; i++) {
+                    const x = padding + ((xData[i] - xMin) / xRange) * (width - 2 * padding);
+                    const y = height - padding - ((yData[i] - yMin) / yRange) * (height - 2 * padding);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Connect on load
+        connect();
+    </script>
+</body>
+</html>
