@@ -98,7 +98,7 @@ class DemoDatabase:
             epsilon: Current exploration epsilon
         """
         self.conn.execute(
-            """INSERT INTO episodes
+            """INSERT OR REPLACE INTO episodes
                (episode_id, timestamp, survival_time, total_reward, extrinsic_reward,
                 intrinsic_reward, intrinsic_weight, curriculum_stage, epsilon)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
