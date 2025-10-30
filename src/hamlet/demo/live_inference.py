@@ -346,7 +346,9 @@ class LiveInferenceServer:
                 'affordances': affordances,
             },
             'agent_meters': {
-                'agent_0': meters
+                'agent_0': {
+                    'meters': meters  # MeterPanel expects agent_0.meters nested structure
+                }
             },
         }
 

@@ -140,7 +140,7 @@ const props = defineProps({
     default: 0
   },
   lastAction: {
-    type: String,
+    type: [Number, String],  // Accept both Number (from server) and String (legacy)
     default: null
   },
   episodeHistory: {
