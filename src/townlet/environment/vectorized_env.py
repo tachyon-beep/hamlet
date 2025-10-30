@@ -214,23 +214,25 @@ class VectorizedHamletEnv:
         Args:
             interact_mask: [num_agents] bool mask
         """
-        # Affordance costs (money normalized 0-1, where cost = dollars/200)
+        # Affordance costs in dollars (will convert to normalized form)
+        # Money normalization: normalized = (dollars / 200) + 0.5
+        # So $0 = 0.5, $5 = 0.525, $100 = 1.0
         # Free affordances: Job, Labor, Park
-        affordance_costs = {
-            'Bed': 0.025,        # $5
-            'LuxuryBed': 0.055,  # $11
-            'Shower': 0.015,     # $3
-            'HomeMeal': 0.015,   # $3
-            'FastFood': 0.05,    # $10
-            'Recreation': 0.03,  # $6
-            'Gym': 0.04,         # $8
-            'Bar': 0.075,        # $15
-            'Therapist': 0.075,  # $15
-            'Doctor': 0.04,      # $8
-            'Hospital': 0.075,   # $15
-            'Job': 0.0,          # Free (gives money)
-            'Labor': 0.0,        # Free (gives money)
-            'Park': 0.0,         # Free
+        affordance_costs_dollars = {
+            'Bed': 5,
+            'LuxuryBed': 11,
+            'Shower': 3,
+            'HomeMeal': 3,
+            'FastFood': 10,
+            'Recreation': 6,
+            'Gym': 8,
+            'Bar': 15,
+            'Therapist': 15,
+            'Doctor': 8,
+            'Hospital': 15,
+            'Job': 0,
+            'Labor': 0,
+            'Park': 0,
         }
 
         # Check each affordance
@@ -243,14 +245,17 @@ class VectorizedHamletEnv:
                 continue
 
             # Check affordability (money >= cost)
-            cost = affordance_costs.get(affordance_name, 0.0)
-            if cost > 0:
-                can_afford = self.meters[at_affordance, 3] >= cost
-                at_affordance = at_affordance.clone()
-                at_affordance[at_affordance] = can_afford
+            cost_dollars = affordance_costs_dollars.get(affordance_name, 0)
+            if cost_dollars > 0:
+                # Convert cost to normalized form: normalized_money = (dollars / 200) + 0.5
+                # To check if agent can afford: (normalized - 0.5) * 200 >= cost_dollars
+                # Which is: normalized >= (cost_dollars / 200) + 0.5
+                cost_normalized = (cost_dollars / 200.0) + 0.5
+                can_afford = self.meters[:, 3] >= cost_normalized
+                at_affordance = at_affordance & can_afford
 
                 if not at_affordance.any():
-                    # Can't afford this affordance, skip
+                    # No one at this affordance can afford it, skip
                     continue
 
             # Apply affordance effects (matching Hamlet exactly)
