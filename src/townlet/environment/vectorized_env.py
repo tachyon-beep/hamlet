@@ -192,6 +192,7 @@ class VectorizedHamletEnv:
                 0.0,    # mood: no cost
                 0.0,    # social: no cost
                 0.0,    # health: no cost
+                0.0,    # fitness: no cost
             ], device=self.device)
             self.meters[movement_mask] -= movement_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
