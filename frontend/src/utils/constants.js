@@ -5,7 +5,7 @@
  */
 
 // Grid rendering
-export const CELL_SIZE = 75 // pixels per cell
+export const CELL_SIZE = 100 // pixels per cell (8x8 grid = 800px total)
 
 // Action display names (support both numeric and string keys)
 export const ACTION_ICONS = {
