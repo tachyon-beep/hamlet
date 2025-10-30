@@ -13,7 +13,6 @@
       <!-- ✅ Semantic HTML: aside for left panel -->
       <aside class="left-panel" aria-label="Agent status panels">
         <MeterPanel :agent-meters="store.agentMeters" />
-        <FailurePanel />
         <!-- Phase 3: Curriculum tracker -->
         <CurriculumTracker
           v-if="store.rndMetrics"
@@ -123,7 +122,6 @@ import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
 import Controls from './components/Controls.vue'
 import StatsPanel from './components/StatsPanel.vue'
-import FailurePanel from './components/FailurePanel.vue'
 import LoadingState from './components/LoadingState.vue'
 import ErrorState from './components/ErrorState.vue'
 import NoveltyHeatmap from './components/NoveltyHeatmap.vue'
