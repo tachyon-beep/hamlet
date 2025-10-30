@@ -38,6 +38,7 @@ class VizServer:
         self.db = DemoDatabase(db_path)
         self.clients = set()
         self.broadcast_task = None
+        self.last_episode_id = None  # Track to send episode_start
 
         # Create FastAPI app
         self.app = FastAPI(title="Hamlet Demo Visualization")
@@ -88,10 +89,43 @@ class VizServer:
         self.clients.add(websocket)
         logger.info(f"Client connected. Total clients: {len(self.clients)}")
 
+        # Send initial connection message
+        await websocket.send_json({
+            'type': 'connected',
+            'message': 'Connected to demo visualization server',
+            'available_models': []
+        })
+
+        # Send training status (demo is always "training")
+        training_status = self.db.get_system_state('training_status')
+        episodes = self.db.get_latest_episodes(limit=1)
+        current_episode = episodes[0]['episode_id'] if episodes else 0
+
+        await websocket.send_json({
+            'type': 'training_status',
+            'is_training': training_status == 'running',
+            'current_episode': current_episode,
+            'total_episodes': 10000  # Demo max episodes
+        })
+
+        # If training is running, send training_started
+        if training_status == 'running':
+            await websocket.send_json({
+                'type': 'training_started',
+                'num_episodes': 10000,
+                'message': 'Demo training in progress'
+            })
+
         try:
-            # Keep connection alive, wait for client disconnect
+            # Keep connection alive, handle incoming commands
             while True:
-                await websocket.receive_text()
+                data = await websocket.receive_text()
+                # Parse command but don't execute (demo runs independently)
+                try:
+                    command = json.loads(data)
+                    logger.info(f"Received command (ignored in demo mode): {command.get('command', command.get('type'))}")
+                except:
+                    pass
         except Exception as e:
             logger.info(f"Client disconnected: {e}")
         finally:
@@ -123,11 +157,22 @@ class VizServer:
                 return
 
             latest = episodes[0]
+            episode_id = latest['episode_id']
+
+            # If this is a new episode, send episode_start first
+            if self.last_episode_id is None or episode_id > self.last_episode_id:
+                episode_start = {
+                    'type': 'episode_start',
+                    'episode': episode_id,
+                    'epsilon': latest['epsilon']
+                }
+                await self._broadcast_to_clients(episode_start)
+                self.last_episode_id = episode_id
 
             # Build update message compatible with frontend expectations
             update = {
                 'type': 'episode_complete',  # Frontend expects this type
-                'episode': latest['episode_id'],
+                'episode': episode_id,
                 'length': latest['survival_time'],
                 'reward': latest['total_reward'],
                 'avg_reward_5': latest['total_reward'],  # TODO: Calculate actual average
@@ -155,20 +200,23 @@ class VizServer:
                 }
             }
 
-            # Broadcast to all clients
-            dead_clients = set()
-            for client in self.clients:
-                try:
-                    await client.send_json(update)
-                except Exception as e:
-                    logger.warning(f"Failed to send to client: {e}")
-                    dead_clients.add(client)
-
-            # Remove dead clients
-            self.clients -= dead_clients
+            await self._broadcast_to_clients(update)
 
         except Exception as e:
             logger.error(f"Error broadcasting update: {e}")
+
+    async def _broadcast_to_clients(self, message):
+        """Helper to broadcast a message to all clients."""
+        dead_clients = set()
+        for client in self.clients:
+            try:
+                await client.send_json(message)
+            except Exception as e:
+                logger.warning(f"Failed to send to client: {e}")
+                dead_clients.add(client)
+
+        # Remove dead clients
+        self.clients -= dead_clients
 
 
 def run_server(
