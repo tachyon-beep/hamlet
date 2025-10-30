@@ -38,13 +38,15 @@ class RecurrentSpatialQNetwork(nn.Module):
     - Vision Encoder: CNN for local window → 128 features
     - Position Encoder: (x, y) → 32 features
     - Meter Encoder: 8 meters → 32 features
-    - LSTM: 192 input → 256 hidden
+    - Affordance Encoder: 15 affordance types → 32 features
+    - LSTM: 224 input → 256 hidden
     - Q-Head: 256 → 128 → action_dim
 
     Handles partial observations:
     - Grid: [batch, window_size²] flattened local window (25 for 5×5)
     - Position: [batch, 2] normalized (x, y)
     - Meters: [batch, 8] normalized meter values
+    - Affordance: [batch, 15] one-hot affordance type (14 types + "none")
     """
 
     def __init__(
@@ -92,8 +94,14 @@ class RecurrentSpatialQNetwork(nn.Module):
             nn.ReLU(),
         )
 
-        # LSTM: 192 input (128 + 32 + 32) → hidden_dim
-        self.lstm_input_dim = 128 + 32 + 32
+        # Affordance Encoder: 15 affordance types (14 + none) → 32 features
+        self.affordance_encoder = nn.Sequential(
+            nn.Linear(15, 32),
+            nn.ReLU(),
+        )
+
+        # LSTM: 224 input (128 + 32 + 32 + 32) → hidden_dim
+        self.lstm_input_dim = 128 + 32 + 32 + 32
         self.lstm = nn.LSTM(
             input_size=self.lstm_input_dim,
             hidden_size=hidden_dim,
@@ -123,7 +131,8 @@ class RecurrentSpatialQNetwork(nn.Module):
             obs: [batch, obs_dim] observations where:
                 - obs[:, :window_size²] = local grid (25 for 5×5)
                 - obs[:, window_size²:window_size²+2] = position (2)
-                - obs[:, window_size²+2:] = meters (8)
+                - obs[:, window_size²+2:window_size²+10] = meters (8)
+                - obs[:, window_size²+10:] = affordance type (15)
             hidden: Optional LSTM hidden state (h, c), each [1, batch, hidden_dim]
 
         Returns:
@@ -136,7 +145,8 @@ class RecurrentSpatialQNetwork(nn.Module):
         grid_size_flat = self.window_size * self.window_size
         grid = obs[:, :grid_size_flat]  # [batch, 25]
         position = obs[:, grid_size_flat:grid_size_flat + 2]  # [batch, 2]
-        meters = obs[:, grid_size_flat + 2:]  # [batch, 8]
+        meters = obs[:, grid_size_flat + 2:grid_size_flat + 10]  # [batch, 8]
+        affordance = obs[:, grid_size_flat + 10:]  # [batch, 15]
 
         # Reshape grid for CNN: [batch, 1, window_size, window_size]
         grid_2d = grid.view(batch_size, 1, self.window_size, self.window_size)
@@ -145,16 +155,18 @@ class RecurrentSpatialQNetwork(nn.Module):
         vision_features = self.vision_encoder(grid_2d)  # [batch, 128]
         position_features = self.position_encoder(position)  # [batch, 32]
         meter_features = self.meter_encoder(meters)  # [batch, 32]
+        affordance_features = self.affordance_encoder(affordance)  # [batch, 32]
 
         # Concatenate features
         combined = torch.cat([
             vision_features,
             position_features,
-            meter_features
-        ], dim=1)  # [batch, 192]
+            meter_features,
+            affordance_features
+        ], dim=1)  # [batch, 224]
 
         # LSTM expects [batch, seq_len, input_dim]
-        combined = combined.unsqueeze(1)  # [batch, 1, 192]
+        combined = combined.unsqueeze(1)  # [batch, 1, 224]
 
         # Use provided hidden state or self.hidden_state
         if hidden is None:

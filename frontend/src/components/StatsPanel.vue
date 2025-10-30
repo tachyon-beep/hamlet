@@ -96,6 +96,10 @@
           <span class="label">Last Episode:</span>
           <span class="value">{{ lastEpisodeSteps }} steps</span>
         </div>
+        <div class="history-stat">
+          <span class="label">Best Survival:</span>
+          <span class="value">{{ bestSurvivalTime }} steps</span>
+        </div>
       </div>
     </div>
   </section>
@@ -154,6 +158,11 @@ const formattedReward = computed(() => {
 const lastEpisodeSteps = computed(() => {
   if (props.episodeHistory.length === 0) return 0
   return props.episodeHistory[props.episodeHistory.length - 1].steps
+})
+
+const bestSurvivalTime = computed(() => {
+  if (props.episodeHistory.length === 0) return 0
+  return Math.max(...props.episodeHistory.map(ep => ep.steps))
 })
 
 // ✅ Min/max survival for accessibility aria-label

@@ -378,27 +378,22 @@ class LiveInferenceServer:
         max_steps = 500
 
         while not done and self.current_step < max_steps:
-            # Get action from Q-network (greedy)
-            with torch.no_grad():
-                obs = self.population.current_obs
-                q_output = self.population.q_network(obs)
-                # Recurrent networks return (q_values, hidden_state), standard networks return q_values
-                q_values = q_output[0] if isinstance(q_output, tuple) else q_output
-                actions = q_values.argmax(dim=1)
+            # Get greedy action from population (uses shared action masking logic)
+            actions = self.population.select_greedy_actions(self.env)
 
-            # Track interaction (action 4 = INTERACT)
-            if actions[0].item() == 4:
-                # Check if agent is adjacent to any affordance
-                agent_pos = self.env.positions[0]
-                for name, aff_pos in self.env.affordances.items():
-                    # Check Manhattan distance (adjacent = distance 1 or 0)
-                    distance = torch.abs(agent_pos - aff_pos).sum().item()
-                    if distance <= 1:
-                        self.affordance_interactions[name] += 1
-                        break
+            # Get Q-values for display
+            with torch.no_grad():
+                q_output = self.population.q_network(self.population.current_obs)
+                q_values = q_output[0] if isinstance(q_output, tuple) else q_output
 
             # Step environment
             next_obs, rewards, dones, info = self.env.step(actions)
+
+            # Track successful interactions (only count if interaction actually succeeded)
+            successful_interactions = info.get('successful_interactions', {})
+            if 0 in successful_interactions:
+                affordance_name = successful_interactions[0]
+                self.affordance_interactions[affordance_name] += 1
 
             # Update state
             self.population.current_obs = next_obs

@@ -118,6 +118,37 @@ class VectorizedPopulation(PopulationManager):
             (self.num_agents,), epsilon, device=self.device
         )
 
+    def select_greedy_actions(self, env: 'VectorizedHamletEnv') -> torch.Tensor:
+        """
+        Select greedy actions with action masking for inference.
+
+        This is the canonical way to select actions during inference.
+        Uses the same action masking logic as training to prevent boundary violations.
+
+        Args:
+            env: Environment to get action masks from
+
+        Returns:
+            actions: [num_agents] tensor of selected actions
+        """
+        with torch.no_grad():
+            # Get Q-values from network
+            q_output = self.q_network(self.current_obs)
+            # Recurrent networks return (q_values, hidden_state)
+            q_values = q_output[0] if isinstance(q_output, tuple) else q_output
+
+            # Get action masks from environment
+            action_masks = env.get_action_masks()
+
+            # Mask invalid actions with -inf before argmax
+            masked_q_values = q_values.clone()
+            masked_q_values[~action_masks] = float('-inf')
+
+            # Select best valid action
+            actions = masked_q_values.argmax(dim=1)
+
+        return actions
+
     def step_population(
         self,
         envs: 'VectorizedHamletEnv',

@@ -487,13 +487,13 @@ function getRelationshipText(name) {
 }
 
 .meter.strobe-slow {
-  animation: strobe-slow 2s ease-in-out infinite !important;
+  animation: strobe-slow 3s ease-in-out infinite !important;
   will-change: transform, opacity;
   transform: translateZ(0);
 }
 
 .meter.strobe-fast {
-  animation: strobe-fast 0.6s ease-in-out infinite !important;
+  animation: strobe-fast 1s ease-in-out infinite !important;
   will-change: transform, opacity;
   transform: translateZ(0);
 }

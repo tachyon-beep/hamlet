@@ -8,7 +8,7 @@ from typing import Optional
 import torch
 import yaml
 
-from hamlet.demo.database import DemoDatabase
+from townlet.demo.database import DemoDatabase
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.curriculum.adversarial import AdversarialCurriculum

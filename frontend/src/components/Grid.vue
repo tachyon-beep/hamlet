@@ -345,76 +345,87 @@ function getHeatColor(intensity) {
   transition: all var(--transition-base);
 }
 
-/* Affordance colors - using semantic colors */
+/*
+ * Affordance colors - SYSTEMATIC by category
+ * Each category uses shades of a common color family
+ */
+
+/* === REST/SLEEP (Purple family) === */
 .affordance-bed {
-  fill: #6366f1;
-  stroke: var(--color-affordance-bed-stroke);
+  fill: #6366f1;  /* Indigo - standard rest */
+  stroke: #818cf8;
 }
 
+.affordance-luxurybed {
+  fill: #6b21a8;  /* Deep purple - premium rest */
+  stroke: #7e22ce;
+}
+
+/* === HYGIENE (Cyan/Teal family) === */
 .affordance-shower {
-  fill: var(--color-meter-hygiene);
-  stroke: var(--color-affordance-shower-stroke);
+  fill: #0891b2;  /* Dark cyan */
+  stroke: #06b6d4;
 }
 
+/* === FOOD (Orange/Amber family) === */
 .affordance-homemeal {
-  fill: var(--color-meter-satiation);
-  stroke: var(--color-affordance-homemeal-stroke);
+  fill: #f59e0b;  /* Amber - home cooking */
+  stroke: #fbbf24;
 }
 
 .affordance-fastfood {
-  fill: var(--color-error);
-  stroke: var(--color-affordance-fastfood-stroke);
+  fill: #ef4444;  /* Red - unhealthy fast food */
+  stroke: #f87171;
 }
 
+/* === WORK/INCOME (Professional colors) === */
 .affordance-job {
-  fill: var(--color-meter-money);
-  stroke: var(--color-affordance-job-stroke);
-}
-
-.affordance-recreation {
-  fill: var(--color-success);
-  stroke: var(--color-interactive-hover);
-}
-
-.affordance-bar {
-  fill: var(--color-meter-social);
-  stroke: var(--color-affordance-bar-stroke);
-}
-
-.affordance-gym {
-  fill: var(--color-meter-mood-high);
-  stroke: var(--color-affordance-gym-stroke);
-}
-
-/* New affordances from coupled cascade architecture */
-.affordance-luxurybed {
-  fill: #8b5cf6;  /* Brighter purple than Bed */
-  stroke: var(--color-affordance-bed-stroke);
+  fill: #8b5cf6;  /* Purple - office/professional */
+  stroke: #a78bfa;
 }
 
 .affordance-labor {
-  fill: #f59e0b;  /* Orange-gold for physical work */
-  stroke: var(--color-warning);
+  fill: #f97316;  /* Orange - physical labor */
+  stroke: #fb923c;
+}
+
+/* === SOCIAL (Pink/Magenta family) === */
+.affordance-bar {
+  fill: #ec4899;  /* Pink - social venue */
+  stroke: #f472b6;
+}
+
+/* === FITNESS (Green family) === */
+.affordance-gym {
+  fill: #10b981;  /* Emerald - active fitness */
+  stroke: #34d399;
 }
 
 .affordance-park {
-  fill: #10b981;  /* Green for nature/outdoor */
-  stroke: var(--color-success);
+  fill: #059669;  /* Darker emerald - outdoor fitness */
+  stroke: #10b981;
+}
+
+/* === MOOD (Blue/Fuchsia family) === */
+.affordance-recreation {
+  fill: #3b82f6;  /* Blue - casual entertainment */
+  stroke: #60a5fa;
 }
 
 .affordance-therapist {
-  fill: #a855f7;  /* Purple for mental health professional - better contrast */
-  stroke: #7c3aed;
+  fill: #c026d3;  /* Fuchsia - professional mental health */
+  stroke: #d946ef;
 }
 
+/* === HEALTH/MEDICAL (Dark red/maroon family - dark for light icons) === */
 .affordance-doctor {
-  fill: #3b82f6;  /* Blue for medical (tier 1) */
-  stroke: var(--color-chart-primary);
+  fill: #991b1b;  /* Dark red - medical tier 1 */
+  stroke: #b91c1c;
 }
 
 .affordance-hospital {
-  fill: #06b6d4;  /* Cyan for hospital - better contrast than blue-on-blue */
-  stroke: #0891b2;
+  fill: #7f1d1d;  /* Darker maroon - medical tier 2 (emergency) */
+  stroke: #991b1b;
 }
 
 .affordance-label {

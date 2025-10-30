@@ -1,1 +1,0 @@
-"""Multi-day demonstration infrastructure."""

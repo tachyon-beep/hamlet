@@ -42,17 +42,6 @@ class VectorizedHamletEnv:
         self.partial_observability = partial_observability
         self.vision_range = vision_range
 
-        # Observation dimensions depend on observability mode
-        if partial_observability:
-            # Level 2 POMDP: local window + position + meters
-            window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
-            self.observation_dim = window_size * window_size + 2 + 8  # Grid + position + 8 meters
-        else:
-            # Level 1: full grid one-hot + meters
-            self.observation_dim = grid_size * grid_size + 8  # Grid one-hot + 8 meters
-
-        self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
-
         # Affordance positions (from Hamlet default layout)
         self.affordances = {
             # Basic survival (tiered)
@@ -76,6 +65,23 @@ class VectorizedHamletEnv:
             'Hospital': torch.tensor([6, 1], device=device),
         }
 
+        # Create ordered list of affordance names for consistent encoding
+        self.affordance_names = list(self.affordances.keys())
+        self.num_affordance_types = len(self.affordance_names)
+
+        # Observation dimensions depend on observability mode
+        if partial_observability:
+            # Level 2 POMDP: local window + position + meters + current affordance type
+            window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
+            # Grid + position + 8 meters + affordance type one-hot (N+1 for "none")
+            self.observation_dim = window_size * window_size + 2 + 8 + (self.num_affordance_types + 1)
+        else:
+            # Level 1: full grid one-hot + meters + current affordance type
+            # Grid one-hot + 8 meters + affordance type (N+1 for "none")
+            self.observation_dim = grid_size * grid_size + 8 + (self.num_affordance_types + 1)
+
+        self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
+
         # State tensors (initialized in reset)
         self.positions: Optional[torch.Tensor] = None  # [num_agents, 2]
         self.meters: Optional[torch.Tensor] = None  # [num_agents, 8]
@@ -96,9 +102,9 @@ class VectorizedHamletEnv:
 
         # Initial meter values (normalized to [0, 1])
         # [energy, hygiene, satiation, money, mood, social, health, fitness]
-        # NOTE: money=0.75 corresponds to $75 in range [0, 100] (no debt allowed)
+        # NOTE: money=1.0 corresponds to $100 in range [0, 100] (no debt allowed)
         self.meters = torch.tensor([
-            [1.0, 1.0, 1.0, 0.75, 1.0, 0.5, 1.0, 0.5]  # Default initial values (fitness starts moderate)
+            [1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 1.0, 0.5]  # Default initial values (fitness starts moderate)
         ], device=self.device).repeat(self.num_agents, 1)
 
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
@@ -118,6 +124,29 @@ class VectorizedHamletEnv:
         else:
             return self._get_full_observations()
 
+    def _get_current_affordance_encoding(self) -> torch.Tensor:
+        """
+        Get one-hot encoding of current affordance under each agent.
+
+        Returns:
+            [num_agents, num_affordance_types + 1] where last dim is "none"
+        """
+        # Initialize with "none" (all zeros except last column)
+        affordance_encoding = torch.zeros(
+            self.num_agents, self.num_affordance_types + 1, device=self.device
+        )
+        affordance_encoding[:, -1] = 1.0  # Default to "none"
+
+        # Check each affordance
+        for affordance_idx, (affordance_name, affordance_pos) in enumerate(self.affordances.items()):
+            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
+            on_affordance = (distances == 0)
+            if on_affordance.any():
+                affordance_encoding[on_affordance, -1] = 0.0  # Clear "none"
+                affordance_encoding[on_affordance, affordance_idx] = 1.0  # Set affordance type
+
+        return affordance_encoding
+
     def _get_full_observations(self) -> torch.Tensor:
         """Get full grid observations (Level 1)."""
         # Grid encoding: one-hot position
@@ -128,8 +157,11 @@ class VectorizedHamletEnv:
         flat_indices = self.positions[:, 1] * self.grid_size + self.positions[:, 0]
         grid_encoding.scatter_(1, flat_indices.unsqueeze(1), 1.0)
 
-        # Concatenate grid + meters
-        observations = torch.cat([grid_encoding, self.meters], dim=1)
+        # Get current affordance encoding
+        affordance_encoding = self._get_current_affordance_encoding()
+
+        # Concatenate grid + meters + current affordance
+        observations = torch.cat([grid_encoding, self.meters, affordance_encoding], dim=1)
 
         return observations
 
@@ -185,11 +217,15 @@ class VectorizedHamletEnv:
         # Normalize positions to [0, 1]
         normalized_positions = self.positions.float() / (self.grid_size - 1)
 
-        # Concatenate: local_grid + position + meters
+        # Get current affordance encoding
+        affordance_encoding = self._get_current_affordance_encoding()
+
+        # Concatenate: local_grid + position + meters + current affordance
         observations = torch.cat([
             local_grids_batch,
             normalized_positions,
-            self.meters
+            self.meters,
+            affordance_encoding
         ], dim=1)
 
         return observations
@@ -222,7 +258,13 @@ class VectorizedHamletEnv:
         action_masks[at_bottom, 1] = False # Can't go DOWN at bottom edge
         action_masks[at_left, 2] = False   # Can't go LEFT at left edge
         action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
-        # INTERACT (action 4) is always valid
+
+        # Mask INTERACT (action 4) - only valid when on an affordance
+        on_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+        for affordance_pos in self.affordances.values():
+            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
+            on_affordance |= (distances == 0)
+        action_masks[:, 4] = on_affordance
 
         return action_masks
 
@@ -242,8 +284,8 @@ class VectorizedHamletEnv:
             dones: [num_agents] bool
             info: dict with metadata
         """
-        # 1. Execute actions
-        self._execute_actions(actions)
+        # 1. Execute actions and track successful interactions
+        successful_interactions = self._execute_actions(actions)
 
         # 2. Deplete meters (base passive decay)
         self._deplete_meters()
@@ -267,17 +309,21 @@ class VectorizedHamletEnv:
         info = {
             'step_counts': self.step_counts.clone(),
             'positions': self.positions.clone(),
+            'successful_interactions': successful_interactions,  # {agent_idx: affordance_name}
         }
 
         return observations, rewards, self.dones, info
 
-    def _execute_actions(self, actions: torch.Tensor) -> None:
+    def _execute_actions(self, actions: torch.Tensor) -> dict:
         """
         Execute movement and interaction actions.
 
         Args:
             actions: [num_agents] tensor
                 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=INTERACT
+
+        Returns:
+            Dictionary mapping agent indices to affordance names for successful interactions
         """
         # Movement deltas (x, y) coordinates
         # x = horizontal (column), y = vertical (row)
@@ -316,17 +362,26 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
+        successful_interactions = {}
         interact_mask = (actions == 4)
         if interact_mask.any():
-            self._handle_interactions(interact_mask)
+            successful_interactions = self._handle_interactions(interact_mask)
 
-    def _handle_interactions(self, interact_mask: torch.Tensor) -> None:
+        return successful_interactions
+
+    def _handle_interactions(self, interact_mask: torch.Tensor) -> dict:
         """
         Handle INTERACT action at affordances.
 
         Args:
             interact_mask: [num_agents] bool mask
+
+        Returns:
+            Dictionary mapping agent indices to affordance names for successful interactions
         """
+        # Track successful interactions for this step
+        successful_interactions = {}  # {agent_idx: affordance_name}
+
         # Affordance costs in dollars (will convert to normalized form)
         # Money normalization: normalized = (dollars / 200) + 0.5
         # So $0 = 0.5, $5 = 0.525, $100 = 1.0
@@ -360,16 +415,20 @@ class VectorizedHamletEnv:
             # Check affordability (money >= cost)
             cost_dollars = affordance_costs_dollars.get(affordance_name, 0)
             if cost_dollars > 0:
-                # Convert cost to normalized form: normalized_money = (dollars / 200) + 0.5
-                # To check if agent can afford: (normalized - 0.5) * 200 >= cost_dollars
-                # Which is: normalized >= (cost_dollars / 200) + 0.5
-                cost_normalized = (cost_dollars / 200.0) + 0.5
+                # Convert cost to normalized form: normalized_money = dollars / 100
+                # Money range is [0, 100] in dollars, [0, 1] normalized
+                cost_normalized = cost_dollars / 100.0
                 can_afford = self.meters[:, 3] >= cost_normalized
                 at_affordance = at_affordance & can_afford
 
                 if not at_affordance.any():
                     # No one at this affordance can afford it, skip
                     continue
+
+            # Track successful interactions
+            agent_indices = torch.where(at_affordance)[0]
+            for agent_idx in agent_indices:
+                successful_interactions[agent_idx.item()] = affordance_name
 
             # Apply affordance effects (matching Hamlet exactly)
             # NOTE: Money is in range [0, 100] (no debt), so $X = X/100 in normalized [0, 1]
@@ -381,7 +440,7 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] + 0.02, 0.0, 1.0
                 )  # Health +2%
-                self.meters[at_affordance, 3] -= 0.025  # Money -$5
+                self.meters[at_affordance, 3] -= 0.05  # Money -$5
             elif affordance_name == 'LuxuryBed':
                 # Energy restoration tier 2 (premium rest)
                 self.meters[at_affordance, 0] = torch.clamp(
@@ -390,12 +449,12 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] + 0.05, 0.0, 1.0
                 )  # Health +5%
-                self.meters[at_affordance, 3] -= 0.055  # Money -$11 (2.2x cost of Bed)
+                self.meters[at_affordance, 3] -= 0.11  # Money -$11 (2.2x cost of Bed)
             elif affordance_name == 'Shower':
                 self.meters[at_affordance, 1] = torch.clamp(
                     self.meters[at_affordance, 1] + 0.4, 0.0, 1.0
                 )  # Hygiene +40%
-                self.meters[at_affordance, 3] -= 0.015  # Money -$3 = -3/200
+                self.meters[at_affordance, 3] -= 0.03  # Money -$3
             elif affordance_name == 'HomeMeal':
                 self.meters[at_affordance, 2] = torch.clamp(
                     self.meters[at_affordance, 2] + 0.45, 0.0, 1.0
@@ -403,7 +462,7 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] + 0.03, 0.0, 1.0
                 )  # Health +3%
-                self.meters[at_affordance, 3] -= 0.015  # Money -$3 = -3/200
+                self.meters[at_affordance, 3] -= 0.03  # Money -$3
             elif affordance_name == 'Job':
                 # Office work - sustainable income
                 self.meters[at_affordance, 3] += 0.1125  # Money +$22.5
@@ -447,7 +506,7 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] - 0.02, 0.0, 1.0
                 )  # Health -2% (junk food)
-                self.meters[at_affordance, 3] -= 0.05  # Money -$10 = -10/200
+                self.meters[at_affordance, 3] -= 0.10  # Money -$10
             elif affordance_name == 'Bar':
                 # Best for social + mood, but health penalty
                 self.meters[at_affordance, 5] = torch.clamp(
@@ -468,7 +527,7 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] - 0.05, 0.0, 1.0
                 )  # Health -5% (late nights, drinking)
-                self.meters[at_affordance, 3] -= 0.075  # Money -$15 = -15/200
+                self.meters[at_affordance, 3] -= 0.15  # Money -$15
             elif affordance_name == 'Recreation':
                 self.meters[at_affordance, 4] = torch.clamp(
                     self.meters[at_affordance, 4] + 0.25, 0.0, 1.0
@@ -476,7 +535,7 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 0] = torch.clamp(
                     self.meters[at_affordance, 0] + 0.12, 0.0, 1.0
                 )  # Energy +12%
-                self.meters[at_affordance, 3] -= 0.03  # Money -$6 = -6/200
+                self.meters[at_affordance, 3] -= 0.06  # Money -$6
             elif affordance_name == 'Gym':
                 # Fitness builder (secondary meter - prevents health decline)
                 self.meters[at_affordance, 7] = torch.clamp(
@@ -485,7 +544,7 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 0] = torch.clamp(
                     self.meters[at_affordance, 0] - 0.08, 0.0, 1.0
                 )  # Energy -8% (workout is tiring)
-                self.meters[at_affordance, 3] -= 0.04  # Money -$8 = -8/200
+                self.meters[at_affordance, 3] -= 0.08  # Money -$8
             elif affordance_name == 'Park':
                 # Free generalist - fitness, social, mood (no direct health)
                 self.meters[at_affordance, 7] = torch.clamp(
@@ -506,19 +565,21 @@ class VectorizedHamletEnv:
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] + 0.25, 0.0, 1.0
                 )  # Health +25%
-                self.meters[at_affordance, 3] -= 0.04  # Money -$8
+                self.meters[at_affordance, 3] -= 0.08  # Money -$8
             elif affordance_name == 'Hospital':
                 # Health restoration tier 2 (expensive emergency care)
                 self.meters[at_affordance, 6] = torch.clamp(
                     self.meters[at_affordance, 6] + 0.40, 0.0, 1.0
                 )  # Health +40% (intensive care)
-                self.meters[at_affordance, 3] -= 0.075  # Money -$15
+                self.meters[at_affordance, 3] -= 0.15  # Money -$15
             elif affordance_name == 'Therapist':
                 # Mood restoration tier 2 (professional mental health)
                 self.meters[at_affordance, 4] = torch.clamp(
                     self.meters[at_affordance, 4] + 0.40, 0.0, 1.0
                 )  # Mood +40% (intensive therapy)
-                self.meters[at_affordance, 3] -= 0.075  # Money -$15 = -12/200
+                self.meters[at_affordance, 3] -= 0.15  # Money -$15
+
+        return successful_interactions
 
     def _deplete_meters(self) -> None:
         """Deplete meters each step."""
