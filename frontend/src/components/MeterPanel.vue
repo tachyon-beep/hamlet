@@ -124,6 +124,11 @@ function getMeterColor(name, value) {
       mid: 'var(--color-meter-money)',
       low: 'var(--color-error)'
     },
+    health: {
+      high: '#10b981',  // Green - healthy
+      mid: 'var(--color-warning)',
+      low: 'var(--color-error)'
+    },
     mood: {
       high: 'var(--color-meter-mood-high)',
       mid: 'var(--color-meter-mood-mid)',
@@ -132,6 +137,11 @@ function getMeterColor(name, value) {
     social: {
       high: 'var(--color-meter-social)',
       mid: 'var(--color-meter-social)',
+      low: 'var(--color-error)'
+    },
+    fitness: {
+      high: '#8b5cf6',  // Purple - athletic
+      mid: 'var(--color-warning)',
       low: 'var(--color-error)'
     }
   }

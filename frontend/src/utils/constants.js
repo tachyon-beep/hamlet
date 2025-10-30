@@ -27,15 +27,17 @@ export const ACTION_ICONS = {
 export const AFFORDANCE_ICONS = {
   Bed: '🛏️',
   Shower: '🚿',
-  Fridge: '🥘',     // Main food source in current env
-  HomeMeal: '🥘',  // Legacy support
+  Fridge: '🥘',       // Main food source in current env
+  HomeMeal: '🥘',    // Legacy support
   FastFood: '🍔',
   Job: '💼',
-  Recreation: '🎮',
+  Recreation: '🎮',  // Mood restoration tier 1
+  Therapist: '🧠',   // Mood restoration tier 2
   Bar: '🍺',
-  Gym: '💪',
-  Park: '🌳',       // Free generalist
-  Doctor: '⚕️'      // Health specialist
+  Gym: '💪',          // Fitness builder
+  Park: '🌳',        // Free generalist
+  Doctor: '⚕️',       // Health restoration tier 1
+  Hospital: '🏥'     // Health restoration tier 2
 }
 
 // Meter thresholds

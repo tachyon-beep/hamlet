@@ -318,10 +318,22 @@ class LiveInferenceServer:
         # Get agent position (unpack for frontend compatibility)
         agent_pos = self.env.positions[0].cpu().tolist()
 
-        # Get meters (all 7: energy, hygiene, satiation, money, mood, social, health)
+        # Get meters (all 8: energy, hygiene, satiation, money, health, mood, social, fitness)
+        # Note: Backend order is [energy, hygiene, satiation, money, mood, social, health, fitness]
+        # We reorder for UI display to group the primary/secondary meters together
+        meter_indices = {
+            'energy': 0,
+            'hygiene': 1,
+            'satiation': 2,
+            'money': 3,
+            'health': 6,    # Primary (direct top-up)
+            'mood': 4,      # Primary (direct top-up)
+            'social': 5,    # Secondary (modulates mood)
+            'fitness': 7,   # Secondary (modulates health)
+        }
         meters = {}
-        for i, meter_name in enumerate(['energy', 'hygiene', 'satiation', 'money', 'mood', 'social', 'health']):
-            meters[meter_name] = self.env.meters[0, i].item()
+        for meter_name, idx in meter_indices.items():
+            meters[meter_name] = self.env.meters[0, idx].item()
 
         # Get affordances (unpack position for frontend compatibility)
         affordances = []
