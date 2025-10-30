@@ -38,11 +38,11 @@
       </p>
       <p v-else-if="epsilonValue > 0.3" class="phase learning">
         <span class="phase-icon">🧠</span>
-        <span>Balanced phase - mixing exploration with learned behaviors</span>
+        <span>Balanced phase - mixing exploration with learned behaviours</span>
       </p>
       <p v-else class="phase exploiting">
         <span class="phase-icon">🎯</span>
-        <span>Low exploration - agent following learned policy, converging to optimal behavior</span>
+        <span>Low exploration - agent following learned policy, converging to optimal behaviour</span>
       </p>
     </div>
   </div>

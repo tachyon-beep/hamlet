@@ -2,9 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ CRITICAL: Active System
+
+**TOWNLET is the ONLY active training system.**
+
+**DO NOT edit code in `src/hamlet/` directories** - it contains obsolete legacy code that will be deleted. The only exception is `src/hamlet/demo/runner.py` which is the temporary entry point until centralization is complete.
+
+**Active system location**: `src/townlet/`
+
 ## Project Overview
 
-Hamlet is a pedagogical Deep Reinforcement Learning (DRL) environment where agents learn to survive by managing multiple competing needs (energy, hygiene, satiation, money). The primary mission is to "trick students into learning graduate-level RL by making them think they're just playing a game."
+HAMLET is a pedagogical Deep Reinforcement Learning (DRL) environment where agents learn to survive by managing multiple competing needs (energy, hygiene, satiation, money, health, fitness, mood, social). The primary mission is to "trick students into learning graduate-level RL by making them think they're just playing The Sims."
+
+**Current Implementation**: **Townlet** - GPU-native vectorized training system with adversarial curriculum and intrinsic exploration.
 
 **Key insight**: The project deliberately produces "interesting failures" (like reward hacking) as teaching moments rather than bugs to fix.
 
@@ -19,25 +29,26 @@ uv sync
 uv sync --extra dev
 ```
 
-### Training
+### Training (Townlet System)
 ```bash
-# Quick training demo (50 episodes)
-uv run python demo_training.py
+# Level 1.5: Full observability, no proximity shaping
+python -m hamlet.demo.runner configs/townlet_level_1_5.yaml demo_level1_5.db checkpoints_level1_5 5000
 
-# Full training run (1000 episodes, ~15-20 minutes)
-uv run python -c "from demo_training import train_agent; train_agent(num_episodes=1000, batch_size=64, buffer_capacity=50000)"
+# Level 2 POMDP: Partial observability (5×5 vision) + LSTM memory
+python -m hamlet.demo.runner configs/townlet_level_2_pomdp.yaml demo_level2.db checkpoints_level2 10000
 
-# Train with config file
-uv run python run_experiment.py --config configs/example_dqn.yaml
+# Arguments: <config> <database> <checkpoint_dir> <max_episodes>
 ```
 
-### Visualization
+### Inference Server (Live Visualization)
 ```bash
-# Terminal 1: Start backend server (FastAPI + WebSocket on port 8765)
-uv run python demo_visualization.py
+# Terminal 1: Start inference server
+python -m hamlet.demo.live_inference checkpoints_level2 8766 0.2 10000
+# Args: <checkpoint_dir> <port> <speed> <total_episodes>
 
-# Terminal 2: Start frontend (Vue 3 dev server on port 5173)
+# Terminal 2: Start frontend
 cd frontend && npm run dev
+# Open http://localhost:5173
 ```
 
 ### Testing
@@ -46,263 +57,282 @@ cd frontend && npm run dev
 uv run pytest
 
 # Run specific test file
-uv run pytest tests/test_environment.py
+uv run pytest tests/test_townlet/test_integration.py
 
 # Run with coverage
-uv run pytest --cov=hamlet --cov-report=term-missing
+uv run pytest --cov=townlet --cov-report=term-missing
 ```
 
 ### Code Quality
 ```bash
 # Format code
-uv run black src/ tests/
+uv run black src/townlet tests/
 
 # Lint
-uv run ruff check src/
+uv run ruff check src/townlet
 
 # Type checking
-uv run mypy src/
+uv run mypy src/townlet
 ```
 
 ## Architecture
 
+### Townlet System (ACTIVE)
+
+```
+src/townlet/
+├── agent/
+│   └── networks.py          # SimpleQNetwork, RecurrentSpatialQNetwork (LSTM)
+├── environment/
+│   └── vectorized_env.py    # VectorizedHamletEnv (GPU-native batched environments)
+├── population/
+│   └── vectorized.py        # VectorizedPopulation (batched agent training)
+├── curriculum/
+│   ├── adversarial.py       # AdversarialCurriculum (adaptive difficulty)
+│   └── static.py            # StaticCurriculum (fixed difficulty)
+├── exploration/
+│   ├── adaptive_intrinsic.py # AdaptiveIntrinsicExploration (RND + annealing)
+│   ├── rnd.py               # RNDExploration (novelty rewards)
+│   └── epsilon_greedy.py    # EpsilonGreedyExploration
+└── training/
+    ├── state.py             # BatchedAgentState, PopulationCheckpoint
+    ├── replay_buffer.py     # ReplayBuffer (experience replay)
+    └── (runner.py coming)   # DemoRunner (main entry point - currently in hamlet/demo/)
+```
+
 ### Core Components
 
-**1. Environment (`src/hamlet/environment/`)**
-- `hamlet_env.py`: Main PettingZoo-based environment with 8×8 grid, 4 affordances, 4 meters
-- `entities.py`: Agent and Affordance base classes
-- `meters.py`: MeterCollection system (energy, hygiene, satiation, money)
-- `affordances.py`: Registry of affordances with effects (Bed, Shower, Fridge, Job)
-- `grid.py`: Spatial grid management
-- `renderer.py`: State-to-JSON serialization for web UI
+**1. Environment (`src/townlet/environment/`)**
+- `vectorized_env.py`: GPU-native vectorized environments
+  - Batches multiple agents for parallel training
+  - 8×8 grid with 14 affordances
+  - 8 meters: energy, hygiene, satiation, money, mood, social, health, fitness
+  - Supports full observability (Level 1.5) and partial observability (Level 2 POMDP)
+  - **Partial observability**: 5×5 local vision window, agent must build mental map
 
-**2. Agent (`src/hamlet/agent/`)**
-- `drl_agent.py`: DQN implementation with epsilon-greedy exploration
-- `networks.py`: Four neural architectures:
-  - `QNetwork`: Baseline MLP (26K params)
-  - `DuelingQNetwork`: Value/advantage separation (500K params)
-  - `SpatialQNetwork`: CNN for spatial processing (280K params)
-  - `SpatialDuelingQNetwork`: Best of both (520K params)
-- `replay_buffer.py`: Experience replay for DQN
-- `observation_utils.py`: State preprocessing (70-dim vector)
+**2. Agent Networks (`src/townlet/agent/`)**
+- `SimpleQNetwork`: MLP for full observability (~26K params)
+- `RecurrentSpatialQNetwork`: CNN + LSTM for partial observability (~600K params)
+  - Vision encoder: 5×5 local window → 128 features
+  - Position encoder: (x, y) → 32 features
+  - Meter encoder: 8 meters → 32 features
+  - LSTM: 192 input → 256 hidden (memory for POMDP)
+  - Q-head: 256 → 128 → 5 actions
 
-**3. Web Visualization (`src/hamlet/web/`)**
-- `server.py`: FastAPI server on port 8765
-- `websocket.py`: WebSocket manager for real-time state streaming
-- `simulation_runner.py`: Async simulation orchestrator
-- Frontend: Vue 3 + Pinia in `frontend/` directory
+**3. Population (`src/townlet/population/`)**
+- `VectorizedPopulation`: Coordinates batched agent training
+  - Shared Q-network across agents
+  - Experience replay buffer
+  - Curriculum-guided training
+  - Intrinsic + extrinsic rewards
+  - Handles both standard and recurrent networks
 
-**4. Training (`src/hamlet/training/`)**
-- `config.py`: Dataclass-based configuration (YAML-loadable)
-- `trainer.py`: Main training loop orchestrator
-- `checkpoint_manager.py`: Model checkpoint management
-- `metrics_manager.py`: TensorBoard, MLflow, SQLite tracking
+**4. Curriculum (`src/townlet/curriculum/`)**
+- `AdversarialCurriculum`: Adaptive difficulty scaling
+  - 5 stages: 50 → 100 → 200 → 350 → 500 steps
+  - Advances on 70% survival rate + minimum entropy
+  - Retreats on <30% survival rate
+  - Prevents premature advancement (min 1000 episodes per stage)
+
+**5. Exploration (`src/townlet/exploration/`)**
+- `AdaptiveIntrinsicExploration`: RND + variance-based annealing
+  - Random Network Distillation for novelty rewards
+  - Anneals intrinsic weight when agent performs consistently (low variance + high survival)
+  - Prevents premature annealing: requires survival >50 steps AND variance <100
+
+**6. Training Entry Point (TEMPORARY LOCATION)**
+- `src/hamlet/demo/runner.py`: Main training orchestrator
+  - ⚠️ Will be moved to `src/townlet/training/runner.py` during centralization
+  - Coordinates: VectorizedHamletEnv, VectorizedPopulation, AdversarialCurriculum, AdaptiveIntrinsicExploration
+  - Saves checkpoints, tracks metrics in SQLite database
 
 ### State Representation
 
-Observation is a 70-dimensional vector:
-- **Grid encoding**: 8×8 = 64 dimensions (one-hot for agent position)
-- **Meter values**: 4 dimensions (energy, hygiene, satiation, money normalized 0-1)
-- **Proximity features**: 2 dimensions (distance to nearest affordance)
+**Full Observability (Level 1.5)**:
+- Grid encoding: 8×8 one-hot (64 dims)
+- Meters: 8 normalized values (8 dims)
+- **Total**: 72 dimensions
 
-Action space: 5 discrete actions (UP=0, DOWN=1, LEFT=2, RIGHT=3, INTERACT=4)
+**Partial Observability (Level 2 POMDP)**:
+- Local grid: 5×5 window (25 dims)
+- Position: normalized (x, y) (2 dims)
+- Meters: 8 normalized values (8 dims)
+- **Total**: 35 dimensions
+
+**Action space**: 5 discrete actions (UP=0, DOWN=1, LEFT=2, RIGHT=3, INTERACT=4)
 
 ### Reward Structure
 
-**Two-tier hybrid reward shaping**:
+**Sparse Rewards (NO proximity shaping)**:
+- Meter thresholds trigger rewards/penalties
+- Interaction rewards based on meter state
+- **NO proximity shaping** (agents must explore and interact to survive)
+- Economic balance: sustainable income cycles
 
-**Tier 1 - Gradient-based feedback**:
-- Healthy meters (>80%): +0.5
-- Okay meters (50-80%): +0.2
-- Concerning meters (20-50%): -0.5
-- Critical meters (<20%): -2.0
-- Need-based interactions: Variable bonus based on meter state
-
-**Tier 2 - Proximity shaping**:
-- Small positive reward for being near needed affordances
-- Guides exploration toward resources
-
-**Economic balance** (see `affordances.py`):
-- Job: +$30 (costs energy/hygiene)
-- Bed: -$5, Shower: -$3, Fridge: -$4
-- Net surplus per cycle: ~$18 (sustainable with buffer)
+**Intrinsic Rewards**:
+- RND (Random Network Distillation) for novelty
+- Adaptive annealing based on performance consistency
+- Combined with extrinsic rewards: `total = extrinsic + intrinsic * weight`
 
 ### Training Checkpoints
 
-The project uses progressive checkpoints to demonstrate learning stages:
-- **Episode ~50 (ε=0.778)**: Random exploration, oscillating behavior
-- **Episode ~455 (ε=0.107)**: Partial learning, emerging strategy
-- **Episode 1000 (ε=0.050)**: Converged policy, ~+79 reward, 372 step survival
+Checkpoints saved periodically contain:
+- Q-network state dict
+- Optimizer state dict
+- Exploration state (RND networks, intrinsic weight, survival history)
+- Episode number, timestamp
 
-These checkpoints are pedagogically valuable for showing the learning arc.
-
-## Known Behaviors (Not Bugs!)
-
-### Reward Hacking: "Interact Spam"
-
-Trained agents may stand still and repeatedly use INTERACT action (no-op when not near affordances). This is **intentional emergent behavior** valuable for teaching:
-
-**Why it happens**:
-- Movement costs: -0.5 energy, -0.3 hygiene, -0.4 satiation per step
-- INTERACT when no affordance nearby: 0 cost
-- Proximity shaping rewards: Small positive for being near affordances
-- Agent optimizes: Standing still > moving around
-
-**Pedagogical value**:
-- Demonstrates reward hacking / specification gaming
-- Teaches "agents optimize what you measure, not what you mean"
-- Perfect introduction to AI alignment problems
-- Real-world parallel: Similar to complex exploits in production systems
-
-**Do NOT "fix" without understanding teaching value**. See `docs/scraps/reward_hacking_interact_spam.md` for detailed analysis.
+---
 
 ## Configuration System
 
 Training is controlled via YAML configs in `configs/`:
-- `example_dqn.yaml`: Baseline MLP architecture
-- `example_dueling.yaml`: Dueling DQN architecture
-- `example_spatial_dueling.yaml`: CNN + dueling architecture
-- `quick_test.yaml`: Fast iteration config for testing
 
-Config structure:
+### Active Configs (Townlet):
+- `townlet_level_1_5.yaml`: Full observability baseline
+- `townlet_level_2_pomdp.yaml`: Partial observability + LSTM
+
+### Obsolete Configs (Hamlet - DO NOT USE):
+- `example_dqn.yaml`, `example_dueling.yaml`, etc. - For legacy hamlet system
+
+**Config structure**:
 ```yaml
-experiment:
-  name: string
-  description: string
-
 environment:
-  grid_width: 8
-  affordance_positions:
-    Bed: [x, y]
-    # ...
+  grid_size: 8
+  partial_observability: false  # or true for POMDP
+  vision_range: 2  # 5×5 window when partial_observability=true
 
-agents:
-  - agent_id: string
-    algorithm: dqn
-    network_type: qnetwork|dueling|spatial|spatial_dueling
-    learning_rate: float
-    # ...
+population:
+  num_agents: 1
+  learning_rate: 0.00025  # 0.0001 for recurrent networks
+  gamma: 0.99
+  replay_buffer_capacity: 10000
+  network_type: simple  # or 'recurrent' for LSTM
+
+curriculum:
+  max_steps_per_episode: 500
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 1000
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 100
 
 training:
-  num_episodes: int
-  batch_size: int
-  # ...
+  device: cuda
 ```
 
-## Pedagogical Resources
-
-The `docs/scraps/` directory contains unformalized teaching insights:
-- `reward_hacking_interact_spam.md`: Analysis of interact-spam exploit
-- `three_stages_of_learning.md`: Using checkpoints to show learning progression
-- `trick_students_pedagogy.md`: Complete teaching framework
-- `flight_sim_reward_hacking_story.md`: Prior experiment validating patterns
-- `session_observations_2025-10-28.md`: Development session log
-
-**These are features, not documentation debt**. Read them before "fixing" unexpected behaviors.
+---
 
 ## Progressive Complexity Levels
 
 The architecture design (`docs/ARCHITECTURE_DESIGN.md`) outlines 5 levels:
 
-**Level 1** (✅ Implemented): Single agent, full observability, 8×8 grid
-**Level 2** (🔨 Designed): Partial observability (POMDP) with LSTM memory
+**Level 1** (✅ Obsolete - hamlet): Single agent, full observability, 8×8 grid
+**Level 1.5** (✅ Implemented - townlet): Full observability, NO proximity shaping
+**Level 2** (✅ Implemented - townlet): Partial observability (POMDP) with LSTM memory
 **Level 3** (🎯 Future): Multi-zone environment with hierarchical RL
 **Level 4** (🎯 Future): Multi-agent competition with theory of mind
 **Level 5** (🎯 Future): Family communication and emergent language
 
-When implementing new levels, maintain pedagogical value over pure technical correctness.
-
-## Web UI Architecture
-
-**Backend** (Python):
-- FastAPI server with CORS enabled (dev mode accepts all origins)
-- WebSocket protocol on `/ws` endpoint
-- Async simulation runner yields state updates
-- Renderer serializes state to JSON
-
-**Frontend** (Vue 3):
-- Pinia store for reactive state management
-- SVG-based grid rendering (75px cells)
-- Real-time meter displays with color coding
-- Episode statistics and performance charts
-- Controls: play/pause/step/reset/speed
-
-**WebSocket messages**:
-- `connected`: Initial handshake with available models
-- `episode_start`: New episode begins
-- `state_update`: Step-by-step state (enriched with rendered grid)
-- `episode_end`: Episode completion summary
-- `control`: Client commands (play/pause/step/reset/set_speed/load_model)
+---
 
 ## Important Implementation Details
 
 ### Network Architecture Selection
 
-The `DRLAgent` class supports 4 architectures via `network_type` parameter:
-- Spatial networks require `grid_size` parameter
-- Standard networks (qnetwork, dueling) do not
-- Architecture is auto-detected in `_create_network()` method
-
-### Checkpoint Format
-
-Saved models (`.pt` files) contain:
-```python
-{
-    'q_network': state_dict,
-    'target_network': state_dict,
-    'optimizer': state_dict,
-    'epsilon': float,
-    'state_dim': int,
-    'action_dim': int,
-}
-```
-
-No episode number or metadata in checkpoint (by design, for simplicity).
+- **SimpleQNetwork**: Full observability (Level 1.5)
+- **RecurrentSpatialQNetwork**: Partial observability (Level 2)
+  - LSTM hidden state resets at episode start
+  - Hidden state persists during episode rollout (memory)
+  - Hidden state resets per transition during batch training (simplified approach)
 
 ### Gradient Clipping
 
-DQN uses gradient clipping (`max_grad_norm=10.0`) to prevent exploding gradients. This is critical for stability with shaped rewards.
+Q-network uses gradient clipping (`max_norm=10.0`) to prevent exploding gradients.
 
 ### Economic Balance
 
 The environment is intentionally balanced for sustainability:
-- Full cycle cost (Bed + Shower + Fridge) = $12
-- Job payment = $30
-- Net per cycle = +$18
+- Full cycle cost varies by affordance choices
+- Job payment = $22.5
+- Sustainable with proper cycles
 
-This allows agents to survive indefinitely if they learn proper cycles.
+### Intrinsic Weight Annealing
+
+**Fixed bug (2025-10-30)**: Premature annealing caused by low variance threshold (10.0)
+- **New threshold**: 100.0
+- **New requirement**: Mean survival >50 steps before annealing
+- Prevents "consistently failing" from triggering "consistent performance" annealing
+
+---
 
 ## Testing Strategy
 
 Tests focus on:
-- Environment mechanics (grid, meters, affordances)
-- Agent action selection and learning
-- Configuration loading
-- Checkpoint save/load
+- Environment mechanics (vectorized operations, GPU tensors)
+- Population training (batched updates, curriculum progression)
+- Exploration (RND novelty, annealing logic)
+- Integration (full training loop)
 
 **Do NOT test for "correct" strategies** - emergent behaviors are valuable even if unexpected.
 
+---
+
+## Known Behaviors (Not Bugs!)
+
+### Reward Hacking: "Proximity Exploitation" (FIXED)
+
+**Historical issue** (Level 1): Agents would stand near affordances to collect proximity rewards without interacting.
+
+**Fix** (Level 1.5+): Proximity shaping disabled entirely in townlet. Agents must interact to survive.
+
+**Pedagogical value**: Demonstrates specification gaming and reward hacking.
+
+---
+
 ## Common Pitfalls
 
-1. **WebSocket localhost hardcoding**: Use `window.location.hostname` in frontend, not `localhost`
-2. **Attribute names**: Affordances use `.name`, not `.affordance_type`
-3. **Numpy types in checkpoints**: Checkpoint manager has type checking for dict vs scalar metrics
-4. **Timeout in training**: Don't set short timeouts on long training runs (15-20 min for 1000 episodes)
-5. **"Fixing" reward hacking**: Read pedagogical docs first - it may be more valuable broken
+1. **DO NOT edit `src/hamlet/` code** (except `demo/runner.py` temporarily)
+2. **Recurrent networks need batch_size reset**: After training batch, reset hidden state to `num_agents`
+3. **Partial observability changes obs_dim**: Auto-detect from environment, don't hardcode
+4. **Intrinsic weight annealing**: Needs both low variance AND high survival (>50 steps)
+5. **Entry point**: Use `python -m hamlet.demo.runner` for now (will move to townlet)
+
+---
 
 ## Future Development Priorities
 
-1. **Checkpoint saving during training**: Save at episodes [50, 200, 500, 1000] for teaching demos
-2. **Model selector in web UI**: Switch between checkpoints to show learning progression
-3. **Q-value visualization**: Overlay Q-values on grid for interpretability
-4. **Level 2 POMDP**: Partial observability with LSTM (next major feature)
+1. **Centralize to townlet**: Move `runner.py`, `database.py`, etc. from `hamlet/demo/` to `townlet/`
+2. **Delete obsolete hamlet code**: Remove `src/hamlet/environment/`, `src/hamlet/agent/`, `src/hamlet/training/`
+3. **Level 3 Multi-zone**: Hierarchical RL with home/work zones
+4. **Sequential replay buffer**: Episode sequences for better recurrent training
+
+---
 
 ## Development Philosophy
 
-> "Trick students into learning graduate-level RL by making them think they're just playing a game."
+> "Trick students into learning graduate-level RL by making them think they're just playing The Sims."
 
 When in doubt:
 - Prioritize pedagogical value over technical purity
 - Preserve "interesting failures" as teaching moments
 - Document unexpected behaviors rather than immediately fixing them
 - Remember: The goal is to teach RL intuitively, not build production-ready agents
+- **Work only in `src/townlet/`** - hamlet is obsolete legacy code
+
+---
+
+## Centralization Roadmap
+
+See `PLAN_TOWNLET_CENTRALIZATION.md` for detailed plan to:
+1. Move all active components to `src/townlet/`
+2. Update entry point to `python -m townlet.training.runner`
+3. Delete obsolete `src/hamlet/` code
+4. Update all documentation
+
+**Current status**: Entry point still in `hamlet/demo/runner.py`, but all implementation in townlet.

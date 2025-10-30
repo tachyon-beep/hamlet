@@ -7,27 +7,38 @@
 
     <!-- ✅ Semantic HTML: main with role="main" -->
     <main class="main-container" role="main">
-      <!-- ✅ Top row: three-column layout -->
+      <!-- ✅ Top row: three-column layout (meters, grid, stats) -->
       <div class="top-row">
-        <!-- ✅ Semantic HTML: aside for left panel -->
-        <aside class="left-panel" aria-label="Agent status panels">
+        <!-- ✅ Semantic HTML: aside for meters panel (left) -->
+        <aside class="meters-panel" aria-label="Agent status panels">
           <MeterPanel :agent-meters="store.agentMeters" />
-          <!-- Phase 3: Curriculum tracker -->
-          <CurriculumTracker
-            v-if="store.rndMetrics"
-            :current-stage="store.rndMetrics.curriculum_stage || 1"
-            :steps-at-stage="store.rndMetrics.steps_at_stage || 0"
-            :min-steps-required="1000"
-          />
-          <!-- Epsilon decay progress visualization -->
-          <EpsilonProgress
-            v-if="store.trainingMetrics && store.isConnected"
+        </aside>
+
+        <!-- Agent Behavior (consolidated panel - center left) -->
+        <aside class="behavior-panel" aria-label="Agent behavior">
+          <AgentBehaviorPanel
+            v-if="store.isConnected"
+            :cumulative-reward="store.cumulativeReward"
+            :last-action="store.lastAction"
             :epsilon="store.trainingMetrics.epsilon"
+            :checkpoint-episode="store.checkpointEpisode"
+            :total-episodes="store.checkpointTotalEpisodes"
           />
         </aside>
 
       <!-- ✅ Semantic HTML: region for grid visualization -->
       <div class="grid-container" role="region" aria-label="Simulation grid">
+        <!-- ✅ Minimal top-right controls (only when connected) -->
+        <MinimalControls
+          v-if="isConnected"
+          :is-connected="store.isConnected"
+          :auto-mode="store.autoCheckpointMode"
+          @disconnect="store.disconnect"
+          @set-speed="store.setSpeed"
+          @refresh-checkpoint="store.refreshCheckpoint"
+          @toggle-auto-checkpoint="store.toggleAutoCheckpoint"
+        />
+
         <!-- ✅ Show loading state while connecting -->
         <LoadingState
           v-if="isConnecting"
@@ -63,36 +74,22 @@
         <!-- ✅ Show empty state when not connected -->
         <div v-else class="not-connected-message">
           <p>Not connected to simulation server.</p>
-          <p class="hint">Use the "Connect (Inference)" or "Connect (Training)" buttons in the controls panel to start.</p>
+          <p class="hint">Click here to connect and start the simulation.</p>
+          <button @click="handleConnect('inference')" class="connect-button">
+            Connect
+          </button>
         </div>
       </div>
 
-        <!-- ✅ Semantic HTML: aside for right panel -->
-        <aside class="right-panel" aria-label="Simulation controls">
-          <Controls
-            :is-connected="store.isConnected"
-            :is-training="store.isTraining"
-            :available-models="store.availableModels"
-            :current-episode="store.currentEpisode"
-            :total-episodes="store.totalEpisodes"
-            :training-metrics="store.trainingMetrics"
-            :server-availability="store.serverAvailability"
-            @connect="handleConnect"
-            @disconnect="store.disconnect"
-            @play="store.play"
-            @pause="store.pause"
-            @step="store.step"
-            @reset="store.reset"
-            @set-speed="store.setSpeed"
-            @load-model="store.loadModel"
-            @start-training="handleStartTraining"
-          />
+        <!-- ✅ Semantic HTML: aside for right panel (stats and visualizations) -->
+        <aside class="right-panel" aria-label="Episode statistics and visualizations">
           <StatsPanel
             :current-episode="store.currentEpisode"
             :current-step="store.currentStep"
             :cumulative-reward="store.cumulativeReward"
             :last-action="store.lastAction"
             :episode-history="store.episodeHistory"
+            :checkpoint-episode="store.checkpointEpisode"
           />
           <!-- Critical Event Log -->
           <CriticalEventLog
@@ -135,14 +132,14 @@ import { useSimulationStore } from './stores/simulation'
 import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
 import ReferencePanel from './components/ReferencePanel.vue'
-import Controls from './components/Controls.vue'
+import MinimalControls from './components/MinimalControls.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import LoadingState from './components/LoadingState.vue'
 import ErrorState from './components/ErrorState.vue'
 import NoveltyHeatmap from './components/NoveltyHeatmap.vue'
 import IntrinsicRewardChart from './components/IntrinsicRewardChart.vue'
 import CurriculumTracker from './components/CurriculumTracker.vue'
-import EpsilonProgress from './components/EpsilonProgress.vue'
+import AgentBehaviorPanel from './components/AgentBehaviorPanel.vue'
 import CriticalEventLog from './components/CriticalEventLog.vue'
 import SurvivalTrendChart from './components/SurvivalTrendChart.vue'
 import AffordanceGraph from './components/AffordanceGraph.vue'
@@ -205,6 +202,14 @@ watch(() => store.rndMetrics, (newMetrics) => {
   }
 })
 
+// Watch for episode end to clear critical events
+watch(() => store.currentEpisode, (newEpisode, oldEpisode) => {
+  // Clear events when episode changes (new episode started)
+  if (newEpisode !== oldEpisode && oldEpisode > 0) {
+    criticalEvents.value = []
+  }
+})
+
 // Watch for critical meter events
 watch(() => store.agentMeters, (newMeters) => {
   if (!newMeters || !newMeters.agent_0) return
@@ -259,20 +264,9 @@ function clearCriticalEvents() {
   criticalEvents.value = []
 }
 
-// ✅ Handle connect event from Controls (with mode parameter)
-function handleConnect(mode) {
+// ✅ Handle connect event (always inference mode - auto-plays on connect)
+function handleConnect(mode = 'inference') {
   store.connect(mode)
-}
-
-// ✅ Handle start training event from Controls
-function handleStartTraining(config) {
-  store.startTraining(
-    config.numEpisodes,
-    config.batchSize,
-    config.bufferCapacity,
-    config.showEvery,
-    config.stepDelay
-  )
 }
 </script>
 
@@ -338,22 +332,35 @@ function handleStartTraining(config) {
   overflow: hidden;
 }
 
-/* Top row contains the three-column layout */
+/* Top row contains the three-column layout (meters, grid, stats) */
 .top-row {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.left-panel {
+/* Meters panel (left) */
+.meters-panel {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
   overflow-y: auto;
+  height: 100%;
+}
+
+/* Behavior panel (center-left) */
+.behavior-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  overflow-y: auto;
+  height: 100%;
 }
 
 .grid-container {
@@ -366,6 +373,7 @@ function handleStartTraining(config) {
   padding: var(--spacing-md);
   min-width: 0;
   min-height: 300px;
+  position: relative; /* For absolute positioning of MinimalControls */
 }
 
 .grid-wrapper {
@@ -377,7 +385,8 @@ function handleStartTraining(config) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  overflow-y: auto;
+  overflow: hidden;
+  height: 100%;
 }
 
 /* ✅ Tablet breakpoint: side-by-side panels */
@@ -388,8 +397,15 @@ function handleStartTraining(config) {
     padding: var(--spacing-lg);
   }
 
-  .left-panel {
-    width: 280px;
+  .meters-panel {
+    width: 300px;
+    flex-shrink: 0;
+    gap: var(--spacing-lg);
+  }
+
+  .behavior-panel {
+    width: 300px;
+    flex-shrink: 0;
     gap: var(--spacing-lg);
   }
 
@@ -398,7 +414,8 @@ function handleStartTraining(config) {
   }
 
   .right-panel {
-    width: 320px;
+    width: 300px;
+    flex-shrink: 0;
     gap: var(--spacing-lg);
   }
 }
@@ -409,8 +426,12 @@ function handleStartTraining(config) {
     padding: var(--spacing-xl);
   }
 
-  .left-panel {
-    width: var(--layout-left-panel-width);
+  .meters-panel {
+    width: 300px;
+  }
+
+  .behavior-panel {
+    width: 300px;
   }
 
   .grid-container {
@@ -418,7 +439,7 @@ function handleStartTraining(config) {
   }
 
   .right-panel {
-    width: var(--layout-right-panel-width);
+    width: 300px;
   }
 }
 
@@ -427,10 +448,14 @@ function handleStartTraining(config) {
   text-align: center;
   color: var(--color-text-secondary);
   padding: var(--spacing-2xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
 }
 
 .not-connected-message p {
-  margin: 0 0 var(--spacing-md) 0;
+  margin: 0;
   font-size: var(--font-size-base);
 }
 
@@ -438,6 +463,28 @@ function handleStartTraining(config) {
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
   max-width: 400px;
-  margin: 0 auto;
+}
+
+.connect-button {
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--color-success);
+  border: none;
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-on-dark);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  margin-top: var(--spacing-md);
+}
+
+.connect-button:hover {
+  background: var(--color-interactive-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.connect-button:active {
+  transform: translateY(0);
 }
 </style>

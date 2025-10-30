@@ -17,26 +17,10 @@ from townlet.exploration.base import ExplorationStrategy
 from townlet.training.replay_buffer import ReplayBuffer
 from townlet.exploration.rnd import RNDExploration
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
 
 if TYPE_CHECKING:
     from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-
-class SimpleQNetwork(nn.Module):
-    """Simple MLP Q-network for Phase 1."""
-
-    def __init__(self, obs_dim: int, action_dim: int, hidden_dim: int = 128):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(obs_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, action_dim),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
 
 
 class VectorizedPopulation(PopulationManager):
@@ -59,6 +43,8 @@ class VectorizedPopulation(PopulationManager):
         learning_rate: float = 0.00025,
         gamma: float = 0.99,
         replay_buffer_capacity: int = 10000,
+        network_type: str = "simple",
+        vision_window_size: int = 5,
     ):
         """
         Initialize vectorized population.
@@ -74,6 +60,8 @@ class VectorizedPopulation(PopulationManager):
             learning_rate: Learning rate for Q-network optimizer
             gamma: Discount factor
             replay_buffer_capacity: Maximum number of transitions in replay buffer
+            network_type: Network architecture ('simple' or 'recurrent')
+            vision_window_size: Size of local vision window for recurrent networks (5 for 5×5)
         """
         self.env = env
         self.curriculum = curriculum
@@ -82,9 +70,19 @@ class VectorizedPopulation(PopulationManager):
         self.num_agents = len(agent_ids)
         self.device = device
         self.gamma = gamma
+        self.network_type = network_type
+        self.is_recurrent = (network_type == "recurrent")
 
         # Q-network (shared across all agents for now)
-        self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
+        if network_type == "recurrent":
+            self.q_network = RecurrentSpatialQNetwork(
+                action_dim=action_dim,
+                window_size=vision_window_size,
+                num_meters=8,
+            ).to(device)
+        else:
+            self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
+
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
 
         # Replay buffer
@@ -105,6 +103,10 @@ class VectorizedPopulation(PopulationManager):
     def reset(self) -> None:
         """Reset all environments and state."""
         self.current_obs = self.env.reset()
+
+        # Reset recurrent network hidden state (if applicable)
+        if self.is_recurrent:
+            self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
 
         # Get epsilon from exploration strategy (handle both direct and composed)
         if isinstance(self.exploration, AdaptiveIntrinsicExploration):
@@ -131,7 +133,12 @@ class VectorizedPopulation(PopulationManager):
         """
         # 1. Get Q-values from network
         with torch.no_grad():
-            q_values = self.q_network(self.current_obs)
+            if self.is_recurrent:
+                q_values, new_hidden = self.q_network(self.current_obs)
+                # Update hidden state for next step (episode rollout memory)
+                self.q_network.set_hidden_state(new_hidden)
+            else:
+                q_values = self.q_network(self.current_obs)
 
         # 2. Create temporary agent state for curriculum decision
         temp_state = BatchedAgentState(
@@ -202,11 +209,25 @@ class VectorizedPopulation(PopulationManager):
             batch = self.replay_buffer.sample(batch_size=64, intrinsic_weight=intrinsic_weight)
 
             # Standard DQN update (simplified, no target network for now)
-            q_pred = self.q_network(batch['observations']).gather(1, batch['actions'].unsqueeze(1)).squeeze()
+            if self.is_recurrent:
+                # Reset hidden states for batch training (treat transitions independently)
+                batch_size = batch['observations'].shape[0]
+                self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
 
-            with torch.no_grad():
-                q_next = self.q_network(batch['next_observations']).max(1)[0]
-                q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+                q_values, _ = self.q_network(batch['observations'])
+                q_pred = q_values.gather(1, batch['actions'].unsqueeze(1)).squeeze()
+
+                with torch.no_grad():
+                    self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
+                    q_next_values, _ = self.q_network(batch['next_observations'])
+                    q_next = q_next_values.max(1)[0]
+                    q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+            else:
+                q_pred = self.q_network(batch['observations']).gather(1, batch['actions'].unsqueeze(1)).squeeze()
+
+                with torch.no_grad():
+                    q_next = self.q_network(batch['next_observations']).max(1)[0]
+                    q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
 
             loss = F.mse_loss(q_pred, q_target)
 
@@ -214,6 +235,10 @@ class VectorizedPopulation(PopulationManager):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
             self.optimizer.step()
+
+            # Reset hidden state back to episode batch size after training
+            if self.is_recurrent:
+                self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
 
         # 10. Update current state
         self.current_obs = next_obs
@@ -231,6 +256,15 @@ class VectorizedPopulation(PopulationManager):
                     self.exploration.update_on_episode_end(survival_time=survival_time)
                 # Reset episode counter
                 self.episode_step_counts[idx] = 0
+
+            # Reset hidden states for agents that terminated (if using recurrent network)
+            if self.is_recurrent:
+                # Get current hidden state
+                h, c = self.q_network.get_hidden_state()
+                # Zero out hidden states for terminated agents
+                h[:, reset_indices, :] = 0.0
+                c[:, reset_indices, :] = 0.0
+                self.q_network.set_hidden_state((h, c))
 
         # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
         total_rewards = rewards + intrinsic_rewards * (

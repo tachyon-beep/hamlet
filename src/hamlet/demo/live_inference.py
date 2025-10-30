@@ -30,6 +30,8 @@ class LiveInferenceServer:
         checkpoint_dir: Path | str,
         port: int = 8766,
         step_delay: float = 0.2,
+        total_episodes: int = 5000,  # Expected total episodes in training run
+        config_path: Optional[Path | str] = None,  # Optional training config
     ):
         """Initialize live inference server.
 
@@ -37,10 +39,15 @@ class LiveInferenceServer:
             checkpoint_dir: Directory containing training checkpoints
             port: WebSocket port
             step_delay: Delay between steps in seconds (0.2 = 5 steps/sec)
+            total_episodes: Expected total episodes for training run (for progress gauge)
+            config_path: Optional path to training config YAML (for matching environment settings)
         """
         self.checkpoint_dir = Path(checkpoint_dir)
         self.port = port
         self.step_delay = step_delay
+        self.total_episodes = total_episodes
+        self.config_path = Path(config_path) if config_path else None
+        self.config = None
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.clients: Set[WebSocket] = set()
@@ -48,6 +55,7 @@ class LiveInferenceServer:
         # Current checkpoint tracking
         self.current_checkpoint_path: Optional[Path] = None
         self.current_checkpoint_episode: int = 0
+        self.current_epsilon: float = 0.0
 
         # Environment and agent
         self.env: Optional[VectorizedHamletEnv] = None
@@ -59,6 +67,9 @@ class LiveInferenceServer:
         self.is_running = False
         self.current_episode = 0
         self.current_step = 0
+
+        # Checkpoint auto-update mode
+        self.auto_checkpoint_mode = False  # If true, automatically check for new checkpoints after each episode
 
         # FastAPI app
         self.app = FastAPI(title="Hamlet Live Inference Server")
@@ -82,6 +93,13 @@ class LiveInferenceServer:
         """Initialize environment and start checkpoint monitoring."""
         logger.info("Starting live inference server")
 
+        # Load config if provided
+        if self.config_path and self.config_path.exists():
+            import yaml
+            with open(self.config_path) as f:
+                self.config = yaml.safe_load(f)
+            logger.info(f"Loaded training config: {self.config_path}")
+
         # Initialize environment and components
         self._initialize_components()
 
@@ -97,9 +115,35 @@ class LiveInferenceServer:
 
     def _initialize_components(self):
         """Initialize environment and agent components."""
-        # Create environment FIRST (need it to auto-detect dimensions)
+        # Get environment config (use config if available, otherwise defaults)
         num_agents = 1
-        self.env = VectorizedHamletEnv(num_agents=num_agents, grid_size=8, device=self.device)
+        grid_size = 8
+        partial_observability = False
+        vision_range = 2
+        network_type = "simple"
+        vision_window_size = 5
+
+        if self.config:
+            env_cfg = self.config.get('environment', {})
+            pop_cfg = self.config.get('population', {})
+
+            grid_size = env_cfg.get('grid_size', 8)
+            partial_observability = env_cfg.get('partial_observability', False)
+            vision_range = env_cfg.get('vision_range', 2)
+            network_type = pop_cfg.get('network_type', 'simple')
+            vision_window_size = 2 * vision_range + 1
+
+            logger.info(f"Environment config: grid={grid_size}, POMDP={partial_observability}, vision={vision_range}")
+            logger.info(f"Network type: {network_type}")
+
+        # Create environment with config settings
+        self.env = VectorizedHamletEnv(
+            num_agents=num_agents,
+            grid_size=grid_size,
+            device=self.device,
+            partial_observability=partial_observability,
+            vision_range=vision_range,
+        )
 
         # Auto-detect observation dimension from environment
         obs_dim = self.env.observation_dim
@@ -124,7 +168,7 @@ class LiveInferenceServer:
             device=self.device,
         )
 
-        # Create population (use auto-detected dimensions)
+        # Create population (use auto-detected dimensions and network type from config)
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
         self.population = VectorizedPopulation(
             env=self.env,
@@ -135,6 +179,8 @@ class LiveInferenceServer:
             obs_dim=obs_dim,
             action_dim=self.env.action_dim,
             replay_buffer_capacity=10000,
+            network_type=network_type,
+            vision_window_size=vision_window_size,
         )
 
         self.curriculum.initialize_population(num_agents)
@@ -176,15 +222,27 @@ class LiveInferenceServer:
             self.population.q_network.load_state_dict(checkpoint['population_state']['q_network'])
             logger.info("Loaded Q-network weights")
 
+        # Calculate epsilon based on training progress
+        # For inference, we estimate epsilon from episode number (linear decay from 1.0 to 0.05)
+        epsilon = checkpoint.get('epsilon', None)
+        if epsilon is None:
+            # Estimate epsilon based on training progress (assuming linear decay over total_episodes)
+            progress = episode_num / self.total_episodes if self.total_episodes > 0 else 0
+            epsilon = max(0.05, 1.0 - (progress * 0.95))  # Decay from 1.0 to 0.05
+            logger.info(f"Estimated epsilon from training progress: {epsilon:.3f}")
+
         # Update tracking
         self.current_checkpoint_path = latest_checkpoint
         self.current_checkpoint_episode = episode_num
+        self.current_epsilon = epsilon
 
         # Broadcast model update to all clients
         await self._broadcast_to_clients({
             'type': 'model_loaded',
             'model': f"checkpoint_ep{episode_num:05d}",
             'episode': episode_num,
+            'total_episodes': self.total_episodes,
+            'epsilon': epsilon,
             'message': f"Loaded model from episode {episode_num}"
         })
 
@@ -202,7 +260,11 @@ class LiveInferenceServer:
             'message': 'Connected to live inference server',
             'available_models': [],
             'mode': 'inference',
-            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}" if self.current_checkpoint_path else "None"
+            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}" if self.current_checkpoint_path else "None",
+            'checkpoint_episode': self.current_checkpoint_episode,
+            'total_episodes': self.total_episodes,
+            'epsilon': self.current_epsilon,
+            'auto_checkpoint_mode': self.auto_checkpoint_mode
         })
 
         try:
@@ -243,13 +305,34 @@ class LiveInferenceServer:
             self.current_step = 0
             logger.info("Reset episode counter")
 
+        elif command == 'refresh_checkpoint':
+            # Manually check for and load new checkpoint
+            logger.info("Manual checkpoint refresh requested")
+            checkpoint_loaded = await self._check_and_load_checkpoint()
+            if checkpoint_loaded:
+                logger.info("New checkpoint loaded")
+            else:
+                logger.info("No new checkpoint available")
+
+        elif command == 'toggle_auto_checkpoint':
+            # Toggle auto checkpoint mode
+            self.auto_checkpoint_mode = not self.auto_checkpoint_mode
+            status = "enabled" if self.auto_checkpoint_mode else "disabled"
+            logger.info(f"Auto checkpoint mode {status}")
+            # Broadcast mode change to all clients
+            await self._broadcast_to_clients({
+                'type': 'auto_checkpoint_mode',
+                'enabled': self.auto_checkpoint_mode
+            })
+
     async def _run_inference_loop(self):
         """Main inference loop - runs episodes continuously."""
         logger.info("Inference loop started")
 
         while self.is_running:
-            # Check for new checkpoint before each episode
-            await self._check_and_load_checkpoint()
+            # Check for new checkpoint before each episode (if auto mode enabled)
+            if self.auto_checkpoint_mode:
+                await self._check_and_load_checkpoint()
 
             # Run one inference episode
             await self._run_single_episode()
@@ -262,6 +345,13 @@ class LiveInferenceServer:
         self.current_episode += 1
         self.current_step = 0
 
+        # Randomize affordance positions for each episode (like training)
+        self.env.randomize_affordance_positions()
+
+        # Log affordance positions for verification
+        affordance_positions = {name: pos.tolist() for name, pos in self.env.affordances.items()}
+        logger.info(f"Episode {self.current_episode} affordance positions: {affordance_positions}")
+
         # Reset environment
         self.env.reset()
         self.population.reset()
@@ -271,6 +361,9 @@ class LiveInferenceServer:
             'type': 'episode_start',
             'episode': self.current_episode,
             'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}",
+            'checkpoint_episode': self.current_checkpoint_episode,
+            'total_episodes': self.total_episodes,
+            'epsilon': self.current_epsilon
         })
 
         # Run episode
@@ -282,7 +375,9 @@ class LiveInferenceServer:
             # Get action from Q-network (greedy)
             with torch.no_grad():
                 obs = self.population.current_obs
-                q_values = self.population.q_network(obs)
+                q_output = self.population.q_network(obs)
+                # Recurrent networks return (q_values, hidden_state), standard networks return q_values
+                q_values = q_output[0] if isinstance(q_output, tuple) else q_output
                 actions = q_values.argmax(dim=1)
 
             # Step environment
@@ -309,6 +404,9 @@ class LiveInferenceServer:
             'total_reward': cumulative_reward,
             'reason': 'done' if done else 'max_steps',
             'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}",
+            'checkpoint_episode': self.current_checkpoint_episode,
+            'total_episodes': self.total_episodes,
+            'epsilon': self.current_epsilon
         })
 
         logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, reward: {cumulative_reward:.2f}")
@@ -389,6 +487,8 @@ def run_server(
     checkpoint_dir: str = "checkpoints",
     port: int = 8766,
     step_delay: float = 0.2,
+    total_episodes: int = 5000,
+    config_path: str = None,
 ):
     """Run live inference server."""
     import uvicorn
@@ -398,11 +498,14 @@ def run_server(
         format='[%(asctime)s] %(levelname)s: %(message)s'
     )
 
-    server = LiveInferenceServer(checkpoint_dir, port, step_delay)
+    server = LiveInferenceServer(checkpoint_dir, port, step_delay, total_episodes, config_path)
 
     logger.info(f"Starting live inference server on port {port}")
     logger.info(f"Checkpoint directory: {checkpoint_dir}")
     logger.info(f"Step delay: {step_delay}s ({1/step_delay:.1f} steps/sec)")
+    logger.info(f"Expected total training episodes: {total_episodes}")
+    if config_path:
+        logger.info(f"Training config: {config_path}")
     logger.info(f"Connect Vue frontend to: ws://localhost:{port}/ws")
 
     uvicorn.run(server.app, host="0.0.0.0", port=port)
@@ -414,5 +517,7 @@ if __name__ == '__main__':
     checkpoint_dir = sys.argv[1] if len(sys.argv) > 1 else "checkpoints"
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8766
     step_delay = float(sys.argv[3]) if len(sys.argv) > 3 else 0.2
+    total_episodes = int(sys.argv[4]) if len(sys.argv) > 4 else 5000
+    config_path = sys.argv[5] if len(sys.argv) > 5 else None
 
-    run_server(checkpoint_dir, port, step_delay)
+    run_server(checkpoint_dir, port, step_delay, total_episodes, config_path)

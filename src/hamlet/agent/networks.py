@@ -541,3 +541,163 @@ class RelationalQNetwork(nn.Module):
             q_values = q_values.squeeze(0)
 
         return q_values
+
+
+class RecurrentSpatialQNetwork(nn.Module):
+    """
+    Recurrent Spatial Q-Network for partial observability (Level 2 POMDP).
+
+    Architecture:
+    - Vision Encoder: CNN for 5×5 local window → 128 features
+    - Position Encoder: (x, y) → 32 features
+    - Meter Encoder: 8 meters → 32 features
+    - LSTM: Maintain memory across timesteps (256 hidden)
+    - Q-Head: Combined features → 5 action Q-values
+
+    Total params: ~600K
+
+    Key design decisions:
+    - Uses LSTM to build implicit spatial memory of environment
+    - Absolute position helps agent understand where it's been
+    - Recurrent state persists across episode to remember affordance locations
+    """
+
+    def __init__(self, action_dim: int = 5, window_size: int = 5, num_meters: int = 8):
+        """
+        Initialize Recurrent Spatial Q-Network.
+
+        Args:
+            action_dim: Number of possible actions (default 5)
+            window_size: Size of local observation window (default 5 for 5×5)
+            num_meters: Number of agent meters (default 8)
+        """
+        super().__init__()
+        self.action_dim = action_dim
+        self.window_size = window_size
+        self.num_meters = num_meters
+
+        # === VISION ENCODER (CNN for 5×5 window) ===
+        self.vision_encoder = nn.Sequential(
+            # Input: 1×5×5 (single channel grid)
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),  # 16×5×5
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),  # 32×5×5
+            nn.ReLU(),
+            nn.Flatten(),  # 32*5*5 = 800
+            nn.Linear(800, 128),
+            nn.ReLU(),
+        )
+
+        # === POSITION ENCODER ===
+        self.position_encoder = nn.Sequential(
+            nn.Linear(2, 32),  # (x, y) → 32 features
+            nn.ReLU(),
+        )
+
+        # === METER ENCODER ===
+        self.meter_encoder = nn.Sequential(
+            nn.Linear(num_meters, 32),  # 8 meters → 32 features
+            nn.ReLU(),
+        )
+
+        # === LSTM (maintains temporal memory) ===
+        # Input: 128 (vision) + 32 (position) + 32 (meters) = 192 features
+        self.lstm_input_dim = 128 + 32 + 32
+        self.lstm_hidden_dim = 256
+        self.lstm = nn.LSTM(
+            input_size=self.lstm_input_dim,
+            hidden_size=self.lstm_hidden_dim,
+            num_layers=1,
+            batch_first=True
+        )
+
+        # === Q-HEAD (outputs Q-values for actions) ===
+        self.q_head = nn.Sequential(
+            nn.Linear(self.lstm_hidden_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, action_dim)
+        )
+
+        # LSTM hidden state (maintained across steps within episode)
+        self.hidden_state = None
+
+    def forward(self, obs, hidden=None):
+        """
+        Forward pass through recurrent network.
+
+        Args:
+            obs: Observation dict with 'grid' (5×5), 'position' (x,y), 'meters' (8 values)
+            hidden: Optional LSTM hidden state tuple (h, c). If None, uses internal state.
+
+        Returns:
+            Tuple of (q_values, hidden_state)
+            - q_values: shape (batch_size, action_dim) or (action_dim,)
+            - hidden_state: tuple (h, c) for next timestep
+        """
+        # Handle both batched and unbatched inputs
+        is_batched = len(obs['grid'].shape) == 4  # (batch, channel, h, w)
+
+        if not is_batched:
+            # Add batch and channel dimensions: (h, w) → (1, 1, h, w)
+            grid = obs['grid'].unsqueeze(0).unsqueeze(0)
+            position = obs['position'].unsqueeze(0)
+            meters = obs['meters'].unsqueeze(0)
+            batch_size = 1
+        else:
+            # Add channel dimension if needed: (batch, h, w) → (batch, 1, h, w)
+            if len(obs['grid'].shape) == 3:
+                grid = obs['grid'].unsqueeze(1)
+            else:
+                grid = obs['grid']
+            position = obs['position']
+            meters = obs['meters']
+            batch_size = grid.shape[0]
+
+        # === ENCODE FEATURES ===
+        vision_features = self.vision_encoder(grid)  # (batch, 128)
+        position_features = self.position_encoder(position)  # (batch, 32)
+        meter_features = self.meter_encoder(meters)  # (batch, 32)
+
+        # Combine all features
+        combined = torch.cat([vision_features, position_features, meter_features], dim=1)  # (batch, 192)
+
+        # Add sequence dimension for LSTM: (batch, seq_len=1, features)
+        lstm_input = combined.unsqueeze(1)
+
+        # === LSTM FORWARD ===
+        if hidden is None:
+            hidden = self.hidden_state
+
+        lstm_output, new_hidden = self.lstm(lstm_input, hidden)  # (batch, 1, 256), ((1, batch, 256), (1, batch, 256))
+
+        # Remove sequence dimension: (batch, 1, 256) → (batch, 256)
+        lstm_output = lstm_output.squeeze(1)
+
+        # === Q-VALUES ===
+        q_values = self.q_head(lstm_output)  # (batch, action_dim)
+
+        if not is_batched:
+            q_values = q_values.squeeze(0)  # (action_dim,)
+
+        return q_values, new_hidden
+
+    def reset_hidden_state(self, batch_size=1, device='cpu'):
+        """
+        Reset LSTM hidden state (call at episode start).
+
+        Args:
+            batch_size: Batch size for hidden state
+            device: Device to create tensors on
+        """
+        self.hidden_state = (
+            torch.zeros(1, batch_size, self.lstm_hidden_dim, device=device),
+            torch.zeros(1, batch_size, self.lstm_hidden_dim, device=device)
+        )
+
+    def get_hidden_state(self):
+        """Get current LSTM hidden state."""
+        return self.hidden_state
+
+    def set_hidden_state(self, hidden):
+        """Set LSTM hidden state."""
+        self.hidden_state = hidden

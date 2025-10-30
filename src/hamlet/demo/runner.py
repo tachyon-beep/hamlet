@@ -139,13 +139,22 @@ class DemoRunner:
         curriculum_cfg = self.config.get('curriculum', {})
         exploration_cfg = self.config.get('exploration', {})
         population_cfg = self.config.get('population', {})
+        environment_cfg = self.config.get('environment', {})
 
         # Get environment parameters from config
         num_agents = population_cfg.get('num_agents', 1)
-        grid_size = population_cfg.get('grid_size', 8)
+        grid_size = environment_cfg.get('grid_size', 8)
+        partial_observability = environment_cfg.get('partial_observability', False)
+        vision_range = environment_cfg.get('vision_range', 2)
 
         # Create environment FIRST (need it to auto-detect dimensions)
-        self.env = VectorizedHamletEnv(num_agents=num_agents, grid_size=grid_size, device=device)
+        self.env = VectorizedHamletEnv(
+            num_agents=num_agents,
+            grid_size=grid_size,
+            device=device,
+            partial_observability=partial_observability,
+            vision_range=vision_range,
+        )
 
         # Auto-detect dimensions from environment (avoids hardcoded config values)
         obs_dim = self.env.observation_dim
@@ -166,7 +175,7 @@ class DemoRunner:
             obs_dim=obs_dim,
             embed_dim=exploration_cfg.get('embed_dim', 128),
             initial_intrinsic_weight=exploration_cfg.get('initial_intrinsic_weight', 1.0),
-            variance_threshold=exploration_cfg.get('variance_threshold', 10.0),
+            variance_threshold=exploration_cfg.get('variance_threshold', 100.0),  # Increased from 10.0
             survival_window=exploration_cfg.get('survival_window', 100),
             device=device,
         )
@@ -175,6 +184,8 @@ class DemoRunner:
         learning_rate = population_cfg.get('learning_rate', 0.00025)
         gamma = population_cfg.get('gamma', 0.99)
         replay_buffer_capacity = population_cfg.get('replay_buffer_capacity', 10000)
+        network_type = population_cfg.get('network_type', 'simple')  # 'simple' or 'recurrent'
+        vision_window_size = 2 * vision_range + 1  # 5 for vision_range=2
 
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
@@ -191,6 +202,8 @@ class DemoRunner:
             learning_rate=learning_rate,
             gamma=gamma,
             replay_buffer_capacity=replay_buffer_capacity,
+            network_type=network_type,
+            vision_window_size=vision_window_size,
         )
 
         self.curriculum.initialize_population(num_agents)

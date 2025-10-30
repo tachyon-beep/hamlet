@@ -184,6 +184,9 @@ class Trainer:
         obs = self.env.reset()
         state = preprocess_observation(obs)
 
+        # Reset agent state (for recurrent networks, resets LSTM hidden state)
+        agent.reset_episode()
+
         episode_reward = 0.0
         episode_length = 0
         trajectory = []  # For replay storage
@@ -196,17 +199,25 @@ class Trainer:
 
         # Episode loop
         for step in range(self.config.training.max_steps_per_episode):
-            # Select action
-            action = agent.select_action(state, explore=True)
+            # Select action (pass raw obs for recurrent, preprocessed state for standard)
+            if agent.is_recurrent:
+                action = agent.select_action(obs, explore=True)
+            else:
+                action = agent.select_action(state, explore=True)
 
             # Execute action
             next_obs, reward, done, info = self.env.step(action)
             next_state = preprocess_observation(next_obs)
 
-            # Store experience
-            self.agent_manager.store_experience(
-                agent_id, state, action, reward, next_state, done
-            )
+            # Store experience (raw obs dict for recurrent, preprocessed for standard)
+            if agent.is_recurrent:
+                self.agent_manager.store_experience(
+                    agent_id, obs, action, reward, next_obs, done
+                )
+            else:
+                self.agent_manager.store_experience(
+                    agent_id, state, action, reward, next_state, done
+                )
 
             # Track trajectory for replay
             if self.config.metrics.replay_storage:
@@ -237,6 +248,7 @@ class Trainer:
                             )
 
             # Update state
+            obs = next_obs
             state = next_state
             episode_reward += reward
             episode_length += 1

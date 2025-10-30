@@ -5,7 +5,7 @@
       <InfoTooltip
         title="What are reward streams?"
         text="Extrinsic rewards come from the environment (meeting needs). Intrinsic rewards come from curiosity/exploration (discovering new states). Together they guide learning."
-        position="bottom"
+        position="left"
       />
     </div>
 

@@ -80,8 +80,9 @@ class HamletEnv:
         # Reward shaping config
         self.reward_mode = self.config.reward_mode
         self.use_shaped_rewards = self.reward_mode == "shaped"
-        # Proximity shaping only applies when dense rewards are enabled
-        self.use_proximity_shaping = self.use_shaped_rewards
+        # Proximity shaping DISABLED - Level 2 progression (agent must interact to survive)
+        # Proximity was causing reward hacking (standing near affordances without interacting)
+        self.use_proximity_shaping = False
 
     def reset(self) -> Dict:
         """Reset the environment to initial state."""
@@ -203,6 +204,8 @@ class HamletEnv:
         """
         Return observation for the specified agent.
 
+        Supports both full observability and partial observability (5×5 window).
+
         Args:
             agent_id: Agent identifier
 
@@ -211,6 +214,14 @@ class HamletEnv:
         """
         agent = self.agents[agent_id]
 
+        # Check if partial observability is enabled
+        if self.config.partial_observability:
+            return self._observe_partial(agent)
+        else:
+            return self._observe_full(agent)
+
+    def _observe_full(self, agent: Agent) -> Dict:
+        """Full observability: agent sees entire grid."""
         # Create grid representation
         grid_array = np.zeros((self.grid.height, self.grid.width), dtype=np.float32)
 
@@ -240,6 +251,67 @@ class HamletEnv:
             "position": np.array([agent.x, agent.y], dtype=np.float32),
             "meters": agent.meters.get_normalized_values(),
             "grid": grid_array,
+        }
+
+        return obs
+
+    def _observe_partial(self, agent: Agent) -> Dict:
+        """
+        Partial observability: agent sees only local 5×5 window (Level 2 POMDP).
+
+        The agent maintains its position in the full grid, but only observes
+        a local window centered on itself. Areas outside the window are unknown.
+
+        Returns:
+            Observation dict with local window and absolute position
+        """
+        vision_range = self.config.vision_range  # Default 2 (for 5×5 window)
+        window_size = 2 * vision_range + 1  # 5×5 window
+
+        # Create local observation window (padded with zeros outside grid bounds)
+        local_grid = np.zeros((window_size, window_size), dtype=np.float32)
+
+        # Extract local window centered on agent
+        for dy in range(-vision_range, vision_range + 1):
+            for dx in range(-vision_range, vision_range + 1):
+                world_x = agent.x + dx
+                world_y = agent.y + dy
+
+                # Check if within grid bounds
+                if 0 <= world_x < self.grid.width and 0 <= world_y < self.grid.height:
+                    # Local coordinates in observation window
+                    local_x = dx + vision_range
+                    local_y = dy + vision_range
+
+                    # Check for affordances at this position
+                    for affordance in self.affordances:
+                        if affordance.x == world_x and affordance.y == world_y:
+                            if affordance.name == "Bed":
+                                local_grid[local_y, local_x] = 1.0
+                            elif affordance.name == "Shower":
+                                local_grid[local_y, local_x] = 2.0
+                            elif affordance.name == "HomeMeal":
+                                local_grid[local_y, local_x] = 3.0
+                            elif affordance.name == "FastFood":
+                                local_grid[local_y, local_x] = 4.0
+                            elif affordance.name == "Job":
+                                local_grid[local_y, local_x] = 5.0
+                            elif affordance.name == "Recreation":
+                                local_grid[local_y, local_x] = 6.0
+                            elif affordance.name == "Bar":
+                                local_grid[local_y, local_x] = 7.0
+                            elif affordance.name == "Gym":
+                                local_grid[local_y, local_x] = 8.0
+                            break
+
+        # Mark agent at center of local window
+        center = vision_range
+        local_grid[center, center] = 9.0
+
+        obs = {
+            "position": np.array([agent.x, agent.y], dtype=np.float32),  # Absolute position (for learning)
+            "meters": agent.meters.get_normalized_values(),
+            "grid": local_grid,  # 5×5 local observation window
         }
 
         return obs
@@ -383,19 +455,22 @@ class HamletEnv:
             )
             reward += interaction_reward
 
-        # Tier 2: Proximity shaping (guide toward needed resources)
-        if self.use_proximity_shaping:
-            proximity_reward = self._calculate_proximity_reward(agent)
-            reward += proximity_reward
+        # Tier 2: Proximity shaping (DISABLED for Level 2 - agent must explore/remember)
+        # Previously: guided agent toward needed resources, but caused reward hacking
+        # Now: agent must learn through interaction, not proximity
+        # if self.use_proximity_shaping:
+        #     proximity_reward = self._calculate_proximity_reward(agent)
+        #     reward += proximity_reward
 
-        # Urgency penalty when hungry and far from food
-        satiation_meter = agent.meters.get("satiation")
-        satiation_norm = satiation_meter.normalize()
-        if satiation_norm < 0.4:
-            urgency = min(1.0, (0.4 - satiation_norm) / 0.4)
-            dist = self._distance_to_affordances(agent, ["HomeMeal", "FastFood"])
-            max_dist = self.grid.width + self.grid.height
-            reward -= urgency * (dist / max_dist) * 2.0
+        # Urgency penalty DISABLED - also a form of proximity shaping
+        # Agent should learn urgency through meter gradient rewards, not distance penalties
+        # satiation_meter = agent.meters.get("satiation")
+        # satiation_norm = satiation_meter.normalize()
+        # if satiation_norm < 0.4:
+        #     urgency = min(1.0, (0.4 - satiation_norm) / 0.4)
+        #     dist = self._distance_to_affordances(agent, ["HomeMeal", "FastFood"])
+        #     max_dist = self.grid.width + self.grid.height
+        #     reward -= urgency * (dist / max_dist) * 2.0
 
         return reward
 

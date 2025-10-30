@@ -5,23 +5,10 @@
 
     <div class="stats-grid">
       <div class="stat-item">
-        <span class="stat-label">Episode</span>
-        <!-- ✅ ARIA live region for real-time updates -->
-        <span
-          class="stat-value"
-          aria-live="polite"
-          aria-atomic="true"
-          role="status"
-        >
-          #{{ props.currentEpisode }}
-        </span>
-      </div>
-
-      <div class="stat-item">
         <span class="stat-label">Steps</span>
         <!-- ✅ ARIA live region for real-time updates -->
         <span
-          class="stat-value"
+          class="stat-value compact-value"
           aria-live="polite"
           aria-atomic="true"
           role="status"
@@ -31,29 +18,22 @@
       </div>
 
       <div class="stat-item">
-        <span class="stat-label">Reward</span>
+        <span class="stat-label">Episode</span>
         <!-- ✅ ARIA live region for real-time updates -->
         <span
-          class="stat-value"
-          :class="{ positive: props.cumulativeReward > 0, negative: props.cumulativeReward < 0 }"
+          class="stat-value compact-value"
           aria-live="polite"
           aria-atomic="true"
           role="status"
         >
-          {{ formattedReward }}
+          {{ displayEpisode }}
         </span>
       </div>
 
-      <div class="stat-item">
-        <span class="stat-label">Action</span>
-        <!-- ✅ ARIA live region for real-time updates -->
-        <span
-          class="stat-value action"
-          aria-live="polite"
-          aria-atomic="true"
-          role="status"
-        >
-          {{ formatAction(props.lastAction) }}
+      <div v-if="props.checkpointEpisode > 0" class="stat-item checkpoint-ref">
+        <span class="stat-label">Checkpoint</span>
+        <span class="stat-value compact-value">
+          {{ props.checkpointEpisode }}
         </span>
       </div>
     </div>
@@ -146,10 +126,20 @@ const props = defineProps({
   episodeHistory: {
     type: Array,
     default: () => []
+  },
+  checkpointEpisode: {
+    type: Number,
+    default: 0
   }
 })
 
 // Computed for derived values
+
+// ✅ Display episode starting at 1 (backend sends 0-indexed)
+const displayEpisode = computed(() => {
+  return props.currentEpisode + 1
+})
+
 const averageSurvivalTime = computed(() => {
   if (props.episodeHistory.length === 0) return 0
   const sum = props.episodeHistory.reduce((acc, ep) => acc + ep.steps, 0)
@@ -223,7 +213,7 @@ function formatAction(action) {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-md);
 }
 
@@ -248,6 +238,14 @@ function formatAction(action) {
 
 .stat-value.positive {
   color: var(--color-success);
+}
+
+.checkpoint-ref {
+  opacity: 0.8;
+}
+
+.stat-value.compact-value {
+  font-size: var(--font-size-lg);
 }
 
 .stat-value.negative {

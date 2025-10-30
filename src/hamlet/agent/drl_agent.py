@@ -10,7 +10,7 @@ import torch.optim as optim
 import numpy as np
 from .base_agent import BaseAgent
 from .base_algorithm import BaseAlgorithm
-from .networks import QNetwork, DuelingQNetwork, SpatialQNetwork, SpatialDuelingQNetwork, RelationalQNetwork
+from .networks import QNetwork, DuelingQNetwork, SpatialQNetwork, SpatialDuelingQNetwork, RelationalQNetwork, RecurrentSpatialQNetwork
 from .observation_utils import preprocess_observation
 
 
@@ -63,6 +63,7 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
         self.epsilon_decay = epsilon_decay
         self.network_type = network_type
         self.grid_size = grid_size
+        self.is_recurrent = (network_type == "recurrent")
 
         # Set device
         if device is None:
@@ -90,6 +91,7 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
             "spatial": SpatialQNetwork,
             "spatial_dueling": SpatialDuelingQNetwork,
             "relational": RelationalQNetwork,
+            "recurrent": RecurrentSpatialQNetwork,
         }
 
         if network_type not in network_map:
@@ -102,7 +104,11 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
 
     def _create_network(self, network_class, state_dim: int, action_dim: int, grid_size: int):
         """Create network instance with appropriate arguments."""
-        if network_class in [SpatialQNetwork, SpatialDuelingQNetwork, RelationalQNetwork]:
+        if network_class == RecurrentSpatialQNetwork:
+            # Recurrent network needs action_dim, window_size, num_meters
+            # grid_size is the local window size (5x5 for Level 2)
+            return network_class(action_dim=action_dim, window_size=grid_size, num_meters=8)
+        elif network_class in [SpatialQNetwork, SpatialDuelingQNetwork, RelationalQNetwork]:
             # Spatial and relational networks need grid_size
             return network_class(state_dim, action_dim, grid_size)
         else:
@@ -120,20 +126,36 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
         Returns:
             Action index (int)
         """
-        # Preprocess if needed
-        if isinstance(observation, dict):
-            state = preprocess_observation(observation)
-        else:
-            state = observation
-
         # Epsilon-greedy action selection
         if explore and np.random.random() < self.epsilon:
             return np.random.randint(self.action_dim)
 
         # Greedy action from Q-network
         with torch.no_grad():
-            state_tensor = torch.FloatTensor(state).to(self.device)
-            q_values = self.q_network(state_tensor)
+            if self.is_recurrent:
+                # Recurrent networks expect observation dict with tensors
+                if isinstance(observation, dict):
+                    obs_dict = {
+                        'grid': torch.FloatTensor(observation['grid']).to(self.device),
+                        'position': torch.FloatTensor(observation['position']).to(self.device),
+                        'meters': torch.FloatTensor(observation['meters']).to(self.device),
+                    }
+                else:
+                    raise ValueError("Recurrent network requires observation dict, not preprocessed array")
+
+                # Forward pass returns (q_values, hidden_state)
+                q_values, new_hidden = self.q_network.forward(obs_dict)
+                # Update hidden state for next step
+                self.q_network.set_hidden_state(new_hidden)
+            else:
+                # Standard networks use preprocessed array
+                if isinstance(observation, dict):
+                    state = preprocess_observation(observation)
+                else:
+                    state = observation
+                state_tensor = torch.FloatTensor(state).to(self.device)
+                q_values = self.q_network(state_tensor)
+
             action = q_values.argmax().item()
 
         return action
@@ -145,27 +167,78 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
         Args:
             batch: Tuple of (states, actions, rewards, next_states, dones)
                 Each element is a list of experiences
+
+        Note:
+            For recurrent networks, this treats each transition independently
+            (resets hidden state per transition). Temporal memory is only
+            leveraged during episode rollouts, not during batch training.
+            Full sequential training would require episode replay buffer.
         """
         states, actions, rewards, next_states, dones = batch
 
-        # Convert to tensors
-        states_tensor = torch.FloatTensor(np.array(states)).to(self.device)
-        actions_tensor = torch.LongTensor(actions).to(self.device)
-        rewards_tensor = torch.FloatTensor(rewards).to(self.device)
-        next_states_tensor = torch.FloatTensor(np.array(next_states)).to(self.device)
-        dones_tensor = torch.FloatTensor(dones).to(self.device)
+        if self.is_recurrent:
+            # Recurrent networks: batch of observation dicts
+            # Convert list of dicts to dict of batched tensors
+            batch_size = len(states)
 
-        # Current Q-values
-        current_q_values = self.q_network(states_tensor)
-        current_q_values = current_q_values.gather(1, actions_tensor.unsqueeze(1)).squeeze(1)
+            # Extract and batch each component
+            grids = np.array([s['grid'] for s in states])
+            positions = np.array([s['position'] for s in states])
+            meters = np.array([s['meters'] for s in states])
 
-        # Target Q-values
-        with torch.no_grad():
-            next_q_values = self.target_network(next_states_tensor)
-            max_next_q_values = next_q_values.max(1)[0]
-            target_q_values = rewards_tensor + (1 - dones_tensor) * self.gamma * max_next_q_values
+            next_grids = np.array([s['grid'] for s in next_states])
+            next_positions = np.array([s['position'] for s in next_states])
+            next_meters = np.array([s['meters'] for s in next_states])
 
-        # Compute loss
+            states_dict = {
+                'grid': torch.FloatTensor(grids).to(self.device),
+                'position': torch.FloatTensor(positions).to(self.device),
+                'meters': torch.FloatTensor(meters).to(self.device),
+            }
+
+            next_states_dict = {
+                'grid': torch.FloatTensor(next_grids).to(self.device),
+                'position': torch.FloatTensor(next_positions).to(self.device),
+                'meters': torch.FloatTensor(next_meters).to(self.device),
+            }
+
+            actions_tensor = torch.LongTensor(actions).to(self.device)
+            rewards_tensor = torch.FloatTensor(rewards).to(self.device)
+            dones_tensor = torch.FloatTensor(dones).to(self.device)
+
+            # Reset hidden states for batch training (treat transitions independently)
+            self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
+            self.target_network.reset_hidden_state(batch_size=batch_size, device=self.device)
+
+            # Current Q-values
+            current_q_values, _ = self.q_network(states_dict)
+            current_q_values = current_q_values.gather(1, actions_tensor.unsqueeze(1)).squeeze(1)
+
+            # Target Q-values
+            with torch.no_grad():
+                next_q_values, _ = self.target_network(next_states_dict)
+                max_next_q_values = next_q_values.max(1)[0]
+                target_q_values = rewards_tensor + (1 - dones_tensor) * self.gamma * max_next_q_values
+
+        else:
+            # Standard networks: preprocessed arrays
+            states_tensor = torch.FloatTensor(np.array(states)).to(self.device)
+            actions_tensor = torch.LongTensor(actions).to(self.device)
+            rewards_tensor = torch.FloatTensor(rewards).to(self.device)
+            next_states_tensor = torch.FloatTensor(np.array(next_states)).to(self.device)
+            dones_tensor = torch.FloatTensor(dones).to(self.device)
+
+            # Current Q-values
+            current_q_values = self.q_network(states_tensor)
+            current_q_values = current_q_values.gather(1, actions_tensor.unsqueeze(1)).squeeze(1)
+
+            # Target Q-values
+            with torch.no_grad():
+                next_q_values = self.target_network(next_states_tensor)
+                max_next_q_values = next_q_values.max(1)[0]
+                target_q_values = rewards_tensor + (1 - dones_tensor) * self.gamma * max_next_q_values
+
+        # Compute loss (same for both network types)
         loss = F.mse_loss(current_q_values, target_q_values)
 
         # Optimize with gradient clipping
@@ -191,6 +264,17 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
     def decay_epsilon(self):
         """Decay exploration rate."""
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+    def reset_episode(self):
+        """
+        Reset agent state for new episode.
+
+        For recurrent networks, this resets the LSTM hidden state.
+        For standard networks, this is a no-op.
+        """
+        if self.is_recurrent:
+            self.q_network.reset_hidden_state(batch_size=1, device=self.device)
+            # Note: target_network hidden state is reset during learn()
 
     def save(self, filepath: str):
         """
@@ -218,10 +302,14 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
             filepath: Path to checkpoint file
 
         Returns:
-            Network type string ('qnetwork', 'dueling', 'spatial', 'spatial_dueling', 'relational')
+            Network type string ('qnetwork', 'dueling', 'spatial', 'spatial_dueling', 'relational', 'recurrent')
         """
         checkpoint = torch.load(filepath, map_location='cpu')
         q_network_keys = set(checkpoint["q_network"].keys())
+
+        # Check for RecurrentSpatialQNetwork (LSTM-based)
+        if "lstm.weight_ih_l0" in q_network_keys or "vision_encoder.0.weight" in q_network_keys:
+            return "recurrent"
 
         # Check for RelationalQNetwork (attention-based)
         if "meter_embeddings.0.0.weight" in q_network_keys:

@@ -39,6 +39,11 @@ export const useSimulationStore = defineStore('simulation', () => {
     bufferSize: 0,
   })
 
+  // Checkpoint progress (for inference mode)
+  const checkpointEpisode = ref(0)
+  const checkpointTotalEpisodes = ref(0)
+  const autoCheckpointMode = ref(false)  // Auto-update to latest checkpoint after each episode
+
   // Grid state
   const gridWidth = ref(8)
   const gridHeight = ref(8)
@@ -135,6 +140,13 @@ export const useSimulationStore = defineStore('simulation', () => {
       isConnected.value = true
       isConnecting.value = false  // ✅ Stop loading state
       reconnectAttempts.value = 0
+
+      // Auto-start simulation (no manual play button needed)
+      // Wait for next tick to ensure WebSocket is fully ready
+      setTimeout(() => {
+        console.log('Auto-starting simulation...')
+        sendCommand('play')
+      }, 100)
     }
 
     ws.value.onclose = () => {
@@ -198,6 +210,19 @@ export const useSimulationStore = defineStore('simulation', () => {
     switch (message.type) {
       case 'connected':
         availableModels.value = message.available_models || []
+        // Handle checkpoint progress (inference mode)
+        if (message.checkpoint_episode !== undefined) {
+          checkpointEpisode.value = message.checkpoint_episode
+        }
+        if (message.total_episodes !== undefined) {
+          checkpointTotalEpisodes.value = message.total_episodes
+        }
+        if (message.epsilon !== undefined) {
+          trainingMetrics.value.epsilon = message.epsilon
+        }
+        if (message.auto_checkpoint_mode !== undefined) {
+          autoCheckpointMode.value = message.auto_checkpoint_mode
+        }
         break
 
       case 'training_status':
@@ -219,6 +244,13 @@ export const useSimulationStore = defineStore('simulation', () => {
         lastAction.value = null
         if (message.epsilon !== undefined) {
           trainingMetrics.value.epsilon = message.epsilon
+        }
+        // Handle checkpoint progress (inference mode)
+        if (message.checkpoint_episode !== undefined) {
+          checkpointEpisode.value = message.checkpoint_episode
+        }
+        if (message.total_episodes !== undefined) {
+          checkpointTotalEpisodes.value = message.total_episodes
         }
         console.log(`Episode ${message.episode} started`)
         break
@@ -242,6 +274,21 @@ export const useSimulationStore = defineStore('simulation', () => {
 
       case 'model_loaded':
         console.log(`Model loaded: ${message.model}`)
+        // Handle checkpoint progress update
+        if (message.episode !== undefined) {
+          checkpointEpisode.value = message.episode
+        }
+        if (message.total_episodes !== undefined) {
+          checkpointTotalEpisodes.value = message.total_episodes
+        }
+        if (message.epsilon !== undefined) {
+          trainingMetrics.value.epsilon = message.epsilon
+        }
+        break
+
+      case 'auto_checkpoint_mode':
+        autoCheckpointMode.value = message.enabled
+        console.log(`Auto checkpoint mode ${message.enabled ? 'enabled' : 'disabled'}`)
         break
 
       case 'paused':
@@ -368,21 +415,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     }))
   }
 
-  function play() {
-    sendCommand('play')
-  }
-
-  function pause() {
-    sendCommand('pause')
-  }
-
-  function step() {
-    sendCommand('step')
-  }
-
-  function reset() {
-    sendCommand('reset')
-  }
+  // Auto-plays on connect, no need for play/pause/step/reset controls
 
   function setSpeed(speed) {
     sendCommand('set_speed', { speed })
@@ -390,6 +423,14 @@ export const useSimulationStore = defineStore('simulation', () => {
 
   function loadModel(modelName) {
     sendCommand('load_model', { model: modelName })
+  }
+
+  function refreshCheckpoint() {
+    sendCommand('refresh_checkpoint')
+  }
+
+  function toggleAutoCheckpoint() {
+    sendCommand('toggle_auto_checkpoint')
   }
 
   // Training commands
@@ -437,16 +478,19 @@ export const useSimulationStore = defineStore('simulation', () => {
     totalEpisodes,
     trainingMetrics,
 
+    // Checkpoint progress
+    checkpointEpisode,
+    checkpointTotalEpisodes,
+    autoCheckpointMode,
+
     // Actions
     checkServerAvailability,
     connect,
     disconnect,
-    play,
-    pause,
-    step,
-    reset,
     setSpeed,
     loadModel,
+    refreshCheckpoint,
+    toggleAutoCheckpoint,
     startTraining,
   }
 })

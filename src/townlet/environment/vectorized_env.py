@@ -23,6 +23,8 @@ class VectorizedHamletEnv:
         num_agents: int,
         grid_size: int = 8,
         device: torch.device = torch.device('cpu'),
+        partial_observability: bool = False,
+        vision_range: int = 2,
     ):
         """
         Initialize vectorized environment.
@@ -31,13 +33,24 @@ class VectorizedHamletEnv:
             num_agents: Number of parallel agents
             grid_size: Grid dimension (grid_size × grid_size)
             device: PyTorch device (cpu or cuda)
+            partial_observability: If True, agent sees only local window (POMDP)
+            vision_range: Radius of vision window (2 = 5×5 window)
         """
         self.num_agents = num_agents
         self.grid_size = grid_size
         self.device = device
+        self.partial_observability = partial_observability
+        self.vision_range = vision_range
 
-        # Observation: grid one-hot (64) + 7 meters (normalized)
-        self.observation_dim = grid_size * grid_size + 8  # Grid one-hot + 8 meters
+        # Observation dimensions depend on observability mode
+        if partial_observability:
+            # Level 2 POMDP: local window + position + meters
+            window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
+            self.observation_dim = window_size * window_size + 2 + 8  # Grid + position + 8 meters
+        else:
+            # Level 1: full grid one-hot + meters
+            self.observation_dim = grid_size * grid_size + 8  # Grid one-hot + 8 meters
+
         self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
 
         # Affordance positions (from Hamlet default layout)
@@ -100,6 +113,13 @@ class VectorizedHamletEnv:
         Returns:
             observations: [num_agents, observation_dim]
         """
+        if self.partial_observability:
+            return self._get_partial_observations()
+        else:
+            return self._get_full_observations()
+
+    def _get_full_observations(self) -> torch.Tensor:
+        """Get full grid observations (Level 1)."""
         # Grid encoding: one-hot position
         # positions[:, 0] = x (column), positions[:, 1] = y (row)
         grid_encoding = torch.zeros(
@@ -110,6 +130,67 @@ class VectorizedHamletEnv:
 
         # Concatenate grid + meters
         observations = torch.cat([grid_encoding, self.meters], dim=1)
+
+        return observations
+
+    def _get_partial_observations(self) -> torch.Tensor:
+        """
+        Get partial observations (Level 2 POMDP).
+
+        Agent sees only local 5×5 window centered on its position.
+        Observation includes:
+        - Local grid: affordances visible in window (5×5 = 25 dims)
+        - Position: agent's (x, y) coordinates normalized (2 dims)
+        - Meters: 8 meter values (8 dims)
+        Total: 35 dims
+
+        Returns:
+            observations: [num_agents, 35]
+        """
+        window_size = 2 * self.vision_range + 1  # 5 for vision_range=2
+        local_grids = []
+
+        for agent_idx in range(self.num_agents):
+            agent_pos = self.positions[agent_idx]  # [x, y]
+            local_grid = torch.zeros(window_size * window_size, device=self.device)
+
+            # Extract local window centered on agent
+            for dy in range(-self.vision_range, self.vision_range + 1):
+                for dx in range(-self.vision_range, self.vision_range + 1):
+                    world_x = agent_pos[0] + dx
+                    world_y = agent_pos[1] + dy
+
+                    # Check if position is within grid bounds
+                    if 0 <= world_x < self.grid_size and 0 <= world_y < self.grid_size:
+                        # Check if there's an affordance at this position
+                        has_affordance = False
+                        for affordance_pos in self.affordances.values():
+                            if (affordance_pos[0] == world_x and
+                                affordance_pos[1] == world_y):
+                                has_affordance = True
+                                break
+
+                        # Encode in local grid (1 = affordance, 0 = empty/out-of-bounds)
+                        if has_affordance:
+                            local_y = dy + self.vision_range
+                            local_x = dx + self.vision_range
+                            local_idx = local_y * window_size + local_x
+                            local_grid[local_idx] = 1.0
+
+            local_grids.append(local_grid)
+
+        # Stack all local grids
+        local_grids_batch = torch.stack(local_grids)  # [num_agents, 25]
+
+        # Normalize positions to [0, 1]
+        normalized_positions = self.positions.float() / (self.grid_size - 1)
+
+        # Concatenate: local_grid + position + meters
+        observations = torch.cat([
+            local_grids_batch,
+            normalized_positions,
+            self.meters
+        ], dim=1)
 
         return observations
 
@@ -602,10 +683,30 @@ class VectorizedHamletEnv:
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """
-        Calculate shaped rewards (Hamlet-style two-tier).
+        SIMPLE SURVIVAL REWARD: Directly reward staying alive.
+
+        Problem with old complex rewards: Longer survival → more accumulated penalties → negative rewards.
+        Solution: +1.0 per step survived, -100 for dying.
 
         Returns:
             rewards: [num_agents]
+        """
+        # Base reward: +1.0 for surviving this step
+        rewards = torch.ones(self.num_agents, device=self.device)
+
+        # Death penalty: -100.0 for dying
+        rewards = torch.where(self.dones, -100.0, rewards)
+
+        return rewards
+
+    def _calculate_shaped_rewards_COMPLEX_DISABLED(self) -> torch.Tensor:
+        """
+        DISABLED: Complex meter-based rewards caused accumulating penalties.
+
+        Problem: Longer survival → more penalties → negative rewards
+        Example: 200 steps with low meters = -2000 reward (backwards!)
+
+        This is kept for reference but not used.
         """
         rewards = torch.zeros(self.num_agents, device=self.device)
 
@@ -729,33 +830,33 @@ class VectorizedHamletEnv:
         # Critical fitness (<=0.2): -0.8 (health declining rapidly)
         rewards += torch.where(fitness_values <= 0.2, -0.8, 0.0)
 
-        # Tier 2: Proximity shaping (simplified version)
-        # Add small reward for being near needed affordances
-        proximity_rewards = self._calculate_proximity_rewards()
-        rewards += proximity_rewards
+        # Tier 2: Proximity shaping (DISABLED for Level 2 - agent must interact to survive)
+        # Previously caused reward hacking (standing near affordances without interacting)
+        # proximity_rewards = self._calculate_proximity_rewards()
+        # rewards += proximity_rewards
 
-        # Urgency penalty: when satiation is low and far from food, subtract
-        satiation_values = self.meters[:, 2]
-        low_satiation = satiation_values < 0.4
-        if low_satiation.any():
-            # Calculate distance to food affordances for agents with low satiation
-            for agent_idx in range(self.num_agents):
-                if not low_satiation[agent_idx]:
-                    continue
-
-                # Find nearest food affordance (HomeMeal or FastFood)
-                food_affordances = ['HomeMeal', 'FastFood']
-                min_dist = float('inf')
-                for food_name in food_affordances:
-                    if food_name in self.affordances:
-                        food_pos = self.affordances[food_name]
-                        dist = torch.abs(self.positions[agent_idx] - food_pos).sum().item()
-                        min_dist = min(min_dist, dist)
-
-                if min_dist < float('inf'):
-                    urgency = min(1.0, (0.4 - satiation_values[agent_idx].item()) / 0.4)
-                    max_dist = self.grid_size * 2
-                    rewards[agent_idx] -= urgency * (min_dist / max_dist) * 2.0
+        # Urgency penalty: DISABLED (also a form of proximity shaping)
+        # satiation_values = self.meters[:, 2]
+        # low_satiation = satiation_values < 0.4
+        # if low_satiation.any():
+        #     # Calculate distance to food affordances for agents with low satiation
+        #     for agent_idx in range(self.num_agents):
+        #         if not low_satiation[agent_idx]:
+        #             continue
+        #
+        #         # Find nearest food affordance (HomeMeal or FastFood)
+        #         food_affordances = ['HomeMeal', 'FastFood']
+        #         min_dist = float('inf')
+        #         for food_name in food_affordances:
+        #             if food_name in self.affordances:
+        #                 food_pos = self.affordances[food_name]
+        #                 dist = torch.abs(self.positions[agent_idx] - food_pos).sum().item()
+        #                 min_dist = min(min_dist, dist)
+        #
+        #         if min_dist < float('inf'):
+        #             urgency = min(1.0, (0.4 - satiation_values[agent_idx].item()) / 0.4)
+        #             max_dist = self.grid_size * 2
+        #             rewards[agent_idx] -= urgency * (min_dist / max_dist) * 2.0
 
         # Terminal penalty
         rewards = torch.where(self.dones, -100.0, rewards)

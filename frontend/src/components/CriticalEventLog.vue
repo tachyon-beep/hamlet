@@ -9,13 +9,16 @@
       />
     </div>
 
-    <!-- Empty state -->
-    <EmptyState
-      v-if="events.length === 0"
-      icon="✅"
-      title="No Critical Events"
-      message="All meters healthy. Watch for warnings when meters drop below 20%."
-    />
+    <!-- All good state (green) -->
+    <div v-if="events.length === 0" class="all-good-state">
+      <div class="all-good-icon">✨</div>
+      <div class="all-good-content">
+        <div class="all-good-title">All Meters Healthy</div>
+        <div class="all-good-message">
+          Agent maintaining homeostasis. No cascade risks detected.
+        </div>
+      </div>
+    </div>
 
     <!-- Event log -->
     <div v-else class="event-list">
@@ -60,7 +63,6 @@
 
 <script setup>
 import { computed } from 'vue'
-import EmptyState from './EmptyState.vue'
 import InfoTooltip from './InfoTooltip.vue'
 
 const props = defineProps({
@@ -96,7 +98,9 @@ function formatTimestamp(timestamp) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  max-height: 400px;
+  flex: 1;
+  min-height: 200px;
+  overflow: hidden;
 }
 
 .log-header {
@@ -111,6 +115,54 @@ function formatTimestamp(timestamp) {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
+}
+
+/* All good state (green, always visible) */
+.all-good-state {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(34, 197, 94, 0.1));
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--border-radius-md);
+  min-height: 80px;
+}
+
+.all-good-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+  animation: gentle-pulse 3s ease-in-out infinite;
+}
+
+@keyframes gentle-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.all-good-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.all-good-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success);
+}
+
+.all-good-message {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
 }
 
 .event-list {

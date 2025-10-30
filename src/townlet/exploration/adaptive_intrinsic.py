@@ -25,7 +25,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         rnd_training_batch_size: int = 128,
         initial_intrinsic_weight: float = 1.0,
         min_intrinsic_weight: float = 0.0,
-        variance_threshold: float = 10.0,
+        variance_threshold: float = 100.0,  # Increased from 10.0 to prevent premature annealing
         survival_window: int = 100,
         decay_rate: float = 0.99,
         epsilon_start: float = 1.0,
@@ -134,7 +134,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             self.anneal_weight()
 
     def should_anneal(self) -> bool:
-        """Check if variance is below threshold.
+        """Check if variance is below threshold AND performance is good.
 
         Returns:
             True if agent performance is consistent enough to reduce exploration
@@ -147,8 +147,15 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             dtype=torch.float32,
         )
         variance = torch.var(recent_survivals).item()
+        mean_survival = torch.mean(recent_survivals).item()
 
-        return variance < self.variance_threshold
+        # DEFENSIVE: Only anneal if BOTH low variance AND good performance
+        # Low variance + low survival = "consistently failing" (NOT ready to anneal)
+        # Low variance + high survival = "consistently succeeding" (ready to anneal)
+        MIN_SURVIVAL_FOR_ANNEALING = 50.0  # Don't anneal until surviving at least 50 steps
+
+        return (variance < self.variance_threshold and
+                mean_survival > MIN_SURVIVAL_FOR_ANNEALING)
 
     def anneal_weight(self) -> None:
         """Reduce intrinsic weight via exponential decay."""

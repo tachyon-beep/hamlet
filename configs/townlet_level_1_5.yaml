@@ -1,0 +1,45 @@
+# Townlet Level 1.5: Full Observability (No Proximity Shaping)
+#
+# Baseline configuration:
+# - Agent sees full 8×8 grid (complete information)
+# - Standard MLP Q-Network (no memory needed)
+# - NO proximity shaping (must learn through interaction)
+#
+# Expected behavior:
+# - 1000-2000 episodes to learn
+# - Peak survival: 250-350 steps
+# - Faster learning than Level 2 (has full information)
+# - Clean baseline for comparing POMDP performance
+
+# Environment configuration
+environment:
+  grid_size: 8  # 8×8 grid world
+  partial_observability: false  # LEVEL 1.5: Agent sees full grid
+  vision_range: 8  # Full vision (not used when partial_observability=false)
+
+# Population configuration
+population:
+  num_agents: 1  # Single agent for now
+  learning_rate: 0.00025  # Standard Atari DQN learning rate
+  gamma: 0.99
+  replay_buffer_capacity: 10000
+  network_type: simple  # Standard MLP Q-Network
+
+# Curriculum configuration (adversarial difficulty adjustment)
+curriculum:
+  max_steps_per_episode: 500
+  survival_advance_threshold: 0.7  # Advance to next stage if 70% survival
+  survival_retreat_threshold: 0.3  # Retreat if <30% survival
+  entropy_gate: 0.5  # Minimum policy entropy to advance
+  min_steps_at_stage: 1000  # Min episodes before stage change
+
+# Exploration configuration (RND + adaptive annealing)
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0  # Fixed: increased from 10.0 to prevent premature annealing
+  survival_window: 100  # Track last 100 episodes for annealing
+
+# Training configuration
+training:
+  device: cuda  # Use GPU if available

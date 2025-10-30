@@ -1,0 +1,46 @@
+# Townlet Level 2: Partial Observability (POMDP) + Recurrent Network
+#
+# This config implements Level 2 from ARCHITECTURE_DESIGN.md:
+# - Agent sees only 5×5 local window (partial observability)
+# - Must build mental map through exploration
+# - Uses LSTM to remember where affordances are located
+# - NO proximity shaping (must learn through interaction)
+#
+# Expected behavior:
+# - 3000-5000 episodes to learn (vs 1000-2000 for full obs)
+# - Peak survival: 150-250 steps (vs 300+ for full obs)
+# - 30-40% of time spent exploring
+# - Realistic cognitive behavior (memory, mistakes, getting lost)
+
+# Environment configuration
+environment:
+  grid_size: 8  # 8×8 grid world
+  partial_observability: true  # LEVEL 2: Agent sees only 5×5 local window
+  vision_range: 2  # 5×5 window (2*2+1)
+
+# Population configuration
+population:
+  num_agents: 1  # Single agent for now
+  learning_rate: 0.0001  # Lower LR for recurrent networks (more stable)
+  gamma: 0.99
+  replay_buffer_capacity: 10000
+  network_type: recurrent  # NEW: RecurrentSpatialQNetwork with LSTM
+
+# Curriculum configuration (adversarial difficulty adjustment)
+curriculum:
+  max_steps_per_episode: 500
+  survival_advance_threshold: 0.7  # Advance to next stage if 70% survival
+  survival_retreat_threshold: 0.3  # Retreat if <30% survival
+  entropy_gate: 0.5  # Minimum policy entropy to advance
+  min_steps_at_stage: 1000  # Min episodes before stage change
+
+# Exploration configuration (RND + adaptive annealing)
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0  # Fixed: increased from 10.0 to prevent premature annealing
+  survival_window: 100  # Track last 100 episodes for annealing
+
+# Training configuration
+training:
+  device: cuda  # Use GPU if available

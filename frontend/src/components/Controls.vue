@@ -6,7 +6,7 @@
     <!-- Connection status indicator -->
     <div class="connection-status" v-if="props.isConnected">
       <span class="status-indicator connected"></span>
-      <span>Live Inference (Latest Checkpoint)</span>
+      <span>Connected</span>
     </div>
 
     <!-- ✅ Connection Control with better semantics -->
@@ -67,10 +67,8 @@
 
       <div class="speed-control">
         <div class="speed-header">
-          <label for="speed">Speed: {{ speedValue }}x</label>
-          <span class="speed-category" :class="`speed-${speedCategory.toLowerCase()}`">
-            {{ speedCategory }}
-          </span>
+          <label for="speed">Speed</label>
+          <span class="speed-value">{{ speedValue }}x</span>
         </div>
         <input
           id="speed"
@@ -83,12 +81,6 @@
           class="speed-slider"
           :class="`speed-${speedCategory.toLowerCase()}`"
         />
-        <div class="speed-labels">
-          <span class="label-slow">Slow (0.5x)</span>
-          <span class="label-normal">Normal (1-2x)</span>
-          <span class="label-fast">Fast (2-5x)</span>
-          <span class="label-turbo">Turbo (5-10x)</span>
-        </div>
       </div>
 
       <div class="model-controls">
@@ -416,47 +408,48 @@ function onModelChange() {
 </script>
 
 <style scoped>
-/* ✅ Mobile-first: Refactored to use design tokens */
+/* ✅ Mobile-first: Refactored to use design tokens - COMPACT VERSION */
 .controls-panel {
   background: var(--color-bg-secondary);
   border-radius: var(--border-radius-md);
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
 @media (min-width: 768px) {
   .controls-panel {
-    padding: var(--spacing-lg);
-    gap: var(--spacing-lg);
+    padding: var(--spacing-md);
+    gap: var(--spacing-sm);
   }
 }
 
 .controls-panel h3 {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
 
-/* Connection Status Indicator */
+/* Connection Status Indicator - COMPACT */
 .connection-status {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
   background: var(--color-bg-tertiary);
   border-radius: var(--border-radius-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
 
 .status-indicator {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .status-indicator.connected {
@@ -572,35 +565,29 @@ function onModelChange() {
   transform: translateY(0);
 }
 
-/* Inference Controls */
+/* Inference Controls - COMPACT */
 .inference-controls {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-@media (min-width: 768px) {
-  .inference-controls {
-    gap: var(--spacing-lg);
-  }
-}
-
-/* ✅ Mobile-first: 2x2 grid on mobile, 4 columns on tablet+ */
-.button-group {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
   gap: var(--spacing-sm);
 }
 
 @media (min-width: 768px) {
-  .button-group {
-    grid-template-columns: repeat(4, 1fr);
+  .inference-controls {
+    gap: var(--spacing-sm);
   }
 }
 
+/* ✅ COMPACT: 2x2 grid always */
+.button-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-xs);
+}
+
 .control-button {
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-xl);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-lg);
   background: var(--color-bg-tertiary);
   border: none;
   border-radius: var(--border-radius-sm);
@@ -642,7 +629,7 @@ function onModelChange() {
 .speed-control {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
 .speed-header {
@@ -652,9 +639,15 @@ function onModelChange() {
 }
 
 .speed-control label {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
+}
+
+.speed-value {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .speed-category {
@@ -821,69 +814,28 @@ function onModelChange() {
   cursor: not-allowed;
 }
 
-.speed-labels {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-xs);
-  font-size: var(--font-size-xs);
-  text-align: center;
-}
-
-.speed-labels span {
-  padding: 2px 4px;
-  border-radius: var(--border-radius-sm);
-  transition: all var(--transition-base);
-}
-
-.label-slow {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.1);
-}
-
-.label-normal {
-  color: var(--color-success);
-  background: rgba(34, 197, 94, 0.1);
-}
-
-.label-fast {
-  color: var(--color-warning);
-  background: rgba(234, 179, 8, 0.1);
-}
-
-.label-turbo {
-  color: var(--color-error);
-  background: rgba(239, 68, 68, 0.1);
-}
-
 .model-selector {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
 .model-selector label {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
 }
 
-/* ✅ Mobile-friendly: proper touch target sizing */
+/* ✅ COMPACT: Smaller select */
 .model-select {
-  padding: var(--spacing-sm);
-  min-height: var(--a11y-min-touch-target);
+  padding: var(--spacing-xs) var(--spacing-sm);
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-interactive-disabled);
   border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-xs);
   cursor: pointer;
   outline: none;
-}
-
-@media (min-width: 768px) {
-  .model-select {
-    font-size: var(--font-size-sm);
-  }
 }
 
 .model-select:hover:not(:disabled) {

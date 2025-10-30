@@ -3,18 +3,23 @@
   <section class="meter-panel" aria-labelledby="meter-heading">
     <div class="panel-header">
       <h3 id="meter-heading">Agent Meters</h3>
-      <InfoTooltip
-        title="What are meters?"
-        text="Meters represent the agent's needs (0-100%). Critical (<20%) triggers death risk. Primary meters (energy, health) are survival-critical. Secondary meters (satiation, money) feed into primary. Tertiary meters (hygiene, social, fitness, mood) accelerate all pathways."
-        position="bottom"
-      />
     </div>
 
-    <!-- ✅ Critical state alert banner -->
-    <div v-if="criticalMetersCount > 0" class="critical-alert" role="alert">
-      <span class="alert-icon">⚠️</span>
+    <!-- ✅ Critical state alert banner (always visible) -->
+    <div
+      v-if="meters"
+      class="critical-alert"
+      :class="{ 'all-healthy': criticalMetersCount === 0 }"
+      :role="criticalMetersCount > 0 ? 'alert' : 'status'"
+    >
+      <span class="alert-icon">{{ criticalMetersCount > 0 ? '⚠️' : '✅' }}</span>
       <span class="alert-text">
-        {{ criticalMetersCount }} critical meter{{ criticalMetersCount > 1 ? 's' : '' }}
+        <template v-if="criticalMetersCount > 0">
+          {{ criticalMetersCount }} critical meter{{ criticalMetersCount > 1 ? 's' : '' }}
+        </template>
+        <template v-else>
+          All meters healthy
+        </template>
       </span>
     </div>
 
@@ -69,13 +74,17 @@
       title="No Agent Data"
       message="Connect to the simulation to see agent meters."
     />
+
+    <!-- Permanent explanation text -->
+    <div v-if="meters" class="panel-explanation">
+      <p>Meters represent the agent's needs (0-100%). Critical (<20%) triggers death risk. Primary meters (energy, health) are survival-critical. Secondary meters (satiation, money) feed into primary. Tertiary meters (hygiene, social, fitness, mood) accelerate all pathways.</p>
+    </div>
   </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import EmptyState from './EmptyState.vue'
-import InfoTooltip from './InfoTooltip.vue'
 import { capitalize, formatMeterValue, getMeterPercentage } from '../utils/formatting'
 
 // ✅ Props First: Receive data from parent instead of importing store
@@ -187,6 +196,9 @@ function getMeterColor(name, value) {
   background: var(--color-bg-secondary);
   border-radius: var(--border-radius-md);
   padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .panel-header {
@@ -207,6 +219,8 @@ function getMeterColor(name, value) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  flex: 1;
+  overflow-y: auto;
 }
 
 .meter {
@@ -298,7 +312,7 @@ function getMeterColor(name, value) {
   transition: width var(--transition-base), background var(--transition-base);
 }
 
-/* ✅ Critical alert banner */
+/* ✅ Critical alert banner (always visible) */
 .critical-alert {
   display: flex;
   align-items: center;
@@ -310,6 +324,13 @@ function getMeterColor(name, value) {
   margin-bottom: var(--spacing-md);
   font-weight: var(--font-weight-semibold);
   animation: alert-pulse 1s ease-in-out infinite;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+/* Green state when all meters are healthy */
+.critical-alert.all-healthy {
+  background: var(--color-success);
+  animation: none;
 }
 
 @keyframes alert-pulse {
@@ -322,6 +343,11 @@ function getMeterColor(name, value) {
   animation: shake 0.5s ease-in-out infinite;
 }
 
+/* Don't shake when healthy */
+.critical-alert.all-healthy .alert-icon {
+  animation: none;
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
@@ -331,5 +357,23 @@ function getMeterColor(name, value) {
 .alert-text {
   flex: 1;
   font-size: var(--font-size-sm);
+}
+
+/* Panel explanation */
+.panel-explanation {
+  margin-top: auto;
+  padding: var(--spacing-sm);
+  background: var(--color-bg-primary);
+  border-radius: var(--border-radius-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.panel-explanation p {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  line-height: 1.4;
+  opacity: 0.9;
 }
 </style>

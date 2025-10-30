@@ -61,6 +61,10 @@ class EnvironmentConfig:
     grid_width: int = 8
     grid_height: int = 8
 
+    # Partial Observability (Level 2 POMDP)
+    partial_observability: bool = False  # False = full grid view, True = limited vision
+    vision_range: int = 2  # Agent sees (2*vision_range+1)×(2*vision_range+1) window (default 5×5)
+
     # Reward configuration
     reward_mode: str = "shaped"  # 'shaped' (dense) or 'sparse'
     sparse_survival_reward: float = 0.1  # Per-step survival bonus in sparse mode
