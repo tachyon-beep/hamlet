@@ -7,8 +7,15 @@
 // Grid rendering
 export const CELL_SIZE = 75 // pixels per cell
 
-// Action display names
+// Action display names (support both numeric and string keys)
 export const ACTION_ICONS = {
+  // Numeric mappings (from action space)
+  0: '↑ Up',
+  1: '↓ Down',
+  2: '← Left',
+  3: '→ Right',
+  4: '⚡ Interact',
+  // String mappings (legacy support)
   up: '↑ Up',
   down: '↓ Down',
   left: '← Left',
@@ -20,7 +27,8 @@ export const ACTION_ICONS = {
 export const AFFORDANCE_ICONS = {
   Bed: '🛏️',
   Shower: '🚿',
-  HomeMeal: '🥘',
+  Fridge: '🥘',     // Main food source in current env
+  HomeMeal: '🥘',  // Legacy support
   FastFood: '🍔',
   Job: '💼',
   Recreation: '🎮',
