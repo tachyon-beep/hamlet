@@ -22,8 +22,8 @@ export function capitalize(str) {
  */
 export function formatMeterValue(name, value) {
   if (name === 'money') {
-    // Money is 0-1 normalized, convert to range [-100, 100]
-    const moneyValue = value * 200 - 100
+    // Money is 0-1 normalized, convert to range [0, 100] (no debt allowed)
+    const moneyValue = value * 100
     return `$${Math.round(moneyValue)}`
   }
   // All meters (including mood) are normalized 0-1, convert to percentage

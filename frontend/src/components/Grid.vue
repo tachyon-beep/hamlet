@@ -403,8 +403,8 @@ function getHeatColor(intensity) {
 }
 
 .affordance-therapist {
-  fill: #ec4899;  /* Pink for mental health professional */
-  stroke: var(--color-error);
+  fill: #a855f7;  /* Purple for mental health professional - better contrast */
+  stroke: #7c3aed;
 }
 
 .affordance-doctor {
@@ -413,8 +413,8 @@ function getHeatColor(intensity) {
 }
 
 .affordance-hospital {
-  fill: #2563eb;  /* Darker blue for medical (tier 2) */
-  stroke: var(--color-chart-primary);
+  fill: #06b6d4;  /* Cyan for hospital - better contrast than blue-on-blue */
+  stroke: #0891b2;
 }
 
 .affordance-label {

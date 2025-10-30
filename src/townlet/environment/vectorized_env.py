@@ -96,7 +96,7 @@ class VectorizedHamletEnv:
 
         # Initial meter values (normalized to [0, 1])
         # [energy, hygiene, satiation, money, mood, social, health, fitness]
-        # NOTE: money=0.75 corresponds to Hamlet's money=50 in range [-100, 100]
+        # NOTE: money=0.75 corresponds to $75 in range [0, 100] (no debt allowed)
         self.meters = torch.tensor([
             [1.0, 1.0, 1.0, 0.75, 1.0, 0.5, 1.0, 0.5]  # Default initial values (fitness starts moderate)
         ], device=self.device).repeat(self.num_agents, 1)
@@ -340,7 +340,7 @@ class VectorizedHamletEnv:
                     continue
 
             # Apply affordance effects (matching Hamlet exactly)
-            # NOTE: Money is in range [-100, 100], so $X = X/200 in normalized [0, 1]
+            # NOTE: Money is in range [0, 100] (no debt), so $X = X/100 in normalized [0, 1]
             if affordance_name == 'Bed':
                 # Energy restoration tier 1 (affordable)
                 self.meters[at_affordance, 0] = torch.clamp(

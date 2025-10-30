@@ -68,6 +68,9 @@ class LiveInferenceServer:
         self.current_episode = 0
         self.current_step = 0
 
+        # Affordance interaction tracking (for UI display)
+        self.affordance_interactions = {}  # {affordance_name: count}
+
         # Checkpoint auto-update mode
         self.auto_checkpoint_mode = False  # If true, automatically check for new checkpoints after each episode
 
@@ -345,6 +348,9 @@ class LiveInferenceServer:
         self.current_episode += 1
         self.current_step = 0
 
+        # Reset affordance interaction tracking
+        self.affordance_interactions = {name: 0 for name in self.env.affordances.keys()}
+
         # Randomize affordance positions for each episode (like training)
         self.env.randomize_affordance_positions()
 
@@ -380,6 +386,17 @@ class LiveInferenceServer:
                 q_values = q_output[0] if isinstance(q_output, tuple) else q_output
                 actions = q_values.argmax(dim=1)
 
+            # Track interaction (action 4 = INTERACT)
+            if actions[0].item() == 4:
+                # Check if agent is adjacent to any affordance
+                agent_pos = self.env.positions[0]
+                for name, aff_pos in self.env.affordances.items():
+                    # Check Manhattan distance (adjacent = distance 1 or 0)
+                    distance = torch.abs(agent_pos - aff_pos).sum().item()
+                    if distance <= 1:
+                        self.affordance_interactions[name] += 1
+                        break
+
             # Step environment
             next_obs, rewards, dones, info = self.env.step(actions)
 
@@ -389,8 +406,8 @@ class LiveInferenceServer:
             cumulative_reward += rewards[0].item()
             self.current_step += 1
 
-            # Send state update
-            await self._broadcast_state_update(cumulative_reward, actions[0].item())
+            # Send state update with Q-values
+            await self._broadcast_state_update(cumulative_reward, actions[0].item(), q_values[0])
 
             # Delay for human viewing
             if self.is_running:
@@ -411,7 +428,7 @@ class LiveInferenceServer:
 
         logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, reward: {cumulative_reward:.2f}")
 
-    async def _broadcast_state_update(self, cumulative_reward: float, last_action: int):
+    async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor):
         """Broadcast current state to all clients."""
         # Get agent position (unpack for frontend compatibility)
         agent_pos = self.env.positions[0].cpu().tolist()
@@ -443,6 +460,19 @@ class LiveInferenceServer:
                 'y': pos_list[1],
             })
 
+        # Convert Q-values to list for JSON serialization
+        q_values_list = q_values.cpu().tolist()
+
+        # Prepare affordance interaction counts (sorted by count descending)
+        affordance_stats = [
+            {'name': name, 'count': count}
+            for name, count in sorted(
+                self.affordance_interactions.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+        ]
+
         # Build state update message
         update = {
             'type': 'state_update',
@@ -465,6 +495,8 @@ class LiveInferenceServer:
                     'meters': meters  # MeterPanel expects agent_0.meters nested structure
                 }
             },
+            'q_values': q_values_list,  # Q-values for all 5 actions
+            'affordance_stats': affordance_stats,  # Interaction counts sorted by frequency
         }
 
         await self._broadcast_to_clients(update)

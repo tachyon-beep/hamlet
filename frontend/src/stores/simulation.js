@@ -49,6 +49,7 @@ export const useSimulationStore = defineStore('simulation', () => {
   const gridHeight = ref(8)
   const agents = ref([])
   const affordances = ref([])
+  const gridZoom = ref(1.0) // Zoom level for grid scaling (0.5 - 2.0)
 
   // Agent meters
   const agentMeters = ref({})
@@ -68,6 +69,10 @@ export const useSimulationStore = defineStore('simulation', () => {
 
   // Affordance transition data (for garden path visualization)
   const transitionData = ref(null)
+
+  // Q-values and affordance stats (for agent behavior panel)
+  const qValues = ref([])  // Q-values for all 5 actions
+  const affordanceStats = ref([])  // Affordance interaction counts
 
   // Computed
   const averageSurvivalTime = computed(() => {
@@ -356,6 +361,14 @@ export const useSimulationStore = defineStore('simulation', () => {
     if (message.affordance_graph) {
       transitionData.value = message.affordance_graph
     }
+
+    // Handle Q-values and affordance stats (agent behavior panel)
+    if (message.q_values) {
+      qValues.value = message.q_values
+    }
+    if (message.affordance_stats) {
+      affordanceStats.value = message.affordance_stats
+    }
   }
 
   function handleEpisodeComplete(message) {
@@ -450,6 +463,10 @@ export const useSimulationStore = defineStore('simulation', () => {
     }))
   }
 
+  function setZoom(zoom) {
+    gridZoom.value = Math.max(0.5, Math.min(2.0, zoom))
+  }
+
   return {
     // State
     isConnected,
@@ -465,6 +482,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     gridHeight,
     agents,
     affordances,
+    gridZoom,
     agentMeters,
     heatMap,
     episodeHistory,
@@ -472,6 +490,8 @@ export const useSimulationStore = defineStore('simulation', () => {
     averageSurvivalTime,
     rndMetrics,
     transitionData,
+    qValues,
+    affordanceStats,
 
     // Training state
     isTraining,
@@ -488,6 +508,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     connect,
     disconnect,
     setSpeed,
+    setZoom,
     loadModel,
     refreshCheckpoint,
     toggleAutoCheckpoint,

@@ -14,15 +14,18 @@
           <MeterPanel :agent-meters="store.agentMeters" />
         </aside>
 
-        <!-- Agent Behavior (consolidated panel - center left) -->
-        <aside class="behavior-panel" aria-label="Agent behavior">
+        <!-- Agent Behaviour (consolidated panel - centre left) -->
+        <aside class="behavior-panel" aria-label="Agent behaviour">
           <AgentBehaviorPanel
             v-if="store.isConnected"
             :cumulative-reward="store.cumulativeReward"
             :last-action="store.lastAction"
+            :current-step="store.currentStep"
             :epsilon="store.trainingMetrics.epsilon"
             :checkpoint-episode="store.checkpointEpisode"
             :total-episodes="store.checkpointTotalEpisodes"
+            :q-values="store.qValues"
+            :affordance-stats="store.affordanceStats"
           />
         </aside>
 
@@ -37,6 +40,14 @@
           @set-speed="store.setSpeed"
           @refresh-checkpoint="store.refreshCheckpoint"
           @toggle-auto-checkpoint="store.toggleAutoCheckpoint"
+        />
+
+        <!-- ✅ Zoom control in bottom right (only when connected) -->
+        <ZoomControl
+          v-if="isConnected"
+          :zoom="store.gridZoom"
+          @update:zoom="store.setZoom"
+          class="zoom-control-position"
         />
 
         <!-- ✅ Show loading state while connecting -->
@@ -54,7 +65,11 @@
         />
 
         <!-- ✅ Show grid when connected -->
-        <div v-else-if="isConnected" class="grid-wrapper">
+        <div
+          v-else-if="isConnected"
+          class="grid-wrapper"
+          :style="{ transform: `scale(${store.gridZoom})` }"
+        >
           <Grid
             :grid-width="store.gridWidth"
             :grid-height="store.gridHeight"
@@ -143,6 +158,7 @@ import AgentBehaviorPanel from './components/AgentBehaviorPanel.vue'
 import CriticalEventLog from './components/CriticalEventLog.vue'
 import SurvivalTrendChart from './components/SurvivalTrendChart.vue'
 import AffordanceGraph from './components/AffordanceGraph.vue'
+import ZoomControl from './components/ZoomControl.vue'
 
 const store = useSimulationStore()
 const isConnected = computed(() => store.isConnected)
@@ -159,22 +175,28 @@ const criticalEvents = ref([])
 let eventIdCounter = 0
 
 // Meter tier classification for cascade detection
+// Updated to match actual game code mechanics (secondary in alphabetical order)
 const meterTiers = {
-  primary: ['energy', 'health'],
-  secondary: ['satiation', 'money'],
-  tertiary: ['hygiene', 'social', 'fitness', 'mood']
+  primary: ['energy', 'health', 'money'],
+  secondary: ['fitness', 'mood', 'satiation'],
+  tertiary: ['hygiene', 'social']
 }
 
-// Cascade explanations
+// Cascade explanations (matching actual game code)
 const cascadeMessages = {
-  hygiene: 'Low hygiene accelerates energy & health depletion',
-  social: 'Loneliness accelerates mood decline → health impacts',
-  fitness: 'Poor fitness → health vulnerability increases',
-  mood: 'Low mood → reduced energy recovery & health decline',
-  satiation: 'Hunger → energy & health depletion accelerates',
-  money: 'No money → cannot afford basic needs → death spiral',
+  // Tertiary → Secondary (accelerators)
+  hygiene: 'Poor hygiene → depletes satiation, fitness & mood',
+  social: 'Loneliness → accelerates mood decline',
+
+  // Secondary → Primary (direct modifiers)
+  mood: 'Low mood → depletes energy',
+  satiation: 'Hunger → depletes energy & health',
+  fitness: 'Poor fitness → accelerates health decline',
+
+  // Primary (survival-critical)
   energy: 'CRITICAL: Energy depletion → imminent death risk',
-  health: 'CRITICAL: Health failure → death imminent'
+  health: 'CRITICAL: Health failure → death imminent',
+  money: 'CRITICAL: No money → cannot afford survival needs'
 }
 
 // Watch for RND metrics updates
@@ -353,7 +375,7 @@ function handleConnect(mode = 'inference') {
   height: 100%;
 }
 
-/* Behavior panel (center-left) */
+/* Behaviour panel (centre-left) */
 .behavior-panel {
   width: 100%;
   display: flex;
@@ -378,6 +400,16 @@ function handleConnect(mode = 'inference') {
 
 .grid-wrapper {
   position: relative;
+  transition: transform var(--transition-base);
+  transform-origin: center;
+}
+
+/* ✅ Position zoom control in bottom right corner of grid container */
+.zoom-control-position {
+  position: absolute;
+  bottom: var(--spacing-md);
+  right: var(--spacing-md);
+  z-index: var(--z-index-dropdown);
 }
 
 .right-panel {

@@ -28,9 +28,9 @@
       <input
         id="speed"
         type="range"
-        min="0.5"
+        min="0.2"
         max="10"
-        step="0.5"
+        step="0.1"
         v-model.number="speedValue"
         @input="onSpeedChange"
         class="speed-slider"
@@ -66,7 +66,7 @@ const props = defineProps({
 
 const emit = defineEmits(['disconnect', 'set-speed', 'refresh-checkpoint', 'toggle-auto-checkpoint'])
 
-const speedValue = ref(1.0)
+const speedValue = ref(0.2)
 
 function onSpeedChange() {
   emit('set-speed', speedValue.value)
