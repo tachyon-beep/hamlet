@@ -77,17 +77,19 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self,
         q_values: torch.Tensor,
         agent_states: BatchedAgentState,
+        action_masks: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Select actions using epsilon-greedy (delegates to RND).
+        """Select actions using epsilon-greedy with action masking (delegates to RND).
 
         Args:
             q_values: Q-values for each action [batch, num_actions]
             agent_states: Current state (contains per-agent epsilons)
+            action_masks: Optional action validity masks [batch, num_actions] bool
 
         Returns:
             actions: [batch] selected actions
         """
-        return self.rnd.select_actions(q_values, agent_states)
+        return self.rnd.select_actions(q_values, agent_states, action_masks)
 
     def compute_intrinsic_rewards(
         self,

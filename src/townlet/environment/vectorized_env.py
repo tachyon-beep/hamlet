@@ -194,6 +194,38 @@ class VectorizedHamletEnv:
 
         return observations
 
+    def get_action_masks(self) -> torch.Tensor:
+        """
+        Get action masks for all agents (invalid actions = False).
+
+        Action masking prevents agents from selecting movements that would
+        take them off the grid. This saves exploration budget and speeds learning.
+
+        Returns:
+            action_masks: [num_agents, 5] bool tensor
+                True = valid action, False = invalid
+                Actions: [UP, DOWN, LEFT, RIGHT, INTERACT]
+        """
+        action_masks = torch.ones(
+            self.num_agents, 5, dtype=torch.bool, device=self.device
+        )
+
+        # Check boundary constraints
+        # positions[:, 0] = x (column), positions[:, 1] = y (row)
+        at_top = (self.positions[:, 1] == 0)                     # y == 0
+        at_bottom = (self.positions[:, 1] == self.grid_size - 1) # y == max
+        at_left = (self.positions[:, 0] == 0)                    # x == 0
+        at_right = (self.positions[:, 0] == self.grid_size - 1)  # x == max
+
+        # Mask invalid movements
+        action_masks[at_top, 0] = False    # Can't go UP at top edge
+        action_masks[at_bottom, 1] = False # Can't go DOWN at bottom edge
+        action_masks[at_left, 2] = False   # Can't go LEFT at left edge
+        action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
+        # INTERACT (action 4) is always valid
+
+        return action_masks
+
     def step(
         self,
         actions: torch.Tensor,  # [num_agents]

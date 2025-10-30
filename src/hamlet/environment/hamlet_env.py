@@ -251,6 +251,7 @@ class HamletEnv:
             "position": np.array([agent.x, agent.y], dtype=np.float32),
             "meters": agent.meters.get_normalized_values(),
             "grid": grid_array,
+            "action_mask": self.get_valid_actions("agent_0"),
         }
 
         return obs
@@ -312,9 +313,40 @@ class HamletEnv:
             "position": np.array([agent.x, agent.y], dtype=np.float32),  # Absolute position (for learning)
             "meters": agent.meters.get_normalized_values(),
             "grid": local_grid,  # 5×5 local observation window
+            "action_mask": self.get_valid_actions("agent_0"),
         }
 
         return obs
+
+    def get_valid_actions(self, agent_id: str) -> np.ndarray:
+        """
+        Get mask of valid actions for the specified agent.
+
+        Invalid actions are movements that would take the agent outside grid bounds.
+        This prevents the agent from wasting exploration budget on no-op boundary collisions.
+
+        Args:
+            agent_id: Agent identifier
+
+        Returns:
+            Boolean array of shape (5,) where True = valid action
+            Actions: [UP, DOWN, LEFT, RIGHT, INTERACT]
+        """
+        agent = self.agents[agent_id]
+        action_mask = np.ones(5, dtype=bool)
+
+        # Check boundary constraints
+        if agent.y == 0:  # At top edge
+            action_mask[self.ACTION_UP] = False
+        if agent.y == self.grid.height - 1:  # At bottom edge
+            action_mask[self.ACTION_DOWN] = False
+        if agent.x == 0:  # At left edge
+            action_mask[self.ACTION_LEFT] = False
+        if agent.x == self.grid.width - 1:  # At right edge
+            action_mask[self.ACTION_RIGHT] = False
+        # INTERACT is always valid (no-op if no affordance present)
+
+        return action_mask
 
     def _apply_social_mood_penalty(self, agent: Agent):
         """Apply additional mood drain when the agent is socially isolated."""

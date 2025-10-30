@@ -25,6 +25,7 @@ class ExplorationStrategy(ABC):
         self,
         q_values: torch.Tensor,  # [batch, num_actions]
         agent_states: BatchedAgentState,
+        action_masks: torch.Tensor | None = None,  # [batch, num_actions] bool
     ) -> torch.Tensor:
         """
         Select actions for batch of agents (GPU).
@@ -34,6 +35,8 @@ class ExplorationStrategy(ABC):
         Args:
             q_values: Q-values for each action [batch, num_actions]
             agent_states: Current state (contains epsilons, curriculum stage, etc.)
+            action_masks: Optional action validity masks [batch, num_actions] bool
+                True = valid action, False = invalid (boundary constraint)
 
         Returns:
             actions: [batch] tensor of selected actions (int)

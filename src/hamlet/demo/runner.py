@@ -314,10 +314,12 @@ if __name__ == '__main__':
     config_path = sys.argv[1] if len(sys.argv) > 1 else "configs/townlet/sparse_adaptive.yaml"
     db_path = sys.argv[2] if len(sys.argv) > 2 else "demo_state.db"
     checkpoint_dir = sys.argv[3] if len(sys.argv) > 3 else "checkpoints"
+    max_episodes = int(sys.argv[4]) if len(sys.argv) > 4 else 10000
 
     runner = DemoRunner(
         config_path=config_path,
         db_path=db_path,
         checkpoint_dir=checkpoint_dir,
+        max_episodes=max_episodes,
     )
     runner.run()

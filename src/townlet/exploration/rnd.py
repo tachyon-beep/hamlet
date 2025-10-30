@@ -98,12 +98,14 @@ class RNDExploration(ExplorationStrategy):
         self,
         q_values: torch.Tensor,
         agent_states: BatchedAgentState,
+        action_masks: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Select actions using epsilon-greedy.
+        """Select actions using epsilon-greedy with action masking.
 
         Args:
             q_values: Q-values for each action [batch, num_actions]
             agent_states: Current state (contains per-agent epsilons)
+            action_masks: Optional action validity masks [batch, num_actions] bool
 
         Returns:
             actions: [batch] selected actions
@@ -111,11 +113,25 @@ class RNDExploration(ExplorationStrategy):
         batch_size, num_actions = q_values.shape
         device = q_values.device
 
-        # Greedy actions (argmax Q)
-        greedy_actions = torch.argmax(q_values, dim=1)
+        # Apply action masking to Q-values if provided
+        if action_masks is not None:
+            masked_q_values = q_values.clone()
+            masked_q_values[~action_masks] = float('-inf')
+        else:
+            masked_q_values = q_values
 
-        # Random actions
-        random_actions = torch.randint(0, num_actions, (batch_size,), device=device)
+        # Greedy actions (argmax of masked Q-values)
+        greedy_actions = torch.argmax(masked_q_values, dim=1)
+
+        # Random actions (sample only from valid actions)
+        if action_masks is not None:
+            random_actions = torch.zeros(batch_size, dtype=torch.long, device=device)
+            for i in range(batch_size):
+                valid_actions = torch.where(action_masks[i])[0]
+                random_idx = torch.randint(0, len(valid_actions), (1,), device=device)
+                random_actions[i] = valid_actions[random_idx]
+        else:
+            random_actions = torch.randint(0, num_actions, (batch_size,), device=device)
 
         # Epsilon mask: True = explore, False = exploit
         explore_mask = torch.rand(batch_size, device=device) < agent_states.epsilons

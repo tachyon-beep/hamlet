@@ -117,7 +117,7 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
 
     def select_action(self, observation, explore: bool = True):
         """
-        Select action using epsilon-greedy policy.
+        Select action using epsilon-greedy policy with action masking.
 
         Args:
             observation: Current environment observation (dict or preprocessed array)
@@ -126,11 +126,19 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
         Returns:
             Action index (int)
         """
-        # Epsilon-greedy action selection
-        if explore and np.random.random() < self.epsilon:
-            return np.random.randint(self.action_dim)
+        # Extract action mask if available
+        action_mask = None
+        if isinstance(observation, dict) and 'action_mask' in observation:
+            action_mask = observation['action_mask']
+            valid_actions = np.where(action_mask)[0]
+        else:
+            valid_actions = np.arange(self.action_dim)
 
-        # Greedy action from Q-network
+        # Epsilon-greedy action selection (only from valid actions)
+        if explore and np.random.random() < self.epsilon:
+            return np.random.choice(valid_actions)
+
+        # Greedy action from Q-network (only from valid actions)
         with torch.no_grad():
             if self.is_recurrent:
                 # Recurrent networks expect observation dict with tensors
@@ -156,7 +164,13 @@ class DRLAgent(BaseAgent, BaseAlgorithm):
                 state_tensor = torch.FloatTensor(state).to(self.device)
                 q_values = self.q_network(state_tensor)
 
-            action = q_values.argmax().item()
+            # Mask invalid actions by setting their Q-values to -inf
+            if action_mask is not None:
+                q_values_np = q_values.cpu().numpy()
+                q_values_np[~action_mask] = -np.inf
+                action = np.argmax(q_values_np)
+            else:
+                action = q_values.argmax().item()
 
         return action
 

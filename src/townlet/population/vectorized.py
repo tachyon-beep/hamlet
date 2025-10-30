@@ -168,13 +168,16 @@ class VectorizedPopulation(PopulationManager):
                 self.agent_ids,
             )
 
-        # 4. Select actions via exploration strategy
-        actions = self.exploration.select_actions(q_values, temp_state)
+        # 4. Get action masks from environment
+        action_masks = envs.get_action_masks()
 
-        # 5. Step environment
+        # 5. Select actions via exploration strategy (with action masking)
+        actions = self.exploration.select_actions(q_values, temp_state, action_masks)
+
+        # 6. Step environment
         next_obs, rewards, dones, info = envs.step(actions)
 
-        # 6. Compute intrinsic rewards (if RND-based exploration)
+        # 7. Compute intrinsic rewards (if RND-based exploration)
         intrinsic_rewards = torch.zeros_like(rewards)
         if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
             intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs)
