@@ -319,6 +319,37 @@ function getHeatColor(intensity) {
   stroke: var(--color-affordance-gym-stroke);
 }
 
+/* New affordances from coupled cascade architecture */
+.affordance-luxurybed {
+  fill: #8b5cf6;  /* Brighter purple than Bed */
+  stroke: var(--color-affordance-bed-stroke);
+}
+
+.affordance-labor {
+  fill: #f59e0b;  /* Orange-gold for physical work */
+  stroke: var(--color-warning);
+}
+
+.affordance-park {
+  fill: #10b981;  /* Green for nature/outdoor */
+  stroke: var(--color-success);
+}
+
+.affordance-therapist {
+  fill: #ec4899;  /* Pink for mental health professional */
+  stroke: var(--color-error);
+}
+
+.affordance-doctor {
+  fill: #3b82f6;  /* Blue for medical (tier 1) */
+  stroke: var(--color-chart-primary);
+}
+
+.affordance-hospital {
+  fill: #2563eb;  /* Darker blue for medical (tier 2) */
+  stroke: var(--color-chart-primary);
+}
+
 .affordance-label {
   font-size: 32px;
   pointer-events: none;
