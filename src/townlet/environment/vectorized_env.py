@@ -214,6 +214,25 @@ class VectorizedHamletEnv:
         Args:
             interact_mask: [num_agents] bool mask
         """
+        # Affordance costs (money normalized 0-1, where cost = dollars/200)
+        # Free affordances: Job, Labor, Park
+        affordance_costs = {
+            'Bed': 0.025,        # $5
+            'LuxuryBed': 0.055,  # $11
+            'Shower': 0.015,     # $3
+            'HomeMeal': 0.015,   # $3
+            'FastFood': 0.05,    # $10
+            'Recreation': 0.03,  # $6
+            'Gym': 0.04,         # $8
+            'Bar': 0.075,        # $15
+            'Therapist': 0.075,  # $15
+            'Doctor': 0.04,      # $8
+            'Hospital': 0.075,   # $15
+            'Job': 0.0,          # Free (gives money)
+            'Labor': 0.0,        # Free (gives money)
+            'Park': 0.0,         # Free
+        }
+
         # Check each affordance
         for affordance_name, affordance_pos in self.affordances.items():
             # Distance to affordance
@@ -222,6 +241,17 @@ class VectorizedHamletEnv:
 
             if not at_affordance.any():
                 continue
+
+            # Check affordability (money >= cost)
+            cost = affordance_costs.get(affordance_name, 0.0)
+            if cost > 0:
+                can_afford = self.meters[at_affordance, 3] >= cost
+                at_affordance = at_affordance.clone()
+                at_affordance[at_affordance] = can_afford
+
+                if not at_affordance.any():
+                    # Can't afford this affordance, skip
+                    continue
 
             # Apply affordance effects (matching Hamlet exactly)
             # NOTE: Money is in range [-100, 100], so $X = X/200 in normalized [0, 1]

@@ -95,7 +95,8 @@ const criticalMetersCount = computed(() => {
 // (capitalize, formatMeterValue, getMeterPercentage are imported above)
 
 function isCritical(name, value) {
-  const percentage = name === 'money' || name === 'mood' ? value : value * 100
+  // All meters are 0-1 normalized, convert to percentage
+  const percentage = value * 100
   // Low mood or other meters trigger critical state when percentage < 20
   return percentage < 20
 }
@@ -116,7 +117,8 @@ function isMoodCritical() {
 
 // ✅ Extract meter color logic using CSS variables
 function getMeterColor(name, value) {
-  const percentage = name === 'money' || name === 'mood' ? value : value * 100
+  // All meters are 0-1 normalized, convert to percentage
+  const percentage = value * 100
 
   // Color mapping using CSS custom properties
   const colors = {
