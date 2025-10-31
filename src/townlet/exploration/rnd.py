@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from townlet.exploration.base import ExplorationStrategy
+from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.training.state import BatchedAgentState
 
 
@@ -55,7 +56,7 @@ class RNDExploration(ExplorationStrategy):
         epsilon_start: float = 1.0,
         epsilon_min: float = 0.01,
         epsilon_decay: float = 0.995,
-        device: torch.device = torch.device('cpu'),
+        device: torch.device = torch.device("cpu"),
     ):
         """Initialize RND with fixed and predictor networks.
 
@@ -110,36 +111,11 @@ class RNDExploration(ExplorationStrategy):
         Returns:
             actions: [batch] selected actions
         """
-        batch_size, num_actions = q_values.shape
-        device = q_values.device
-
-        # Apply action masking to Q-values if provided
-        if action_masks is not None:
-            masked_q_values = q_values.clone()
-            masked_q_values[~action_masks] = float('-inf')
-        else:
-            masked_q_values = q_values
-
-        # Greedy actions (argmax of masked Q-values)
-        greedy_actions = torch.argmax(masked_q_values, dim=1)
-
-        # Random actions (sample only from valid actions)
-        if action_masks is not None:
-            random_actions = torch.zeros(batch_size, dtype=torch.long, device=device)
-            for i in range(batch_size):
-                valid_actions = torch.where(action_masks[i])[0]
-                random_idx = torch.randint(0, len(valid_actions), (1,), device=device)
-                random_actions[i] = valid_actions[random_idx]
-        else:
-            random_actions = torch.randint(0, num_actions, (batch_size,), device=device)
-
-        # Epsilon mask: True = explore, False = exploit
-        explore_mask = torch.rand(batch_size, device=device) < agent_states.epsilons
-
-        # Select based on mask
-        actions = torch.where(explore_mask, random_actions, greedy_actions)
-
-        return actions
+        return epsilon_greedy_action_selection(
+            q_values=q_values,
+            epsilons=agent_states.epsilons,
+            action_masks=action_masks,
+        )
 
     def compute_intrinsic_rewards(
         self,
@@ -167,10 +143,10 @@ class RNDExploration(ExplorationStrategy):
         Args:
             batch: Experience batch with 'observations' key
         """
-        if 'observations' not in batch:
+        if "observations" not in batch:
             return
 
-        observations = batch['observations']
+        observations = batch["observations"]
 
         # Add to buffer
         for i in range(observations.shape[0]):
@@ -192,10 +168,10 @@ class RNDExploration(ExplorationStrategy):
             return 0.0
 
         # Stack observations into batch
-        obs_batch = torch.stack(self.obs_buffer[:self.training_batch_size]).to(self.device)
+        obs_batch = torch.stack(self.obs_buffer[: self.training_batch_size]).to(self.device)
 
         # Clear buffer
-        self.obs_buffer = self.obs_buffer[self.training_batch_size:]
+        self.obs_buffer = self.obs_buffer[self.training_batch_size :]
 
         # Compute loss
         target = self.fixed_network(obs_batch).detach()
@@ -251,14 +227,14 @@ class RNDExploration(ExplorationStrategy):
             Dict with network weights, optimizer state, and epsilon
         """
         return {
-            'fixed_network': self.fixed_network.state_dict(),
-            'predictor_network': self.predictor_network.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'epsilon': self.epsilon,
-            'epsilon_min': self.epsilon_min,
-            'epsilon_decay': self.epsilon_decay,
-            'obs_dim': self.obs_dim,
-            'embed_dim': self.embed_dim,
+            "fixed_network": self.fixed_network.state_dict(),
+            "predictor_network": self.predictor_network.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "epsilon": self.epsilon,
+            "epsilon_min": self.epsilon_min,
+            "epsilon_decay": self.epsilon_decay,
+            "obs_dim": self.obs_dim,
+            "embed_dim": self.embed_dim,
         }
 
     def load_state(self, state: Dict[str, Any]) -> None:
@@ -267,9 +243,9 @@ class RNDExploration(ExplorationStrategy):
         Args:
             state: Dict from checkpoint_state()
         """
-        self.fixed_network.load_state_dict(state['fixed_network'])
-        self.predictor_network.load_state_dict(state['predictor_network'])
-        self.optimizer.load_state_dict(state['optimizer'])
-        self.epsilon = state['epsilon']
-        self.epsilon_min = state['epsilon_min']
-        self.epsilon_decay = state['epsilon_decay']
+        self.fixed_network.load_state_dict(state["fixed_network"])
+        self.predictor_network.load_state_dict(state["predictor_network"])
+        self.optimizer.load_state_dict(state["optimizer"])
+        self.epsilon = state["epsilon"]
+        self.epsilon_min = state["epsilon_min"]
+        self.epsilon_decay = state["epsilon_decay"]

@@ -250,8 +250,10 @@ class TestRecurrentNetworkTraining:
             p.clone() for name, p in population.q_network.named_parameters() if "lstm" in name
         ]
 
-        # Train
-        for _ in range(50):
+        # Train for enough steps to complete episodes and trigger training
+        # Episodes take ~70-80 steps to complete, need 16+ episodes for training
+        # 200 steps should be enough to get training events
+        for _ in range(200):
             population.step_population(env)
 
         # Check LSTM parameters changed

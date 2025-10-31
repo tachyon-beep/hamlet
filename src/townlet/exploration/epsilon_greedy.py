@@ -9,6 +9,7 @@ from typing import Dict, Any
 import torch
 
 from townlet.exploration.base import ExplorationStrategy
+from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.training.state import BatchedAgentState
 
 
@@ -55,37 +56,11 @@ class EpsilonGreedyExploration(ExplorationStrategy):
         Returns:
             actions: [batch] selected actions
         """
-        batch_size, num_actions = q_values.shape
-        device = q_values.device
-
-        # Apply action masking to Q-values if provided
-        if action_masks is not None:
-            masked_q_values = q_values.clone()
-            masked_q_values[~action_masks] = float('-inf')
-        else:
-            masked_q_values = q_values
-
-        # Greedy actions (argmax of masked Q-values)
-        greedy_actions = torch.argmax(masked_q_values, dim=1)
-
-        # Random actions (sample only from valid actions)
-        if action_masks is not None:
-            # Sample from valid actions per agent
-            random_actions = torch.zeros(batch_size, dtype=torch.long, device=device)
-            for i in range(batch_size):
-                valid_actions = torch.where(action_masks[i])[0]
-                random_idx = torch.randint(0, len(valid_actions), (1,), device=device)
-                random_actions[i] = valid_actions[random_idx]
-        else:
-            random_actions = torch.randint(0, num_actions, (batch_size,), device=device)
-
-        # Epsilon mask: True = explore, False = exploit
-        explore_mask = torch.rand(batch_size, device=device) < agent_states.epsilons
-
-        # Select based on mask
-        actions = torch.where(explore_mask, random_actions, greedy_actions)
-
-        return actions
+        return epsilon_greedy_action_selection(
+            q_values=q_values,
+            epsilons=agent_states.epsilons,
+            action_masks=action_masks,
+        )
 
     def compute_intrinsic_rewards(
         self,
@@ -124,9 +99,9 @@ class EpsilonGreedyExploration(ExplorationStrategy):
             Dict with epsilon state
         """
         return {
-            'epsilon': self.epsilon,
-            'epsilon_decay': self.epsilon_decay,
-            'epsilon_min': self.epsilon_min,
+            "epsilon": self.epsilon,
+            "epsilon_decay": self.epsilon_decay,
+            "epsilon_min": self.epsilon_min,
         }
 
     def load_state(self, state: Dict[str, Any]) -> None:
@@ -136,6 +111,6 @@ class EpsilonGreedyExploration(ExplorationStrategy):
         Args:
             state: Dict from checkpoint_state()
         """
-        self.epsilon = state['epsilon']
-        self.epsilon_decay = state['epsilon_decay']
-        self.epsilon_min = state['epsilon_min']
+        self.epsilon = state["epsilon"]
+        self.epsilon_decay = state["epsilon_decay"]
+        self.epsilon_min = state["epsilon_min"]
