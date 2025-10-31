@@ -37,6 +37,9 @@ python -m hamlet.demo.runner configs/townlet_level_1_5.yaml demo_level1_5.db che
 # Level 2 POMDP: Partial observability (5×5 vision) + LSTM memory
 python -m hamlet.demo.runner configs/townlet_level_2_pomdp.yaml demo_level2.db checkpoints_level2 10000
 
+# Level 2.5: Temporal mechanics + multi-interaction affordances + POMDP + LSTM
+python -m hamlet.demo.runner configs/townlet_level_2_5_temporal.yaml demo_level2_5.db checkpoints_level2_5 10000
+
 # Arguments: <config> <database> <checkpoint_dir> <max_episodes>
 ```
 
@@ -235,6 +238,15 @@ The architecture design (`docs/ARCHITECTURE_DESIGN.md`) outlines 5 levels:
 **Level 1** (✅ Obsolete - hamlet): Single agent, full observability, 8×8 grid
 **Level 1.5** (✅ Implemented - townlet): Full observability, NO proximity shaping
 **Level 2** (✅ Implemented - townlet): Partial observability (POMDP) with LSTM memory
+**Level 2.5** (✅ Implemented - townlet): **Temporal Mechanics & Multi-Interaction**
+- 24-tick day/night cycle with operating hours
+- Multi-tick interactions: 75% linear rewards + 25% completion bonus
+- Time-based action masking (Job closes at 6pm, Bar opens at 6pm, etc.)
+- Early exit mechanics (agents keep accumulated benefits)
+- Per-tick costs prevent "free sampling"
+- Observation +2 dims: time_of_day + interaction_progress
+- Agent learns temporal planning and opportunity cost
+
 **Level 3** (🎯 Future): Multi-zone environment with hierarchical RL
 **Level 4** (🎯 Future): Multi-agent competition with theory of mind
 **Level 5** (🎯 Future): Family communication and emergent language
