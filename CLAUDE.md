@@ -56,16 +56,17 @@ cd /home/john/hamlet/.worktrees/temporal-mechanics  # or your worktree path
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 
 # For Level 2 POMDP:
-python -m townlet.demo.live_inference checkpoints_level2 8766 0.2 10000
+python -m townlet.demo.live_inference checkpoints_level2 8766 0.2 10000 configs/townlet_level_2_pomdp.yaml
 
 # For Level 2.5 Temporal Mechanics:
-python -m townlet.demo.live_inference checkpoints_level2_5 8766 0.2 10000
+python -m townlet.demo.live_inference checkpoints_level2_5 8766 0.2 10000 configs/townlet_level_2_5_temporal.yaml
 
-# Args: <checkpoint_dir> <port> <speed> <total_episodes>
+# Args: <checkpoint_dir> <port> <speed> <total_episodes> <config_path>
 # - checkpoint_dir: Where checkpoints are saved
 # - port: WebSocket port (default 8766)
 # - speed: Simulation speed multiplier (0.2 = slower, 2.0 = faster)
 # - total_episodes: Number of episodes to run
+# - config_path: Training config YAML (REQUIRED for POMDP/temporal to load correct network type)
 
 # Terminal 2: Start frontend (from main repo)
 cd /home/john/hamlet/frontend  # Main repo, not worktree!

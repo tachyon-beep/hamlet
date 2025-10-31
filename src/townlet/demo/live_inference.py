@@ -123,6 +123,7 @@ class LiveInferenceServer:
         grid_size = 8
         partial_observability = False
         vision_range = 2
+        enable_temporal_mechanics = False
         network_type = "simple"
         vision_window_size = 5
 
@@ -133,10 +134,11 @@ class LiveInferenceServer:
             grid_size = env_cfg.get('grid_size', 8)
             partial_observability = env_cfg.get('partial_observability', False)
             vision_range = env_cfg.get('vision_range', 2)
+            enable_temporal_mechanics = env_cfg.get('enable_temporal_mechanics', False)
             network_type = pop_cfg.get('network_type', 'simple')
             vision_window_size = 2 * vision_range + 1
 
-            logger.info(f"Environment config: grid={grid_size}, POMDP={partial_observability}, vision={vision_range}")
+            logger.info(f"Environment config: grid={grid_size}, POMDP={partial_observability}, vision={vision_range}, temporal={enable_temporal_mechanics}")
             logger.info(f"Network type: {network_type}")
 
         # Create environment with config settings
@@ -146,6 +148,7 @@ class LiveInferenceServer:
             device=self.device,
             partial_observability=partial_observability,
             vision_range=vision_range,
+            enable_temporal_mechanics=enable_temporal_mechanics,
         )
 
         # Auto-detect observation dimension from environment
