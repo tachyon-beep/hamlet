@@ -26,29 +26,29 @@
                 <div class="insight-card">
                   <span class="insight-icon">⛓️</span>
                   <div class="insight-content">
-                    <strong>Meter Coupling</strong>
-                    <p>Satiation affects Health & Energy. Tertiary meters (hygiene/social) accelerate ALL pathways.</p>
+                    <strong>Meter Hierarchy</strong>
+                    <p>PRIMARY (death): Energy, Health. SECONDARY: Satiation → Energy + Health (critical!), Fitness → Health, Mood → Energy. TERTIARY: Hygiene, Social.</p>
                   </div>
                 </div>
                 <div class="insight-card">
                   <span class="insight-icon">💀</span>
                   <div class="insight-content">
-                    <strong>Cascading Death</strong>
-                    <p>Neglect tertiary → secondary tanks → primary fails → death spiral.</p>
+                    <strong>Death Conditions</strong>
+                    <p>Die if Energy ≤ 0 OR Health ≤ 0. Satiation is foundational—hunger makes you sick AND exhausted!</p>
                   </div>
                 </div>
                 <div class="insight-card">
                   <span class="insight-icon">⚠️</span>
                   <div class="insight-content">
                     <strong>Economic Traps</strong>
-                    <p>FastFood damages fitness. Labor pays well but damages health long-term.</p>
+                    <p>FastFood damages fitness & health. Labor ($30) damages health. Bar costs $15 but drains energy & hygiene.</p>
                   </div>
                 </div>
                 <div class="insight-card">
                   <span class="insight-icon">🛡️</span>
                   <div class="insight-content">
                     <strong>Prevention Strategy</strong>
-                    <p>Gym ($8) prevents Hospital ($15). Invest in buffers before emergencies.</p>
+                    <p>Gym ($8) builds fitness → prevents health decline → saves Hospital ($15). Park is FREE multi-benefit!</p>
                   </div>
                 </div>
               </div>
@@ -77,17 +77,17 @@
                   <div class="affordance-compact">
                     <span class="icon">🚿</span>
                     <span class="name">Shower</span>
-                    <span class="effects">+50% hygiene, -$2</span>
+                    <span class="effects">+40% hygiene, -$3</span>
                   </div>
                   <div class="affordance-compact">
                     <span class="icon">🥘</span>
                     <span class="name">HomeMeal</span>
-                    <span class="effects">+40% satiation, +3% health, -$3</span>
+                    <span class="effects">+45% satiation, +3% health, -$3</span>
                   </div>
                   <div class="affordance-compact">
                     <span class="icon">🍔</span>
                     <span class="name">FastFood</span>
-                    <span class="effects">+45% satiation, -3% fitness, -$10</span>
+                    <span class="effects">+45% satiation, +15% energy, -3% fitness, -2% health, -$10</span>
                   </div>
                 </div>
               </div>
@@ -99,12 +99,12 @@
                   <div class="affordance-compact">
                     <span class="icon">💼</span>
                     <span class="name">Job</span>
-                    <span class="effects">+$22.5, -15% energy, +2% social</span>
+                    <span class="effects">+$22.5, -15% energy, +2% social, -3% health</span>
                   </div>
                   <div class="affordance-compact">
                     <span class="icon">🔨</span>
                     <span class="name">Labor</span>
-                    <span class="effects">+$30, -20% energy, -5% fitness</span>
+                    <span class="effects">+$30, -20% energy, -5% fitness, -5% health</span>
                   </div>
                 </div>
 
@@ -118,12 +118,12 @@
                   <div class="affordance-compact">
                     <span class="icon">🍺</span>
                     <span class="name">Bar</span>
-                    <span class="effects">+50% social, +25% mood, -$15</span>
+                    <span class="effects">+50% social, +25% mood, +30% satiation, -20% energy, -15% hygiene, -5% health, -$15</span>
                   </div>
                   <div class="affordance-compact">
                     <span class="icon">🌳</span>
                     <span class="name">Park</span>
-                    <span class="effects">+20% fitness, +15% social (FREE)</span>
+                    <span class="effects">+20% fitness, +15% social, +15% mood, -15% energy (FREE)</span>
                   </div>
                 </div>
               </div>

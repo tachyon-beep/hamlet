@@ -149,6 +149,56 @@ class VectorizedPopulation(PopulationManager):
 
         return actions
 
+    def select_epsilon_greedy_actions(
+        self,
+        env: 'VectorizedHamletEnv',
+        epsilon: float
+    ) -> torch.Tensor:
+        """
+        Select epsilon-greedy actions with action masking.
+
+        With probability epsilon, select random valid action.
+        With probability (1-epsilon), select greedy action.
+
+        Args:
+            env: Environment to get action masks from
+            epsilon: Exploration rate [0, 1]
+
+        Returns:
+            actions: [num_agents] tensor of selected actions
+        """
+        with torch.no_grad():
+            # Get Q-values from network
+            q_output = self.q_network(self.current_obs)
+            # Recurrent networks return (q_values, hidden_state)
+            q_values = q_output[0] if isinstance(q_output, tuple) else q_output
+
+            # Get action masks from environment
+            action_masks = env.get_action_masks()
+
+            # Mask invalid actions with -inf before argmax
+            masked_q_values = q_values.clone()
+            masked_q_values[~action_masks] = float('-inf')
+
+            # Select best valid action (greedy)
+            greedy_actions = masked_q_values.argmax(dim=1)
+
+            # Epsilon-greedy exploration
+            num_agents = q_values.shape[0]
+            actions = torch.zeros(num_agents, dtype=torch.long, device=q_values.device)
+
+            for i in range(num_agents):
+                if torch.rand(1).item() < epsilon:
+                    # Random action from valid actions
+                    valid_actions = torch.where(action_masks[i])[0]
+                    random_idx = torch.randint(0, len(valid_actions), (1,)).item()
+                    actions[i] = valid_actions[random_idx]
+                else:
+                    # Greedy action
+                    actions[i] = greedy_actions[i]
+
+        return actions
+
     def step_population(
         self,
         envs: 'VectorizedHamletEnv',

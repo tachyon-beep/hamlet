@@ -27,7 +27,7 @@ exploration:
   decay_rate: 0.99
   epsilon_start: 1.0
   epsilon_min: 0.01
-  epsilon_decay: 0.995
+  epsilon_decay: 0.999  # Slower decay for thorough exploration
 
 population:
   num_agents: 10

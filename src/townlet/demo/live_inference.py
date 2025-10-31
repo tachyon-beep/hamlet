@@ -378,8 +378,8 @@ class LiveInferenceServer:
         max_steps = 500
 
         while not done and self.current_step < max_steps:
-            # Get greedy action from population (uses shared action masking logic)
-            actions = self.population.select_greedy_actions(self.env)
+            # Get action using epsilon-greedy (respects current epsilon from checkpoint)
+            actions = self.population.select_epsilon_greedy_actions(self.env, self.current_epsilon)
 
             # Get Q-values for display
             with torch.no_grad():

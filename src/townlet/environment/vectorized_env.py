@@ -259,12 +259,30 @@ class VectorizedHamletEnv:
         action_masks[at_left, 2] = False   # Can't go LEFT at left edge
         action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
 
-        # Mask INTERACT (action 4) - only valid when on an affordance
-        on_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
-        for affordance_pos in self.affordances.values():
+        # Mask INTERACT (action 4) - only valid when on an affordable affordance
+        on_affordable_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+
+        # Affordance costs (must match _handle_interactions)
+        affordance_costs = {
+            'Bed': 5, 'LuxuryBed': 11, 'Shower': 3, 'HomeMeal': 3,
+            'FastFood': 10, 'Recreation': 6, 'Gym': 8, 'Bar': 15,
+            'Therapist': 15, 'Doctor': 8, 'Hospital': 15,
+            'Job': 0, 'Labor': 0, 'Park': 0,
+        }
+
+        for affordance_name, affordance_pos in self.affordances.items():
             distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            on_affordance |= (distances == 0)
-        action_masks[:, 4] = on_affordance
+            on_this_affordance = (distances == 0)
+
+            # Check affordability (money normalized to [0, 1] where 1.0 = $100)
+            cost_dollars = affordance_costs.get(affordance_name, 0)
+            cost_normalized = cost_dollars / 100.0
+            can_afford = self.meters[:, 3] >= cost_normalized
+
+            # Valid if on affordance AND can afford it
+            on_affordable_affordance |= (on_this_affordance & can_afford)
+
+        action_masks[:, 4] = on_affordable_affordance
 
         return action_masks
 
@@ -776,18 +794,35 @@ class VectorizedHamletEnv:
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """
-        SIMPLE SURVIVAL REWARD: Directly reward staying alive.
+        MILESTONE SURVIVAL REWARDS: Sparse bonuses for survival milestones.
 
-        Problem with old complex rewards: Longer survival → more accumulated penalties → negative rewards.
-        Solution: +1.0 per step survived, -100 for dying.
+        Problem with constant per-step rewards: Rewards aimless wandering equally to strategic play.
+        Solution: Milestone bonuses that reward longevity without constant accumulation.
+
+        - Every 10 steps: +0.5 ("you're making progress!")
+        - Every 100 steps: +5.0 ("happy birthday!" 🎂)
+        - Death: -100.0
+
+        This prevents left-right oscillation from being rewarded while still encouraging survival.
 
         Returns:
             rewards: [num_agents]
         """
-        # Base reward: +1.0 for surviving this step
-        rewards = torch.ones(self.num_agents, device=self.device)
+        # Start with zero rewards
+        rewards = torch.zeros(self.num_agents, device=self.device)
 
-        # Death penalty: -100.0 for dying
+        # Milestone bonuses (only for alive agents)
+        alive_mask = ~self.dones
+
+        # Every 10 steps: +0.5 bonus
+        decade_milestone = (self.step_counts % 10 == 0) & alive_mask
+        rewards += torch.where(decade_milestone, 0.5, 0.0)
+
+        # Every 100 steps: +5.0 bonus ("Happy Birthday!")
+        century_milestone = (self.step_counts % 100 == 0) & alive_mask
+        rewards += torch.where(century_milestone, 5.0, 0.0)
+
+        # Death penalty: -100.0
         rewards = torch.where(self.dones, -100.0, rewards)
 
         return rewards
@@ -803,8 +838,9 @@ class VectorizedHamletEnv:
         """
         rewards = torch.zeros(self.num_agents, device=self.device)
 
-        # Tier 1: Essential meter-based feedback (energy, hygiene, satiation)
-        for i, meter_name in enumerate(['energy', 'hygiene', 'satiation']):
+        # Tier 1: Essential PRIMARY meter-based feedback (energy, hygiene only)
+        # Satiation is now a SECONDARY meter that affects primary meters indirectly
+        for i, meter_name in enumerate(['energy', 'hygiene']):
             meter_values = self.meters[:, i]
 
             # Healthy (>0.8): +0.4
