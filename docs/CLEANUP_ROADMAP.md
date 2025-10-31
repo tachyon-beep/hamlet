@@ -8,6 +8,51 @@
 
 ---
 
+## 🌟 North Star: The v2.0 "Smart Collection" Vision
+
+**Why This Cleanup Matters**: Every refactoring decision must preserve our path to the v2.0 moonshot architecture.
+
+### The Moonshot: From "Flashcard Memorizer" to "Grammar Engine"
+
+**Current (v1.0)**: Monolithic DQN that memorizes `Q(s,a)` values  
+**Future (v2.0)**: Modular "Smart Collection" that learns world rules and agent psychology
+
+### The Four Modules (v2.0 Architecture)
+
+1. **Module A: Perception Encoder** → Outputs `BeliefDistribution` (solves POMDP)
+2. **Module B: World Model** → Outputs `ImaginedFutures` (learns physics & predicts consequences)
+3. **Module C: Social Model** → Outputs `SocialPrediction` (opponent modeling & theory of mind)
+4. **Module D: Hierarchical Policy** → Outputs `Goal` + `PrimitiveAction` (strategic HRL)
+
+### Critical Prerequisites (What This Cleanup MUST Achieve)
+
+From AGENT_MOONSHOT.md "Phase 1: Foundation (Prerequisites)":
+
+1. ✅ **Implement explicit data structures** (`BeliefDistribution`, `ImaginedFuture`, `SocialPrediction`, `Goal`)
+2. ✅ **Refactor environment for `public_cues`** (enables Module C - Social Model)
+3. ✅ **Refactor environment "physics" to be data-driven** (enables Module B - World Model)
+
+**BLOCKER**: "The hardcoded logic in `vectorized_env.py` (Actions #1, #12) must be refactored to be configuration-driven (e.g., YAML) so the World Model can learn these rules."
+
+### The "Don't Lock Out" Checklist
+
+Before each refactoring action, ensure:
+
+- ✅ **Can Module B learn this?** (Is it in YAML/config, not hardcoded?)
+- ✅ **Can Module A replace this?** (Is observation construction pluggable?)
+- ✅ **Can Module D replace this?** (Is action selection/rewards modular?)
+- ✅ **Can Module C extend this?** (Is there room for social cues?)
+
+### Migration Path (Incremental, Not Big Bang)
+
+- **v1.5**: Module A (Perception) + v1.0 Q-Network (hybrid validation)
+- **v1.7**: v1.5 + Module B (World Model for planning)
+- **v2.0**: Full integration - all modules replace v1.0 DQN
+
+**Key Insight**: Our foundation rebuild (ACTIONS #1, #2, #3, #4, #12) is actually **Phase 1 of the moonshot roadmap**. We're not just cleaning—we're building the launchpad. 🚀
+
+---
+
 ## Executive Summary
 
 **Current Position**: Between Level 1.5 and Level 2
