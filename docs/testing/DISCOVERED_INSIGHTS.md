@@ -1070,6 +1070,16 @@ As tests are written and run, add findings here:
 - [ ] Measure actual survival times with random exploration
 - [ ] Test if agents can learn >100 step survival with current balance
 - [ ] Run death condition tests
+- [x] **NETWORK ARCHITECTURE TESTING STARTED** (2025-10-31)
+  - Created 19 comprehensive tests for neural networks
+  - 12/19 passing on first run (63%)
+  - Revealed fundamental architecture issues:
+    - Inconsistent observation handling between network types
+    - Manual hidden state management (error-prone)
+    - Hardcoded observation parsing (not extensible)
+    - No abstraction layer between network architectures
+  - **ACTION #9 CREATED**: Root-and-branch network redesign (HIGH priority)
+  - Need unified interfaces, observation abstraction, automatic state management
 
 ---
 

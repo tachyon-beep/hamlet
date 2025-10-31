@@ -790,20 +790,219 @@ class SequentialReplayBuffer:
 
 ---
 
+---
+
+### ACTION #9: Root-and-Branch Network Architecture Redesign
+
+**Status:** DESIGN PHASE  
+**Priority:** CRITICAL (execute after 70% coverage)  
+**Complexity:** HIGH (3-4 weeks)  
+**Depends On:** Network testing complete, clear requirements documented
+
+#### Current Problems Identified
+
+**From testing (2025-10-31):**
+
+1. **Inconsistent observation handling**:
+   - SimpleQNetwork: Takes flat `obs_dim`
+   - RecurrentSpatialQNetwork: Computes from `window_size`, `num_meters`, etc.
+   - No unified observation abstraction
+
+2. **Hidden state management is manual**:
+   - Network stores `self.hidden_state` internally
+   - Caller must remember to call `reset_hidden_state()`, `get_hidden_state()`, `set_hidden_state()`
+   - Easy to forget, causes silent bugs
+   - No automatic batching or episode boundary handling
+
+3. **Observation parsing is hardcoded**:
+   - RecurrentSpatialQNetwork manually slices `obs[:, :25]`, `obs[:, 25:27]`, etc.
+   - Adding temporal features breaks everything
+   - No extensibility for new observation components
+
+4. **No abstraction between observation types**:
+   - Full observability vs POMDP are completely different architectures
+   - Can't easily A/B test or transition between them
+   - Training code must know which network type
+
+5. **Network creation is scattered**:
+   - Population manager creates networks directly
+   - No factory pattern or registry
+   - Hard to add new architectures
+
+#### Proposed Redesign (High-Level)
+
+**Observation Abstraction:**
+
+```python
+class Observation:
+    """Abstract observation with typed components."""
+    
+    @dataclass
+    class Components:
+        grid: torch.Tensor  # [batch, grid_features]
+        position: torch.Tensor  # [batch, 2]
+        meters: torch.Tensor  # [batch, num_meters]
+        affordance: torch.Tensor  # [batch, num_affordances]
+        temporal: Optional[torch.Tensor] = None  # [batch, temporal_features]
+    
+    def to_tensor(self) -> torch.Tensor:
+        """Flatten to [batch, obs_dim] for backward compatibility."""
+        pass
+    
+    @classmethod
+    def from_tensor(cls, tensor: torch.Tensor, config: ObsConfig) -> "Observation":
+        """Parse tensor into structured components."""
+        pass
+```
+
+**Network Interface:**
+
+```python
+class QNetwork(ABC, nn.Module):
+    """Unified interface for all Q-networks."""
+    
+    @abstractmethod
+    def forward(
+        self, 
+        obs: Union[torch.Tensor, Observation],
+        state: Optional[NetworkState] = None
+    ) -> Tuple[torch.Tensor, Optional[NetworkState]]:
+        """
+        Forward pass with optional state.
+        
+        Args:
+            obs: Structured or flat observation
+            state: Optional network state (for recurrent nets)
+            
+        Returns:
+            q_values: [batch, action_dim]
+            new_state: Updated state (None for feedforward nets)
+        """
+        pass
+    
+    @abstractmethod
+    def reset_state(self, batch_size: int) -> NetworkState:
+        """Create initial state for episode."""
+        pass
+```
+
+**Network Registry:**
+
+```python
+class NetworkFactory:
+    """Factory for creating Q-networks from config."""
+    
+    _registry: Dict[str, Type[QNetwork]] = {}
+    
+    @classmethod
+    def register(cls, name: str):
+        """Decorator to register network architectures."""
+        def wrapper(network_cls):
+            cls._registry[name] = network_cls
+            return network_cls
+        return wrapper
+    
+    @classmethod
+    def create(cls, config: NetworkConfig) -> QNetwork:
+        """Create network from config."""
+        network_cls = cls._registry[config.type]
+        return network_cls(**config.kwargs)
+
+# Usage:
+@NetworkFactory.register("mlp")
+class MLPQNetwork(QNetwork):
+    pass
+
+@NetworkFactory.register("recurrent_spatial")
+class RecurrentSpatialQNetwork(QNetwork):
+    pass
+
+# In training code:
+network = NetworkFactory.create(config.network)
+```
+
+**Episode State Manager:**
+
+```python
+class EpisodeStateManager:
+    """Automatic state management across episode boundaries."""
+    
+    def __init__(self, network: QNetwork, num_agents: int):
+        self.network = network
+        self.states = network.reset_state(num_agents)
+        self.episode_done = torch.zeros(num_agents, dtype=torch.bool)
+    
+    def step(
+        self, 
+        obs: Observation, 
+        dones: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Automatic state reset on episode boundaries.
+        
+        Args:
+            obs: Current observations
+            dones: Episode termination flags
+            
+        Returns:
+            q_values: [num_agents, action_dim]
+        """
+        # Reset states for done episodes
+        if dones.any():
+            for i in torch.where(dones)[0]:
+                self.states[i] = self.network.reset_state(1)
+        
+        # Forward pass
+        q_values, self.states = self.network(obs, self.states)
+        return q_values
+```
+
+#### Benefits
+
+1. **Testability**: Each component testable in isolation
+2. **Extensibility**: Add new observation types without breaking existing code
+3. **Maintainability**: Clear interfaces, self-documenting
+4. **Performance**: Can optimize observation parsing once, not per-network
+5. **Debugging**: Structured observations easier to inspect
+6. **Flexibility**: Easy to A/B test architectures
+7. **Safety**: Automatic state management prevents bugs
+
+#### Testing Strategy
+
+- Test observation parsing (tensor ↔ structured)
+- Test network registry (registration, creation)
+- Test state manager (reset on done, persistence across steps)
+- Test each network architecture with new interface
+- Test backward compatibility (old code still works)
+
+#### Migration Path
+
+1. **Phase 1**: Add new abstractions alongside old code (2 weeks)
+2. **Phase 2**: Migrate networks one at a time, keep tests green (1 week)
+3. **Phase 3**: Migrate training code to use new interfaces (1 week)
+4. **Phase 4**: Remove old code, cleanup (3 days)
+
+**Total**: 3-4 weeks with continuous testing
+
+---
+
 ## 📋 Action Summary
 
 | Priority | Action | Complexity | Estimated Time | Depends On |
 |----------|--------|------------|----------------|------------|
 | 🔴 HIGH | #1: Configurable Cascade Engine | MEDIUM-HIGH | 2-3 weeks | 70% test coverage |
+| 🔴 HIGH | #9: Network Architecture Redesign | HIGH | 3-4 weeks | Network testing complete |
 | 🟡 MEDIUM | #2: Extract RewardStrategy | LOW | 3-5 days | 60% test coverage |
 | 🟡 MEDIUM | #3: Extract MeterDynamics | MEDIUM | 1-2 weeks | Action #1 |
-| 🟡 MEDIUM | #4: Extract ObservationBuilder | LOW | 2-3 days | 50% test coverage |
-| � MEDIUM-HIGH | #8: Add WAIT Action | LOW | 1-2 days | Balance testing |
-| �🟢 LOW | #5: Target Network DQN | LOW | 1-2 days | Multi-Day Demo |
+| 🟡 MEDIUM | #4: Extract ObservationBuilder | LOW | 2-3 days | Action #9 |
+| 🟡 MEDIUM-HIGH | #8: Add WAIT Action | LOW | 1-2 days | Balance testing |
+| � LOW | #5: Target Network DQN | LOW | 1-2 days | Multi-Day Demo |
 | 🟢 LOW | #6: GPU Optimization RND | LOW | 1 day | Profiling |
 | 🟢 LOW | #7: Sequential Replay Buffer | MEDIUM | 1 week | POMDP issues |
 
-**Total Estimated Time:** 6-10 weeks of focused development
+**Total Estimated Time:** 9-14 weeks of focused development
+
+**Note:** Action #9 (Network Architecture Redesign) added 2025-10-31 based on systematic testing discoveries. Testing revealed fundamental design issues that require "root and branch reimagining" of network architecture, observation handling, and state management.
 
 **Note:** Action #8 (WAIT) elevated to MEDIUM-HIGH priority due to multiple critical design failures:
 
