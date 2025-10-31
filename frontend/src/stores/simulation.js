@@ -74,6 +74,10 @@ export const useSimulationStore = defineStore('simulation', () => {
   const qValues = ref([])  // Q-values for all 5 actions
   const affordanceStats = ref([])  // Affordance interaction counts
 
+  // Temporal mechanics state
+  const timeOfDay = ref(0)  // Current time of day (0-23)
+  const interactionProgress = ref(0)  // Current interaction progress (0-1)
+
   // Computed
   const averageSurvivalTime = computed(() => {
     if (episodeHistory.value.length === 0) return 0
@@ -369,6 +373,12 @@ export const useSimulationStore = defineStore('simulation', () => {
     if (message.affordance_stats) {
       affordanceStats.value = message.affordance_stats
     }
+
+    // Handle temporal mechanics data
+    if (message.temporal) {
+      timeOfDay.value = message.temporal.time_of_day
+      interactionProgress.value = message.temporal.interaction_progress
+    }
   }
 
   function handleEpisodeComplete(message) {
@@ -492,6 +502,8 @@ export const useSimulationStore = defineStore('simulation', () => {
     transitionData,
     qValues,
     affordanceStats,
+    timeOfDay,
+    interactionProgress,
 
     // Training state
     isTraining,

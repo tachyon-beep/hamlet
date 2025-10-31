@@ -31,6 +31,12 @@
 
       <!-- ✅ Semantic HTML: region for grid visualization -->
       <div class="grid-container" role="region" aria-label="Simulation grid">
+        <!-- ✅ Time of day bar (top-left) - only when connected and temporal mechanics enabled -->
+        <TimeOfDayBar
+          v-if="isConnected && store.timeOfDay !== null"
+          :time-of-day="store.timeOfDay"
+        />
+
         <!-- ✅ Minimal top-right controls (only when connected) -->
         <MinimalControls
           v-if="isConnected"
@@ -148,6 +154,7 @@ import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
 import ReferencePanel from './components/ReferencePanel.vue'
 import MinimalControls from './components/MinimalControls.vue'
+import TimeOfDayBar from './components/TimeOfDayBar.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import LoadingState from './components/LoadingState.vue'
 import ErrorState from './components/ErrorState.vue'
