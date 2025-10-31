@@ -67,20 +67,20 @@ const timeIcon = computed(() => {
 
 .time-bar-container {
   background: var(--color-bg-secondary);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--border-radius-md);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  min-width: 180px;
+  gap: var(--spacing-sm);
+  min-width: 270px;
 }
 
 /* Gradient bar showing day/night cycle */
 .time-bar-background {
   width: 100%;
-  height: 12px;
+  height: 18px;
   border-radius: var(--border-radius-sm);
   background: linear-gradient(
     to right,
@@ -121,15 +121,15 @@ const timeIcon = computed(() => {
 .time-label {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  font-size: var(--font-size-sm);
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   font-family: 'Monaco', 'Courier New', monospace;
 }
 
 .time-icon {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   line-height: 1;
 }
 
@@ -146,20 +146,20 @@ const timeIcon = computed(() => {
   }
 
   .time-bar-container {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    min-width: 140px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    min-width: 210px;
   }
 
   .time-bar-background {
-    height: 10px;
+    height: 15px;
   }
 
   .time-label {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .time-icon {
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-lg);
   }
 }
 </style>
