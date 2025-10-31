@@ -21,6 +21,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Status:** All 8 tasks complete, 37/37 tests passing, pushed to origin/main
 
 **Delivered:**
+
 - ReplayBuffer with dual reward storage (extrinsic + intrinsic)
 - RND (Random Network Distillation) for novelty detection
 - AdaptiveIntrinsicExploration with variance-based annealing
@@ -32,11 +33,13 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Key Achievement:** Agents can now learn in sparse reward environments using intrinsic motivation that automatically transitions to exploitation.
 
 **Test Results:**
+
 - Unit tests: 13/13 passing
 - Integration tests: 1/1 passing
 - End-to-end: 1/1 passing (baseline comparison shows adaptive intrinsic > epsilon-greedy)
 
 **Known Limitations (documented, not blocking):**
+
 - No target network (simplified DQN)
 - RND buffer uses CPU transfers (performance trade-off)
 - Hardcoded batch size and training frequency
@@ -48,18 +51,21 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Goal:** Validate Phase 3 system works in production over extended runtime (days) and generate teaching materials.
 
 **Why This First:**
+
 - Validates the "watchers get more invested over time" hypothesis
 - Reveals any stability issues (memory leaks, NaN losses, crashes) before adding POMDP complexity
 - Generates real data on exploration→exploitation transition for teaching
 - Uses existing code - low risk, high value
 
 **Approach:**
+
 - Run 10K episode training (full `test_sparse_learning_with_intrinsic` test)
 - Stream live visualization via WebSocket (port 8765)
 - Monitor metrics over hours/days: survival trends, intrinsic weight decay, curriculum progression
 - Capture screenshots and data for teaching materials
 
 **Success Criteria:**
+
 - [ ] Training runs for 48+ hours without crashes
 - [ ] Intrinsic weight anneals from 1.0 → <0.1
 - [ ] Agent progresses through all 5 curriculum stages
@@ -68,6 +74,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 - [ ] No memory leaks or performance degradation
 
 **Deliverables:**
+
 - Training logs and metrics (JSON or CSV)
 - Screenshots showing exploration→exploitation transition
 - Performance report (survival over time, reward components, curriculum progression)
@@ -82,29 +89,34 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Goal:** Add partial observability and working memory to create more realistic, pedagogically valuable scenarios.
 
 **Why After Multi-Day Demo:**
+
 - Multi-day demo validates Phase 3 foundation is solid
 - POMDP will stress the system - better to know current system works first
 - Adding complexity before optimization lets us optimize based on real needs
 
 **Core Changes:**
+
 - **Partial Observability:** Agents see limited field of view (e.g., 3×3 window around position)
 - **LSTM Memory:** Temporal state integration for sequential reasoning
 - **Modified Observation:** Add "fog of war" - unknown cells have null/masked values
 - **New Reward Shaping:** Encourage exploration to discover hidden affordances
 
 **Architecture:**
+
 - Modify `VectorizedHamletEnv` to provide partial observations
 - Update Q-networks to include LSTM layer
 - Extend `BatchedAgentState` with hidden state management
 - Modify RND to work with partial observations (or full state for novelty)
 
 **Teaching Value:**
+
 - Demonstrates working memory requirements
 - Shows how partial observability affects exploration
 - Creates "interesting failures" when agents forget affordance locations
 - Introduces recurrent architectures
 
 **Deliverables:**
+
 - Partial observability implementation
 - LSTM-based Q-networks
 - Tests validating hidden state propagation
@@ -121,12 +133,14 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Goal:** Profile the complete system (Phase 3 + POMDP) and optimize based on real bottlenecks.
 
 **Why Last:**
+
 - Avoids premature optimization (the 1→3→1 trap)
 - Optimization targets are informed by POMDP requirements
 - We know which issues actually matter vs. theoretical concerns
 - One clean optimization pass instead of multiple revisions
 
 **Optimization Candidates (from Phase 3 code reviews):**
+
 - **Target Network:** Add to DQN for training stability (especially important with LSTM?)
 - **Double DQN:** Reduce overestimation bias
 - **Dueling Architecture:** Separate value/advantage streams
@@ -136,6 +150,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 - **Hyperparameter Tuning:** Learning rates, batch sizes, update frequencies
 
 **Process:**
+
 1. **Profile:** Use cProfile, PyTorch profiler, memory profiler on POMDP system
 2. **Identify Bottlenecks:** Find actual slow points (not guesses)
 3. **Prioritize:** Fix issues by impact (biggest speedup first)
@@ -143,6 +158,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 5. **Document:** Record performance improvements
 
 **Success Criteria:**
+
 - [ ] Training speed: 2-5x faster (target: 100 episodes/hour → 200-500 episodes/hour)
 - [ ] Memory stable over 10K episodes (no leaks)
 - [ ] No NaN losses during LSTM training
@@ -150,6 +166,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 - [ ] Profiling report showing improvements
 
 **Deliverables:**
+
 - Optimized codebase
 - Performance benchmarks (before/after)
 - Profiling reports
@@ -164,12 +181,14 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Goal:** Add competitive multi-agent scenarios with theory of mind.
 
 **Concepts:**
+
 - Agents compete for limited resources (only one can use Job at a time)
 - Theory of mind: predict other agents' actions
 - Emergent cooperation or competition
 - Communication (implicit via observation)
 
 **Teaching Value:**
+
 - Game theory applications
 - Social intelligence
 - Emergent behavior
@@ -184,12 +203,14 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Goal:** Family units with emergent language and communication.
 
 **Concepts:**
+
 - Family members can share information
 - Communication channel (discrete symbols)
 - Emergent protocols for coordination
 - Language grounding in shared experience
 
 **Teaching Value:**
+
 - Language emergence
 - Communication protocols
 - Coordination problems
@@ -206,33 +227,57 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 ### Scale & Complexity
 
 **Environment:**
+
 - **50×50 grid** (vs current 8×8) - room to roam and form territories
 - **Dozens of agents** simultaneously (vs current single agent)
 - **Continuous affordance usage** - agents "toggle on" affordances, blocking others
 - **Multiple instances** of each affordance type (e.g., 3 jobs with different pay rates)
 - **Dynamic environment** - affordances can move, appear, disappear over time
+- **Day/Night cycle** - affects affordance availability and agent behavior
+- **Seasons/Events** - periodic changes affecting resources and social dynamics
+- **Persistent world state** - environment retains changes over time
+- **Agent memory** - agents remember past interactions and routines
+- **Advanced sensory input** - agents perceive more complex state (e.g., other agents' positions, affordance states)
+- **Complex affordance interactions** - some affordances require prerequisites or have cooldowns
+- **Extended time horizon** - agents plan over days/weeks, not just episodes
+- **Goal diversity** - agents have varied objectives (wealth, social status, survival)
+- **Economic system** - agents trade resources, services, and favors
+- **Social structures** - agents form friendships, rivalries, families
+- **Governance mechanisms** - rules or norms emerge to regulate behavior
+- **Political dynamics** - power structures and alliances form among agents
+- **Long-term consequences** - actions have lasting effects on reputation and resources
 
 ### Emergent Social Dynamics
 
 **Strategic Competition:**
+
 - **Agent A notices Agent B's routine:** "B goes to the high-paying job at 9 AM every morning"
 - **Agent A adapts strategically:** Arrives at 8 AM to take the job first
 - **Agent B must find alternative:** Learns new routine or competes for timing
 
 **Social Penalties:**
+
 - **Proximity cost:** Agents take negative reward when near each other
 - **Resource blocking:** "You're using something I want" creates tension
 - **Reputation/memory:** Agents remember who blocks them frequently
 - **Emergent territoriality:** Agents may stake out regions to avoid others
 
 **Economic Hierarchy:**
+
 - **Tiered housing:** Better houses give better rewards but cost more
 - **Job competition:** High-paying jobs are scarce, low-paying are plentiful
 - **Affordability trade-offs:** Save money for expensive house vs. use cheap options
 
+**Families:**
+
+- **Family Units:** Agents can form families sharing resources and responsibilities.
+- **Shared Goals:** Families coordinate schedules to avoid conflicts
+- **Communication:** Emergent signaling of intentions, families will have a communications channel but this will not be defined. Agents can evolve their own protocols.
+
 ### Teaching Value (The Real Goal)
 
 **Novel Pedagogical Opportunities:**
+
 1. **Game Theory in Action:** Students see Nash equilibria emerge naturally
 2. **Social Intelligence:** Agents learn theory of mind (predicting others' actions)
 3. **Temporal Strategy:** Planning ahead ("I'll go early tomorrow") vs reactive behavior
@@ -241,6 +286,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 6. **Conflict Resolution:** How do agents handle competition? Avoidance? Aggression?
 
 **Specific Scenarios:**
+
 - "Watch Agent A steal Agent B's job every morning"
 - "See agents form 'day shift' and 'night shift' patterns to avoid each other"
 - "Agent C discovers the cheap house + cheap job is actually more profitable (less competition)"
@@ -249,6 +295,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 ### Technical Prerequisites
 
 **What needs to exist first:**
+
 - ✅ Phase 3: Intrinsic motivation and curriculum (done)
 - ✅ Phase 3.5: Multi-day stability validation (next)
 - ⬜ Phase 4: POMDP + memory (agents need memory to predict others' routines)
@@ -262,6 +309,7 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 ### Why Document This Now?
 
 **Good bones first:** Every phase builds toward this vision:
+
 - SQLite schema → extends to `agent_interactions`, `resource_ownership`, `social_graph`
 - Position heatmaps → per-agent heatmaps
 - Affordance transitions → "who arrived first" temporal data
@@ -281,12 +329,14 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 **Decision:** Do multi-day demo → POMDP → optimization (not demo → optimization → POMDP)
 
 **Rationale:**
+
 - Avoids 1→3→1 trap (optimizing twice)
 - POMDP reveals real optimization needs
 - Current system is proven stable (37/37 tests)
 - Optimization targets are concrete not theoretical
 
 **Trade-offs Considered:**
+
 - **Pro (1 first):** Fix known issues while fresh, cleaner foundation
 - **Pro (3 first):** One optimization pass, informed by real needs, no wasted work
 - **Conclusion:** Real profiling data > theoretical concerns

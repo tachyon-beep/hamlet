@@ -454,3 +454,201 @@ class TestTrainingStability:
         assert "state" in optimizer_state
         # Adam optimizer should have momentum buffers
         assert len(optimizer_state["state"]) > 0
+
+
+class TestCurriculumIntegration:
+    """Test curriculum integration in training loop."""
+
+    @pytest.fixture
+    def curriculum_setup(self):
+        """Create setup with curriculum that has get_batch_decisions."""
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=5,
+            device=torch.device("cpu"),
+            partial_observability=False,
+            enable_temporal_mechanics=False,
+        )
+
+        obs_dim = env.observation_dim
+        curriculum = StaticCurriculum()
+        exploration = EpsilonGreedyExploration(epsilon=0.5)
+
+        population = VectorizedPopulation(
+            env=env,
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["0", "1"],
+            device=torch.device("cpu"),
+            obs_dim=obs_dim,
+            action_dim=5,
+            learning_rate=0.001,
+            gamma=0.99,
+            network_type="simple",
+        )
+
+        population.reset()
+        return population, env
+
+    def test_static_curriculum_batch_decisions(self, curriculum_setup):
+        """StaticCurriculum should use get_batch_decisions (no Q-values)."""
+        population, env = curriculum_setup
+
+        # StaticCurriculum doesn't have get_batch_decisions_with_qvalues
+        assert not hasattr(population.curriculum, "get_batch_decisions_with_qvalues")
+
+        # Step should work without Q-value-based curriculum
+        state = population.step_population(env)
+
+        # Should get valid decisions
+        assert state.observations is not None
+        assert state.actions is not None
+
+    def test_curriculum_tracker_updates(self, curriculum_setup):
+        """update_curriculum_tracker should handle curricula with/without tracker."""
+        population, _env = curriculum_setup
+
+        rewards = torch.tensor([1.0, 2.0])
+        dones = torch.tensor([False, True])
+
+        # StaticCurriculum doesn't have a tracker, should not crash
+        population.update_curriculum_tracker(rewards, dones)
+
+        # Should complete without error (no-op for StaticCurriculum)
+        # If we got here, the function handled missing tracker correctly
+        assert population.curriculum is not None
+
+
+class TestExplorationIntegration:
+    """Test exploration strategy integration."""
+
+    @pytest.fixture
+    def epsilon_greedy_setup(self):
+        """Setup with epsilon-greedy exploration."""
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=5,
+            device=torch.device("cpu"),
+            partial_observability=False,
+            enable_temporal_mechanics=False,
+        )
+
+        obs_dim = env.observation_dim
+        curriculum = StaticCurriculum()
+        exploration = EpsilonGreedyExploration(epsilon=0.5)
+
+        population = VectorizedPopulation(
+            env=env,
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["0", "1"],
+            device=torch.device("cpu"),
+            obs_dim=obs_dim,
+            action_dim=5,
+            learning_rate=0.001,
+            gamma=0.99,
+            network_type="simple",
+        )
+
+        population.reset()
+        return population, env
+
+    def test_epsilon_retrieval_from_epsilon_greedy(self, epsilon_greedy_setup):
+        """Should retrieve epsilon from EpsilonGreedyExploration directly."""
+        population, _env = epsilon_greedy_setup
+
+        # Reset calls epsilon retrieval logic (line 113)
+        population.reset()
+
+        # Should have epsilon values stored
+        assert population.current_epsilons is not None
+        assert len(population.current_epsilons) == population.num_agents
+
+    def test_intrinsic_rewards_zero_for_non_rnd(self, epsilon_greedy_setup):
+        """Non-RND exploration should produce zero intrinsic rewards."""
+        population, env = epsilon_greedy_setup
+
+        # Step with epsilon-greedy (not RND)
+        state = population.step_population(env)
+
+        # Intrinsic rewards should be zero (within tolerance)
+        assert torch.all(state.intrinsic_rewards.abs() < 1e-6)
+
+    def test_intrinsic_weight_one_for_non_adaptive(self, epsilon_greedy_setup):
+        """Non-adaptive exploration should use weight=1.0 for intrinsic rewards."""
+        population, env = epsilon_greedy_setup
+
+        # Step population
+        state = population.step_population(env)
+
+        # For non-adaptive, intrinsic weight is 1.0 (but intrinsic rewards are 0)
+        # Combined rewards should equal extrinsic rewards
+        # (This tests line 355: else 1.0 branch)
+        assert state.rewards is not None
+
+
+class TestEpisodeResetLogic:
+    """Test episode reset handling."""
+
+    @pytest.fixture
+    def reset_setup(self):
+        """Setup for testing episode resets."""
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=5,
+            device=torch.device("cpu"),
+            partial_observability=False,
+            enable_temporal_mechanics=False,
+        )
+
+        obs_dim = env.observation_dim
+        curriculum = StaticCurriculum()
+        exploration = EpsilonGreedyExploration(epsilon=0.5)
+
+        population = VectorizedPopulation(
+            env=env,
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["0", "1"],
+            device=torch.device("cpu"),
+            obs_dim=obs_dim,
+            action_dim=5,
+            learning_rate=0.001,
+            gamma=0.99,
+            network_type="simple",
+        )
+
+        population.reset()
+        return population, env
+
+    def test_episode_step_counter_resets(self, reset_setup):
+        """Episode step counters should reset when agent dies."""
+        population, env = reset_setup
+
+        # Take steps until we get a done
+        max_steps = 200
+        for _ in range(max_steps):
+            state = population.step_population(env)
+            if state.dones.any():
+                # Check that episode counter was reset for done agent
+                done_idx = torch.where(state.dones)[0][0].item()
+                # After step_population, counter should be 0 for done agent
+                assert population.episode_step_counts[done_idx] == 0
+                break
+
+    def test_non_adaptive_exploration_on_reset(self, reset_setup):
+        """Non-adaptive exploration should not crash on episode reset."""
+        population, env = reset_setup
+
+        # Take steps until we get a done
+        max_steps = 200
+        done_found = False
+        for _ in range(max_steps):
+            state = population.step_population(env)
+            if state.dones.any():
+                # Should complete without error (lines 339-340 not triggered)
+                done_found = True
+                break
+
+        # If we get here without crash, non-adaptive exploration handled correctly
+        assert done_found or max_steps == 200

@@ -989,18 +989,23 @@ class EpisodeStateManager:
 ## 📋 Action Summary
 
 | Priority | Action | Complexity | Estimated Time | Depends On |
-|----------|--------|------------|----------------|------------|
 | 🔴 HIGH | #1: Configurable Cascade Engine | MEDIUM-HIGH | 2-3 weeks | 70% test coverage |
 | 🔴 HIGH | #9: Network Architecture Redesign | HIGH | 3-4 weeks | Network testing complete |
 | 🟡 MEDIUM | #2: Extract RewardStrategy | LOW | 3-5 days | 60% test coverage |
 | 🟡 MEDIUM | #3: Extract MeterDynamics | MEDIUM | 1-2 weeks | Action #1 |
 | 🟡 MEDIUM | #4: Extract ObservationBuilder | LOW | 2-3 days | Action #9 |
 | 🟡 MEDIUM-HIGH | #8: Add WAIT Action | LOW | 1-2 days | Balance testing |
-| � LOW | #5: Target Network DQN | LOW | 1-2 days | Multi-Day Demo |
+| 🟡 MEDIUM | #12: Configuration-Defined Affordances | MEDIUM | 1-2 weeks | 70% coverage, Action #3 |
+| 🟡 MEDIUM | #13: Remove Pedagogical DISABLED Code | TRIVIAL | 30 min | 70% coverage |
+| 🟢 LOW | #5: Target Network DQN | LOW | 1-2 days | Multi-Day Demo |
 | 🟢 LOW | #6: GPU Optimization RND | LOW | 1 day | Profiling |
 | 🟢 LOW | #7: Sequential Replay Buffer | MEDIUM | 1 week | POMDP issues |
+| 🟢 LOW | #10: Deduplicate Epsilon-Greedy | LOW | 1-2 hours | 70% coverage, Action #9 |
+| 🟢 LOW | #11: Remove Legacy Checkpoint Methods | TRIVIAL | 15 min | 70% coverage |
+| 🔴 HIGH | #14: Implement Modern CI/CD Pipeline | MEDIUM | 3-5 days | 70% coverage |
+| 🟡 MEDIUM | #15: Unified Training + Inference Server | MEDIUM-HIGH | 1-2 weeks | 70% coverage, ACTION #14 |
 
-**Total Estimated Time:** 9-14 weeks of focused development
+**Total Estimated Time:** 13-20 weeks of focused development
 
 **Note:** Action #9 (Network Architecture Redesign) added 2025-10-31 based on systematic testing discoveries. Testing revealed fundamental design issues that require "root and branch reimagining" of network architecture, observation handling, and state management.
 
@@ -1055,6 +1060,190 @@ For teaching purposes, preserve:
 
 ---
 
+### ACTION #10: Deduplicate Epsilon-Greedy Action Selection
+
+**Status:** PLANNED  
+**Priority:** LOW  
+**Complexity:** LOW (1-2 hours)  
+**Depends On:** 70% test coverage, ACTION #9 (Network Architecture Redesign)  
+**Discovered:** October 31, 2025 during Week 2 testing
+
+#### Current Problem
+
+**Code Duplication:** `select_actions()` method is duplicated between:
+
+- `exploration/epsilon_greedy.py` lines 41-88 (47 lines)
+- `exploration/rnd.py` lines 98-144 (47 lines)
+
+**Impact:**
+
+- 47 lines of 100% duplicate code
+- Maintenance burden (changes must be made in two places)
+- Violates DRY principle
+- Increases risk of divergence over time
+
+**Why It Exists:**
+
+- RND needs epsilon-greedy selection + intrinsic rewards
+- Copy-paste during initial implementation
+- Both implementations are identical (well-tested via `test_epsilon_greedy.py`)
+
+#### Dependencies
+
+**Cross-module coupling:**
+
+- `population/vectorized.py` line 113: `self.exploration.rnd.epsilon`
+- Currently an untested line (part of 11 missing lines in vectorized.py)
+- Needs test coverage before refactoring
+
+**Existing correct pattern:**
+
+- `AdaptiveIntrinsicExploration` correctly delegates to RND:
+
+  ```python
+  def select_actions(self, q_values, agent_states, action_masks):
+      return self.rnd.select_actions(q_values, agent_states, action_masks)
+  ```
+
+#### Proposed Solution
+
+**Option 1: Composition (Recommended)**
+
+```python
+# In rnd.py
+class RNDExploration(ExplorationStrategy):
+    def __init__(self, epsilon_start=1.0, epsilon_decay=0.995, epsilon_min=0.01, ...):
+        self.epsilon_greedy_helper = EpsilonGreedyExploration(
+            epsilon=epsilon_start,
+            epsilon_decay=epsilon_decay,
+            epsilon_min=epsilon_min
+        )
+        # ... rest of init
+    
+    @property
+    def epsilon(self):
+        """Delegate epsilon access for backwards compatibility."""
+        return self.epsilon_greedy_helper.epsilon
+    
+    def select_actions(self, q_values, agent_states, action_masks):
+        return self.epsilon_greedy_helper.select_actions(q_values, agent_states, action_masks)
+    
+    def decay_epsilon(self):
+        self.epsilon_greedy_helper.decay_epsilon()
+```
+
+**Option 2: Pull up to base class**
+
+```python
+# In base.py
+class ExplorationStrategy:
+    @staticmethod
+    def epsilon_greedy_select(q_values, agent_states, action_masks):
+        # Implementation here (47 lines)
+        pass
+```
+
+#### Implementation Steps
+
+1. **Add test for vectorized.py line 113** (epsilon retrieval from RND)
+2. **Verify all tests pass** (159 tests)
+3. **Implement composition** in RND
+4. **Add epsilon property** for backwards compatibility
+5. **Run full test suite** (should still be 159 passing)
+6. **Delete 47 duplicate lines** from RND
+7. **Update documentation**
+
+#### Success Criteria
+
+- ✅ All 159 tests still passing
+- ✅ 47 lines of code eliminated
+- ✅ `population/vectorized.py` line 113 still works
+- ✅ `AdaptiveIntrinsicExploration` still works (wraps RND correctly)
+- ✅ No performance degradation
+
+#### Risk Assessment
+
+**Risk Level:** LOW
+
+- Small, isolated change
+- Well-tested components
+- Clear backwards compatibility path
+
+**Mitigation:**
+
+- Do during ACTION #9 when touching exploration code anyway
+- Add missing test first (vectorized.py line 113)
+- Verify integration tests pass
+
+---
+
+### ACTION #11: Remove Legacy Checkpoint Methods in AdversarialCurriculum
+
+**Status:** PLANNED  
+**Priority:** LOW  
+**Complexity:** TRIVIAL (15 minutes)  
+**Depends On:** 70% test coverage  
+**Discovered:** October 31, 2025 during Week 2 testing (adversarial curriculum)
+
+#### Current Problem
+
+**Code Duplication:** Legacy wrapper methods in `curriculum/adversarial.py`:
+
+```python
+def checkpoint_state(self) -> Dict[str, Any]:
+    """Return serializable state for checkpoint saving."""
+    # Legacy method - use state_dict() instead
+    return self.state_dict()
+
+def load_state(self, state: Dict[str, Any]) -> None:
+    """Restore curriculum manager from checkpoint."""
+    # Legacy method - use load_state_dict() instead
+    self.load_state_dict(state)
+```
+
+**Why It Exists:**
+
+- Backwards compatibility during API transition
+- Old code used `checkpoint_state()` / `load_state()`
+- New code uses `state_dict()` / `load_state_dict()` (PyTorch convention)
+- Now that tests use the new API, legacy methods are unnecessary
+
+**Impact:**
+
+- 10 lines of trivial wrapper code
+- API confusion (two ways to do the same thing)
+- Minor maintenance burden
+
+#### Proposed Solution
+
+**Step 1:** Verify no code uses legacy methods
+
+```bash
+grep -r "checkpoint_state\|load_state[^_]" src/townlet/ tests/
+# Should only find state_dict() / load_state_dict() usage
+```
+
+**Step 2:** Remove legacy methods from `adversarial.py` lines ~355-365
+
+**Step 3:** Verify tests still pass (they use new API)
+
+#### Success Criteria
+
+- ✅ All 205 tests still passing
+- ✅ 10 lines of code eliminated
+- ✅ Single clear API (state_dict/load_state_dict)
+- ✅ No deprecation warnings needed (old API unused)
+
+#### Risk Assessment
+
+**Risk Level:** TRIVIAL
+
+- No external callers (verified by grep)
+- Tests already use new API
+- PyTorch-style naming is clearer
+
+---
+
 ## 📊 Success Metrics
 
 For each refactoring action, track:
@@ -1065,6 +1254,1204 @@ For each refactoring action, track:
 - [ ] Lines of code in `vectorized_env.py` decreased
 - [ ] Configuration flexibility increased
 - [ ] Documentation quality improved
+
+---
+
+### ACTION #12: Configuration-Defined Affordances
+
+**Status:** PLANNED  
+**Priority:** MEDIUM  
+**Complexity:** MEDIUM (1-2 weeks)  
+**Depends On:** 70% test coverage, ACTION #3 (MeterDynamics extraction)  
+**Discovered:** November 1, 2025 during affordance effects testing
+
+#### Current Problem
+
+**Affordances are hardcoded in Python**: All affordance effects are defined as Python code in `vectorized_env.py` lines 620-780:
+
+```python
+elif affordance_name == "Doctor":
+    self.meters[at_affordance, 6] = torch.clamp(
+        self.meters[at_affordance, 6] + 0.25, 0.0, 1.0
+    )  # Health +25%
+    self.meters[at_affordance, 3] -= 0.08  # Money -$8
+elif affordance_name == "Hospital":
+    self.meters[at_affordance, 6] = torch.clamp(
+        self.meters[at_affordance, 6] + 0.40, 0.0, 1.0
+    )  # Health +40% (intensive care)
+    self.meters[at_affordance, 3] -= 0.15  # Money -$15
+# ... 15 more affordances with similar code
+```
+
+**Problems:**
+
+- **200+ lines of repetitive code** (one elif block per affordance)
+- **Cannot add affordances without editing code** (no modding support)
+- **Balance changes require code changes** (not data-driven)
+- **Cannot A/B test different affordance configurations** (need separate branches)
+- **Violates data/code separation** (affordances are game data, not logic)
+- **Hard to teach** (students can't experiment with new affordances easily)
+- **Duplicate definitions** between temporal (`affordance_config.py`) and legacy systems
+
+#### Recognition
+
+**Affordances are just gauge adjustments**:
+
+- Every affordance modifies meters in predictable ways
+- The logic is identical: check position, check cost, apply effects, charge money
+- Differences are only in the numbers, not the code structure
+
+**This should be data, not code.**
+
+#### Desired End State
+
+**YAML Configuration:**
+
+```yaml
+# configs/affordances.yaml
+affordances:
+  Doctor:
+    position: [5, 1]
+    cost: 8  # dollars
+    effects:
+      health: +0.25
+    operating_hours: [8, 18]  # 8am-6pm
+    description: "Affordable health clinic"
+    tier: 1
+    
+  Hospital:
+    position: [6, 1]
+    cost: 15
+    effects:
+      health: +0.40
+    operating_hours: [0, 24]  # 24/7 emergency
+    description: "Intensive emergency care"
+    tier: 2
+    
+  Park:
+    position: [0, 4]
+    cost: 0  # FREE!
+    effects:
+      fitness: +0.20
+      social: +0.15
+      mood: +0.15
+      energy: -0.15  # Time/effort cost
+    operating_hours: [6, 22]  # 6am-10pm
+    description: "Free outdoor recreation"
+    
+  Bed:
+    position: [1, 1]
+    cost: 5
+    effects:
+      energy: +0.50
+      health: +0.02
+    operating_hours: [0, 24]
+    description: "Basic rest"
+    tier: 1
+    
+  LuxuryBed:
+    position: [2, 1]
+    cost: 11
+    effects:
+      energy: +0.75
+      health: +0.05
+    operating_hours: [0, 24]
+    description: "Premium rest and recovery"
+    tier: 2
+    
+  Job:
+    position: [6, 6]
+    cost: 0
+    effects:
+      money: +22.5  # Special: adds money instead of subtracting
+      energy: -0.15
+      social: +0.02
+      health: -0.03
+    operating_hours: [8, 18]
+    description: "Office work - sustainable income"
+    
+  Labor:
+    position: [7, 6]
+    cost: 0
+    effects:
+      money: +30.0
+      energy: -0.20
+      fitness: -0.05
+      health: -0.05
+      social: +0.01
+    operating_hours: [8, 18]
+    description: "Physical labor - higher pay, higher costs"
+    
+  Bar:
+    position: [7, 0]
+    cost: 15
+    effects:
+      social: +0.50  # BEST social in game
+      mood: +0.25
+      satiation: +0.30
+      energy: -0.20
+      hygiene: -0.15
+      health: -0.05
+    operating_hours: [18, 4]  # 6pm-4am (wraps midnight)
+    description: "Social hub with health penalties"
+    
+  FastFood:
+    position: [5, 6]
+    cost: 10
+    effects:
+      satiation: +0.45
+      energy: +0.15
+      social: +0.01
+      fitness: -0.03
+      health: -0.02
+    operating_hours: [0, 24]
+    description: "Quick satiation with health costs"
+    
+  # ... etc for all 15 affordances
+```
+
+**Generic Engine:**
+
+```python
+# src/townlet/affordances/engine.py
+
+from typing import Dict, List, Tuple
+import torch
+from pydantic import BaseModel, Field
+
+class AffordanceEffect(BaseModel):
+    """Single meter effect."""
+    meter: str
+    delta: float  # Can be positive or negative
+
+class AffordanceConfig(BaseModel):
+    """Configuration for a single affordance."""
+    name: str
+    position: Tuple[int, int]
+    cost: float = Field(ge=0.0)  # In dollars
+    effects: Dict[str, float]  # meter_name → delta
+    operating_hours: Tuple[int, int] = (0, 24)
+    description: str = ""
+    tier: int = 1
+
+class AffordanceEngine:
+    """
+    Generic affordance interaction engine.
+    
+    Applies meter effects based on configuration, no hardcoded logic.
+    """
+    
+    def __init__(
+        self, 
+        affordances: List[AffordanceConfig], 
+        meter_names: List[str],
+        device: torch.device
+    ):
+        self.affordances = {aff.name: aff for aff in affordances}
+        self.meter_name_to_idx = {name: idx for idx, name in enumerate(meter_names)}
+        self.device = device
+        
+        # Pre-compute affordance positions tensor
+        self.affordance_positions = torch.tensor(
+            [aff.position for aff in affordances],
+            device=device
+        )
+        self.affordance_names = [aff.name for aff in affordances]
+    
+    def apply_affordance_effects(
+        self,
+        meters: torch.Tensor,
+        positions: torch.Tensor,
+        interact_mask: torch.Tensor,
+        time_of_day: int = 12
+    ) -> Tuple[torch.Tensor, Dict[int, str]]:
+        """
+        Apply affordance effects to agents.
+        
+        Args:
+            meters: [num_agents, num_meters]
+            positions: [num_agents, 2]
+            interact_mask: [num_agents] bool
+            time_of_day: Current hour (0-23)
+            
+        Returns:
+            updated_meters: [num_agents, num_meters]
+            successful_interactions: {agent_idx: affordance_name}
+        """
+        meters = meters.clone()
+        successful_interactions = {}
+        
+        for affordance_name, config in self.affordances.items():
+            # Check if affordance is open
+            if not self._is_open(config.operating_hours, time_of_day):
+                continue
+            
+            # Find agents on this affordance
+            affordance_pos = torch.tensor(config.position, device=self.device)
+            distances = torch.abs(positions - affordance_pos).sum(dim=1)
+            at_affordance = (distances == 0) & interact_mask
+            
+            if not at_affordance.any():
+                continue
+            
+            # Check affordability
+            cost_normalized = config.cost / 100.0  # $0-$100 → 0.0-1.0
+            money_idx = self.meter_name_to_idx['money']
+            can_afford = meters[:, money_idx] >= cost_normalized
+            at_affordance = at_affordance & can_afford
+            
+            if not at_affordance.any():
+                continue
+            
+            # Apply effects
+            for meter_name, delta in config.effects.items():
+                meter_idx = self.meter_name_to_idx[meter_name]
+                
+                if meter_name == 'money':
+                    # Special case: money can be added or subtracted
+                    delta_normalized = delta / 100.0
+                    meters[at_affordance, meter_idx] += delta_normalized
+                else:
+                    # Normal meter effect
+                    meters[at_affordance, meter_idx] += delta
+            
+            # Charge cost
+            meters[at_affordance, money_idx] -= cost_normalized
+            
+            # Clamp meters
+            meters = torch.clamp(meters, 0.0, 1.0)
+            
+            # Track successful interactions
+            agent_indices = torch.where(at_affordance)[0]
+            for agent_idx in agent_indices:
+                successful_interactions[agent_idx.item()] = affordance_name
+        
+        return meters, successful_interactions
+    
+    def _is_open(self, operating_hours: Tuple[int, int], time_of_day: int) -> bool:
+        """Check if affordance is open at given time."""
+        open_hour, close_hour = operating_hours
+        
+        if open_hour < close_hour:
+            # Normal hours (e.g., 8-18)
+            return open_hour <= time_of_day < close_hour
+        else:
+            # Wraps midnight (e.g., 18-4)
+            return time_of_day >= open_hour or time_of_day < close_hour
+```
+
+**Integration:**
+
+```python
+# src/townlet/environment/vectorized_env.py
+
+class VectorizedHamletEnv:
+    def __init__(self, ..., affordance_config_path: Optional[str] = None):
+        # Load affordances from YAML
+        if affordance_config_path is None:
+            affordance_config_path = "configs/affordances.yaml"
+        
+        with open(affordance_config_path) as f:
+            config_dict = yaml.safe_load(f)
+        
+        affordances = [
+            AffordanceConfig(name=name, **data)
+            for name, data in config_dict['affordances'].items()
+        ]
+        
+        meter_names = ['energy', 'hygiene', 'satiation', 'money', 
+                       'mood', 'social', 'health', 'fitness']
+        
+        self.affordance_engine = AffordanceEngine(affordances, meter_names, device)
+    
+    def _handle_interactions_legacy(self, interact_mask: torch.Tensor) -> dict:
+        """Use generic engine instead of hardcoded logic."""
+        self.meters, successful = self.affordance_engine.apply_affordance_effects(
+            self.meters,
+            self.positions,
+            interact_mask,
+            time_of_day=0  # Legacy system has no time
+        )
+        return successful
+    
+    # DELETE: 200 lines of hardcoded affordance logic (lines 620-780)
+```
+
+#### Benefits
+
+**For Development:**
+
+- ✅ **Eliminate 200+ lines of repetitive code**
+- ✅ **Data-driven balance** (tweak YAML, not Python)
+- ✅ **Easy to add new affordances** (just add YAML entry)
+- ✅ **A/B test configurations** (swap config files)
+- ✅ **Version control affordances separately** (track balance changes)
+- ✅ **Unify temporal and legacy systems** (one config, two engines)
+
+**For Teaching:**
+
+- ✅ **Students can create custom affordances** without editing code
+- ✅ **Mod support** (drop in new affordance configs)
+- ✅ **Experimentation** (change numbers, observe results)
+- ✅ **Clear separation of concerns** (game data vs game logic)
+- ✅ **Configuration becomes documentation** (self-describing)
+
+**For Research:**
+
+- ✅ **Reproducible experiments** (config versioning)
+- ✅ **Systematic exploration** (parameter sweeps)
+- ✅ **Easy to share designs** (send YAML file)
+- ✅ **Can generate configs programmatically** (procedural content)
+
+**For Game Design:**
+
+- ✅ **Balance iterations don't require code review** (non-programmers can tweak)
+- ✅ **Risk/reward tuning visible in one place**
+- ✅ **Tier system explicit** (tier 1 vs tier 2 clearly marked)
+- ✅ **Operating hours in config** (already defined for temporal, consolidate)
+
+#### Implementation Plan
+
+**Phase 1: Create Engine (Week 1)**
+
+1. Define Pydantic models (`AffordanceConfig`, etc.)
+2. Implement `AffordanceEngine` class
+3. Write unit tests for engine (test each component)
+4. Validate YAML parsing and validation
+
+**Phase 2: Migrate Configuration (Week 1)**
+
+1. Extract current affordance data to YAML
+2. Ensure exact behavior match (same numbers)
+3. Add temporal mechanics data (multi-tick, operating hours)
+4. Validate completeness (all 15 affordances)
+
+**Phase 3: Integration (Week 2)**
+
+1. Integrate engine into `_handle_interactions_legacy()`
+2. Run full test suite (all 241+ tests must pass)
+3. Verify behavior identical to hardcoded version
+4. Performance benchmark (should be equivalent)
+
+**Phase 4: Temporal System (Week 2)**
+
+1. Extend engine for multi-tick interactions (from `affordance_config.py`)
+2. Consolidate temporal and legacy configs
+3. Single YAML drives both systems
+4. Delete `affordance_config.py` (now redundant)
+
+**Phase 5: Cleanup & Documentation (3 days)**
+
+1. Delete 200 lines of hardcoded logic
+2. Document YAML schema
+3. Create example custom affordances
+4. Add affordance creation tutorial
+
+#### Success Criteria
+
+- [ ] All existing tests pass (241+ tests)
+- [ ] Behavior identical to hardcoded version
+- [ ] Performance within 5% of current implementation
+- [ ] 200+ lines of code eliminated
+- [ ] Can add new affordance by editing YAML only
+- [ ] Students can create custom affordances without code knowledge
+- [ ] Configuration validates on load (Pydantic)
+- [ ] Documentation includes YAML schema and examples
+
+#### Risks & Mitigations
+
+**Risk:** Performance degradation from dynamic dispatch  
+**Mitigation:** Pre-compile configurations, use tensor operations, benchmark thoroughly
+
+**Risk:** Configuration becomes too complex  
+**Mitigation:** Provide templates, validation, sensible defaults
+
+**Risk:** Breaking temporal mechanics  
+**Mitigation:** Comprehensive test coverage first, careful migration
+
+**Risk:** Students confused by YAML  
+**Mitigation:** Clear documentation, examples, config generator tool
+
+#### Pedagogical Value
+
+**Before (Hardcoded):**
+
+- Students see 200 lines of repetitive elif statements
+- "This is what NOT to do in production code"
+- Adding affordance requires editing Python
+- Balance changes require code review
+
+**After (Config-Driven):**
+
+- Students see clean generic engine
+- "This is data-driven design"
+- Adding affordance is editing YAML
+- Non-programmers can balance game
+- **Teaching moment:** Show both versions, explain trade-offs
+
+**Assignment Idea:**
+
+"Design a new affordance for Hamlet. It should help with a specific survival challenge. Submit your `custom_affordances.yaml` file."
+
+Students learn game design without needing to code!
+
+### ACTION #13: Remove Pedagogical DISABLED Code
+
+**Status:** PLANNED  
+**Priority:** MEDIUM  
+**Complexity:** TRIVIAL (30 minutes)  
+**Depends On:** 70% test coverage, git history preserved  
+**Discovered:** November 1, 2025 during affordance effects testing
+
+#### Current Problem
+
+**DISABLED code kept "for teaching"** in `vectorized_env.py`:
+
+- Lines 1019-1147: `_calculate_shaped_rewards_COMPLEX_DISABLED()` (~129 lines)
+- Lines 1158-1244: `_calculate_proximity_rewards()` and related (~87 lines)
+- **Total: ~216 lines of dead code**
+
+**Why It Exists:**
+
+- Complex reward system caused negative accumulation bug
+- Proximity rewards caused reward hacking (agents standing near affordances)
+- Kept "for pedagogical value" to show students what NOT to do
+
+**Problems:**
+
+- ✅ Code is in git history (commit hash available)
+- ✅ Anecdote is documented in AGENTS.md and ROADMAP.md
+- ❌ Dead code clutters the codebase
+- ❌ Confuses new contributors
+- ❌ Risk of accidentally re-enabling
+- ❌ Not actually used for teaching (just referenced)
+
+#### Recognition
+
+**Git is our teaching archive**, not the live codebase:
+
+- Students can `git show <commit>` to see old implementations
+- Documentation references the commits and explains the failures
+- No need to carry dead code forward
+- Live code should be clean and production-ready
+
+#### Implementation Steps
+
+1. Find commit hashes for COMPLEX and proximity systems
+2. Update documentation with commit references (AGENTS.md, ROADMAP.md)
+3. Delete dead code (lines 1019-1244 in vectorized_env.py)
+4. Run full test suite (should still pass - code was never called)
+5. Add comment at deletion site referencing git history
+
+#### Expected Impact on Coverage
+
+**Current:** `vectorized_env.py`: 84% (71 missing lines)  
+**After Removal:** `vectorized_env.py`: ~98% (~1 missing line)
+
+**This single action moves vectorized_env.py from 84% → 98% coverage!**
+
+#### Success Criteria
+
+- [ ] Commit hashes documented in AGENTS.md and ROADMAP.md
+- [ ] 216 lines deleted from vectorized_env.py
+- [ ] All tests still passing
+- [ ] Coverage improves dramatically
+- [ ] Comment added explaining where to find old implementations
+
+### ACTION #14: Implement Modern CI/CD Pipeline
+
+**Status:** PLANNED  
+**Priority:** HIGH  
+**Complexity:** MEDIUM (3-5 days)  
+**Depends On:** 70% test coverage milestone  
+**Discovered:** November 1, 2025 during documentation review
+
+#### Current Problem
+
+**No automated quality checks in CI:**
+
+- No linting (code style violations accumulate)
+- No type checking (mypy not enforced)
+- No dead code detection (216 lines of DISABLED code went unnoticed)
+- No security scanning
+- No automated formatting
+- Manual quality control = inconsistent quality
+
+**Current Setup:**
+
+- Basic pytest in CI (if any)
+- Manual code review catches issues late
+- No pre-commit hooks
+- No automatic formatting enforcement
+
+#### Recognition
+
+**Modern Python projects use automated quality gates:**
+
+- Ruff: Lightning-fast linter + formatter (replaces Black, isort, flake8, pylint)
+- Mypy: Type checking catches bugs before runtime
+- Vulture: Dead code detection (would have flagged 216 DISABLED lines!)
+- Bandit: Security vulnerability scanning
+- Pre-commit: Local checks before pushing
+- GitHub Actions: Automated CI on every PR
+
+#### Proposed Solution
+
+**Phase 1: Local Development Tools (Day 1)**
+
+Install and configure tools:
+
+```bash
+pip install ruff mypy vulture bandit pre-commit
+```
+
+**`pyproject.toml` configuration:**
+
+```toml
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # function calls in argument defaults
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Start lenient, tighten over time
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.vulture]
+min_confidence = 80
+paths = ["src/townlet"]
+exclude = ["tests/", "src/hamlet/"]  # Ignore legacy code
+
+[tool.bandit]
+exclude_dirs = ["tests", "src/hamlet"]
+skips = ["B101"]  # Skip assert_used (normal in tests)
+```
+
+**Phase 2: Pre-commit Hooks (Day 1-2)**
+
+**`.pre-commit-config.yaml`:**
+
+```yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        args: [--config-file=pyproject.toml]
+
+  - repo: local
+    hooks:
+      - id: vulture
+        name: vulture
+        entry: vulture
+        language: system
+        types: [python]
+        args: [--min-confidence=80]
+
+      - id: pytest-coverage
+        name: pytest with coverage
+        entry: bash -c 'pytest tests/test_townlet/ --cov=src/townlet --cov-report=term-missing --cov-fail-under=70'
+        language: system
+        pass_filenames: false
+        always_run: true
+```
+
+Install hooks:
+
+```bash
+pre-commit install
+pre-commit run --all-files  # Initial run
+```
+
+**Phase 3: GitHub Actions CI (Day 2-3)**
+
+**`.github/workflows/ci.yml`:**
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+          
+      - name: Ruff lint
+        run: ruff check src/townlet tests/test_townlet
+        
+      - name: Ruff format check
+        run: ruff format --check src/townlet tests/test_townlet
+        
+      - name: Mypy type check
+        run: mypy src/townlet
+        
+      - name: Vulture dead code check
+        run: vulture src/townlet --min-confidence=80
+        
+      - name: Bandit security check
+        run: bandit -r src/townlet -c pyproject.toml
+        
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+          
+      - name: Run tests with coverage
+        run: |
+          pytest tests/test_townlet/             --cov=src/townlet             --cov-report=xml             --cov-report=term-missing             --cov-fail-under=70
+            
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+```
+
+**Phase 4: Fix Existing Violations (Day 3-5)**
+
+Run tools and fix issues:
+
+```bash
+# 1. Auto-fix what we can
+ruff check --fix src/townlet tests/test_townlet
+ruff format src/townlet tests/test_townlet
+
+# 2. Review mypy errors
+mypy src/townlet > mypy_errors.txt
+# Fix type hints incrementally (don't block on 100% compliance)
+
+# 3. Review vulture findings
+vulture src/townlet --min-confidence=80 > dead_code.txt
+# This WILL flag the 216 lines in ACTION #13!
+# Also might find other unused imports/variables
+
+# 4. Review bandit findings
+bandit -r src/townlet -c pyproject.toml > security.txt
+# Fix any high-priority security issues
+```
+
+**Phase 5: Documentation & Onboarding (Day 5)**
+
+Update development docs:
+
+- Add "Development Setup" section to README
+- Document pre-commit workflow
+- Add CI badge to README
+- Create CONTRIBUTING.md with quality standards
+
+#### Benefits
+
+**For Development:**
+
+- ✅ Catch bugs before runtime (mypy)
+- ✅ Consistent code style (ruff format)
+- ✅ Find dead code automatically (vulture)
+- ✅ Security vulnerability scanning (bandit)
+- ✅ Pre-commit prevents bad commits
+- ✅ CI prevents bad merges
+
+**For Teaching:**
+
+- ✅ Students learn modern Python tooling
+- ✅ Professional development practices
+- ✅ Automated quality feedback
+- ✅ Industry-standard workflow
+
+**For Maintenance:**
+
+- ✅ Code quality improves over time
+- ✅ Less manual review burden
+- ✅ Easier to onboard contributors
+- ✅ Confidence in refactoring
+
+#### Tool Comparison
+
+**Ruff vs Traditional:**
+
+- Ruff: 10-100x faster than pylint/flake8
+- Replaces: Black, isort, flake8, pylint, pyupgrade
+- Single tool for linting + formatting
+- Written in Rust, blazingly fast
+
+**Vulture:**
+
+- Would have detected 216 lines of DISABLED code
+- Finds unused imports, variables, functions
+- Configurable confidence threshold
+- Minimal false positives at 80% confidence
+
+**Mypy:**
+
+- Static type checking without runtime overhead
+- Gradual typing (can start lenient, tighten over time)
+- Catches type errors, null pointer issues
+- Industry standard for Python type checking
+
+#### Implementation Plan
+
+**Day 1: Local Tools Setup**
+
+1. Add dependencies to pyproject.toml
+2. Configure ruff, mypy, vulture, bandit
+3. Run initial scan, document violations
+4. Set up pre-commit hooks
+
+**Day 2: CI Pipeline**
+
+1. Create .github/workflows/ci.yml
+2. Configure quality and test jobs
+3. Add coverage upload to Codecov
+4. Test on feature branch
+
+**Day 3-4: Fix Violations**
+
+1. Run ruff format on all files
+2. Fix ruff lint errors (auto-fix most)
+3. Add type hints for mypy (prioritize)
+4. Review vulture findings, remove dead code
+5. Fix bandit security issues
+
+**Day 5: Documentation**
+
+1. Update README with CI badge
+2. Add Development Setup section
+3. Create CONTRIBUTING.md
+4. Document pre-commit workflow
+
+#### Success Criteria
+
+- [ ] Ruff configured and running in CI
+- [ ] Mypy type checking enabled (lenient mode initially)
+- [ ] Vulture dead code detection running
+- [ ] Bandit security scanning enabled
+- [ ] Pre-commit hooks installed and documented
+- [ ] GitHub Actions CI running on all PRs
+- [ ] Coverage badge added to README
+- [ ] All existing code passes quality gates
+- [ ] CONTRIBUTING.md created with workflow
+- [ ] <10 mypy errors remaining (fix incrementally)
+
+#### Expected Findings
+
+**Vulture will flag:**
+
+- 216 lines in ACTION #13 (DISABLED reward code)
+- Unused imports in legacy hamlet code
+- Possibly unused helper functions
+- Dead variables/constants
+
+**Ruff will find:**
+
+- Import ordering issues (auto-fixable)
+- Line length violations (auto-fixable)
+- Style inconsistencies (auto-fixable)
+- Possibly unused variables
+
+**Mypy will find:**
+
+- Missing type hints (many)
+- Type mismatches in tensor operations
+- Optional/None handling issues
+- Return type inconsistencies
+
+**Strategy:** Fix critical issues (security, dead code), auto-fix style, defer some type hints to gradual improvement.
+
+#### Pedagogical Value
+
+**Teaching Moment:**
+"Professional Python development uses automated quality tools. These aren't just for 'being pedantic' - they catch real bugs:
+
+- Mypy catches type errors before runtime
+- Vulture finds 216 lines of dead code we forgot about
+- Bandit finds security vulnerabilities
+- Ruff enforces consistency across contributors
+
+This is how real teams ship quality software at scale."
+
+#### Notes
+
+**Why High Priority:**
+
+- Technical debt accumulates without quality gates
+- 216 lines of dead code went unnoticed (vulture would have caught it)
+- Type safety prevents entire classes of bugs
+- Industry-standard tooling prepares students for real work
+- Small investment (3-5 days) pays dividends forever
+
+**Why After 70% Coverage:**
+
+- Need test safety net before fixing violations
+- Coverage requirement in CI needs to be met first
+- Some tools (vulture) work better with high test coverage
+
+**Gradual Type Checking:**
+Start with `disallow_untyped_defs = false`, then tighten:
+
+1. Phase 1: Check typed functions only
+2. Phase 2: Require types for new code
+3. Phase 3: Add types to existing code incrementally
+4. Phase 4: Enable strict mode
+
+Don't block on 100% type coverage - improve gradually!
+
+---
+
+### ACTION #15: Unified Training + Inference Server
+
+**Status:** PLANNED  
+**Priority:** MEDIUM  
+**Complexity:** MEDIUM-HIGH (1-2 weeks)  
+**Depends On:** 70% coverage, stable training loop, ACTION #14 (CI/CD)  
+**Discovered:** November 1, 2025 during demo infrastructure review
+
+#### Current Problem
+
+**Training, inference, and frontend are THREE separate processes:**
+
+**Current Architecture:**
+
+```bash
+# Terminal 1: Training
+python -m townlet.demo.runner configs/townlet.yaml demo.db checkpoints 10000
+
+# Terminal 2: Inference server  
+python -m townlet.demo.live_inference checkpoints 8766 0.2 10000 configs/townlet.yaml
+
+# Terminal 3: Frontend web server
+cd frontend && npm run dev
+```
+
+**Three processes to manage!**
+
+- `runner.py`: Training process (saves checkpoints every 100 episodes)
+- `live_inference.py`: WebSocket server (watches for new checkpoints, loads periodically)
+- `npm run dev`: Vue.js frontend (serves HTML/JS/CSS on port 5173)
+
+**Problems:**
+
+- ❌ **THREE separate commands to start demo** (fiddly, error-prone)
+- ❌ Inference sees stale model (100 episodes behind)
+- ❌ Extra process management complexity
+- ❌ Double GPU memory usage (if both use GPU)
+- ❌ Checkpoint I/O adds latency
+- ❌ Race conditions (inference loading while checkpoint being written)
+- ❌ Can't see "hot off the press" behavior during training
+- ❌ Frontend must be started separately (easy to forget)
+- ❌ Port conflicts if something already on 5173 or 8766
+
+#### Recognition
+
+**The goal: `python run_demo.py` and you're done!**
+
+No juggling three terminals. No "did I remember to start the frontend?" confusion.
+
+**Modern RL systems integrate training, evaluation, and visualization:**
+
+- Ray RLlib: Built-in rollout workers + TensorBoard integration
+- SB3: VecEnv callbacks + evaluation during training
+- MLflow: Unified experiment tracking with web UI
+- **Single command starts everything**
+
+**Two technical approaches:**
+
+1. **Checkpoint-based** (safer): Serve from last completed checkpoint
+2. **Live model** (faster): Serve directly from training model (read-only)
+
+#### Proposed Solution
+
+**Single Command: `python run_demo.py`**
+
+```bash
+# That's it! Everything starts automatically:
+python run_demo.py --config configs/townlet.yaml --episodes 10000
+
+# Opens browser to http://localhost:8766 automatically
+# Training + inference + frontend all running
+# Hit Ctrl+C to stop everything cleanly
+```
+
+**Unified Server Architecture:**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    run_demo.py                               │
+│              Unified Training + Inference + Web UI           │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌───────────┐ │
+│  │  Training Thread │  │ Inference Thread │  │ Frontend  │ │
+│  │                  │  │                  │  │  Server   │ │
+│  │  1. Step env     │◄─┤  1. Copy model   │  │  (Static) │ │
+│  │  2. Update model │  │  2. Run episode  │  │           │ │
+│  │  3. Checkpoint   │  │  3. Broadcast    │◄─┤  Port     │ │
+│  │  4. Repeat       │  │  4. Wait/Repeat  │  │  8766     │ │
+│  └──────────────────┘  └──────────────────┘  └───────────┘ │
+│         │                      │                     │       │
+│         └──────────┬───────────┴─────────────────────┘       │
+│                    ▼                                         │
+│           ┌─────────────────┐                                │
+│           │  Shared Q-Net   │                                │
+│           │  (with RWLock)  │                                │
+│           └─────────────────┘                                │
+│                                                              │
+│  WebSocket (ws://localhost:8766/ws) ◄──► Browser            │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
+
+- **TrainingLoop**: Pure training logic (no I/O dependencies)
+- **InferenceEngine**: Runs episodes with model snapshot
+- **CheckpointManager**: Coordinates model synchronization
+- **FrontendServer**: Serves static Vue.js build (embedded in Python)
+- **UnifiedServer**: Orchestrates all three threads + auto-opens browser
+
+#### Benefits
+
+**Performance:**
+
+- ✅ Single process (no IPC overhead)
+- ✅ Shared model (no double memory)
+- ✅ Optional: Serve from live model (no checkpoint I/O lag)
+- ✅ Faster inference updates (every 10 episodes vs 100)
+
+**Simplicity:**
+
+- ✅ One command to start training + demo
+- ✅ No process coordination needed
+- ✅ Simpler deployment (one service)
+- ✅ Unified configuration
+
+**Features:**
+
+- ✅ Training status API (pause/resume/metrics)
+- ✅ See "hot off the press" agent behavior
+- ✅ Live performance monitoring
+- ✅ Easier debugging (single process)
+
+#### Implementation Plan
+
+**Week 1: Core Refactoring**
+
+**Day 1-2: Extract TrainingLoop**
+
+- Separate training logic from runner.py
+- Create TrainingLoop class (pure RL logic)
+- Test: Training still works identically
+
+**Day 3-4: Extract InferenceEngine**
+
+- Extract inference logic from live_inference.py
+- Create InferenceEngine class (model snapshot + episode runner)
+- Test: Inference episodes run correctly
+
+**Day 4-5: Model Synchronization**
+
+- Implement CheckpointManager with threading primitives
+- Add model snapshot mechanism (deep copy)
+- Test: Thread-safe model access
+
+**Week 2: Integration**
+
+**Day 1-2: Unified Server + Frontend Integration**
+
+- Create UnifiedServer combining training + inference + frontend
+- Integrate FastAPI WebSocket server (port 8766)
+- **Build Vue.js frontend to static bundle** (`npm run build`)
+- **Serve static frontend from Python** (FastAPI StaticFiles)
+- Add training control API (pause/resume/status)
+- **Auto-open browser** on startup (Python `webbrowser` module)
+- Test: All three components run concurrently
+
+**Frontend Integration Options:**
+
+1. **Static build (RECOMMENDED)**: Build frontend once, embed in Python package
+   - `frontend/dist/` → Python package resources
+   - FastAPI serves static files from `/` route
+   - No Node.js runtime needed for deployment!
+2. **Dev mode**: Optionally proxy to `npm run dev` for development
+   - Use `--dev` flag to run frontend hot-reload server
+   - Production mode uses static build
+
+**Day 3-4: Testing & Polish**
+
+- Thread safety tests
+- Performance benchmarks
+- Integration tests (full training runs)
+- Stress tests (multiple WebSocket clients)
+- Test static frontend serving
+- Test auto-browser-open functionality
+
+**Day 5: Documentation + Packaging**
+
+- Update README with new unified command
+- Document training control API
+- Add architecture diagram
+- Migration guide from old two-process system
+- **Create `run_demo.py` entry point**
+- Update package build to include frontend static files
+
+#### Success Criteria
+
+- [ ] **Single command starts everything: `python run_demo.py`**
+- [ ] **Browser auto-opens to <http://localhost:8766>**
+- [ ] Frontend loads correctly (static files served from Python)
+- [ ] Training throughput unchanged (episodes/hour)
+- [ ] Inference sees model updates every 10-100 episodes (configurable)
+- [ ] WebSocket clients receive step-by-step updates
+- [ ] Training control API works (pause/resume/status)
+- [ ] Thread-safe (no deadlocks, no race conditions)
+- [ ] Memory usage acceptable (1.5x single training, not 2x)
+- [ ] All tests passing (unit + integration)
+- [ ] Clean shutdown (Ctrl+C stops all threads)
+- [ ] **No "forgot to start frontend" errors**
+- [ ] **No "forgot to start inference server" errors**
+- [ ] Documentation updated with new architecture
+
+#### Recommended Strategy
+
+**Start with Checkpoint-Based (SAFER):**
+
+- Training and inference fully isolated after checkpoint
+- Easier to debug (clear separation)
+- Proven pattern (most RL frameworks use this)
+- Lower risk of training instability
+
+**Later (if needed), migrate to Live Model:**
+
+- Only if checkpoint I/O becomes bottleneck
+- Requires careful locking (read during training updates)
+- Risk: Inference could see partially updated model
+- Benefit: Faster updates, no disk I/O
+
+#### Pedagogical Value
+
+**Teaching Moment:**
+"Real-world RL systems need to train and evaluate simultaneously. This teaches:
+
+- **Concurrent programming**: Threading, locks, async I/O
+- **System architecture**: Separating concerns, shared state management
+- **Performance optimization**: Minimizing synchronization overhead
+- **Production patterns**: Single service vs microservices
+
+Industry frameworks (Ray RLlib, SB3) solve this problem. Now you understand how!"
+
+#### Notes
+
+**Why Medium Priority:**
+
+- Current three-process system works (not broken)
+- Significant engineering effort (1-2 weeks)
+- But: **MUCH better UX** - no fiddly multi-terminal juggling!
+
+**Why After 70% Coverage:**
+
+- Need tests before refactoring demo infrastructure
+- Demo code currently untested (0% coverage)
+- Want stable training loop before adding concurrency
+
+**Why After ACTION #14 (CI/CD):**
+
+- Thread safety bugs are subtle
+- Need automated testing for concurrency issues
+- CI/CD catches race conditions and deadlocks
+
+**Frontend Build Strategy:**
+
+- One-time setup: Build Vue.js to static files
+- Python package includes `frontend/dist/` in resources
+- FastAPI serves static files (no Node.js runtime needed!)
+- Development mode: Optionally run `npm run dev` with `--dev` flag
+- Production: Just Python, no npm/node required
+
+**GPU Consideration:**
+
+- Training uses GPU for forward + backward pass
+- Inference only needs CPU (no gradients)
+- Strategy: Keep inference model on CPU, training on GPU
+- Saves GPU memory for larger batch sizes!
+
+**User Experience Win:**
+
+```bash
+# Before (THREE commands, THREE terminals):
+Terminal 1: python -m townlet.demo.runner ...
+Terminal 2: python -m townlet.demo.live_inference ...  
+Terminal 3: cd frontend && npm run dev
+
+# After (ONE command, ONE terminal):
+python run_demo.py --config configs/townlet.yaml --episodes 10000
+
+# Browser auto-opens, everything just works!
+```
+
+---
+
+---
 
 ---
 
