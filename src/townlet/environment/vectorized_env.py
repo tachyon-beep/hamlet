@@ -396,6 +396,9 @@ class VectorizedHamletEnv:
         Returns:
             Dictionary mapping agent indices to affordance names for successful interactions
         """
+        # Store old positions for temporal mechanics progress tracking
+        old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
+
         # Movement deltas (x, y) coordinates
         # x = horizontal (column), y = vertical (row)
         deltas = torch.tensor([
@@ -414,6 +417,13 @@ class VectorizedHamletEnv:
         new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
 
         self.positions = new_positions
+
+        # Reset progress for agents that moved away (temporal mechanics)
+        if self.enable_temporal_mechanics and old_positions is not None:
+            for agent_idx in range(self.num_agents):
+                if not torch.equal(old_positions[agent_idx], self.positions[agent_idx]):
+                    self.interaction_progress[agent_idx] = 0
+                    self.last_interaction_affordance[agent_idx] = None
 
         # Apply movement costs (matching Hamlet exactly)
         # Movement costs: energy -0.5%, hygiene -0.3%, satiation -0.4%
@@ -441,6 +451,94 @@ class VectorizedHamletEnv:
         return successful_interactions
 
     def _handle_interactions(self, interact_mask: torch.Tensor) -> dict:
+        """
+        Handle INTERACT actions with multi-tick accumulation.
+
+        Args:
+            interact_mask: [num_agents] bool mask
+
+        Returns:
+            Dictionary mapping agent indices to affordance names
+        """
+        if not self.enable_temporal_mechanics:
+            # Legacy single-shot interactions (for backward compatibility)
+            return self._handle_interactions_legacy(interact_mask)
+
+        # Multi-tick interaction logic
+        from townlet.environment.affordance_config import (
+            AFFORDANCE_CONFIGS,
+            METER_NAME_TO_IDX,
+        )
+
+        successful_interactions = {}
+
+        for affordance_name, affordance_pos in self.affordances.items():
+            # Distance to affordance
+            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
+            at_affordance = (distances == 0) & interact_mask
+
+            if not at_affordance.any():
+                continue
+
+            # Get config
+            config = AFFORDANCE_CONFIGS[affordance_name]
+
+            # Check affordability (per-tick cost)
+            cost_per_tick = config['cost_per_tick']
+            can_afford = self.meters[:, 3] >= cost_per_tick
+            at_affordance = at_affordance & can_afford
+
+            if not at_affordance.any():
+                continue
+
+            # Track successful interactions
+            agent_indices = torch.where(at_affordance)[0]
+
+            for agent_idx in agent_indices:
+                agent_idx_int = agent_idx.item()
+                current_pos = self.positions[agent_idx]
+
+                # Check if continuing same affordance at same position
+                if (self.last_interaction_affordance[agent_idx_int] == affordance_name and
+                    torch.equal(current_pos, self.last_interaction_position[agent_idx_int])):
+                    # Continue progress
+                    self.interaction_progress[agent_idx] += 1
+                else:
+                    # New affordance - reset progress
+                    self.interaction_progress[agent_idx] = 1
+                    self.last_interaction_affordance[agent_idx_int] = affordance_name
+                    self.last_interaction_position[agent_idx_int] = current_pos.clone()
+
+                ticks_done = self.interaction_progress[agent_idx].item()
+                required_ticks = config['required_ticks']
+
+                # Apply per-tick benefits (75% of total, distributed)
+                for meter_name, delta in config['benefits']['linear'].items():
+                    meter_idx = METER_NAME_TO_IDX[meter_name]
+                    self.meters[agent_idx, meter_idx] += delta
+
+                # Charge per-tick cost
+                self.meters[agent_idx, 3] -= cost_per_tick
+
+                # Completion bonus? (25% of total)
+                if ticks_done == required_ticks:
+                    for meter_name, delta in config['benefits']['completion'].items():
+                        meter_idx = METER_NAME_TO_IDX[meter_name]
+                        self.meters[agent_idx, meter_idx] += delta
+
+                    # Reset progress (job complete)
+                    self.interaction_progress[agent_idx] = 0
+                    self.last_interaction_affordance[agent_idx_int] = None
+
+                successful_interactions[agent_idx_int] = affordance_name
+
+        # Clamp meters after updates
+        self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
+        return successful_interactions
+
+
+    def _handle_interactions_legacy(self, interact_mask: torch.Tensor) -> dict:
         """
         Handle INTERACT action at affordances.
 
