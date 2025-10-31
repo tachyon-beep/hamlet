@@ -1,9 +1,9 @@
 # Hamlet Project: AI Agent Memory Document
 
-**Last Updated:** October 31, 2025  
+**Last Updated:** November 1, 2025  
 **Purpose:** Comprehensive project documentation for AI assistants and future developers  
 **Current Branch:** main  
-**Test Coverage:** 16% (250/1521 statements)  
+**Test Coverage:** 64% (982/1525 statements, 241 tests passing)  
 **Authority Order:** ROADMAP.md > actual code > CLAUDE.md (CLAUDE.md is outdated)
 
 ---
@@ -42,7 +42,7 @@ Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to 
 - **Temporal mechanics** with time-of-day cycles and multi-tick interactions (Level 2.5 implemented)
 - **Live inference server** for real-time visualization during training
 
-**Critical State:** About to undergo major refactoring with only 16% test coverage. RED-GREEN testing approach required.
+**Critical State:** Test coverage at 64% (target: 70% before refactoring). Major refactoring plan documented with 15 actions in `docs/testing/REFACTORING_ACTIONS.md`.
 
 ---
 
@@ -56,20 +56,30 @@ Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to 
 
 ### Running the System
 
+**⚠️ Current (Three Separate Commands - Will Be Unified):**
+
 ```bash
 # Set PYTHONPATH to include src directory
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 
-# Training (Multi-Day Demo Setup)
+# Terminal 1: Training
 python -m townlet.demo.runner configs/townlet_level_1_5.yaml demo_level1_5.db checkpoints_level1_5 10000
 
-# Live Inference Server (for visualization during training)
+# Terminal 2: Live Inference Server (for visualization during training)
 python -m townlet.demo.live_inference checkpoints_level1_5 8766 0.2 10000 configs/townlet_level_1_5.yaml
 # Args: <checkpoint_dir> <port> <speed> <total_episodes> <config_path>
 
-# Frontend (separate terminal, from main repo not worktree)
+# Terminal 3: Frontend
 cd frontend && npm run dev
 # Open http://localhost:5173
+```
+
+**🎯 Future (ACTION #15 - Unified Server):**
+
+```bash
+# Single command starts everything (training + inference + frontend):
+python run_demo.py --config configs/townlet_level_1_5.yaml --episodes 10000
+# Browser auto-opens, everything just works!
 ```
 
 ### Configuration Files (YAML)
@@ -130,41 +140,50 @@ src/townlet/
 │   ├── runner.py            # Multi-day training orchestration
 │   ├── database.py          # SQLite for episode metrics
 │   └── __init__.py
-├── environment/             # Core RL environment (56% coverage on vectorized_env)
+├── environment/             # Core RL environment (82% coverage on vectorized_env)
 │   ├── vectorized_env.py    # GPU-native vectorized environment ⚠️ COMPLEX
 │   ├── affordance_config.py # Multi-tick interaction configs (100% coverage)
 │   └── __init__.py
-├── exploration/             # Action selection strategies (0% coverage)
-│   ├── adaptive_intrinsic.py # RND with variance-based annealing
-│   ├── rnd.py               # Random Network Distillation
-│   ├── epsilon_greedy.py    # Simple baseline
-│   ├── base.py              # Abstract interface
+├── exploration/             # Action selection strategies (100% coverage on main modules)
+│   ├── adaptive_intrinsic.py # RND with variance-based annealing (100% coverage)
+│   ├── rnd.py               # Random Network Distillation (82% coverage)
+│   ├── epsilon_greedy.py    # Simple baseline (100% coverage)
+│   ├── base.py              # Abstract interface (75% coverage)
 │   └── __init__.py
-├── population/              # Agent coordination (0% coverage)
-│   ├── vectorized.py        # Training loop orchestration
-│   ├── base.py              # Abstract interface
+├── population/              # Agent coordination (92% coverage on vectorized)
+│   ├── vectorized.py        # Training loop orchestration (92% coverage)
+│   ├── base.py              # Abstract interface (80% coverage)
 │   └── __init__.py
-└── training/                # Supporting infrastructure (0% coverage)
-    ├── replay_buffer.py     # Experience replay with dual rewards
-    ├── state.py             # DTOs for hot/cold paths
+└── training/                # Supporting infrastructure (97% average coverage)
+    ├── replay_buffer.py     # Experience replay with dual rewards (100% coverage)
+    ├── state.py             # DTOs for hot/cold paths (94% coverage)
     └── __init__.py
 
-tests/test_townlet/          # Current test suite (19 tests, all passing)
-├── test_affordance_config.py       # Affordance structure & math
-├── test_multi_interaction.py       # Multi-tick mechanics
-├── test_temporal_integration.py    # Time-based systems
-├── test_time_based_masking.py      # Operating hours
-└── test_vectorized_env_temporal.py # Environment temporal features
+tests/test_townlet/          # Current test suite (241 tests, all passing)
+├── test_affordance_config.py       # Affordance structure & math (3 tests)
+├── test_affordance_effects.py      # Affordance effects validation (23 tests) ⭐ NEW
+├── test_multi_interaction.py       # Multi-tick mechanics (4 tests)
+├── test_temporal_integration.py    # Time-based systems (6 tests)
+├── test_time_based_masking.py      # Operating hours (3 tests)
+├── test_vectorized_env_temporal.py # Environment temporal features (3 tests)
+├── test_networks.py                # Neural network validation
+├── test_epsilon_greedy.py          # Exploration strategy tests
+├── test_adaptive_intrinsic.py      # RND with annealing tests
+├── test_adversarial_curriculum.py  # Curriculum progression tests
+├── test_static_curriculum.py       # Static curriculum tests
+├── test_population.py              # Training loop tests
+├── test_replay_buffer.py           # Replay buffer tests
+└── test_state.py                   # State management tests
 ```
 
 ---
 
 ## Core Components Deep Dive
 
-### 1. Environment (`vectorized_env.py`) - 1262 lines - **HIGHEST RISK**
+### 1. Environment (`vectorized_env.py`) - 433 lines - **HIGHEST RISK**
 
 **Complexity Level:** 🔴 EXTREME  
-**Coverage:** 56% (241/429 statements)  
+**Coverage:** 82% (356/433 statements)  
 **Refactoring Priority:** CRITICAL
 
 #### Responsibilities (Too Many!)
@@ -269,8 +288,8 @@ environment/
 
 ### 2. Neural Networks (`agent/networks.py`) - 217 lines
 
-**Coverage:** 0%  
-**Risk Level:** 🟡 MODERATE
+**Coverage:** 98%  
+**Risk Level:** � LOW (well-tested)
 
 #### Architectures
 
@@ -301,19 +320,19 @@ def set_hidden_state(hidden) -> None
 def get_hidden_state() -> Optional[Tuple[h, c]]
 ```
 
-#### Testing Priorities
+#### Testing Status
 
-1. ✅ Shape validation (input/output dimensions)
-2. ✅ Hidden state management (reset, continuity)
-3. ✅ Batch processing
-4. ⚠️ LSTM memory (does it actually use history?)
+1. ✅ Shape validation (input/output dimensions) - TESTED
+2. ✅ Hidden state management (reset, continuity) - TESTED
+3. ✅ Batch processing - TESTED
+4. ⚠️ LSTM memory (does it actually use history?) - ACTION #9 will address
 
 ---
 
 ### 3. Curriculum (`curriculum/adversarial.py`) - 360 lines
 
-**Coverage:** 0%  
-**Risk Level:** 🟡 MODERATE  
+**Coverage:** 86%  
+**Risk Level:** � LOW (well-tested)  
 **Complexity:** State machine with performance tracking
 
 #### 5-Stage Progression
@@ -368,21 +387,19 @@ def state_dict() -> Dict  # For checkpointing
 def load_state_dict(state_dict) -> None
 ```
 
-#### Testing Priorities
+#### Testing Status
 
-1. ✅ Stage progression logic
-2. ✅ Entropy calculation
-3. ✅ Survival rate tracking
-4. ✅ State persistence (checkpointing)
+1. ✅ Stage progression logic - TESTED
+2. ✅ Entropy calculation - TESTED
+3. ✅ Survival rate tracking - TESTED
+4. ✅ State persistence (checkpointing) - TESTED
 
 ---
 
 ### 4. Exploration (`exploration/` module)
 
-**Coverage:** 0%  
-**Risk Level:** 🟢 LOW (well-abstracted)
-
-#### Class Hierarchy
+**Coverage:** 100% on main modules (epsilon_greedy, adaptive_intrinsic)  
+**Risk Level:** 🟢 LOW (well-abstracted)#### Class Hierarchy
 
 ```
 ExplorationStrategy (base.py - Abstract)
@@ -444,8 +461,8 @@ Decay: weight *= 0.99 (exponential)
 
 ### 5. Population (`population/vectorized.py`) - 402 lines
 
-**Coverage:** 0%  
-**Risk Level:** 🔴 HIGH (orchestrates everything)  
+**Coverage:** 92%  
+**Risk Level:** � LOW (well-tested)  
 **Role:** Training loop coordinator
 
 #### Responsibilities
@@ -507,14 +524,14 @@ def update_curriculum_tracker(rewards, dones) -> None
 - No target network (simplified DQN)
 - Recurrent networks: Reset hidden state for batch training
 
-#### Testing Priorities
+#### Testing Status
 
-1. ✅ Q-network shape validation
-2. ✅ Action masking integration
-3. ✅ Replay buffer flow
-4. ✅ DQN update correctness
-5. ⚠️ Hidden state management (recurrent)
-6. ⚠️ Multi-agent coordination
+1. ✅ Q-network shape validation - TESTED
+2. ✅ Action masking integration - TESTED
+3. ✅ Replay buffer flow - TESTED
+4. ✅ DQN update correctness - TESTED
+5. ⚠️ Hidden state management (recurrent) - Partial coverage
+6. ⚠️ Multi-agent coordination - Partial coverage
 
 ---
 
@@ -671,23 +688,34 @@ class BatchedAgentState:
 ## Current Test Suite
 
 **Location:** `tests/test_townlet/`  
-**Total Tests:** 19 (all passing ✅)  
-**Coverage:** 16% overall, focused on environment temporal mechanics
+**Total Tests:** 241 (all passing ✅)  
+**Coverage:** 64% overall (982/1525 statements)  
+**Target:** 70% before major refactoring
 
-### Test Files
+### Test Files (Organized by Component)
+
+**Environment Tests (82% coverage on vectorized_env.py):**
 
 1. **test_affordance_config.py** (3 tests)
    - Structure validation
    - Benefit math (linear + completion)
    - Dynamic affordance time windows
 
-2. **test_multi_interaction.py** (4 tests)
+2. **test_affordance_effects.py** (23 tests) ⭐ NEW
+   - Health restoration: Doctor (+25%), Hospital (+40%)
+   - Mood restoration: Therapist (+40%)
+   - Park: FREE, fitness +20%, social +15%, mood +15%
+   - Bar: Social +50% (BEST), mood +25%, health -5%
+   - FastFood: Satiation +45%, fitness -3%, health -2%
+   - Job/Labor: Income generation, energy costs, penalties
+
+3. **test_multi_interaction.py** (4 tests)
    - Progressive benefit accumulation
    - Completion bonuses
    - Early exit preserves progress
    - Money charged per tick
 
-3. **test_temporal_integration.py** (6 tests)
+4. **test_temporal_integration.py** (6 tests)
    - Full 24-hour cycle
    - Observation dimensions with temporal features
    - Multi-tick job completion
@@ -695,89 +723,139 @@ class BatchedAgentState:
    - Early exit from interactions
    - Temporal mechanics disable fallback
 
-4. **test_time_based_masking.py** (3 tests)
+5. **test_time_based_masking.py** (3 tests)
    - Job closed outside business hours
    - Bar open after 6pm
    - Bar wraparound midnight
 
-5. **test_vectorized_env_temporal.py** (3 tests)
+6. **test_vectorized_env_temporal.py** (3 tests)
    - Time-of-day cycles
    - Interaction progress state exists
    - Observation includes time + progress
 
-### Coverage Gaps (84% untested!)
+**Neural Network Tests (98% coverage on networks.py):**
 
-**Critical Untested:**
+7. **test_networks.py** - SimpleQNetwork and RecurrentSpatialQNetwork validation
 
-- 🔴 `vectorized_env.py`: 44% untested (meter dynamics, reward calculation)
-- 🔴 All neural networks (0%)
-- 🔴 All curriculum logic (0%)
-- 🔴 All exploration strategies (0%)
-- 🔴 All population coordination (0%)
-- 🔴 Replay buffer (0%)
+**Exploration Tests (100% coverage on epsilon_greedy, adaptive_intrinsic):**
+
+8. **test_epsilon_greedy.py** - Epsilon-greedy exploration with decay
+9. **test_adaptive_intrinsic.py** - RND with variance-based annealing
+
+**Curriculum Tests (86% coverage on adversarial, 100% on static):**
+
+10. **test_adversarial_curriculum.py** - 5-stage progression, entropy gating
+11. **test_static_curriculum.py** - Fixed difficulty baseline
+
+**Population Tests (92% coverage on vectorized.py):**
+
+12. **test_population.py** - Training loop, Q-network updates, replay buffer
+
+**Supporting Module Tests:**
+
+13. **test_replay_buffer.py** (100% coverage) - Dual reward storage
+14. **test_state.py** (94% coverage) - DTOs and state management
+
+### Coverage by Module
+
+**🟢 Perfect Coverage (100%):**
+
+- ✅ `static.py` - 100%
+- ✅ `epsilon_greedy.py` - 100%
+- ✅ `adaptive_intrinsic.py` - 100%
+- ✅ `affordance_config.py` - 100%
+- ✅ `replay_buffer.py` - 100%
+
+**� Excellent (90%+):**
+
+- ✅ `networks.py` - 98% (1 line missing)
+- ✅ `state.py` - 94% (3 lines missing)
+- ✅ `population/vectorized.py` - 92% (11 lines missing)
+
+**🟡 Good (80-89%):**
+
+- ✅ `adversarial.py` - 86% (20 lines missing)
+- ✅ `vectorized_env.py` - 82% (77 lines missing) - includes 216 lines of DISABLED dead code
+- ✅ `rnd.py` - 82% (17 lines missing)
+- ✅ `population/base.py` - 80% (2 lines missing)
+
+**🟡 Fair (70-79%):**
+
+- ⚠️ `curriculum/base.py` - 77% (3 lines missing)
+- ⚠️ `exploration/base.py` - 75% (5 lines missing)
+
+**🔴 Untested (0%):**
+
+- ❌ `demo/database.py` - 0% (35 lines) - SQLite metrics storage
+- ❌ `demo/live_inference.py` - 0% (237 lines) - WebSocket server
+- ❌ `demo/runner.py` - 0% (132 lines) - Training orchestration
+
+### Gap to 70% Milestone: +6 percentage points needed
+
+**Fastest Path:**
+
+1. **Execute ACTION #13** (30 min): Remove 216 lines of dead code → vectorized_env.py 82% → ~95%!
+2. **Test small gaps** (2-3 hours): Complete base classes (11 lines total)
+3. **Result**: Should easily hit 70%+ 🎯
 
 ---
 
-## Refactoring Plan: Red-Green Approach
+## Refactoring Plan: 15 Actions Documented
 
-### Phase 1: Safety Net Construction (2-3 weeks)
+**Full details:** See `docs/testing/REFACTORING_ACTIONS.md` for comprehensive documentation.
 
-**Week 1: Core Environment Tests**
+**Total Estimated Time:** 13-20 weeks of focused development  
+**Prerequisite:** 70% test coverage milestone (currently at 64%, need +6%)
 
-- Priority 1: Meter dynamics (cascading effects)
-- Priority 2: Action execution (movement, interactions)
-- Priority 3: Reward calculation (milestone system)
-- Priority 4: Terminal conditions (death cascades)
+### High Priority Actions (🔴)
 
-**Week 2: Training Loop Tests**
+1. **ACTION #1: Configurable Cascade Engine** (2-3 weeks)
+   - Replace hardcoded meter cascades with data-driven system
+   - Enable students to experiment with different cascade strengths
+   - Critical for pedagogical flexibility
 
-- Priority 1: VectorizedPopulation step execution
-- Priority 2: Replay buffer operations
-- Priority 3: Q-network training (DQN updates)
-- Priority 4: Action masking integration
+2. **ACTION #9: Network Architecture Redesign** (3-4 weeks)
+   - "Root and branch reimagining" based on testing discoveries
+   - Fix LSTM memory issues, observation handling
+   - Discovered through systematic testing October 31, 2025
 
-**Week 3: Curriculum & Exploration Tests**
+3. **ACTION #14: Implement Modern CI/CD Pipeline** (3-5 days)
+   - Ruff (linter/formatter), Mypy (type checking)
+   - Vulture (dead code detection - would have caught 216 DISABLED lines!)
+   - Bandit (security), Pre-commit hooks, GitHub Actions
 
-- Priority 1: Stage progression logic
-- Priority 2: RND intrinsic rewards
-- Priority 3: Adaptive annealing
-- Priority 4: State persistence (checkpointing)
+### Medium Priority Actions (🟡)
 
-**Target:** 70-80% coverage on modules being refactored
+4. **ACTION #2: Extract RewardStrategy** (3-5 days)
+5. **ACTION #3: Extract MeterDynamics** (1-2 weeks)
+6. **ACTION #4: Extract ObservationBuilder** (2-3 days)
+7. **ACTION #8: Add WAIT Action** (1-2 days) - Elevated priority due to oscillation bugs
+8. **ACTION #12: Configuration-Defined Affordances** (1-2 weeks)
+   - Move affordance logic to YAML (200+ lines → data)
+   - Enable modding and custom affordance creation
+9. **ACTION #13: Remove Pedagogical DISABLED Code** (30 minutes)
+   - Delete 216 lines of dead code (reward systems that failed)
+   - **Impact:** vectorized_env.py 82% → ~95% coverage instantly!
+10. **ACTION #15: Unified Training + Inference Server** (1-2 weeks)
+    - **Goal:** `python run_demo.py` and you're done!
+    - Merge training, inference, AND frontend into single process
+    - No more juggling THREE terminals
 
-### Phase 2: Refactor with Green Tests (2-3 weeks)
+### Low Priority Actions (🟢)
 
-**Extraction Candidates (in order of safety):**
+11. **ACTION #5: Target Network DQN** (1-2 days)
+12. **ACTION #6: GPU Optimization RND** (1 day)
+13. **ACTION #7: Sequential Replay Buffer** (1 week)
+14. **ACTION #10: Deduplicate Epsilon-Greedy** (1-2 hours)
+15. **ACTION #11: Remove Legacy Checkpoint Methods** (15 minutes)
 
-1. **RewardStrategy** (from vectorized_env.py)
-   - Extract milestone calculation
-   - Interface: `def calculate_rewards(step_counts, dones) -> torch.Tensor`
-   - Risk: LOW (pure function, no side effects)
+### Quick Wins to Hit 70%
 
-2. **MeterDynamics** (from vectorized_env.py)
-   - Extract depletion + cascading effects
-   - Interface: `def update_meters(meters) -> torch.Tensor`
-   - Risk: MODERATE (complex logic, but isolated)
+Before major refactoring:
 
-3. **InteractionHandler** (from vectorized_env.py)
-   - Extract affordance interaction logic
-   - Interface: `def handle_interactions(positions, meters, time_of_day) -> Tuple[meters, success_dict]`
-   - Risk: MODERATE (temporal mechanics complexity)
-
-4. **ObservationBuilder** (from vectorized_env.py)
-   - Extract full/partial observation construction
-   - Interface: `def build_observation(state) -> torch.Tensor`
-   - Risk: LOW (data transformation only)
-
-5. **CurriculumStateMachine** (refactor adversarial.py)
-   - Separate decision logic from performance tracking
-   - Risk: MODERATE (state machine complexity)
-
-### Phase 3: Validate & Iterate (1 week)
-
-- Run full test suite after each extraction
-- Performance benchmarks (GPU throughput)
-- Integration tests (end-to-end episodes)
+1. **ACTION #13** (30 min): Remove dead code → +10-12% coverage on vectorized_env.py
+2. **Test small gaps** (2-3 hours): Complete base classes (11 lines total)
+3. **Result:** 64% → 70%+ ✅
 
 ---
 
@@ -1216,4 +1294,4 @@ python -m pytest tests/ --cov=src/townlet --cov-report=term-missing --cov-report
 
 ---
 
-**Remember:** With 16% coverage, we're flying blind. Test first, refactor second. Red-Green-Refactor is not optional.
+**Remember:** At 64% coverage (241 tests passing), we have a solid foundation. Target 70% before major refactoring. Quick wins available: Remove 216 lines of dead code (ACTION #13) for instant coverage boost!
