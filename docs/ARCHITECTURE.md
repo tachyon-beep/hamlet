@@ -2764,60 +2764,1547 @@ set_hidden_state(hidden)
 ### 5. Training Orchestration System
 
 **Location:** `src/townlet/population/`  
-**Core File:** `vectorized.py` (402 lines)  
-**Coverage:** 92%  
-**Purpose:** Main training loop coordinator
+**Core Files:** `base.py` (74 lines), `vectorized.py` (402 lines)  
+**Coverage:** 80% (base), 92% (vectorized)  
+**Complexity:** 🟡 MODERATE (coordinator, not complex logic)  
+**Purpose:** Main training loop coordination and Q-network management
 
-**What it does:**
+---
 
-- Creates and manages Q-network + optimizer
-- Orchestrates environment steps
-- Delegates action selection to exploration strategy
-- Collects experiences in replay buffer
-- Trains Q-network via DQN updates (every 4 steps, batch=64)
-- Trains RND predictor (if using intrinsic motivation)
-- Retrieves curriculum decisions
-- Handles episode resets and annealing
-- Manages hidden states for recurrent networks
+#### 5.1 System Overview
 
-**Key training loop (step_population):**
+The Training Orchestration System implements the **main training loop** that coordinates all other systems. It's the "brain" that connects environment, curriculum, exploration, and networks into a cohesive training process.
+
+**Core Responsibilities:**
+
+1. **Q-Network Management** - Create, train, and checkpoint neural networks
+2. **Action Selection** - Delegate to exploration strategy with action masking
+3. **Environment Stepping** - Execute actions and collect transitions
+4. **Replay Buffer** - Store and sample experiences for training
+5. **DQN Updates** - Train Q-network every 4 steps (batch=64)
+6. **RND Training** - Train predictor network for intrinsic rewards
+7. **Curriculum Integration** - Retrieve decisions and track performance
+8. **Episode Reset Handling** - Annealing, hidden state management
+9. **State Management** - Maintain current observations, epsilons
+
+**Design Pattern:** Coordinator/Orchestrator - delegates to specialized systems.
+
+**Hot Path:** `step_population()` called every environment step (~200-500x per episode).
+
+---
+
+#### 5.2 Abstract Interface: `PopulationManager` (base.py, Lines 1-74)
+
+**Coverage:** 80%  
+**Purpose:** Define contract for population managers
+
+##### 5.2.1 Abstract Methods (Lines 19-74)
 
 ```python
-1. Forward pass (Q-values from network)
-2. Get curriculum decisions (from curriculum system)
-3. Get action masks (from environment)
-4. Select actions (from exploration strategy)
-5. Step environment (obs, rewards, dones, info)
-6. Compute intrinsic rewards (if RND enabled)
-7. Store transition in replay buffer
-8. Train RND predictor
-9. Train Q-network (if step % 4 == 0)
-10. Update curriculum tracker
-11. Handle episode resets (annealing, hidden states)
-12. Return BatchedAgentState
+class PopulationManager(ABC):
+    """Abstract interface for population management."""
+    
+    @abstractmethod
+    def step_population(envs: VectorizedHamletEnv) -> BatchedAgentState:
+        """Execute one training step for entire population (GPU).
+        
+        Coordinates:
+        - Action selection via exploration strategy
+        - Environment stepping (vectorized)
+        - Reward calculation (extrinsic + intrinsic)
+        - Replay buffer updates
+        - Q-network training
+        
+        Args:
+            envs: Vectorized environment [num_agents parallel]
+        
+        Returns:
+            BatchedAgentState with all agent data after step
+        
+        Note:
+            Hot path - called every step. Must be GPU-optimized.
+        """
+        pass
+    
+    @abstractmethod
+    def get_checkpoint() -> PopulationCheckpoint:
+        """Return Pydantic checkpoint (cold path).
+        
+        Aggregates:
+        - Agent network weights
+        - Curriculum states (per agent)
+        - Exploration states (per agent)
+        - Pareto frontier
+        - Metrics summary
+        
+        Returns:
+            PopulationCheckpoint (Pydantic DTO)
+        """
+        pass
 ```
 
-**Key interfaces:**
+**Future Abstractions:**
+
+- `reset()` - Reset all agents
+- `load_checkpoint(checkpoint)` - Restore from checkpoint
+- `select_actions(...)` - Action selection interface
+
+**Note:** Base class is minimal (only 2 abstract methods). More could be extracted.
+
+---
+
+#### 5.3 Vectorized Implementation: `VectorizedPopulation` (vectorized.py, Lines 1-402)
+
+**Coverage:** 92% (32/402 lines missing)  
+**Purpose:** Concrete training loop for vectorized environments
+
+##### 5.3.1 Constructor (Lines 34-110)
 
 ```python
-reset()
-step_population(envs) -> BatchedAgentState
-select_greedy_actions(env) -> torch.Tensor  # For inference
-update_curriculum_tracker(rewards, dones)
+def __init__(
+    env: VectorizedHamletEnv,
+    curriculum: CurriculumManager,
+    exploration: ExplorationStrategy,
+    agent_ids: List[str],
+    device: torch.device,
+    obs_dim: int = 70,
+    action_dim: int = 5,
+    learning_rate: float = 0.00025,
+    gamma: float = 0.99,
+    replay_buffer_capacity: int = 10000,
+    network_type: str = "simple",
+    vision_window_size: int = 5,
+)
 ```
 
-**Supporting file:**
+**Key Initialization Steps:**
 
-- `base.py` (10 lines, 80% coverage) - Abstract interface
+**1. Store References (Lines 68-74):**
+
+```python
+self.env = env
+self.curriculum = curriculum
+self.exploration = exploration
+self.agent_ids = agent_ids
+self.num_agents = len(agent_ids)
+self.device = device
+self.gamma = gamma
+self.network_type = network_type
+self.is_recurrent = (network_type == "recurrent")
+```
+
+**2. Create Q-Network (Lines 77-85):**
+
+```python
+if network_type == "recurrent":
+    self.q_network = RecurrentSpatialQNetwork(
+        action_dim=action_dim,
+        window_size=vision_window_size,
+        num_meters=8,
+    ).to(device)
+else:
+    self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
+```
+
+**Auto-Detection:** Network type from config (`'simple'` or `'recurrent'`).
+
+**⚠️ ISSUE:** `obs_dim` parameter is passed but ignored for recurrent networks (hardcoded dimensions in `RecurrentSpatialQNetwork`).
+
+**3. Create Optimizer (Line 87):**
+
+```python
+self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
+```
+
+**No scheduler:** Learning rate is fixed (could add decay).
+
+**4. Create Replay Buffer (Line 90):**
+
+```python
+self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity, device=device)
+```
+
+**Capacity:** 10K transitions by default (circular buffer).
+
+**5. Initialize Training Counters (Lines 93-96):**
+
+```python
+self.total_steps = 0
+self.train_frequency = 4  # Train Q-network every N steps
+self.episode_step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=device)
+```
+
+**Train Frequency:** Q-network trained every 4 steps (accumulate 4 transitions before update).
+
+**6. Initialize State (Lines 99-101):**
+
+```python
+self.current_obs: torch.Tensor = None
+self.current_epsilons: torch.Tensor = None
+self.current_curriculum_decisions: List = []
+```
+
+**State Management:** Maintained across calls to `step_population()`.
+
+##### 5.3.2 Reset Method (Lines 103-125)
+
+```python
+def reset() -> None:
+    """Reset all environments and state."""
+    self.current_obs = self.env.reset()
+    
+    # Reset recurrent network hidden state (if applicable)
+    if self.is_recurrent:
+        self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
+    
+    # Get epsilon from exploration strategy (handle both direct and composed)
+    if isinstance(self.exploration, AdaptiveIntrinsicExploration):
+        epsilon = self.exploration.rnd.epsilon
+    else:
+        epsilon = self.exploration.epsilon
+    
+    self.current_epsilons = torch.full(
+        (self.num_agents,), epsilon, device=self.device
+    )
+```
+
+**Called:** Once at training start (before first episode).
+
+**Actions:**
+
+1. Reset environment → get initial observations
+2. Reset LSTM hidden state (if recurrent network)
+3. Extract epsilon from exploration strategy (handles composition)
+
+**⚠️ ISSUE:** Epsilon extraction uses `isinstance` checks (fragile - breaks with new exploration strategies).
+
+##### 5.3.3 Inference Action Selection (Lines 127-159)
+
+**`select_greedy_actions()` (Lines 127-159):**
+
+```python
+def select_greedy_actions(env: VectorizedHamletEnv) -> torch.Tensor:
+    """Select greedy actions with action masking for inference.
+    
+    This is the canonical way to select actions during inference.
+    Uses the same action masking logic as training to prevent boundary violations.
+    """
+    with torch.no_grad():
+        # Get Q-values from network
+        q_output = self.q_network(self.current_obs)
+        # Recurrent networks return (q_values, hidden_state)
+        q_values = q_output[0] if isinstance(q_output, tuple) else q_output
+        
+        # Get action masks from environment
+        action_masks = env.get_action_masks()
+        
+        # Mask invalid actions with -inf before argmax
+        masked_q_values = q_values.clone()
+        masked_q_values[~action_masks] = float('-inf')
+        
+        # Select best valid action
+        actions = masked_q_values.argmax(dim=1)
+    
+    return actions
+```
+
+**Purpose:** Pure exploitation (no exploration) for inference server.
+
+**Key Features:**
+
+1. `torch.no_grad()` - No gradient computation (inference only)
+2. Action masking - Prevent boundary violations
+3. Handles recurrent networks (tuple unpacking)
+
+**Used By:** `demo/live_inference.py` for visualization.
+
+**`select_epsilon_greedy_actions()` (Lines 161-207):**
+
+```python
+def select_epsilon_greedy_actions(env: VectorizedHamletEnv, epsilon: float) -> torch.Tensor:
+    """Select epsilon-greedy actions with action masking.
+    
+    With probability epsilon, select random valid action.
+    With probability (1-epsilon), select greedy action.
+    """
+    with torch.no_grad():
+        # Get Q-values from network
+        q_output = self.q_network(self.current_obs)
+        q_values = q_output[0] if isinstance(q_output, tuple) else q_output
+        
+        # Get action masks from environment
+        action_masks = env.get_action_masks()
+        
+        # Mask invalid actions with -inf before argmax
+        masked_q_values = q_values.clone()
+        masked_q_values[~action_masks] = float('-inf')
+        
+        # Select best valid action (greedy)
+        greedy_actions = masked_q_values.argmax(dim=1)
+        
+        # Epsilon-greedy exploration
+        num_agents = q_values.shape[0]
+        actions = torch.zeros(num_agents, dtype=torch.long, device=q_values.device)
+        
+        for i in range(num_agents):
+            if torch.rand(1).item() < epsilon:
+                # Random action from valid actions
+                valid_actions = torch.where(action_masks[i])[0]
+                random_idx = torch.randint(0, len(valid_actions), (1,)).item()
+                actions[i] = valid_actions[random_idx]
+            else:
+                # Greedy action
+                actions[i] = greedy_actions[i]
+    
+    return actions
+```
+
+**Purpose:** Epsilon-greedy exploration for training (alternative to exploration strategy).
+
+**⚠️ CODE DUPLICATION (Related to ACTION #10):** This is a THIRD copy of epsilon-greedy logic!
+
+- Copy 1: `exploration/epsilon_greedy.py` (100 lines)
+- Copy 2: `exploration/rnd.py` (100 lines) - ACTION #10
+- Copy 3: `population/vectorized.py` (47 lines) - **THIS ONE**
+
+**Why It Exists:** Provides direct epsilon-greedy without going through exploration strategy abstraction (used by inference server).
+
+**Should Keep?** Yes, but refactor to call shared utility function.
+
+##### 5.3.4 Main Training Loop: `step_population()` (Lines 209-378)
+
+**Coverage:** 92% (excellent for 170-line method)  
+**Complexity:** 🟡 MODERATE (12 steps, but straightforward)
+
+**Full Method Structure:**
+
+```python
+def step_population(envs: VectorizedHamletEnv) -> BatchedAgentState:
+    """Execute one training step for entire population."""
+```
+
+**Step 1: Forward Pass (Lines 219-226):**
+
+```python
+# 1. Get Q-values from network
+with torch.no_grad():
+    if self.is_recurrent:
+        q_values, new_hidden = self.q_network(self.current_obs)
+        # Update hidden state for next step (episode rollout memory)
+        self.q_network.set_hidden_state(new_hidden)
+    else:
+        q_values = self.q_network(self.current_obs)
+```
+
+**Key:** Maintains hidden state across episode steps (memory continuity).
+
+**Step 2: Create Temporary State (Lines 228-238):**
+
+```python
+# 2. Create temporary agent state for curriculum decision
+temp_state = BatchedAgentState(
+    observations=self.current_obs,
+    actions=torch.zeros(self.num_agents, dtype=torch.long, device=self.device),
+    rewards=torch.zeros(self.num_agents, device=self.device),
+    dones=torch.zeros(self.num_agents, dtype=torch.bool, device=self.device),
+    epsilons=self.current_epsilons,
+    intrinsic_rewards=torch.zeros(self.num_agents, device=self.device),
+    survival_times=envs.step_counts.clone(),
+    curriculum_difficulties=torch.zeros(self.num_agents, device=self.device),
+    device=self.device,
+)
+```
+
+**Purpose:** Curriculum needs state to make decisions (but actions haven't been selected yet, so fill with zeros).
+
+**⚠️ AWKWARD:** Creating state before actions are selected (zeros are placeholders).
+
+**Step 3: Get Curriculum Decisions (Lines 240-252):**
+
+```python
+# 3. Get curriculum decisions (pass Q-values if curriculum supports it)
+if hasattr(self.curriculum, 'get_batch_decisions_with_qvalues'):
+    # AdversarialCurriculum - pass Q-values for entropy calculation
+    self.current_curriculum_decisions = self.curriculum.get_batch_decisions_with_qvalues(
+        temp_state,
+        self.agent_ids,
+        q_values,
+    )
+else:
+    # StaticCurriculum or other curricula - no Q-values needed
+    self.current_curriculum_decisions = self.curriculum.get_batch_decisions(
+        temp_state,
+        self.agent_ids,
+    )
+```
+
+**Polymorphism:** Check for method existence (`hasattr`) to support both interfaces.
+
+**Why Q-Values?** AdversarialCurriculum needs entropy (policy certainty) for advancement.
+
+**Step 4: Get Action Masks (Lines 254-255):**
+
+```python
+# 4. Get action masks from environment
+action_masks = envs.get_action_masks()
+```
+
+**Step 5: Select Actions (Lines 257-258):**
+
+```python
+# 5. Select actions via exploration strategy (with action masking)
+actions = self.exploration.select_actions(q_values, temp_state, action_masks)
+```
+
+**Delegation:** Exploration strategy handles epsilon-greedy, RND, etc.
+
+**Step 6: Step Environment (Lines 260-261):**
+
+```python
+# 6. Step environment
+next_obs, rewards, dones, info = envs.step(actions)
+```
+
+**Step 7: Compute Intrinsic Rewards (Lines 263-266):**
+
+```python
+# 7. Compute intrinsic rewards (if RND-based exploration)
+intrinsic_rewards = torch.zeros_like(rewards)
+if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
+    intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs)
+```
+
+**Novelty Bonus:** RND computes intrinsic reward based on observation novelty.
+
+**Step 8: Store Transition (Lines 268-275):**
+
+```python
+# 7. Store transition in replay buffer
+self.replay_buffer.push(
+    observations=self.current_obs,
+    actions=actions,
+    rewards_extrinsic=rewards,
+    rewards_intrinsic=intrinsic_rewards,
+    next_observations=next_obs,
+    dones=dones,
+)
+```
+
+**Dual Rewards:** Stores both extrinsic and intrinsic separately (combined during sampling).
+
+**Step 9: Train RND Predictor (Lines 277-284):**
+
+```python
+# 8. Train RND predictor (if applicable)
+if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
+    rnd = self.exploration.rnd if isinstance(self.exploration, AdaptiveIntrinsicExploration) else self.exploration
+    # Accumulate observations in RND buffer
+    for i in range(self.num_agents):
+        rnd.obs_buffer.append(self.current_obs[i].cpu())
+    # Train predictor if buffer is full
+    loss = rnd.update_predictor()
+```
+
+**Mini-Batch Accumulation:** RND buffers 128 observations before training.
+
+**Step 10: Train Q-Network (Lines 286-330):**
+
+```python
+# 9. Train Q-network from replay buffer (every train_frequency steps)
+self.total_steps += 1
+if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= 64:
+    intrinsic_weight = (
+        self.exploration.get_intrinsic_weight()
+        if isinstance(self.exploration, AdaptiveIntrinsicExploration)
+        else 1.0
+    )
+    batch = self.replay_buffer.sample(batch_size=64, intrinsic_weight=intrinsic_weight)
+    
+    # Standard DQN update (simplified, no target network for now)
+    if self.is_recurrent:
+        # Reset hidden states for batch training (treat transitions independently)
+        batch_size = batch['observations'].shape[0]
+        self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
+        q_values, _ = self.q_network(batch['observations'])
+        q_pred = q_values.gather(1, batch['actions'].unsqueeze(1)).squeeze()
+        
+        with torch.no_grad():
+            self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
+            q_next_values, _ = self.q_network(batch['next_observations'])
+            q_next = q_next_values.max(1)[0]
+            q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+    else:
+        q_pred = self.q_network(batch['observations']).gather(1, batch['actions'].unsqueeze(1)).squeeze()
+        
+        with torch.no_grad():
+            q_next = self.q_network(batch['next_observations']).max(1)[0]
+            q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+    
+    loss = F.mse_loss(q_pred, q_target)
+    
+    self.optimizer.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
+    self.optimizer.step()
+    
+    # Reset hidden state back to episode batch size after training
+    if self.is_recurrent:
+        self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
+```
+
+**DQN Algorithm:**
+
+1. Sample 64 random transitions from replay buffer
+2. Compute Q-prediction: `Q(s, a)`
+3. Compute Q-target: `r + γ * max_a' Q(s', a')` (Bellman equation)
+4. MSE loss between prediction and target
+5. Backward pass + gradient clipping (max_norm=10.0)
+6. Optimizer step
+
+**⚠️ CRITICAL ISSUE (Related to ACTION #9):** Recurrent networks reset hidden state to zeros for batch training (defeats LSTM purpose).
+
+**No Target Network (ACTION #5):** Q-target uses same network as Q-pred (unstable - causes overestimation).
+
+**Step 11: Update Current State (Lines 332-335):**
+
+```python
+# 10. Update current state
+self.current_obs = next_obs
+
+# Track episode steps
+self.episode_step_counts += 1
+```
+
+**Step 12: Handle Episode Resets (Lines 337-358):**
+
+```python
+# 11. Handle episode resets (for adaptive intrinsic annealing)
+if dones.any():
+    reset_indices = torch.where(dones)[0]
+    for idx in reset_indices:
+        # Update adaptive intrinsic annealing
+        if isinstance(self.exploration, AdaptiveIntrinsicExploration):
+            survival_time = self.episode_step_counts[idx].item()
+            self.exploration.update_on_episode_end(survival_time=survival_time)
+        # Reset episode counter
+        self.episode_step_counts[idx] = 0
+    
+    # Reset hidden states for agents that terminated (if using recurrent network)
+    if self.is_recurrent:
+        # Get current hidden state
+        h, c = self.q_network.get_hidden_state()
+        # Zero out hidden states for terminated agents
+        h[:, reset_indices, :] = 0.0
+        c[:, reset_indices, :] = 0.0
+        self.q_network.set_hidden_state((h, c))
+```
+
+**Key Actions:**
+
+1. Update adaptive intrinsic annealing (track survival time)
+2. Reset episode counters for terminated agents
+3. Zero out LSTM hidden state for terminated agents (fresh start next episode)
+
+**Correctness:** Handles vectorized resets (some agents terminate while others continue).
+
+**Step 13: Construct Return State (Lines 360-378):**
+
+```python
+# 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
+total_rewards = rewards + intrinsic_rewards * (
+    self.exploration.get_intrinsic_weight()
+    if isinstance(self.exploration, AdaptiveIntrinsicExploration)
+    else 1.0
+)
+
+state = BatchedAgentState(
+    observations=next_obs,
+    actions=actions,
+    rewards=total_rewards,
+    dones=dones,
+    epsilons=self.current_epsilons,
+    intrinsic_rewards=intrinsic_rewards,
+    survival_times=info['step_counts'],
+    curriculum_difficulties=torch.zeros(self.num_agents, device=self.device),
+    device=self.device,
+)
+
+return state
+```
+
+**Combined Rewards:** Returns `extrinsic + intrinsic * weight` (used by curriculum for advancement).
+
+##### 5.3.5 Curriculum Tracker Update (Lines 380-392)
+
+```python
+def update_curriculum_tracker(rewards: torch.Tensor, dones: torch.Tensor):
+    """Update curriculum performance tracking after step.
+    
+    Call this after step_population if using AdversarialCurriculum.
+    """
+    if hasattr(self.curriculum, 'tracker') and self.curriculum.tracker is not None:
+        self.curriculum.tracker.update_step(rewards, dones)
+```
+
+**Purpose:** Update curriculum's PerformanceTracker (survival rate, learning progress).
+
+**⚠️ DESIGN ISSUE:** Why separate method? Could be integrated into `step_population()`.
+
+**Called By:** `demo/runner.py` training loop.
+
+##### 5.3.6 Checkpointing (Lines 394-402)
+
+```python
+def get_checkpoint() -> PopulationCheckpoint:
+    """Return Pydantic checkpoint."""
+    return PopulationCheckpoint(
+        generation=0,
+        num_agents=self.num_agents,
+        agent_ids=self.agent_ids,
+        curriculum_states={'global': self.curriculum.checkpoint_state()},
+        exploration_states={'global': self.exploration.checkpoint_state()},
+        pareto_frontier=[],
+        metrics_summary={},
+    )
+```
+
+**⚠️ INCOMPLETE:** Does NOT save Q-network weights!
+
+**Missing:**
+
+- Q-network state_dict
+- Optimizer state_dict
+- Replay buffer contents
+- Total steps counter
+
+**Related:** ACTION #11 (Remove Legacy Checkpoint Methods) - needs unified checkpointing.
+
+---
+
+#### 5.4 Integration with Other Systems
+
+**System Dependencies:**
+
+```text
+VectorizedPopulation
+    ├── Environment (VectorizedHamletEnv)
+    │   └── get_action_masks(), step(), reset()
+    ├── Curriculum (CurriculumManager)
+    │   └── get_batch_decisions_with_qvalues()
+    ├── Exploration (ExplorationStrategy)
+    │   ├── select_actions()
+    │   ├── compute_intrinsic_rewards()
+    │   └── update_on_episode_end()
+    ├── Q-Network (SimpleQNetwork or RecurrentSpatialQNetwork)
+    │   ├── forward()
+    │   ├── reset_hidden_state()
+    │   └── set_hidden_state()
+    └── Replay Buffer (ReplayBuffer)
+        ├── push()
+        └── sample()
+```
+
+**Flow Diagram:**
+
+```text
+step_population() called
+    ↓
+Q-Network forward → q_values
+    ↓
+Curriculum decisions ← q_values (for entropy)
+    ↓
+Action masks ← Environment
+    ↓
+Actions ← Exploration strategy (q_values, masks)
+    ↓
+Environment.step(actions) → (obs, rewards, dones)
+    ↓
+Intrinsic rewards ← RND (if enabled)
+    ↓
+Replay buffer.push(transition)
+    ↓
+[Every 4 steps] Q-Network.train(batch from replay buffer)
+    ↓
+[On episode end] Update annealing, reset hidden states
+    ↓
+Return BatchedAgentState
+```
+
+---
+
+#### 5.5 Testing Status
+
+**Coverage:** 92% (32/402 lines missing)
+
+**Tested:**
+
+- ✅ Q-network initialization (simple and recurrent)
+- ✅ Forward pass shape validation
+- ✅ Action masking integration
+- ✅ DQN update correctness (loss computation)
+- ✅ Replay buffer flow (push and sample)
+- ✅ Episode reset handling (partial)
+- ⚠️ Hidden state management (recurrent) - Partial coverage
+- ⚠️ Multi-agent coordination - Partial coverage
+
+**Missing Coverage (32 lines):**
+
+- Likely edge cases in hidden state management
+- RND predictor training integration
+- Curriculum tracker update
+- Checkpoint serialization
+
+**Test Files:**
+
+- `tests/test_townlet/test_population.py` - Main test suite
+
+---
+
+#### 5.6 Known Issues
+
+**🔴 CRITICAL ISSUES:**
+
+1. **LSTM Training Defeats Purpose (ACTION #9):**
+   - Lines 299-308: Reset hidden state to zeros for batch training
+   - Treats transitions independently (no temporal context)
+   - **Impact:** LSTM degenerates to feedforward network
+   - **Fix:** Implement sequential replay buffer (ACTION #7) + trajectory training
+
+2. **No Target Network (ACTION #5):**
+   - Line 314: Q-target uses same network as Q-pred
+   - **Impact:** Unstable training, overestimation bias
+   - **Fix:** Add target network with periodic sync (1-2 days)
+
+3. **Incomplete Checkpointing (ACTION #11):**
+   - Lines 394-402: Missing Q-network weights, optimizer state
+   - **Impact:** Cannot resume training properly
+   - **Fix:** Save all training state (2-4 hours)
+
+**🟡 MODERATE ISSUES:**
+
+4. **Code Duplication (Related to ACTION #10):**
+   - Lines 161-207: Third copy of epsilon-greedy logic
+   - **Impact:** Maintenance burden, inconsistency risk
+   - **Fix:** Extract shared utility function (1-2 hours)
+
+5. **Fragile Epsilon Extraction (Line 117):**
+   - Uses `isinstance` checks to extract epsilon from exploration
+   - **Impact:** Breaks with new exploration strategies
+   - **Fix:** Add `get_epsilon()` to ExplorationStrategy interface (30 min)
+
+6. **Awkward Temporary State (Lines 228-238):**
+   - Creates state with zero actions before actions are selected
+   - **Impact:** Confusing code, potential bugs if curriculum uses actions
+   - **Fix:** Refactor curriculum to accept observations only (2-3 hours)
+
+7. **Separate Curriculum Tracker Update (Lines 380-392):**
+   - `update_curriculum_tracker()` must be called separately
+   - **Impact:** Easy to forget, inconsistent state
+   - **Fix:** Integrate into `step_population()` (30 min)
+
+**🟢 LOW PRIORITY:**
+
+8. **Fixed Learning Rate:**
+   - No learning rate scheduler
+   - **Impact:** Suboptimal convergence (maybe)
+   - **Fix:** Add scheduler (1 day)
+
+9. **Hardcoded Train Frequency:**
+   - `train_frequency = 4` hardcoded (line 95)
+   - **Impact:** Can't tune without code change
+   - **Fix:** Make configurable (15 min)
+
+10. **No Gradient Norm Logging:**
+    - Line 323: Clips gradients but doesn't log magnitude
+    - **Impact:** Can't diagnose exploding gradients
+    - **Fix:** Add logging (30 min)
+
+---
+
+#### 5.7 Design Strengths
+
+1. **Clean Delegation:** Each system has clear responsibility (curriculum, exploration, etc.)
+2. **Vectorized:** All operations batched on GPU
+3. **Action Masking:** Integrated at action selection (prevents invalid actions)
+4. **Dual Rewards:** Separate extrinsic and intrinsic storage/combination
+5. **Hidden State Management:** Correctly resets on episode end (per agent)
+6. **Gradient Clipping:** Prevents exploding gradients (max_norm=10.0)
+
+---
+
+#### 5.8 Design Weaknesses
+
+1. **God Object Tendencies:** VectorizedPopulation knows about all systems (high coupling)
+2. **Type Checking (`isinstance`):** Scattered throughout (fragile, violates OOP)
+3. **Missing Abstractions:** Epsilon extraction, curriculum decision retrieval
+4. **Incomplete Checkpointing:** Missing critical training state
+5. **No Metrics Logging:** Loss, Q-values, gradients not tracked
+6. **No Prioritized Replay:** Uniform sampling (could be improved)
+7. **Single-Step Transitions:** LSTM trained on isolated steps (no sequences)
+
+---
+
+#### 5.9 Refactoring Opportunities
+
+**High Priority:**
+
+1. **ACTION #5: Add Target Network (1-2 days)**
+
+```python
+# Add to __init__:
+self.q_network_target = copy.deepcopy(self.q_network)
+self.target_update_frequency = 1000  # Update every 1000 steps
+
+# In step_population():
+if self.total_steps % self.target_update_frequency == 0:
+    self.q_network_target.load_state_dict(self.q_network.state_dict())
+
+# In DQN update:
+with torch.no_grad():
+    q_next = self.q_network_target(batch['next_observations']).max(1)[0]
+    q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+```
+
+**Impact:** More stable training (prevents moving target problem).
+
+2. **ACTION #7: Sequential Replay Buffer (1 week)**
+
+```python
+# Store trajectories instead of single transitions
+class TrajectoryReplayBuffer:
+    def sample_trajectories(batch_size, seq_len) -> Dict:
+        # Return [batch, seq_len, obs_dim] trajectories
+        pass
+
+# In step_population():
+trajectories = self.replay_buffer.sample_trajectories(batch_size=16, seq_len=32)
+q_values_seq = []
+for t in range(32):
+    q_values, new_hidden = self.q_network(trajectories[:, t, :])
+    q_values_seq.append(q_values)
+# Compute TD loss over sequence
+```
+
+**Impact:** LSTM can learn temporal dependencies (fixes ACTION #9).
+
+3. **ACTION #10: Deduplicate Epsilon-Greedy (1-2 hours)**
+
+```python
+# Create shared utility:
+def select_epsilon_greedy_with_masking(
+    q_values: torch.Tensor,
+    action_masks: torch.Tensor,
+    epsilon: float
+) -> torch.Tensor:
+    # ... shared logic ...
+    pass
+
+# Use in VectorizedPopulation, EpsilonGreedyExploration, RNDExploration
+```
+
+4. **ACTION #11: Complete Checkpointing (2-4 hours)**
+
+```python
+def get_checkpoint() -> PopulationCheckpoint:
+    return PopulationCheckpoint(
+        generation=0,
+        num_agents=self.num_agents,
+        agent_ids=self.agent_ids,
+        q_network_state=self.q_network.state_dict(),  # ADD
+        optimizer_state=self.optimizer.state_dict(),  # ADD
+        total_steps=self.total_steps,  # ADD
+        curriculum_states={'global': self.curriculum.checkpoint_state()},
+        exploration_states={'global': self.exploration.checkpoint_state()},
+        pareto_frontier=[],
+        metrics_summary={},
+    )
+```
+
+**Medium Priority:**
+
+5. **Extract Interfaces for Type Checking:**
+
+```python
+# Add to ExplorationStrategy:
+@abstractmethod
+def get_epsilon() -> float:
+    pass
+
+# Remove isinstance checks
+epsilon = self.exploration.get_epsilon()  # Clean!
+```
+
+6. **Integrate Curriculum Tracker Update:**
+
+```python
+# In step_population(), after computing rewards:
+if hasattr(self.curriculum, 'tracker') and self.curriculum.tracker is not None:
+    self.curriculum.tracker.update_step(rewards, dones)
+```
+
+7. **Add Metrics Logging:**
+
+```python
+# In DQN update:
+metrics = {
+    'loss': loss.item(),
+    'q_pred_mean': q_pred.mean().item(),
+    'q_target_mean': q_target.mean().item(),
+    'grad_norm': torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0),
+}
+# Log to tensorboard or wandb
+```
+
+---
+
+#### 5.10 Future Enhancements
+
+**Potential Improvements:**
+
+1. **Prioritized Experience Replay:** Sample important transitions more frequently
+2. **N-Step Returns:** Use multi-step TD targets (reduces bias)
+3. **Double DQN:** Use online network to select action, target network to evaluate
+4. **Dueling Architecture:** Separate value and advantage estimation
+5. **Noisy Networks:** Add learnable noise to network weights (exploration)
+6. **Distributional RL:** Predict full return distribution (C51, QR-DQN)
+7. **Multi-Agent Learning:** Independent learners → parameter sharing → communication
+
+**ACTION Items Referenced:**
+
+- **ACTION #5:** Add target network 🔴 HIGH
+- **ACTION #7:** Sequential replay buffer 🔴 HIGH (enables #9)
+- **ACTION #9:** Root and branch network reimagining 🔴 HIGH
+- **ACTION #10:** Deduplicate epsilon-greedy 🟡 MEDIUM
+- **ACTION #11:** Complete checkpointing 🟡 MEDIUM
 
 ---
 
 ### 6. Supporting Infrastructure
 
 **Location:** `src/townlet/training/`  
-**Coverage:** 97% average
+**Core Files:** `replay_buffer.py` (117 lines), `state.py` (208 lines)  
+**Coverage:** 100% (replay_buffer), 94% (state)  
+**Complexity:** 🟢 LOW (simple data structures)  
+**Purpose:** Data storage and transfer between hot path (training) and cold path (checkpoints)
 
-#### ReplayBuffer (`replay_buffer.py`, 50 lines, 100% coverage)
+---
+
+#### 6.1 System Overview
+
+The Supporting Infrastructure provides **foundational data structures** for training:
+
+1. **ReplayBuffer** - Stores and samples transitions for off-policy learning
+2. **State DTOs** - Represents agent state, curriculum decisions, checkpoints
+
+**Design Philosophy:** Separation of concerns:
+
+- **Hot Path (GPU):** PyTorch tensors, minimal overhead, no validation (`BatchedAgentState`)
+- **Cold Path (CPU):** Pydantic models, validation, serialization (`CurriculumDecision`, `PopulationCheckpoint`)
+
+**Why Two Paths?**
+
+- Hot path: Called every step (~500x per episode) - performance critical
+- Cold path: Called per episode or checkpoint - correctness critical
+
+---
+
+#### 6.2 Replay Buffer (`replay_buffer.py`, Lines 1-117)
+
+**Coverage:** 100% ✅  
+**Purpose:** Store and sample transitions for DQN training
+
+##### 6.2.1 Architecture (Lines 7-32)
+
+```python
+class ReplayBuffer:
+    """Circular buffer storing transitions with separate extrinsic/intrinsic rewards.
+    
+    Stores: (obs, action, reward_extrinsic, reward_intrinsic, next_obs, done)
+    Samples: Random mini-batches with combined rewards
+    """
+    
+    def __init__(capacity: int = 10000, device: torch.device = torch.device('cpu')):
+        self.capacity = capacity
+        self.device = device
+        self.position = 0  # Write pointer (circular)
+        self.size = 0      # Current buffer size (0 to capacity)
+        
+        # Storage tensors (lazy initialization on first push)
+        self.observations = None
+        self.actions = None
+        self.rewards_extrinsic = None
+        self.rewards_intrinsic = None
+        self.next_observations = None
+        self.dones = None
+```
+
+**Circular Buffer:** FIFO eviction when full (oldest transitions overwritten).
+
+**Dual Rewards:** Stores extrinsic and intrinsic separately, combines during sampling.
+
+**Lazy Initialization:** Storage tensors created on first `push()` (dimensions unknown at construction).
+
+##### 6.2.2 Push Method (Lines 34-83)
+
+```python
+def push(
+    observations: torch.Tensor,      # [batch, obs_dim]
+    actions: torch.Tensor,           # [batch]
+    rewards_extrinsic: torch.Tensor, # [batch]
+    rewards_intrinsic: torch.Tensor, # [batch]
+    next_observations: torch.Tensor, # [batch, obs_dim]
+    dones: torch.Tensor,             # [batch]
+) -> None:
+    """Add batch of transitions to buffer. FIFO eviction when full."""
+```
+
+**Algorithm (Lines 45-83):**
+
+```python
+batch_size = observations.shape[0]
+obs_dim = observations.shape[1]
+
+# 1. Initialize storage on first push
+if self.observations is None:
+    self.observations = torch.zeros(capacity, obs_dim, device=device)
+    self.actions = torch.zeros(capacity, dtype=torch.long, device=device)
+    self.rewards_extrinsic = torch.zeros(capacity, device=device)
+    self.rewards_intrinsic = torch.zeros(capacity, device=device)
+    self.next_observations = torch.zeros(capacity, obs_dim, device=device)
+    self.dones = torch.zeros(capacity, dtype=torch.bool, device=device)
+
+# 2. Move tensors to device
+observations = observations.to(device)
+# ... (all tensors moved)
+
+# 3. Circular buffer insertion (FIFO)
+for i in range(batch_size):
+    idx = self.position % capacity  # Wrap around at capacity
+    
+    self.observations[idx] = observations[i]
+    self.actions[idx] = actions[i]
+    self.rewards_extrinsic[idx] = rewards_extrinsic[i]
+    self.rewards_intrinsic[idx] = rewards_intrinsic[i]
+    self.next_observations[idx] = next_observations[i]
+    self.dones[idx] = dones[i]
+    
+    self.position += 1
+    self.size = min(self.size + 1, capacity)  # Cap at capacity
+```
+
+**Circular Logic:**
+
+- `position` increments indefinitely (0, 1, 2, ..., capacity, capacity+1, ...)
+- `idx = position % capacity` wraps to 0-capacity range
+- `size` caps at capacity (represents how full buffer is)
+
+**⚠️ PERFORMANCE NOTE:** Loop over batch_size (not vectorized). Could be optimized with slicing.
+
+##### 6.2.3 Sample Method (Lines 85-115)
+
+```python
+def sample(batch_size: int, intrinsic_weight: float) -> Dict[str, torch.Tensor]:
+    """Sample random mini-batch with combined rewards.
+    
+    Args:
+        batch_size: Number of transitions to sample
+        intrinsic_weight: Weight for intrinsic rewards (0.0-1.0, anneals over time)
+    
+    Returns:
+        Dictionary with keys: observations, actions, rewards, next_observations, dones
+        'rewards' = rewards_extrinsic + rewards_intrinsic * intrinsic_weight
+    """
+```
+
+**Algorithm:**
+
+```python
+if self.size < batch_size:
+    raise ValueError(f"Buffer size ({self.size}) < batch_size ({batch_size})")
+
+# 1. Random indices
+if batch_size == self.size:
+    indices = torch.randperm(self.size, device=device)  # Sample all (no replacement)
+else:
+    indices = torch.randint(0, self.size, (batch_size,), device=device)  # With replacement
+
+# 2. Combine rewards
+combined_rewards = (
+    self.rewards_extrinsic[indices] +
+    self.rewards_intrinsic[indices] * intrinsic_weight
+)
+
+# 3. Return batch dictionary
+return {
+    'observations': self.observations[indices],
+    'actions': self.actions[indices],
+    'rewards': combined_rewards,
+    'next_observations': self.next_observations[indices],
+    'dones': self.dones[indices],
+}
+```
+
+**Uniform Sampling:** All transitions have equal probability (no prioritization).
+
+**Intrinsic Weight Annealing:**
+
+- Early training: `intrinsic_weight = 1.0` → exploration focus
+- Late training: `intrinsic_weight = 0.01` → exploitation focus
+- Combined reward smoothly transitions
+
+**⚠️ NO PRIORITIZATION (Future Enhancement):** Important transitions (high TD error) not sampled more frequently.
+
+##### 6.2.4 Length Method (Lines 117)
+
+```python
+def __len__() -> int:
+    """Return current buffer size."""
+    return self.size
+```
+
+**Purpose:** Check if buffer has enough data before sampling.
+
+---
+
+#### 6.3 State DTOs (`state.py`, Lines 1-208)
+
+**Coverage:** 94% (3 lines missing)  
+**Purpose:** Type-safe data transfer between systems
+
+##### 6.3.1 Cold Path: `CurriculumDecision` (Lines 13-48)
+
+```python
+class CurriculumDecision(BaseModel):
+    """Cold path: Curriculum decision for environment configuration.
+    
+    Returned by CurriculumManager to specify environment settings.
+    Validated at construction, immutable, serializable.
+    """
+    model_config = ConfigDict(frozen=True)  # Immutable
+    
+    difficulty_level: float = Field(..., ge=0.0, le=1.0)
+    active_meters: List[str] = Field(..., min_length=1, max_length=6)
+    depletion_multiplier: float = Field(..., gt=0.0, le=10.0)
+    reward_mode: str = Field(..., pattern=r'^(shaped|sparse)$')
+    reason: str = Field(..., min_length=1)
+```
+
+**Validation:**
+
+- `difficulty_level`: 0.0 (easiest) to 1.0 (hardest)
+- `active_meters`: 1-6 meters (e.g., `['energy', 'hygiene']`)
+- `depletion_multiplier`: 0.1 (10x slower) to 10.0 (10x faster)
+- `reward_mode`: MUST be `'shaped'` or `'sparse'` (regex pattern)
+- `reason`: Human-readable explanation
+
+**⚠️ INCONSISTENCY:** System uses `'sparse'` only, but schema allows `'shaped'` (legacy from Phase 1-2).
+
+**Usage:** Returned by `CurriculumManager.get_batch_decisions()`.
+
+##### 6.3.2 Cold Path: `ExplorationConfig` (Lines 51-89)
+
+```python
+class ExplorationConfig(BaseModel):
+    """Cold path: Configuration for exploration strategy.
+    
+    Defines parameters for epsilon-greedy, RND, or adaptive intrinsic exploration.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    strategy_type: str = Field(..., pattern=r'^(epsilon_greedy|rnd|adaptive_intrinsic)$')
+    epsilon: float = Field(default=1.0, ge=0.0, le=1.0)
+    epsilon_decay: float = Field(default=0.995, gt=0.0, le=1.0)
+    intrinsic_weight: float = Field(default=0.0, ge=0.0)
+    rnd_hidden_dim: int = Field(default=256, gt=0)
+    rnd_learning_rate: float = Field(default=0.0001, gt=0.0)
+```
+
+**Validation:**
+
+- `strategy_type`: MUST be `'epsilon_greedy'`, `'rnd'`, or `'adaptive_intrinsic'`
+- `epsilon`: 0.0 (greedy) to 1.0 (random)
+- `epsilon_decay`: 0.995 = ~1% decay per episode
+- `intrinsic_weight`: 0.0+ (no upper bound, anneals to ~0.01)
+- `rnd_hidden_dim`: Hidden dimension for RND networks (256 default)
+- `rnd_learning_rate`: 0.0001 default (lower than Q-network's 0.00025)
+
+**Usage:** Loaded from YAML config, used to construct exploration strategy.
+
+##### 6.3.3 Cold Path: `PopulationCheckpoint` (Lines 92-137)
+
+```python
+class PopulationCheckpoint(BaseModel):
+    """Cold path: Serializable population state for checkpointing.
+    
+    Contains all state needed to restore a population training run.
+    """
+    model_config = ConfigDict(frozen=True)
+    
+    generation: int = Field(..., ge=0)
+    num_agents: int = Field(..., ge=1, le=1000)
+    agent_ids: List[str] = Field(...)
+    curriculum_states: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    exploration_states: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    pareto_frontier: List[str] = Field(default_factory=list)
+    metrics_summary: Dict[str, float] = Field(default_factory=dict)
+```
+
+**Validation:**
+
+- `generation`: 0+ (for genetic algorithms, currently always 0)
+- `num_agents`: 1-1000 agents
+- `agent_ids`: List of strings (e.g., `['agent_0']`)
+- `curriculum_states`: Per-agent curriculum state (e.g., `{'global': {...}}`)
+- `exploration_states`: Per-agent exploration state
+- `pareto_frontier`: Agent IDs on Pareto frontier (multi-objective, future)
+- `metrics_summary`: Aggregated stats (e.g., `{'avg_survival': 150.5}`)
+
+**⚠️ INCOMPLETE (Related to ACTION #11):** Does NOT include:
+
+- Q-network weights (`state_dict`)
+- Optimizer state
+- Replay buffer contents
+- Total training steps
+
+**Fix Required:** Add network/optimizer state to PopulationCheckpoint schema.
+
+##### 6.3.4 Hot Path: `BatchedAgentState` (Lines 140-208)
+
+```python
+class BatchedAgentState:
+    """Hot path: Vectorized agent state for GPU training loops.
+    
+    All data is batched tensors (batch_size = num_agents).
+    Optimized for GPU operations, minimal validation overhead.
+    Use slots for memory efficiency.
+    """
+    __slots__ = [
+        'observations', 'actions', 'rewards', 'dones',
+        'epsilons', 'intrinsic_rewards', 'survival_times',
+        'curriculum_difficulties', 'device'
+    ]
+```
+
+**Why `__slots__`?**
+
+- Prevents dynamic attributes (fixed memory layout)
+- 20-30% memory savings vs normal classes
+- Faster attribute access (no dict lookup)
+
+**Constructor (Lines 159-186):**
+
+```python
+def __init__(
+    observations: torch.Tensor,      # [batch, obs_dim]
+    actions: torch.Tensor,           # [batch]
+    rewards: torch.Tensor,           # [batch]
+    dones: torch.Tensor,             # [batch] bool
+    epsilons: torch.Tensor,          # [batch]
+    intrinsic_rewards: torch.Tensor, # [batch]
+    survival_times: torch.Tensor,    # [batch]
+    curriculum_difficulties: torch.Tensor,  # [batch]
+    device: torch.device,
+):
+    """Construct batched agent state.
+    
+    All tensors must be on the same device.
+    No validation in __init__ for performance (hot path).
+    """
+    # Direct assignment, no validation
+    self.observations = observations
+    self.actions = actions
+    # ... (all attributes)
+```
+
+**No Validation:** Hot path - called every step, performance critical.
+
+**Batch Size Property (Lines 188-190):**
+
+```python
+@property
+def batch_size() -> int:
+    """Get batch size from observations shape."""
+    return self.observations.shape[0]
+```
+
+**Device Transfer (Lines 192-207):**
+
+```python
+def to(device: torch.device) -> 'BatchedAgentState':
+    """Move all tensors to specified device.
+    
+    Returns new BatchedAgentState (tensors are immutable after .to()).
+    """
+    return BatchedAgentState(
+        observations=self.observations.to(device),
+        actions=self.actions.to(device),
+        # ... (all tensors moved)
+        device=device,
+    )
+```
+
+**Immutable Pattern:** Returns new instance (like PyTorch tensors).
+
+**Telemetry Export (Lines 209-220 - not shown in file read):**
+
+```python
+def detach_cpu_summary() -> Dict[str, np.ndarray]:
+    """Extract summary for telemetry (cold path).
+    
+    Returns dict of numpy arrays (CPU). Used for logging, checkpoints.
+    """
+    return {
+        'rewards': self.rewards.detach().cpu().numpy(),
+        'survival_times': self.survival_times.detach().cpu().numpy(),
+        'epsilons': self.epsilons.detach().cpu().numpy(),
+        'curriculum_difficulties': self.curriculum_difficulties.detach().cpu().numpy(),
+    }
+```
+
+**Conversion:** PyTorch GPU tensors → NumPy CPU arrays (for logging, plotting).
+
+---
+
+#### 6.4 Design Patterns
+
+##### 6.4.1 Hot Path vs Cold Path
+
+**Hot Path (Every Step - Performance Critical):**
+
+- `BatchedAgentState` - PyTorch tensors, no validation, `__slots__`
+- `ReplayBuffer.push()` - Direct tensor operations
+- Called ~500x per episode
+
+**Cold Path (Per Episode - Correctness Critical):**
+
+- `CurriculumDecision`, `ExplorationConfig`, `PopulationCheckpoint` - Pydantic models
+- Validation, immutability, serialization
+- Called 1x per episode or checkpoint
+
+**Trade-off:** Hot path sacrifices safety for speed, cold path prioritizes correctness.
+
+##### 6.4.2 Separation of Concerns
+
+**ReplayBuffer:** Knows NOTHING about:
+
+- Q-networks (just stores tensors)
+- Curriculum (just stores transitions)
+- Exploration (just combines rewards)
+
+**Single Responsibility:** Store and sample transitions.
+
+##### 6.4.3 Lazy Initialization
+
+**ReplayBuffer Storage:**
+
+```python
+# Constructor: DON'T allocate yet (obs_dim unknown)
+self.observations = None
+
+# First push(): NOW allocate
+if self.observations is None:
+    obs_dim = observations.shape[1]  # Detected from data
+    self.observations = torch.zeros(capacity, obs_dim, device=device)
+```
+
+**Benefit:** Flexible observation dimensions (supports simple and recurrent networks).
+
+---
+
+#### 6.5 Testing Status
+
+**Coverage:**
+
+- ReplayBuffer: 100% ✅ (all lines covered)
+- State DTOs: 94% (3 lines missing)
+
+**Tested:**
+
+- ✅ ReplayBuffer push and sample
+- ✅ Circular buffer wraparound
+- ✅ Dual reward combination
+- ✅ Pydantic validation (CurriculumDecision, ExplorationConfig)
+- ✅ BatchedAgentState device transfer
+- ⚠️ PopulationCheckpoint serialization (partial)
+
+**Missing Coverage (3 lines in state.py):**
+
+- Likely edge cases in validation or telemetry export
+
+**Test Files:**
+
+- `tests/test_townlet/test_replay_buffer.py` - Replay buffer tests (100% coverage)
+- `tests/test_townlet/test_state.py` - State DTO tests (94% coverage)
+
+---
+
+#### 6.6 Known Issues
+
+**🟡 MODERATE ISSUES:**
+
+1. **ReplayBuffer Loop (Lines 71-83):**
+   - Loops over batch_size (not vectorized)
+   - **Impact:** Slower push operations (minor, only called once per step)
+   - **Fix:** Use tensor slicing for batch insertion (1 hour)
+
+```python
+# Current (loop):
+for i in range(batch_size):
+    idx = self.position % capacity
+    self.observations[idx] = observations[i]
+    # ...
+
+# Better (vectorized):
+start_idx = self.position % capacity
+end_idx = (self.position + batch_size) % capacity
+
+if end_idx > start_idx:
+    # No wraparound
+    self.observations[start_idx:end_idx] = observations
+else:
+    # Wraparound (split into two slices)
+    self.observations[start_idx:] = observations[:capacity - start_idx]
+    self.observations[:end_idx] = observations[capacity - start_idx:]
+```
+
+2. **No Prioritized Replay (Future Enhancement):**
+   - Uniform sampling (all transitions equal priority)
+   - **Impact:** Slower learning (important transitions undersampled)
+   - **Fix:** Implement SumTree for O(log n) prioritized sampling (1 week)
+
+3. **PopulationCheckpoint Incomplete (ACTION #11):**
+   - Missing Q-network weights, optimizer state, replay buffer
+   - **Impact:** Cannot resume training properly
+   - **Fix:** Extend schema to include network state (2-4 hours)
+
+4. **reward_mode Schema Inconsistency:**
+   - CurriculumDecision allows `'shaped'` or `'sparse'`
+   - System only uses `'sparse'` (legacy option)
+   - **Impact:** Confusing to new developers
+   - **Fix:** Update schema to only allow `'sparse'` OR document `'shaped'` is legacy (15 min)
+
+**🟢 LOW PRIORITY:**
+
+5. **No Replay Buffer Checkpointing:**
+   - Buffer contents not saved (only curriculum/exploration)
+   - **Impact:** Resume training starts with empty buffer (minor)
+   - **Fix:** Add `get_state_dict()` and `load_state_dict()` (2 hours)
+
+---
+
+#### 6.7 Design Strengths
+
+1. **Hot/Cold Path Separation:** Performance where needed, safety where needed
+2. **Type Safety:** Pydantic validation catches config errors at startup
+3. **Immutable DTOs:** `frozen=True` prevents accidental mutation
+4. **Lazy Initialization:** Flexible observation dimensions
+5. **Dual Reward Storage:** Clean separation of extrinsic and intrinsic
+6. **Device-Aware:** All tensors track device (GPU/CPU)
+
+---
+
+#### 6.8 Design Weaknesses
+
+1. **Loop in ReplayBuffer:** Not fully vectorized (minor performance hit)
+2. **No Prioritization:** Uniform sampling only (future enhancement)
+3. **Incomplete Checkpointing:** Missing network weights
+4. **No Buffer Serialization:** Can't save/load replay buffer
+5. **reward_mode Inconsistency:** Schema allows unused options
+
+---
+
+#### 6.9 Refactoring Opportunities
+
+**High Priority:**
+
+1. **ACTION #11: Complete Checkpointing (2-4 hours)**
+
+```python
+class PopulationCheckpoint(BaseModel):
+    # ... existing fields ...
+    q_network_state: Dict[str, Any] = Field(...)  # ADD
+    optimizer_state: Dict[str, Any] = Field(...)  # ADD
+    total_steps: int = Field(...)  # ADD
+    replay_buffer_state: Optional[Dict[str, Any]] = Field(default=None)  # OPTIONAL
+```
+
+**Medium Priority:**
+
+2. **Vectorize ReplayBuffer Push (1 hour):**
+
+```python
+def push_vectorized(...):
+    # Handle wraparound with tensor slicing (see issue #1 above)
+    pass
+```
+
+3. **Add Replay Buffer Checkpointing (2 hours):**
+
+```python
+def get_state_dict() -> Dict:
+    return {
+        'observations': self.observations.cpu(),
+        'actions': self.actions.cpu(),
+        # ...
+        'position': self.position,
+        'size': self.size,
+    }
+
+def load_state_dict(state_dict: Dict):
+    self.observations = state_dict['observations'].to(self.device)
+    # ...
+```
+
+**Low Priority:**
+
+4. **Clean Up reward_mode Schema (15 min):**
+
+```python
+# Option A: Only allow sparse
+reward_mode: str = Field(..., pattern=r'^sparse$')
+
+# Option B: Document shaped is legacy
+reward_mode: str = Field(
+    ...,
+    pattern=r'^(shaped|sparse)$',
+    description="'shaped' is legacy (unused), system uses 'sparse' only"
+)
+```
+
+---
+
+#### 6.10 Future Enhancements
+
+**Potential Improvements:**
+
+1. **Prioritized Experience Replay (1 week):**
+   - Store TD error with each transition
+   - Use SumTree for O(log n) sampling
+   - Sample important transitions more frequently
+
+2. **Hindsight Experience Replay (2 weeks):**
+   - Re-label failed episodes with achieved goals
+   - Improves sparse reward learning
+
+3. **Replay Buffer Compression (1 week):**
+   - Compress observations with autoencoder
+   - Store latent representations (smaller memory)
+
+4. **Multi-Step Returns (3-5 days):**
+   - Store n-step TD targets in buffer
+   - Reduces bias (closer to Monte Carlo)
+
+5. **Recurrent Replay Buffer (1 week - Related to ACTION #7):**
+   - Store full episodes (trajectories)
+   - Sample sequences for LSTM training
+   - Enables proper recurrent network training
+
+**ACTION Items Referenced:**
+
+- **ACTION #7:** Sequential replay buffer (1 week) 🔴 HIGH
+- **ACTION #11:** Complete checkpointing (2-4 hours) 🟡 MEDIUM
+
+---
 
 **What it does:**
 

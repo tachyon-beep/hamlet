@@ -986,26 +986,286 @@ class EpisodeStateManager:
 
 ---
 
-## 📋 Action Summary
+## 🏗️ Foundation Rebuild Strategy
 
-| Priority | Action | Complexity | Estimated Time | Depends On |
-| 🔴 HIGH | #1: Configurable Cascade Engine | MEDIUM-HIGH | 2-3 weeks | 70% test coverage |
-| 🔴 HIGH | #9: Network Architecture Redesign | HIGH | 3-4 weeks | Network testing complete |
-| 🟡 MEDIUM | #2: Extract RewardStrategy | LOW | 3-5 days | 60% test coverage |
-| 🟡 MEDIUM | #3: Extract MeterDynamics | MEDIUM | 1-2 weeks | Action #1 |
-| 🟡 MEDIUM | #4: Extract ObservationBuilder | LOW | 2-3 days | Action #9 |
-| 🟡 MEDIUM-HIGH | #8: Add WAIT Action | LOW | 1-2 days | Balance testing |
-| 🟡 MEDIUM | #12: Configuration-Defined Affordances | MEDIUM | 1-2 weeks | 70% coverage, Action #3 |
-| 🟡 MEDIUM | #13: Remove Pedagogical DISABLED Code | TRIVIAL | 30 min | 70% coverage |
-| 🟢 LOW | #5: Target Network DQN | LOW | 1-2 days | Multi-Day Demo |
-| 🟢 LOW | #6: GPU Optimization RND | LOW | 1 day | Profiling |
-| 🟢 LOW | #7: Sequential Replay Buffer | MEDIUM | 1 week | POMDP issues |
-| 🟢 LOW | #10: Deduplicate Epsilon-Greedy | LOW | 1-2 hours | 70% coverage, Action #9 |
-| 🟢 LOW | #11: Remove Legacy Checkpoint Methods | TRIVIAL | 15 min | 70% coverage |
-| 🔴 HIGH | #14: Implement Modern CI/CD Pipeline | MEDIUM | 3-5 days | 70% coverage |
-| 🟡 MEDIUM | #15: Unified Training + Inference Server | MEDIUM-HIGH | 1-2 weeks | 70% coverage, ACTION #14 |
+**Mission**: Fix the damage, break down god classes, create clean slate for thinking about future features
 
-**Total Estimated Time:** 13-20 weeks of focused development
+**NOT the goal**: Prepare for Level 3-5 implementation (that comes later)
+
+**IS the goal**:
+
+1. Get Level 2 POMDP actually working
+2. Eliminate technical debt and antipatterns
+3. Create modular, testable, maintainable codebase
+4. Allow clear thinking about future architecture
+
+---
+
+### Phase 1: Fix Critical Damage (2-4 weeks) 🔴
+
+**Goal**: Get POMDP working, remove obvious problems
+
+1. **ACTION #13** (30 min) - Remove 216 lines dead code
+   - **Why first**: Instant coverage boost, clears mental clutter
+   - **Impact**: 82% → 95% coverage on vectorized_env.py
+   - **Risk**: None (code is DISABLED)
+
+2. **ACTION #11** (15 min) - Remove legacy checkpoint methods
+   - **Why first**: Another quick win, removes confusion
+   - **Impact**: Clearer curriculum interface
+   - **Risk**: None (methods unused)
+
+3. **ACTION #7** (1 week) - Sequential replay buffer
+   - **Why now**: Required for ACTION #9
+   - **Impact**: Enables proper LSTM training
+   - **Risk**: Low (new class, doesn't break existing)
+
+4. **ACTION #9** (3-4 weeks) - Network architecture redesign
+   - **Why now**: Critical blocker for POMDP
+   - **Impact**: Level 2 actually works
+   - **Risk**: High (complex, but necessary)
+   - **Includes**: Fix observation dims, LSTM training, proper state management
+
+**Outcome**: Level 2 POMDP works, ~240 lines dead code removed, LSTM learns with memory
+
+---
+
+### Phase 2: Break Down God Classes (3-5 weeks) 🟡
+
+**Goal**: Eliminate monolithic antipatterns, create maintainability
+
+5. **ACTION #2** (3-5 days) - Extract RewardStrategy
+   - **Why now**: vectorized_env.py is 1247 lines (too big)
+   - **Impact**: Separates concerns, enables A/B testing reward systems
+   - **Breaks down**: 280 lines → separate module
+   - **Risk**: Low (well-understood extraction)
+
+6. **ACTION #3** (1-2 weeks) - Extract MeterDynamics
+   - **Why now**: Meter logic scattered across 8 methods
+   - **Impact**: Centralizes meter behavior, testable in isolation
+   - **Breaks down**: ~150 lines → separate module
+   - **Depends on**: None (independent extraction)
+
+7. **ACTION #4** (2-3 days) - Extract ObservationBuilder
+   - **Why now**: Observation logic mixed with environment
+   - **Impact**: Clean separation, easier to add new observation modes
+   - **Breaks down**: ~80 lines → separate module
+   - **Risk**: Low (straightforward interface)
+
+8. **ACTION #1** (2-3 weeks) - Configurable cascade engine
+   - **Why now**: Hardcoded cascades prevent experimentation
+   - **Impact**: Data-driven meter relationships, pedagogical flexibility
+   - **Breaks down**: ~150 lines → config + engine
+   - **Risk**: Medium (complex logic to extract)
+
+**Outcome**: vectorized_env.py 1247 → ~600 lines, clear separation of concerns, modular architecture
+
+---
+
+### Phase 3: Eliminate Technical Debt (1-2 weeks) 🟢
+
+**Goal**: Clean up embarrassing patterns, improve code quality
+
+9. **ACTION #10** (1-2 hours) - Deduplicate epsilon-greedy
+   - **Why now**: 3 copies of same 100-line logic
+   - **Impact**: Single source of truth, easier maintenance
+   - **Risk**: None (simple extraction)
+
+10. **ACTION #14** (3-5 days) - CI/CD pipeline
+    - **Why now**: Prevent future technical debt
+    - **Impact**: Automated quality checks, catch issues early
+    - **Tools**: Ruff, mypy, vulture, pytest
+    - **Risk**: None (adds safety)
+
+11. **ACTION #12** (1-2 weeks) - Configuration-defined affordances
+    - **Why now**: 200+ line elif blocks are embarrassing
+    - **Impact**: YAML-defined affordances, easy to modify
+    - **Depends on**: ACTION #3 (meter dynamics extracted)
+    - **Risk**: Medium (touches core gameplay)
+
+**Outcome**: Professional code quality, maintainability, no copy-paste patterns
+
+---
+
+### Phase 4: Polish & Validate (1-2 weeks) 🎨
+
+**Goal**: Prove foundation is solid, ready for new thinking
+
+12. **ACTION #8** (1-2 days) - Add WAIT action
+    - **Why now**: Fixes design flaw (forced movement)
+    - **Impact**: Agents can "rest", strategic gameplay possible
+    - **Risk**: Low (adds action, doesn't change existing)
+
+13. **ACTION #5** (1-2 days) - Target network DQN
+    - **Why now**: Improves training stability
+    - **Impact**: More reliable learning
+    - **Risk**: Low (standard DQN improvement)
+
+14. **Multi-Day Validation** (1 week) - Phase 3.5 tech demo
+    - **Why now**: Prove everything works end-to-end
+    - **Goal**: 10K episodes, no crashes, visible learning
+    - **Outcome**: Confidence in foundation
+
+15. **ACTION #15** (1-2 weeks, optional) - Unified server
+    - **Why now**: Better UX for demos
+    - **Impact**: Single command demo (vs 3 terminals)
+    - **Risk**: Medium (significant refactor)
+    - **Optional**: Can defer if time-constrained
+
+**Outcome**: Solid foundation validated, ready to think clearly about future features
+
+---
+
+## 📋 Action Summary Table
+
+| Priority | Action | What It Fixes | Time | Phase |
+|----------|--------|---------------|------|-------|
+| 🔴 | #13: Remove Dead Code | 216 lines clutter, coverage | 30 min | Phase 1 |
+| 🔴 | #11: Remove Legacy Checkpoints | Interface confusion | 15 min | Phase 1 |
+| � | #7: Sequential Replay Buffer | LSTM can't learn (enabler) | 1 week | Phase 1 |
+| 🔴 | #9: Network Architecture Redesign | POMDP broken, obs mismatch | 3-4 weeks | Phase 1 |
+| 🟡 | #2: Extract RewardStrategy | God class (1247 lines) | 3-5 days | Phase 2 |
+| 🟡 | #3: Extract MeterDynamics | Scattered meter logic | 1-2 weeks | Phase 2 |
+| 🟡 | #4: Extract ObservationBuilder | Mixed concerns | 2-3 days | Phase 2 |
+| 🟡 | #1: Configurable Cascades | Hardcoded relationships | 2-3 weeks | Phase 2 |
+| 🟢 | #10: Deduplicate Epsilon-Greedy | 3 copies of same code | 1-2 hrs | Phase 3 |
+| 🟢 | #14: CI/CD Pipeline | No automated quality checks | 3-5 days | Phase 3 |
+| 🟢 | #12: Config Affordances | 200-line elif blocks | 1-2 weeks | Phase 3 |
+| 🎨 | #8: Add WAIT Action | Forced movement design flaw | 1-2 days | Phase 4 |
+| 🎨 | #5: Target Network | Training instability | 1-2 days | Phase 4 |
+| 🎨 | #15: Unified Server (optional) | 3-terminal UX pain | 1-2 weeks | Phase 4 |
+
+**Critical Path**: Phase 1 → Phase 2 → Phase 3 → Phase 4
+
+**Timeline**:
+
+- **Aggressive**: 8-10 weeks
+- **Realistic**: 12-14 weeks (recommended)
+- **Conservative**: 16-18 weeks (with buffer)
+
+**Key Metrics**:
+
+- **Before**: vectorized_env.py 1247 lines, 3 copies epsilon-greedy, 216 lines dead code, POMDP broken
+- **After**: vectorized_env.py ~600 lines, single source of truth, 0 dead code, POMDP working
+
+---
+
+## 🎯 Why This Order?
+
+### Phase 1 First (Fix Damage)
+
+- **Quick wins** (ACTION #13, #11) build momentum and clear clutter
+- **Sequential buffer** (#7) unblocks network redesign (#9)
+- **Network redesign** (#9) is critical blocker - can't think about future until POMDP works
+- **Can't refactor** broken code - fix it first, then refactor
+
+### Phase 2 Second (Break God Classes)
+
+- **Can't extract** from broken environment - Phase 1 must complete first
+- **Order matters**: Rewards (#2) → Meters (#3) → Observations (#4) → Cascades (#1)
+- **Each extraction** makes next one easier (less tangled dependencies)
+- **Result**: Clear module boundaries, easier to reason about
+
+### Phase 3 Third (Eliminate Debt)
+
+- **Deduplication** (#10) obvious after extractions complete
+- **CI/CD** (#14) locks in quality improvements from Phase 2
+- **Config affordances** (#12) easier after meter dynamics extracted (#3)
+- **Result**: Professional code quality
+
+### Phase 4 Last (Polish)
+
+- **WAIT action** (#8) is new feature, not refactor (do on clean foundation)
+- **Target network** (#5) training improvement (do after foundation solid)
+- **Validation** proves everything works before new features
+- **Unified server** (#15) optional nice-to-have (can defer)
+
+---
+
+## 🚨 What NOT to Do
+
+**❌ Don't prepare for Level 3-5 yet**
+
+- Not adding zone systems
+- Not adding 5 new meters  
+- Not building hierarchical policies
+- Not implementing multi-agent
+
+**Why?** Can't think clearly about future architecture with broken foundation.
+
+**✅ Do fix and clean up**
+
+- Get Level 2 working
+- Break down god classes
+- Remove technical debt
+- Create clean slate
+
+**Then** (after Phase 4 complete) we can think clearly about:
+
+- What multi-agent should look like
+- How zones should work
+- What emergent communication needs
+- Fresh architecture design
+
+---
+
+## 📊 Success Criteria
+
+### Phase 1 Complete
+
+- ✅ Level 2 POMDP agent survives 150+ steps (vs ~115 now)
+- ✅ LSTM memory tests pass (remembers 5+ steps)
+- ✅ 240 lines dead code removed
+- ✅ Test coverage ≥70%
+- ✅ Observation dimensions match (no more 50 vs 53 bugs)
+
+### Phase 2 Complete  
+
+- ✅ vectorized_env.py <700 lines (from 1247)
+- ✅ RewardStrategy, MeterDynamics, ObservationBuilder, CascadeEngine all extracted
+- ✅ Clear module boundaries
+- ✅ All tests still pass (green refactoring)
+- ✅ Each subsystem testable in isolation
+
+### Phase 3 Complete
+
+- ✅ Zero code duplication (epsilon-greedy has 1 implementation)
+- ✅ CI pipeline passes (ruff, mypy, vulture, pytest)
+- ✅ Affordances defined in YAML (no elif blocks)
+- ✅ Code quality metrics improved (cyclomatic complexity down)
+
+### Phase 4 Complete
+
+- ✅ WAIT action implemented and tested
+- ✅ Target network DQN working
+- ✅ 10K episode validation run successful
+- ✅ Agent shows exploration→exploitation transition
+- ✅ Training stable for 48+ hours
+- ✅ (Optional) Demo runs with one command
+
+---
+
+## 🤔 Decision Points
+
+### Should we skip Phase 2 (extractions)?
+
+**NO** - God classes will get worse as we add features. Fix now while foundation is visible.
+
+### Should we do Phase 3 before Phase 4?
+
+**YES** - Want CI/CD in place before adding new features (WAIT, target network).
+
+### Should we do Phase 4 at all?
+
+**YES** for validation and WAIT/target network. **MAYBE** for unified server (nice-to-have).
+
+### Can we parallelize phases?
+
+**NO** - Each phase depends on previous. This is intentionally sequential for stability.
+
+### What about ACTION #6 (GPU optimization)?
+
+**DEFER** - Performance isn't blocking. Focus on correctness and structure first.
 
 **Note:** Action #9 (Network Architecture Redesign) added 2025-10-31 based on systematic testing discoveries. Testing revealed fundamental design issues that require "root and branch reimagining" of network architecture, observation handling, and state management.
 
