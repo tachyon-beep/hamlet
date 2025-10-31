@@ -499,9 +499,21 @@ class LiveInferenceServer:
 
         # Add temporal mechanics data if enabled
         if hasattr(self.env, 'time_of_day'):
+            # Normalize interaction progress to 0-1 range
+            interaction_progress_raw = self.env.interaction_progress[0].item()
+            interaction_progress_normalized = 0.0
+
+            if interaction_progress_raw > 0 and self.env.last_interaction_affordance[0] is not None:
+                from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
+                affordance_name = self.env.last_interaction_affordance[0]
+                config = AFFORDANCE_CONFIGS.get(affordance_name)
+                if config:
+                    required_ticks = config['required_ticks']
+                    interaction_progress_normalized = interaction_progress_raw / required_ticks
+
             update['temporal'] = {
                 'time_of_day': self.env.time_of_day,
-                'interaction_progress': self.env.interaction_progress[0].item(),
+                'interaction_progress': interaction_progress_normalized,
             }
 
         await self._broadcast_to_clients(update)
