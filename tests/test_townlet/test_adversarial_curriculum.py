@@ -508,8 +508,8 @@ class TestBatchDecisions:
 class TestStatePersistence:
     """Test checkpoint and restore functionality."""
 
-    def test_state_dict_includes_all_tracker_state(self):
-        """state_dict should include all performance tracker state."""
+    def test_checkpoint_state_includes_all_tracker_state(self):
+        """checkpoint_state should include all performance tracker state."""
         curriculum = AdversarialCurriculum(device=torch.device("cpu"))
         curriculum.initialize_population(num_agents=2)
 
@@ -520,7 +520,7 @@ class TestStatePersistence:
         curriculum.tracker.prev_avg_reward = torch.tensor([1.5, 2.5])
         curriculum.tracker.steps_at_stage = torch.tensor([500.0, 800.0])
 
-        state = curriculum.state_dict()
+        state = curriculum.checkpoint_state()
 
         assert torch.equal(state["agent_stages"], torch.tensor([2, 3]))
         assert torch.allclose(state["episode_rewards"], torch.tensor([10.0, 20.0]))
@@ -528,8 +528,8 @@ class TestStatePersistence:
         assert torch.allclose(state["prev_avg_reward"], torch.tensor([1.5, 2.5]))
         assert torch.allclose(state["steps_at_stage"], torch.tensor([500.0, 800.0]))
 
-    def test_load_state_dict_restores_all_state(self):
-        """load_state_dict should restore all performance tracker state."""
+    def test_load_state_restores_all_state(self):
+        """load_state should restore all performance tracker state."""
         curriculum = AdversarialCurriculum(device=torch.device("cpu"))
         curriculum.initialize_population(num_agents=2)
 
@@ -541,7 +541,7 @@ class TestStatePersistence:
             "steps_at_stage": torch.tensor([1200.0, 1500.0]),
         }
 
-        curriculum.load_state_dict(state)
+        curriculum.load_state(state)
 
         assert torch.equal(curriculum.tracker.agent_stages, torch.tensor([4, 5]))
         assert torch.allclose(curriculum.tracker.episode_rewards, torch.tensor([15.0, 25.0]))

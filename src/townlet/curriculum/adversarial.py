@@ -28,37 +28,37 @@ class StageConfig(BaseModel):
 STAGE_CONFIGS = [
     StageConfig(
         stage=1,
-        active_meters=['energy', 'hygiene'],
+        active_meters=["energy", "hygiene"],
         depletion_multiplier=0.2,
-        reward_mode='shaped',
+        reward_mode="shaped",
         description="Stage 1: Basic needs (energy, hygiene) at 20% depletion",
     ),
     StageConfig(
         stage=2,
-        active_meters=['energy', 'hygiene', 'satiation'],
+        active_meters=["energy", "hygiene", "satiation"],
         depletion_multiplier=0.5,
-        reward_mode='shaped',
+        reward_mode="shaped",
         description="Stage 2: Add hunger at 50% depletion",
     ),
     StageConfig(
         stage=3,
-        active_meters=['energy', 'hygiene', 'satiation', 'money'],
+        active_meters=["energy", "hygiene", "satiation", "money"],
         depletion_multiplier=0.8,
-        reward_mode='shaped',
+        reward_mode="shaped",
         description="Stage 3: Add money management at 80% depletion",
     ),
     StageConfig(
         stage=4,
-        active_meters=['energy', 'hygiene', 'satiation', 'money', 'mood', 'social'],
+        active_meters=["energy", "hygiene", "satiation", "money", "mood", "social"],
         depletion_multiplier=1.0,
-        reward_mode='shaped',
+        reward_mode="shaped",
         description="Stage 4: All meters at full depletion",
     ),
     StageConfig(
         stage=5,
-        active_meters=['energy', 'hygiene', 'satiation', 'money', 'mood', 'social'],
+        active_meters=["energy", "hygiene", "satiation", "money", "mood", "social"],
         depletion_multiplier=1.0,
-        reward_mode='sparse',
+        reward_mode="sparse",
         description="Stage 5: SPARSE REWARDS - Graduation!",
     ),
 ]
@@ -126,7 +126,7 @@ class AdversarialCurriculum(CurriculumManager):
         survival_retreat_threshold: float = 0.3,
         entropy_gate: float = 0.5,
         min_steps_at_stage: int = 1000,
-        device: torch.device = torch.device('cpu'),
+        device: torch.device = torch.device("cpu"),
     ):
         self.max_steps_per_episode = max_steps_per_episode
         self.survival_advance_threshold = survival_advance_threshold
@@ -138,7 +138,7 @@ class AdversarialCurriculum(CurriculumManager):
         self.tracker: Optional[PerformanceTracker] = None  # Set when population initialized
 
     @classmethod
-    def from_yaml(cls, config_path: str) -> 'AdversarialCurriculum':
+    def from_yaml(cls, config_path: str) -> "AdversarialCurriculum":
         """Load curriculum from YAML config file.
 
         Args:
@@ -147,21 +147,21 @@ class AdversarialCurriculum(CurriculumManager):
         Returns:
             Configured AdversarialCurriculum instance
         """
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 
-        curriculum_config = config.get('curriculum', {})
+        curriculum_config = config.get("curriculum", {})
 
         # Extract device config
-        device_str = curriculum_config.get('device', 'cpu')
+        device_str = curriculum_config.get("device", "cpu")
         device = torch.device(device_str)
 
         return cls(
-            max_steps_per_episode=curriculum_config.get('max_steps_per_episode', 500),
-            survival_advance_threshold=curriculum_config.get('survival_advance_threshold', 0.7),
-            survival_retreat_threshold=curriculum_config.get('survival_retreat_threshold', 0.3),
-            entropy_gate=curriculum_config.get('entropy_gate', 0.5),
-            min_steps_at_stage=curriculum_config.get('min_steps_at_stage', 1000),
+            max_steps_per_episode=curriculum_config.get("max_steps_per_episode", 500),
+            survival_advance_threshold=curriculum_config.get("survival_advance_threshold", 0.7),
+            survival_retreat_threshold=curriculum_config.get("survival_retreat_threshold", 0.3),
+            entropy_gate=curriculum_config.get("entropy_gate", 0.5),
+            min_steps_at_stage=curriculum_config.get("min_steps_at_stage", 1000),
             device=device,
         )
 
@@ -185,7 +185,9 @@ class AdversarialCurriculum(CurriculumManager):
         """Check if agent should advance to next stage."""
         # Bounds checking
         if not (0 <= agent_idx < self.tracker.num_agents):
-            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
+            raise ValueError(
+                f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})"
+            )
 
         if self.tracker.agent_stages[agent_idx] >= 5:
             return False  # Already at max stage
@@ -209,7 +211,9 @@ class AdversarialCurriculum(CurriculumManager):
         """Check if agent should retreat to previous stage."""
         # Bounds checking
         if not (0 <= agent_idx < self.tracker.num_agents):
-            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
+            raise ValueError(
+                f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})"
+            )
 
         if self.tracker.agent_stages[agent_idx] <= 1:
             return False  # Already at minimum stage
@@ -251,14 +255,18 @@ class AdversarialCurriculum(CurriculumManager):
                 self.tracker.agent_stages[i] -= 1
                 self.tracker.steps_at_stage[i] = 0
                 # Update baseline for retreating agent only
-                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
+                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(
+                    self.tracker.episode_steps[i], min=1.0
+                )
                 self.tracker.prev_avg_reward[i] = current_avg_i
             # Then check for advancement
             elif self._should_advance(i, entropies[i].item()):
                 self.tracker.agent_stages[i] += 1
                 self.tracker.steps_at_stage[i] = 0
                 # Update baseline for advancing agent only (not all agents)
-                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
+                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(
+                    self.tracker.episode_steps[i], min=1.0
+                )
                 self.tracker.prev_avg_reward[i] = current_avg_i
 
             # Get current stage
@@ -325,36 +333,26 @@ class AdversarialCurriculum(CurriculumManager):
 
         return normalized_entropy
 
-    def state_dict(self) -> Dict:
-        """Get curriculum state for checkpointing."""
+    def checkpoint_state(self) -> Dict[str, Any]:
+        """Return serializable state for checkpoint saving."""
         if self.tracker is None:
             return {}
 
         return {
-            'agent_stages': self.tracker.agent_stages.cpu(),
-            'episode_rewards': self.tracker.episode_rewards.cpu(),
-            'episode_steps': self.tracker.episode_steps.cpu(),
-            'prev_avg_reward': self.tracker.prev_avg_reward.cpu(),
-            'steps_at_stage': self.tracker.steps_at_stage.cpu(),
+            "agent_stages": self.tracker.agent_stages.cpu(),
+            "episode_rewards": self.tracker.episode_rewards.cpu(),
+            "episode_steps": self.tracker.episode_steps.cpu(),
+            "prev_avg_reward": self.tracker.prev_avg_reward.cpu(),
+            "steps_at_stage": self.tracker.steps_at_stage.cpu(),
         }
-
-    def load_state_dict(self, state_dict: Dict):
-        """Restore curriculum state from checkpoint."""
-        if self.tracker is None:
-            raise RuntimeError("Must initialize_population before loading state")
-
-        self.tracker.agent_stages = state_dict['agent_stages'].to(self.device)
-        self.tracker.episode_rewards = state_dict['episode_rewards'].to(self.device)
-        self.tracker.episode_steps = state_dict['episode_steps'].to(self.device)
-        self.tracker.prev_avg_reward = state_dict['prev_avg_reward'].to(self.device)
-        self.tracker.steps_at_stage = state_dict['steps_at_stage'].to(self.device)
-
-    def checkpoint_state(self) -> Dict[str, Any]:
-        """Return serializable state for checkpoint saving."""
-        # Legacy method - use state_dict() instead
-        return self.state_dict()
 
     def load_state(self, state: Dict[str, Any]) -> None:
         """Restore curriculum manager from checkpoint."""
-        # Legacy method - use load_state_dict() instead
-        self.load_state_dict(state)
+        if self.tracker is None:
+            raise RuntimeError("Must initialize_population before loading state")
+
+        self.tracker.agent_stages = state["agent_stages"].to(self.device)
+        self.tracker.episode_rewards = state["episode_rewards"].to(self.device)
+        self.tracker.episode_steps = state["episode_steps"].to(self.device)
+        self.tracker.prev_avg_reward = state["prev_avg_reward"].to(self.device)
+        self.tracker.steps_at_stage = state["steps_at_stage"].to(self.device)
