@@ -271,6 +271,9 @@ The architecture design (`docs/ARCHITECTURE_DESIGN.md`) outlines 5 levels:
 - Per-tick costs prevent "free sampling"
 - Observation +2 dims: time_of_day + interaction_progress
 - Agent learns temporal planning and opportunity cost
+- **Visualization**: Time-of-day gradient bar with dawn/day/dusk/night transitions
+- **Visualization**: Interaction progress ring showing multi-tick completion
+- **Future**: Dynamic affordances (CoffeeShop↔Bar based on time) - deferred for architectural complexity
 
 **Level 3** (🎯 Future): Multi-zone environment with hierarchical RL
 **Level 4** (🎯 Future): Multi-agent competition with theory of mind
