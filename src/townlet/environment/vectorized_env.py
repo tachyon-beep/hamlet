@@ -9,6 +9,10 @@ import torch
 import numpy as np
 from typing import Tuple, Optional
 
+from townlet.environment.observation_builder import ObservationBuilder
+from townlet.environment.reward_strategy import RewardStrategy
+from townlet.environment.meter_dynamics import MeterDynamics
+
 
 class VectorizedHamletEnv:
     """
@@ -89,6 +93,23 @@ class VectorizedHamletEnv:
         if enable_temporal_mechanics:
             self.observation_dim += 2  # time_of_day + interaction_progress
 
+        # Initialize observation builder
+        self.observation_builder = ObservationBuilder(
+            num_agents=num_agents,
+            grid_size=grid_size,
+            device=device,
+            partial_observability=partial_observability,
+            vision_range=vision_range,
+            enable_temporal_mechanics=enable_temporal_mechanics,
+            num_affordance_types=self.num_affordance_types,
+        )
+
+        # Initialize reward strategy
+        self.reward_strategy = RewardStrategy(device=device)
+
+        # Initialize meter dynamics
+        self.meter_dynamics = MeterDynamics(num_agents=num_agents, device=device)
+
         self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
 
         # State tensors (initialized in reset)
@@ -144,128 +165,16 @@ class VectorizedHamletEnv:
         Returns:
             observations: [num_agents, observation_dim]
         """
-        if self.partial_observability:
-            obs = self._get_partial_observations()
-        else:
-            obs = self._get_full_observations()
-
-        # Add temporal features if enabled
-        if self.enable_temporal_mechanics:
-            # Normalize time_of_day to [0, 1] (0-23 hours)
-            normalized_time = torch.full(
-                (self.num_agents, 1), self.time_of_day / 23.0, device=self.device
-            )
-            # Normalize interaction_progress to [0, 1]
-            normalized_progress = self.interaction_progress.unsqueeze(1) / 10.0  # Max 10 ticks
-
-            obs = torch.cat([obs, normalized_time, normalized_progress], dim=1)
-
-        return obs
-
-    def _get_current_affordance_encoding(self) -> torch.Tensor:
-        """
-        Get one-hot encoding of current affordance under each agent.
-
-        Returns:
-            [num_agents, num_affordance_types + 1] where last dim is "none"
-        """
-        # Initialize with "none" (all zeros except last column)
-        affordance_encoding = torch.zeros(
-            self.num_agents, self.num_affordance_types + 1, device=self.device
+        # Delegate to observation builder
+        return self.observation_builder.build_observations(
+            positions=self.positions,
+            meters=self.meters,
+            affordances=self.affordances,
+            time_of_day=self.time_of_day if self.enable_temporal_mechanics else 0,
+            interaction_progress=self.interaction_progress
+            if self.enable_temporal_mechanics
+            else None,
         )
-        affordance_encoding[:, -1] = 1.0  # Default to "none"
-
-        # Check each affordance
-        for affordance_idx, (affordance_name, affordance_pos) in enumerate(
-            self.affordances.items()
-        ):
-            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            on_affordance = distances == 0
-            if on_affordance.any():
-                affordance_encoding[on_affordance, -1] = 0.0  # Clear "none"
-                affordance_encoding[on_affordance, affordance_idx] = 1.0  # Set affordance type
-
-        return affordance_encoding
-
-    def _get_full_observations(self) -> torch.Tensor:
-        """Get full grid observations (Level 1)."""
-        # Grid encoding: one-hot position
-        # positions[:, 0] = x (column), positions[:, 1] = y (row)
-        grid_encoding = torch.zeros(
-            self.num_agents, self.grid_size * self.grid_size, device=self.device
-        )
-        flat_indices = self.positions[:, 1] * self.grid_size + self.positions[:, 0]
-        grid_encoding.scatter_(1, flat_indices.unsqueeze(1), 1.0)
-
-        # Get current affordance encoding
-        affordance_encoding = self._get_current_affordance_encoding()
-
-        # Concatenate grid + meters + current affordance
-        # (Temporal features added by _get_observations if enabled)
-        observations = torch.cat([grid_encoding, self.meters, affordance_encoding], dim=1)
-
-        return observations
-
-    def _get_partial_observations(self) -> torch.Tensor:
-        """
-        Get partial observations (Level 2 POMDP).
-
-        Agent sees only local 5×5 window centered on its position.
-        Observation includes:
-        - Local grid: affordances visible in window (5×5 = 25 dims)
-        - Position: agent's (x, y) coordinates normalized (2 dims)
-        - Meters: 8 meter values (8 dims)
-        Total: 35 dims
-
-        Returns:
-            observations: [num_agents, 35]
-        """
-        window_size = 2 * self.vision_range + 1  # 5 for vision_range=2
-        local_grids = []
-
-        for agent_idx in range(self.num_agents):
-            agent_pos = self.positions[agent_idx]  # [x, y]
-            local_grid = torch.zeros(window_size * window_size, device=self.device)
-
-            # Extract local window centered on agent
-            for dy in range(-self.vision_range, self.vision_range + 1):
-                for dx in range(-self.vision_range, self.vision_range + 1):
-                    world_x = agent_pos[0] + dx
-                    world_y = agent_pos[1] + dy
-
-                    # Check if position is within grid bounds
-                    if 0 <= world_x < self.grid_size and 0 <= world_y < self.grid_size:
-                        # Check if there's an affordance at this position
-                        has_affordance = False
-                        for affordance_pos in self.affordances.values():
-                            if affordance_pos[0] == world_x and affordance_pos[1] == world_y:
-                                has_affordance = True
-                                break
-
-                        # Encode in local grid (1 = affordance, 0 = empty/out-of-bounds)
-                        if has_affordance:
-                            local_y = dy + self.vision_range
-                            local_x = dx + self.vision_range
-                            local_idx = local_y * window_size + local_x
-                            local_grid[local_idx] = 1.0
-
-            local_grids.append(local_grid)
-
-        # Stack all local grids
-        local_grids_batch = torch.stack(local_grids)  # [num_agents, 25]
-
-        # Normalize positions to [0, 1]
-        normalized_positions = self.positions.float() / (self.grid_size - 1)
-
-        # Get current affordance encoding
-        affordance_encoding = self._get_current_affordance_encoding()
-
-        # Concatenate: local_grid + position + meters + current affordance
-        observations = torch.cat(
-            [local_grids_batch, normalized_positions, self.meters, affordance_encoding], dim=1
-        )
-
-        return observations
 
     def get_action_masks(self) -> torch.Tensor:
         """
@@ -373,15 +282,15 @@ class VectorizedHamletEnv:
         successful_interactions = self._execute_actions(actions)
 
         # 2. Deplete meters (base passive decay)
-        self._deplete_meters()
+        self.meters = self.meter_dynamics.deplete_meters(self.meters)
 
         # 3. Cascading effects (coupled differential equations!)
-        self._apply_secondary_to_primary_effects()  # Satiation/Fitness/Mood → Health/Energy
-        self._apply_tertiary_to_secondary_effects()  # Hygiene/Social → Satiation/Fitness/Mood
-        self._apply_tertiary_to_primary_effects()  # Hygiene/Social → Health/Energy (weak)
+        self.meters = self.meter_dynamics.apply_secondary_to_primary_effects(self.meters)
+        self.meters = self.meter_dynamics.apply_tertiary_to_secondary_effects(self.meters)
+        self.meters = self.meter_dynamics.apply_tertiary_to_primary_effects(self.meters)
 
         # 4. Check terminal conditions
-        self._check_dones()
+        self.dones = self.meter_dynamics.check_terminal_conditions(self.meters, self.dones)
 
         # 5. Calculate rewards (shaped rewards for now)
         rewards = self._calculate_shaped_rewards()
@@ -776,231 +685,19 @@ class VectorizedHamletEnv:
 
         return successful_interactions
 
-    def _deplete_meters(self) -> None:
-        """Deplete meters each step."""
-        # Base depletion rates (per step)
-        depletions = torch.tensor(
-            [
-                0.005,  # energy: 0.5% per step
-                0.003,  # hygiene: 0.3%
-                0.004,  # satiation: 0.4%
-                0.0,  # money: no passive depletion
-                0.001,  # mood: 0.1%
-                0.006,  # social: 0.6%
-                0.0,  # health: modulated by fitness (see below)
-                0.002,  # fitness: 0.2% (slower than energy, faster than health)
-            ],
-            device=self.device,
-        )
-
-        # Apply base depletions
-        self.meters = torch.clamp(self.meters - depletions, 0.0, 1.0)
-
-        # Fitness-modulated health depletion (GRADIENT approach for consistency)
-        # All cascade effects use gradient calculation based on current level
-        # fitness=100%: multiplier=0.5x (0.0005/step - very healthy)
-        # fitness=50%: multiplier=1.75x (0.00175/step - moderate decline)
-        # fitness=0%: multiplier=3.0x (0.003/step - get sick easily)
-        baseline_health_depletion = 0.001
-        fitness = self.meters[:, 7]
-
-        # Calculate multiplier: ranges from 0.5 (100% fitness) to 3.0 (0% fitness)
-        fitness_penalty_strength = 1.0 - fitness  # 0.0 at 100%, 1.0 at 0%
-        multiplier = 0.5 + (2.5 * fitness_penalty_strength)  # Linear gradient
-
-        health_depletion = baseline_health_depletion * multiplier
-        self.meters[:, 6] = torch.clamp(self.meters[:, 6] - health_depletion, 0.0, 1.0)
-
-    def _apply_secondary_to_primary_effects(self) -> None:
-        """
-        SECONDARY → PRIMARY (Aggressive effects).
-
-        **Satiation is FUNDAMENTAL** (affects BOTH primaries):
-        - Low Satiation → Health decline ↑↑↑ (starving → sick → death)
-        - Low Satiation → Energy decline ↑↑↑ (hungry → exhausted → death)
-
-        **Specialized secondaries** (each affects one primary):
-        - Low Fitness → Health decline ↑↑↑ (unfit → sick → death)
-        - Low Mood → Energy decline ↑↑↑ (depressed → exhausted → death)
-
-        This creates asymmetry: FOOD FIRST, then everything else.
-        """
-        threshold = 0.3  # below this, aggressive penalties apply
-
-        # SATIATION → BOTH PRIMARIES (fundamental need!)
-        satiation = self.meters[:, 2]
-        low_satiation = satiation < threshold
-        if low_satiation.any():
-            deficit = (threshold - satiation[low_satiation]) / threshold
-
-            # Health damage (starving → sick)
-            health_penalty = 0.004 * deficit  # 0.4% at threshold, up to ~0.8% at 0
-            self.meters[low_satiation, 6] = torch.clamp(
-                self.meters[low_satiation, 6] - health_penalty, 0.0, 1.0
-            )
-
-            # Energy damage (hungry → exhausted)
-            energy_penalty = 0.005 * deficit  # 0.5% at threshold, up to ~1.0% at 0
-            self.meters[low_satiation, 0] = torch.clamp(
-                self.meters[low_satiation, 0] - energy_penalty, 0.0, 1.0
-            )
-
-        # FITNESS → HEALTH (specialized)
-        # (Already implemented in _deplete_meters via fitness-modulated health depletion)
-        # Low fitness creates 3x health depletion multiplier
-
-        # MOOD → ENERGY (specialized)
-        mood = self.meters[:, 4]
-        low_mood = mood < threshold
-        if low_mood.any():
-            deficit = (threshold - mood[low_mood]) / threshold
-            energy_penalty = 0.005 * deficit  # 0.5% at threshold, up to ~1.0% at 0
-            self.meters[low_mood, 0] = torch.clamp(
-                self.meters[low_mood, 0] - energy_penalty, 0.0, 1.0
-            )
-
-    def _apply_tertiary_to_secondary_effects(self) -> None:
-        """
-        TERTIARY → SECONDARY (Aggressive effects).
-
-        - Low Hygiene → Satiation/Fitness/Mood decline ↑↑
-        - Low Social → Mood decline ↑↑
-        """
-        threshold = 0.3
-
-        # Low hygiene → secondary meters
-        hygiene = self.meters[:, 1]
-        low_hygiene = hygiene < threshold
-        if low_hygiene.any():
-            deficit = (threshold - hygiene[low_hygiene]) / threshold
-
-            # Satiation penalty (being dirty → loss of appetite)
-            satiation_penalty = 0.002 * deficit
-            self.meters[low_hygiene, 2] = torch.clamp(
-                self.meters[low_hygiene, 2] - satiation_penalty, 0.0, 1.0
-            )
-
-            # Fitness penalty (being dirty → harder to exercise)
-            fitness_penalty = 0.002 * deficit
-            self.meters[low_hygiene, 7] = torch.clamp(
-                self.meters[low_hygiene, 7] - fitness_penalty, 0.0, 1.0
-            )
-
-            # Mood penalty (being dirty → feel bad)
-            mood_penalty = 0.003 * deficit
-            self.meters[low_hygiene, 4] = torch.clamp(
-                self.meters[low_hygiene, 4] - mood_penalty, 0.0, 1.0
-            )
-
-        # Low social → mood
-        social = self.meters[:, 5]
-        low_social = social < threshold
-        if low_social.any():
-            deficit = (threshold - social[low_social]) / threshold
-            mood_penalty = 0.004 * deficit  # Stronger than hygiene
-            self.meters[low_social, 4] = torch.clamp(
-                self.meters[low_social, 4] - mood_penalty, 0.0, 1.0
-            )
-
-    def _apply_tertiary_to_primary_effects(self) -> None:
-        """
-        TERTIARY → PRIMARY (Weak direct effects).
-
-        - Low Hygiene → Health/Energy decline ↑ (weak)
-        - Low Social → Energy decline ↑ (weak)
-        """
-        threshold = 0.3
-
-        # Low hygiene → health (weak)
-        hygiene = self.meters[:, 1]
-        low_hygiene = hygiene < threshold
-        if low_hygiene.any():
-            deficit = (threshold - hygiene[low_hygiene]) / threshold
-
-            health_penalty = 0.0005 * deficit  # Weak effect
-            self.meters[low_hygiene, 6] = torch.clamp(
-                self.meters[low_hygiene, 6] - health_penalty, 0.0, 1.0
-            )
-
-            energy_penalty = 0.0005 * deficit  # Weak effect
-            self.meters[low_hygiene, 0] = torch.clamp(
-                self.meters[low_hygiene, 0] - energy_penalty, 0.0, 1.0
-            )
-
-        # Low social → energy (weak)
-        social = self.meters[:, 5]
-        low_social = social < threshold
-        if low_social.any():
-            deficit = (threshold - social[low_social]) / threshold
-            energy_penalty = 0.0008 * deficit  # Weak effect
-            self.meters[low_social, 0] = torch.clamp(
-                self.meters[low_social, 0] - energy_penalty, 0.0, 1.0
-            )
-
-    def _check_dones(self) -> None:
-        """Check terminal conditions.
-
-        Coupled cascade architecture:
-
-        **PRIMARY (Death Conditions):**
-        - Health: Are you alive?
-        - Energy: Can you move?
-
-        **SECONDARY (Aggressive → Primary):**
-        - Satiation ──strong──> Health AND Energy (FUNDAMENTAL - affects both!)
-        - Fitness ──strong──> Health (unfit → sick → death)
-        - Mood ──strong──> Energy (depressed → exhausted → death)
-
-        **TERTIARY (Quality of Life):**
-        - Hygiene ──strong──> Secondary + weak──> Primary
-        - Social ──strong──> Secondary + weak──> Primary
-
-        **RESOURCE:**
-        - Money (Enables affordances)
-
-        **Key Insight:** Satiation is THE foundational need - hungry makes you
-        BOTH sick AND exhausted. Food must be prioritized above all else.
-        """
-        # Death if either PRIMARY meter hits 0
-        health_values = self.meters[:, 6]  # health
-        energy_values = self.meters[:, 0]  # energy
-
-        self.dones = (health_values <= 0.0) | (energy_values <= 0.0)
-
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """
         MILESTONE SURVIVAL REWARDS: Sparse bonuses for survival milestones.
 
-        Problem with constant per-step rewards: Rewards aimless wandering equally to strategic play.
-        Solution: Milestone bonuses that reward longevity without constant accumulation.
-
-        - Every 10 steps: +0.5 ("you're making progress!")
-        - Every 100 steps: +5.0 ("happy birthday!" 🎂)
-        - Death: -100.0
-
-        This prevents left-right oscillation from being rewarded while still encouraging survival.
+        Delegates to RewardStrategy for calculation.
 
         Returns:
             rewards: [num_agents]
         """
-        # Start with zero rewards
-        rewards = torch.zeros(self.num_agents, device=self.device)
-
-        # Milestone bonuses (only for alive agents)
-        alive_mask = ~self.dones
-
-        # Every 10 steps: +0.5 bonus
-        decade_milestone = (self.step_counts % 10 == 0) & alive_mask
-        rewards += torch.where(decade_milestone, 0.5, 0.0)
-
-        # Every 100 steps: +5.0 bonus ("Happy Birthday!")
-        century_milestone = (self.step_counts % 100 == 0) & alive_mask
-        rewards += torch.where(century_milestone, 5.0, 0.0)
-
-        # Death penalty: -100.0
-        rewards = torch.where(self.dones, -100.0, rewards)
-
-        return rewards
+        return self.reward_strategy.calculate_rewards(
+            step_counts=self.step_counts,
+            dones=self.dones,
+        )
 
     def get_affordance_positions(self) -> dict[str, tuple[int, int]]:
         """Get current affordance positions.

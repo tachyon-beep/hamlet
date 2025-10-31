@@ -196,7 +196,7 @@ class TestDeathConditions:
         env.meters[0, 6] = 0.0
         env.meters[0, 0] = 0.5  # Energy is fine
 
-        env._check_dones()
+        env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
         assert env.dones[0]
 
@@ -215,7 +215,7 @@ class TestDeathConditions:
         env.meters[0, 0] = 0.0
         env.meters[0, 6] = 0.5  # Health is fine
 
-        env._check_dones()
+        env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
         assert env.dones[0]
 
@@ -234,7 +234,7 @@ class TestDeathConditions:
         env.meters[0, 0] = 0.0
         env.meters[0, 6] = 0.0
 
-        env._check_dones()
+        env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
         assert env.dones[0]
 
@@ -254,7 +254,7 @@ class TestDeathConditions:
         env.meters[0, 6] = 0.01  # Health barely positive
         env.dones[0] = False
 
-        env._check_dones()
+        env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
         # Should NOT be dead
         assert not env.dones[0]
@@ -280,7 +280,7 @@ class TestDeathConditions:
         env.meters[2, 6] = 0.5
         env.meters[2, 0] = 0.5
 
-        env._check_dones()
+        env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
         assert env.dones[0]  # Dead from health
         assert env.dones[1]  # Dead from energy
