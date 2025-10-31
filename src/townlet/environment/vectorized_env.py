@@ -25,6 +25,7 @@ class VectorizedHamletEnv:
         device: torch.device = torch.device('cpu'),
         partial_observability: bool = False,
         vision_range: int = 2,
+        enable_temporal_mechanics: bool = False,
     ):
         """
         Initialize vectorized environment.
@@ -35,12 +36,14 @@ class VectorizedHamletEnv:
             device: PyTorch device (cpu or cuda)
             partial_observability: If True, agent sees only local window (POMDP)
             vision_range: Radius of vision window (2 = 5×5 window)
+            enable_temporal_mechanics: Enable time-based mechanics and multi-tick interactions
         """
         self.num_agents = num_agents
         self.grid_size = grid_size
         self.device = device
         self.partial_observability = partial_observability
         self.vision_range = vision_range
+        self.enable_temporal_mechanics = enable_temporal_mechanics
 
         # Affordance positions (from Hamlet default layout)
         self.affordances = {
@@ -80,6 +83,10 @@ class VectorizedHamletEnv:
             # Grid one-hot + 8 meters + affordance type (N+1 for "none")
             self.observation_dim = grid_size * grid_size + 8 + (self.num_affordance_types + 1)
 
+        # Add temporal features to observation if enabled
+        if enable_temporal_mechanics:
+            self.observation_dim += 2  # time_of_day + interaction_progress
+
         self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
 
         # State tensors (initialized in reset)
@@ -87,6 +94,21 @@ class VectorizedHamletEnv:
         self.meters: Optional[torch.Tensor] = None  # [num_agents, 8]
         self.dones: Optional[torch.Tensor] = None  # [num_agents]
         self.step_counts: Optional[torch.Tensor] = None  # [num_agents]
+
+        # Temporal mechanics state
+        if self.enable_temporal_mechanics:
+            self.time_of_day = 0  # 0-23 tick cycle
+            self.interaction_progress = torch.zeros(
+                self.num_agents,
+                dtype=torch.long,
+                device=self.device
+            )
+            self.last_interaction_affordance = [None] * self.num_agents
+            self.last_interaction_position = torch.zeros(
+                (self.num_agents, 2),
+                dtype=torch.long,
+                device=self.device
+            )
 
     def reset(self) -> torch.Tensor:
         """
@@ -109,6 +131,13 @@ class VectorizedHamletEnv:
 
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+
+        # Reset temporal mechanics state
+        if self.enable_temporal_mechanics:
+            self.time_of_day = 0
+            self.interaction_progress.fill_(0)
+            self.last_interaction_affordance = [None] * self.num_agents
+            self.last_interaction_position.fill_(0)
 
         return self._get_observations()
 
@@ -162,6 +191,26 @@ class VectorizedHamletEnv:
 
         # Concatenate grid + meters + current affordance
         observations = torch.cat([grid_encoding, self.meters, affordance_encoding], dim=1)
+
+        # Add temporal features if enabled
+        if self.enable_temporal_mechanics:
+            # time_of_day: normalized [0, 1]
+            time_feature = torch.full(
+                (self.num_agents, 1),
+                self.time_of_day / 24.0,
+                device=self.device
+            )
+
+            # interaction_progress: normalized [0, 1]
+            progress_feature = torch.zeros((self.num_agents, 1), device=self.device)
+            for i in range(self.num_agents):
+                if self.last_interaction_affordance[i] is not None:
+                    from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
+                    config = AFFORDANCE_CONFIGS[self.last_interaction_affordance[i]]
+                    progress_ratio = self.interaction_progress[i].float() / config['required_ticks']
+                    progress_feature[i, 0] = progress_ratio
+
+            observations = torch.cat([observations, time_feature, progress_feature], dim=1)
 
         return observations
 
@@ -321,6 +370,10 @@ class VectorizedHamletEnv:
 
         # 5. Increment step counts
         self.step_counts += 1
+
+        # 6. Increment time of day (temporal mechanics)
+        if self.enable_temporal_mechanics:
+            self.time_of_day = (self.time_of_day + 1) % 24
 
         observations = self._get_observations()
 
