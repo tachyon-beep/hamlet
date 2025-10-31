@@ -145,9 +145,22 @@ class VectorizedHamletEnv:
             observations: [num_agents, observation_dim]
         """
         if self.partial_observability:
-            return self._get_partial_observations()
+            obs = self._get_partial_observations()
         else:
-            return self._get_full_observations()
+            obs = self._get_full_observations()
+
+        # Add temporal features if enabled
+        if self.enable_temporal_mechanics:
+            # Normalize time_of_day to [0, 1] (0-23 hours)
+            normalized_time = torch.full(
+                (self.num_agents, 1), self.time_of_day / 23.0, device=self.device
+            )
+            # Normalize interaction_progress to [0, 1]
+            normalized_progress = self.interaction_progress.unsqueeze(1) / 10.0  # Max 10 ticks
+
+            obs = torch.cat([obs, normalized_time, normalized_progress], dim=1)
+
+        return obs
 
     def _get_current_affordance_encoding(self) -> torch.Tensor:
         """
@@ -188,26 +201,8 @@ class VectorizedHamletEnv:
         affordance_encoding = self._get_current_affordance_encoding()
 
         # Concatenate grid + meters + current affordance
+        # (Temporal features added by _get_observations if enabled)
         observations = torch.cat([grid_encoding, self.meters, affordance_encoding], dim=1)
-
-        # Add temporal features if enabled
-        if self.enable_temporal_mechanics:
-            # time_of_day: normalized [0, 1]
-            time_feature = torch.full(
-                (self.num_agents, 1), self.time_of_day / 24.0, device=self.device
-            )
-
-            # interaction_progress: normalized [0, 1]
-            progress_feature = torch.zeros((self.num_agents, 1), device=self.device)
-            for i in range(self.num_agents):
-                if self.last_interaction_affordance[i] is not None:
-                    from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
-
-                    config = AFFORDANCE_CONFIGS[self.last_interaction_affordance[i]]
-                    progress_ratio = self.interaction_progress[i].float() / config["required_ticks"]
-                    progress_feature[i, 0] = progress_ratio
-
-            observations = torch.cat([observations, time_feature, progress_feature], dim=1)
 
         return observations
 

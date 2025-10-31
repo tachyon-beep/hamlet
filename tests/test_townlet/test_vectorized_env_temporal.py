@@ -10,7 +10,7 @@ def env():
     return VectorizedHamletEnv(
         num_agents=2,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -20,7 +20,7 @@ def test_time_of_day_cycles():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -40,9 +40,9 @@ def test_interaction_progress_state_exists(env):
     env.reset()
 
     # Verify state attributes exist
-    assert hasattr(env, 'interaction_progress')
-    assert hasattr(env, 'last_interaction_affordance')
-    assert hasattr(env, 'last_interaction_position')
+    assert hasattr(env, "interaction_progress")
+    assert hasattr(env, "last_interaction_affordance")
+    assert hasattr(env, "last_interaction_position")
 
     # Initial values
     assert env.interaction_progress[0] == 0
@@ -53,9 +53,11 @@ def test_observation_includes_time_and_progress(env):
     """Verify observation contains time_of_day and interaction_progress."""
     obs = env.reset()
 
-    # Observation shape: base (87) + temporal (2) = 89
-    # Base: 64 (grid) + 8 (meters) + 15 (affordance encoding)
-    assert obs.shape == (2, 89)
+    # Observation shape: base + temporal (2)
+    # Base: 64 (grid) + 8 (meters) + (num_affordance_types + 1)
+    # num_affordance_types = 15, encoding = 16
+    expected_dim = 64 + 8 + (env.num_affordance_types + 1) + 2
+    assert obs.shape == (2, expected_dim)
 
     # time_of_day should be normalized [0, 1]
     time_feature = obs[0, -2]

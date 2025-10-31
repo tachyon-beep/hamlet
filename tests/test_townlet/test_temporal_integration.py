@@ -1,5 +1,6 @@
 # tests/test_townlet/test_temporal_integration.py
 """Integration tests for temporal mechanics system."""
+
 import pytest
 import torch
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -10,7 +11,7 @@ def test_full_24_hour_cycle():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -31,14 +32,16 @@ def test_observation_dimensions_with_temporal():
     env = VectorizedHamletEnv(
         num_agents=2,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
     obs = env.reset()
 
-    # Full observability: 64 (grid) + 8 (meters) + 15 (affordance encoding) + 2 (temporal) = 89
-    assert obs.shape == (2, 89)
+    # Full observability: 64 (grid) + 8 (meters) + (num_affordance_types + 1) + 2 (temporal)
+    # num_affordance_types = 15 (including CoffeeShop), encoding = 16
+    expected_dim = 64 + 8 + (env.num_affordance_types + 1) + 2
+    assert obs.shape == (2, expected_dim)
 
     # Last two features are time_of_day and interaction_progress
     time_feature = obs[0, -2]
@@ -53,7 +56,7 @@ def test_multi_tick_job_completion():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -85,7 +88,7 @@ def test_operating_hours_mask_job():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -109,7 +112,7 @@ def test_early_exit_from_interaction():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -140,7 +143,7 @@ def test_temporal_mechanics_disabled_fallback():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=False,  # Legacy mode
     )
 
@@ -150,7 +153,7 @@ def test_temporal_mechanics_disabled_fallback():
     assert obs.shape == (1, 87)
 
     # No time tracking
-    assert not hasattr(env, 'time_of_day')
+    assert not hasattr(env, "time_of_day")
 
     # Interactions work (legacy single-shot mode)
     env.positions[0] = torch.tensor([1, 1])  # On Bed

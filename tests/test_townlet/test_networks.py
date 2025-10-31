@@ -111,7 +111,8 @@ class TestRecurrentSpatialQNetwork:
     def network(self):
         """Create RecurrentSpatialQNetwork with standard config."""
         # Network computes obs_dim from window_size + num_meters + affordances
-        # Observation: 25 (5×5) + 2 (position) + 8 (meters) + 15 (affordance) = 50
+        # Default num_affordance_types=15 → encoding size = 15+1 = 16
+        # Observation: 25 (5×5) + 2 (position) + 8 (meters) + 16 (affordance) = 51
         return RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
 
     def test_initialization(self, network):
@@ -138,7 +139,8 @@ class TestRecurrentSpatialQNetwork:
 
     def test_forward_pass_without_hidden_state(self, network):
         """Forward pass should work without providing hidden state."""
-        obs = torch.randn(1, 50)
+        # 25 (grid) + 2 (pos) + 8 (meters) + 16 (affordance encoding) = 51
+        obs = torch.randn(1, 51)
         q_values, hidden = network(obs)
 
         assert q_values.shape == (1, 5)
@@ -149,7 +151,7 @@ class TestRecurrentSpatialQNetwork:
 
     def test_forward_pass_with_hidden_state(self, network):
         """Forward pass should accept and update hidden state."""
-        obs = torch.randn(1, 50)
+        obs = torch.randn(1, 51)
 
         # First forward pass
         q1, hidden1 = network(obs)
@@ -164,7 +166,7 @@ class TestRecurrentSpatialQNetwork:
     def test_hidden_state_management(self, network):
         """Hidden state should persist across forward passes."""
         batch_size = 1
-        obs = torch.randn(batch_size, 50)
+        obs = torch.randn(batch_size, 51)
 
         # Reset hidden state
         network.reset_hidden_state(batch_size, device=torch.device("cpu"))
@@ -213,7 +215,7 @@ class TestRecurrentSpatialQNetwork:
     def test_batch_processing(self, network):
         """Network should handle batched observations."""
         batch_size = 8
-        obs = torch.randn(batch_size, 50)
+        obs = torch.randn(batch_size, 51)
 
         network.reset_hidden_state(batch_size, device=torch.device("cpu"))
         q_values, hidden = network(obs)
@@ -229,7 +231,7 @@ class TestRecurrentSpatialQNetwork:
 
         # Vision goes through conv-like processing (reshaped to spatial)
         # This is tested implicitly in full forward pass
-        obs = torch.randn(4, 50)
+        obs = torch.randn(4, 51)
         q_values, _ = network(obs)
 
         assert q_values.shape == (4, 5)
@@ -237,7 +239,7 @@ class TestRecurrentSpatialQNetwork:
 
     def test_gradient_flow_through_lstm(self, network):
         """Gradients should flow through LSTM."""
-        obs = torch.randn(4, 50, requires_grad=True)
+        obs = torch.randn(4, 51, requires_grad=True)
         network.reset_hidden_state(4, device=torch.device("cpu"))
 
         q_values, _ = network(obs)
@@ -257,7 +259,7 @@ class TestRecurrentSpatialQNetwork:
 
         hidden_states = []
         for step in range(5):
-            obs = torch.randn(batch_size, 50)
+            obs = torch.randn(batch_size, 51)
             q_values, hidden = network(obs)
             hidden_states.append(hidden[0].clone())
 
@@ -271,15 +273,15 @@ class TestRecurrentSpatialQNetwork:
         """Network should work with temporal features added (obs dimensions change)."""
         # Base POMDP: 25 (5×5) + 2 (pos) + 8 (meters) + 15 (affordance) = 50
         net_base = RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
-        obs_base = torch.randn(2, 50)
+        obs_base = torch.randn(2, 51)
         q_base, _ = net_base(obs_base)
         assert q_base.shape == (2, 5)
 
-        # With temporal: 25 + 2 + 8 + 15 + 2 (time + progress) = 52
+        # With temporal: 25 + 2 + 8 + 16 + 2 (time + progress) = 52
         # But network doesn't know about temporal - it just processes extra dims
         # So we test it handles the expected 50 dims correctly
         net_temporal = RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
-        obs_temporal = torch.randn(2, 50)
+        obs_temporal = torch.randn(2, 51)
         q_temporal, _ = net_temporal(obs_temporal)
         assert q_temporal.shape == (2, 5)
 
@@ -289,7 +291,7 @@ class TestRecurrentSpatialQNetwork:
         network.reset_hidden_state(batch_size, device=torch.device("cpu"))
 
         # Create sequence of similar observations
-        obs_sequence = [torch.randn(batch_size, 50) for _ in range(3)]
+        obs_sequence = [torch.randn(batch_size, 51) for _ in range(3)]
 
         # Get Q-values for each step
         q_values_list = []
@@ -341,7 +343,7 @@ class TestNetworkComparison:
 
         batch_size = 32
         obs_simple = torch.randn(batch_size, 72)
-        obs_recurrent = torch.randn(batch_size, 50)  # 25 + 2 + 8 + 15
+        obs_recurrent = torch.randn(batch_size, 51)  # 25 + 2 + 8 + 16
 
         # Warm up
         _ = simple_net(obs_simple)

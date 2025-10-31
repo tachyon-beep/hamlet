@@ -33,7 +33,7 @@ class VectorizedPopulation(PopulationManager):
 
     def __init__(
         self,
-        env: 'VectorizedHamletEnv',
+        env: "VectorizedHamletEnv",
         curriculum: CurriculumManager,
         exploration: ExplorationStrategy,
         agent_ids: List[str],
@@ -71,7 +71,7 @@ class VectorizedPopulation(PopulationManager):
         self.device = device
         self.gamma = gamma
         self.network_type = network_type
-        self.is_recurrent = (network_type == "recurrent")
+        self.is_recurrent = network_type == "recurrent"
 
         # Q-network (shared across all agents for now)
         if network_type == "recurrent":
@@ -79,6 +79,8 @@ class VectorizedPopulation(PopulationManager):
                 action_dim=action_dim,
                 window_size=vision_window_size,
                 num_meters=8,
+                num_affordance_types=env.num_affordance_types,
+                enable_temporal_features=env.enable_temporal_mechanics,
             ).to(device)
         else:
             self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
@@ -114,11 +116,9 @@ class VectorizedPopulation(PopulationManager):
         else:
             epsilon = self.exploration.epsilon
 
-        self.current_epsilons = torch.full(
-            (self.num_agents,), epsilon, device=self.device
-        )
+        self.current_epsilons = torch.full((self.num_agents,), epsilon, device=self.device)
 
-    def select_greedy_actions(self, env: 'VectorizedHamletEnv') -> torch.Tensor:
+    def select_greedy_actions(self, env: "VectorizedHamletEnv") -> torch.Tensor:
         """
         Select greedy actions with action masking for inference.
 
@@ -142,7 +142,7 @@ class VectorizedPopulation(PopulationManager):
 
             # Mask invalid actions with -inf before argmax
             masked_q_values = q_values.clone()
-            masked_q_values[~action_masks] = float('-inf')
+            masked_q_values[~action_masks] = float("-inf")
 
             # Select best valid action
             actions = masked_q_values.argmax(dim=1)
@@ -150,9 +150,7 @@ class VectorizedPopulation(PopulationManager):
         return actions
 
     def select_epsilon_greedy_actions(
-        self,
-        env: 'VectorizedHamletEnv',
-        epsilon: float
+        self, env: "VectorizedHamletEnv", epsilon: float
     ) -> torch.Tensor:
         """
         Select epsilon-greedy actions with action masking.
@@ -178,7 +176,7 @@ class VectorizedPopulation(PopulationManager):
 
             # Mask invalid actions with -inf before argmax
             masked_q_values = q_values.clone()
-            masked_q_values[~action_masks] = float('-inf')
+            masked_q_values[~action_masks] = float("-inf")
 
             # Select best valid action (greedy)
             greedy_actions = masked_q_values.argmax(dim=1)
@@ -201,7 +199,7 @@ class VectorizedPopulation(PopulationManager):
 
     def step_population(
         self,
-        envs: 'VectorizedHamletEnv',
+        envs: "VectorizedHamletEnv",
     ) -> BatchedAgentState:
         """
         Execute one training step for entire population.
@@ -235,7 +233,7 @@ class VectorizedPopulation(PopulationManager):
         )
 
         # 3. Get curriculum decisions (pass Q-values if curriculum supports it)
-        if hasattr(self.curriculum, 'get_batch_decisions_with_qvalues'):
+        if hasattr(self.curriculum, "get_batch_decisions_with_qvalues"):
             # AdversarialCurriculum - pass Q-values for entropy calculation
             self.current_curriculum_decisions = self.curriculum.get_batch_decisions_with_qvalues(
                 temp_state,
@@ -275,7 +273,11 @@ class VectorizedPopulation(PopulationManager):
 
         # 8. Train RND predictor (if applicable)
         if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
-            rnd = self.exploration.rnd if isinstance(self.exploration, AdaptiveIntrinsicExploration) else self.exploration
+            rnd = (
+                self.exploration.rnd
+                if isinstance(self.exploration, AdaptiveIntrinsicExploration)
+                else self.exploration
+            )
             # Accumulate observations in RND buffer
             for i in range(self.num_agents):
                 rnd.obs_buffer.append(self.current_obs[i].cpu())
@@ -295,23 +297,27 @@ class VectorizedPopulation(PopulationManager):
             # Standard DQN update (simplified, no target network for now)
             if self.is_recurrent:
                 # Reset hidden states for batch training (treat transitions independently)
-                batch_size = batch['observations'].shape[0]
+                batch_size = batch["observations"].shape[0]
                 self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
 
-                q_values, _ = self.q_network(batch['observations'])
-                q_pred = q_values.gather(1, batch['actions'].unsqueeze(1)).squeeze()
+                q_values, _ = self.q_network(batch["observations"])
+                q_pred = q_values.gather(1, batch["actions"].unsqueeze(1)).squeeze()
 
                 with torch.no_grad():
                     self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
-                    q_next_values, _ = self.q_network(batch['next_observations'])
+                    q_next_values, _ = self.q_network(batch["next_observations"])
                     q_next = q_next_values.max(1)[0]
-                    q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+                    q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
             else:
-                q_pred = self.q_network(batch['observations']).gather(1, batch['actions'].unsqueeze(1)).squeeze()
+                q_pred = (
+                    self.q_network(batch["observations"])
+                    .gather(1, batch["actions"].unsqueeze(1))
+                    .squeeze()
+                )
 
                 with torch.no_grad():
-                    q_next = self.q_network(batch['next_observations']).max(1)[0]
-                    q_target = batch['rewards'] + self.gamma * q_next * (~batch['dones']).float()
+                    q_next = self.q_network(batch["next_observations"]).max(1)[0]
+                    q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
 
             loss = F.mse_loss(q_pred, q_target)
 
@@ -364,7 +370,7 @@ class VectorizedPopulation(PopulationManager):
             dones=dones,
             epsilons=self.current_epsilons,
             intrinsic_rewards=intrinsic_rewards,
-            survival_times=info['step_counts'],
+            survival_times=info["step_counts"],
             curriculum_difficulties=torch.zeros(self.num_agents, device=self.device),
             device=self.device,
         )
@@ -380,7 +386,7 @@ class VectorizedPopulation(PopulationManager):
             rewards: Rewards from environment step
             dones: Done flags from environment step
         """
-        if hasattr(self.curriculum, 'tracker') and self.curriculum.tracker is not None:
+        if hasattr(self.curriculum, "tracker") and self.curriculum.tracker is not None:
             self.curriculum.tracker.update_step(rewards, dones)
 
     def get_checkpoint(self) -> PopulationCheckpoint:
@@ -394,8 +400,8 @@ class VectorizedPopulation(PopulationManager):
             generation=0,
             num_agents=self.num_agents,
             agent_ids=self.agent_ids,
-            curriculum_states={'global': self.curriculum.checkpoint_state()},
-            exploration_states={'global': self.exploration.checkpoint_state()},
+            curriculum_states={"global": self.curriculum.checkpoint_state()},
+            exploration_states={"global": self.exploration.checkpoint_state()},
             pareto_frontier=[],
             metrics_summary={},
         )
