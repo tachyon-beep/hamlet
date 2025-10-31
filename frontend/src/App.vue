@@ -83,6 +83,15 @@
             :affordances="store.affordances"
             :heat-map="store.heatMap"
           />
+          <!-- Interaction progress ring overlay (temporal mechanics) -->
+          <InteractionProgressRing
+            v-if="store.agents && store.agents.length > 0 && store.interactionProgress > 0"
+            :x="store.agents[0].x"
+            :y="store.agents[0].y"
+            :progress="store.interactionProgress"
+            :affordance-type="currentAffordanceType"
+            :cell-size="75"
+          />
           <!-- Phase 3: Novelty heatmap overlay -->
           <NoveltyHeatmap
             v-if="store.rndMetrics && store.rndMetrics.novelty_map"
@@ -155,6 +164,7 @@ import MeterPanel from './components/MeterPanel.vue'
 import ReferencePanel from './components/ReferencePanel.vue'
 import MinimalControls from './components/MinimalControls.vue'
 import TimeOfDayBar from './components/TimeOfDayBar.vue'
+import InteractionProgressRing from './components/InteractionProgressRing.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import LoadingState from './components/LoadingState.vue'
 import ErrorState from './components/ErrorState.vue'
@@ -171,6 +181,18 @@ const store = useSimulationStore()
 const isConnected = computed(() => store.isConnected)
 const isConnecting = computed(() => store.isConnecting)
 const connectionError = computed(() => store.connectionError)
+
+// Compute current affordance agent is on (for interaction progress ring)
+const currentAffordanceType = computed(() => {
+  if (!store.agents || store.agents.length === 0) return null
+  if (!store.affordances || store.affordances.length === 0) return null
+
+  const agent = store.agents[0]
+  const affordance = store.affordances.find(
+    a => a.x === agent.x && a.y === agent.y
+  )
+  return affordance ? affordance.type : null
+})
 
 // Phase 3: Track reward histories and survival trend
 const extrinsicHistory = ref([])
