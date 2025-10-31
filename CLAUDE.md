@@ -31,22 +31,28 @@ uv sync --extra dev
 
 ### Training (Townlet System)
 ```bash
+# Set PYTHONPATH to include src directory
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+
 # Level 1.5: Full observability, no proximity shaping
-python -m hamlet.demo.runner configs/townlet_level_1_5.yaml demo_level1_5.db checkpoints_level1_5 5000
+python -m townlet.demo.runner configs/townlet_level_1_5.yaml demo_level1_5.db checkpoints_level1_5 5000
 
 # Level 2 POMDP: Partial observability (5×5 vision) + LSTM memory
-python -m hamlet.demo.runner configs/townlet_level_2_pomdp.yaml demo_level2.db checkpoints_level2 10000
+python -m townlet.demo.runner configs/townlet_level_2_pomdp.yaml demo_level2.db checkpoints_level2 10000
 
 # Level 2.5: Temporal mechanics + multi-interaction affordances + POMDP + LSTM
-python -m hamlet.demo.runner configs/townlet_level_2_5_temporal.yaml demo_level2_5.db checkpoints_level2_5 10000
+python -m townlet.demo.runner configs/townlet_level_2_5_temporal.yaml demo_level2_5.db checkpoints_level2_5 10000
 
 # Arguments: <config> <database> <checkpoint_dir> <max_episodes>
 ```
 
 ### Inference Server (Live Visualization)
 ```bash
+# Set PYTHONPATH if not already set
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+
 # Terminal 1: Start inference server
-python -m hamlet.demo.live_inference checkpoints_level2 8766 0.2 10000
+python -m townlet.demo.live_inference checkpoints_level2 8766 0.2 10000
 # Args: <checkpoint_dir> <port> <speed> <total_episodes>
 
 # Terminal 2: Start frontend
@@ -143,11 +149,12 @@ src/townlet/
   - Anneals intrinsic weight when agent performs consistently (low variance + high survival)
   - Prevents premature annealing: requires survival >50 steps AND variance <100
 
-**6. Training Entry Point (TEMPORARY LOCATION)**
-- `src/hamlet/demo/runner.py`: Main training orchestrator
+**6. Training Entry Point (CURRENT LOCATION)**
+- `src/townlet/demo/runner.py`: Main training orchestrator
   - ⚠️ Will be moved to `src/townlet/training/runner.py` during centralization
   - Coordinates: VectorizedHamletEnv, VectorizedPopulation, AdversarialCurriculum, AdaptiveIntrinsicExploration
   - Saves checkpoints, tracks metrics in SQLite database
+  - Run with: `python -m townlet.demo.runner` (requires PYTHONPATH=src)
 
 ### State Representation
 
@@ -313,7 +320,7 @@ Tests focus on:
 2. **Recurrent networks need batch_size reset**: After training batch, reset hidden state to `num_agents`
 3. **Partial observability changes obs_dim**: Auto-detect from environment, don't hardcode
 4. **Intrinsic weight annealing**: Needs both low variance AND high survival (>50 steps)
-5. **Entry point**: Use `python -m hamlet.demo.runner` for now (will move to townlet)
+5. **Entry point**: Use `python -m townlet.demo.runner` (requires PYTHONPATH=src, will move to townlet.training)
 
 ---
 
