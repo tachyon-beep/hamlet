@@ -123,6 +123,7 @@ class LiveInferenceServer:
         grid_size = 8
         partial_observability = False
         vision_range = 2
+        enable_temporal_mechanics = False
         network_type = "simple"
         vision_window_size = 5
 
@@ -133,10 +134,11 @@ class LiveInferenceServer:
             grid_size = env_cfg.get('grid_size', 8)
             partial_observability = env_cfg.get('partial_observability', False)
             vision_range = env_cfg.get('vision_range', 2)
+            enable_temporal_mechanics = env_cfg.get('enable_temporal_mechanics', False)
             network_type = pop_cfg.get('network_type', 'simple')
             vision_window_size = 2 * vision_range + 1
 
-            logger.info(f"Environment config: grid={grid_size}, POMDP={partial_observability}, vision={vision_range}")
+            logger.info(f"Environment config: grid={grid_size}, POMDP={partial_observability}, vision={vision_range}, temporal={enable_temporal_mechanics}")
             logger.info(f"Network type: {network_type}")
 
         # Create environment with config settings
@@ -146,6 +148,7 @@ class LiveInferenceServer:
             device=self.device,
             partial_observability=partial_observability,
             vision_range=vision_range,
+            enable_temporal_mechanics=enable_temporal_mechanics,
         )
 
         # Auto-detect observation dimension from environment
@@ -493,6 +496,25 @@ class LiveInferenceServer:
             'q_values': q_values_list,  # Q-values for all 5 actions
             'affordance_stats': affordance_stats,  # Interaction counts sorted by frequency
         }
+
+        # Add temporal mechanics data if enabled
+        if hasattr(self.env, 'time_of_day'):
+            # Normalize interaction progress to 0-1 range
+            interaction_progress_raw = self.env.interaction_progress[0].item()
+            interaction_progress_normalized = 0.0
+
+            if interaction_progress_raw > 0 and self.env.last_interaction_affordance[0] is not None:
+                from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
+                affordance_name = self.env.last_interaction_affordance[0]
+                config = AFFORDANCE_CONFIGS.get(affordance_name)
+                if config:
+                    required_ticks = config['required_ticks']
+                    interaction_progress_normalized = interaction_progress_raw / required_ticks
+
+            update['temporal'] = {
+                'time_of_day': self.env.time_of_day,
+                'interaction_progress': interaction_progress_normalized,
+            }
 
         await self._broadcast_to_clients(update)
 

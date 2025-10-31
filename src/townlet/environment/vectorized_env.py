@@ -25,6 +25,7 @@ class VectorizedHamletEnv:
         device: torch.device = torch.device('cpu'),
         partial_observability: bool = False,
         vision_range: int = 2,
+        enable_temporal_mechanics: bool = False,
     ):
         """
         Initialize vectorized environment.
@@ -35,12 +36,14 @@ class VectorizedHamletEnv:
             device: PyTorch device (cpu or cuda)
             partial_observability: If True, agent sees only local window (POMDP)
             vision_range: Radius of vision window (2 = 5×5 window)
+            enable_temporal_mechanics: Enable time-based mechanics and multi-tick interactions
         """
         self.num_agents = num_agents
         self.grid_size = grid_size
         self.device = device
         self.partial_observability = partial_observability
         self.vision_range = vision_range
+        self.enable_temporal_mechanics = enable_temporal_mechanics
 
         # Affordance positions (from Hamlet default layout)
         self.affordances = {
@@ -80,6 +83,10 @@ class VectorizedHamletEnv:
             # Grid one-hot + 8 meters + affordance type (N+1 for "none")
             self.observation_dim = grid_size * grid_size + 8 + (self.num_affordance_types + 1)
 
+        # Add temporal features to observation if enabled
+        if enable_temporal_mechanics:
+            self.observation_dim += 2  # time_of_day + interaction_progress
+
         self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
 
         # State tensors (initialized in reset)
@@ -87,6 +94,21 @@ class VectorizedHamletEnv:
         self.meters: Optional[torch.Tensor] = None  # [num_agents, 8]
         self.dones: Optional[torch.Tensor] = None  # [num_agents]
         self.step_counts: Optional[torch.Tensor] = None  # [num_agents]
+
+        # Temporal mechanics state
+        if self.enable_temporal_mechanics:
+            self.time_of_day = 0  # 0-23 tick cycle
+            self.interaction_progress = torch.zeros(
+                self.num_agents,
+                dtype=torch.long,
+                device=self.device
+            )
+            self.last_interaction_affordance = [None] * self.num_agents
+            self.last_interaction_position = torch.zeros(
+                (self.num_agents, 2),
+                dtype=torch.long,
+                device=self.device
+            )
 
     def reset(self) -> torch.Tensor:
         """
@@ -109,6 +131,13 @@ class VectorizedHamletEnv:
 
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+
+        # Reset temporal mechanics state
+        if self.enable_temporal_mechanics:
+            self.time_of_day = 0
+            self.interaction_progress.fill_(0)
+            self.last_interaction_affordance = [None] * self.num_agents
+            self.last_interaction_position.fill_(0)
 
         return self._get_observations()
 
@@ -162,6 +191,26 @@ class VectorizedHamletEnv:
 
         # Concatenate grid + meters + current affordance
         observations = torch.cat([grid_encoding, self.meters, affordance_encoding], dim=1)
+
+        # Add temporal features if enabled
+        if self.enable_temporal_mechanics:
+            # time_of_day: normalized [0, 1]
+            time_feature = torch.full(
+                (self.num_agents, 1),
+                self.time_of_day / 24.0,
+                device=self.device
+            )
+
+            # interaction_progress: normalized [0, 1]
+            progress_feature = torch.zeros((self.num_agents, 1), device=self.device)
+            for i in range(self.num_agents):
+                if self.last_interaction_affordance[i] is not None:
+                    from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
+                    config = AFFORDANCE_CONFIGS[self.last_interaction_affordance[i]]
+                    progress_ratio = self.interaction_progress[i].float() / config['required_ticks']
+                    progress_feature[i, 0] = progress_ratio
+
+            observations = torch.cat([observations, time_feature, progress_feature], dim=1)
 
         return observations
 
@@ -262,6 +311,13 @@ class VectorizedHamletEnv:
         # Mask INTERACT (action 4) - only valid when on an affordable affordance
         on_affordable_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
+        # Import temporal mechanics config if needed
+        if self.enable_temporal_mechanics:
+            from townlet.environment.affordance_config import (
+                AFFORDANCE_CONFIGS,
+                is_affordance_open,
+            )
+
         # Affordance costs (must match _handle_interactions)
         affordance_costs = {
             'Bed': 5, 'LuxuryBed': 11, 'Shower': 3, 'HomeMeal': 3,
@@ -274,12 +330,25 @@ class VectorizedHamletEnv:
             distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
             on_this_affordance = (distances == 0)
 
+            # Check operating hours (temporal mechanics)
+            if self.enable_temporal_mechanics:
+                config = AFFORDANCE_CONFIGS[affordance_name]
+                if not is_affordance_open(self.time_of_day, config['operating_hours']):
+                    # Affordance is closed, skip
+                    continue
+
             # Check affordability (money normalized to [0, 1] where 1.0 = $100)
-            cost_dollars = affordance_costs.get(affordance_name, 0)
-            cost_normalized = cost_dollars / 100.0
+            if self.enable_temporal_mechanics:
+                # Use per-tick cost from config
+                cost_normalized = AFFORDANCE_CONFIGS[affordance_name]['cost_per_tick']
+            else:
+                # Legacy single-shot cost
+                cost_dollars = affordance_costs.get(affordance_name, 0)
+                cost_normalized = cost_dollars / 100.0
+
             can_afford = self.meters[:, 3] >= cost_normalized
 
-            # Valid if on affordance AND can afford it
+            # Valid if on affordance AND can afford it AND is open
             on_affordable_affordance |= (on_this_affordance & can_afford)
 
         action_masks[:, 4] = on_affordable_affordance
@@ -322,6 +391,10 @@ class VectorizedHamletEnv:
         # 5. Increment step counts
         self.step_counts += 1
 
+        # 6. Increment time of day (temporal mechanics)
+        if self.enable_temporal_mechanics:
+            self.time_of_day = (self.time_of_day + 1) % 24
+
         observations = self._get_observations()
 
         info = {
@@ -343,6 +416,9 @@ class VectorizedHamletEnv:
         Returns:
             Dictionary mapping agent indices to affordance names for successful interactions
         """
+        # Store old positions for temporal mechanics progress tracking
+        old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
+
         # Movement deltas (x, y) coordinates
         # x = horizontal (column), y = vertical (row)
         deltas = torch.tensor([
@@ -361,6 +437,13 @@ class VectorizedHamletEnv:
         new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
 
         self.positions = new_positions
+
+        # Reset progress for agents that moved away (temporal mechanics)
+        if self.enable_temporal_mechanics and old_positions is not None:
+            for agent_idx in range(self.num_agents):
+                if not torch.equal(old_positions[agent_idx], self.positions[agent_idx]):
+                    self.interaction_progress[agent_idx] = 0
+                    self.last_interaction_affordance[agent_idx] = None
 
         # Apply movement costs (matching Hamlet exactly)
         # Movement costs: energy -0.5%, hygiene -0.3%, satiation -0.4%
@@ -388,6 +471,94 @@ class VectorizedHamletEnv:
         return successful_interactions
 
     def _handle_interactions(self, interact_mask: torch.Tensor) -> dict:
+        """
+        Handle INTERACT actions with multi-tick accumulation.
+
+        Args:
+            interact_mask: [num_agents] bool mask
+
+        Returns:
+            Dictionary mapping agent indices to affordance names
+        """
+        if not self.enable_temporal_mechanics:
+            # Legacy single-shot interactions (for backward compatibility)
+            return self._handle_interactions_legacy(interact_mask)
+
+        # Multi-tick interaction logic
+        from townlet.environment.affordance_config import (
+            AFFORDANCE_CONFIGS,
+            METER_NAME_TO_IDX,
+        )
+
+        successful_interactions = {}
+
+        for affordance_name, affordance_pos in self.affordances.items():
+            # Distance to affordance
+            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
+            at_affordance = (distances == 0) & interact_mask
+
+            if not at_affordance.any():
+                continue
+
+            # Get config
+            config = AFFORDANCE_CONFIGS[affordance_name]
+
+            # Check affordability (per-tick cost)
+            cost_per_tick = config['cost_per_tick']
+            can_afford = self.meters[:, 3] >= cost_per_tick
+            at_affordance = at_affordance & can_afford
+
+            if not at_affordance.any():
+                continue
+
+            # Track successful interactions
+            agent_indices = torch.where(at_affordance)[0]
+
+            for agent_idx in agent_indices:
+                agent_idx_int = agent_idx.item()
+                current_pos = self.positions[agent_idx]
+
+                # Check if continuing same affordance at same position
+                if (self.last_interaction_affordance[agent_idx_int] == affordance_name and
+                    torch.equal(current_pos, self.last_interaction_position[agent_idx_int])):
+                    # Continue progress
+                    self.interaction_progress[agent_idx] += 1
+                else:
+                    # New affordance - reset progress
+                    self.interaction_progress[agent_idx] = 1
+                    self.last_interaction_affordance[agent_idx_int] = affordance_name
+                    self.last_interaction_position[agent_idx_int] = current_pos.clone()
+
+                ticks_done = self.interaction_progress[agent_idx].item()
+                required_ticks = config['required_ticks']
+
+                # Apply per-tick benefits (75% of total, distributed)
+                for meter_name, delta in config['benefits']['linear'].items():
+                    meter_idx = METER_NAME_TO_IDX[meter_name]
+                    self.meters[agent_idx, meter_idx] += delta
+
+                # Charge per-tick cost
+                self.meters[agent_idx, 3] -= cost_per_tick
+
+                # Completion bonus? (25% of total)
+                if ticks_done == required_ticks:
+                    for meter_name, delta in config['benefits']['completion'].items():
+                        meter_idx = METER_NAME_TO_IDX[meter_name]
+                        self.meters[agent_idx, meter_idx] += delta
+
+                    # Reset progress (job complete)
+                    self.interaction_progress[agent_idx] = 0
+                    self.last_interaction_affordance[agent_idx_int] = None
+
+                successful_interactions[agent_idx_int] = affordance_name
+
+        # Clamp meters after updates
+        self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
+        return successful_interactions
+
+
+    def _handle_interactions_legacy(self, interact_mask: torch.Tensor) -> dict:
         """
         Handle INTERACT action at affordances.
 
