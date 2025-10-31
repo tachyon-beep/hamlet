@@ -311,6 +311,13 @@ class VectorizedHamletEnv:
         # Mask INTERACT (action 4) - only valid when on an affordable affordance
         on_affordable_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
+        # Import temporal mechanics config if needed
+        if self.enable_temporal_mechanics:
+            from townlet.environment.affordance_config import (
+                AFFORDANCE_CONFIGS,
+                is_affordance_open,
+            )
+
         # Affordance costs (must match _handle_interactions)
         affordance_costs = {
             'Bed': 5, 'LuxuryBed': 11, 'Shower': 3, 'HomeMeal': 3,
@@ -323,12 +330,25 @@ class VectorizedHamletEnv:
             distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
             on_this_affordance = (distances == 0)
 
+            # Check operating hours (temporal mechanics)
+            if self.enable_temporal_mechanics:
+                config = AFFORDANCE_CONFIGS[affordance_name]
+                if not is_affordance_open(self.time_of_day, config['operating_hours']):
+                    # Affordance is closed, skip
+                    continue
+
             # Check affordability (money normalized to [0, 1] where 1.0 = $100)
-            cost_dollars = affordance_costs.get(affordance_name, 0)
-            cost_normalized = cost_dollars / 100.0
+            if self.enable_temporal_mechanics:
+                # Use per-tick cost from config
+                cost_normalized = AFFORDANCE_CONFIGS[affordance_name]['cost_per_tick']
+            else:
+                # Legacy single-shot cost
+                cost_dollars = affordance_costs.get(affordance_name, 0)
+                cost_normalized = cost_dollars / 100.0
+
             can_afford = self.meters[:, 3] >= cost_normalized
 
-            # Valid if on affordance AND can afford it
+            # Valid if on affordance AND can afford it AND is open
             on_affordable_affordance |= (on_this_affordance & can_afford)
 
         action_masks[:, 4] = on_affordable_affordance
