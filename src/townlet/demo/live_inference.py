@@ -497,6 +497,13 @@ class LiveInferenceServer:
             'affordance_stats': affordance_stats,  # Interaction counts sorted by frequency
         }
 
+        # Add temporal mechanics data if enabled
+        if hasattr(self.env, 'time_of_day'):
+            update['temporal'] = {
+                'time_of_day': self.env.time_of_day,
+                'interaction_progress': self.env.interaction_progress[0].item(),
+            }
+
         await self._broadcast_to_clients(update)
 
     async def _broadcast_to_clients(self, message: dict):
