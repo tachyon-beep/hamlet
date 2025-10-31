@@ -52,12 +52,24 @@ python -m townlet.demo.runner configs/townlet_level_2_5_temporal.yaml demo_level
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 
 # Terminal 1: Start inference server
+# For Level 2 POMDP:
 python -m townlet.demo.live_inference checkpoints_level2 8766 0.2 10000
+
+# For Level 2.5 Temporal Mechanics:
+python -m townlet.demo.live_inference checkpoints_level2_5 8766 0.2 10000
+
 # Args: <checkpoint_dir> <port> <speed> <total_episodes>
+# - checkpoint_dir: Where checkpoints are saved
+# - port: WebSocket port (default 8766)
+# - speed: Simulation speed multiplier (0.2 = slower, 2.0 = faster)
+# - total_episodes: Number of episodes to run
 
 # Terminal 2: Start frontend
 cd frontend && npm run dev
 # Open http://localhost:5173
+
+# Terminal 3 (optional): Monitor training progress
+watch -n 5 'sqlite3 demo_level2_5.db "SELECT episode, survival_steps, total_reward, stage FROM training_history ORDER BY episode DESC LIMIT 10"'
 ```
 
 ### Testing
