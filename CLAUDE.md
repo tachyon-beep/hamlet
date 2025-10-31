@@ -48,10 +48,13 @@ python -m townlet.demo.runner configs/townlet_level_2_5_temporal.yaml demo_level
 
 ### Inference Server (Live Visualization)
 ```bash
-# Set PYTHONPATH if not already set
+# IMPORTANT: Run inference server from worktree (where checkpoints are),
+# but run frontend from main repo (where package.json is)
+
+# Terminal 1: Start inference server (from worktree)
+cd /home/john/hamlet/.worktrees/temporal-mechanics  # or your worktree path
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 
-# Terminal 1: Start inference server
 # For Level 2 POMDP:
 python -m townlet.demo.live_inference checkpoints_level2 8766 0.2 10000
 
@@ -64,11 +67,13 @@ python -m townlet.demo.live_inference checkpoints_level2_5 8766 0.2 10000
 # - speed: Simulation speed multiplier (0.2 = slower, 2.0 = faster)
 # - total_episodes: Number of episodes to run
 
-# Terminal 2: Start frontend
-cd frontend && npm run dev
+# Terminal 2: Start frontend (from main repo)
+cd /home/john/hamlet/frontend  # Main repo, not worktree!
+npm run dev
 # Open http://localhost:5173
 
-# Terminal 3 (optional): Monitor training progress
+# Terminal 3 (optional): Monitor training progress (from worktree)
+cd /home/john/hamlet/.worktrees/temporal-mechanics
 watch -n 5 'sqlite3 demo_level2_5.db "SELECT episode, survival_steps, total_reward, stage FROM training_history ORDER BY episode DESC LIMIT 10"'
 ```
 
