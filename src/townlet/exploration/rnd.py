@@ -4,7 +4,7 @@ from typing import Any
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.exploration.base import ExplorationStrategy

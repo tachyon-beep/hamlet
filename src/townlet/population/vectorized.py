@@ -8,7 +8,7 @@ Manages Q-networks, replay buffers, and training loops.
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 from townlet.curriculum.base import CurriculumManager
@@ -116,9 +116,7 @@ class VectorizedPopulation(PopulationManager):
 
         # Replay buffer (dual system: sequential for recurrent, standard for feedforward)
         if self.is_recurrent:
-            self.replay_buffer = SequentialReplayBuffer(
-                capacity=replay_buffer_capacity, device=device
-            )
+            self.replay_buffer = SequentialReplayBuffer(capacity=replay_buffer_capacity, device=device)
             # Episode tracking for sequential buffer
             self.current_episodes = [
                 {
@@ -193,9 +191,7 @@ class VectorizedPopulation(PopulationManager):
 
         return actions
 
-    def select_epsilon_greedy_actions(
-        self, env: "VectorizedHamletEnv", epsilon: float
-    ) -> torch.Tensor:
+    def select_epsilon_greedy_actions(self, env: "VectorizedHamletEnv", epsilon: float) -> torch.Tensor:
         """
         Select epsilon-greedy actions with action masking.
 
@@ -219,9 +215,7 @@ class VectorizedPopulation(PopulationManager):
             action_masks = env.get_action_masks()
 
             # Use shared epsilon-greedy action selection
-            epsilons = torch.full(
-                (self.num_agents,), epsilon, device=self.device, dtype=torch.float32
-            )
+            epsilons = torch.full((self.num_agents,), epsilon, device=self.device, dtype=torch.float32)
             return epsilon_greedy_action_selection(
                 q_values=q_values,
                 epsilons=epsilons,
@@ -314,11 +308,7 @@ class VectorizedPopulation(PopulationManager):
 
         # 8. Train RND predictor (if applicable)
         if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
-            rnd = (
-                self.exploration.rnd
-                if isinstance(self.exploration, AdaptiveIntrinsicExploration)
-                else self.exploration
-            )
+            rnd = self.exploration.rnd if isinstance(self.exploration, AdaptiveIntrinsicExploration) else self.exploration
             # Accumulate observations in RND buffer
             for i in range(self.num_agents):
                 rnd.obs_buffer.append(self.current_obs[i].cpu())
@@ -330,14 +320,9 @@ class VectorizedPopulation(PopulationManager):
         # For recurrent: need enough episodes (16+) for sequence sampling
         # For feedforward: need enough transitions (64+) for batch sampling
         min_buffer_size = 16 if self.is_recurrent else 64
-        if (
-            self.total_steps % self.train_frequency == 0
-            and len(self.replay_buffer) >= min_buffer_size
-        ):
+        if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:
             intrinsic_weight = (
-                self.exploration.get_intrinsic_weight()
-                if isinstance(self.exploration, AdaptiveIntrinsicExploration)
-                else 1.0
+                self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0
             )
 
             if self.is_recurrent:
@@ -364,9 +349,7 @@ class VectorizedPopulation(PopulationManager):
                 # PASS 2: Collect Q-targets from target network
                 # Unroll through sequence with target network to maintain hidden state
                 with torch.no_grad():
-                    self.target_network.reset_hidden_state(
-                        batch_size=batch_size, device=self.device
-                    )
+                    self.target_network.reset_hidden_state(batch_size=batch_size, device=self.device)
                     q_values_list = []
 
                     # First, unroll through entire sequence to collect Q-values
@@ -380,10 +363,7 @@ class VectorizedPopulation(PopulationManager):
                         if t < seq_len - 1:
                             # Use Q-values from t+1 (computed with hidden state from t)
                             q_next = q_values_list[t + 1].max(1)[0]
-                            q_target = (
-                                batch["rewards"][:, t]
-                                + self.gamma * q_next * (~batch["dones"][:, t]).float()
-                            )
+                            q_target = batch["rewards"][:, t] + self.gamma * q_next * (~batch["dones"][:, t]).float()
                         else:
                             # Terminal state: no next observation
                             q_target = batch["rewards"][:, t]
@@ -411,13 +391,9 @@ class VectorizedPopulation(PopulationManager):
                 # Log network statistics to TensorBoard (every 100 training steps)
                 if self.tb_logger is not None and self.total_steps % 100 == 0:
                     for name, param in self.q_network.named_parameters():
-                        self.tb_logger.writer.add_histogram(
-                            f"Network/Weights/{name}", param.data, self.total_steps
-                        )
+                        self.tb_logger.writer.add_histogram(f"Network/Weights/{name}", param.data, self.total_steps)
                         if param.grad is not None:
-                            self.tb_logger.writer.add_histogram(
-                                f"Network/Gradients/{name}", param.grad, self.total_steps
-                            )
+                            self.tb_logger.writer.add_histogram(f"Network/Gradients/{name}", param.grad, self.total_steps)
 
                 # Update target network periodically
                 self.training_step_counter += 1
@@ -430,11 +406,7 @@ class VectorizedPopulation(PopulationManager):
                 # Standard feedforward DQN training (unchanged)
                 batch = self.replay_buffer.sample(batch_size=64, intrinsic_weight=intrinsic_weight)
 
-                q_pred = (
-                    self.q_network(batch["observations"])
-                    .gather(1, batch["actions"].unsqueeze(1))
-                    .squeeze()
-                )
+                q_pred = self.q_network(batch["observations"]).gather(1, batch["actions"].unsqueeze(1)).squeeze()
 
                 with torch.no_grad():
                     q_next = self.q_network(batch["next_observations"]).max(1)[0]
@@ -457,13 +429,9 @@ class VectorizedPopulation(PopulationManager):
                 # Log network statistics to TensorBoard (every 100 training steps)
                 if self.tb_logger is not None and self.total_steps % 100 == 0:
                     for name, param in self.q_network.named_parameters():
-                        self.tb_logger.writer.add_histogram(
-                            f"Network/Weights/{name}", param.data, self.total_steps
-                        )
+                        self.tb_logger.writer.add_histogram(f"Network/Weights/{name}", param.data, self.total_steps)
                         if param.grad is not None:
-                            self.tb_logger.writer.add_histogram(
-                                f"Network/Gradients/{name}", param.grad, self.total_steps
-                            )
+                            self.tb_logger.writer.add_histogram(f"Network/Gradients/{name}", param.grad, self.total_steps)
 
         # 10. Update current state
         self.current_obs = next_obs
@@ -485,12 +453,8 @@ class VectorizedPopulation(PopulationManager):
                     episode = {
                         "observations": torch.stack(self.current_episodes[idx]["observations"]),
                         "actions": torch.stack(self.current_episodes[idx]["actions"]),
-                        "rewards_extrinsic": torch.stack(
-                            self.current_episodes[idx]["rewards_extrinsic"]
-                        ),
-                        "rewards_intrinsic": torch.stack(
-                            self.current_episodes[idx]["rewards_intrinsic"]
-                        ),
+                        "rewards_extrinsic": torch.stack(self.current_episodes[idx]["rewards_extrinsic"]),
+                        "rewards_intrinsic": torch.stack(self.current_episodes[idx]["rewards_intrinsic"]),
                         "dones": torch.stack(self.current_episodes[idx]["dones"]),
                     }
                     self.replay_buffer.store_episode(episode)
@@ -517,9 +481,7 @@ class VectorizedPopulation(PopulationManager):
 
         # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
         total_rewards = rewards + intrinsic_rewards * (
-            self.exploration.get_intrinsic_weight()
-            if isinstance(self.exploration, AdaptiveIntrinsicExploration)
-            else 1.0
+            self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0
         )
 
         state = BatchedAgentState(
