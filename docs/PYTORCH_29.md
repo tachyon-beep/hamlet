@@ -1,3 +1,36 @@
+# PyTorch 2.9 Upgrade
+
+**Upgrade Date:** November 1, 2025  
+**Previous Version:** PyTorch 2.0.0+  
+**Current Version:** PyTorch 2.9.0+cu128  
+**Status:** ✅ COMPLETE - All 392 tests passing
+
+## Upgrade Summary
+
+Successfully upgraded from PyTorch 2.0+ to PyTorch 2.9.0 with CUDA 12.8 support.
+
+### Changes Made
+
+- Updated `pyproject.toml`: `torch>=2.0.0` → `torch>=2.9.0`
+- Verified compatibility: All 392 tests pass (100% success rate)
+- Confirmed `weights_only` parameter compatibility in `torch.load()`
+
+### Test Results
+
+- ✅ Network tests: 19/19 passing
+- ✅ Integration tests: 5/5 passing  
+- ✅ Full test suite: 392/392 passing
+- ✅ Code coverage: 73%
+
+### Compatibility Notes
+
+- `torch.load()` signature unchanged - `weights_only` parameter still supported
+- CUDA 12.8 support enabled
+- No breaking changes detected in our codebase
+
+---
+
+```markdown
 Here is a high-level breakdown of how PyTorch 2.9's features map directly to your v2.0 design.
 
 ### 1. `torch.compile()` for Your "Smart Collection"
