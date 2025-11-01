@@ -76,8 +76,14 @@ class DemoRunner:
 
         # Shutdown flag
         self.should_shutdown = False
-        signal.signal(signal.SIGTERM, self._handle_shutdown)
-        signal.signal(signal.SIGINT, self._handle_shutdown)
+        # Signal handlers only work in main thread
+        try:
+            signal.signal(signal.SIGTERM, self._handle_shutdown)
+            signal.signal(signal.SIGINT, self._handle_shutdown)
+        except ValueError:
+            # Running in a worker thread (e.g., unified server)
+            # Signal handling will be done by the orchestrator
+            pass
 
     def _handle_shutdown(self, signum, frame):
         """Handle shutdown signal gracefully."""
