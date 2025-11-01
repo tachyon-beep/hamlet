@@ -41,7 +41,7 @@ export const useSimulationStore = defineStore('simulation', () => {
 
   // Checkpoint progress (for inference mode)
   const checkpointEpisode = ref(0)
-  const checkpointTotalEpisodes = ref(0)
+  const checkpointTotalEpisodes = ref(1)  // Default to 1 to avoid divide-by-zero in progress bar
   const autoCheckpointMode = ref(false)  // Auto-update to latest checkpoint after each episode
 
   // Grid state
@@ -71,10 +71,12 @@ export const useSimulationStore = defineStore('simulation', () => {
   const transitionData = ref(null)
 
   // Q-values and affordance stats (for agent behavior panel)
-  const qValues = ref([])  // Q-values for all 5 actions
+  const qValues = ref([])  // Q-values for all 6 actions (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+  const actionMasks = ref([true, true, true, true, true, true])  // Which actions are valid
   const affordanceStats = ref([])  // Affordance interaction counts
 
   // Temporal mechanics state
+  const temporalEnabled = ref(false)  // Whether temporal mechanics is enabled
   const timeOfDay = ref(0)  // Current time of day (0-23)
   const interactionProgress = ref(0)  // Current interaction progress (0-1)
 
@@ -374,12 +376,16 @@ export const useSimulationStore = defineStore('simulation', () => {
     if (message.q_values) {
       qValues.value = message.q_values
     }
+    if (message.action_masks) {
+      actionMasks.value = message.action_masks
+    }
     if (message.affordance_stats) {
       affordanceStats.value = message.affordance_stats
     }
 
     // Handle temporal mechanics data
     if (message.temporal) {
+      temporalEnabled.value = true
       timeOfDay.value = message.temporal.time_of_day
       interactionProgress.value = message.temporal.interaction_progress
     }
@@ -390,6 +396,19 @@ export const useSimulationStore = defineStore('simulation', () => {
     }
     if (message.baseline_survival !== undefined) {
       baselineSurvival.value = message.baseline_survival
+    }
+
+    // Handle epsilon updates (exploration rate)
+    if (message.epsilon !== undefined) {
+      trainingMetrics.value.epsilon = message.epsilon
+    }
+
+    // Handle training progress updates
+    if (message.checkpoint_episode !== undefined) {
+      checkpointEpisode.value = message.checkpoint_episode
+    }
+    if (message.total_episodes !== undefined) {
+      checkpointTotalEpisodes.value = message.total_episodes
     }
   }
 
@@ -513,7 +532,9 @@ export const useSimulationStore = defineStore('simulation', () => {
     rndMetrics,
     transitionData,
     qValues,
+    actionMasks,
     affordanceStats,
+    temporalEnabled,
     timeOfDay,
     interactionProgress,
     projectedReward,

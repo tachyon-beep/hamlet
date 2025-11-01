@@ -16,7 +16,6 @@
           <!-- ✅ Projected reward bar (below meters) - always shown when connected -->
           <ProjectedRewardBar
             v-if="isConnected"
-            :projected-reward="store.projectedReward"
             :current-step="store.currentStep"
             :baseline-survival="store.baselineSurvival"
           />
@@ -33,6 +32,7 @@
             :checkpoint-episode="store.checkpointEpisode"
             :total-episodes="store.checkpointTotalEpisodes"
             :q-values="store.qValues"
+            :action-masks="store.actionMasks"
             :affordance-stats="store.affordanceStats"
           />
         </aside>
@@ -41,7 +41,7 @@
       <div class="grid-container" role="region" aria-label="Simulation grid">
         <!-- ✅ Time of day bar (top-left) - only when connected and temporal mechanics enabled -->
         <TimeOfDayBar
-          v-if="isConnected && store.timeOfDay !== null"
+          v-if="isConnected && store.temporalEnabled"
           :time-of-day="store.timeOfDay"
         />
 

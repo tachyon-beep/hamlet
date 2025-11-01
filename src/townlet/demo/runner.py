@@ -111,6 +111,10 @@ class DemoRunner:
             if hasattr(self.population.exploration, "checkpoint_state"):
                 checkpoint["exploration_state"] = self.population.exploration.checkpoint_state()
 
+        # Add epsilon for inference server display
+        if self.exploration and hasattr(self.exploration, "rnd") and hasattr(self.exploration.rnd, "epsilon"):
+            checkpoint["epsilon"] = self.exploration.rnd.epsilon
+
         torch.save(checkpoint, checkpoint_path)
         logger.info(f"Checkpoint saved: {checkpoint_path}")
 
@@ -198,9 +202,7 @@ class DemoRunner:
             obs_dim=obs_dim,
             embed_dim=exploration_cfg.get("embed_dim", 128),
             initial_intrinsic_weight=exploration_cfg.get("initial_intrinsic_weight", 1.0),
-            variance_threshold=exploration_cfg.get(
-                "variance_threshold", 100.0
-            ),  # Increased from 10.0
+            variance_threshold=exploration_cfg.get("variance_threshold", 100.0),  # Increased from 10.0
             survival_window=exploration_cfg.get("survival_window", 100),
             device=device,
         )
@@ -306,23 +308,15 @@ class DemoRunner:
 
                 for step in range(max_steps):
                     agent_state = self.population.step_population(self.env)
-                    self.population.update_curriculum_tracker(
-                        agent_state.rewards, agent_state.dones
-                    )
+                    self.population.update_curriculum_tracker(agent_state.rewards, agent_state.dones)
 
                     survival_time += 1
 
                     # Track rewards separately
                     # agent_state.rewards is total (extrinsic + intrinsic * weight)
                     # agent_state.intrinsic_rewards is just intrinsic component
-                    intrinsic_weight = (
-                        self.exploration.get_intrinsic_weight()
-                        if hasattr(self.exploration, "get_intrinsic_weight")
-                        else 1.0
-                    )
-                    extrinsic_component = agent_state.rewards[0].item() - (
-                        agent_state.intrinsic_rewards[0].item() * intrinsic_weight
-                    )
+                    intrinsic_weight = self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 1.0
+                    extrinsic_component = agent_state.rewards[0].item() - (agent_state.intrinsic_rewards[0].item() * intrinsic_weight)
                     intrinsic_component = agent_state.intrinsic_rewards[0].item()
 
                     episode_reward += agent_state.rewards[0].item()
@@ -332,9 +326,7 @@ class DemoRunner:
                     # Track affordance usage
                     if hasattr(self.env, "last_interaction_affordances"):
                         for affordance_name in self.env.last_interaction_affordances:
-                            affordance_visits[affordance_name] = (
-                                affordance_visits.get(affordance_name, 0) + 1
-                            )
+                            affordance_visits[affordance_name] = affordance_visits.get(affordance_name, 0) + 1
 
                     if agent_state.dones[0]:
                         # Capture final meters before reset
@@ -392,9 +384,7 @@ class DemoRunner:
                         "health",
                         "fitness",
                     ]
-                    meter_dict = {
-                        name: final_meters[i].item() for i, name in enumerate(meter_names)
-                    }
+                    meter_dict = {name: final_meters[i].item() for i, name in enumerate(meter_names)}
                     self.tb_logger.log_meters(
                         episode=self.current_episode,
                         step=survival_time,
@@ -403,9 +393,7 @@ class DemoRunner:
 
                 # Log affordance usage
                 if affordance_visits:
-                    self.tb_logger.log_affordance_usage(
-                        episode=self.current_episode, affordance_counts=affordance_visits
-                    )
+                    self.tb_logger.log_affordance_usage(episode=self.current_episode, affordance_counts=affordance_visits)
 
                 # Heartbeat log every 10 episodes
                 if self.current_episode % 10 == 0:

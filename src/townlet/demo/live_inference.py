@@ -19,6 +19,9 @@ from townlet.population.vectorized import VectorizedPopulation
 
 logger = logging.getLogger(__name__)
 
+# Q-value log file (opened at module level)
+qvalue_log_file = None
+
 
 class LiveInferenceServer:
     """Runs inference on latest checkpoint with step-by-step WebSocket streaming."""
@@ -71,6 +74,10 @@ class LiveInferenceServer:
 
         # Checkpoint auto-update mode
         self.auto_checkpoint_mode = False  # If true, automatically check for new checkpoints after each episode
+
+        # Open Q-value log file
+        global qvalue_log_file
+        qvalue_log_file = open("qvalues_inference.log", "w", buffering=1)  # Line buffering
 
         # FastAPI app
         self.app = FastAPI(title="Hamlet Live Inference Server")
@@ -235,11 +242,16 @@ class LiveInferenceServer:
         # Calculate epsilon based on training progress
         # For inference, we estimate epsilon from episode number (linear decay from 1.0 to 0.05)
         epsilon = checkpoint.get("epsilon", None)
+        logger.info(f"Checkpoint contains epsilon: {epsilon} (type: {type(epsilon).__name__})")
         if epsilon is None:
             # Estimate epsilon based on training progress (assuming linear decay over total_episodes)
             progress = episode_num / self.total_episodes if self.total_episodes > 0 else 0
             epsilon = max(0.05, 1.0 - (progress * 0.95))  # Decay from 1.0 to 0.05
-            logger.info(f"Estimated epsilon from training progress: {epsilon:.3f}")
+            logger.info(
+                f"Estimated epsilon from training progress: episode={episode_num}, total={self.total_episodes}, progress={progress:.3f}, epsilon={epsilon:.3f}"
+            )
+        else:
+            logger.info(f"Loaded epsilon from checkpoint: {epsilon:.3f}")
 
         # Update tracking
         self.current_checkpoint_path = latest_checkpoint
@@ -477,6 +489,11 @@ class LiveInferenceServer:
         # Get agent position (unpack for frontend compatibility)
         agent_pos = self.env.positions[0].cpu().tolist()
 
+        # Get action masks (which actions are valid)
+        action_masks = self.env.get_action_masks()[0].cpu().tolist()  # [5] bool list
+        # Pad with False for Wait action (not yet implemented in backend)
+        action_masks.append(False)
+
         # Get meters (all 8: energy, hygiene, satiation, money, health, mood, social, fitness)
         # Note: Backend order is [energy, hygiene, satiation, money, mood, social, health, fitness]
         # We reorder for UI display to group the primary/secondary meters together
@@ -508,6 +525,19 @@ class LiveInferenceServer:
 
         # Convert Q-values to list for JSON serialization
         q_values_list = q_values.cpu().tolist()
+        # Pad with 0 for Wait action (not yet implemented in backend)
+        q_values_list.append(0.0)
+
+        # Log Q-values and chosen action to file for debugging
+        action_names = ["Up", "Down", "Left", "Right", "Interact", "Wait"]
+        log_line = (
+            f"Step {self.current_step}: Action={action_names[last_action]}, "
+            f"Q-values: Up={q_values_list[0]:.2f}, Down={q_values_list[1]:.2f}, "
+            f"Left={q_values_list[2]:.2f}, Right={q_values_list[3]:.2f}, Interact={q_values_list[4]:.2f}\n"
+        )
+        if qvalue_log_file:
+            qvalue_log_file.write(log_line)
+            qvalue_log_file.flush()
 
         # Prepare affordance interaction counts (sorted by count descending)
         affordance_stats = [
@@ -524,6 +554,9 @@ class LiveInferenceServer:
             "step": self.current_step,
             "cumulative_reward": cumulative_reward,
             "projected_reward": projected_reward,  # Current steps - baseline (real-time learning signal)
+            "epsilon": self.current_epsilon,  # Current exploration rate
+            "checkpoint_episode": self.current_checkpoint_episode,  # For training progress bar
+            "total_episodes": self.total_episodes,  # For training progress bar
             "grid": {
                 "width": self.env.grid_size,
                 "height": self.env.grid_size,
@@ -543,7 +576,8 @@ class LiveInferenceServer:
                     "meters": meters  # MeterPanel expects agent_0.meters nested structure
                 }
             },
-            "q_values": q_values_list,  # Q-values for all 5 actions
+            "q_values": q_values_list,  # Q-values for all 6 actions (5 real + Wait padded)
+            "action_masks": action_masks,  # Which actions are valid [5] bool list
             "affordance_stats": affordance_stats,  # Interaction counts sorted by frequency
             "baseline_survival": baseline_survival,  # For UI display
         }

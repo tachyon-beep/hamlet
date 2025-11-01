@@ -84,14 +84,22 @@
       </h4>
       <div class="q-values-list">
         <div
-          v-for="(qval, index) in displayQValues"
+          v-for="(prob, index) in actionProbabilities"
           :key="index"
           class="q-value-item"
-          :class="{ 'best-action': index === bestActionIndex }"
+          :class="{ 
+            'best-action': index === bestActionIndex && actionMasks?.[index],
+            'action-masked': !actionMasks?.[index]
+          }"
         >
-          <span class="action-icon-small">{{ actionMap[index]?.icon }}</span>
-          <span class="action-name-small">{{ actionMap[index]?.name }}</span>
-          <span class="q-value">{{ qval >= 0 ? '+' : '' }}{{ qval.toFixed(1) }}</span>
+          <div class="q-value-label">
+            <span class="action-icon-small">{{ actionMap[index]?.icon }}</span>
+            <span class="action-name-small">{{ actionMap[index]?.name }}</span>
+          </div>
+          <div class="q-value-bar-container">
+            <div class="q-value-bar" :style="{ width: `${prob}%` }"></div>
+          </div>
+          <span class="q-value-percent">{{ prob.toFixed(1) }}%</span>
         </div>
       </div>
     </section>
@@ -172,6 +180,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  actionMasks: {
+    type: Array,
+    default: () => [true, true, true, true, true, true]  // All 6 actions valid by default
+  },
   affordanceStats: {
     type: Array,
     default: () => []
@@ -184,7 +196,8 @@ const actionMap = {
   1: { icon: '⬇️', name: 'Move Down' },
   2: { icon: '⬅️', name: 'Move Left' },
   3: { icon: '➡️', name: 'Move Right' },
-  4: { icon: '⚡', name: 'Interact' }
+  4: { icon: '⚡', name: 'Interact' },
+  5: { icon: '⏸️', name: 'Wait' }
 }
 
 // Affordance icon mapping
@@ -254,7 +267,10 @@ const rewardIcon = computed(() => {
 })
 
 // Epsilon formatting
-const formattedEpsilon = computed(() => props.epsilon.toFixed(3))
+const formattedEpsilon = computed(() => {
+  console.log('Epsilon value:', props.epsilon)
+  return props.epsilon.toFixed(3)
+})
 
 // Bar shows exploitation progress (1 - ε): starts at 0 when ε=1, trends to 100 when ε→0
 const epsilonPercent = computed(() => (1 - props.epsilon) * 100)
@@ -279,25 +295,92 @@ const progressGradient = computed(() => {
 // Q-Values (from backend via props)
 const displayQValues = computed(() => {
   // Use real Q-values if available, otherwise return zeros
-  if (props.qValues && props.qValues.length === 5) {
+  if (props.qValues && props.qValues.length >= 5) {
+    // If backend sends 5 values (old), pad with 0 for Wait action
+    if (props.qValues.length === 5) {
+      return [...props.qValues, 0]
+    }
     return props.qValues
   }
-  return [0, 0, 0, 0, 0]
+  return [0, 0, 0, 0, 0, 0]  // 6 actions: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+})
+
+// Action probabilities - show relative strength of each Q-value
+const actionProbabilities = computed(() => {
+  const qvals = displayQValues.value
+  const masks = props.actionMasks
+  
+  // Safety check for empty or invalid data
+  if (!qvals || qvals.length === 0 || !masks || masks.length === 0) {
+    return [0, 0, 0, 0, 0, 0]
+  }
+  
+  // Filter to only valid (unmasked) actions for normalization
+  const validQValues = qvals.filter((q, i) => masks[i])
+  
+  if (validQValues.length === 0) {
+    return qvals.map(() => 0)
+  }
+  
+  // Find max and min Q-values among valid actions only
+  const maxQ = Math.max(...validQValues)
+  const minQ = Math.min(...validQValues)
+  
+  // If all Q-values are the same, return uniform distribution for valid actions
+  if (maxQ === minQ) {
+    return qvals.map((q, i) => masks[i] ? 100 / validQValues.length : 0)
+  }
+  
+  // Normalize to 0-100 scale based on min-max range
+  // Masked actions always get 0%
+  const range = maxQ - minQ
+  return qvals.map((q, i) => masks[i] ? ((q - minQ) / range) * 100 : 0)
 })
 
 const bestActionIndex = computed(() => {
-  const qvals = displayQValues.value
-  if (qvals.length === 0) return -1
-  return qvals.indexOf(Math.max(...qvals))
+  const probs = actionProbabilities.value
+  if (probs.length === 0) return -1
+  return probs.indexOf(Math.max(...probs))
 })
 
-// Confidence (difference between best and second-best Q-value)
+// Confidence (combines Q-value spread and epsilon)
+// High Q-value difference + low epsilon = confident
+// Similar Q-values or high epsilon = uncertain
 const mockConfidence = computed(() => {
-  const qvals = [...displayQValues.value].sort((a, b) => b - a)
-  if (qvals.length < 2) return 0
-  const diff = qvals[0] - qvals[1]
-  // Map difference to 0-100% confidence
-  return Math.min(Math.max(Math.round(diff * 10 + 50), 0), 100)
+  const probs = actionProbabilities.value
+  if (probs.length === 0) return 0
+  
+  // Filter out masked actions (they have 0% probability)
+  const validProbs = probs.filter(p => p > 0)
+  
+  if (validProbs.length === 0) return 0
+  
+  // Sort to get top 2 probabilities among valid actions
+  const sortedProbs = [...validProbs].sort((a, b) => b - a)
+  const bestProb = sortedProbs[0]
+  const secondBestProb = sortedProbs[1] || 0
+  
+  // Calculate separation between best and second-best (0-100)
+  const separation = bestProb - secondBestProb
+  
+  // Factor in epsilon (high epsilon = low confidence due to exploration)
+  // Confidence = separation * (1 - epsilon)
+  // At epsilon=1.0 (full exploration), confidence = 0%
+  // At epsilon=0.0 (full exploitation), confidence = separation
+  const exploitationFactor = 1 - props.epsilon
+  const confidence = separation * exploitationFactor
+  
+  console.log('Confidence calc:', { 
+    validCount: validProbs.length,
+    bestProb, 
+    secondBestProb, 
+    separation, 
+    epsilon: props.epsilon, 
+    exploitationFactor, 
+    confidence 
+  })
+  
+  return Math.round(confidence)
 })
 
 const confidenceText = computed(() => {
@@ -751,6 +834,13 @@ const topFavorite = computed(() => {
   background: rgba(16, 185, 129, 0.05);
 }
 
+.q-value-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 90px;
+}
+
 .action-icon-small {
   font-size: 1rem;
   flex-shrink: 0;
@@ -759,21 +849,59 @@ const topFavorite = computed(() => {
 .action-name-small {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
-  flex: 1;
 }
 
-.q-value {
-  font-size: var(--font-size-sm);
+.q-value-bar-container {
+  flex: 1;
+  height: 14px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--border-radius-full);
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.q-value-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #c4b5fd);
+  transition: width 0.3s ease;
+  border-radius: var(--border-radius-full);
+}
+
+.q-value-item.best-action .q-value-bar {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.q-value-percent {
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   font-family: 'Monaco', 'Courier New', monospace;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
-  min-width: 4ch;
+  min-width: 40px;
   text-align: right;
 }
 
-.q-value-item.best-action .q-value {
+.q-value-item.best-action .q-value-percent {
   color: var(--color-success);
+}
+
+.q-value-item.action-masked {
+  opacity: 0.3;
+  border-left-color: var(--color-bg-tertiary);
+  background: var(--color-bg-primary);
+}
+
+.q-value-item.action-masked .action-name-small {
+  text-decoration: line-through;
+  color: var(--color-text-tertiary);
+}
+
+.q-value-item.action-masked .q-value-bar {
+  background: rgba(128, 128, 128, 0.3);
+}
+
+.q-value-item.action-masked .q-value-percent {
+  color: var(--color-text-tertiary);
 }
 
 /* CONFIDENCE SECTION */

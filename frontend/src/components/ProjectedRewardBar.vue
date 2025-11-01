@@ -46,10 +46,6 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  projectedReward: {
-    type: Number,
-    default: 0
-  },
   currentStep: {
     type: Number,
     default: 0
@@ -58,6 +54,11 @@ const props = defineProps({
     type: Number,
     default: 100
   }
+})
+
+// Calculate real-time projected reward (currentStep - baseline)
+const projectedReward = computed(() => {
+  return props.currentStep - props.baselineSurvival
 })
 
 // Calculate tier (0-4) based on how many times we've exceeded baseline
@@ -83,7 +84,7 @@ const baselinePercent = computed(() => {
 
 // Format reward with sign
 const formattedReward = computed(() => {
-  const reward = props.projectedReward
+  const reward = projectedReward.value
   if (reward > 0) return `+${reward.toFixed(1)}`
   return reward.toFixed(1)
 })
