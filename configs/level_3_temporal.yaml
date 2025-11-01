@@ -1,10 +1,13 @@
-# configs/townlet_level_2_5_temporal.yaml
-# Townlet Level 2.5: Temporal Mechanics + Multi-Interaction Affordances
+# Level 3: Temporal Mechanics
 #
-# Adds time-based mechanics on top of Level 2 POMDP:
+# See docs/TRAINING_LEVELS.md for complete specification.
+#
+# Key features (adds to Level 2):
 # - 24-tick day/night cycle with operating hours
-# - Multi-interaction affordances (75% linear, 25% completion bonus)
-# - Agent learns temporal planning and opportunity cost
+# - Multi-tick interactions (progressive benefits + completion bonuses)
+# - Time-based action masking (affordances have business hours)
+# - Temporal planning and opportunity cost learning
+# - LSTM learns time-dependent strategies
 
 # Environment configuration
 environment:
@@ -44,3 +47,4 @@ exploration:
 # Training configuration
 training:
   device: cuda
+  max_episodes: 10000  # Total episodes for this training run

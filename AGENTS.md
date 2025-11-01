@@ -92,9 +92,9 @@ python run_demo.py --config configs/townlet_level_1_5.yaml --episodes 10000
 
 **Active Configs:**
 
-- `configs/townlet_level_1_5.yaml` - Full observability baseline (SimpleQNetwork)
-- `configs/townlet_level_2_pomdp.yaml` - Partial observability + LSTM (RecurrentSpatialQNetwork)
-- `configs/townlet_level_2_5_temporal.yaml` - Temporal mechanics + multi-tick interactions
+- `configs/level_1_full_observability.yaml` - Level 1: Full observability baseline (SimpleQNetwork)
+- `configs/level_2_pomdp.yaml` - Level 2: Partial observability + LSTM (RecurrentSpatialQNetwork)
+- `configs/level_3_temporal.yaml` - Level 3: Temporal mechanics + multi-tick interactions
 
 **Key Config Parameters:**
 
@@ -117,13 +117,14 @@ exploration:
 
 ## Progressive Complexity Levels
 
-**Level 1** (Obsolete - hamlet legacy): Single agent, full observability  
-**Level 1.5** (✅ Current): Full observability, NO proximity shaping, sparse rewards  
-**Level 2** (✅ Implemented): Partial observability (POMDP) + LSTM memory  
-**Level 2.5** (✅ Implemented): Temporal mechanics + multi-tick interactions  
-**Level 3** (🎯 Future): Multi-zone environment with hierarchical RL  
-**Level 4** (🎯 Future): Multi-agent competition with theory of mind  
-**Level 5** (🎯 Future): Family communication and emergent language
+**See `docs/TRAINING_LEVELS.md` for complete formal specification.**
+
+**Level 1** (✅ Implemented): Full observability baseline - MLP, complete information  
+**Level 2** (✅ Implemented): Partial observability (POMDP) - LSTM, 5×5 window, spatial memory  
+**Level 3** (✅ Implemented): Temporal mechanics - 24-tick cycles, multi-tick interactions, time planning  
+**Level 4** (🎯 Future): Multi-zone environment - Hierarchical RL, zone transitions, long-term planning  
+**Level 5** (🎯 Future): Multi-agent competition - Resource contention, theory of mind, emergent strategies  
+**Level 6** (🎯 Future): Emergent communication - Discrete symbols, family units, language grounding
 
 ---
 

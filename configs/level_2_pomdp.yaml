@@ -1,14 +1,18 @@
-# Townlet Level 2: Partial Observability (POMDP) + Recurrent Network
+# Level 2: Partial Observability (POMDP)
 #
-# This config implements Level 2 from ARCHITECTURE_DESIGN.md:
+# See docs/TRAINING_LEVELS.md for complete specification.
+#
+# Key features:
 # - Agent sees only 5×5 local window (partial observability)
+# - RecurrentSpatialQNetwork with LSTM memory
 # - Must build mental map through exploration
-# - Uses LSTM to remember where affordances are located
+# - Target network for temporal credit assignment (ACTION #9)
 # - NO proximity shaping (must learn through interaction)
+# - Sparse rewards (milestone bonuses only)
 #
-# Expected behavior:
-# - 3000-5000 episodes to learn (vs 1000-2000 for full obs)
-# - Peak survival: 150-250 steps (vs 300+ for full obs)
+# Expected performance:
+# - 3000-5000 episodes to learn (vs 1000-2000 for Level 1)
+# - Peak survival: 150-250 steps (vs 250-350 for Level 1)
 # - 30-40% of time spent exploring
 # - Realistic cognitive behavior (memory, mistakes, getting lost)
 
@@ -47,3 +51,4 @@ exploration:
 # Training configuration
 training:
   device: cuda  # Use GPU if available
+  max_episodes: 10000  # Total episodes for this training run
