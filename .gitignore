@@ -95,3 +95,5 @@ frontend/.vite/
 docs/_build/
 site/
 .worktrees/
+.db-shm
+.db-wal

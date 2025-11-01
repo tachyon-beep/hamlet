@@ -87,6 +87,23 @@ class VectorizedPopulation(PopulationManager):
         else:
             self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
 
+        # Target network (for stable LSTM training with temporal dependencies)
+        if self.is_recurrent:
+            self.target_network = RecurrentSpatialQNetwork(
+                action_dim=action_dim,
+                window_size=vision_window_size,
+                num_meters=8,
+                num_affordance_types=env.num_affordance_types,
+                enable_temporal_features=env.enable_temporal_mechanics,
+            ).to(device)
+            # Initialize target network with same weights as Q-network
+            self.target_network.load_state_dict(self.q_network.state_dict())
+            self.target_network.eval()  # Target network always in eval mode
+            self.target_update_frequency = 100  # Update target every N training steps
+            self.training_step_counter = 0
+        else:
+            self.target_network = None
+
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
 
         # Replay buffer (dual system: sequential for recurrent, standard for feedforward)
@@ -316,61 +333,70 @@ class VectorizedPopulation(PopulationManager):
             )
 
             if self.is_recurrent:
-                # Sequential LSTM training: sample sequences and unroll through time
+                # Sequential LSTM training with target network for temporal dependencies
                 batch = self.replay_buffer.sample_sequences(
-                    batch_size=16,  # Fewer sequences (each has multiple timesteps)
+                    batch_size=16,
                     seq_len=self.sequence_length,
                     intrinsic_weight=intrinsic_weight,
                 )
-                # batch["observations"]: [batch_size, seq_len, obs_dim]
-                # batch["actions"]: [batch_size, seq_len]
-                # batch["rewards"]: [batch_size, seq_len]
-                # batch["dones"]: [batch_size, seq_len]
 
                 batch_size = batch["observations"].shape[0]
                 seq_len = batch["observations"].shape[1]
 
-                # Initialize hidden state for sequence processing
+                # PASS 1: Collect Q-predictions from online network
+                # Unroll through sequence, maintaining hidden state for gradient computation
                 self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
-
-                # Unroll through sequence, maintaining hidden state
                 q_pred_list = []
-                q_target_list = []
 
                 for t in range(seq_len):
-                    # Current timestep Q-values
                     q_values, _ = self.q_network(batch["observations"][:, t, :])
                     q_pred = q_values.gather(1, batch["actions"][:, t].unsqueeze(1)).squeeze()
                     q_pred_list.append(q_pred)
 
-                    # Target Q-values (using next observation from sequence)
-                    with torch.no_grad():
-                        if t < seq_len - 1:
-                            # Use next obs from sequence
-                            next_obs_batch = batch["observations"][:, t + 1, :]
-                        else:
-                            # Last timestep - use current (will be masked by done anyway)
-                            next_obs_batch = batch["observations"][:, t, :]
+                # PASS 2: Collect Q-targets from target network
+                # Unroll through sequence with target network to maintain hidden state
+                with torch.no_grad():
+                    self.target_network.reset_hidden_state(
+                        batch_size=batch_size, device=self.device
+                    )
+                    q_values_list = []
 
-                        # Compute target with separate forward pass (no gradient)
-                        self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
-                        q_next_values, _ = self.q_network(next_obs_batch)
-                        q_next = q_next_values.max(1)[0]
-                        q_target = (
-                            batch["rewards"][:, t]
-                            + self.gamma * q_next * (~batch["dones"][:, t]).float()
-                        )
+                    # First, unroll through entire sequence to collect Q-values
+                    for t in range(seq_len):
+                        q_values, _ = self.target_network(batch["observations"][:, t, :])
+                        q_values_list.append(q_values)
+
+                    # Now compute targets using Q-values from next timestep
+                    q_target_list = []
+                    for t in range(seq_len):
+                        if t < seq_len - 1:
+                            # Use Q-values from t+1 (computed with hidden state from t)
+                            q_next = q_values_list[t + 1].max(1)[0]
+                            q_target = (
+                                batch["rewards"][:, t]
+                                + self.gamma * q_next * (~batch["dones"][:, t]).float()
+                            )
+                        else:
+                            # Terminal state: no next observation
+                            q_target = batch["rewards"][:, t]
+
                         q_target_list.append(q_target)
 
-                # Concatenate all timesteps and compute loss
+                # Compute loss across all timesteps
                 q_pred_all = torch.stack(q_pred_list, dim=1)  # [batch, seq_len]
                 q_target_all = torch.stack(q_target_list, dim=1)  # [batch, seq_len]
                 loss = F.mse_loss(q_pred_all, q_target_all)
 
+                # Backprop and optimize
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
                 self.optimizer.step()
+
+                # Update target network periodically
+                self.training_step_counter += 1
+                if self.training_step_counter % self.target_update_frequency == 0:
+                    self.target_network.load_state_dict(self.q_network.state_dict())
 
                 # Reset hidden state back to episode batch size after training
                 self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
