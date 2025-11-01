@@ -134,24 +134,25 @@ class CascadeEngine:
 
         for tc in self.config.bars.terminal_conditions:
             meter_idx = self._bar_name_to_idx[tc.meter]
-            terminal_data.append(
-                {"meter_idx": meter_idx, "operator": tc.operator, "value": tc.value}
-            )
+            terminal_data.append({"meter_idx": meter_idx, "operator": tc.operator, "value": tc.value})
 
         return terminal_data
 
-    def apply_base_depletions(self, meters: torch.Tensor) -> torch.Tensor:
+    def apply_base_depletions(self, meters: torch.Tensor, depletion_multiplier: float = 1.0) -> torch.Tensor:
         """
-        Apply base depletion rates to all meters.
+        Apply base depletion rates to all meters with curriculum difficulty scaling.
 
         Args:
             meters: [num_agents, 8] current meter values
+            depletion_multiplier: Curriculum difficulty multiplier (0.2 = 20% difficulty)
 
         Returns:
             meters: [num_agents, 8] meters after base depletions
         """
-        # Subtract base depletions and clamp to [0, 1]
-        meters = torch.clamp(meters - self._base_depletions, 0.0, 1.0)
+        # Apply curriculum difficulty scaling to base depletions
+        scaled_depletions = self._base_depletions * depletion_multiplier
+        # Subtract scaled depletions and clamp to [0, 1]
+        meters = torch.clamp(meters - scaled_depletions, 0.0, 1.0)
         return meters
 
     def apply_modulations(self, meters: torch.Tensor) -> torch.Tensor:
@@ -220,9 +221,7 @@ class CascadeEngine:
                     penalty = cascade["strength"] * deficit
 
                     # Apply penalty to target
-                    target_values[low_mask] = torch.clamp(
-                        target_values[low_mask] - penalty, 0.0, 1.0
-                    )
+                    target_values[low_mask] = torch.clamp(target_values[low_mask] - penalty, 0.0, 1.0)
 
                     # Update meters
                     meters[:, cascade["target_idx"]] = target_values

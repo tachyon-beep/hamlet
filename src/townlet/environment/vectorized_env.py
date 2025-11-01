@@ -84,9 +84,7 @@ class VectorizedHamletEnv:
             # Level 2 POMDP: local window + position + meters + current affordance type
             window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
             # Grid + position + 8 meters + affordance type one-hot (N+1 for "none")
-            self.observation_dim = (
-                window_size * window_size + 2 + 8 + (self.num_affordance_types + 1)
-            )
+            self.observation_dim = window_size * window_size + 2 + 8 + (self.num_affordance_types + 1)
         else:
             # Level 1: full grid one-hot + meters + current affordance type
             # Grid one-hot + 8 meters + affordance type (N+1 for "none")
@@ -115,9 +113,7 @@ class VectorizedHamletEnv:
 
         # Initialize affordance engine
         # Path from src/townlet/environment/ → project root
-        config_path = (
-            Path(__file__).parent.parent.parent.parent / "configs" / "affordances_corrected.yaml"
-        )
+        config_path = Path(__file__).parent.parent.parent.parent / "configs" / "affordances_corrected.yaml"
         with open(config_path) as f:
             config_dict = yaml.safe_load(f)
         affordance_config = AffordanceConfigCollection.model_validate(config_dict)
@@ -134,13 +130,9 @@ class VectorizedHamletEnv:
         # Temporal mechanics state
         if self.enable_temporal_mechanics:
             self.time_of_day = 0  # 0-23 tick cycle
-            self.interaction_progress = torch.zeros(
-                self.num_agents, dtype=torch.long, device=self.device
-            )
+            self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
             self.last_interaction_affordance = [None] * self.num_agents
-            self.last_interaction_position = torch.zeros(
-                (self.num_agents, 2), dtype=torch.long, device=self.device
-            )
+            self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
 
     def reset(self) -> torch.Tensor:
         """
@@ -184,9 +176,7 @@ class VectorizedHamletEnv:
             meters=self.meters,
             affordances=self.affordances,
             time_of_day=self.time_of_day if self.enable_temporal_mechanics else 0,
-            interaction_progress=self.interaction_progress
-            if self.enable_temporal_mechanics
-            else None,
+            interaction_progress=self.interaction_progress if self.enable_temporal_mechanics else None,
         )
 
     def get_action_masks(self) -> torch.Tensor:
@@ -217,9 +207,7 @@ class VectorizedHamletEnv:
         action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
 
         # Mask INTERACT (action 4) - only valid when on an affordable affordance
-        on_affordable_affordance = torch.zeros(
-            self.num_agents, dtype=torch.bool, device=self.device
-        )
+        on_affordable_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
         # Check each affordance using AffordanceEngine
         for affordance_name, affordance_pos in self.affordances.items():
@@ -247,12 +235,14 @@ class VectorizedHamletEnv:
     def step(
         self,
         actions: torch.Tensor,  # [num_agents]
+        depletion_multiplier: float = 1.0,  # Curriculum difficulty
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """
         Execute one step for all agents.
 
         Args:
             actions: [num_agents] tensor of actions (0-4)
+            depletion_multiplier: Curriculum difficulty multiplier (0.2 = 20% difficulty)
 
         Returns:
             observations: [num_agents, observation_dim]
@@ -263,8 +253,8 @@ class VectorizedHamletEnv:
         # 1. Execute actions and track successful interactions
         successful_interactions = self._execute_actions(actions)
 
-        # 2. Deplete meters (base passive decay)
-        self.meters = self.meter_dynamics.deplete_meters(self.meters)
+        # 2. Deplete meters (base passive decay with curriculum difficulty)
+        self.meters = self.meter_dynamics.deplete_meters(self.meters, depletion_multiplier)
 
         # 3. Cascading effects (coupled differential equations!)
         self.meters = self.meter_dynamics.apply_secondary_to_primary_effects(self.meters)
@@ -274,7 +264,7 @@ class VectorizedHamletEnv:
         # 4. Check terminal conditions
         self.dones = self.meter_dynamics.check_terminal_conditions(self.meters, self.dones)
 
-        # 5. Calculate rewards (shaped rewards for now)
+        # 5. Calculate rewards (steps lived - baseline)
         rewards = self._calculate_shaped_rewards()
 
         # 5. Increment step counts
@@ -391,9 +381,7 @@ class VectorizedHamletEnv:
                 continue
 
             # Check affordability using AffordanceEngine
-            cost_per_tick = self.affordance_engine.get_affordance_cost(
-                affordance_name, cost_mode="per_tick"
-            )
+            cost_per_tick = self.affordance_engine.get_affordance_cost(affordance_name, cost_mode="per_tick")
             can_afford = self.meters[:, 3] >= cost_per_tick
             at_affordance = at_affordance & can_afford
 
@@ -411,9 +399,7 @@ class VectorizedHamletEnv:
                 current_pos = self.positions[agent_idx]
 
                 # Check if continuing same affordance at same position
-                if self.last_interaction_affordance[
-                    agent_idx_int
-                ] == affordance_name and torch.equal(
+                if self.last_interaction_affordance[agent_idx_int] == affordance_name and torch.equal(
                     current_pos, self.last_interaction_position[agent_idx_int]
                 ):
                     # Continue progress
@@ -427,9 +413,7 @@ class VectorizedHamletEnv:
                 ticks_done = self.interaction_progress[agent_idx].item()
 
                 # Create single-agent mask for this agent
-                single_agent_mask = torch.zeros(
-                    self.num_agents, dtype=torch.bool, device=self.device
-                )
+                single_agent_mask = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
                 single_agent_mask[agent_idx] = True
 
                 # Apply multi-tick interaction using AffordanceEngine
@@ -476,9 +460,7 @@ class VectorizedHamletEnv:
                 continue
 
             # Check affordability using AffordanceEngine
-            cost_normalized = self.affordance_engine.get_affordance_cost(
-                affordance_name, cost_mode="instant"
-            )
+            cost_normalized = self.affordance_engine.get_affordance_cost(affordance_name, cost_mode="instant")
             if cost_normalized > 0:
                 can_afford = self.meters[:, 3] >= cost_normalized
                 at_affordance = at_affordance & can_afford
@@ -503,7 +485,7 @@ class VectorizedHamletEnv:
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """
-        MILESTONE SURVIVAL REWARDS: Sparse bonuses for survival milestones.
+        Calculate rewards relative to baseline survival.
 
         Delegates to RewardStrategy for calculation.
 
@@ -514,6 +496,46 @@ class VectorizedHamletEnv:
             step_counts=self.step_counts,
             dones=self.dones,
         )
+
+    def calculate_baseline_survival(self, depletion_multiplier: float = 1.0) -> float:
+        """
+        Calculate baseline survival steps (R) for random-walking agent.
+
+        This is the expected survival time if agent does nothing but move randomly
+        until death (no affordance interactions).
+
+        Args:
+            depletion_multiplier: Curriculum difficulty multiplier
+
+        Returns:
+            baseline_steps: Expected survival time in steps
+        """
+        # Energy is the most restrictive death condition
+        # Calculate energy depletion per step:
+        # - Base depletion: 0.005 * multiplier
+        # - Movement cost: 0.005 per step (always paid)
+        # Total: (0.005 * multiplier) + 0.005
+
+        energy_base_depletion = 0.005  # From bars.yaml
+        movement_cost = 0.005  # From vectorized_env movement costs
+
+        total_energy_depletion_per_step = (energy_base_depletion * depletion_multiplier) + movement_cost
+
+        # Starting energy: 1.0
+        # Steps until death: 1.0 / depletion_per_step
+        baseline_steps = 1.0 / total_energy_depletion_per_step
+
+        return baseline_steps
+
+    def update_baseline_for_curriculum(self, depletion_multiplier: float):
+        """
+        Update reward baseline when curriculum stage changes.
+
+        Args:
+            depletion_multiplier: New curriculum difficulty multiplier
+        """
+        baseline = self.calculate_baseline_survival(depletion_multiplier)
+        self.reward_strategy.set_baseline_survival_steps(baseline)
 
     def get_affordance_positions(self) -> dict[str, tuple[int, int]]:
         """Get current affordance positions.
@@ -544,6 +566,4 @@ class VectorizedHamletEnv:
         # Assign new positions to affordances
         for i, affordance_name in enumerate(self.affordances.keys()):
             new_pos = all_positions[i]
-            self.affordances[affordance_name] = torch.tensor(
-                new_pos, dtype=torch.long, device=self.device
-            )
+            self.affordances[affordance_name] = torch.tensor(new_pos, dtype=torch.long, device=self.device)

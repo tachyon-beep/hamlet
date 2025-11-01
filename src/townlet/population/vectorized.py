@@ -143,10 +143,14 @@ class VectorizedPopulation(PopulationManager):
         self.current_obs: torch.Tensor = None
         self.current_epsilons: torch.Tensor = None
         self.current_curriculum_decisions: list = []  # Store curriculum decisions
+        self.current_depletion_multiplier: float = 1.0  # Track curriculum difficulty
 
     def reset(self) -> None:
         """Reset all environments and state."""
         self.current_obs = self.env.reset()
+
+        # Initialize reward baseline for current curriculum
+        self._update_reward_baseline()
 
         # Reset recurrent network hidden state (if applicable)
         if self.is_recurrent:
@@ -159,6 +163,14 @@ class VectorizedPopulation(PopulationManager):
             epsilon = self.exploration.epsilon
 
         self.current_epsilons = torch.full((self.num_agents,), epsilon, device=self.device)
+
+    def _update_reward_baseline(self):
+        """Update reward baseline when curriculum changes."""
+        if self.current_curriculum_decisions:
+            multiplier = self.current_curriculum_decisions[0].depletion_multiplier
+            if multiplier != self.current_depletion_multiplier:
+                self.current_depletion_multiplier = multiplier
+                self.env.update_baseline_for_curriculum(multiplier)
 
     def select_greedy_actions(self, env: "VectorizedHamletEnv") -> torch.Tensor:
         """
@@ -272,14 +284,22 @@ class VectorizedPopulation(PopulationManager):
                 self.agent_ids,
             )
 
+        # 3.5 Update reward baseline if curriculum changed
+        self._update_reward_baseline()
+
         # 4. Get action masks from environment
         action_masks = envs.get_action_masks()
 
         # 5. Select actions via exploration strategy (with action masking)
         actions = self.exploration.select_actions(q_values, temp_state, action_masks)
 
-        # 6. Step environment
-        next_obs, rewards, dones, info = envs.step(actions)
+        # 6. Extract curriculum difficulty multiplier
+        depletion_multiplier = 1.0
+        if self.current_curriculum_decisions:
+            depletion_multiplier = self.current_curriculum_decisions[0].depletion_multiplier
+
+        # 7. Step environment with curriculum difficulty
+        next_obs, rewards, dones, info = envs.step(actions, depletion_multiplier)
 
         # 7. Compute intrinsic rewards (if RND-based exploration)
         intrinsic_rewards = torch.zeros_like(rewards)

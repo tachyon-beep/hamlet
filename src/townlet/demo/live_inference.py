@@ -370,7 +370,29 @@ class LiveInferenceServer:
         self.env.reset()
         self.population.reset()
 
-        # Send episode start
+        # Get initial curriculum decision to set baseline and track stage
+        from townlet.training.state import BatchedAgentState
+
+        temp_state = BatchedAgentState(
+            observations=self.population.current_obs,
+            actions=torch.zeros(1, dtype=torch.long, device=self.device),
+            rewards=torch.zeros(1, device=self.device),
+            dones=torch.zeros(1, dtype=torch.bool, device=self.device),
+            epsilons=torch.full((1,), self.current_epsilon, device=self.device),
+            intrinsic_rewards=torch.zeros(1, device=self.device),
+            survival_times=torch.zeros(1, device=self.device),
+            curriculum_difficulties=torch.zeros(1, device=self.device),
+            device=self.device,
+        )
+        curriculum_decisions = self.curriculum.get_batch_decisions(temp_state, ["agent_0"])
+        current_stage = curriculum_decisions[0].difficulty_level
+        current_multiplier = curriculum_decisions[0].depletion_multiplier
+
+        # Update environment baseline for correct reward display
+        self.env.update_baseline_for_curriculum(current_multiplier)
+        baseline_survival = self.env.reward_strategy.baseline_survival_steps
+
+        # Send episode start with curriculum info
         await self._broadcast_to_clients(
             {
                 "type": "episode_start",
@@ -379,6 +401,9 @@ class LiveInferenceServer:
                 "checkpoint_episode": self.current_checkpoint_episode,
                 "total_episodes": self.total_episodes,
                 "epsilon": self.current_epsilon,
+                "curriculum_stage": int(current_stage),
+                "curriculum_multiplier": current_multiplier,
+                "baseline_survival": baseline_survival,
             }
         )
 
@@ -396,8 +421,8 @@ class LiveInferenceServer:
                 q_output = self.population.q_network(self.population.current_obs)
                 q_values = q_output[0] if isinstance(q_output, tuple) else q_output
 
-            # Step environment
-            next_obs, rewards, dones, info = self.env.step(actions)
+            # Step environment with curriculum difficulty
+            next_obs, rewards, dones, info = self.env.step(actions, current_multiplier)
 
             # Track successful interactions (only count if interaction actually succeeded)
             successful_interactions = info.get("successful_interactions", {})
@@ -418,7 +443,9 @@ class LiveInferenceServer:
             if self.is_running:
                 await asyncio.sleep(self.step_delay)
 
-        # Episode complete
+        # Episode complete - calculate performance vs baseline
+        performance_vs_baseline = self.current_step - baseline_survival
+
         await self._broadcast_to_clients(
             {
                 "type": "episode_end",
@@ -430,10 +457,17 @@ class LiveInferenceServer:
                 "checkpoint_episode": self.current_checkpoint_episode,
                 "total_episodes": self.total_episodes,
                 "epsilon": self.current_epsilon,
+                "baseline_survival": baseline_survival,
+                "performance_vs_baseline": performance_vs_baseline,
+                "curriculum_stage": int(current_stage),
             }
         )
 
-        logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, reward: {cumulative_reward:.2f}")
+        logger.info(
+            f"Episode {self.current_episode} complete: {self.current_step} steps, "
+            f"reward: {cumulative_reward:.2f}, baseline: {baseline_survival:.1f}, "
+            f"vs baseline: {performance_vs_baseline:+.1f}"
+        )
 
     async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor):
         """Broadcast current state to all clients."""
@@ -503,6 +537,7 @@ class LiveInferenceServer:
             },
             "q_values": q_values_list,  # Q-values for all 5 actions
             "affordance_stats": affordance_stats,  # Interaction counts sorted by frequency
+            "baseline_survival": self.env.reward_strategy.baseline_survival_steps,  # For UI display
         }
 
         # Add temporal mechanics data if enabled

@@ -62,17 +62,18 @@ class MeterDynamics:
         # Initialize config-driven CascadeEngine
         self.cascade_engine = CascadeEngine(env_config, device)
 
-    def deplete_meters(self, meters: torch.Tensor) -> torch.Tensor:
+    def deplete_meters(self, meters: torch.Tensor, depletion_multiplier: float = 1.0) -> torch.Tensor:
         """
         Apply base depletion rates and modulations to all meters.
 
         Args:
             meters: [num_agents, 8] current meter values
+            depletion_multiplier: Curriculum difficulty multiplier (0.2 = 20% difficulty)
 
         Returns:
             meters: [num_agents, 8] meters after depletion and modulations
         """
-        meters = self.cascade_engine.apply_base_depletions(meters)
+        meters = self.cascade_engine.apply_base_depletions(meters, depletion_multiplier)
         meters = self.cascade_engine.apply_modulations(meters)
         return meters
 
