@@ -3,48 +3,74 @@
 
 Creates a clean directory structure for each training run:
     runs/
-    └── run_name/
-        ├── config.yaml (copy of config)
-        ├── checkpoints/
-        └── metrics.db
+    └── L1_full_observability/
+        └── 2025-11-02_143022/
+            ├── config.yaml (copy of config)
+            ├── checkpoints/
+            ├── tensorboard/
+            └── metrics.db
 
 Usage:
-    python scripts/start_training_run.py <run_name> <config_path>
+    python scripts/start_training_run.py <config_path>
 
 Examples:
-    python scripts/start_training_run.py L2_pomdp configs/townlet_level_2_pomdp.yaml
-    python scripts/start_training_run.py L2_5_temporal configs/townlet_level_2_5_temporal.yaml
+    python scripts/start_training_run.py configs/level_1_full_observability.yaml
+    python scripts/start_training_run.py configs/level_2_pomdp.yaml
+    python scripts/start_training_run.py configs/level_3_temporal.yaml
 """
 
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
 
+def infer_level_name(config_path: Path) -> str:
+    """Infer level name from config filename."""
+    filename = config_path.stem.lower()
+
+    # Map level prefixes to human-readable names
+    level_map = {
+        "level_1": "L1_full_observability",
+        "level_2": "L2_partial_observability",
+        "level_3": "L3_temporal_mechanics",
+        "level_4": "L4_multi_agent",
+    }
+
+    for prefix, level_name in level_map.items():
+        if prefix in filename:
+            return level_name
+
+    # Fallback: use filename as-is
+    return config_path.stem
+
+
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python scripts/start_training_run.py <run_name> <config_path>")
+    if len(sys.argv) < 2:
+        print("Usage: python scripts/start_training_run.py <config_path>")
         print()
         print("See docs/TRAINING_LEVELS.md for level specifications.")
         print()
         print("Examples:")
-        print(
-            "  python scripts/start_training_run.py L1_baseline "
-            "configs/level_1_full_observability.yaml"
-        )
-        print("  python scripts/start_training_run.py L2_pomdp configs/level_2_pomdp.yaml")
-        print("  python scripts/start_training_run.py L3_temporal configs/level_3_temporal.yaml")
+        print("  python scripts/start_training_run.py configs/level_1_full_observability.yaml")
+        print("  python scripts/start_training_run.py configs/level_2_pomdp.yaml")
+        print("  python scripts/start_training_run.py configs/level_3_temporal.yaml")
         sys.exit(1)
 
-    run_name = sys.argv[1]
-    config_path = Path(sys.argv[2])
+    config_path = Path(sys.argv[1])
 
     if not config_path.exists():
         print(f"Error: Config file not found: {config_path}")
         sys.exit(1)
+
+    # Infer level name from config filename
+    level_name = infer_level_name(config_path)
+
+    # Generate timestamp for this run
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
 
     # Load config to get max_episodes
     with open(config_path) as f:
@@ -58,12 +84,16 @@ def main():
         print("    max_episodes: 10000")
         sys.exit(1)
 
-    # Create run directory structure
-    run_dir = Path("runs") / run_name
+    # Create run directory structure: runs/L1_full_observability/2025-11-02_143022/
+    run_dir = Path("runs") / level_name / timestamp
     run_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint_dir = run_dir / "checkpoints"
     checkpoint_dir.mkdir(exist_ok=True)
+
+    # Create tensorboard directory
+    tensorboard_dir = run_dir / "tensorboard"
+    tensorboard_dir.mkdir(exist_ok=True)
 
     # Copy config into run directory for reproducibility
     config_copy = run_dir / config_path.name
@@ -72,10 +102,11 @@ def main():
     # Database path
     db_path = run_dir / "metrics.db"
 
-    print(f"🚀 Starting training run: {run_name}")
+    print(f"🚀 Starting training run: {level_name}")
     print(f"   Config: {config_path}")
     print(f"   Run directory: {run_dir}")
     print(f"   Episodes: {num_episodes}")
+    print(f"   TensorBoard: tensorboard --logdir {tensorboard_dir}")
     print()
 
     # Build command

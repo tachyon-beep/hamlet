@@ -13,8 +13,8 @@ Coverage Target: exploration/epsilon_greedy.py (75% -> ~95%)
 import pytest
 import torch
 
-from src.townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
-from src.townlet.training.state import BatchedAgentState
+from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.training.state import BatchedAgentState
 
 
 class TestEpsilonGreedyActionSelection:

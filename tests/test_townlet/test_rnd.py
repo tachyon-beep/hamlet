@@ -15,7 +15,7 @@ Focus: Core RND logic, not duplicated epsilon-greedy behavior
 import pytest
 import torch
 
-from src.townlet.exploration.rnd import RNDExploration
+from townlet.exploration.rnd import RNDExploration
 
 
 class TestRNDNetworkInitialization:

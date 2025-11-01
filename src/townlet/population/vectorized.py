@@ -47,6 +47,7 @@ class VectorizedPopulation(PopulationManager):
         replay_buffer_capacity: int = 10000,
         network_type: str = "simple",
         vision_window_size: int = 5,
+        tb_logger=None,
     ):
         """
         Initialize vectorized population.
@@ -74,6 +75,7 @@ class VectorizedPopulation(PopulationManager):
         self.gamma = gamma
         self.network_type = network_type
         self.is_recurrent = network_type == "recurrent"
+        self.tb_logger = tb_logger
 
         # Training metrics (for TensorBoard logging)
         self.last_td_error = 0.0
@@ -406,6 +408,17 @@ class VectorizedPopulation(PopulationManager):
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
                 self.optimizer.step()
 
+                # Log network statistics to TensorBoard (every 100 training steps)
+                if self.tb_logger is not None and self.total_steps % 100 == 0:
+                    for name, param in self.q_network.named_parameters():
+                        self.tb_logger.writer.add_histogram(
+                            f"Network/Weights/{name}", param.data, self.total_steps
+                        )
+                        if param.grad is not None:
+                            self.tb_logger.writer.add_histogram(
+                                f"Network/Gradients/{name}", param.grad, self.total_steps
+                            )
+
                 # Update target network periodically
                 self.training_step_counter += 1
                 if self.training_step_counter % self.target_update_frequency == 0:
@@ -440,6 +453,17 @@ class VectorizedPopulation(PopulationManager):
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
                 self.optimizer.step()
+
+                # Log network statistics to TensorBoard (every 100 training steps)
+                if self.tb_logger is not None and self.total_steps % 100 == 0:
+                    for name, param in self.q_network.named_parameters():
+                        self.tb_logger.writer.add_histogram(
+                            f"Network/Weights/{name}", param.data, self.total_steps
+                        )
+                        if param.grad is not None:
+                            self.tb_logger.writer.add_histogram(
+                                f"Network/Gradients/{name}", param.grad, self.total_steps
+                            )
 
         # 10. Update current state
         self.current_obs = next_obs

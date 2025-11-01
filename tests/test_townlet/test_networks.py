@@ -17,7 +17,7 @@ Critical Areas:
 import pytest
 import torch
 import torch.nn as nn
-from src.townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
 
 
 class TestSimpleQNetwork:

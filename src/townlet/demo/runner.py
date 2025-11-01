@@ -49,7 +49,16 @@ class DemoRunner:
         self.db = DemoDatabase(self.db_path)
 
         # Initialize TensorBoard logger
-        tb_log_dir = self.checkpoint_dir / "tensorboard"
+        # If checkpoint_dir is in a structured run (e.g., runs/L1_full_observability/2025-11-02_143022/checkpoints)
+        # then tensorboard should be at sibling level, not inside checkpoints
+        parent_dir = self.checkpoint_dir.parent
+        if parent_dir.parent.parent.name == "runs" and self.checkpoint_dir.name == "checkpoints":
+            # New structure: runs/LX_name/timestamp/checkpoints -> use runs/LX_name/timestamp/tensorboard
+            tb_log_dir = parent_dir / "tensorboard"
+        else:
+            # Old structure or direct invocation: put tensorboard inside checkpoint_dir
+            tb_log_dir = self.checkpoint_dir / "tensorboard"
+
         self.tb_logger = TensorBoardLogger(
             log_dir=tb_log_dir,
             flush_every=10,
@@ -214,6 +223,7 @@ class DemoRunner:
             replay_buffer_capacity=replay_buffer_capacity,
             network_type=network_type,
             vision_window_size=vision_window_size,
+            tb_logger=self.tb_logger,
         )
 
         self.curriculum.initialize_population(num_agents)
@@ -280,6 +290,8 @@ class DemoRunner:
                 # Run episode
                 survival_time = 0
                 episode_reward = 0.0
+                episode_extrinsic_reward = 0.0
+                episode_intrinsic_reward = 0.0
                 max_steps = 500
 
                 # Track meters and affordances for Phase 3
@@ -293,7 +305,23 @@ class DemoRunner:
                     )
 
                     survival_time += 1
+
+                    # Track rewards separately
+                    # agent_state.rewards is total (extrinsic + intrinsic * weight)
+                    # agent_state.intrinsic_rewards is just intrinsic component
+                    intrinsic_weight = (
+                        self.exploration.get_intrinsic_weight()
+                        if hasattr(self.exploration, "get_intrinsic_weight")
+                        else 1.0
+                    )
+                    extrinsic_component = agent_state.rewards[0].item() - (
+                        agent_state.intrinsic_rewards[0].item() * intrinsic_weight
+                    )
+                    intrinsic_component = agent_state.intrinsic_rewards[0].item()
+
                     episode_reward += agent_state.rewards[0].item()
+                    episode_extrinsic_reward += extrinsic_component
+                    episode_intrinsic_reward += intrinsic_component
 
                     # Track affordance usage
                     if hasattr(self.env, "last_interaction_affordances"):
@@ -317,8 +345,8 @@ class DemoRunner:
                     timestamp=time.time(),
                     survival_time=survival_time,
                     total_reward=episode_reward,
-                    extrinsic_reward=0.0,  # TODO: track separately
-                    intrinsic_reward=0.0,  # TODO: track separately
+                    extrinsic_reward=episode_extrinsic_reward,
+                    intrinsic_reward=episode_intrinsic_reward,
                     intrinsic_weight=self.exploration.get_intrinsic_weight(),
                     curriculum_stage=self.curriculum.tracker.agent_stages[0].item(),
                     epsilon=self.exploration.rnd.epsilon,
@@ -329,8 +357,8 @@ class DemoRunner:
                     episode=self.current_episode,
                     survival_time=survival_time,
                     total_reward=episode_reward,
-                    extrinsic_reward=0.0,  # TODO: track separately
-                    intrinsic_reward=0.0,  # TODO: track separately
+                    extrinsic_reward=episode_extrinsic_reward,
+                    intrinsic_reward=episode_intrinsic_reward,
                     curriculum_stage=int(self.curriculum.tracker.agent_stages[0].item()),
                     epsilon=self.exploration.rnd.epsilon,
                     intrinsic_weight=self.exploration.get_intrinsic_weight(),

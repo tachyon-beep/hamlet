@@ -16,7 +16,7 @@ Critical Areas:
 
 import pytest
 import torch
-from src.townlet.training.replay_buffer import ReplayBuffer
+from townlet.training.replay_buffer import ReplayBuffer
 
 
 class TestReplayBufferInitialization:

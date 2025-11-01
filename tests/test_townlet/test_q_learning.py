@@ -23,10 +23,10 @@ import pytest
 import torch
 import torch.nn.functional as functional
 
-from src.townlet.curriculum.static import StaticCurriculum
-from src.townlet.environment.vectorized_env import VectorizedHamletEnv
-from src.townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
-from src.townlet.population.vectorized import VectorizedPopulation
+from townlet.curriculum.static import StaticCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.population.vectorized import VectorizedPopulation
 
 
 class TestQNetworkTraining:
