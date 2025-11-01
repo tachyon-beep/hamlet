@@ -38,7 +38,7 @@ class MeterDynamics:
         self,
         num_agents: int,
         device: torch.device,
-        use_cascade_engine: bool = False,
+        use_cascade_engine: bool = True,
         cascade_config_dir: Optional[Path] = None,
     ):
         """
@@ -47,7 +47,8 @@ class MeterDynamics:
         Args:
             num_agents: Number of agents in the environment
             device: torch device for tensor operations
-            use_cascade_engine: If True, use config-driven CascadeEngine
+            use_cascade_engine: If True, use config-driven CascadeEngine (default)
+                              If False, use legacy hardcoded cascades
             cascade_config_dir: Directory containing bars.yaml and cascades.yaml
                               (defaults to project configs/ directory)
         """

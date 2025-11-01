@@ -1,0 +1,133 @@
+# cascades_strong.yaml - Strong Cascade Effects (Hard Mode)
+# Teaching Example: 150% strength for challenging survival, shows cascade dangers
+#
+# Use Case: Advanced students who need to see death spirals and cascade effects
+# Expected Behavior: Agents must manage ALL meters carefully or die quickly
+# Teaching Value: Demonstrates cascade system's full challenge potential
+
+version: "1.0"
+description: "Strong cascade configuration (150% strength, hard mode for advanced learning)"
+math_type: "gradient_penalty"
+
+# Fitness modulation - stronger health impact
+modulations:
+  - name: "fitness_health_modulation"
+    description: "Low fitness increases health depletion (STRONG - 150% strength)"
+    source: "fitness"
+    target: "health"
+    type: "depletion_multiplier"
+    base_multiplier: 0.25  # 0.25x healthy (vs 0.5x normal) - even healthier when fit!
+    range: 4.25            # 0.25 + 4.25 = 4.5x max (vs 3.0x normal) - brutal when unfit!
+    baseline_depletion: 0.001
+    note: "Stronger fitness gradient - unfit agents highly vulnerable"
+
+cascades:
+  # PRIMARY → PIVOTAL (150% of normal strength)
+  - name: "satiation_to_health"
+    description: "Hunger strongly damages health (STRONG)"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "health"
+    target_index: 6
+    threshold: 0.3
+    strength: 0.006  # 150% of 0.004
+
+  - name: "satiation_to_energy"
+    description: "Hunger strongly drains energy (STRONG)"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0075  # 150% of 0.005
+
+  - name: "mood_to_energy"
+    description: "Depression strongly exhausts (STRONG)"
+    category: "primary_to_pivotal"
+    source: "mood"
+    source_index: 4
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0075  # 150% of 0.005
+
+  # SECONDARY → PRIMARY (150% of normal strength)
+  - name: "hygiene_to_satiation"
+    description: "Filth strongly suppresses appetite (STRONG)"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "satiation"
+    target_index: 2
+    threshold: 0.3
+    strength: 0.003  # 150% of 0.002
+
+  - name: "hygiene_to_fitness"
+    description: "Filth strongly degrades fitness (STRONG)"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "fitness"
+    target_index: 7
+    threshold: 0.3
+    strength: 0.003  # 150% of 0.002
+
+  - name: "hygiene_to_mood"
+    description: "Filth strongly depresses (STRONG)"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "mood"
+    target_index: 4
+    threshold: 0.3
+    strength: 0.0045  # 150% of 0.003
+
+  - name: "social_to_mood"
+    description: "Isolation strongly depresses (STRONG)"
+    category: "secondary_to_primary"
+    source: "social"
+    source_index: 5
+    target: "mood"
+    target_index: 4
+    threshold: 0.3
+    strength: 0.006  # 150% of 0.004
+
+  # SECONDARY → PIVOTAL (150% of normal strength - still relatively weak)
+  - name: "hygiene_to_health"
+    description: "Filth weakly damages health (MODERATE)"
+    category: "secondary_to_pivotal_weak"
+    source: "hygiene"
+    source_index: 1
+    target: "health"
+    target_index: 6
+    threshold: 0.3
+    strength: 0.00075  # 150% of 0.0005
+
+  - name: "hygiene_to_energy"
+    description: "Filth weakly drains energy (MODERATE)"
+    category: "secondary_to_pivotal_weak"
+    source: "hygiene"
+    source_index: 1
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.00075  # 150% of 0.0005
+
+  - name: "social_to_energy"
+    description: "Isolation weakly exhausts (MODERATE)"
+    category: "secondary_to_pivotal_weak"
+    source: "social"
+    source_index: 5
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0012  # 150% of 0.0008
+
+# Execution order (same as normal)
+execution_order:
+  - "modulations"
+  - "primary_to_pivotal"
+  - "secondary_to_primary"
+  - "secondary_to_pivotal_weak"

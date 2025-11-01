@@ -1,0 +1,133 @@
+# cascades_weak.yaml - Weak Cascade Effects (Easy Mode)
+# Teaching Example: 50% strength for easier survival, good for learning basics
+#
+# Use Case: Students new to the environment who need to learn affordances
+# Expected Behavior: Agents can survive longer with poor meter management
+# Teaching Value: Shows cascade system with gentler penalties
+
+version: "1.0"
+description: "Weak cascade configuration (50% strength, easy mode for learning)"
+math_type: "gradient_penalty"
+
+# Fitness modulation - weaker health impact
+modulations:
+  - name: "fitness_health_modulation"
+    description: "Low fitness increases health depletion (WEAK - 50% strength)"
+    source: "fitness"
+    target: "health"
+    type: "depletion_multiplier"
+    base_multiplier: 0.75  # 0.75x healthy (vs 0.5x normal)
+    range: 1.25            # 0.75 + 1.25 = 2.0x max (vs 3.0x normal)
+    baseline_depletion: 0.001
+    note: "Weaker fitness gradient - unfit agents less vulnerable"
+
+cascades:
+  # PRIMARY → PIVOTAL (50% of normal strength)
+  - name: "satiation_to_health"
+    description: "Hunger weakly damages health (WEAK)"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "health"
+    target_index: 6
+    threshold: 0.3
+    strength: 0.002  # 50% of 0.004
+
+  - name: "satiation_to_energy"
+    description: "Hunger weakly drains energy (WEAK)"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0025  # 50% of 0.005
+
+  - name: "mood_to_energy"
+    description: "Depression weakly exhausts (WEAK)"
+    category: "primary_to_pivotal"
+    source: "mood"
+    source_index: 4
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0025  # 50% of 0.005
+
+  # SECONDARY → PRIMARY (50% of normal strength)
+  - name: "hygiene_to_satiation"
+    description: "Filth weakly suppresses appetite (WEAK)"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "satiation"
+    target_index: 2
+    threshold: 0.3
+    strength: 0.001  # 50% of 0.002
+
+  - name: "hygiene_to_fitness"
+    description: "Filth weakly degrades fitness (WEAK)"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "fitness"
+    target_index: 7
+    threshold: 0.3
+    strength: 0.001  # 50% of 0.002
+
+  - name: "hygiene_to_mood"
+    description: "Filth weakly depresses (WEAK)"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "mood"
+    target_index: 4
+    threshold: 0.3
+    strength: 0.0015  # 50% of 0.003
+
+  - name: "social_to_mood"
+    description: "Isolation weakly depresses (WEAK)"
+    category: "secondary_to_primary"
+    source: "social"
+    source_index: 5
+    target: "mood"
+    target_index: 4
+    threshold: 0.3
+    strength: 0.002  # 50% of 0.004
+
+  # SECONDARY → PIVOTAL (50% of normal strength - already weak)
+  - name: "hygiene_to_health"
+    description: "Filth extremely weakly damages health (VERY WEAK)"
+    category: "secondary_to_pivotal_weak"
+    source: "hygiene"
+    source_index: 1
+    target: "health"
+    target_index: 6
+    threshold: 0.3
+    strength: 0.00025  # 50% of 0.0005
+
+  - name: "hygiene_to_energy"
+    description: "Filth extremely weakly drains energy (VERY WEAK)"
+    category: "secondary_to_pivotal_weak"
+    source: "hygiene"
+    source_index: 1
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.00025  # 50% of 0.0005
+
+  - name: "social_to_energy"
+    description: "Isolation extremely weakly exhausts (VERY WEAK)"
+    category: "secondary_to_pivotal_weak"
+    source: "social"
+    source_index: 5
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0004  # 50% of 0.0008
+
+# Execution order (same as normal)
+execution_order:
+  - "modulations"
+  - "primary_to_pivotal"
+  - "secondary_to_primary"
+  - "secondary_to_pivotal_weak"

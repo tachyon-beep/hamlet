@@ -1,0 +1,276 @@
+# affordances_corrected.yaml - EXACT match to hardcoded logic
+#
+# This file contains the EXACT values from vectorized_env._handle_interactions_legacy()
+# Every value has been verified against the hardcoded implementation.
+#
+# CRITICAL: Zero behavioral change - this is a 1:1 translation of code to data.
+
+version: "1.0"
+description: "Affordance definitions matching hardcoded logic exactly"
+status: "PRODUCTION - Ready for integration"
+
+# Meter definitions (for reference)
+meters:
+  - { id: 0, name: "energy", range: [0.0, 1.0] }
+  - { id: 1, name: "hygiene", range: [0.0, 1.0] }
+  - { id: 2, name: "satiation", range: [0.0, 1.0] }
+  - { id: 3, name: "money", range: [0.0, 1.0] }  # $0-$100 = 0.0-1.0
+  - { id: 4, name: "mood", range: [0.0, 1.0] }
+  - { id: 5, name: "social", range: [0.0, 1.0] }
+  - { id: 6, name: "health", range: [0.0, 1.0] }
+  - { id: 7, name: "fitness", range: [0.0, 1.0] }
+
+affordances:
+  # ============================================================================
+  # ENERGY RESTORATION
+  # ============================================================================
+  
+  - id: "0"
+    name: "Bed"
+    category: "energy_restoration"
+    interaction_type: "instant"  # Hardcoded as instant!
+    
+    costs:
+      - { meter: "money", amount: 0.05 }  # $5
+    
+    effects:
+      - { meter: "energy", amount: 0.50 }  # +50%
+      - { meter: "health", amount: 0.02 }  # +2%
+    
+    operating_hours: [0, 24]  # Always available
+
+  - id: "1"
+    name: "LuxuryBed"
+    category: "energy_restoration"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.11 }  # $11
+    
+    effects:
+      - { meter: "energy", amount: 0.75 }  # +75%
+      - { meter: "health", amount: 0.05 }  # +5%
+    
+    operating_hours: [0, 24]
+
+  # ============================================================================
+  # HYGIENE RESTORATION
+  # ============================================================================
+  
+  - id: "2"
+    name: "Shower"
+    category: "hygiene"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.03 }  # $3
+    
+    effects:
+      - { meter: "hygiene", amount: 0.40 }  # +40%
+    
+    operating_hours: [0, 24]
+
+  # ============================================================================
+  # SATIATION (FOOD)
+  # ============================================================================
+  
+  - id: "3"
+    name: "HomeMeal"
+    category: "food"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.03 }  # $3
+    
+    effects:
+      - { meter: "satiation", amount: 0.45 }  # +45%
+      - { meter: "health", amount: 0.03 }     # +3%
+    
+    operating_hours: [0, 24]
+
+  - id: "4"
+    name: "FastFood"
+    category: "food"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.10 }  # $10
+    
+    effects:
+      - { meter: "satiation", amount: 0.45 }  # +45%
+      - { meter: "energy", amount: 0.15 }     # +15%
+      - { meter: "social", amount: 0.01 }     # +1%
+      - { meter: "fitness", amount: -0.03 }   # -3% (penalty!)
+      - { meter: "health", amount: -0.02 }    # -2% (penalty!)
+    
+    operating_hours: [0, 24]
+
+  # ============================================================================
+  # HEALTH RESTORATION
+  # ============================================================================
+  
+  - id: "5"
+    name: "Doctor"
+    category: "health"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.08 }  # $8
+    
+    effects:
+      - { meter: "health", amount: 0.25 }  # +25%
+    
+    operating_hours: [8, 18]  # Business hours (8am-6pm)
+
+  - id: "6"
+    name: "Hospital"
+    category: "health"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.15 }  # $15
+    
+    effects:
+      - { meter: "health", amount: 0.40 }  # +40%
+    
+    operating_hours: [0, 24]  # Emergency - always open
+
+  # ============================================================================
+  # MOOD RESTORATION
+  # ============================================================================
+  
+  - id: "7"
+    name: "Therapist"
+    category: "mood"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.15 }  # $15
+    
+    effects:
+      - { meter: "mood", amount: 0.40 }  # +40%
+    
+    operating_hours: [8, 18]  # Business hours
+
+  - id: "8"
+    name: "Recreation"
+    category: "mood"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.06 }  # $6
+    
+    effects:
+      - { meter: "mood", amount: 0.25 }    # +25%
+      - { meter: "energy", amount: 0.12 }  # +12%
+    
+    operating_hours: [8, 22]  # 8am-10pm
+
+  # ============================================================================
+  # SOCIAL
+  # ============================================================================
+  
+  - id: "9"
+    name: "Bar"
+    category: "social"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.15 }  # $15
+    
+    effects:
+      - { meter: "social", amount: 0.50 }    # +50% (BEST social!)
+      - { meter: "mood", amount: 0.25 }      # +25%
+      - { meter: "satiation", amount: 0.30 } # +30%
+      - { meter: "energy", amount: -0.20 }   # -20% (drunk/tired)
+      - { meter: "hygiene", amount: -0.15 }  # -15% (messy)
+      - { meter: "health", amount: -0.05 }   # -5% (hangover)
+    
+    operating_hours: [18, 4]  # 6pm-4am (wraps midnight!)
+
+  # ============================================================================
+  # INCOME GENERATION
+  # ============================================================================
+  
+  - id: "10"
+    name: "Job"
+    category: "income"
+    interaction_type: "instant"
+    
+    costs: []  # FREE (you get paid!)
+    
+    effects:
+      - { meter: "money", amount: 0.225 }   # +$22.50
+      - { meter: "energy", amount: -0.15 }  # -15%
+      - { meter: "social", amount: 0.02 }   # +2%
+      - { meter: "health", amount: -0.03 }  # -3%
+    
+    operating_hours: [8, 18]  # Business hours
+
+  - id: "11"
+    name: "Labor"
+    category: "income"
+    interaction_type: "instant"
+    
+    costs: []  # FREE (you get paid!)
+    
+    effects:
+      - { meter: "money", amount: 0.30 }    # +$30
+      - { meter: "energy", amount: -0.20 }  # -20%
+      - { meter: "fitness", amount: -0.05 } # -5%
+      - { meter: "health", amount: -0.05 }  # -5%
+      - { meter: "social", amount: 0.01 }   # +1%
+    
+    operating_hours: [8, 18]  # Business hours
+
+  # ============================================================================
+  # FITNESS
+  # ============================================================================
+  
+  - id: "12"
+    name: "Gym"
+    category: "fitness"
+    interaction_type: "instant"
+    
+    costs:
+      - { meter: "money", amount: 0.08 }  # $8
+    
+    effects:
+      - { meter: "fitness", amount: 0.30 }  # +30%
+      - { meter: "energy", amount: -0.08 }  # -8%
+    
+    operating_hours: [6, 22]  # 6am-10pm
+
+  - id: "13"
+    name: "Park"
+    category: "fitness"
+    interaction_type: "instant"
+    
+    costs: []  # FREE!
+    
+    effects:
+      - { meter: "fitness", amount: 0.20 }  # +20%
+      - { meter: "social", amount: 0.15 }   # +15%
+      - { meter: "mood", amount: 0.15 }     # +15%
+      - { meter: "energy", amount: -0.15 }  # -15%
+    
+    operating_hours: [6, 22]  # 6am-10pm
+
+  # ============================================================================
+  # COFFEE SHOP (Not in hardcoded yet - commented out)
+  # ============================================================================
+  
+  # - id: 14
+  #   name: "CoffeeShop"
+  #   category: "energy"
+  #   interaction_type: "instant"
+  #   
+  #   costs:
+  #     - { meter: "money", amount: 0.04 }  # $4
+  #   
+  #   effects:
+  #     - { meter: "energy", amount: 0.20 }  # +20%
+  #     - { meter: "mood", amount: 0.10 }    # +10%
+  #     - { meter: "social", amount: 0.05 }  # +5%
+  #   
+  #   operating_hours: [6, 20]  # 6am-8pm
