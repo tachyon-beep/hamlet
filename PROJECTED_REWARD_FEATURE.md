@@ -56,6 +56,7 @@ Updates every step, showing if agent is on track.
 ### 3. Live Chart
 
 Plot `projected_reward` over time during episode:
+
 - Starts negative (e.g., -167 at step 0)
 - Climbs toward zero
 - Goes positive if agent beats baseline
@@ -92,6 +93,7 @@ const status = progress < 0.5 ? "struggling" :
 **Before:** Viewers only saw reward at episode end. No sense of progress during episode.
 
 **After:** Viewers see:
+
 1. **Real-time learning signal** - Is agent beating baseline?
 2. **Progress tracking** - How close to positive reward?
 3. **Celebration moments** - When projected_reward crosses 0!
@@ -153,6 +155,7 @@ python run_demo.py --config configs/level_1_full_observability.yaml --episodes 1
 ```
 
 Expected behavior:
+
 - `projected_reward` starts at `-baseline` (e.g., -167)
 - Increases by 1 each step
 - Goes positive when agent survives past baseline

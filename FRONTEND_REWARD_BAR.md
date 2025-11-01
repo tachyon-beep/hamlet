@@ -6,6 +6,7 @@
 ## Summary
 
 Added a real-time projected reward bar to the frontend that displays learning progress during episodes. The bar is positioned directly below the TimeOfDayBar and shows:
+
 - Current projected reward (steps - baseline)
 - Progress bar with color-coded performance
 - Status indicators (🔴 struggling → 🟡 learning → 🟢 mastered)
@@ -16,12 +17,14 @@ Added a real-time projected reward bar to the frontend that displays learning pr
 ### 1. `frontend/src/stores/simulation.js`
 
 **Added state variables:**
+
 ```javascript
 const projectedReward = ref(0)      // Current step - baseline
 const baselineSurvival = ref(100)   // Expected random walk survival
 ```
 
 **Added to state_update handler:**
+
 ```javascript
 if (message.projected_reward !== undefined) {
   projectedReward.value = message.projected_reward
@@ -32,6 +35,7 @@ if (message.baseline_survival !== undefined) {
 ```
 
 **Exported new values:**
+
 ```javascript
 return {
   // ... existing exports
@@ -43,6 +47,7 @@ return {
 ### 2. `frontend/src/components/ProjectedRewardBar.vue` (NEW)
 
 **Component structure:**
+
 - Progress bar showing current step vs baseline
 - Color-coded by performance:
   - 🔴 Red: < 50% of baseline (struggling)
@@ -54,6 +59,7 @@ return {
 - Formatted reward display (+33.7 or -67.3)
 
 **Props:**
+
 ```javascript
 projectedReward: Number   // Current step - baseline
 currentStep: Number       // Current episode step
@@ -61,6 +67,7 @@ baselineSurvival: Number  // Expected survival (R)
 ```
 
 **Visual design:**
+
 - Positioned at `top: 110px` (below TimeOfDayBar at 20px + 80px height)
 - Dark glass-morphic background
 - Smooth color transitions
@@ -70,11 +77,13 @@ baselineSurvival: Number  // Expected survival (R)
 ### 3. `frontend/src/App.vue`
 
 **Added import:**
+
 ```javascript
 import ProjectedRewardBar from './components/ProjectedRewardBar.vue'
 ```
 
 **Added component to template:**
+
 ```vue
 <ProjectedRewardBar
   v-if="isConnected"
@@ -128,6 +137,7 @@ Step 200: `🟢 +33`  (mastered!)
 ## User Experience
 
 **What viewers see:**
+
 1. **Episode starts** - Bar at 0%, reward = -167 (assuming baseline 167)
 2. **Agent survives** - Bar fills, reward climbs from negative toward zero
 3. **Milestone moment** - When reward crosses zero, color turns green! 🎉
@@ -135,6 +145,7 @@ Step 200: `🟢 +33`  (mastered!)
 5. **Celebration** - Large positive rewards in bright green
 
 **Educational value:**
+
 - Instantly understand if agent is learning
 - See the baseline-relative reward calculation in action
 - Watch exploration→exploitation transition visually
@@ -152,6 +163,7 @@ cd frontend && npm run dev -- --host 0.0.0.0
 ```
 
 **Expected behavior:**
+
 - Bar appears when connected
 - Updates every step
 - Shows baseline marker (vertical tick)

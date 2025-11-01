@@ -445,7 +445,7 @@ class LiveInferenceServer:
 
         # Episode complete - calculate performance vs baseline
         performance_vs_baseline = self.current_step - baseline_survival
-        
+
         # Calculate final reward using baseline-relative formula: reward = steps_lived - R
         final_reward = float(self.current_step) - baseline_survival
 
@@ -517,7 +517,7 @@ class LiveInferenceServer:
         # Calculate projected reward based on current progress
         baseline_survival = self.env.reward_strategy.baseline_survival_steps
         projected_reward = float(self.current_step) - baseline_survival
-        
+
         # Build state update message
         update = {
             "type": "state_update",
