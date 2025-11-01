@@ -102,8 +102,17 @@ class DemoDatabase:
                (episode_id, timestamp, survival_time, total_reward, extrinsic_reward,
                 intrinsic_reward, intrinsic_weight, curriculum_stage, epsilon)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (episode_id, timestamp, survival_time, total_reward, extrinsic_reward,
-             intrinsic_reward, intrinsic_weight, curriculum_stage, epsilon)
+            (
+                episode_id,
+                timestamp,
+                survival_time,
+                total_reward,
+                extrinsic_reward,
+                intrinsic_reward,
+                intrinsic_weight,
+                curriculum_stage,
+                epsilon,
+            ),
         )
         self.conn.commit()
 
@@ -116,10 +125,7 @@ class DemoDatabase:
         Returns:
             List of episode dictionaries
         """
-        cursor = self.conn.execute(
-            "SELECT * FROM episodes ORDER BY episode_id DESC LIMIT ?",
-            (limit,)
-        )
+        cursor = self.conn.execute("SELECT * FROM episodes ORDER BY episode_id DESC LIMIT ?", (limit,))
         return [dict(row) for row in cursor.fetchall()]
 
     def set_system_state(self, key: str, value: str):
@@ -129,10 +135,7 @@ class DemoDatabase:
             key: State key
             value: State value (will be converted to string)
         """
-        self.conn.execute(
-            "INSERT OR REPLACE INTO system_state (key, value) VALUES (?, ?)",
-            (key, str(value))
-        )
+        self.conn.execute("INSERT OR REPLACE INTO system_state (key, value) VALUES (?, ?)", (key, str(value)))
         self.conn.commit()
 
     def get_system_state(self, key: str) -> str | None:
@@ -144,12 +147,9 @@ class DemoDatabase:
         Returns:
             State value or None if not found
         """
-        cursor = self.conn.execute(
-            "SELECT value FROM system_state WHERE key = ?",
-            (key,)
-        )
+        cursor = self.conn.execute("SELECT value FROM system_state WHERE key = ?", (key,))
         row = cursor.fetchone()
-        return row['value'] if row else None
+        return row["value"] if row else None
 
     def insert_affordance_visits(self, episode_id: int, transitions: dict[str, dict[str, int]]):
         """Insert affordance transition counts for an episode.
@@ -162,7 +162,12 @@ class DemoDatabase:
         """
         pass
 
-    def insert_position_heatmap(self, episode_id: int, positions: dict[tuple[int, int], int], novelty: dict[tuple[int, int], float] | None = None):
+    def insert_position_heatmap(
+        self,
+        episode_id: int,
+        positions: dict[tuple[int, int], int],
+        novelty: dict[tuple[int, int], float] | None = None,
+    ):
         """Insert position visit counts and novelty values for an episode.
 
         Args:
