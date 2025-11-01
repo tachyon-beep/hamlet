@@ -18,11 +18,13 @@
 - Implementation status
 
 **Old naming (deprecated):**
+
 - ~~Level 1.5~~ → **Level 1** (Full Observability)
-- ~~Level 2~~ → **Level 2** (POMDP) 
+- ~~Level 2~~ → **Level 2** (POMDP)
 - ~~Level 2.5~~ → **Level 3** (Temporal)
 
 **New naming (formalized):**
+
 - **Level 1:** Full observability baseline (MLP, complete info)
 - **Level 2:** Partial observability (LSTM, 5×5 window, spatial memory)
 - **Level 3:** Temporal mechanics (time cycles, multi-tick interactions)
@@ -31,6 +33,7 @@
 ### 2. Renamed Config Files
 
 **Old → New:**
+
 ```
 configs/townlet_level_1_5.yaml → configs/level_1_full_observability.yaml
 configs/townlet_level_2_pomdp.yaml → configs/level_2_pomdp.yaml
@@ -38,6 +41,7 @@ configs/townlet_level_2_5_temporal.yaml → configs/level_3_temporal.yaml
 ```
 
 **Updated headers:**
+
 - Added reference to `docs/TRAINING_LEVELS.md`
 - Formalized feature descriptions
 - Clarified what each level adds
@@ -45,6 +49,7 @@ configs/townlet_level_2_5_temporal.yaml → configs/level_3_temporal.yaml
 ### 3. Added max_episodes to Configs
 
 All configs now specify training duration:
+
 - **Level 1:** 5000 episodes (learns faster)
 - **Level 2:** 10000 episodes (POMDP harder)
 - **Level 3:** 10000 episodes (temporal complexity)
@@ -52,6 +57,7 @@ All configs now specify training duration:
 ### 4. Organized Runs Directory
 
 **Structure:**
+
 ```
 runs/
 ├── README.md              # Usage guide
@@ -70,6 +76,7 @@ runs/
 ```
 
 **Benefits:**
+
 - ✅ Clean project root (no more scattered DB files)
 - ✅ `runs/` already gitignored
 - ✅ Each run self-contained
@@ -78,11 +85,13 @@ runs/
 ### 5. Simplified CLI
 
 **Old (3 arguments):**
+
 ```bash
 python scripts/start_training_run.py L2_validation configs/level_2_pomdp.yaml 10000
 ```
 
 **New (2 arguments, episodes in config):**
+
 ```bash
 python scripts/start_training_run.py L2_validation configs/level_2_pomdp.yaml
 ```
@@ -92,6 +101,7 @@ Script reads `training.max_episodes` from YAML automatically.
 ### 6. Updated Documentation
 
 **Modified files:**
+
 - `AGENTS.md` - Updated level references, config paths
 - `docs/TRAINING_RUN_ORGANIZATION.md` - New CLI examples
 - `runs/README.md` - Updated examples
@@ -133,6 +143,7 @@ python scripts/start_training_run.py L3_comparison configs/level_3_temporal.yaml
 ## 📚 Key Documentation
 
 **Primary reference:** `docs/TRAINING_LEVELS.md`
+
 - Complete level specifications
 - Capability tables
 - Teaching value
@@ -140,6 +151,7 @@ python scripts/start_training_run.py L3_comparison configs/level_3_temporal.yaml
 - Implementation status
 
 **Secondary references:**
+
 - `AGENTS.md` - Overall project architecture
 - `runs/README.md` - Quick start guide
 - `docs/TRAINING_RUN_ORGANIZATION.md` - Detailed workflow
@@ -149,11 +161,13 @@ python scripts/start_training_run.py L3_comparison configs/level_3_temporal.yaml
 ## 🧹 Cleanup Done
 
 **Moved to archive:**
+
 - 7 DB files (2.6MB total) moved to `runs/archive/`
 - Project root cleaned up
 - Files not tracked in git (already gitignored)
 
 **Can safely delete later:**
+
 ```bash
 # When ready to purge old data:
 rm -rf runs/archive/
@@ -164,12 +178,14 @@ rm -rf runs/archive/
 ## ✅ Validation Status
 
 **Configs tested:**
+
 - ✅ All 3 configs exist and are readable
 - ✅ All configs have `training.max_episodes`
 - ✅ Helper script shows correct examples
 - ✅ Config headers reference `docs/TRAINING_LEVELS.md`
 
 **Ready to start:**
+
 - ✅ Level 2 validation (Phase 3.5 multi-day run)
 - ✅ Level comparison experiments
 - ✅ Teaching demonstrations
@@ -190,12 +206,14 @@ python scripts/start_training_run.py L2_validation configs/level_2_pomdp.yaml
 ```
 
 **Why Level 2?**
+
 - Validates ACTION #9 (LSTM target network fix)
 - Tests spatial memory in production
 - Baseline for Level 3 temporal mechanics
 - 10K episodes = ~48 hours runtime
 
 **Monitoring:**
+
 - Checkpoint dir: `runs/L2_validation/checkpoints/`
 - Metrics DB: `runs/L2_validation/metrics.db`
 - Watch for: survival time improving, intrinsic weight annealing

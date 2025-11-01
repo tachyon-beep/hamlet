@@ -34,11 +34,13 @@ uv run pytest tests/test_integration/ -k "test_all_configs_valid" -v
 ```
 
 **Validates:**
+
 - All config files are valid YAML
 - Required sections present (environment, population, curriculum, exploration, training)
 - Required fields present in each section
 
 **Configs tested:**
+
 - `level_1_1_integration_test.yaml`
 - `level_2_1_integration_test.yaml`
 - `level_3_1_integration_test.yaml`
@@ -55,6 +57,7 @@ uv run pytest tests/test_integration/ -k "test_level_1" -v
 ```
 
 **Validates:**
+
 - SimpleQNetwork trains without errors
 - Full observability works
 - Checkpoints can be saved and loaded
@@ -62,6 +65,7 @@ uv run pytest tests/test_integration/ -k "test_level_1" -v
 - Agent shows learning progress
 
 **Config:** `configs/level_1_1_integration_test.yaml`
+
 - 200 episodes (~5 minutes)
 - Full observability
 - MLP Q-Network
@@ -69,6 +73,7 @@ uv run pytest tests/test_integration/ -k "test_level_1" -v
 - Max 200 steps/episode
 
 **Expected outcome:**
+
 - Completes 200 episodes
 - Saves 2 checkpoints (ep 100, ep 200)
 - Average survival improves over time
@@ -83,6 +88,7 @@ uv run pytest tests/test_integration/ -k "test_level_2" -v
 ```
 
 **Validates:**
+
 - RecurrentSpatialQNetwork trains without errors
 - LSTM hidden state management works
 - Target network for LSTM works (ACTION #9)
@@ -90,6 +96,7 @@ uv run pytest tests/test_integration/ -k "test_level_2" -v
 - Sequential replay buffer works
 
 **Config:** `configs/level_2_1_integration_test.yaml`
+
 - 200 episodes (~8 minutes)
 - Partial observability (5×5 window)
 - LSTM with target network
@@ -97,6 +104,7 @@ uv run pytest tests/test_integration/ -k "test_level_2" -v
 - Max 200 steps/episode
 
 **Expected outcome:**
+
 - Completes 200 episodes
 - Saves 2 checkpoints
 - Target network present in checkpoint
@@ -112,6 +120,7 @@ uv run pytest tests/test_integration/ -k "test_level_3" -v
 ```
 
 **Validates:**
+
 - Temporal mechanics work (24-tick day/night cycles)
 - Multi-tick interactions work (progressive benefits)
 - Operating hours masking works
@@ -119,6 +128,7 @@ uv run pytest tests/test_integration/ -k "test_level_3" -v
 - Time-of-day observation included
 
 **Config:** `configs/level_3_1_integration_test.yaml`
+
 - 200 episodes (~8 minutes)
 - Partial observability + temporal mechanics
 - LSTM with time awareness
@@ -126,6 +136,7 @@ uv run pytest tests/test_integration/ -k "test_level_3" -v
 - Max 200 steps/episode
 
 **Expected outcome:**
+
 - Completes 200 episodes
 - Temporal mechanics don't cause errors
 - Multi-tick interactions work
@@ -140,11 +151,13 @@ uv run pytest tests/test_integration/ -k "test_checkpoint_resume" -v
 ```
 
 **Validates:**
+
 - Training can be paused and resumed
 - Checkpoints save Q-network and optimizer state
 - Checkpoint structure is correct
 
 **Process:**
+
 1. Train for 100 episodes
 2. Save checkpoint
 3. Verify checkpoint can be loaded
@@ -159,6 +172,7 @@ uv run pytest tests/test_integration/ -k "test_checkpoint_resume" -v
 **Purpose:** Fast validation that systems work end-to-end
 
 **Characteristics:**
+
 - 200 episodes (~5-8 minutes)
 - Reduced replay buffer (2000 vs 10000)
 - Reduced max steps (200 vs 500)
@@ -167,6 +181,7 @@ uv run pytest tests/test_integration/ -k "test_checkpoint_resume" -v
 - Higher epsilon_min (0.1 vs 0.01)
 
 **Files:**
+
 - `configs/level_1_1_integration_test.yaml`
 - `configs/level_2_1_integration_test.yaml`
 - `configs/level_3_1_integration_test.yaml`
@@ -176,6 +191,7 @@ uv run pytest tests/test_integration/ -k "test_checkpoint_resume" -v
 **Purpose:** Achieve best performance over extended training
 
 **Characteristics:**
+
 - 5000-10000 episodes (hours/days)
 - Full replay buffer (10000)
 - Full episode length (500 steps)
@@ -183,6 +199,7 @@ uv run pytest tests/test_integration/ -k "test_checkpoint_resume" -v
 - Full exploration annealing
 
 **Files:**
+
 - `configs/level_1_full_observability.yaml` (5000 episodes)
 - `configs/level_2_pomdp.yaml` (10000 episodes)
 - `configs/level_3_temporal.yaml` (10000 episodes)
@@ -224,6 +241,7 @@ Integration tests use pytest markers:
 ```
 
 **Filter by markers:**
+
 ```bash
 # Only integration tests
 uv run pytest -m "integration" -v
@@ -285,6 +303,7 @@ tests/test_integration/test_training_levels.py::test_level_3_temporal_integratio
 ### Tests fail with "Config file not found"
 
 Make sure you're running from project root:
+
 ```bash
 cd /home/john/hamlet
 uv run pytest tests/test_integration/ -v
@@ -293,6 +312,7 @@ uv run pytest tests/test_integration/ -v
 ### Tests fail with CUDA out of memory
 
 Edit lite configs to use CPU:
+
 ```yaml
 training:
   device: cpu  # Change from cuda
@@ -303,6 +323,7 @@ training:
 Integration tests are marked `@pytest.mark.slow`. Default timeout is sufficient for lite configs (200 episodes).
 
 If needed, increase timeout:
+
 ```bash
 uv run pytest tests/test_integration/ -v --timeout=600  # 10 minutes per test
 ```
@@ -318,6 +339,7 @@ When adding a new level:
    - Reduced parameters (buffer, steps, thresholds)
 
 2. **Add test function:** `tests/test_integration/test_training_levels.py`
+
    ```python
    @pytest.mark.integration
    @pytest.mark.slow
@@ -327,6 +349,7 @@ When adding a new level:
    ```
 
 3. **Add to config validation test:**
+
    ```python
    config_files = [
        # ... existing configs
@@ -341,16 +364,19 @@ When adding a new level:
 ## Summary
 
 **Fast validation (<1 sec):**
+
 ```bash
 uv run pytest tests/test_integration/ -k "test_all_configs_valid"
 ```
 
 **Full integration (~20 min):**
+
 ```bash
 uv run pytest tests/test_integration/ -v
 ```
 
 **Best practice:**
+
 - Run config validation on every commit
 - Run full integration tests before merging major changes
 - Use lite configs for CI/CD, full configs for production training

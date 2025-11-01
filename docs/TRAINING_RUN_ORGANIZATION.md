@@ -3,11 +3,13 @@
 ## ✅ What Changed
 
 **Before:**
+
 - Config, DB, and checkpoints scattered in project root
 - Hard to track which files belong together
 - Messy git status with training artifacts
 
 **After:**
+
 - Everything organized in `runs/` subdirectories
 - Each run is self-contained and reproducible
 - Clean project root, gitignored automatically

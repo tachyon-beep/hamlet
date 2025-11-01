@@ -12,11 +12,13 @@
 **Purpose:** Fast end-to-end validation without waiting hours
 
 **Files created:**
+
 - `configs/level_1_1_integration_test.yaml` - Full observability (MLP, ~5 min)
 - `configs/level_2_1_integration_test.yaml` - POMDP + LSTM (~8 min)
 - `configs/level_3_1_integration_test.yaml` - Temporal mechanics (~8 min)
 
 **Key differences from production configs:**
+
 - Episodes: 200 (vs 5000-10000)
 - Replay buffer: 2000 (vs 10000)
 - Max steps: 200 (vs 500)
@@ -65,6 +67,7 @@
 **File:** `docs/INTEGRATION_TESTS.md` (336 lines)
 
 **Contents:**
+
 - Quick start commands
 - Detailed test descriptions
 - Expected outcomes for each test
@@ -110,6 +113,7 @@ uv run pytest tests/ -v -m "not slow and not integration"
 ## ✅ Verified Working
 
 **Config validation test passed:**
+
 ```
 tests/test_integration/test_training_levels.py::test_all_configs_valid PASSED
 ✅ configs/level_1_1_integration_test.yaml is valid
@@ -226,6 +230,7 @@ uv run pytest tests/test_integration/ -k "test_all_configs_valid" -q
 ## 🎓 Next Steps
 
 1. **Run integration tests locally:**
+
    ```bash
    uv run pytest tests/test_integration/ -v
    ```
@@ -235,11 +240,13 @@ uv run pytest tests/test_integration/ -k "test_all_configs_valid" -q
 3. **Add to CI/CD pipeline** (optional)
 
 4. **Use lite configs for demos:**
+
    ```bash
    python scripts/start_training_run.py demo_L1 configs/level_1_1_integration_test.yaml
    ```
 
 5. **Continue with Phase 3.5 validation:**
+
    ```bash
    python scripts/start_training_run.py L2_validation configs/level_2_pomdp.yaml
    ```
@@ -258,17 +265,20 @@ uv run pytest tests/test_integration/ -k "test_all_configs_valid" -q
 ## ✨ Summary
 
 **Created:**
+
 - 3 lite training configs (200 episodes each)
 - 5 integration tests (config + 3 levels + checkpoint)
 - Complete documentation
 
 **Benefit:**
+
 - Fast validation (20 min vs hours)
 - CI/CD ready
 - Confidence in changes
 - Teaching demonstrations
 
 **Status:**
+
 - ✅ Config validation test passing
 - ✅ Ready to run full integration tests
 - ✅ Documentation complete

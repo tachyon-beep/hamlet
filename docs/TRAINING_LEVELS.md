@@ -55,12 +55,14 @@ This document defines the progression of complexity levels in the Hamlet RL envi
 ### What Changed from Level 1
 
 **Added:**
+
 - Partial observability (vision_range=2 → 5×5 window)
 - LSTM hidden state for memory
 - Spatial reasoning requirements (build mental map)
 - Target network for temporal credit assignment (ACTION #9)
 
 **Removed:**
+
 - Full grid visibility
 - Stateless decision making
 
@@ -103,6 +105,7 @@ Uses **DRQN (Deep Recurrent Q-Network)** with target network to handle temporal 
 ### What Changed from Level 2
 
 **Added:**
+
 - 24-tick day/night cycle (time_of_day state)
 - Operating hours for affordances (Job: 8am-6pm, Bar: 6pm-4am, etc.)
 - Multi-tick interactions (Bed: 5 ticks for full benefit)
@@ -150,6 +153,7 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 ### Planned Changes
 
 **Added:**
+
 - Multiple interconnected zones (3-5 zones)
 - Zone transitions (doors/gates between zones)
 - Zone-specific affordances (home has Bed, work has Job, etc.)
@@ -188,6 +192,7 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 ### Planned Changes
 
 **Added:**
+
 - Multiple agents (2-4) in same environment
 - Affordance blocking (only 1 agent can use Bed at a time)
 - Social proximity penalty (agents prefer personal space)
@@ -227,6 +232,7 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 ### Planned Changes
 
 **Added:**
+
 - Communication action (broadcast 1 token to nearby agents)
 - Observation includes recent messages from others
 - No predefined meaning (emergent protocol)
@@ -257,21 +263,25 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 ## Pedagogical Progression
 
 **Week 1-2:** Level 1 (Full Observability)
+
 - Students understand the basics: meters, affordances, curriculum
 - Learn about reward shaping pitfalls (proximity hacking)
 - See adversarial curriculum in action
 
 **Week 3-4:** Level 2 (POMDP)
+
 - Introduce partial observability and memory requirements
 - Teach LSTM architectures and target networks
 - Explore exploration vs exploitation tradeoffs
 
 **Week 5-6:** Level 3 (Temporal)
+
 - Add time-based constraints and planning
 - Teach temporal credit assignment
 - Multi-tick interactions and opportunity cost
 
 **Week 7+:** Level 4-6 (Advanced)
+
 - Hierarchical RL, multi-agent systems, emergent communication
 - Graduate-level RL concepts in accessible environment
 
@@ -282,6 +292,7 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 **Format:** `level_<number>_<primary_feature>.yaml`
 
 **Examples:**
+
 - `level_1_full_observability.yaml` - Emphasizes complete information
 - `level_2_pomdp.yaml` - Emphasizes partial observability (POMDP)
 - `level_3_temporal.yaml` - Emphasizes time-based mechanics
@@ -290,6 +301,7 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 - `level_6_communication.yaml` - Emphasizes emergent language
 
 **Deprecated naming:**
+
 - ~~`townlet_level_1_5.yaml`~~ → `level_1_full_observability.yaml`
 - ~~`townlet_level_2_pomdp.yaml`~~ → `level_2_pomdp.yaml`
 - ~~`townlet_level_2_5_temporal.yaml`~~ → `level_3_temporal.yaml`
@@ -333,6 +345,7 @@ python scripts/start_training_run.py L3_temporal configs/level_3_temporal.yaml
 ```
 
 **Success Criteria:**
+
 - Agent survives progressively longer episodes
 - Learning curves show clear improvement
 - Emergent behaviors match level objectives (L3: time-dependent strategies)

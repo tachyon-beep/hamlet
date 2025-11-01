@@ -31,12 +31,12 @@ def main():
         print("See docs/TRAINING_LEVELS.md for level specifications.")
         print()
         print("Examples:")
-        print("  python scripts/start_training_run.py L1_baseline "
-              "configs/level_1_full_observability.yaml")
-        print("  python scripts/start_training_run.py L2_pomdp "
-              "configs/level_2_pomdp.yaml")
-        print("  python scripts/start_training_run.py L3_temporal "
-              "configs/level_3_temporal.yaml")
+        print(
+            "  python scripts/start_training_run.py L1_baseline "
+            "configs/level_1_full_observability.yaml"
+        )
+        print("  python scripts/start_training_run.py L2_pomdp configs/level_2_pomdp.yaml")
+        print("  python scripts/start_training_run.py L3_temporal configs/level_3_temporal.yaml")
         sys.exit(1)
 
     run_name = sys.argv[1]
@@ -49,7 +49,7 @@ def main():
     # Load config to get max_episodes
     with open(config_path) as f:
         config = yaml.safe_load(f)
-    
+
     num_episodes = config.get("training", {}).get("max_episodes")
     if num_episodes is None:
         print("Error: 'training.max_episodes' not found in config file")
@@ -80,7 +80,9 @@ def main():
 
     # Build command
     cmd = [
-        "python", "-m", "townlet.demo.runner",
+        "python",
+        "-m",
+        "townlet.demo.runner",
         str(config_copy),  # Use the copied config
         str(db_path),
         str(checkpoint_dir),

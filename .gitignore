@@ -65,6 +65,10 @@ dmypy.json
 
 # Training artifacts
 checkpoints/
+checkpoints_*/
+test_checkpoints/
+test_checkpoints_*/
+demo_checkpoints/
 logs/
 runs/
 runs_*/

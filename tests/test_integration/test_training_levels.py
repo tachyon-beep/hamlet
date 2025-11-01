@@ -46,7 +46,7 @@ def run_training_pipeline(
     device: torch.device,
 ) -> dict:
     """Run complete training pipeline and return metrics.
-    
+
     Returns:
         dict with keys:
         - final_episode: Last episode number
@@ -57,10 +57,10 @@ def run_training_pipeline(
     # Load config
     config = load_config(config_path)
     max_episodes = config["training"]["max_episodes"]
-    
+
     # Initialize database
     db = DemoDatabase(db_path)
-    
+
     # Create environment
     env_config = config["environment"]
     env = VectorizedHamletEnv(
@@ -70,7 +70,7 @@ def run_training_pipeline(
         vision_range=env_config.get("vision_range", 8),
         enable_temporal_mechanics=env_config.get("enable_temporal_mechanics", False),
     )
-    
+
     # Create curriculum
     curriculum = AdversarialCurriculum(
         device=device,
@@ -80,7 +80,7 @@ def run_training_pipeline(
         entropy_gate=config["curriculum"]["entropy_gate"],
         min_steps_at_stage=config["curriculum"]["min_steps_at_stage"],
     )
-    
+
     # Create exploration strategy
     exploration = AdaptiveIntrinsicExploration(
         observation_dim=env.observation_dim,
@@ -90,7 +90,7 @@ def run_training_pipeline(
         variance_threshold=config["exploration"]["variance_threshold"],
         survival_window=config["exploration"]["survival_window"],
     )
-    
+
     # Create population
     agent_ids = [f"agent_{i}" for i in range(config["population"]["num_agents"])]
     population = VectorizedPopulation(
@@ -106,35 +106,35 @@ def run_training_pipeline(
         replay_buffer_capacity=config["population"]["replay_buffer_capacity"],
         network_type=config["population"]["network_type"],
     )
-    
+
     # Training loop
     survival_times = []
     checkpoints_saved = 0
-    
+
     for episode in range(max_episodes):
         # Run episode
         observations = env.reset()
         done = False
         episode_steps = 0
-        
+
         while not done:
             # Step population
             batch_state = population.step_population(env)
             done = batch_state.dones[0].item()
             episode_steps += 1
-            
+
             if episode_steps >= config["curriculum"]["max_steps_per_episode"]:
                 break
-        
+
         survival_times.append(episode_steps)
-        
+
         # Save checkpoint every 100 episodes
         if (episode + 1) % 100 == 0:
-            checkpoint_path = checkpoint_dir / f"checkpoint_ep{episode+1:05d}.pt"
+            checkpoint_path = checkpoint_dir / f"checkpoint_ep{episode + 1:05d}.pt"
             checkpoint = population.get_checkpoint()
             torch.save(checkpoint, checkpoint_path)
             checkpoints_saved += 1
-        
+
         # Log to database
         db.log_episode(
             episode_id=episode,
@@ -144,11 +144,11 @@ def run_training_pipeline(
             curriculum_stage=1,  # Simplified
             epsilon=0.5,  # Simplified
         )
-    
+
     # Calculate metrics
     avg_survival = sum(survival_times[-20:]) / min(20, len(survival_times))
-    final_stage = curriculum.agent_stages[0].item() if hasattr(curriculum, 'agent_stages') else 1
-    
+    final_stage = curriculum.agent_stages[0].item() if hasattr(curriculum, "agent_stages") else 1
+
     return {
         "final_episode": max_episodes,
         "avg_survival": avg_survival,
@@ -161,9 +161,9 @@ def run_training_pipeline(
 @pytest.mark.slow
 def test_level_1_full_observability_integration(temp_run_dir):
     """Test Level 1 (Full Observability) complete training pipeline.
-    
+
     Duration: ~5 minutes (200 episodes)
-    
+
     Validates:
     - SimpleQNetwork trains without errors
     - Checkpoints can be saved/loaded
@@ -174,27 +174,27 @@ def test_level_1_full_observability_integration(temp_run_dir):
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     # Run training
     metrics = run_training_pipeline(config_path, checkpoint_dir, db_path, device)
-    
+
     # Assertions
     assert metrics["final_episode"] == 200, "Should complete 200 episodes"
     assert metrics["checkpoints_saved"] >= 1, "Should save at least 1 checkpoint"
     assert checkpoint_dir.exists(), "Checkpoint directory should exist"
     assert db_path.exists(), "Database should be created"
-    
+
     # Check checkpoints exist
     checkpoints = list(checkpoint_dir.glob("*.pt"))
     assert len(checkpoints) >= 1, "Should have saved checkpoints"
-    
+
     # Verify checkpoint can be loaded
     checkpoint = torch.load(checkpoints[0], map_location=device)
     assert "q_network" in checkpoint, "Checkpoint should contain Q-network"
     assert "optimizer" in checkpoint, "Checkpoint should contain optimizer"
-    
+
     print(f"\n✅ Level 1 Integration Test PASSED")
     print(f"   Episodes: {metrics['final_episode']}")
     print(f"   Avg survival (last 20): {metrics['avg_survival']:.1f} steps")
@@ -205,9 +205,9 @@ def test_level_1_full_observability_integration(temp_run_dir):
 @pytest.mark.slow
 def test_level_2_pomdp_integration(temp_run_dir):
     """Test Level 2 (POMDP) complete training pipeline.
-    
+
     Duration: ~8 minutes (200 episodes)
-    
+
     Validates:
     - RecurrentSpatialQNetwork trains without errors
     - LSTM hidden state management works
@@ -219,25 +219,25 @@ def test_level_2_pomdp_integration(temp_run_dir):
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     # Run training
     metrics = run_training_pipeline(config_path, checkpoint_dir, db_path, device)
-    
+
     # Assertions
     assert metrics["final_episode"] == 200, "Should complete 200 episodes"
     assert metrics["checkpoints_saved"] >= 1, "Should save at least 1 checkpoint"
-    
+
     # Verify checkpoint structure for recurrent network
     checkpoints = list(checkpoint_dir.glob("*.pt"))
     checkpoint = torch.load(checkpoints[0], map_location=device)
     assert "q_network" in checkpoint, "Checkpoint should contain Q-network"
-    
+
     # Check for target network (ACTION #9)
     if "target_network" in checkpoint:
         print("   ✅ Target network present (ACTION #9 validated)")
-    
+
     print(f"\n✅ Level 2 Integration Test PASSED")
     print(f"   Episodes: {metrics['final_episode']}")
     print(f"   Avg survival (last 20): {metrics['avg_survival']:.1f} steps")
@@ -248,9 +248,9 @@ def test_level_2_pomdp_integration(temp_run_dir):
 @pytest.mark.slow
 def test_level_3_temporal_integration(temp_run_dir):
     """Test Level 3 (Temporal) complete training pipeline.
-    
+
     Duration: ~8 minutes (200 episodes)
-    
+
     Validates:
     - Temporal mechanics work (time-of-day cycles)
     - Multi-tick interactions work
@@ -261,16 +261,16 @@ def test_level_3_temporal_integration(temp_run_dir):
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     # Run training
     metrics = run_training_pipeline(config_path, checkpoint_dir, db_path, device)
-    
+
     # Assertions
     assert metrics["final_episode"] == 200, "Should complete 200 episodes"
     assert metrics["checkpoints_saved"] >= 1, "Should save at least 1 checkpoint"
-    
+
     print(f"\n✅ Level 3 Integration Test PASSED")
     print(f"   Episodes: {metrics['final_episode']}")
     print(f"   Avg survival (last 20): {metrics['avg_survival']:.1f} steps")
@@ -281,7 +281,7 @@ def test_level_3_temporal_integration(temp_run_dir):
 @pytest.mark.slow
 def test_checkpoint_resume(temp_run_dir):
     """Test that training can be resumed from checkpoint.
-    
+
     Validates:
     - Save checkpoint after 100 episodes
     - Load checkpoint and continue training
@@ -291,31 +291,31 @@ def test_checkpoint_resume(temp_run_dir):
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     # Run first half of training
     config = load_config(config_path)
     config["training"]["max_episodes"] = 100
-    
+
     # Save modified config
     temp_config = temp_run_dir / "temp_config.yaml"
     with open(temp_config, "w") as f:
         yaml.dump(config, f)
-    
+
     # First run
     metrics1 = run_training_pipeline(temp_config, checkpoint_dir, db_path, device)
     assert metrics1["final_episode"] == 100
-    
+
     # Check checkpoint exists
     checkpoints = list(checkpoint_dir.glob("*.pt"))
     assert len(checkpoints) >= 1, "Should have checkpoint from first run"
-    
+
     # Second run (in practice would load checkpoint, but we validate it exists)
     checkpoint = torch.load(checkpoints[0], map_location=device)
     assert "q_network" in checkpoint
     assert "optimizer" in checkpoint
-    
+
     print(f"\n✅ Checkpoint Resume Test PASSED")
     print(f"   First run: {metrics1['final_episode']} episodes")
     print(f"   Checkpoint saved and loadable")
@@ -324,7 +324,7 @@ def test_checkpoint_resume(temp_run_dir):
 @pytest.mark.integration
 def test_all_configs_valid():
     """Quick test that all config files are valid YAML and have required fields.
-    
+
     Duration: <1 second
     """
     required_fields = {
@@ -334,7 +334,7 @@ def test_all_configs_valid():
         "exploration": ["embed_dim", "initial_intrinsic_weight"],
         "training": ["device", "max_episodes"],
     }
-    
+
     config_files = [
         "configs/level_1_1_integration_test.yaml",
         "configs/level_2_1_integration_test.yaml",
@@ -343,21 +343,19 @@ def test_all_configs_valid():
         "configs/level_2_pomdp.yaml",
         "configs/level_3_temporal.yaml",
     ]
-    
+
     for config_file in config_files:
         config_path = Path(config_file)
         assert config_path.exists(), f"Config file not found: {config_file}"
-        
+
         # Load and validate
         config = load_config(config_path)
-        
+
         for section, fields in required_fields.items():
             assert section in config, f"{config_file}: Missing section '{section}'"
             for field in fields:
-                assert field in config[section], (
-                    f"{config_file}: Missing field '{section}.{field}'"
-                )
-        
+                assert field in config[section], f"{config_file}: Missing field '{section}.{field}'"
+
         print(f"✅ {config_file} is valid")
-    
+
     print(f"\n✅ All Config Validation Test PASSED")
