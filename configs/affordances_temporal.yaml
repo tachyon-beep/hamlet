@@ -1,0 +1,329 @@
+# affordances_temporal.yaml - Level 2 Temporal Mechanics
+#
+# This file contains multi-tick affordances with time-of-day operating hours.
+# Used for Level 2 POMDP + Temporal training.
+#
+# Benefits Distribution:
+#   - Linear (per-tick): 75% of total effect, distributed evenly
+#   - Completion (bonus): 25% of total effect, applied on final tick
+#
+# Operating Hours:
+#   - Format: [open_hour, close_hour] in 24-hour time
+#   - Wraparound: [18, 28] means 6pm-4am (28 % 24 = 4am)
+#   - Always open: [0, 24]
+
+version: "2.0"
+description: "Multi-tick affordances with temporal mechanics"
+status: "PRODUCTION - Level 2 temporal mechanics"
+
+# Meter definitions (for reference)
+meters:
+  - { id: 0, name: "energy", range: [0.0, 1.0] }
+  - { id: 1, name: "hygiene", range: [0.0, 1.0] }
+  - { id: 2, name: "satiation", range: [0.0, 1.0] }
+  - { id: 3, name: "money", range: [0.0, 1.0] }  # $0-$100 = 0.0-1.0
+  - { id: 4, name: "mood", range: [0.0, 1.0] }
+  - { id: 5, name: "social", range: [0.0, 1.0] }
+  - { id: 6, name: "health", range: [0.0, 1.0] }
+  - { id: 7, name: "fitness", range: [0.0, 1.0] }
+
+affordances:
+  # ============================================================================
+  # 24/7 AFFORDANCES (Always Available)
+  # ============================================================================
+  
+  - id: "0"
+    name: "Bed"
+    category: "energy_restoration"
+    interaction_type: "multi_tick"
+    required_ticks: 5
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.01 }  # $1/tick ($5 total)
+    
+    effects_per_tick:
+      - { meter: "energy", amount: 0.075 }  # 75% of 50% = 37.5%, distributed over 5 ticks
+    
+    completion_bonus:
+      - { meter: "energy", amount: 0.125 }  # 25% of 50% = 12.5%
+      - { meter: "health", amount: 0.02 }
+    
+    operating_hours: [0, 24]  # 24/7
+
+  - id: "1"
+    name: "LuxuryBed"
+    category: "energy_restoration"
+    interaction_type: "multi_tick"
+    required_ticks: 5
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.022 }  # $2.20/tick ($11 total)
+    
+    effects_per_tick:
+      - { meter: "energy", amount: 0.1125 }  # 75% of 75% = 56.25%, distributed
+    
+    completion_bonus:
+      - { meter: "energy", amount: 0.1875 }  # 25% of 75% = 18.75%
+      - { meter: "health", amount: 0.05 }
+    
+    operating_hours: [0, 24]
+
+  - id: "2"
+    name: "Shower"
+    category: "hygiene"
+    interaction_type: "multi_tick"
+    required_ticks: 3
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.01 }  # $1/tick ($3 total)
+    
+    effects_per_tick:
+      - { meter: "hygiene", amount: 0.10 }  # 75% of 40% = 30%, distributed over 3 ticks
+    
+    completion_bonus:
+      - { meter: "hygiene", amount: 0.10 }  # 25% of 40% = 10%
+    
+    operating_hours: [0, 24]
+
+  - id: "3"
+    name: "HomeMeal"
+    category: "satiation"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.015 }  # $1.50/tick ($3 total)
+    
+    effects_per_tick:
+      - { meter: "satiation", amount: 0.16875 }  # 75% of 45% = 33.75%, distributed over 2 ticks
+    
+    completion_bonus:
+      - { meter: "satiation", amount: 0.1125 }  # 25% of 45% = 11.25%
+      - { meter: "health", amount: 0.03 }
+    
+    operating_hours: [0, 24]
+
+  - id: "4"
+    name: "FastFood"
+    category: "satiation"
+    interaction_type: "multi_tick"
+    required_ticks: 1  # Quick!
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.10 }  # $10
+    
+    effects_per_tick:
+      - { meter: "satiation", amount: 0.3375 }  # 75% of 45% in 1 tick
+      - { meter: "energy", amount: 0.1125 }
+    
+    completion_bonus:
+      - { meter: "satiation", amount: 0.1125 }  # 25% of 45%
+      - { meter: "energy", amount: 0.0375 }
+      - { meter: "fitness", amount: -0.03 }  # Penalty
+      - { meter: "health", amount: -0.02 }
+    
+    operating_hours: [0, 24]
+
+  - id: "11"
+    name: "Hospital"
+    category: "health_restoration"
+    interaction_type: "multi_tick"
+    required_ticks: 3
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.05 }  # $5/tick ($15 total)
+    
+    effects_per_tick:
+      - { meter: "health", amount: 0.225 }  # 75% of 60% = 45%, distributed over 3 ticks
+    
+    completion_bonus:
+      - { meter: "health", amount: 0.15 }  # 25% of 60% = 15%
+    
+    operating_hours: [0, 24]
+
+  - id: "9"
+    name: "Gym"
+    category: "fitness"
+    interaction_type: "multi_tick"
+    required_ticks: 4
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.02 }  # $2/tick ($8 total)
+    
+    effects_per_tick:
+      - { meter: "fitness", amount: 0.1125 }  # 75% of 30% = 22.5%, distributed
+      - { meter: "energy", amount: -0.03 }    # Exercise cost
+    
+    completion_bonus:
+      - { meter: "fitness", amount: 0.075 }   # 25% of 30% = 7.5%
+      - { meter: "mood", amount: 0.05 }       # Feel-good endorphins
+    
+    operating_hours: [0, 24]
+
+  # ============================================================================
+  # BUSINESS HOURS (8am-6pm)
+  # ============================================================================
+
+  - id: "5"
+    name: "Job"
+    category: "income"
+    interaction_type: "multi_tick"
+    required_ticks: 4
+    
+    costs_per_tick: []  # Free
+    
+    effects_per_tick:
+      - { meter: "money", amount: 0.084375 }   # 75% of $22.50 (0.1125) = 0.084375, distributed over 4 ticks
+      - { meter: "energy", amount: -0.0375 }   # Work exhaustion
+    
+    completion_bonus:
+      - { meter: "money", amount: 0.028125 }   # 25% of $22.50 (0.1125) = 0.028125
+      - { meter: "social", amount: 0.02 }      # Coworker interaction
+      - { meter: "health", amount: -0.03 }     # Work stress
+    
+    operating_hours: [8, 18]  # 8am-6pm
+
+  - id: "6"
+    name: "Labor"
+    category: "income"
+    interaction_type: "multi_tick"
+    required_ticks: 4
+    
+    costs_per_tick: []  # Free
+    
+    effects_per_tick:
+      - { meter: "money", amount: 0.1125 }     # 75% of $30 (0.15) = 0.1125, distributed over 4 ticks
+      - { meter: "energy", amount: -0.05 }     # More exhausting
+    
+    completion_bonus:
+      - { meter: "money", amount: 0.0375 }     # 25% of $30 (0.15) = 0.0375
+      - { meter: "fitness", amount: -0.05 }    # Physical wear
+      - { meter: "health", amount: -0.05 }     # Injury risk
+      - { meter: "social", amount: 0.01 }      # Minimal
+    
+    operating_hours: [8, 18]
+
+  - id: "10"
+    name: "Doctor"
+    category: "health_restoration"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.04 }  # $4/tick ($8 total)
+    
+    effects_per_tick:
+      - { meter: "health", amount: 0.1125 }  # 75% of 30% = 22.5%, distributed over 2 ticks
+    
+    completion_bonus:
+      - { meter: "health", amount: 0.075 }   # 25% of 30% = 7.5%
+    
+    operating_hours: [8, 18]
+
+  - id: "12"
+    name: "Therapist"
+    category: "mood_restoration"
+    interaction_type: "multi_tick"
+    required_ticks: 3
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.05 }  # $5/tick ($15 total)
+    
+    effects_per_tick:
+      - { meter: "mood", amount: 0.15 }  # 75% of 40% = 30%, distributed over 3 ticks
+    
+    completion_bonus:
+      - { meter: "mood", amount: 0.10 }    # 25% of 40% = 10%
+      - { meter: "social", amount: 0.05 }  # Talking helps
+    
+    operating_hours: [8, 18]
+
+  - id: "7"
+    name: "Recreation"
+    category: "mood_social"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.03 }  # $3/tick ($6 total)
+    
+    effects_per_tick:
+      - { meter: "mood", amount: 0.1125 }    # 75% of 30% = 22.5%, distributed over 2 ticks
+      - { meter: "social", amount: 0.075 }
+    
+    completion_bonus:
+      - { meter: "mood", amount: 0.075 }     # 25% of 30% = 7.5%
+      - { meter: "social", amount: 0.05 }
+    
+    operating_hours: [8, 22]  # 8am-10pm (extended evening)
+
+  # ============================================================================
+  # TIME-DEPENDENT (Special Hours)
+  # ============================================================================
+
+  - id: "8"
+    name: "Bar"
+    category: "social"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    
+    costs_per_tick:
+      - { meter: "money", amount: 0.075 }  # $7.50/round ($15 total)
+    
+    effects_per_tick:
+      - { meter: "social", amount: 0.375 }    # 75% of 50% = 37.5%, distributed over 2 ticks
+      - { meter: "mood", amount: 0.1875 }     # 75% of 25% = 18.75%
+      - { meter: "satiation", amount: 0.225 } # Bar food
+      - { meter: "energy", amount: -0.15 }    # Getting drunk
+      - { meter: "hygiene", amount: -0.1125 } # Getting messy
+    
+    completion_bonus:
+      - { meter: "social", amount: 0.125 }    # 25% of 50% = 12.5%
+      - { meter: "mood", amount: 0.0625 }     # 25% of 25%
+      - { meter: "satiation", amount: 0.075 }
+      - { meter: "energy", amount: -0.05 }    # Hangover starting
+      - { meter: "hygiene", amount: -0.0375 }
+      - { meter: "health", amount: -0.05 }    # Full hangover
+    
+    operating_hours: [18, 28]  # 6pm-4am (wraps midnight!)
+
+  - id: "13"
+    name: "Park"
+    category: "mood_social_fitness"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    
+    costs_per_tick: []  # FREE!
+    
+    effects_per_tick:
+      - { meter: "fitness", amount: 0.1125 }  # 75% of 20% = 15%, distributed over 2 ticks  
+      - { meter: "social", amount: 0.1125 }   # 75% of 15% = 11.25%
+      - { meter: "mood", amount: 0.1125 }     # 75% of 15% = 11.25%
+      - { meter: "energy", amount: -0.0375 }  # Light activity cost
+    
+    completion_bonus:
+      - { meter: "fitness", amount: 0.05 }    # 25% of 20% = 5%
+      - { meter: "social", amount: 0.0375 }   # 25% of 15%
+      - { meter: "mood", amount: 0.0375 }     # 25% of 15%
+    
+    operating_hours: [6, 22]  # 6am-10pm
+
+# Teaching insights
+teaching_insights:
+  multi_tick_mechanics: |
+    Benefits are split 75%/25% between linear (per-tick) and completion (bonus).
+    This creates strategic trade-offs: finish for bonus vs. leave early to avoid opportunity cost.
+    
+  operating_hours: |
+    Wraparound format: [18, 28] = 6pm to 4am (28 % 24 = 4).
+    Agents must plan around time windows, creating temporal strategy.
+    
+  cost_structure: |
+    Cost per tick encourages commitment (sunk cost fallacy) but allows early exit.
+    Example: Bed costs $1/tick, full sleep = $5. Leave after 3 ticks = wasted $3.
+
+implementation_notes:
+  normalization: "All amounts are normalized [0.0, 1.0]. Money: $100 = 1.0, $0 = 0.0"
+  linear_formula: "(total_effect * 0.75) / required_ticks"
+  completion_formula: "total_effect * 0.25"
+  wrapping_logic: "if close_hour > 24: close_hour_adjusted = close_hour % 24"

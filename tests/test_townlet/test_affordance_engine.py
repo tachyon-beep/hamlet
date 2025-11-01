@@ -69,7 +69,7 @@ class TestAffordanceEngineBasics:
         shower = engine.get_affordance("2")  # Shower has ID "2"
         assert shower is not None
         assert shower.name == "Shower"
-        assert shower.interaction_type == "instant"
+        assert shower.interaction_type == "dual"  # All affordances are now dual-mode
 
     def test_affordance_name_to_index_mapping(self, engine):
         """

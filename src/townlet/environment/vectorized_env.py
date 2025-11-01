@@ -7,11 +7,15 @@ environment with tensor operations [num_agents, ...].
 
 import torch
 import numpy as np
+import yaml
+from pathlib import Path
 from typing import Tuple, Optional
 
 from townlet.environment.observation_builder import ObservationBuilder
 from townlet.environment.reward_strategy import RewardStrategy
 from townlet.environment.meter_dynamics import MeterDynamics
+from townlet.environment.affordance_engine import AffordanceEngine
+from townlet.environment.affordance_config import AffordanceConfigCollection
 
 
 class VectorizedHamletEnv:
@@ -109,6 +113,16 @@ class VectorizedHamletEnv:
 
         # Initialize meter dynamics
         self.meter_dynamics = MeterDynamics(num_agents=num_agents, device=device)
+
+        # Initialize affordance engine
+        # Path from src/townlet/environment/ → project root
+        config_path = (
+            Path(__file__).parent.parent.parent.parent / "configs" / "affordances_corrected.yaml"
+        )
+        with open(config_path) as f:
+            config_dict = yaml.safe_load(f)
+        affordance_config = AffordanceConfigCollection.model_validate(config_dict)
+        self.affordance_engine = AffordanceEngine(affordance_config, num_agents, device)
 
         self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
 
@@ -534,154 +548,13 @@ class VectorizedHamletEnv:
             for agent_idx in agent_indices:
                 successful_interactions[agent_idx.item()] = affordance_name
 
-            # Apply affordance effects (matching Hamlet exactly)
-            # NOTE: Money is in range [0, 100] (no debt), so $X = X/100 in normalized [0, 1]
-            if affordance_name == "Bed":
-                # Energy restoration tier 1 (affordable)
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] + 0.50, 0.0, 1.0
-                )  # Energy +50%
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] + 0.02, 0.0, 1.0
-                )  # Health +2%
-                self.meters[at_affordance, 3] -= 0.05  # Money -$5
-            elif affordance_name == "LuxuryBed":
-                # Energy restoration tier 2 (premium rest)
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] + 0.75, 0.0, 1.0
-                )  # Energy +75% (50% more than Bed)
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] + 0.05, 0.0, 1.0
-                )  # Health +5%
-                self.meters[at_affordance, 3] -= 0.11  # Money -$11 (2.2x cost of Bed)
-            elif affordance_name == "Shower":
-                self.meters[at_affordance, 1] = torch.clamp(
-                    self.meters[at_affordance, 1] + 0.4, 0.0, 1.0
-                )  # Hygiene +40%
-                self.meters[at_affordance, 3] -= 0.03  # Money -$3
-            elif affordance_name == "HomeMeal":
-                self.meters[at_affordance, 2] = torch.clamp(
-                    self.meters[at_affordance, 2] + 0.45, 0.0, 1.0
-                )  # Satiation +45%
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] + 0.03, 0.0, 1.0
-                )  # Health +3%
-                self.meters[at_affordance, 3] -= 0.03  # Money -$3
-            elif affordance_name == "Job":
-                # Office work - sustainable income
-                self.meters[at_affordance, 3] += 0.1125  # Money +$22.5
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] - 0.15, 0.0, 1.0
-                )  # Energy -15%
-                self.meters[at_affordance, 5] = torch.clamp(
-                    self.meters[at_affordance, 5] + 0.02, 0.0, 1.0
-                )  # Social +2% (coworker interaction)
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] - 0.03, 0.0, 1.0
-                )  # Health -3% (work stress)
-            elif affordance_name == "Labor":
-                # Physical labor - higher pay, higher costs
-                self.meters[at_affordance, 3] += 0.150  # Money +$30 (33% more than Job)
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] - 0.20, 0.0, 1.0
-                )  # Energy -20% (exhausting)
-                self.meters[at_affordance, 7] = torch.clamp(
-                    self.meters[at_affordance, 7] - 0.05, 0.0, 1.0
-                )  # Fitness -5% (physical wear and tear)
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] - 0.05, 0.0, 1.0
-                )  # Health -5% (injury risk)
-                self.meters[at_affordance, 5] = torch.clamp(
-                    self.meters[at_affordance, 5] + 0.01, 0.0, 1.0
-                )  # Social +1% (minimal - hard physical work)
-            elif affordance_name == "FastFood":
-                self.meters[at_affordance, 2] = torch.clamp(
-                    self.meters[at_affordance, 2] + 0.45, 0.0, 1.0
-                )  # Satiation +45%
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] + 0.15, 0.0, 1.0
-                )  # Energy +15%
-                self.meters[at_affordance, 5] = torch.clamp(
-                    self.meters[at_affordance, 5] + 0.01, 0.0, 1.0
-                )  # Social +1%
-                self.meters[at_affordance, 7] = torch.clamp(
-                    self.meters[at_affordance, 7] - 0.03, 0.0, 1.0
-                )  # Fitness -3% (unhealthy food)
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] - 0.02, 0.0, 1.0
-                )  # Health -2% (junk food)
-                self.meters[at_affordance, 3] -= 0.10  # Money -$10
-            elif affordance_name == "Bar":
-                # Best for social + mood, but health penalty
-                self.meters[at_affordance, 5] = torch.clamp(
-                    self.meters[at_affordance, 5] + 0.5, 0.0, 1.0
-                )  # Social +50% (BEST)
-                self.meters[at_affordance, 4] = torch.clamp(
-                    self.meters[at_affordance, 4] + 0.25, 0.0, 1.0
-                )  # Mood +25%
-                self.meters[at_affordance, 2] = torch.clamp(
-                    self.meters[at_affordance, 2] + 0.3, 0.0, 1.0
-                )  # Satiation +30%
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] - 0.2, 0.0, 1.0
-                )  # Energy -20%
-                self.meters[at_affordance, 1] = torch.clamp(
-                    self.meters[at_affordance, 1] - 0.15, 0.0, 1.0
-                )  # Hygiene -15%
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] - 0.05, 0.0, 1.0
-                )  # Health -5% (late nights, drinking)
-                self.meters[at_affordance, 3] -= 0.15  # Money -$15
-            elif affordance_name == "Recreation":
-                self.meters[at_affordance, 4] = torch.clamp(
-                    self.meters[at_affordance, 4] + 0.25, 0.0, 1.0
-                )  # Mood +25%
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] + 0.12, 0.0, 1.0
-                )  # Energy +12%
-                self.meters[at_affordance, 3] -= 0.06  # Money -$6
-            elif affordance_name == "Gym":
-                # Fitness builder (secondary meter - prevents health decline)
-                self.meters[at_affordance, 7] = torch.clamp(
-                    self.meters[at_affordance, 7] + 0.30, 0.0, 1.0
-                )  # Fitness +30%
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] - 0.08, 0.0, 1.0
-                )  # Energy -8% (workout is tiring)
-                self.meters[at_affordance, 3] -= 0.08  # Money -$8
-            elif affordance_name == "Park":
-                # Free generalist - fitness, social, mood (no direct health)
-                self.meters[at_affordance, 7] = torch.clamp(
-                    self.meters[at_affordance, 7] + 0.20, 0.0, 1.0
-                )  # Fitness +20% (secondary - prevents health decline)
-                self.meters[at_affordance, 5] = torch.clamp(
-                    self.meters[at_affordance, 5] + 0.15, 0.0, 1.0
-                )  # Social +15% (secondary - prevents mood decline)
-                self.meters[at_affordance, 4] = torch.clamp(
-                    self.meters[at_affordance, 4] + 0.15, 0.0, 1.0
-                )  # Mood +15% (primary)
-                self.meters[at_affordance, 0] = torch.clamp(
-                    self.meters[at_affordance, 0] - 0.15, 0.0, 1.0
-                )  # Energy -15% (time/effort cost)
-                # Money: $0 (FREE!)
-            elif affordance_name == "Doctor":
-                # Health restoration tier 1 (affordable clinic)
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] + 0.25, 0.0, 1.0
-                )  # Health +25%
-                self.meters[at_affordance, 3] -= 0.08  # Money -$8
-            elif affordance_name == "Hospital":
-                # Health restoration tier 2 (expensive emergency care)
-                self.meters[at_affordance, 6] = torch.clamp(
-                    self.meters[at_affordance, 6] + 0.40, 0.0, 1.0
-                )  # Health +40% (intensive care)
-                self.meters[at_affordance, 3] -= 0.15  # Money -$15
-            elif affordance_name == "Therapist":
-                # Mood restoration tier 2 (professional mental health)
-                self.meters[at_affordance, 4] = torch.clamp(
-                    self.meters[at_affordance, 4] + 0.40, 0.0, 1.0
-                )  # Mood +40% (intensive therapy)
-                self.meters[at_affordance, 3] -= 0.15  # Money -$15
+            # Apply affordance effects using AffordanceEngine
+            # This replaces ~160 lines of hardcoded elif blocks with a single call!
+            self.meters = self.affordance_engine.apply_interaction(
+                meters=self.meters,
+                affordance_name=affordance_name,
+                agent_mask=at_affordance,
+            )
 
         return successful_interactions
 

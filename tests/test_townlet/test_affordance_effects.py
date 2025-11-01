@@ -402,9 +402,9 @@ class TestJobAffordances:
         actions = torch.tensor([4])
         env.step(actions)
 
-        # Should generate $22.50
+        # Should generate $22.50 (0.225 in normalized units)
         assert env.meters[0, 3] > initial_money
-        assert abs(env.meters[0, 3] - (initial_money + 0.1125)) < 0.01
+        assert abs(env.meters[0, 3] - (initial_money + 0.225)) < 0.01
 
     def test_job_costs_energy(self, env):
         """Job should cost 15% energy (office work)."""

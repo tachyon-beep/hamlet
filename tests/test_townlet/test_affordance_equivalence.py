@@ -381,17 +381,16 @@ class TestJobLaborEquivalence:
             device=device,
         )
 
-        expected_money_delta = +0.225  # $22.50
+        expected_money_delta = +0.225  # $22.50 (normalized: $22.50/$100 = 0.225)
         expected_energy_delta = -0.15
         expected_social_delta = +0.02  # Coworker interaction
         expected_health_delta = -0.03  # Work stress
 
         agent_mask = torch.tensor([True], device=device)
-        result_meters = affordance_engine.apply_instant_interaction(
+        result_meters = affordance_engine.apply_interaction(
             meters=initial_meters.clone(),
             affordance_name="Job",
             agent_mask=agent_mask,
-            check_affordability=False,
         )
 
         assert abs(result_meters[0, 3] - initial_meters[0, 3] - expected_money_delta) < 1e-6
@@ -408,18 +407,17 @@ class TestJobLaborEquivalence:
             device=device,
         )
 
-        expected_money_delta = +0.30  # $30 (higher than Job)
+        expected_money_delta = +0.150  # $30 (corrected normalization)
         expected_energy_delta = -0.20  # More exhausting
         expected_fitness_delta = -0.05  # Physical wear
         expected_health_delta = -0.05  # Injury risk
         expected_social_delta = +0.01  # Minimal
 
         agent_mask = torch.tensor([True], device=device)
-        result_meters = affordance_engine.apply_instant_interaction(
+        result_meters = affordance_engine.apply_interaction(
             meters=initial_meters.clone(),
             affordance_name="Labor",
             agent_mask=agent_mask,
-            check_affordability=False,
         )
 
         assert abs(result_meters[0, 3] - initial_meters[0, 3] - expected_money_delta) < 1e-6

@@ -79,7 +79,7 @@ class AffordanceConfig(BaseModel):
     category: str  # Category (e.g., "energy_restoration", "income")
 
     # Interaction type
-    interaction_type: Literal["instant", "multi_tick", "continuous"]
+    interaction_type: Literal["instant", "multi_tick", "continuous", "dual"]
 
     # Multi-tick specific
     required_ticks: Optional[int] = None  # Number of ticks to complete
@@ -105,15 +105,18 @@ class AffordanceConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_multi_tick_requirements(self) -> "AffordanceConfig":
-        """Ensure multi_tick affordances have required_ticks set."""
+        """Ensure multi_tick and dual affordances have required_ticks set."""
         if self.interaction_type == "multi_tick" and self.required_ticks is None:
             raise ValueError(
                 f"Affordance '{self.id}': multi_tick type requires 'required_ticks' field"
             )
 
-        if self.interaction_type != "multi_tick" and self.required_ticks is not None:
+        if self.interaction_type == "dual" and self.required_ticks is None:
+            raise ValueError(f"Affordance '{self.id}': dual type requires 'required_ticks' field")
+
+        if self.interaction_type not in ["multi_tick", "dual"] and self.required_ticks is not None:
             raise ValueError(
-                f"Affordance '{self.id}': 'required_ticks' only valid for multi_tick type"
+                f"Affordance '{self.id}': 'required_ticks' only valid for multi_tick or dual types"
             )
 
         return self

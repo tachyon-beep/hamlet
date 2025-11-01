@@ -81,7 +81,7 @@ class AffordanceEngine:
 
     def get_affordance(self, affordance_id: str):
         """Get affordance config by ID."""
-        return self.affordance_map.get(affordance_id)
+        return self.affordance_map_by_id.get(affordance_id)
 
     def is_affordance_open(self, affordance_name: str, time_of_day: int) -> bool:
         """
@@ -132,10 +132,10 @@ class AffordanceEngine:
         if affordance is None:
             return meters
 
-        if affordance.interaction_type != "instant":
+        if affordance.interaction_type not in ["instant", "dual"]:
             raise ValueError(
                 f"Affordance '{affordance_name}' is {affordance.interaction_type}, "
-                f"not instant. Use apply_multi_tick_interaction instead."
+                f"not instant or dual. Use apply_multi_tick_interaction instead."
             )
 
         # Clone meters to avoid modifying input
@@ -186,10 +186,10 @@ class AffordanceEngine:
         if affordance is None:
             return meters
 
-        if affordance.interaction_type != "multi_tick":
+        if affordance.interaction_type not in ["multi_tick", "dual"]:
             raise ValueError(
                 f"Affordance '{affordance_name}' is {affordance.interaction_type}, "
-                f"not multi_tick. Use apply_instant_interaction instead."
+                f"not multi_tick or dual. Use apply_instant_interaction instead."
             )
 
         # Clone meters
@@ -318,6 +318,55 @@ class AffordanceEngine:
     def get_num_affordances(self) -> int:
         """Get the number of affordances defined in config."""
         return len(self.affordances)
+
+    def apply_interaction(
+        self,
+        meters: torch.Tensor,
+        affordance_name: str,
+        agent_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Apply affordance effects to agent meters.
+
+        This method applies the effects and costs defined in the config
+        for a given affordance to the specified agents.
+
+        Args:
+            meters: [num_agents, 8] meter values
+            affordance_name: Name of the affordance being interacted with
+            agent_mask: [num_agents] bool mask indicating which agents interact
+
+        Returns:
+            Updated meters tensor [num_agents, 8]
+
+        Raises:
+            ValueError: If affordance_name is not recognized
+        """
+        # Validate affordance exists
+        if affordance_name not in self.affordance_name_to_idx:
+            raise ValueError(f"Unknown affordance: {affordance_name}")
+
+        # Get affordance config
+        affordance = self.affordances[self.affordance_name_to_idx[affordance_name]]
+
+        # Clone meters to avoid in-place modification
+        result_meters = meters.clone()
+
+        # Apply effects (all affordances in corrected config are instant)
+        for effect in affordance.effects:
+            meter_idx = METER_NAME_TO_IDX[effect.meter]
+            result_meters[agent_mask, meter_idx] = torch.clamp(
+                result_meters[agent_mask, meter_idx] + effect.amount,
+                0.0,
+                1.0,
+            )
+
+        # Apply costs
+        for cost in affordance.costs:
+            meter_idx = METER_NAME_TO_IDX[cost.meter]
+            result_meters[agent_mask, meter_idx] -= cost.amount
+
+        return result_meters
 
 
 def create_affordance_engine(

@@ -1,30 +1,68 @@
 # Cleanup Strategy Summary
 
 **Date**: November 1, 2025  
-**Status**: Week 1 COMPLETE! 🎉
+**Status**: ACTION #12 COMPLETE! 🎉 (Phase 3 Cleanup Done)
 
 ## TL;DR
 
-**Current Problem**: Level 2 POMDP is implemented but LSTM doesn't learn effectively (observation mismatch)
+**Today's Win**: ACTION #12 (Configuration-Defined Affordances) COMPLETE with dual-mode support! 🎉
 
-**Why It Matters**: Can't build Levels 3-5 (multi-zone, multi-agent, emergent language) on broken foundation
+**Major Progress**:
 
-**Solution**: Fix LSTM learning (3 weeks) → Validate (1 week) → Prepare for scale (3 weeks) → Add quality (2 weeks)
+- ✅ ACTION #1: Configurable Cascades (add 5 meters in <5 min via YAML)
+- ✅ ACTION #7: Sequential Buffer (discovered as already implemented)
+- ✅ ACTION #12: Config-Defined Affordances (dual-mode: instant + temporal in one file)
 
-**Timeline**: 7-10 weeks to be ready for Level 3 implementation (accelerated!)
+**Status**: Foundation infrastructure 80% complete!
 
-**Week 1 Surprise**: Sequential buffer was ALREADY IMPLEMENTED (29 tests passing, 98% coverage) - timeline accelerated by 1+ weeks!
+- Meter dynamics: ✅ Config-driven
+- Affordances: ✅ Config-driven with dual-mode support
+- LSTM: ✅ Infrastructure ready (29 tests passing)
+- Remaining: Optimize LSTM learning, add target network
+
+**Timeline**: 4-6 weeks remaining to Level 3 readiness (accelerated from 7-10 weeks!)
 
 ---
 
-## 🎉 Week 1 Complete! (November 1, 2025)
+## 🎉 ACTION #12 Complete! (November 1, 2025)
 
-**Major Achievements**:
+**Today's Achievement**: Configuration-Defined Affordances with Dual-Mode Support
 
-- ACTION #1 (Configurable Cascades) COMPLETE ahead of schedule!
-- ACTION #7 (Sequential Buffer) DISCOVERED as already complete! 🎁
+**Major Milestones**:
 
-### What We Built (ACTION #1)
+- ✅ ACTION #12 Phase 3 Cleanup COMPLETE (98.98% test pass rate)
+- ✅ Dual-mode config design (single file for both Level 1 + Level 2)
+- ✅ 388/392 tests passing (only 4 failures, unrelated to affordances)
+
+### What We Built (ACTION #12 - Final Phase)
+
+**Dual-Mode Affordance Configuration**:
+
+- ✅ **Unified Config**: All 14 affordances support both instant AND temporal modes
+- ✅ **Schema Updates**: Pydantic models accept "dual" interaction type
+- ✅ **Engine Updates**: Both `apply_interaction()` and `apply_multi_tick_interaction()` accept dual affordances
+- ✅ **Smart Mode Selection**: Environment picks instant vs temporal based on `enable_temporal_mechanics` flag
+- ✅ **Zero Duplication**: Single source of truth, no need for separate config files
+
+**Test Results**:
+
+- Before: 382/387 tests passing (98.7%)
+- After: 388/392 tests passing (98.98%)
+- Coverage: 73% maintained
+- Failures: 4 integration tests (AdaptiveIntrinsicExploration issue, unrelated to affordances)
+
+**Files Modified**:
+
+- `configs/affordances_corrected.yaml` - Version 2.0, all 14 affordances now dual-mode
+- `src/townlet/environment/affordance_config.py` - Schema accepts "dual" type
+- `src/townlet/environment/affordance_engine.py` - Methods accept dual affordances
+- Tests updated for dual-mode expectations
+
+**Documentation Created**:
+
+- `docs/DUAL_MODE_CONFIG.md` - Complete specification with formulas and examples
+
+### Previous Week 1 Work (ACTION #1)
 
 - ✅ **CascadeEngine**: Config-driven meter dynamics (305 lines, GPU-accelerated)
 - ✅ **YAML Configs**: bars.yaml (109 lines) + cascades.yaml (198 lines)
@@ -117,7 +155,7 @@
 ### Weeks 6-7: Prepare for Level 3
 
 - ✅ **Configurable cascades** (2-3 weeks) - COMPLETE! Add 5 new meters easily
-- 🎯 **Config-defined affordances** (1-2 weeks) - Add 14+ affordances easily
+- ✅ **Config-defined affordances** (1-2 weeks) - COMPLETE! Dual-mode support, 14 affordances ready
 - 🎯 **Target network** (1-2 days) - Stable training for 5K+ episodes
 
 ### Weeks 8-10: Quality (Optional but Recommended)
