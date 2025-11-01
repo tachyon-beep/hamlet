@@ -331,16 +331,19 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 ### Phase 2: Training Metrics (COMPLETE)
 
 **Added to `VectorizedPopulation`:**
+
 - Training metrics tracking (`last_td_error`, `last_loss`, `last_q_values_mean`, `last_training_step`)
 - Metrics captured during both recurrent and feedforward training
 - `get_training_metrics()` method to retrieve current values
 
 **Logged Metrics:**
+
 - **Training/TD_Error** - Temporal difference error (Q-learning convergence indicator)
 - **Training/Loss** - MSE loss between Q-predictions and targets
 - **Training/Q_Values_Mean** - Average Q-value magnitude (detects value explosion)
 
 **Benefits:**
+
 - Debug learning issues (vanishing gradients, Q-value explosion)
 - Monitor convergence in real-time
 - Identify when training plateaus
@@ -348,11 +351,13 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 ### Phase 3: Meter Dynamics & Affordance Tracking (COMPLETE)
 
 **Added to `DemoRunner`:**
+
 - Final meter state capture at episode end
 - Affordance visit tracking throughout episode
 - Per-meter value logging to TensorBoard
 
 **Logged Metrics:**
+
 - **Meters/Energy** - Energy meter final value [0, 1]
 - **Meters/Hygiene** - Hygiene meter final value [0, 1]
 - **Meters/Satiation** - Satiation meter final value [0, 1]
@@ -364,6 +369,7 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 - **Affordances/*** - Visit counts per affordance type
 
 **Benefits:**
+
 - Understand agent behavior patterns (which affordances preferred)
 - Identify meter management strategies
 - Diagnose cascade issues (meters depleting too fast)
@@ -372,12 +378,14 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 ### Phase 4: Hyperparameter Comparison (COMPLETE)
 
 **Added to `DemoRunner`:**
+
 - Hyperparameter dictionary collection at training start
 - Initial logging with empty metrics
 - Final metrics logging at training completion
 - TensorBoard HPARAMS tab integration
 
 **Logged Hyperparameters:**
+
 - `learning_rate` - Neural network learning rate
 - `gamma` - Discount factor (future reward weight)
 - `network_type` - Architecture (simple/recurrent)
@@ -391,10 +399,12 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 - `max_steps_per_episode` - Episode length limit
 
 **Final Metrics:**
+
 - `final_episode` - Total episodes completed
 - `total_training_steps` - Total Q-network updates
 
 **Benefits:**
+
 - Compare multiple runs with different hyperparameters
 - Identify optimal configurations
 - A/B testing of curriculum strategies
@@ -407,6 +417,7 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 ### Now Available in TensorBoard
 
 **Episode Metrics (Phase 1):**
+
 - Episode/Survival_Time
 - Episode/Total_Reward
 - Episode/Extrinsic_Reward (TODO: track separately)
@@ -416,11 +427,13 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 - Exploration/Intrinsic_Weight
 
 **Training Metrics (Phase 2):**
+
 - Training/TD_Error
 - Training/Loss
 - Training/Q_Values_Mean
 
 **Meter Dynamics (Phase 3):**
+
 - Meters/Energy
 - Meters/Hygiene
 - Meters/Satiation
@@ -431,9 +444,11 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 - Meters/Fitness
 
 **Affordance Usage (Phase 3):**
+
 - Affordances/* (per affordance type)
 
 **Hyperparameters (Phase 4):**
+
 - All configuration parameters
 - Final training metrics
 - HPARAMS tab comparison
@@ -443,6 +458,7 @@ TensorBoard is now fully integrated into the Hamlet training system with:
 ## Testing Verification
 
 **Test Run:** 10 episodes with all phases active
+
 - ✅ Phase 1 episode metrics logged
 - ✅ Phase 2 training metrics logged
 - ✅ Phase 3 meter values logged
@@ -475,6 +491,7 @@ tensorboard --logdir checkpoints/tensorboard --port 6006
 ```
 
 **TensorBoard Tabs:**
+
 - **SCALARS** - Time series of all metrics (Episode, Training, Meters, Affordances)
 - **HPARAMS** - Hyperparameter comparison across runs
 - **TIME SERIES** - Compare multiple training runs side-by-side
@@ -528,12 +545,14 @@ tensorboard --logdir_spec \
 ### Code Changes
 
 **File: `src/townlet/population/vectorized.py`**
+
 - Lines 28-32: Added training metrics tracking variables
 - Lines 394-400: Capture metrics during recurrent training
 - Lines 429-435: Capture metrics during feedforward training
 - Lines 521-535: Added `get_training_metrics()` method
 
 **File: `src/townlet/demo/runner.py`**
+
 - Lines 228-246: Phase 4 hyperparameter logging (initialization)
 - Lines 269-312: Phase 3 meter and affordance tracking during episode
 - Lines 340-348: Phase 2 training metrics logging
@@ -543,6 +562,7 @@ tensorboard --logdir_spec \
 ### Performance Impact
 
 **Overhead per Episode:**
+
 - Phase 1 (Episode): ~0.5ms
 - Phase 2 (Training): ~0.2ms per training step
 - Phase 3 (Meters): ~0.3ms
@@ -550,6 +570,7 @@ tensorboard --logdir_spec \
 - **Total:** <2ms per episode (~0.1% of typical episode time)
 
 **Storage per 1000 Episodes:**
+
 - Phase 1: ~10KB
 - Phase 2: ~20KB (depends on training frequency)
 - Phase 3: ~30KB (8 meters + ~15 affordances)
@@ -580,6 +601,7 @@ if self.total_steps % 100 == 0:  # Log every 100 training steps
 ```
 
 **Benefits:**
+
 - Detect vanishing/exploding gradients
 - Monitor weight distribution evolution
 - Identify dead neurons
@@ -600,6 +622,7 @@ if step % 50 == 0:  # Every 50 steps
 ```
 
 **Benefits:**
+
 - Visualize meter trajectories throughout episode
 - Identify critical moments (when meters drop below thresholds)
 - Understand cascade dynamics in detail
@@ -620,6 +643,7 @@ The Hamlet training system now has **comprehensive TensorBoard integration** wit
 - **Phase 4:** Hyperparameter comparison and final metrics
 
 **What This Enables:**
+
 1. **Real-time training visualization** - Watch agents learn live
 2. **Debugging capabilities** - Identify learning issues immediately
 3. **Behavior analysis** - Understand agent strategies from data
@@ -635,6 +659,7 @@ The Hamlet training system now has **comprehensive TensorBoard integration** wit
 ---
 
 **Conclusion:** The Hamlet project now has **enterprise-grade training observability** with minimal overhead. This positions it perfectly for:
+
 - Multi-day training runs (10K+ episodes)
 - Systematic hyperparameter search
 - Curriculum strategy comparison

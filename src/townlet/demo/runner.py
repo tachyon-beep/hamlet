@@ -404,9 +404,7 @@ class DemoRunner:
                 }
                 # Re-log hyperparameters with final metrics for comparison
                 if hasattr(self, "hparams"):
-                    self.tb_logger.log_hyperparameters(
-                        hparams=self.hparams, metrics=final_metrics
-                    )
+                    self.tb_logger.log_hyperparameters(hparams=self.hparams, metrics=final_metrics)
 
             self.db.set_system_state("training_status", "completed")
             self.db.close()

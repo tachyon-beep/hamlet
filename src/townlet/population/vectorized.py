@@ -519,7 +519,7 @@ class VectorizedPopulation(PopulationManager):
 
     def get_training_metrics(self) -> dict:
         """Get recent training metrics for logging.
-        
+
         Returns:
             Dictionary with TD error, loss, Q-values mean, and training step.
             Returns None values if no training has occurred yet.
