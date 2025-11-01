@@ -20,7 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 class TensorBoardLogger:
     """Logs Hamlet training metrics to TensorBoard.
-    
+
     Tracks per-episode and per-step metrics for:
     - Survival time and rewards
     - Learning progress (Q-values, TD error, losses)
@@ -28,7 +28,7 @@ class TensorBoardLogger:
     - Curriculum progression
     - Meter dynamics (agent health, resource management)
     - Network gradients and weights
-    
+
     Example:
         >>> logger = TensorBoardLogger(log_dir="runs/experiment_1")
         >>> logger.log_episode(
@@ -53,7 +53,7 @@ class TensorBoardLogger:
         log_histograms: bool = True,
     ):
         """Initialize TensorBoard logger.
-        
+
         Args:
             log_dir: Directory for TensorBoard logs (e.g., "runs/exp_name")
             flush_every: Flush to disk every N episodes (default: 10)
@@ -62,16 +62,16 @@ class TensorBoardLogger:
         """
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.writer = SummaryWriter(str(self.log_dir))
         self.flush_every = flush_every
         self.log_gradients = log_gradients
         self.log_histograms = log_histograms
-        
+
         # Track last flush
         self.last_flush_episode = 0
         self.episodes_logged = 0
-        
+
     def log_episode(
         self,
         episode: int,
@@ -85,7 +85,7 @@ class TensorBoardLogger:
         agent_id: str = "agent_0",
     ):
         """Log per-episode metrics.
-        
+
         Args:
             episode: Episode number (x-axis)
             survival_time: Steps survived
@@ -98,30 +98,30 @@ class TensorBoardLogger:
             agent_id: Agent identifier for multi-agent scenarios
         """
         prefix = f"{agent_id}/" if agent_id else ""
-        
+
         # Core metrics
         self.writer.add_scalar(f"{prefix}Episode/Survival_Time", survival_time, episode)
         self.writer.add_scalar(f"{prefix}Episode/Total_Reward", total_reward, episode)
         self.writer.add_scalar(f"{prefix}Episode/Extrinsic_Reward", extrinsic_reward, episode)
         self.writer.add_scalar(f"{prefix}Episode/Intrinsic_Reward", intrinsic_reward, episode)
-        
+
         # Learning progress indicators
         self.writer.add_scalar(f"{prefix}Curriculum/Stage", curriculum_stage, episode)
         self.writer.add_scalar(f"{prefix}Exploration/Epsilon", epsilon, episode)
         self.writer.add_scalar(f"{prefix}Exploration/Intrinsic_Weight", intrinsic_weight, episode)
-        
+
         # Derived metrics
         if total_reward != 0:
             intrinsic_ratio = intrinsic_reward / total_reward if total_reward != 0 else 0
             self.writer.add_scalar(f"{prefix}Episode/Intrinsic_Ratio", intrinsic_ratio, episode)
-        
+
         self.episodes_logged += 1
-        
+
         # Auto-flush
         if self.episodes_logged % self.flush_every == 0:
             self.writer.flush()
             self.last_flush_episode = episode
-    
+
     def log_training_step(
         self,
         step: int,
@@ -132,7 +132,7 @@ class TensorBoardLogger:
         agent_id: str = "agent_0",
     ):
         """Log per-training-step metrics.
-        
+
         Args:
             step: Global training step
             td_error: Temporal difference error
@@ -142,21 +142,21 @@ class TensorBoardLogger:
             agent_id: Agent identifier
         """
         prefix = f"{agent_id}/" if agent_id else ""
-        
+
         if td_error is not None:
             self.writer.add_scalar(f"{prefix}Training/TD_Error", td_error, step)
-        
+
         if loss is not None:
             self.writer.add_scalar(f"{prefix}Training/Loss", loss, step)
-        
+
         if rnd_prediction_error is not None:
             self.writer.add_scalar(f"{prefix}Training/RND_Error", rnd_prediction_error, step)
-        
+
         if q_values is not None and self.log_histograms:
             self.writer.add_histogram(f"{prefix}Training/Q_Values", q_values, step)
             self.writer.add_scalar(f"{prefix}Training/Q_Mean", q_values.mean().item(), step)
             self.writer.add_scalar(f"{prefix}Training/Q_Std", q_values.std().item(), step)
-    
+
     def log_meters(
         self,
         episode: int,
@@ -165,7 +165,7 @@ class TensorBoardLogger:
         agent_id: str = "agent_0",
     ):
         """Log agent meter values (health, energy, etc.).
-        
+
         Args:
             episode: Current episode
             step: Step within episode
@@ -173,17 +173,13 @@ class TensorBoardLogger:
             agent_id: Agent identifier
         """
         prefix = f"{agent_id}/" if agent_id else ""
-        
+
         # Use episode*1000 + step as x-axis for fine-grained tracking
         global_step = episode * 1000 + step
-        
+
         for meter_name, value in meters.items():
-            self.writer.add_scalar(
-                f"{prefix}Meters/{meter_name.capitalize()}",
-                value,
-                global_step
-            )
-    
+            self.writer.add_scalar(f"{prefix}Meters/{meter_name.capitalize()}", value, global_step)
+
     def log_network_stats(
         self,
         episode: int,
@@ -193,7 +189,7 @@ class TensorBoardLogger:
         agent_id: str = "agent_0",
     ):
         """Log network weights, gradients, and optimizer state.
-        
+
         Args:
             episode: Current episode
             q_network: Main Q-network
@@ -203,33 +199,29 @@ class TensorBoardLogger:
         """
         if not self.log_histograms and not self.log_gradients:
             return
-        
+
         prefix = f"{agent_id}/" if agent_id else ""
-        
+
         # Log weight distributions
         if self.log_histograms:
             for name, param in q_network.named_parameters():
                 clean_name = name.replace(".", "/")
-                self.writer.add_histogram(
-                    f"{prefix}Weights/{clean_name}",
-                    param.data,
-                    episode
-                )
-        
+                self.writer.add_histogram(f"{prefix}Weights/{clean_name}", param.data, episode)
+
         # Log gradient norms
         if self.log_gradients:
             total_norm = 0.0
             for param in q_network.parameters():
                 if param.grad is not None:
                     total_norm += param.grad.data.norm(2).item() ** 2
-            total_norm = total_norm ** 0.5
+            total_norm = total_norm**0.5
             self.writer.add_scalar(f"{prefix}Gradients/Total_Norm", total_norm, episode)
-        
+
         # Log learning rate
         if optimizer is not None:
-            lr = optimizer.param_groups[0]['lr']
+            lr = optimizer.param_groups[0]["lr"]
             self.writer.add_scalar(f"{prefix}Training/Learning_Rate", lr, episode)
-    
+
     def log_affordance_usage(
         self,
         episode: int,
@@ -237,21 +229,17 @@ class TensorBoardLogger:
         agent_id: str = "agent_0",
     ):
         """Log affordance usage statistics.
-        
+
         Args:
             episode: Current episode
             affordance_counts: Dict of affordance_name -> visit_count
             agent_id: Agent identifier
         """
         prefix = f"{agent_id}/" if agent_id else ""
-        
+
         for affordance, count in affordance_counts.items():
-            self.writer.add_scalar(
-                f"{prefix}Affordances/{affordance}",
-                count,
-                episode
-            )
-    
+            self.writer.add_scalar(f"{prefix}Affordances/{affordance}", count, episode)
+
     def log_custom_metric(
         self,
         tag: str,
@@ -260,7 +248,7 @@ class TensorBoardLogger:
         agent_id: str = "agent_0",
     ):
         """Log custom metric (catch-all for experiments).
-        
+
         Args:
             tag: Metric name (e.g., "Debug/StateEntropy")
             value: Metric value
@@ -269,29 +257,29 @@ class TensorBoardLogger:
         """
         prefix = f"{agent_id}/" if agent_id else ""
         self.writer.add_scalar(f"{prefix}{tag}", value, step)
-    
+
     def log_hyperparameters(self, hparams: Dict[str, Any], metrics: Dict[str, float]):
         """Log hyperparameters and final metrics for comparison.
-        
+
         Args:
             hparams: Hyperparameter dict (e.g., learning_rate, gamma)
             metrics: Final metric dict (e.g., final_reward, final_survival)
         """
         self.writer.add_hparams(hparams, metrics)
-    
+
     def flush(self):
         """Force flush all pending writes to disk."""
         self.writer.flush()
-    
+
     def close(self):
         """Close writer and flush all pending writes."""
         self.writer.flush()
         self.writer.close()
-    
+
     def __enter__(self):
         """Context manager entry."""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit (auto-close)."""
         self.close()

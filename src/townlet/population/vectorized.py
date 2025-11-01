@@ -75,6 +75,12 @@ class VectorizedPopulation(PopulationManager):
         self.network_type = network_type
         self.is_recurrent = network_type == "recurrent"
 
+        # Training metrics (for TensorBoard logging)
+        self.last_td_error = 0.0
+        self.last_loss = 0.0
+        self.last_q_values_mean = 0.0
+        self.last_training_step = 0
+
         # Q-network (shared across all agents for now)
         if network_type == "recurrent":
             self.q_network = RecurrentSpatialQNetwork(
@@ -387,6 +393,13 @@ class VectorizedPopulation(PopulationManager):
                 q_target_all = torch.stack(q_target_list, dim=1)  # [batch, seq_len]
                 loss = F.mse_loss(q_pred_all, q_target_all)
 
+                # Store training metrics
+                with torch.no_grad():
+                    self.last_td_error = (q_target_all - q_pred_all).abs().mean().item()
+                    self.last_loss = loss.item()
+                    self.last_q_values_mean = q_pred_all.mean().item()
+                    self.last_training_step = self.total_steps
+
                 # Backprop and optimize
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -415,6 +428,13 @@ class VectorizedPopulation(PopulationManager):
                     q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
 
                 loss = F.mse_loss(q_pred, q_target)
+
+                # Store training metrics
+                with torch.no_grad():
+                    self.last_td_error = (q_target - q_pred).abs().mean().item()
+                    self.last_loss = loss.item()
+                    self.last_q_values_mean = q_pred.mean().item()
+                    self.last_training_step = self.total_steps
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -492,17 +512,24 @@ class VectorizedPopulation(PopulationManager):
 
         return state
 
-    def update_curriculum_tracker(self, rewards: torch.Tensor, dones: torch.Tensor):
-        """Update curriculum performance tracking after step.
-
-        Call this after step_population if using AdversarialCurriculum.
-
-        Args:
-            rewards: Rewards from environment step
-            dones: Done flags from environment step
-        """
+    def update_curriculum_tracker(self, rewards: torch.Tensor, dones: torch.Tensor) -> None:
+        """Update curriculum tracker with episode rewards/dones."""
         if hasattr(self.curriculum, "tracker") and self.curriculum.tracker is not None:
             self.curriculum.tracker.update_step(rewards, dones)
+
+    def get_training_metrics(self) -> dict:
+        """Get recent training metrics for logging.
+        
+        Returns:
+            Dictionary with TD error, loss, Q-values mean, and training step.
+            Returns None values if no training has occurred yet.
+        """
+        return {
+            "td_error": self.last_td_error,
+            "loss": self.last_loss,
+            "q_values_mean": self.last_q_values_mean,
+            "training_step": self.last_training_step,
+        }
 
     def get_checkpoint(self) -> PopulationCheckpoint:
         """

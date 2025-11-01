@@ -178,6 +178,7 @@ tb_logger.log_episode(
 ```
 
 **TensorBoard Panels:**
+
 - `Episode/Survival_Time` - Learning curve
 - `Episode/Total_Reward` - Cumulative reward
 - `Episode/Intrinsic_Ratio` - Novelty vs environment reward
@@ -200,6 +201,7 @@ tb_logger.log_training_step(
 ```
 
 **TensorBoard Panels:**
+
 - `Training/TD_Error` - Value function learning
 - `Training/Loss` - DQN loss curve
 - `Training/Q_Mean` - Average Q-value (check for divergence)
@@ -228,6 +230,7 @@ tb_logger.log_meters(
 ```
 
 **TensorBoard Panels:**
+
 - `Meters/Health`, `Meters/Energy`, etc. - Meter trajectories over time
 - Use for debugging cascade effects and death conditions
 
@@ -245,6 +248,7 @@ tb_logger.log_network_stats(
 ```
 
 **TensorBoard Panels:**
+
 - `Weights/*` - Weight distributions (histograms)
 - `Gradients/Total_Norm` - Gradient explosion/vanishing detection
 - `Training/Learning_Rate` - LR schedule visualization
@@ -410,6 +414,7 @@ if episode % 100 == 0:
 | Use case | Production data | Development | Experiment tracking |
 
 **Recommendation:** Use all three!
+
 - **SQLite**: Permanent production data, queries
 - **TensorBoard**: Real-time development, debugging
 - **MLflow**: Experiment comparison, hyperparameter sweeps
@@ -497,6 +502,7 @@ tensorboard --logdir test_checkpoints/tensorboard
 ```
 
 You should see:
+
 - Episode/Survival_Time curve
 - Episode/Total_Reward curve
 - Curriculum/Stage progression
@@ -512,6 +518,7 @@ You should see:
 
 **Issue:** "TensorBoard shows old data"  
 **Solution:** Delete the log directory or create a new one with a timestamp:
+
 ```python
 log_dir=f"runs/exp_{int(time.time())}"
 ```

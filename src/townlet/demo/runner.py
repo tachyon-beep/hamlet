@@ -13,6 +13,7 @@ from townlet.population.vectorized import VectorizedPopulation
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+from townlet.training.tensorboard_logger import TensorBoardLogger
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,13 @@ class DemoRunner:
         # Initialize database
         self.db = DemoDatabase(self.db_path)
 
+        # Initialize TensorBoard logger
+        tb_log_dir = self.checkpoint_dir / "tensorboard"
+        self.tb_logger = TensorBoardLogger(
+            log_dir=tb_log_dir,
+            flush_every=10,
+        )
+
         # Load config
         with open(self.config_path) as f:
             self.config = yaml.safe_load(f)
@@ -73,26 +81,26 @@ class DemoRunner:
 
         # For now, just save episode number (full checkpoint implementation later)
         checkpoint = {
-            'episode': self.current_episode,
-            'timestamp': time.time(),
+            "episode": self.current_episode,
+            "timestamp": time.time(),
         }
 
         # Add population state if initialized
         if self.population:
-            checkpoint['population_state'] = {
-                'q_network': self.population.q_network.state_dict(),
-                'optimizer': self.population.optimizer.state_dict(),
+            checkpoint["population_state"] = {
+                "q_network": self.population.q_network.state_dict(),
+                "optimizer": self.population.optimizer.state_dict(),
             }
 
             # Add exploration state
-            if hasattr(self.population.exploration, 'checkpoint_state'):
-                checkpoint['exploration_state'] = self.population.exploration.checkpoint_state()
+            if hasattr(self.population.exploration, "checkpoint_state"):
+                checkpoint["exploration_state"] = self.population.exploration.checkpoint_state()
 
         torch.save(checkpoint, checkpoint_path)
         logger.info(f"Checkpoint saved: {checkpoint_path}")
 
         # Update system state
-        self.db.set_system_state('last_checkpoint', str(checkpoint_path))
+        self.db.set_system_state("last_checkpoint", str(checkpoint_path))
 
     def load_checkpoint(self) -> Optional[int]:
         """Load latest checkpoint if exists.
@@ -110,17 +118,17 @@ class DemoRunner:
         logger.info(f"Loading checkpoint: {latest_checkpoint}")
 
         checkpoint = torch.load(latest_checkpoint, weights_only=False)
-        self.current_episode = checkpoint['episode']
+        self.current_episode = checkpoint["episode"]
 
         # Load population state if present
-        if 'population_state' in checkpoint and self.population:
-            self.population.q_network.load_state_dict(checkpoint['population_state']['q_network'])
-            self.population.optimizer.load_state_dict(checkpoint['population_state']['optimizer'])
+        if "population_state" in checkpoint and self.population:
+            self.population.q_network.load_state_dict(checkpoint["population_state"]["q_network"])
+            self.population.optimizer.load_state_dict(checkpoint["population_state"]["optimizer"])
 
         # Load exploration state if present
-        if 'exploration_state' in checkpoint and self.population:
-            if hasattr(self.population.exploration, 'load_state'):
-                self.population.exploration.load_state(checkpoint['exploration_state'])
+        if "exploration_state" in checkpoint and self.population:
+            if hasattr(self.population.exploration, "load_state"):
+                self.population.exploration.load_state(checkpoint["exploration_state"])
 
         logger.info(f"Resumed from episode {self.current_episode}")
         return self.current_episode
@@ -132,20 +140,20 @@ class DemoRunner:
         logger.info(f"Checkpoints: {self.checkpoint_dir}")
 
         # Initialize training components
-        device_str = self.config.get('training', {}).get('device', 'cuda')
-        device = torch.device(device_str if torch.cuda.is_available() else 'cpu')
+        device_str = self.config.get("training", {}).get("device", "cuda")
+        device = torch.device(device_str if torch.cuda.is_available() else "cpu")
 
         # Extract config parameters
-        curriculum_cfg = self.config.get('curriculum', {})
-        exploration_cfg = self.config.get('exploration', {})
-        population_cfg = self.config.get('population', {})
-        environment_cfg = self.config.get('environment', {})
+        curriculum_cfg = self.config.get("curriculum", {})
+        exploration_cfg = self.config.get("exploration", {})
+        population_cfg = self.config.get("population", {})
+        environment_cfg = self.config.get("environment", {})
 
         # Get environment parameters from config
-        num_agents = population_cfg.get('num_agents', 1)
-        grid_size = environment_cfg.get('grid_size', 8)
-        partial_observability = environment_cfg.get('partial_observability', False)
-        vision_range = environment_cfg.get('vision_range', 2)
+        num_agents = population_cfg.get("num_agents", 1)
+        grid_size = environment_cfg.get("grid_size", 8)
+        partial_observability = environment_cfg.get("partial_observability", False)
+        vision_range = environment_cfg.get("vision_range", 2)
 
         # Create environment FIRST (need it to auto-detect dimensions)
         self.env = VectorizedHamletEnv(
@@ -162,29 +170,31 @@ class DemoRunner:
 
         # Create curriculum
         self.curriculum = AdversarialCurriculum(
-            max_steps_per_episode=curriculum_cfg.get('max_steps_per_episode', 500),
-            survival_advance_threshold=curriculum_cfg.get('survival_advance_threshold', 0.7),
-            survival_retreat_threshold=curriculum_cfg.get('survival_retreat_threshold', 0.3),
-            entropy_gate=curriculum_cfg.get('entropy_gate', 0.5),
-            min_steps_at_stage=curriculum_cfg.get('min_steps_at_stage', 1000),
+            max_steps_per_episode=curriculum_cfg.get("max_steps_per_episode", 500),
+            survival_advance_threshold=curriculum_cfg.get("survival_advance_threshold", 0.7),
+            survival_retreat_threshold=curriculum_cfg.get("survival_retreat_threshold", 0.3),
+            entropy_gate=curriculum_cfg.get("entropy_gate", 0.5),
+            min_steps_at_stage=curriculum_cfg.get("min_steps_at_stage", 1000),
             device=device,
         )
 
         # Create exploration (use auto-detected obs_dim)
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
-            embed_dim=exploration_cfg.get('embed_dim', 128),
-            initial_intrinsic_weight=exploration_cfg.get('initial_intrinsic_weight', 1.0),
-            variance_threshold=exploration_cfg.get('variance_threshold', 100.0),  # Increased from 10.0
-            survival_window=exploration_cfg.get('survival_window', 100),
+            embed_dim=exploration_cfg.get("embed_dim", 128),
+            initial_intrinsic_weight=exploration_cfg.get("initial_intrinsic_weight", 1.0),
+            variance_threshold=exploration_cfg.get(
+                "variance_threshold", 100.0
+            ),  # Increased from 10.0
+            survival_window=exploration_cfg.get("survival_window", 100),
             device=device,
         )
 
         # Get population parameters from config
-        learning_rate = population_cfg.get('learning_rate', 0.00025)
-        gamma = population_cfg.get('gamma', 0.99)
-        replay_buffer_capacity = population_cfg.get('replay_buffer_capacity', 10000)
-        network_type = population_cfg.get('network_type', 'simple')  # 'simple' or 'recurrent'
+        learning_rate = population_cfg.get("learning_rate", 0.00025)
+        gamma = population_cfg.get("gamma", 0.99)
+        replay_buffer_capacity = population_cfg.get("replay_buffer_capacity", 10000)
+        network_type = population_cfg.get("network_type", "simple")  # 'simple' or 'recurrent'
         vision_window_size = 2 * vision_range + 1  # 5 for vision_range=2
 
         # Create agent IDs
@@ -213,9 +223,26 @@ class DemoRunner:
         if loaded_episode is not None:
             self.current_episode = loaded_episode + 1
 
+        # Phase 4 - Log hyperparameters to TensorBoard
+        self.hparams = {
+            "learning_rate": learning_rate,
+            "gamma": gamma,
+            "network_type": network_type,
+            "replay_buffer_capacity": replay_buffer_capacity,
+            "grid_size": environment_cfg.get("grid_size", 8),
+            "partial_observability": environment_cfg.get("partial_observability", False),
+            "vision_range": vision_range,
+            "enable_temporal": environment_cfg.get("enable_temporal_mechanics", False),
+            "initial_intrinsic_weight": exploration_cfg.get("initial_intrinsic_weight", 1.0),
+            "variance_threshold": exploration_cfg.get("variance_threshold", 100.0),
+            "max_steps_per_episode": curriculum_cfg.get("max_steps_per_episode", 500),
+        }
+        # Note: final metrics will be logged at end of training
+        self.tb_logger.log_hyperparameters(hparams=self.hparams, metrics={})
+
         # Mark training started
-        self.db.set_system_state('training_status', 'running')
-        self.db.set_system_state('start_time', str(time.time()))
+        self.db.set_system_state("training_status", "running")
+        self.db.set_system_state("start_time", str(time.time()))
 
         # Training loop
         try:
@@ -241,9 +268,10 @@ class DemoRunner:
 
                     # Mark in database
                     import json
-                    self.db.set_system_state('affordance_randomization_episode', '5000')
-                    self.db.set_system_state('old_affordance_positions', json.dumps(old_positions))
-                    self.db.set_system_state('new_affordance_positions', json.dumps(new_positions))
+
+                    self.db.set_system_state("affordance_randomization_episode", "5000")
+                    self.db.set_system_state("old_affordance_positions", json.dumps(old_positions))
+                    self.db.set_system_state("new_affordance_positions", json.dumps(new_positions))
 
                 # Reset environment and population
                 self.env.reset()
@@ -254,15 +282,34 @@ class DemoRunner:
                 episode_reward = 0.0
                 max_steps = 500
 
+                # Track meters and affordances for Phase 3
+                final_meters = None
+                affordance_visits = {}
+
                 for step in range(max_steps):
                     agent_state = self.population.step_population(self.env)
-                    self.population.update_curriculum_tracker(agent_state.rewards, agent_state.dones)
+                    self.population.update_curriculum_tracker(
+                        agent_state.rewards, agent_state.dones
+                    )
 
                     survival_time += 1
                     episode_reward += agent_state.rewards[0].item()
 
+                    # Track affordance usage
+                    if hasattr(self.env, "last_interaction_affordances"):
+                        for affordance_name in self.env.last_interaction_affordances:
+                            affordance_visits[affordance_name] = (
+                                affordance_visits.get(affordance_name, 0) + 1
+                            )
+
                     if agent_state.dones[0]:
+                        # Capture final meters before reset
+                        final_meters = self.env.meters[0].cpu()
                         break
+
+                # If episode didn't end, capture current meters
+                if final_meters is None:
+                    final_meters = self.env.meters[0].cpu()
 
                 # Log metrics to database
                 self.db.insert_episode(
@@ -276,6 +323,55 @@ class DemoRunner:
                     curriculum_stage=self.curriculum.tracker.agent_stages[0].item(),
                     epsilon=self.exploration.rnd.epsilon,
                 )
+
+                # Log to TensorBoard (Phase 1 - Episode metrics)
+                self.tb_logger.log_episode(
+                    episode=self.current_episode,
+                    survival_time=survival_time,
+                    total_reward=episode_reward,
+                    extrinsic_reward=0.0,  # TODO: track separately
+                    intrinsic_reward=0.0,  # TODO: track separately
+                    curriculum_stage=int(self.curriculum.tracker.agent_stages[0].item()),
+                    epsilon=self.exploration.rnd.epsilon,
+                    intrinsic_weight=self.exploration.get_intrinsic_weight(),
+                )
+
+                # Phase 2 - Training metrics (if training occurred this episode)
+                training_metrics = self.population.get_training_metrics()
+                if training_metrics["training_step"] > 0:
+                    self.tb_logger.log_training_step(
+                        step=training_metrics["training_step"],
+                        td_error=training_metrics["td_error"],
+                        loss=training_metrics["loss"],
+                    )
+
+                # Phase 3 - Meter dynamics and affordance usage
+                if final_meters is not None:
+                    # Convert meter names to indices (energy, hygiene, satiation, money, mood, social, health, fitness)
+                    meter_names = [
+                        "energy",
+                        "hygiene",
+                        "satiation",
+                        "money",
+                        "mood",
+                        "social",
+                        "health",
+                        "fitness",
+                    ]
+                    meter_dict = {
+                        name: final_meters[i].item() for i, name in enumerate(meter_names)
+                    }
+                    self.tb_logger.log_meters(
+                        episode=self.current_episode,
+                        step=survival_time,
+                        meters=meter_dict,
+                    )
+
+                # Log affordance usage
+                if affordance_visits:
+                    self.tb_logger.log_affordance_usage(
+                        episode=self.current_episode, affordance_counts=affordance_visits
+                    )
 
                 # Heartbeat log every 10 episodes
                 if self.current_episode % 10 == 0:
@@ -299,15 +395,32 @@ class DemoRunner:
             # Save final checkpoint
             logger.info("Training complete, saving final checkpoint...")
             self.save_checkpoint()
-            self.db.set_system_state('training_status', 'completed')
+
+            # Phase 4 - Log final metrics with hyperparameters
+            if self.population is not None:
+                final_metrics = {
+                    "final_episode": self.current_episode,
+                    "total_training_steps": self.population.total_steps,
+                }
+                # Re-log hyperparameters with final metrics for comparison
+                if hasattr(self, "hparams"):
+                    self.tb_logger.log_hyperparameters(
+                        hparams=self.hparams, metrics=final_metrics
+                    )
+
+            self.db.set_system_state("training_status", "completed")
             self.db.close()
 
+            # Close TensorBoard logger
+            self.tb_logger.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import sys
+
     logging.basicConfig(
         level=logging.INFO,
-        format='[%(asctime)s] %(levelname)s: %(message)s',
+        format="[%(asctime)s] %(levelname)s: %(message)s",
     )
 
     # Get paths from environment or args
