@@ -445,13 +445,16 @@ class LiveInferenceServer:
 
         # Episode complete - calculate performance vs baseline
         performance_vs_baseline = self.current_step - baseline_survival
+        
+        # Calculate final reward using baseline-relative formula: reward = steps_lived - R
+        final_reward = float(self.current_step) - baseline_survival
 
         await self._broadcast_to_clients(
             {
                 "type": "episode_end",
                 "episode": self.current_episode,
                 "steps": self.current_step,
-                "total_reward": cumulative_reward,
+                "total_reward": final_reward,  # Use baseline-relative reward
                 "reason": "done" if done else "max_steps",
                 "checkpoint": f"checkpoint_ep{self.current_checkpoint_episode:05d}",
                 "checkpoint_episode": self.current_checkpoint_episode,
@@ -465,7 +468,7 @@ class LiveInferenceServer:
 
         logger.info(
             f"Episode {self.current_episode} complete: {self.current_step} steps, "
-            f"reward: {cumulative_reward:.2f}, baseline: {baseline_survival:.1f}, "
+            f"reward: {final_reward:.2f}, baseline: {baseline_survival:.1f}, "
             f"vs baseline: {performance_vs_baseline:+.1f}"
         )
 
@@ -511,11 +514,16 @@ class LiveInferenceServer:
             {"name": name, "count": count} for name, count in sorted(self.affordance_interactions.items(), key=lambda x: x[1], reverse=True)
         ]
 
+        # Calculate projected reward based on current progress
+        baseline_survival = self.env.reward_strategy.baseline_survival_steps
+        projected_reward = float(self.current_step) - baseline_survival
+        
         # Build state update message
         update = {
             "type": "state_update",
             "step": self.current_step,
             "cumulative_reward": cumulative_reward,
+            "projected_reward": projected_reward,  # Current steps - baseline (real-time learning signal)
             "grid": {
                 "width": self.env.grid_size,
                 "height": self.env.grid_size,
@@ -537,7 +545,7 @@ class LiveInferenceServer:
             },
             "q_values": q_values_list,  # Q-values for all 5 actions
             "affordance_stats": affordance_stats,  # Interaction counts sorted by frequency
-            "baseline_survival": self.env.reward_strategy.baseline_survival_steps,  # For UI display
+            "baseline_survival": baseline_survival,  # For UI display
         }
 
         # Add temporal mechanics data if enabled

@@ -37,6 +37,14 @@
           :time-of-day="store.timeOfDay"
         />
 
+        <!-- ✅ Projected reward bar (below time of day) - always shown when connected -->
+        <ProjectedRewardBar
+          v-if="isConnected"
+          :projected-reward="store.projectedReward"
+          :current-step="store.currentStep"
+          :baseline-survival="store.baselineSurvival"
+        />
+
         <!-- ✅ Minimal top-right controls (only when connected) -->
         <MinimalControls
           v-if="isConnected"
@@ -164,6 +172,7 @@ import MeterPanel from './components/MeterPanel.vue'
 import ReferencePanel from './components/ReferencePanel.vue'
 import MinimalControls from './components/MinimalControls.vue'
 import TimeOfDayBar from './components/TimeOfDayBar.vue'
+import ProjectedRewardBar from './components/ProjectedRewardBar.vue'
 import InteractionProgressRing from './components/InteractionProgressRing.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import LoadingState from './components/LoadingState.vue'

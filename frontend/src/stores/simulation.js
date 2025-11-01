@@ -78,6 +78,10 @@ export const useSimulationStore = defineStore('simulation', () => {
   const timeOfDay = ref(0)  // Current time of day (0-23)
   const interactionProgress = ref(0)  // Current interaction progress (0-1)
 
+  // Reward tracking (baseline-relative)
+  const projectedReward = ref(0)  // Current step - baseline (real-time learning signal)
+  const baselineSurvival = ref(100)  // Expected survival of random-walking agent
+
   // Computed
   const averageSurvivalTime = computed(() => {
     if (episodeHistory.value.length === 0) return 0
@@ -379,6 +383,14 @@ export const useSimulationStore = defineStore('simulation', () => {
       timeOfDay.value = message.temporal.time_of_day
       interactionProgress.value = message.temporal.interaction_progress
     }
+
+    // Handle baseline-relative reward tracking
+    if (message.projected_reward !== undefined) {
+      projectedReward.value = message.projected_reward
+    }
+    if (message.baseline_survival !== undefined) {
+      baselineSurvival.value = message.baseline_survival
+    }
   }
 
   function handleEpisodeComplete(message) {
@@ -504,6 +516,8 @@ export const useSimulationStore = defineStore('simulation', () => {
     affordanceStats,
     timeOfDay,
     interactionProgress,
+    projectedReward,
+    baselineSurvival,
 
     // Training state
     isTraining,
