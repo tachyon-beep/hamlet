@@ -4,20 +4,13 @@
       <h3>Agent Behaviour</h3>
     </div>
 
-    <!-- SECTION 1: NOW (Episode Performance) -->
+    <!-- SECTION 1: ACTION (Current Action) -->
     <section class="section performance-section">
       <h4 class="section-header">
         <span class="section-icon">⚡</span>
-        NOW
+        ACTION
       </h4>
       <div class="immediate-info">
-        <div class="reward-display">
-          <span class="label">Reward</span>
-          <div class="value-container">
-            <span class="reward-icon" :class="rewardClass">{{ rewardIcon }}</span>
-            <span class="value" :class="rewardClass">{{ formattedReward }}</span>
-          </div>
-        </div>
         <div class="action-display">
           <div class="action-current">
             <span class="action-icon">{{ actionIcon }}</span>
@@ -120,17 +113,20 @@
       </div>
     </section>
 
-    <!-- SECTION 6: FAVOURITE AFFORDANCE (singular - just the top one) -->
-    <section v-if="topFavorite" class="section affordances-section">
+    <!-- SECTION 6: TOP 3 FAVOURITES -->
+    <section v-if="topFavorites.length > 0" class="section affordances-section">
       <h4 class="section-header">
         <span class="section-icon">⭐</span>
-        FAVOURITE
+        FAVOURITES
       </h4>
-      <div class="favorite-single">
-        <span class="affordance-icon-large">{{ topFavorite.icon }}</span>
-        <div class="favorite-info">
-          <span class="affordance-name-large">{{ topFavorite.name }}</span>
-          <span class="affordance-count-large">{{ topFavorite.count }} uses</span>
+      <div class="favorites-list">
+        <div v-for="(favorite, index) in topFavorites" :key="favorite.name" class="favorite-item">
+          <span class="favorite-rank">{{ index + 1 }}</span>
+          <span class="affordance-icon">{{ favorite.icon }}</span>
+          <div class="favorite-info">
+            <span class="affordance-name">{{ favorite.name }}</span>
+            <span class="affordance-count">{{ favorite.count }} uses</span>
+          </div>
         </div>
       </div>
     </section>
@@ -328,11 +324,15 @@ const mockFavorites = computed(() => {
   }))
 })
 
-// Top favorite - just the most-used affordance
-const topFavorite = computed(() => {
+// Top 3 favorites - the most-used affordances
+const topFavorites = computed(() => {
   const favorites = mockFavorites.value
-  if (favorites.length === 0) return null
-  return favorites[0]  // Backend already sorts by count descending
+  return favorites.slice(0, 3)  // Backend already sorts by count descending
+})
+
+// Keep topFavorite for backward compatibility (shows section if any favorites exist)
+const topFavorite = computed(() => {
+  return topFavorites.value.length > 0 ? topFavorites.value[0] : null
 })
 </script>
 
@@ -507,8 +507,6 @@ const topFavorite = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
-  padding-top: var(--spacing-sm);
-  border-top: 1px solid var(--color-bg-tertiary);
 }
 
 .action-current {
@@ -829,7 +827,13 @@ const topFavorite = computed(() => {
   color: #ec4899; /* Pink */
 }
 
-.favorite-single {
+.favorites-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.favorite-item {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -839,11 +843,19 @@ const topFavorite = computed(() => {
     rgba(236, 72, 153, 0.05)
   );
   border-radius: var(--border-radius-md);
-  border-left: 4px solid #ec4899;
+  border-left: 3px solid #ec4899;
 }
 
-.affordance-icon-large {
-  font-size: 2rem;
+.favorite-rank {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: #ec4899;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.affordance-icon {
+  font-size: 1.5rem;
   flex-shrink: 0;
 }
 
@@ -854,13 +866,13 @@ const topFavorite = computed(() => {
   flex: 1;
 }
 
-.affordance-name-large {
-  font-size: var(--font-size-base);
+.affordance-name {
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
 
-.affordance-count-large {
+.affordance-count {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   font-family: 'Monaco', 'Courier New', monospace;

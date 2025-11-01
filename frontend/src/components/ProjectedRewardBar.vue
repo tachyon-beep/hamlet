@@ -25,7 +25,7 @@
         </div>
       </div>
 
-      <!-- Reward value label with status icon -->
+      <!-- Status label with icon -->
       <div class="reward-label">
         <span class="reward-icon" aria-hidden="true">
           <transition name="icon-fade" mode="out-in">
@@ -145,20 +145,22 @@ const markerColor = computed(() => {
 <style scoped>
 .projected-reward-bar {
   position: absolute;
-  top: 110px;  /* Position below TimeOfDayBar (which is at top: 20px, height: 80px) */
-  left: 20px;
-  width: 320px;
+  top: 130px;  /* Position below TimeOfDayBar with spacing */
+  left: var(--spacing-md);  /* Match TimeOfDayBar left alignment */
+  min-width: 270px;  /* Match TimeOfDayBar width */
   z-index: 100;
   pointer-events: none;
 }
 
 .reward-bar-container {
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 12px 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  background: var(--color-bg-secondary);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 
 .reward-label-header {
