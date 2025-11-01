@@ -47,7 +47,7 @@ class LiveInferenceServer:
         self.config_path = Path(config_path) if config_path else None
         self.config = None
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.clients: set[WebSocket] = set()
 
         # Current checkpoint tracking
@@ -97,6 +97,7 @@ class LiveInferenceServer:
         # Load config if provided
         if self.config_path and self.config_path.exists():
             import yaml
+
             with open(self.config_path) as f:
                 self.config = yaml.safe_load(f)
             logger.info(f"Loaded training config: {self.config_path}")
@@ -126,17 +127,22 @@ class LiveInferenceServer:
         vision_window_size = 5
 
         if self.config:
-            env_cfg = self.config.get('environment', {})
-            pop_cfg = self.config.get('population', {})
+            env_cfg = self.config.get("environment", {})
+            pop_cfg = self.config.get("population", {})
 
-            grid_size = env_cfg.get('grid_size', 8)
-            partial_observability = env_cfg.get('partial_observability', False)
-            vision_range = env_cfg.get('vision_range', 2)
-            enable_temporal_mechanics = env_cfg.get('enable_temporal_mechanics', False)
-            network_type = pop_cfg.get('network_type', 'simple')
+            grid_size = env_cfg.get("grid_size", 8)
+            partial_observability = env_cfg.get("partial_observability", False)
+            vision_range = env_cfg.get("vision_range", 2)
+            enable_temporal_mechanics = env_cfg.get("enable_temporal_mechanics", False)
+            network_type = pop_cfg.get("network_type", "simple")
             vision_window_size = 2 * vision_range + 1
 
-            logger.info(f"Environment config: grid={grid_size}, POMDP={partial_observability}, vision={vision_range}, temporal={enable_temporal_mechanics}")
+            logger.info(
+                f"Environment config: grid={grid_size}, "
+                f"POMDP={partial_observability}, "
+                f"vision={vision_range}, "
+                f"temporal={enable_temporal_mechanics}"
+            )
             logger.info(f"Network type: {network_type}")
 
         # Create environment with config settings
@@ -222,13 +228,13 @@ class LiveInferenceServer:
         checkpoint = torch.load(latest_checkpoint, weights_only=False)
 
         # Load Q-network weights
-        if 'population_state' in checkpoint:
-            self.population.q_network.load_state_dict(checkpoint['population_state']['q_network'])
+        if "population_state" in checkpoint:
+            self.population.q_network.load_state_dict(checkpoint["population_state"]["q_network"])
             logger.info("Loaded Q-network weights")
 
         # Calculate epsilon based on training progress
         # For inference, we estimate epsilon from episode number (linear decay from 1.0 to 0.05)
-        epsilon = checkpoint.get('epsilon', None)
+        epsilon = checkpoint.get("epsilon", None)
         if epsilon is None:
             # Estimate epsilon based on training progress (assuming linear decay over total_episodes)
             progress = episode_num / self.total_episodes if self.total_episodes > 0 else 0
@@ -241,14 +247,16 @@ class LiveInferenceServer:
         self.current_epsilon = epsilon
 
         # Broadcast model update to all clients
-        await self._broadcast_to_clients({
-            'type': 'model_loaded',
-            'model': f"checkpoint_ep{episode_num:05d}",
-            'episode': episode_num,
-            'total_episodes': self.total_episodes,
-            'epsilon': epsilon,
-            'message': f"Loaded model from episode {episode_num}"
-        })
+        await self._broadcast_to_clients(
+            {
+                "type": "model_loaded",
+                "model": f"checkpoint_ep{episode_num:05d}",
+                "episode": episode_num,
+                "total_episodes": self.total_episodes,
+                "epsilon": epsilon,
+                "message": f"Loaded model from episode {episode_num}",
+            }
+        )
 
         return True
 
@@ -259,17 +267,19 @@ class LiveInferenceServer:
         logger.info(f"Client connected. Total clients: {len(self.clients)}")
 
         # Send connection message
-        await websocket.send_json({
-            'type': 'connected',
-            'message': 'Connected to live inference server',
-            'available_models': [],
-            'mode': 'inference',
-            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}" if self.current_checkpoint_path else "None",
-            'checkpoint_episode': self.current_checkpoint_episode,
-            'total_episodes': self.total_episodes,
-            'epsilon': self.current_epsilon,
-            'auto_checkpoint_mode': self.auto_checkpoint_mode
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "message": "Connected to live inference server",
+                "available_models": [],
+                "mode": "inference",
+                "checkpoint": f"checkpoint_ep{self.current_checkpoint_episode:05d}" if self.current_checkpoint_path else "None",
+                "checkpoint_episode": self.current_checkpoint_episode,
+                "total_episodes": self.total_episodes,
+                "epsilon": self.current_epsilon,
+                "auto_checkpoint_mode": self.auto_checkpoint_mode,
+            }
+        )
 
         try:
             # Handle incoming commands
@@ -286,30 +296,30 @@ class LiveInferenceServer:
 
     async def _handle_command(self, websocket: WebSocket, data: dict):
         """Handle incoming WebSocket commands."""
-        command = data.get('command') or data.get('type')
+        command = data.get("command") or data.get("type")
 
-        if command == 'play':
+        if command == "play":
             if not self.is_running:
                 self.is_running = True
                 asyncio.create_task(self._run_inference_loop())
                 logger.info("Started inference loop")
 
-        elif command == 'pause':
+        elif command == "pause":
             self.is_running = False
             logger.info("Paused inference loop")
 
-        elif command == 'step':
+        elif command == "step":
             # Run a single step
             if not self.is_running:
                 asyncio.create_task(self._run_single_episode())
 
-        elif command == 'reset':
+        elif command == "reset":
             # Reset episode
             self.current_episode = 0
             self.current_step = 0
             logger.info("Reset episode counter")
 
-        elif command == 'refresh_checkpoint':
+        elif command == "refresh_checkpoint":
             # Manually check for and load new checkpoint
             logger.info("Manual checkpoint refresh requested")
             checkpoint_loaded = await self._check_and_load_checkpoint()
@@ -318,16 +328,13 @@ class LiveInferenceServer:
             else:
                 logger.info("No new checkpoint available")
 
-        elif command == 'toggle_auto_checkpoint':
+        elif command == "toggle_auto_checkpoint":
             # Toggle auto checkpoint mode
             self.auto_checkpoint_mode = not self.auto_checkpoint_mode
             status = "enabled" if self.auto_checkpoint_mode else "disabled"
             logger.info(f"Auto checkpoint mode {status}")
             # Broadcast mode change to all clients
-            await self._broadcast_to_clients({
-                'type': 'auto_checkpoint_mode',
-                'enabled': self.auto_checkpoint_mode
-            })
+            await self._broadcast_to_clients({"type": "auto_checkpoint_mode", "enabled": self.auto_checkpoint_mode})
 
     async def _run_inference_loop(self):
         """Main inference loop - runs episodes continuously."""
@@ -364,14 +371,16 @@ class LiveInferenceServer:
         self.population.reset()
 
         # Send episode start
-        await self._broadcast_to_clients({
-            'type': 'episode_start',
-            'episode': self.current_episode,
-            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}",
-            'checkpoint_episode': self.current_checkpoint_episode,
-            'total_episodes': self.total_episodes,
-            'epsilon': self.current_epsilon
-        })
+        await self._broadcast_to_clients(
+            {
+                "type": "episode_start",
+                "episode": self.current_episode,
+                "checkpoint": f"checkpoint_ep{self.current_checkpoint_episode:05d}",
+                "checkpoint_episode": self.current_checkpoint_episode,
+                "total_episodes": self.total_episodes,
+                "epsilon": self.current_epsilon,
+            }
+        )
 
         # Run episode
         done = False
@@ -391,7 +400,7 @@ class LiveInferenceServer:
             next_obs, rewards, dones, info = self.env.step(actions)
 
             # Track successful interactions (only count if interaction actually succeeded)
-            successful_interactions = info.get('successful_interactions', {})
+            successful_interactions = info.get("successful_interactions", {})
             if 0 in successful_interactions:
                 affordance_name = successful_interactions[0]
                 self.affordance_interactions[affordance_name] += 1
@@ -410,17 +419,19 @@ class LiveInferenceServer:
                 await asyncio.sleep(self.step_delay)
 
         # Episode complete
-        await self._broadcast_to_clients({
-            'type': 'episode_end',
-            'episode': self.current_episode,
-            'steps': self.current_step,
-            'total_reward': cumulative_reward,
-            'reason': 'done' if done else 'max_steps',
-            'checkpoint': f"checkpoint_ep{self.current_checkpoint_episode:05d}",
-            'checkpoint_episode': self.current_checkpoint_episode,
-            'total_episodes': self.total_episodes,
-            'epsilon': self.current_epsilon
-        })
+        await self._broadcast_to_clients(
+            {
+                "type": "episode_end",
+                "episode": self.current_episode,
+                "steps": self.current_step,
+                "total_reward": cumulative_reward,
+                "reason": "done" if done else "max_steps",
+                "checkpoint": f"checkpoint_ep{self.current_checkpoint_episode:05d}",
+                "checkpoint_episode": self.current_checkpoint_episode,
+                "total_episodes": self.total_episodes,
+                "epsilon": self.current_epsilon,
+            }
+        )
 
         logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, reward: {cumulative_reward:.2f}")
 
@@ -433,14 +444,14 @@ class LiveInferenceServer:
         # Note: Backend order is [energy, hygiene, satiation, money, mood, social, health, fitness]
         # We reorder for UI display to group the primary/secondary meters together
         meter_indices = {
-            'energy': 0,
-            'hygiene': 1,
-            'satiation': 2,
-            'money': 3,
-            'health': 6,    # Primary (direct top-up)
-            'mood': 4,      # Primary (direct top-up)
-            'social': 5,    # Secondary (modulates mood)
-            'fitness': 7,   # Secondary (modulates health)
+            "energy": 0,
+            "hygiene": 1,
+            "satiation": 2,
+            "money": 3,
+            "health": 6,  # Primary (direct top-up)
+            "mood": 4,  # Primary (direct top-up)
+            "social": 5,  # Secondary (modulates mood)
+            "fitness": 7,  # Secondary (modulates health)
         }
         meters = {}
         for meter_name, idx in meter_indices.items():
@@ -450,68 +461,68 @@ class LiveInferenceServer:
         affordances = []
         for name, pos in self.env.affordances.items():
             pos_list = pos.cpu().tolist()
-            affordances.append({
-                'type': name,  # Frontend expects 'type' not 'name'
-                'x': pos_list[0],
-                'y': pos_list[1],
-            })
+            affordances.append(
+                {
+                    "type": name,  # Frontend expects 'type' not 'name'
+                    "x": pos_list[0],
+                    "y": pos_list[1],
+                }
+            )
 
         # Convert Q-values to list for JSON serialization
         q_values_list = q_values.cpu().tolist()
 
         # Prepare affordance interaction counts (sorted by count descending)
         affordance_stats = [
-            {'name': name, 'count': count}
-            for name, count in sorted(
-                self.affordance_interactions.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )
+            {"name": name, "count": count} for name, count in sorted(self.affordance_interactions.items(), key=lambda x: x[1], reverse=True)
         ]
 
         # Build state update message
         update = {
-            'type': 'state_update',
-            'step': self.current_step,
-            'cumulative_reward': cumulative_reward,
-            'grid': {
-                'width': self.env.grid_size,
-                'height': self.env.grid_size,
-                'agents': [{
-                    'id': 'agent_0',
-                    'x': agent_pos[0],  # Frontend expects x, y not position
-                    'y': agent_pos[1],
-                    'color': '#4CAF50',  # Green color for agent
-                    'last_action': last_action,
-                }],
-                'affordances': affordances,
+            "type": "state_update",
+            "step": self.current_step,
+            "cumulative_reward": cumulative_reward,
+            "grid": {
+                "width": self.env.grid_size,
+                "height": self.env.grid_size,
+                "agents": [
+                    {
+                        "id": "agent_0",
+                        "x": agent_pos[0],  # Frontend expects x, y not position
+                        "y": agent_pos[1],
+                        "color": "#4CAF50",  # Green color for agent
+                        "last_action": last_action,
+                    }
+                ],
+                "affordances": affordances,
             },
-            'agent_meters': {
-                'agent_0': {
-                    'meters': meters  # MeterPanel expects agent_0.meters nested structure
+            "agent_meters": {
+                "agent_0": {
+                    "meters": meters  # MeterPanel expects agent_0.meters nested structure
                 }
             },
-            'q_values': q_values_list,  # Q-values for all 5 actions
-            'affordance_stats': affordance_stats,  # Interaction counts sorted by frequency
+            "q_values": q_values_list,  # Q-values for all 5 actions
+            "affordance_stats": affordance_stats,  # Interaction counts sorted by frequency
         }
 
         # Add temporal mechanics data if enabled
-        if hasattr(self.env, 'time_of_day'):
+        if hasattr(self.env, "time_of_day"):
             # Normalize interaction progress to 0-1 range
             interaction_progress_raw = self.env.interaction_progress[0].item()
             interaction_progress_normalized = 0.0
 
             if interaction_progress_raw > 0 and self.env.last_interaction_affordance[0] is not None:
                 from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
+
                 affordance_name = self.env.last_interaction_affordance[0]
                 config = AFFORDANCE_CONFIGS.get(affordance_name)
                 if config:
-                    required_ticks = config['required_ticks']
+                    required_ticks = config["required_ticks"]
                     interaction_progress_normalized = interaction_progress_raw / required_ticks
 
-            update['temporal'] = {
-                'time_of_day': self.env.time_of_day,
-                'interaction_progress': interaction_progress_normalized,
+            update["temporal"] = {
+                "time_of_day": self.env.time_of_day,
+                "interaction_progress": interaction_progress_normalized,
             }
 
         await self._broadcast_to_clients(update)
@@ -540,16 +551,13 @@ def run_server(
     """Run live inference server."""
     import uvicorn
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='[%(asctime)s] %(levelname)s: %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 
     server = LiveInferenceServer(checkpoint_dir, port, step_delay, total_episodes, config_path)
 
     logger.info(f"Starting live inference server on port {port}")
     logger.info(f"Checkpoint directory: {checkpoint_dir}")
-    logger.info(f"Step delay: {step_delay}s ({1/step_delay:.1f} steps/sec)")
+    logger.info(f"Step delay: {step_delay}s ({1 / step_delay:.1f} steps/sec)")
     logger.info(f"Expected total training episodes: {total_episodes}")
     if config_path:
         logger.info(f"Training config: {config_path}")
@@ -558,7 +566,7 @@ def run_server(
     uvicorn.run(server.app, host="0.0.0.0", port=port)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
 
     checkpoint_dir = sys.argv[1] if len(sys.argv) > 1 else "checkpoints"
