@@ -30,7 +30,7 @@ class MeterDynamics:
     - RESOURCE: Money
 
     Key Insight: Satiation is THE foundational need - affects BOTH primaries.
-    
+
     All cascade physics are defined in configs/bars.yaml and configs/cascades.yaml.
     Students can experiment with different cascade strengths by editing YAML files.
     """
@@ -127,9 +127,7 @@ class MeterDynamics:
         Returns:
             meters: [num_agents, 8] meters after cascade effects
         """
-        return self.cascade_engine.apply_threshold_cascades(
-            meters, ["secondary_to_pivotal_weak"]
-        )
+        return self.cascade_engine.apply_threshold_cascades(meters, ["secondary_to_pivotal_weak"])
 
     def check_terminal_conditions(self, meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
         """
