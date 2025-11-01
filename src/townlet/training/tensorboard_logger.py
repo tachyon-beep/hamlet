@@ -10,9 +10,8 @@ Integration:
     - Safe for multi-agent scenarios
 """
 
-import time
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -125,10 +124,10 @@ class TensorBoardLogger:
     def log_training_step(
         self,
         step: int,
-        td_error: Optional[float] = None,
-        q_values: Optional[torch.Tensor] = None,
-        loss: Optional[float] = None,
-        rnd_prediction_error: Optional[float] = None,
+        td_error: float | None = None,
+        q_values: torch.Tensor | None = None,
+        loss: float | None = None,
+        rnd_prediction_error: float | None = None,
         agent_id: str = "agent_0",
     ):
         """Log per-training-step metrics.
@@ -161,7 +160,7 @@ class TensorBoardLogger:
         self,
         episode: int,
         step: int,
-        meters: Dict[str, float],
+        meters: dict[str, float],
         agent_id: str = "agent_0",
     ):
         """Log agent meter values (health, energy, etc.).
@@ -184,8 +183,8 @@ class TensorBoardLogger:
         self,
         episode: int,
         q_network: torch.nn.Module,
-        target_network: Optional[torch.nn.Module] = None,
-        optimizer: Optional[torch.optim.Optimizer] = None,
+        target_network: torch.nn.Module | None = None,
+        optimizer: torch.optim.Optimizer | None = None,
         agent_id: str = "agent_0",
     ):
         """Log network weights, gradients, and optimizer state.
@@ -225,7 +224,7 @@ class TensorBoardLogger:
     def log_affordance_usage(
         self,
         episode: int,
-        affordance_counts: Dict[str, int],
+        affordance_counts: dict[str, int],
         agent_id: str = "agent_0",
     ):
         """Log affordance usage statistics.
@@ -258,7 +257,7 @@ class TensorBoardLogger:
         prefix = f"{agent_id}/" if agent_id else ""
         self.writer.add_scalar(f"{prefix}{tag}", value, step)
 
-    def log_hyperparameters(self, hparams: Dict[str, Any], metrics: Dict[str, float]):
+    def log_hyperparameters(self, hparams: dict[str, Any], metrics: dict[str, float]):
         """Log hyperparameters and final metrics for comparison.
 
         Args:

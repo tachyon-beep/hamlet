@@ -7,17 +7,15 @@ Provides step-by-step visualization at human-watchable speed.
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional, Set
-import time
 
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.population.vectorized import VectorizedPopulation
 from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+from townlet.population.vectorized import VectorizedPopulation
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +29,7 @@ class LiveInferenceServer:
         port: int = 8766,
         step_delay: float = 0.2,
         total_episodes: int = 5000,  # Expected total episodes in training run
-        config_path: Optional[Path | str] = None,  # Optional training config
+        config_path: Path | str | None = None,  # Optional training config
     ):
         """Initialize live inference server.
 
@@ -50,18 +48,18 @@ class LiveInferenceServer:
         self.config = None
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.clients: Set[WebSocket] = set()
+        self.clients: set[WebSocket] = set()
 
         # Current checkpoint tracking
-        self.current_checkpoint_path: Optional[Path] = None
+        self.current_checkpoint_path: Path | None = None
         self.current_checkpoint_episode: int = 0
         self.current_epsilon: float = 0.0
 
         # Environment and agent
-        self.env: Optional[VectorizedHamletEnv] = None
-        self.population: Optional[VectorizedPopulation] = None
-        self.curriculum: Optional[AdversarialCurriculum] = None
-        self.exploration: Optional[AdaptiveIntrinsicExploration] = None
+        self.env: VectorizedHamletEnv | None = None
+        self.population: VectorizedPopulation | None = None
+        self.curriculum: AdversarialCurriculum | None = None
+        self.exploration: AdaptiveIntrinsicExploration | None = None
 
         # Episode state
         self.is_running = False

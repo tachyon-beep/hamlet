@@ -1,12 +1,13 @@
 """Random Network Distillation (RND) for intrinsic motivation."""
 
-from typing import Optional, Dict, Any
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from townlet.exploration.base import ExplorationStrategy
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
+from townlet.exploration.base import ExplorationStrategy
 from townlet.training.state import BatchedAgentState
 
 
@@ -137,7 +138,7 @@ class RNDExploration(ExplorationStrategy):
 
         return mse_per_sample
 
-    def update(self, batch: Dict[str, torch.Tensor]) -> None:
+    def update(self, batch: dict[str, torch.Tensor]) -> None:
         """Update predictor network from experience batch.
 
         Args:
@@ -220,7 +221,7 @@ class RNDExploration(ExplorationStrategy):
         """Decay epsilon (call once per episode)."""
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-    def checkpoint_state(self) -> Dict[str, Any]:
+    def checkpoint_state(self) -> dict[str, Any]:
         """Return serializable state for checkpoint saving.
 
         Returns:
@@ -237,7 +238,7 @@ class RNDExploration(ExplorationStrategy):
             "embed_dim": self.embed_dim,
         }
 
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """Restore from checkpoint.
 
         Args:

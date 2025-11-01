@@ -8,7 +8,6 @@ All cascade logic is config-driven via CascadeEngine and YAML files.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import torch
 
@@ -39,7 +38,7 @@ class MeterDynamics:
         self,
         num_agents: int,
         device: torch.device,
-        cascade_config_dir: Optional[Path] = None,
+        cascade_config_dir: Path | None = None,
     ):
         """
         Initialize meter dynamics with config-driven cascade system.

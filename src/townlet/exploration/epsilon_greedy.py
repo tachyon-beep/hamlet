@@ -5,11 +5,12 @@ Simple baseline: epsilon probability of random action, 1-epsilon probability
 of greedy action. No intrinsic motivation.
 """
 
-from typing import Dict, Any
+from typing import Any
+
 import torch
 
-from townlet.exploration.base import ExplorationStrategy
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
+from townlet.exploration.base import ExplorationStrategy
 from townlet.training.state import BatchedAgentState
 
 
@@ -78,7 +79,7 @@ class EpsilonGreedyExploration(ExplorationStrategy):
         batch_size = observations.shape[0]
         return torch.zeros(batch_size, device=observations.device)
 
-    def update(self, batch: Dict[str, torch.Tensor]) -> None:
+    def update(self, batch: dict[str, torch.Tensor]) -> None:
         """
         Update exploration networks (no-op for epsilon-greedy).
 
@@ -91,7 +92,7 @@ class EpsilonGreedyExploration(ExplorationStrategy):
         """Decay epsilon (call once per episode)."""
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-    def checkpoint_state(self) -> Dict[str, Any]:
+    def checkpoint_state(self) -> dict[str, Any]:
         """
         Return serializable state.
 
@@ -104,7 +105,7 @@ class EpsilonGreedyExploration(ExplorationStrategy):
             "epsilon_min": self.epsilon_min,
         }
 
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """
         Restore from checkpoint.
 

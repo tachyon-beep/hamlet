@@ -6,7 +6,6 @@ this buffer stores complete episodes and samples sequences of consecutive
 transitions to maintain temporal structure for recurrent networks.
 """
 
-from typing import Dict, Optional
 import torch
 
 
@@ -41,7 +40,7 @@ class SequentialReplayBuffer:
         """Return number of episodes stored."""
         return len(self.episodes)
 
-    def store_episode(self, episode: Dict[str, torch.Tensor]) -> None:
+    def store_episode(self, episode: dict[str, torch.Tensor]) -> None:
         """
         Store a complete episode.
 
@@ -94,7 +93,7 @@ class SequentialReplayBuffer:
 
     def sample_sequences(
         self, batch_size: int, seq_len: int, intrinsic_weight: float = 1.0
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         Sample a batch of sequential transitions.
 

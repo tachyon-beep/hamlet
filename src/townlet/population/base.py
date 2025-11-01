@@ -12,7 +12,9 @@ from townlet.training.state import BatchedAgentState, PopulationCheckpoint
 
 # Avoid circular import
 if TYPE_CHECKING:
-    from townlet.environment.vectorized_env import VectorizedHamletEnv  # type: ignore[import-untyped]
+    from townlet.environment.vectorized_env import (
+        VectorizedHamletEnv,  # type: ignore[import-untyped]
+    )
 
 
 class PopulationManager(ABC):

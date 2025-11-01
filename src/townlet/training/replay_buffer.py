@@ -1,6 +1,6 @@
 """Replay buffer for off-policy learning with dual rewards."""
 
-from typing import Dict
+
 import torch
 
 
@@ -78,7 +78,7 @@ class ReplayBuffer:
             self.position += 1
             self.size = min(self.size + 1, self.capacity)
 
-    def sample(self, batch_size: int, intrinsic_weight: float) -> Dict[str, torch.Tensor]:
+    def sample(self, batch_size: int, intrinsic_weight: float) -> dict[str, torch.Tensor]:
         """Sample random mini-batch with combined rewards.
 
         Args:

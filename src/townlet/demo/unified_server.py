@@ -13,11 +13,9 @@ Date: November 2, 2025
 """
 
 import logging
-import sys
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ class UnifiedServer:
         self,
         config_path: str,
         total_episodes: int,
-        checkpoint_dir: Optional[str] = None,
+        checkpoint_dir: str | None = None,
         inference_port: int = 8766,
     ):
         """
@@ -56,8 +54,8 @@ class UnifiedServer:
         self.inference_port = inference_port
 
         # Component handles (initialized in start())
-        self.training_thread: Optional[threading.Thread] = None
-        self.inference_thread: Optional[threading.Thread] = None
+        self.training_thread: threading.Thread | None = None
+        self.inference_thread: threading.Thread | None = None
 
         # Shutdown coordination
         self.shutdown_requested = False
@@ -130,12 +128,27 @@ class UnifiedServer:
             self.inference_thread.start()
             logger.info(f"[Inference] Server starting on port {self.inference_port}")
 
-            logger.info("─" * 60)
-            logger.info("Training + Inference servers operational.")
-            logger.info(f"Open frontend separately: cd frontend && npm run dev")
-            logger.info(f"Frontend will connect to: http://localhost:{self.inference_port}")
-            logger.info("Press Ctrl+C to stop.")
-            logger.info("─" * 60)
+            # Display helpful commands
+            tensorboard_dir = self.checkpoint_dir.parent / "tensorboard"
+            logger.info("=" * 60)
+            logger.info("✅ Training + Inference servers operational")
+            logger.info("=" * 60)
+            logger.info("")
+            logger.info("📊 To view live visualization (optional):")
+            logger.info("   Terminal 2:")
+            logger.info("   $ cd frontend && npm run dev -- --host 0.0.0.0")
+            logger.info("   Then open: http://localhost:5173")
+            logger.info("")
+            logger.info("📈 To view training metrics (optional):")
+            logger.info("   Terminal 3:")
+            logger.info(f"   $ tensorboard --logdir {tensorboard_dir} --bind_all")
+            logger.info("   Then open: http://localhost:6006")
+            logger.info("")
+            logger.info(f"💾 Checkpoints: {self.checkpoint_dir}")
+            logger.info(f"🔌 Inference port: {self.inference_port}")
+            logger.info("")
+            logger.info("Press Ctrl+C to stop gracefully")
+            logger.info("=" * 60)
 
             # Block until shutdown requested
             while not self.shutdown_requested:
@@ -253,7 +266,9 @@ class UnifiedServer:
         Runs LiveInferenceServer with uvicorn.
         """
         import asyncio
+
         import uvicorn
+
         from townlet.demo.live_inference import LiveInferenceServer
 
         try:

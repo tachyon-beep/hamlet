@@ -19,14 +19,14 @@ Teaching Value:
 Status: Ready for integration with vectorized_env.py
 """
 
-import torch
 from pathlib import Path
-from typing import Optional
+
+import torch
 
 from townlet.environment.affordance_config import (
+    METER_NAME_TO_IDX,
     AffordanceConfigCollection,
     load_affordance_config,
-    METER_NAME_TO_IDX,
 )
 
 
@@ -319,6 +319,46 @@ class AffordanceEngine:
         """Get the number of affordances defined in config."""
         return len(self.affordances)
 
+    def get_affordance_cost(self, affordance_name: str, cost_mode: str = "instant") -> float:
+        """
+        Get the monetary cost for an affordance interaction.
+
+        Args:
+            affordance_name: Name of affordance
+            cost_mode: "instant" or "per_tick"
+
+        Returns:
+            Normalized cost [0, 1] where 1.0 = $100
+        """
+        affordance = self.affordance_map.get(affordance_name)
+        if affordance is None:
+            return 0.0
+
+        # Get costs list based on mode
+        costs = affordance.costs if cost_mode == "instant" else affordance.costs_per_tick
+
+        # Find money cost (most affordances only have money cost)
+        for cost in costs:
+            if cost.meter == "money":
+                return cost.amount
+
+        return 0.0
+
+    def get_required_ticks(self, affordance_name: str) -> int:
+        """
+        Get the required number of ticks for a multi-tick affordance.
+
+        Args:
+            affordance_name: Name of affordance
+
+        Returns:
+            Number of required ticks (1 for instant affordances)
+        """
+        affordance = self.affordance_map.get(affordance_name)
+        if affordance is None or affordance.required_ticks is None:
+            return 1
+        return affordance.required_ticks
+
     def apply_interaction(
         self,
         meters: torch.Tensor,
@@ -370,7 +410,7 @@ class AffordanceEngine:
 
 
 def create_affordance_engine(
-    config_path: Optional[Path] = None,
+    config_path: Path | None = None,
     num_agents: int = 1,
     device: torch.device = torch.device("cpu"),
 ) -> AffordanceEngine:

@@ -6,7 +6,8 @@ and optionally provide intrinsic motivation rewards (RND, ICM, etc.).
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any
+
 import torch
 
 from townlet.training.state import BatchedAgentState
@@ -70,7 +71,7 @@ class ExplorationStrategy(ABC):
         pass
 
     @abstractmethod
-    def update(self, batch: Dict[str, torch.Tensor]) -> None:
+    def update(self, batch: dict[str, torch.Tensor]) -> None:
         """
         Update exploration networks (RND, ICM, etc.) from experience batch.
 
@@ -87,7 +88,7 @@ class ExplorationStrategy(ABC):
         pass
 
     @abstractmethod
-    def checkpoint_state(self) -> Dict[str, Any]:
+    def checkpoint_state(self) -> dict[str, Any]:
         """
         Return serializable state for checkpoint saving.
 
@@ -103,7 +104,7 @@ class ExplorationStrategy(ABC):
         pass
 
     @abstractmethod
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """
         Restore exploration strategy from checkpoint.
 

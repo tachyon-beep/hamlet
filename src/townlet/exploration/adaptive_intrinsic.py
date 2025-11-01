@@ -1,6 +1,7 @@
 """Adaptive intrinsic exploration with variance-based annealing."""
 
-from typing import List, Dict, Any
+from typing import Any
+
 import torch
 
 from townlet.exploration.base import ExplorationStrategy
@@ -71,7 +72,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self.device = device
 
         # Survival tracking
-        self.survival_history: List[float] = []
+        self.survival_history: list[float] = []
 
     def select_actions(
         self,
@@ -109,7 +110,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         # Scale by current weight
         return rnd_novelty * self.current_intrinsic_weight
 
-    def update(self, batch: Dict[str, torch.Tensor]) -> None:
+    def update(self, batch: dict[str, torch.Tensor]) -> None:
         """Update RND predictor network from experience batch.
 
         Args:
@@ -172,7 +173,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         """Decay epsilon (delegates to RND)."""
         self.rnd.decay_epsilon()
 
-    def checkpoint_state(self) -> Dict[str, Any]:
+    def checkpoint_state(self) -> dict[str, Any]:
         """Return serializable state for checkpoint saving.
 
         Returns:
@@ -188,7 +189,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             'survival_history': self.survival_history,
         }
 
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """Restore from checkpoint.
 
         Args:

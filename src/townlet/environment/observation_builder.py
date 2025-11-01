@@ -3,8 +3,8 @@
 Handles full observability, partial observability (POMDP), and temporal features.
 """
 
+
 import torch
-from typing import Dict
 
 
 class ObservationBuilder:
@@ -49,7 +49,7 @@ class ObservationBuilder:
         self,
         positions: torch.Tensor,
         meters: torch.Tensor,
-        affordances: Dict[str, torch.Tensor],
+        affordances: dict[str, torch.Tensor],
         time_of_day: int = 0,
         interaction_progress: torch.Tensor = None,
     ) -> torch.Tensor:
@@ -84,7 +84,7 @@ class ObservationBuilder:
         self,
         positions: torch.Tensor,
         meters: torch.Tensor,
-        affordances: Dict[str, torch.Tensor],
+        affordances: dict[str, torch.Tensor],
     ) -> torch.Tensor:
         """Build full grid observations (Level 1).
 
@@ -115,7 +115,7 @@ class ObservationBuilder:
         self,
         positions: torch.Tensor,
         meters: torch.Tensor,
-        affordances: Dict[str, torch.Tensor],
+        affordances: dict[str, torch.Tensor],
     ) -> torch.Tensor:
         """Build partial observations (Level 2 POMDP).
 
@@ -179,7 +179,7 @@ class ObservationBuilder:
     def _build_affordance_encoding(
         self,
         positions: torch.Tensor,
-        affordances: Dict[str, torch.Tensor],
+        affordances: dict[str, torch.Tensor],
     ) -> torch.Tensor:
         """Build one-hot encoding of current affordance under each agent.
 

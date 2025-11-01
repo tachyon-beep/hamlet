@@ -5,7 +5,7 @@ Always returns the same curriculum decision. Used for baseline testing
 and to validate the curriculum interface works.
 """
 
-from typing import List, Dict, Any
+from typing import Any
 
 from townlet.curriculum.base import CurriculumManager
 from townlet.training.state import BatchedAgentState, CurriculumDecision
@@ -23,7 +23,7 @@ class StaticCurriculum(CurriculumManager):
         self,
         difficulty_level: float = 0.5,
         reward_mode: str = 'shaped',
-        active_meters: List[str] = None,
+        active_meters: list[str] = None,
         depletion_multiplier: float = 1.0,
     ):
         """
@@ -45,8 +45,8 @@ class StaticCurriculum(CurriculumManager):
     def get_batch_decisions(
         self,
         agent_states: BatchedAgentState,
-        agent_ids: List[str],
-    ) -> List[CurriculumDecision]:
+        agent_ids: list[str],
+    ) -> list[CurriculumDecision]:
         """
         Get curriculum decisions (same for all agents).
 
@@ -68,7 +68,7 @@ class StaticCurriculum(CurriculumManager):
         # Return same decision for all agents
         return [decision] * len(agent_ids)
 
-    def checkpoint_state(self) -> Dict[str, Any]:
+    def checkpoint_state(self) -> dict[str, Any]:
         """
         Return serializable state.
 
@@ -82,7 +82,7 @@ class StaticCurriculum(CurriculumManager):
             'depletion_multiplier': self.depletion_multiplier,
         }
 
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """
         Restore from checkpoint.
 

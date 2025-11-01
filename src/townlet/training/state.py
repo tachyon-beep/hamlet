@@ -5,10 +5,11 @@ Contains DTOs for cold path (config, checkpoints, telemetry) using Pydantic
 for validation, and hot path (training loop) using PyTorch tensors.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Dict, Any
-import torch
+from typing import Any
+
 import numpy as np
+import torch
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CurriculumDecision(BaseModel):
@@ -26,7 +27,7 @@ class CurriculumDecision(BaseModel):
         le=1.0,
         description="Difficulty level from 0.0 (easiest) to 1.0 (hardest)"
     )
-    active_meters: List[str] = Field(
+    active_meters: list[str] = Field(
         ...,
         min_length=1,
         max_length=6,
@@ -112,23 +113,23 @@ class PopulationCheckpoint(BaseModel):
         le=1000,
         description="Number of agents in population (1-1000)"
     )
-    agent_ids: List[str] = Field(
+    agent_ids: list[str] = Field(
         ...,
         description="List of agent identifiers"
     )
-    curriculum_states: Dict[str, Dict[str, Any]] = Field(
+    curriculum_states: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         description="Per-agent curriculum manager state"
     )
-    exploration_states: Dict[str, Dict[str, Any]] = Field(
+    exploration_states: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         description="Per-agent exploration strategy state"
     )
-    pareto_frontier: List[str] = Field(
+    pareto_frontier: list[str] = Field(
         default_factory=list,
         description="Agent IDs on Pareto frontier (non-dominated solutions)"
     )
-    metrics_summary: Dict[str, float] = Field(
+    metrics_summary: dict[str, float] = Field(
         default_factory=dict,
         description="Summary metrics (avg_survival, avg_reward, etc.)"
     )
@@ -199,7 +200,7 @@ class BatchedAgentState:
             device=device,
         )
 
-    def detach_cpu_summary(self) -> Dict[str, np.ndarray]:
+    def detach_cpu_summary(self) -> dict[str, np.ndarray]:
         """
         Extract summary for telemetry (cold path).
 

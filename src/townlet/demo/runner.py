@@ -4,15 +4,15 @@ import logging
 import signal
 import time
 from pathlib import Path
-from typing import Optional
+
 import torch
 import yaml
 
-from townlet.demo.database import DemoDatabase
-from townlet.population.vectorized import VectorizedPopulation
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.demo.database import DemoDatabase
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.tensorboard_logger import TensorBoardLogger
 
 logger = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ class DemoRunner:
         # Update system state
         self.db.set_system_state("last_checkpoint", str(checkpoint_path))
 
-    def load_checkpoint(self) -> Optional[int]:
+    def load_checkpoint(self) -> int | None:
         """Load latest checkpoint if exists.
 
         Returns:

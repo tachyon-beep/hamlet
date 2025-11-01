@@ -101,3 +101,5 @@ site/
 .worktrees/
 .db-shm
 .db-wal
+
+test_migration_checkpoints/*

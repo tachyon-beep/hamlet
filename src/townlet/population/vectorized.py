@@ -5,21 +5,21 @@ Coordinates multiple agents with shared curriculum and exploration strategies.
 Manages Q-networks, replay buffers, and training loops.
 """
 
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
-from townlet.population.base import PopulationManager
-from townlet.training.state import BatchedAgentState, PopulationCheckpoint
+from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 from townlet.curriculum.base import CurriculumManager
+from townlet.exploration.action_selection import epsilon_greedy_action_selection
+from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.base import ExplorationStrategy
+from townlet.exploration.rnd import RNDExploration
+from townlet.population.base import PopulationManager
 from townlet.training.replay_buffer import ReplayBuffer
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
-from townlet.exploration.rnd import RNDExploration
-from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
-from townlet.exploration.action_selection import epsilon_greedy_action_selection
-from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+from townlet.training.state import BatchedAgentState, PopulationCheckpoint
 
 if TYPE_CHECKING:
     from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -38,7 +38,7 @@ class VectorizedPopulation(PopulationManager):
         env: "VectorizedHamletEnv",
         curriculum: CurriculumManager,
         exploration: ExplorationStrategy,
-        agent_ids: List[str],
+        agent_ids: list[str],
         device: torch.device,
         obs_dim: int = 70,
         action_dim: int = 5,
@@ -144,7 +144,7 @@ class VectorizedPopulation(PopulationManager):
         # Current state
         self.current_obs: torch.Tensor = None
         self.current_epsilons: torch.Tensor = None
-        self.current_curriculum_decisions: List = []  # Store curriculum decisions
+        self.current_curriculum_decisions: list = []  # Store curriculum decisions
 
     def reset(self) -> None:
         """Reset all environments and state."""

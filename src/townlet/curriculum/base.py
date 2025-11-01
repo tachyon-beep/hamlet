@@ -6,7 +6,7 @@ agent performance metrics (survival time, learning progress, policy entropy).
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import Any
 
 from townlet.training.state import BatchedAgentState, CurriculumDecision
 
@@ -23,8 +23,8 @@ class CurriculumManager(ABC):
     def get_batch_decisions(
         self,
         agent_states: BatchedAgentState,
-        agent_ids: List[str],
-    ) -> List[CurriculumDecision]:
+        agent_ids: list[str],
+    ) -> list[CurriculumDecision]:
         """
         Get curriculum decisions for batch of agents.
 
@@ -45,7 +45,7 @@ class CurriculumManager(ABC):
         pass
 
     @abstractmethod
-    def checkpoint_state(self) -> Dict[str, Any]:
+    def checkpoint_state(self) -> dict[str, Any]:
         """
         Return serializable state for checkpoint saving.
 
@@ -60,7 +60,7 @@ class CurriculumManager(ABC):
         pass
 
     @abstractmethod
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """
         Restore curriculum manager from checkpoint.
 

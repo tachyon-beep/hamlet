@@ -5,17 +5,16 @@ Batches multiple independent Hamlet environments into a single vectorized
 environment with tensor operations [num_agents, ...].
 """
 
-import torch
-import numpy as np
-import yaml
 from pathlib import Path
-from typing import Tuple, Optional
 
+import torch
+import yaml
+
+from townlet.environment.affordance_config import AffordanceConfigCollection
+from townlet.environment.affordance_engine import AffordanceEngine
+from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.observation_builder import ObservationBuilder
 from townlet.environment.reward_strategy import RewardStrategy
-from townlet.environment.meter_dynamics import MeterDynamics
-from townlet.environment.affordance_engine import AffordanceEngine
-from townlet.environment.affordance_config import AffordanceConfigCollection
 
 
 class VectorizedHamletEnv:
@@ -127,10 +126,10 @@ class VectorizedHamletEnv:
         self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
 
         # State tensors (initialized in reset)
-        self.positions: Optional[torch.Tensor] = None  # [num_agents, 2]
-        self.meters: Optional[torch.Tensor] = None  # [num_agents, 8]
-        self.dones: Optional[torch.Tensor] = None  # [num_agents]
-        self.step_counts: Optional[torch.Tensor] = None  # [num_agents]
+        self.positions: torch.Tensor | None = None  # [num_agents, 2]
+        self.meters: torch.Tensor | None = None  # [num_agents, 8]
+        self.dones: torch.Tensor | None = None  # [num_agents]
+        self.step_counts: torch.Tensor | None = None  # [num_agents]
 
         # Temporal mechanics state
         if self.enable_temporal_mechanics:
@@ -222,51 +221,20 @@ class VectorizedHamletEnv:
             self.num_agents, dtype=torch.bool, device=self.device
         )
 
-        # Import temporal mechanics config if needed
-        if self.enable_temporal_mechanics:
-            from townlet.environment.affordance_config import (
-                AFFORDANCE_CONFIGS,
-                is_affordance_open,
-            )
-
-        # Affordance costs (must match _handle_interactions)
-        affordance_costs = {
-            "Bed": 5,
-            "LuxuryBed": 11,
-            "Shower": 3,
-            "HomeMeal": 3,
-            "FastFood": 10,
-            "Recreation": 6,
-            "Gym": 8,
-            "Bar": 15,
-            "Therapist": 15,
-            "Doctor": 8,
-            "Hospital": 15,
-            "Job": 0,
-            "Labor": 0,
-            "Park": 0,
-        }
-
+        # Check each affordance using AffordanceEngine
         for affordance_name, affordance_pos in self.affordances.items():
             distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
             on_this_affordance = distances == 0
 
-            # Check operating hours (temporal mechanics)
+            # Check operating hours using AffordanceEngine
             if self.enable_temporal_mechanics:
-                config = AFFORDANCE_CONFIGS[affordance_name]
-                if not is_affordance_open(self.time_of_day, config["operating_hours"]):
+                if not self.affordance_engine.is_affordance_open(affordance_name, self.time_of_day):
                     # Affordance is closed, skip
                     continue
 
-            # Check affordability (money normalized to [0, 1] where 1.0 = $100)
-            if self.enable_temporal_mechanics:
-                # Use per-tick cost from config
-                cost_normalized = AFFORDANCE_CONFIGS[affordance_name]["cost_per_tick"]
-            else:
-                # Legacy single-shot cost
-                cost_dollars = affordance_costs.get(affordance_name, 0)
-                cost_normalized = cost_dollars / 100.0
-
+            # Check affordability using AffordanceEngine
+            cost_mode = "per_tick" if self.enable_temporal_mechanics else "instant"
+            cost_normalized = self.affordance_engine.get_affordance_cost(affordance_name, cost_mode)
             can_afford = self.meters[:, 3] >= cost_normalized
 
             # Valid if on affordance AND can afford it AND is open
@@ -279,7 +247,7 @@ class VectorizedHamletEnv:
     def step(
         self,
         actions: torch.Tensor,  # [num_agents]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """
         Execute one step for all agents.
 
@@ -408,15 +376,10 @@ class VectorizedHamletEnv:
             Dictionary mapping agent indices to affordance names
         """
         if not self.enable_temporal_mechanics:
-            # Legacy single-shot interactions (for backward compatibility)
+            # Instant interactions (Level 1-2)
             return self._handle_interactions_legacy(interact_mask)
 
-        # Multi-tick interaction logic
-        from townlet.environment.affordance_config import (
-            AFFORDANCE_CONFIGS,
-            METER_NAME_TO_IDX,
-        )
-
+        # Multi-tick interaction logic using AffordanceEngine
         successful_interactions = {}
 
         for affordance_name, affordance_pos in self.affordances.items():
@@ -427,16 +390,18 @@ class VectorizedHamletEnv:
             if not at_affordance.any():
                 continue
 
-            # Get config
-            config = AFFORDANCE_CONFIGS[affordance_name]
-
-            # Check affordability (per-tick cost)
-            cost_per_tick = config["cost_per_tick"]
+            # Check affordability using AffordanceEngine
+            cost_per_tick = self.affordance_engine.get_affordance_cost(
+                affordance_name, cost_mode="per_tick"
+            )
             can_afford = self.meters[:, 3] >= cost_per_tick
             at_affordance = at_affordance & can_afford
 
             if not at_affordance.any():
                 continue
+
+            # Get required ticks from AffordanceEngine
+            required_ticks = self.affordance_engine.get_required_ticks(affordance_name)
 
             # Track successful interactions
             agent_indices = torch.where(at_affordance)[0]
@@ -460,36 +425,37 @@ class VectorizedHamletEnv:
                     self.last_interaction_position[agent_idx_int] = current_pos.clone()
 
                 ticks_done = self.interaction_progress[agent_idx].item()
-                required_ticks = config["required_ticks"]
 
-                # Apply per-tick benefits (75% of total, distributed)
-                for meter_name, delta in config["benefits"]["linear"].items():
-                    meter_idx = METER_NAME_TO_IDX[meter_name]
-                    self.meters[agent_idx, meter_idx] += delta
+                # Create single-agent mask for this agent
+                single_agent_mask = torch.zeros(
+                    self.num_agents, dtype=torch.bool, device=self.device
+                )
+                single_agent_mask[agent_idx] = True
 
-                # Charge per-tick cost
-                self.meters[agent_idx, 3] -= cost_per_tick
+                # Apply multi-tick interaction using AffordanceEngine
+                # This applies per-tick effects and costs
+                self.meters = self.affordance_engine.apply_multi_tick_interaction(
+                    meters=self.meters,
+                    affordance_name=affordance_name,
+                    current_tick=ticks_done - 1,  # 0-indexed
+                    agent_mask=single_agent_mask,
+                    check_affordability=False,  # Already checked above
+                )
 
-                # Completion bonus? (25% of total)
+                # Reset progress if completed
                 if ticks_done == required_ticks:
-                    for meter_name, delta in config["benefits"]["completion"].items():
-                        meter_idx = METER_NAME_TO_IDX[meter_name]
-                        self.meters[agent_idx, meter_idx] += delta
-
-                    # Reset progress (job complete)
                     self.interaction_progress[agent_idx] = 0
                     self.last_interaction_affordance[agent_idx_int] = None
 
                 successful_interactions[agent_idx_int] = affordance_name
 
-        # Clamp meters after updates
-        self.meters = torch.clamp(self.meters, 0.0, 1.0)
-
         return successful_interactions
 
     def _handle_interactions_legacy(self, interact_mask: torch.Tensor) -> dict:
         """
-        Handle INTERACT action at affordances.
+        Handle INTERACT action at affordances (instant mode).
+
+        Uses AffordanceEngine for all logic - no hardcoded costs!
 
         Args:
             interact_mask: [num_agents] bool mask
@@ -500,27 +466,6 @@ class VectorizedHamletEnv:
         # Track successful interactions for this step
         successful_interactions = {}  # {agent_idx: affordance_name}
 
-        # Affordance costs in dollars (will convert to normalized form)
-        # Money normalization: normalized = (dollars / 200) + 0.5
-        # So $0 = 0.5, $5 = 0.525, $100 = 1.0
-        # Free affordances: Job, Labor, Park
-        affordance_costs_dollars = {
-            "Bed": 5,
-            "LuxuryBed": 11,
-            "Shower": 3,
-            "HomeMeal": 3,
-            "FastFood": 10,
-            "Recreation": 6,
-            "Gym": 8,
-            "Bar": 15,
-            "Therapist": 15,
-            "Doctor": 8,
-            "Hospital": 15,
-            "Job": 0,
-            "Labor": 0,
-            "Park": 0,
-        }
-
         # Check each affordance
         for affordance_name, affordance_pos in self.affordances.items():
             # Distance to affordance
@@ -530,12 +475,11 @@ class VectorizedHamletEnv:
             if not at_affordance.any():
                 continue
 
-            # Check affordability (money >= cost)
-            cost_dollars = affordance_costs_dollars.get(affordance_name, 0)
-            if cost_dollars > 0:
-                # Convert cost to normalized form: normalized_money = dollars / 100
-                # Money range is [0, 100] in dollars, [0, 1] normalized
-                cost_normalized = cost_dollars / 100.0
+            # Check affordability using AffordanceEngine
+            cost_normalized = self.affordance_engine.get_affordance_cost(
+                affordance_name, cost_mode="instant"
+            )
+            if cost_normalized > 0:
                 can_afford = self.meters[:, 3] >= cost_normalized
                 at_affordance = at_affordance & can_afford
 
@@ -549,7 +493,6 @@ class VectorizedHamletEnv:
                 successful_interactions[agent_idx.item()] = affordance_name
 
             # Apply affordance effects using AffordanceEngine
-            # This replaces ~160 lines of hardcoded elif blocks with a single call!
             self.meters = self.affordance_engine.apply_interaction(
                 meters=self.meters,
                 affordance_name=affordance_name,

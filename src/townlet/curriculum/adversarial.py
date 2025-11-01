@@ -4,11 +4,11 @@ Tracks per-agent metrics (survival, learning, entropy) and adapts stage
 through 5 progressive difficulty levels culminating in sparse rewards.
 """
 
-from typing import List, Dict, Tuple, Any, Optional
+from typing import Any
+
 import torch
 import yaml
-from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from townlet.curriculum.base import CurriculumManager
 from townlet.training.state import BatchedAgentState, CurriculumDecision
@@ -18,7 +18,7 @@ class StageConfig(BaseModel):
     """Configuration for a single curriculum stage."""
 
     stage: int
-    active_meters: List[str]
+    active_meters: list[str]
     depletion_multiplier: float
     reward_mode: str  # 'shaped' or 'sparse'
     description: str
@@ -135,7 +135,7 @@ class AdversarialCurriculum(CurriculumManager):
         self.min_steps_at_stage = min_steps_at_stage
         self.device = device
 
-        self.tracker: Optional[PerformanceTracker] = None  # Set when population initialized
+        self.tracker: PerformanceTracker | None = None  # Set when population initialized
 
     @classmethod
     def from_yaml(cls, config_path: str) -> "AdversarialCurriculum":
@@ -147,7 +147,7 @@ class AdversarialCurriculum(CurriculumManager):
         Returns:
             Configured AdversarialCurriculum instance
         """
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         curriculum_config = config.get("curriculum", {})
@@ -169,7 +169,7 @@ class AdversarialCurriculum(CurriculumManager):
         """Initialize performance tracking for population."""
         self.tracker = PerformanceTracker(num_agents, self.device)
 
-    def _get_active_meters(self, stage: int) -> List[str]:
+    def _get_active_meters(self, stage: int) -> list[str]:
         """Get active meters for stage."""
         return STAGE_CONFIGS[stage - 1].active_meters
 
@@ -235,9 +235,9 @@ class AdversarialCurriculum(CurriculumManager):
     def get_batch_decisions_with_qvalues(
         self,
         agent_states: BatchedAgentState,
-        agent_ids: List[str],
+        agent_ids: list[str],
         q_values: torch.Tensor,
-    ) -> List[CurriculumDecision]:
+    ) -> list[CurriculumDecision]:
         """Generate curriculum decisions with Q-values for entropy calculation.
 
         This is the main entry point when called from VectorizedPopulation.
@@ -295,8 +295,8 @@ class AdversarialCurriculum(CurriculumManager):
     def get_batch_decisions(
         self,
         agent_states: BatchedAgentState,
-        agent_ids: List[str],
-    ) -> List[CurriculumDecision]:
+        agent_ids: list[str],
+    ) -> list[CurriculumDecision]:
         """Generate curriculum decisions without Q-values (for testing).
 
         Uses zero entropy (assumes converged policy).
@@ -333,7 +333,7 @@ class AdversarialCurriculum(CurriculumManager):
 
         return normalized_entropy
 
-    def checkpoint_state(self) -> Dict[str, Any]:
+    def checkpoint_state(self) -> dict[str, Any]:
         """Return serializable state for checkpoint saving."""
         if self.tracker is None:
             return {}
@@ -346,7 +346,7 @@ class AdversarialCurriculum(CurriculumManager):
             "steps_at_stage": self.tracker.steps_at_stage.cpu(),
         }
 
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """Restore curriculum manager from checkpoint."""
         if self.tracker is None:
             raise RuntimeError("Must initialize_population before loading state")

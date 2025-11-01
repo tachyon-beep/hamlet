@@ -1,8 +1,8 @@
 """Neural network architectures for townlet agents."""
 
+
 import torch
 import torch.nn as nn
-from typing import Tuple, Optional
 
 
 class SimpleQNetwork(nn.Module):
@@ -121,11 +121,11 @@ class RecurrentSpatialQNetwork(nn.Module):
         )
 
         # Hidden state (initialized per episode)
-        self.hidden_state: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
+        self.hidden_state: tuple[torch.Tensor, torch.Tensor] | None = None
 
     def forward(
-        self, obs: torch.Tensor, hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        self, obs: torch.Tensor, hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Forward pass with LSTM memory.
 
@@ -219,7 +219,7 @@ class RecurrentSpatialQNetwork(nn.Module):
         c = torch.zeros(1, batch_size, self.hidden_dim, device=device)
         self.hidden_state = (h, c)
 
-    def set_hidden_state(self, hidden: Tuple[torch.Tensor, torch.Tensor]) -> None:
+    def set_hidden_state(self, hidden: tuple[torch.Tensor, torch.Tensor]) -> None:
         """
         Set LSTM hidden state (for episode rollouts).
 
@@ -228,6 +228,6 @@ class RecurrentSpatialQNetwork(nn.Module):
         """
         self.hidden_state = hidden
 
-    def get_hidden_state(self) -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
+    def get_hidden_state(self) -> tuple[torch.Tensor, torch.Tensor] | None:
         """Get current LSTM hidden state."""
         return self.hidden_state

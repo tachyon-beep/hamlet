@@ -10,11 +10,10 @@ Configuration Files:
 """
 
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
-
 
 # ============================================================================
 # Bars Configuration (bars.yaml)
@@ -35,9 +34,9 @@ class BarConfig(BaseModel):
     description: str = Field(description="Human-readable description")
 
     # Optional fields for documentation
-    key_insight: Optional[str] = None
-    special: Optional[str] = None
-    cascade_pattern: Optional[str] = None
+    key_insight: str | None = None
+    special: str | None = None
+    cascade_pattern: str | None = None
 
     @field_validator("range")
     @classmethod
@@ -62,13 +61,13 @@ class BarsConfig(BaseModel):
 
     version: str = Field(description="Config version")
     description: str = Field(description="Config description")
-    bars: List[BarConfig] = Field(description="List of meter configurations")
-    terminal_conditions: List[TerminalCondition] = Field(description="Death conditions")
-    notes: Optional[List[str]] = None
+    bars: list[BarConfig] = Field(description="List of meter configurations")
+    terminal_conditions: list[TerminalCondition] = Field(description="Death conditions")
+    notes: list[str] | None = None
 
     @field_validator("bars")
     @classmethod
-    def validate_bars(cls, v: List[BarConfig]) -> List[BarConfig]:
+    def validate_bars(cls, v: list[BarConfig]) -> list[BarConfig]:
         """Validate bar list."""
         if len(v) != 8:
             raise ValueError(f"Expected 8 bars, got {len(v)}")
@@ -108,7 +107,7 @@ class ModulationConfig(BaseModel):
     baseline_depletion: float = Field(ge=0.0, description="Baseline depletion rate to modulate")
 
     # Optional documentation
-    note: Optional[str] = None
+    note: str | None = None
 
 
 class CascadeConfig(BaseModel):
@@ -129,8 +128,8 @@ class CascadeConfig(BaseModel):
     strength: float = Field(gt=0.0, description="Penalty strength (gradient factor)")
 
     # Optional documentation fields
-    teaching_note: Optional[str] = None
-    why_it_matters: Optional[str] = None
+    teaching_note: str | None = None
+    why_it_matters: str | None = None
 
 
 class CascadesConfig(BaseModel):
@@ -142,17 +141,17 @@ class CascadesConfig(BaseModel):
         description="Cascade math approach"
     )
 
-    modulations: List[ModulationConfig] = Field(description="Depletion rate modulations")
-    cascades: List[CascadeConfig] = Field(description="Threshold-based cascades")
-    execution_order: List[str] = Field(description="Cascade execution order")
+    modulations: list[ModulationConfig] = Field(description="Depletion rate modulations")
+    cascades: list[CascadeConfig] = Field(description="Threshold-based cascades")
+    execution_order: list[str] = Field(description="Cascade execution order")
 
     # Optional documentation
-    notes: Optional[List[str]] = None
-    teaching_insights: Optional[dict] = None
+    notes: list[str] | None = None
+    teaching_insights: dict | None = None
 
     @field_validator("cascades")
     @classmethod
-    def validate_cascades(cls, v: List[CascadeConfig]) -> List[CascadeConfig]:
+    def validate_cascades(cls, v: list[CascadeConfig]) -> list[CascadeConfig]:
         """Validate cascade list."""
         # Check all names are unique
         names = [cascade.name for cascade in v]

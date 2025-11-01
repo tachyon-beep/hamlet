@@ -1,9 +1,9 @@
 # Hamlet Project: AI Agent Memory Document
 
-**Last Updated:** November 1, 2025  
+**Last Updated:** November 2, 2025  
 **Purpose:** Comprehensive project documentation for AI assistants and future developers  
 **Current Branch:** main  
-**Test Coverage:** 70%+ milestone achieved! (285 tests passing: 241 original + 44 cascade system)  
+**Test Coverage:** 62% (376 tests passing after legacy code removal)  
 **Authority Order:** ROADMAP.md > actual code > CLAUDE.md (CLAUDE.md is outdated)  
 **Package Manager:** Use `uv` for all pip operations
 
@@ -13,14 +13,17 @@
 
 Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to "trick students into learning graduate-level RL by making them think they're just playing The Sims." Agents learn to survive in a grid world by managing 8 interconnected meters (energy, hygiene, satiation, money, mood, social, health, fitness) through interactions with 15 affordances.
 
-### Current Status: Phase 3 Complete, Phase 3.5 Next
+### Current Status: Phase 3 Complete + Legacy Cleanup Complete, Phase 3.5 Next
 
-**Phase 3 (✅ COMPLETE):** Intrinsic Exploration - 37/37 tests passing
+**Phase 3 (✅ COMPLETE - Nov 2, 2025):** Full Config-Driven Architecture
 
-- RND (Random Network Distillation) for novelty detection
-- Adaptive intrinsic motivation with variance-based annealing
-- Dual reward system (extrinsic + intrinsic)
-- All tests passing, system validated
+- ✅ **CascadeEngine Integration:** Removed 148 lines of legacy meter dynamics (Nov 2)
+- ✅ **AffordanceEngine Migration:** Removed 282 lines of legacy affordance code (Nov 2)
+- ✅ **Total Technical Debt Eliminated:** 430 lines + 11 obsolete tests
+- ✅ **Single Source of Truth:** All systems now YAML-driven (bars.yaml, cascades.yaml, affordances_corrected.yaml)
+- ✅ **RND Exploration:** Random Network Distillation with adaptive annealing
+- ✅ **Adversarial Curriculum:** 5-stage progressive difficulty system
+- ✅ **376 tests passing** (100% pass rate after cleanup)
 
 **Phase 3.5 (🎯 NEXT):** Multi-Day Tech Demo
 
@@ -28,6 +31,7 @@ Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to 
 - Observe exploration→exploitation transition in production
 - Generate teaching materials from real training data
 - **Purpose:** Validate foundation before adding POMDP complexity
+- **Status:** READY - all legacy code removed, systems validated
 
 **Strategic Direction:** 2→3→1 approach
 
@@ -36,18 +40,21 @@ Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to 
 
 ### Key Features
 
+- **Config-driven architecture** - All game mechanics defined in YAML files (Nov 2)
 - **Vectorized GPU training** with PyTorch tensors throughout
 - **Adversarial curriculum learning** (5 progressive stages from shaped to sparse rewards)
 - **RND-based intrinsic motivation** with adaptive annealing
 - **Partial observability (POMDP)** support with recurrent neural networks (Level 2 implemented)
-- **Temporal mechanics** with time-of-day cycles and multi-tick interactions (Level 2.5 implemented)
-- **Live inference server** for real-time visualization during training
+- **Temporal mechanics** with time-of-day cycles and multi-tick interactions (Level 3 implemented)
+- **Unified server** for training + inference in single process
 
-**Recent Milestone:** Test coverage hit 70%+ target! (Nov 1, 2025)
+**Recent Milestone:** MAJOR REFACTORING COMPLETE (Nov 2, 2025)
 
-- **ACTION #3 COMPLETE:** MeterDynamics extracted (268 lines, 100% coverage)
-- **ACTION #1 Days 1-5 COMPLETE:** CascadeEngine implemented (44/44 tests passing)
-- Config-driven cascade system ready for integration
+- ✅ **CascadeEngine:** meter_dynamics.py 315→167 lines, pure config-driven
+- ✅ **AffordanceEngine:** Removed AFFORDANCE_CONFIGS dict (240 lines)
+- ✅ **vectorized_env.py:** All 3 code paths migrated to use AffordanceEngine
+- ✅ **Deleted obsolete tests:** 11 tests removed (8 cascade + 3 affordance)
+- ✅ **Training validated:** 10 episodes successful with new architecture
 - Major refactoring plan documented with 15 actions in `docs/testing/REFACTORING_ACTIONS.md`
 
 ---
@@ -62,30 +69,77 @@ Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to 
 
 ### Running the System
 
-**⚠️ Current (Three Separate Commands - Will Be Unified):**
+**✅ Current: Unified Server (Training + Inference in one command)**
 
 ```bash
-# Set PYTHONPATH to include src directory
-export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+# Terminal 1: Start training + inference server
+python run_demo.py --config configs/level_1_full_observability.yaml --episodes 10000
 
-# Terminal 1: Training
-python -m townlet.demo.runner configs/townlet_level_1_5.yaml demo_level1_5.db checkpoints_level1_5 10000
+# Terminal 2: Start frontend (Vue dev server - optional, for visualization)
+cd frontend && npm run dev
+# Open http://localhost:5173
 
-# Terminal 2: Live Inference Server (for visualization during training)
-python -m townlet.demo.live_inference checkpoints_level1_5 8766 0.2 10000 configs/townlet_level_1_5.yaml
-# Args: <checkpoint_dir> <port> <speed> <total_episodes> <config_path>
+# Terminal 3: Start TensorBoard (optional, for metrics visualization)
+tensorboard --logdir runs/L1_full_observability/<timestamp>/tensorboard
+# Open http://localhost:6006
+
+# Note: The unified server will print the exact commands for you!
+```
+
+**What You'll See When Starting:**
+
+```
+= ============================================================
+✅ Training + Inference servers operational
+==============================================================
+
+📊 To view live visualization (optional):
+   Terminal 2:
+   $ cd frontend && npm run dev -- --host 0.0.0.0
+   Then open: http://localhost:5173
+
+📈 To view training metrics (optional):
+   Terminal 3:
+   $ tensorboard --logdir runs/L1_full_observability/2025-11-02_123456/tensorboard --bind_all
+   Then open: http://localhost:6006
+
+💾 Checkpoints: runs/L1_full_observability/2025-11-02_123456/checkpoints
+🔌 Inference port: 8766
+
+Press Ctrl+C to stop gracefully
+==============================================================
+```
+
+**Example Commands:**
+
+```bash
+# Short demo (1K episodes, ~2 hours)
+python run_demo.py --config configs/level_1_full_observability.yaml --episodes 1000
+
+# Full demo (10K episodes, ~48 hours)
+python run_demo.py --config configs/level_1_full_observability.yaml --episodes 10000
+
+# Resume from checkpoint
+python run_demo.py --config configs/level_1_full_observability.yaml \
+    --checkpoint-dir runs/L1_full_observability/2025-11-02_123456/checkpoints
+
+# Custom inference port
+python run_demo.py --config configs/level_1_full_observability.yaml \
+    --episodes 5000 --inference-port 8800
+```
+
+**Legacy (Still Works, but unified server is preferred):**
+
+```bash
+# Three separate terminals (old way)
+# Terminal 1: Training only
+python -m townlet.demo.runner configs/level_1_full_observability.yaml demo.db checkpoints_dir 10000
+
+# Terminal 2: Inference server
+python -m townlet.demo.live_inference checkpoints_dir 8766 0.2 10000 configs/level_1_full_observability.yaml
 
 # Terminal 3: Frontend
 cd frontend && npm run dev
-# Open http://localhost:5173
-```
-
-**🎯 Future (ACTION #15 - Unified Server):**
-
-```bash
-# Single command starts everything (training + inference + frontend):
-python run_demo.py --config configs/townlet_level_1_5.yaml --episodes 10000
-# Browser auto-opens, everything just works!
 ```
 
 ### Configuration Files (YAML)

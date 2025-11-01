@@ -2,7 +2,7 @@
 
 import sqlite3
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 
 class DemoDatabase:
@@ -107,7 +107,7 @@ class DemoDatabase:
         )
         self.conn.commit()
 
-    def get_latest_episodes(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_latest_episodes(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get most recent episodes.
 
         Args:
@@ -135,7 +135,7 @@ class DemoDatabase:
         )
         self.conn.commit()
 
-    def get_system_state(self, key: str) -> Optional[str]:
+    def get_system_state(self, key: str) -> str | None:
         """Get system state value.
 
         Args:
