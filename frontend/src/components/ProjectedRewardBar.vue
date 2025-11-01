@@ -31,7 +31,10 @@
           </transition>
         </span>
         <div class="reward-text-container">
-          <span class="reward-text-main" :class="rewardStatusClass">{{ formattedReward }}</span>
+          <div class="reward-row">
+            <span class="reward-text-main" :class="rewardStatusClass">{{ formattedReward }}</span>
+            <span class="reward-percent" :class="rewardStatusClass">{{ cumulativePercent }}%</span>
+          </div>
           <span class="reward-text-sub">{{ statusText }}</span>
         </div>
       </div>
@@ -83,6 +86,12 @@ const formattedReward = computed(() => {
   const reward = props.projectedReward
   if (reward > 0) return `+${reward.toFixed(1)}`
   return reward.toFixed(1)
+})
+
+// Calculate cumulative percentage (continues past 100%)
+const cumulativePercent = computed(() => {
+  if (props.baselineSurvival === 0) return 0
+  return Math.floor((props.currentStep / props.baselineSurvival) * 100)
 })
 
 // Status text based on tier
@@ -257,7 +266,21 @@ const backgroundColor = computed(() => {
   flex: 1;
 }
 
+.reward-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .reward-text-main {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  transition: color 0.3s ease;
+}
+
+.reward-percent {
   font-size: 24px;
   font-weight: 700;
   letter-spacing: 0.5px;
