@@ -99,7 +99,16 @@ def test_bars_config_has_all_meters(bars_path: Path):
     config = load_bars_config(bars_path)
 
     meter_names = {bar.name for bar in config.bars}
-    expected_names = {"energy", "health", "satiation", "fitness", "mood", "hygiene", "social", "money"}
+    expected_names = {
+        "energy",
+        "health",
+        "satiation",
+        "fitness",
+        "mood",
+        "hygiene",
+        "social",
+        "money",
+    }
 
     assert meter_names == expected_names, f"Expected {expected_names}, got {meter_names}"
 
@@ -182,7 +191,8 @@ def test_bars_config_rejects_duplicate_indices():
                 "base_depletion": 0.01,
                 "description": "Bar 2",
             },
-        ] + [
+        ]
+        + [
             {
                 "name": f"bar{i}",
                 "index": i,

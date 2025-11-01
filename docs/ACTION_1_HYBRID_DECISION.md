@@ -13,11 +13,13 @@
 ### What This Means
 
 ✅ **SDW Structure** (the framework):
+
 - 4-file YAML organization: `bars.yaml`, `cascades.yaml`, `affordances.yaml`, `cues.yaml`
 - Clean separation of concerns (ontology, physics, actions, communication)
 - Module B ready (World Model can learn from config)
 
 ✅ **Our Math** (the proven content):
+
 - Gradient penalties (smooth, proportional consequences)
 - 30% thresholds (validated with 275 passing tests)
 - Current cascade strengths (tested over thousands of episodes)
@@ -34,6 +36,7 @@
 ## The Two Designs Compared
 
 ### SDW Spec (SOFTWARE_DEFINED_WORLD.md)
+
 ```yaml
 # Multiplier approach (binary threshold)
 cascades:
@@ -44,6 +47,7 @@ cascades:
 ```
 
 ### Our Validated Math (275 tests)
+
 ```yaml
 # Gradient penalty approach (smooth proportional)
 cascades:
@@ -68,6 +72,7 @@ cascades:
 ## What We're Building
 
 ### File 1: `configs/bars.yaml`
+
 ```yaml
 # Meter definitions & base depletion rates
 # This is the "what exists" ontology
@@ -95,6 +100,7 @@ terminal_conditions:
 ```
 
 ### File 2: `configs/cascades.yaml`
+
 ```yaml
 # Threshold-based cascade effects
 # This is the "how they interact" physics
@@ -117,12 +123,14 @@ cascades:
 ```
 
 ### File 3: `configs/affordances.yaml`
+
 ```yaml
 # Already exists! No changes needed for ACTION #1
 # This is ACTION #12 territory
 ```
 
 ### File 4: `configs/cues.yaml`
+
 ```yaml
 # Social tells for Module C (future)
 # Not needed for ACTION #1
@@ -136,12 +144,14 @@ cascades:
 ### Week 1: Core Implementation (Days 1-5)
 
 **Days 1-2: Schema & Validation**
+
 - Create `bars.yaml` and `cascades.yaml`
 - Create Pydantic models for type safety
 - Write config loader with validation
 - Test: Config loads without errors
 
 **Days 3-5: CascadeEngine**
+
 - Create `CascadeEngine` class
 - Implement gradient penalty logic
 - Replace hardcoded meter_dynamics.py logic
@@ -150,11 +160,13 @@ cascades:
 ### Week 2: Extension & Alternatives (Days 6-10)
 
 **Days 6-7: Add SDW Features**
+
 - Optional: Add multiplier support alongside gradient
 - Create `configs/cascades/sdw_multiplier.yaml`
 - Test: Both approaches work
 
 **Days 8-10: Alternative Configs**
+
 - `configs/cascades/default.yaml` - current behavior
 - `configs/cascades/weak_cascades.yaml` - 50% strength (pedagogy)
 - `configs/cascades/strong_cascades.yaml` - 150% strength (challenge)
@@ -164,11 +176,13 @@ cascades:
 ### Week 3: Testing & Documentation (Days 11-15)
 
 **Days 11-12: Comprehensive Testing**
+
 - Characterization tests (config == hardcoded)
 - Performance benchmarks (<5% overhead)
 - Edge case validation
 
 **Days 13-15: Documentation**
+
 - Student guide: "Experimenting with Cascade Physics"
 - Update AGENTS.md with new architecture
 - Create CASCADE_CONFIG_GUIDE.md
@@ -178,17 +192,20 @@ cascades:
 ## Success Criteria
 
 ### Must Have (Week 1)
+
 ✅ Config-driven system produces **identical behavior** to hardcoded  
 ✅ All 275 tests pass with zero regressions  
 ✅ SDW-compliant 4-file structure  
 ✅ Type-safe config loading with validation  
 
 ### Should Have (Week 2)
+
 ✅ 5 alternative configs for pedagogical experiments  
 ✅ Support for both gradient and multiplier approaches  
 ✅ Performance <5% overhead vs hardcoded  
 
 ### Nice to Have (Week 3)
+
 ✅ Student-friendly documentation  
 ✅ Config validation with helpful error messages  
 ✅ Examples showing how to add new meters  

@@ -13,7 +13,8 @@
 
 **Design Approach**: Use SOFTWARE_DEFINED_WORLD.md as **structural template** (4-file organization), but implement our **validated mathematics** (30% thresholds, gradient penalties, 275 passing tests).
 
-**Why This Matters**: 
+**Why This Matters**:
+
 - **Moonshot Prerequisite**: Module B (World Model) needs to learn physics from config, not code
 - **Pedagogical**: Students can experiment with different cascade strengths
 - **Level 3 Ready**: Easy to add 5 new meters without touching code
@@ -29,24 +30,29 @@
 ### Meter Architecture (8 meters)
 
 **PRIMARY (Death Conditions):**
+
 - `health` [6]: Are you alive?
 - `energy` [0]: Can you move?
 
 **SECONDARY (Strong → Primary):**
+
 - `satiation` [2] → health AND energy (FUNDAMENTAL - affects both!)
 - `fitness` [7] → health (via depletion multiplier: 0.5x to 3.0x)
 - `mood` [4] → energy
 
 **TERTIARY (Quality of Life):**
+
 - `hygiene` [1] → strong to secondary + weak to primary
 - `social` [5] → strong to secondary + weak to primary
 
 **RESOURCE:**
+
 - `money` [3]: Enables affordances (no cascades)
 
 ### Current Cascade Effects (13 total)
 
 #### Base Depletions (8 effects)
+
 ```python
 energy: -0.005 (0.5% per step)
 hygiene: -0.003 (0.3%)
@@ -59,6 +65,7 @@ fitness: -0.002 (0.2%)
 ```
 
 #### Secondary → Primary (3 effects)
+
 ```python
 LOW satiation (<0.3) → health: -0.004 * deficit
 LOW satiation (<0.3) → energy: -0.005 * deficit
@@ -66,6 +73,7 @@ LOW mood (<0.3) → energy: -0.005 * deficit
 ```
 
 #### Tertiary → Secondary (4 effects)
+
 ```python
 LOW hygiene (<0.3) → satiation: -0.002 * deficit
 LOW hygiene (<0.3) → fitness: -0.002 * deficit
@@ -74,6 +82,7 @@ LOW social (<0.3) → mood: -0.004 * deficit
 ```
 
 #### Tertiary → Primary (3 effects)
+
 ```python
 LOW hygiene (<0.3) → health: -0.0005 * deficit
 LOW hygiene (<0.3) → energy: -0.0005 * deficit
@@ -81,6 +90,7 @@ LOW social (<0.3) → energy: -0.0008 * deficit
 ```
 
 #### Special: Fitness Modulation (1 effect)
+
 ```python
 fitness level → health depletion multiplier: 0.5x to 3.0x
 ```
@@ -363,13 +373,15 @@ if satiation < 0.3:
 
 Clear separation enables modular development!# Terminal conditions (death triggers)
 terminal_conditions:
-  - meter: "health"
+
+- meter: "health"
     condition: "<= 0.0"
     description: "Death if health reaches zero"
   
-  - meter: "energy"
+- meter: "energy"
     condition: "<= 0.0"
     description: "Death if energy reaches zero"
+
 ```
 
 ---
@@ -465,6 +477,7 @@ class MeterDynamics:
 ```
 
 **Deliverables:**
+
 - `CascadeEngine` class fully implemented
 - `MeterDynamics` refactored to use engine
 - All existing tests still passing (zero behavior change)
@@ -472,6 +485,7 @@ class MeterDynamics:
 ### Phase 3: Testing & Validation (Week 2-3, Days 8-12)
 
 **Tasks:**
+
 1. **Characterization Tests**: Verify config produces same behavior as hardcoded
 2. **Alternative Configs**: Create test configs with different cascade strengths
 3. **Pedagogical Tests**: Test "what if satiation was 2x stronger?"
@@ -503,6 +517,7 @@ class TestCascadeEngine:
 ```
 
 **Deliverables:**
+
 - 20+ tests for cascade engine
 - 5 alternative configs for testing/pedagogy
 - Documentation of pedagogical use cases
@@ -511,6 +526,7 @@ class TestCascadeEngine:
 ### Phase 4: Documentation & Polish (Week 3, Days 13-15)
 
 **Tasks:**
+
 1. Update AGENTS.md with new cascade engine architecture
 2. Create CASCADE_CONFIG_GUIDE.md for students
 3. Add inline comments to default.yaml explaining each cascade
@@ -534,6 +550,7 @@ Define a new meter (e.g., "stress") and its cascades
 ```
 
 **Deliverables:**
+
 - Complete documentation
 - Student-friendly experimentation guide
 - Updated project docs
@@ -543,6 +560,7 @@ Define a new meter (e.g., "stress") and its cascades
 ## Success Criteria
 
 ### Must Have (Required)
+
 - ✅ Config-driven system produces **identical behavior** to hardcoded (zero regression)
 - ✅ All 275 existing tests pass without modification
 - ✅ New tests achieve 100% coverage on `CascadeEngine`
@@ -550,12 +568,14 @@ Define a new meter (e.g., "stress") and its cascades
 - ✅ Can modify cascade strength in YAML in <1 minute
 
 ### Should Have (Important)
+
 - ✅ 5 alternative configs for pedagogical experiments
 - ✅ Level 3 preview config with 13 meters
 - ✅ Student-friendly documentation
 - ✅ Performance: <1% overhead vs hardcoded
 
 ### Nice to Have (Bonus)
+
 - ✅ Config validation catches common errors with helpful messages
 - ✅ Visualization tool to see cascade graph from config
 - ✅ Hot-reload config during training (advanced)
@@ -569,6 +589,7 @@ Define a new meter (e.g., "stress") and its cascades
 **Likelihood**: Low  
 **Impact**: Medium (200 episodes/hour → 180?)  
 **Mitigation**:
+
 - Pre-compute indices/masks during initialization
 - Keep hot path tight (avoid YAML parsing in loop)
 - Benchmark: config-driven should be within 5% of hardcoded
@@ -578,6 +599,7 @@ Define a new meter (e.g., "stress") and its cascades
 **Likelihood**: Medium (easy to introduce subtle bugs)  
 **Impact**: High (breaks existing training)  
 **Mitigation**:
+
 - Extensive characterization tests before refactoring
 - Test against exact hardcoded outputs (bit-level comparison)
 - Keep legacy code temporarily for A/B testing
@@ -587,6 +609,7 @@ Define a new meter (e.g., "stress") and its cascades
 **Likelihood**: Low (YAML is simple)  
 **Impact**: Medium (confusion for students)  
 **Mitigation**:
+
 - Extensive comments in default.yaml
 - Student guide with examples
 - Start simple (can add complexity later)
@@ -622,15 +645,18 @@ Define a new meter (e.g., "stress") and its cascades
 ## Timeline Summary
 
 **Week 1**:
+
 - Days 1-2: Schema & validation
 - Days 3-5: CascadeEngine implementation
 - Days 6-7: MeterDynamics integration
 
 **Week 2**:
+
 - Days 8-10: Testing & validation
 - Days 11-12: Alternative configs
 
 **Week 3**:
+
 - Days 13-15: Documentation & polish
 - Buffer: Handle unexpected issues
 

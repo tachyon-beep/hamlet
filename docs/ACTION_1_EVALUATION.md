@@ -1,7 +1,8 @@
 # ACTION #1 Design Evaluation
 
 **Date**: November 1, 2025  
-**Comparing**: 
+**Comparing**:
+
 - `docs/ACTION_1_DESIGN.md` (Our fresh design)
 - `docs/SOFTWARE_DEFINED_WORLD.md` (Existing spec)
 
@@ -12,6 +13,7 @@
 ✅ **EXCELLENT ALIGNMENT** - The existing spec and our design are ~90% compatible!
 
 **Key Findings**:
+
 1. ✅ Both use YAML for configuration-driven physics
 2. ✅ Both define hierarchical meter relationships
 3. ⚠️ **Different cascade approaches** (multipliers vs direct penalties)
@@ -28,6 +30,7 @@
 ### 1. Meter Hierarchy: ALIGNED ✅
 
 **SOFTWARE_DEFINED_WORLD.md (4-tier system)**:
+
 ```yaml
 Tier 0 (Pivotal): energy, health - DEATH if 0
 Tier 1 (Primary): money - Gates affordances
@@ -36,6 +39,7 @@ Tier 3 (Tertiary): hygiene, social, stimulation - Affect secondary
 ```
 
 **ACTION_1_DESIGN.md (3-tier + resource)**:
+
 ```yaml
 PRIMARY: energy, health - DEATH if 0
 SECONDARY: satiation, mood, fitness - Strong → primary
@@ -44,6 +48,7 @@ RESOURCE: money - Enables affordances (no cascades)
 ```
 
 **Analysis**:
+
 - Same meters in pivotal/primary death conditions ✅
 - **Money placement differs**: SDW says "Tier 1 Primary", we say "Resource"
 - SDW adds "stimulation" (new meter for boredom) 🆕
@@ -58,6 +63,7 @@ RESOURCE: money - Enables affordances (no cascades)
 ### 2. Cascade Physics: MAJOR DIFFERENCE ⚠️
 
 **SOFTWARE_DEFINED_WORLD.md Approach**:
+
 ```yaml
 # Uses MULTIPLIERS on depletion rates
 - id: "low_satiation_penalty"
@@ -68,6 +74,7 @@ RESOURCE: money - Enables affordances (no cascades)
 ```
 
 **ACTION_1_DESIGN.md Approach**:
+
 ```yaml
 # Uses DIRECT PENALTIES based on deficit
 - name: "satiation_to_health"
@@ -87,6 +94,7 @@ RESOURCE: money - Enables affordances (no cascades)
 | **Our Direct Penalties** | Below 30 threshold | 0.004 * ((30-20)/30) | 0.00133/tick EXTRA |
 
 **Key Differences**:
+
 1. **SDW**: Multipliers (1.2x, 1.5x, 2.0x) on base depletion rates
 2. **Our design**: Additive penalties scaled by deficit magnitude
 3. **SDW**: Binary threshold (on/off at 20)
@@ -95,12 +103,14 @@ RESOURCE: money - Enables affordances (no cascades)
 **Pros of Each**:
 
 **SDW Multipliers**:
+
 - ✅ Simpler conceptual model ("low X makes Y deplete 1.5x faster")
 - ✅ Easier for students to understand
 - ✅ Matches existing spec
 - ❌ Binary (no gradient between 20→0)
 
 **Our Direct Penalties**:
+
 - ✅ Gradient approach (smoother gameplay)
 - ✅ Already implemented and tested (270 lines of working code)
 - ✅ 100% test coverage with 275 tests passing
@@ -118,12 +128,14 @@ RESOURCE: money - Enables affordances (no cascades)
 | **Our Design** | 0.3 (30% normalized) | "Low" means <30% |
 
 **Analysis**:
+
 - SDW uses absolute values (out of 100)
 - Our design uses normalized values (0.0 to 1.0)
 - 20/100 = 0.2 (20%) vs 0.3 (30%)
 - **Different trigger points!**
 
 **Impact**:
+
 - SDW more aggressive (cascades start earlier)
 - Our design more forgiving (30% threshold)
 
@@ -136,6 +148,7 @@ RESOURCE: money - Enables affordances (no cascades)
 ### 4. File Structure: ALIGNED ✅
 
 **SOFTWARE_DEFINED_WORLD.md**:
+
 ```
 config/bars.yaml - Meter definitions
 config/cascades.yaml - Cascade physics
@@ -144,6 +157,7 @@ config/cues.yaml - Social tells (Module C)
 ```
 
 **ACTION_1_DESIGN.md**:
+
 ```
 configs/cascades/default.yaml - All-in-one (meters + cascades)
 configs/cascades/weak_cascades.yaml - Alternative strengths
@@ -152,16 +166,19 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 ```
 
 **Analysis**:
+
 - SDW separates concerns (4 files)
 - Our design combines meters + cascades (1 file)
 - Both approaches valid
 
 **Pros of Separation** (SDW):
+
 - ✅ Clear separation of concerns
 - ✅ Can modify cascades without touching meter definitions
 - ✅ Matches common config patterns
 
 **Pros of Combination** (Our design):
+
 - ✅ Single file for complete physics
 - ✅ Easier to create alternative physics configs
 - ✅ Pedagogical - see full system at once
@@ -173,16 +190,19 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 ### 5. New Meters in SDW: VALUABLE ADDITION 🆕
 
 **SDW Introduces**:
+
 - `stimulation` - "Boredom" meter (Tier 3/Tertiary)
   - Depletes at -0.1/tick
   - Low stimulation → fitness multiplier 1.5x
   - Gained from: bar (+20), job completion (implicitly)
 
 **Our Design**:
+
 - Only 8 meters (current system)
 - Planned: 5 new meters for Level 3 (stress, knowledge, etc.)
 
 **Analysis**:
+
 - Stimulation/boredom is pedagogically valuable
 - Teaches: "Need variety in life, not just survival"
 - Fits Tertiary tier (quality of life)
@@ -194,6 +214,7 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 ### 6. Affordances (ACTION #12): PERFECTLY ALIGNED ✅
 
 **SDW `affordances.yaml`**:
+
 ```yaml
 - id: "fridge"
   interaction_type: "instant"
@@ -208,6 +229,7 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 ```
 
 **Our Design**:
+
 - ACTION #12 (not yet started)
 - Would use very similar YAML structure
 
@@ -218,6 +240,7 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 ### 7. Social Cues (Module C): PERFECTLY ALIGNED ✅
 
 **SDW `cues.yaml`**:
+
 ```yaml
 - cue_id: "looks_dirty"
   conditions: [{ bar: "hygiene", op: "<", val: 10 }]
@@ -230,6 +253,7 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 ```
 
 **Our Design**:
+
 - Not in ACTION #1 scope
 - Module C work (future)
 
@@ -244,10 +268,12 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 **Implement SDW spec exactly as written**
 
 **Pros**:
+
 - ✅ Matches approved design doc
 - ✅ Simpler multiplier model
 
 **Cons**:
+
 - ❌ Throw away 270 lines of tested code
 - ❌ Throw away 15 characterization tests (100% coverage)
 - ❌ Behavioral changes (20% threshold, multipliers vs penalties)
@@ -262,11 +288,13 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 **Implement our design, ignore SDW**
 
 **Pros**:
+
 - ✅ Keep 270 lines of tested code
 - ✅ Keep 275 passing tests
 - ✅ Zero behavioral changes
 
 **Cons**:
+
 - ❌ Ignores approved spec
 - ❌ Misses valuable additions (stimulation meter)
 - ❌ File structure doesn't match spec
@@ -282,11 +310,13 @@ configs/cascades/strong_cascades.yaml - Alternative strengths
 #### Phase 1: Validate Current System (Week 1)
 
 **Keep current cascade math** (gradient penalties at 30% threshold):
+
 - ✅ Already tested and working
 - ✅ 100% test coverage
 - ✅ Zero risk to existing training
 
 **Add SDW structure**:
+
 ```
 configs/
   bars.yaml - Meter definitions (SDW format)
@@ -298,6 +328,7 @@ configs/
 #### Phase 2: Add SDW Features (Week 2)
 
 1. **Add stimulation meter**:
+
    ```yaml
    # In bars.yaml
    - id: "stimulation"
@@ -307,6 +338,7 @@ configs/
    ```
 
 2. **Add stimulation cascades**:
+
    ```yaml
    # In cascades.yaml
    - name: "stimulation_to_fitness"
@@ -341,6 +373,7 @@ cascades:
 ```
 
 **Implementation**:
+
 ```python
 class CascadeEngine:
     def apply_cascade(self, cascade_config, meters):
@@ -351,6 +384,7 @@ class CascadeEngine:
 ```
 
 **Benefits**:
+
 - ✅ Support both approaches
 - ✅ Students can experiment with each
 - ✅ Pedagogically rich ("compare gradient vs binary")
@@ -363,17 +397,20 @@ class CascadeEngine:
 ### Week 1: Foundation (SDW Structure + Our Math)
 
 **Days 1-2**: Schema & File Structure
+
 - Create `configs/bars.yaml` (SDW format)
 - Create `configs/cascades.yaml` (SDW structure, our math)
 - Pydantic models for both
 - Load both files, combine into single config object
 
 **Days 3-5**: CascadeEngine Implementation
+
 - Implement gradient penalty approach (current)
 - Use SDW YAML structure
 - All 275 tests pass (zero behavioral change)
 
 **Days 6-7**: Add Stimulation Meter
+
 - Add to `bars.yaml`
 - Add cascades to `cascades.yaml`
 - Update affordances (bar, job affects stimulation)
@@ -384,12 +421,14 @@ class CascadeEngine:
 ### Week 2: SDW Features + Dual Math Support
 
 **Days 8-10**: Implement Multiplier Approach
+
 - Add multiplier cascade type
 - Create `configs/cascades/multiplier_mode.yaml`
 - Test both modes produce different (but valid) results
 - Document trade-offs
 
 **Days 11-12**: Alternative Configs
+
 - `configs/cascades/sdw_official.yaml` - Pure SDW spec (20% thresholds, multipliers)
 - `configs/cascades/current_behavior.yaml` - Our exact current system
 - `configs/cascades/level_3_preview.yaml` - 13 meters for future
@@ -399,6 +438,7 @@ class CascadeEngine:
 ### Week 3: Testing & Documentation
 
 **Days 13-15**: Polish
+
 - Comprehensive testing (100% coverage on CascadeEngine)
 - Student guide: "Experimenting with Cascade Physics"
 - Performance benchmarks (config vs hardcoded)
@@ -428,7 +468,8 @@ class CascadeEngine:
 
 **Likelihood**: Medium (if we adopt 20% threshold + multipliers)  
 **Impact**: High (breaks existing training)  
-**Mitigation**: 
+**Mitigation**:
+
 - Default to current behavior (30% threshold, gradient penalties)
 - Make SDW mode opt-in via config
 - Extensive A/B testing before switching
@@ -438,6 +479,7 @@ class CascadeEngine:
 **Likelihood**: Low  
 **Impact**: Medium (200→180 episodes/hour?)  
 **Mitigation**:
+
 - Pre-compute cascade indices
 - Benchmark: SDW structure should be <5% overhead
 - Keep hot paths tight
@@ -447,6 +489,7 @@ class CascadeEngine:
 **Likelihood**: Medium (SDW spec might evolve)  
 **Impact**: Low (can update configs)  
 **Mitigation**:
+
 - Version configs (v1.0, v2.0)
 - Keep SDW spec as source of truth
 - Document deviations clearly
@@ -468,7 +511,8 @@ class CascadeEngine:
 **Week 2**: Add stimulation meter + support both math models (best of both)  
 **Week 3**: Test, document, pedagogical configs  
 
-**Result**: 
+**Result**:
+
 - ✅ Compliant with SDW spec
 - ✅ Preserves 270 lines of tested code
 - ✅ Adds valuable features (stimulation meter)

@@ -12,6 +12,7 @@
 ### 1. Created YAML Configuration Files ✅
 
 **`configs/bars.yaml`** (109 lines)
+
 - All 8 meters defined with SDW structure
 - Exact base depletion rates from `meter_dynamics.py`
 - Clear tier hierarchy: pivotal, primary, secondary, resource
@@ -20,6 +21,7 @@
 - **Key insight documented**: Satiation is THE foundational need
 
 **`configs/cascades.yaml`** (198 lines)
+
 - 1 modulation: fitness → health multiplier (0.5x-3.0x)
 - 10 threshold-based cascades with gradient penalties
 - Exact strength values from `meter_dynamics.py` (0.0005 to 0.005)
@@ -34,6 +36,7 @@
 **`src/townlet/environment/cascade_config.py`** (320 lines)
 
 Pydantic Models:
+
 - `BarConfig` - Single meter definition with validation
 - `BarsConfig` - Complete bars.yaml with uniqueness checks
 - `TerminalCondition` - Death condition validation
@@ -43,6 +46,7 @@ Pydantic Models:
 - `EnvironmentConfig` - Combined configuration with helper methods
 
 Validation Features:
+
 - Type checking (Pydantic automatic)
 - Range validation (meters must be [0.0, 1.0])
 - Uniqueness validation (no duplicate indices/names)
@@ -50,6 +54,7 @@ Validation Features:
 - Helpful error messages for debugging
 
 Helper Methods:
+
 - `get_bar_by_name(name)` - Lookup meter by name
 - `get_bar_by_index(index)` - Lookup meter by index
 - `get_cascade_by_name(name)` - Lookup cascade by name
@@ -60,6 +65,7 @@ Helper Methods:
 **`tests/test_townlet/test_cascade_config.py`** (370 lines, 23 tests)
 
 Test Coverage:
+
 1. **YAML Loading** (2 tests)
    - bars.yaml syntax validation
    - cascades.yaml syntax validation
@@ -115,6 +121,7 @@ Test Coverage:
 ### 3. Comprehensive Documentation ✅
 
 Both YAML files include:
+
 - Detailed comments explaining each parameter
 - Teaching notes for pedagogy
 - Why each cascade exists
@@ -145,6 +152,7 @@ hamlet/
 ## Validation Results
 
 ### Script Validation ✅
+
 ```bash
 $ python scripts/validate_configs.py
 ✅ bars.yaml loaded successfully
@@ -156,13 +164,16 @@ $ python scripts/validate_configs.py
 ```
 
 ### Test Suite ✅
+
 ```bash
 $ pytest tests/test_townlet/test_cascade_config.py -v
 ===================================== 23 passed in 0.34s =====================================
 ```
 
 ### Coverage 📊
+
 Config loader module created with full test coverage:
+
 - 23 tests covering loading, validation, helpers, error handling
 - All edge cases tested (invalid ranges, duplicate names, missing files)
 - Ready for integration into CascadeEngine
@@ -172,12 +183,14 @@ Config loader module created with full test coverage:
 ## What This Enables
 
 ### Immediate Benefits
+
 1. ✅ **Zero Risk**: Values match current implementation exactly
 2. ✅ **Type Safety**: Pydantic catches errors at load time
 3. ✅ **Documentation**: YAML files are self-documenting
 4. ✅ **Testable**: Config loader fully tested (23 tests)
 
 ### Next Steps Ready
+
 1. ⏳ **CascadeEngine**: Can now read validated config
 2. ⏳ **Alternative Configs**: Easy to create variations
 3. ⏳ **Module B**: Config-driven physics ready for World Model
@@ -189,6 +202,7 @@ Config loader module created with full test coverage:
 **Goal**: Replace hardcoded logic in `meter_dynamics.py` with `CascadeEngine` that reads YAML config.
 
 **Tasks**:
+
 1. Create `CascadeEngine` class
 2. Implement gradient penalty logic (from config)
 3. Implement fitness modulation logic (from config)
@@ -196,6 +210,7 @@ Config loader module created with full test coverage:
 5. Validate: All 275 tests still pass (zero behavioral change)
 
 **Success Criteria**:
+
 - ✅ Config-driven cascade logic
 - ✅ All 275 existing tests pass
 - ✅ No performance degradation
@@ -208,17 +223,20 @@ Config loader module created with full test coverage:
 ## Retrospective
 
 ### What Went Well ✅
+
 1. **YAML structure** - Clean, readable, self-documenting
 2. **Pydantic validation** - Caught issues early, great error messages
 3. **Test coverage** - 23 tests give confidence in config loader
 4. **SDW alignment** - Perfect 90% compatibility maintained
 
 ### Challenges Overcome 💪
+
 1. **Validation logic** - Ensuring uniqueness, ranges, constraints
 2. **Helper methods** - Making config easy to query
 3. **Error handling** - Clear messages for missing files, invalid data
 
 ### Lessons Learned 📚
+
 1. **Type safety matters** - Pydantic validation caught several issues
 2. **Test early** - 23 tests written alongside code, not after
 3. **Document as you go** - YAML comments explain WHY, not just WHAT

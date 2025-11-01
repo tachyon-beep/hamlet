@@ -29,9 +29,7 @@ class BarConfig(BaseModel):
     tier: Literal["pivotal", "primary", "secondary", "resource"] = Field(
         description="Tier in cascade hierarchy"
     )
-    range: tuple[float, float] = Field(
-        default=(0.0, 1.0), description="Min and max values"
-    )
+    range: tuple[float, float] = Field(default=(0.0, 1.0), description="Min and max values")
     initial: float = Field(ge=0.0, le=1.0, description="Initial value at spawn")
     base_depletion: float = Field(ge=0.0, description="Passive decay per step")
     description: str = Field(description="Human-readable description")
@@ -54,9 +52,7 @@ class TerminalCondition(BaseModel):
     """Configuration for a terminal (death) condition."""
 
     meter: str = Field(description="Meter name to check")
-    operator: Literal["<=", ">=", "<", ">", "=="] = Field(
-        description="Comparison operator"
-    )
+    operator: Literal["<=", ">=", "<", ">", "=="] = Field(description="Comparison operator")
     value: float = Field(description="Threshold value")
     description: str = Field(description="Human-readable description")
 
@@ -67,9 +63,7 @@ class BarsConfig(BaseModel):
     version: str = Field(description="Config version")
     description: str = Field(description="Config description")
     bars: List[BarConfig] = Field(description="List of meter configurations")
-    terminal_conditions: List[TerminalCondition] = Field(
-        description="Death conditions"
-    )
+    terminal_conditions: List[TerminalCondition] = Field(description="Death conditions")
     notes: Optional[List[str]] = None
 
     @field_validator("bars")
@@ -109,13 +103,9 @@ class ModulationConfig(BaseModel):
     )
 
     # Gradient multiplier parameters
-    base_multiplier: float = Field(
-        gt=0.0, description="Base multiplier (at source=100%)"
-    )
+    base_multiplier: float = Field(gt=0.0, description="Base multiplier (at source=100%)")
     range: float = Field(gt=0.0, description="Multiplier range (base + range = max)")
-    baseline_depletion: float = Field(
-        ge=0.0, description="Baseline depletion rate to modulate"
-    )
+    baseline_depletion: float = Field(ge=0.0, description="Baseline depletion rate to modulate")
 
     # Optional documentation
     note: Optional[str] = None
@@ -135,9 +125,7 @@ class CascadeConfig(BaseModel):
     target: str = Field(description="Target meter name")
     target_index: int = Field(ge=0, le=7, description="Target meter index")
 
-    threshold: float = Field(
-        gt=0.0, le=1.0, description="Threshold below which cascade applies"
-    )
+    threshold: float = Field(gt=0.0, le=1.0, description="Threshold below which cascade applies")
     strength: float = Field(gt=0.0, description="Penalty strength (gradient factor)")
 
     # Optional documentation fields
@@ -154,9 +142,7 @@ class CascadesConfig(BaseModel):
         description="Cascade math approach"
     )
 
-    modulations: List[ModulationConfig] = Field(
-        description="Depletion rate modulations"
-    )
+    modulations: List[ModulationConfig] = Field(description="Depletion rate modulations")
     cascades: List[CascadeConfig] = Field(description="Threshold-based cascades")
     execution_order: List[str] = Field(description="Cascade execution order")
 
