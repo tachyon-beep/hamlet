@@ -345,10 +345,9 @@ function getRelationshipText(name) {
 .meter-panel {
   background: var(--color-bg-secondary);
   border-radius: var(--border-radius-md);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg) 2px var(--spacing-lg);
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .panel-header {

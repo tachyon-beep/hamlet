@@ -12,6 +12,14 @@
         <!-- ✅ Semantic HTML: aside for meters panel (left) -->
         <aside class="meters-panel" aria-label="Agent status panels">
           <MeterPanel :agent-meters="store.agentMeters" />
+          
+          <!-- ✅ Projected reward bar (below meters) - always shown when connected -->
+          <ProjectedRewardBar
+            v-if="isConnected"
+            :projected-reward="store.projectedReward"
+            :current-step="store.currentStep"
+            :baseline-survival="store.baselineSurvival"
+          />
         </aside>
 
         <!-- Agent Behaviour (consolidated panel - centre left) -->
@@ -35,14 +43,6 @@
         <TimeOfDayBar
           v-if="isConnected && store.timeOfDay !== null"
           :time-of-day="store.timeOfDay"
-        />
-
-        <!-- ✅ Projected reward bar (below time of day) - always shown when connected -->
-        <ProjectedRewardBar
-          v-if="isConnected"
-          :projected-reward="store.projectedReward"
-          :current-step="store.currentStep"
-          :baseline-survival="store.baselineSurvival"
         />
 
         <!-- ✅ Minimal top-right controls (only when connected) -->
@@ -408,9 +408,9 @@ function handleConnect(mode = 'inference') {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 2px;
   overflow-y: auto;
-  height: 100%;
+  align-self: flex-start;
 }
 
 /* Behaviour panel (centre-left) */
@@ -470,7 +470,7 @@ function handleConnect(mode = 'inference') {
   .meters-panel {
     width: 300px;
     flex-shrink: 0;
-    gap: var(--spacing-lg);
+    gap: 2px;
   }
 
   .behavior-panel {

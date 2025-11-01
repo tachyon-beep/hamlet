@@ -4,14 +4,12 @@
     <!-- Gradient bar showing learning progress -->
     <div class="reward-bar-container">
       <!-- Small label above bar -->
-      <div class="reward-label-header">PROJECTED REWARD</div>
+      <div class="reward-label-header">
+        <span>🎁</span>
+        <span>PROJECTED REWARD</span>
+      </div>
 
       <div class="reward-bar-background">
-        <!-- Zero line marker (baseline) -->
-        <div class="baseline-marker" :style="{ left: `${baselinePercent}%` }">
-          <div class="baseline-tick"></div>
-        </div>
-
         <!-- Progress indicator with glow -->
         <div
           class="reward-progress"
@@ -73,9 +71,11 @@ const progressPercent = computed(() => {
   return (progressInTier / props.baselineSurvival) * 100
 })
 
-// Baseline position (always at 100%)
+// Baseline position - shows where the bar will wrap (always at 100% of current tier)
 const baselinePercent = computed(() => {
-  return 100  // Baseline is always at 100% mark (where it wraps)
+  // The baseline marker stays at 100% to show where the wrap happens
+  // This is the target the agent is trying to reach in the current tier
+  return 100
 })
 
 // Format reward with sign
@@ -112,24 +112,24 @@ const rewardStatusClass = computed(() => {
   return 'reward-tier-3'
 })
 
-// Dynamic progress glow color based on tier
+// Dynamic progress glow color based on tier - gradient to next tier color
 const progressGlowColor = computed(() => {
   const tier = currentTier.value
 
-  // Tier 0: Red (struggling)
+  // Tier 0: Red → Yellow (struggling → learning)
   if (tier === 0) {
-    return 'radial-gradient(ellipse at right, rgba(244, 67, 54, 0.7), rgba(200, 50, 50, 0.4))'
+    return 'linear-gradient(to right, rgba(244, 67, 54, 0.9), rgba(255, 235, 59, 0.7))'
   }
-  // Tier 1: Yellow (learning)
+  // Tier 1: Yellow → Green (learning → thriving)
   if (tier === 1) {
-    return 'radial-gradient(ellipse at right, rgba(255, 235, 59, 0.7), rgba(255, 200, 50, 0.4))'
+    return 'linear-gradient(to right, rgba(255, 235, 59, 0.9), rgba(76, 175, 80, 0.7))'
   }
-  // Tier 2: Green (thriving)
+  // Tier 2: Green → Blue (thriving → mastered)
   if (tier === 2) {
-    return 'radial-gradient(ellipse at right, rgba(76, 175, 80, 0.7), rgba(50, 150, 70, 0.4))'
+    return 'linear-gradient(to right, rgba(76, 175, 80, 0.9), rgba(33, 150, 243, 0.7))'
   }
-  // Tier 3: Blue (mastered)
-  return 'radial-gradient(ellipse at right, rgba(33, 150, 243, 0.7), rgba(20, 100, 200, 0.4))'
+  // Tier 3: Blue (mastered) - stays blue
+  return 'linear-gradient(to right, rgba(33, 150, 243, 0.9), rgba(33, 150, 243, 0.7))'
 })
 
 // Marker color matches tier
@@ -144,12 +144,8 @@ const markerColor = computed(() => {
 
 <style scoped>
 .projected-reward-bar {
-  position: absolute;
-  top: 130px;  /* Position below TimeOfDayBar with spacing */
-  left: var(--spacing-md);  /* Match TimeOfDayBar left alignment */
-  min-width: 270px;  /* Match TimeOfDayBar width */
-  z-index: 100;
-  pointer-events: none;
+  width: 100%;
+  margin-top: 13px;
 }
 
 .reward-bar-container {
@@ -160,25 +156,28 @@ const markerColor = computed(() => {
   backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 1px;
 }
 
 .reward-label-header {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 8px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 3px;
   text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .reward-bar-background {
   position: relative;
-  height: 8px;
+  height: 24px;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  border-radius: 10px;
   overflow: visible;
-  margin-bottom: 10px;
+  margin-bottom: 3px;
 }
 
 .baseline-marker {
@@ -190,7 +189,7 @@ const markerColor = computed(() => {
 
 .baseline-tick {
   width: 2px;
-  height: 16px;
+  height: 32px;
   background: rgba(255, 255, 255, 0.6);
   border-radius: 1px;
   box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
@@ -201,7 +200,7 @@ const markerColor = computed(() => {
   top: 0;
   left: 0;
   height: 100%;
-  border-radius: 4px;
+  border-radius: 10px;
   transition: width 0.3s ease, background 0.5s ease;
 }
 
@@ -250,7 +249,7 @@ const markerColor = computed(() => {
 }
 
 .reward-text-main {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: 0.5px;
   transition: color 0.3s ease;
@@ -277,9 +276,10 @@ const markerColor = computed(() => {
 }
 
 .reward-text-sub {
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
   letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 </style>
