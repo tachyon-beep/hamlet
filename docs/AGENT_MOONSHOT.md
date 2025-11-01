@@ -418,3 +418,157 @@ This "Personality Layer" is the enabling system for high-level social dynamics.
         Example: An agent at the "job" affordance sees its money rise. It learns to SetCommChannel(123). Its "child" agent, miles away, observes family_comm_channel = [..., 123, ...]. The "child's" Social Model learns that "123" correlates with its "parent's" money increasing, and its Policy (Module D) learns that moving toward the parent (who is at the "job") is a good idea.
 
         The agents have, without any hardcoding, "negotiated a meaning" for the integer 123: "I have found a good source of money."
+
+==============
+
+CHATGPT Review:
+
+# Short confirmation (TL;DR)
+
+No-code configs + bar-only affordances = simpler, better inductive biases for DRL and emergent behaviour. You’ll get more stable training and clearer supervision data for Module B/C.
+Confidence: **very likely (~85%)**
+
+## Important consequences (you already know most of these, but worth stating)
+
+1. **All affordance outcomes must be expressible as bar deltas over one or many ticks.** That’s fine — everything you described (beds, fridges, bars, phones as payments/teleports) fits.
+   WEP: **very likely (~90%)**
+
+2. **Any truly special effect (teleport, kill, spawn) is implemented *in the engine* as a small, repeatable effect handler; configs only reference it by name.** That keeps the YAML pure while allowing controlled exceptions.
+   WEP: **very likely (~90%)**
+
+3. **No global ownership state reduces engineering complexity and avoids persistent-entity bookkeeping.** But you need clear per-tick semantics to avoid races (see below).
+   WEP: **very likely (~85%)**
+
+---
+
+## Practical spec additions (keeps YAML code-free but engine-ready)
+
+Add these optional but recommended fields to `affordances.yaml`. They are metadata only — still no logic in YAML.
+
+```yaml
+- id: "bed"
+  quality: 1.0                   # multiplier for restful effect (>1 = better)
+  capacity: 1                    # number of agents that can occupy simultaneously
+  exclusive: true                # whether simultaneous use is allowed
+  interaction_type: "multi_tick"
+  interruptible: true            # can be cancelled by moving, attack, etc
+  precondition:
+    - { bar: "money", op: ">=", val: 0 }  # still declarative only
+  distance_limit: 1              # max tiles away to engage (optional)
+  costs:
+    - { bar: "money", change: -5 }
+  effects_per_tick:
+    - { bar: "energy", change: +25, scale_by: "quality" }
+  completion_bonus:
+    - { bar: "energy", change: +25 }
+```
+
+Why these fields:
+
+* `quality` lets you have many beds without hardcoding effects; better beds = larger scale.
+* `capacity` + `exclusive` allow multiple beds in same tile or bunkbeds without a global owner.
+* `interruptible` prevents agents from being trapped in interactions (important for emergent behaviours).
+* `distance_limit` supports affordances like phones/teleporters being usable from nearby tiles without special-case logic.
+
+WEP: **likely (~75%)** these fields cover 90% of use-cases without code changes.
+
+---
+
+## Engine semantics you must define (deterministic, simple rules)
+
+1. **Reservation vs. Use**
+
+   * *Reservation phase*: when agent begins interaction, engine checks capacity & preconditions; if accepted, it creates a **local reservation token** tied to that agent only for the duration. Reservation is ephemeral and only lives in tick context (not persisted to config). No global persistent ownership.
+2. **Capacity & contention resolution**
+
+   * If multiple agents attempt to reserve and capacity is exceeded in the same tick, resolve deterministically: sort agents by `(priority, agent_id)` where `priority` is e.g. distance, hunger, or a fixed tie-breaker (or random seeded). Use seed so replays deterministic.
+3. **Atomic per-tick effect application**
+
+   * Collect all accepted affordance effects (including per-tick effects). Sum deltas per bar, then apply atomically. Clamp to min/max afterwards. This preserves your no-global-state goal and avoids partial application weirdness.
+4. **Interrupts**
+
+   * If `interruptible: true` and agent moves or receives an effect that should break (health→0, death), engine aborts multi-tick and applies partial completion semantics defined by `on_interrupt` (configurable: refund fraction, no bonus, partial penalty). Keep `on_interrupt` declarative.
+5. **Implicit local state**
+
+   * Allow affordances to carry **ephemeral local interaction state** only (e.g., `interaction_progress` keyed by agent id) stored in the tick context or agent’s own state. Do not persist affordance occupancy beyond the tick unless it is a reservation token. This respects your "owned only while on it" rule.
+6. **Special effects whitelist**
+
+   * Allow `effect_type: teleport` in YAML, but require engine to implement the handler. Keep the effect set small and versioned. If you add a special effect (eg. `kill_target`) implement it once in engine and then any affordance can reference it.
+
+WEP: **very likely (~85%)** these rules prevent race conditions and keep world stateless.
+
+---
+
+## Examples for phone/ambulance, still config-only semantics
+
+```yaml
+- id: "phone_ambulance"
+  interaction_type: "instant"
+  costs:
+    - { bar: "money", change: -300 }
+  effects:
+    - { effect_type: "teleport", destination_tag: "nearest_hospital", precondition: {bar: "health", op: "<=", val: 20} }
+```
+
+Engine behaviour: the YAML declares `teleport` with a `destination_tag` (no coordinates in configs). The engine resolves `nearest_hospital` at runtime (engine code) and applies teleport. No code appears in YAML; special logic confined to deterministic engine handler.
+
+WEP: **likely (~70%)** this pattern balances purity and practical needs.
+
+---
+
+## Contention & emergent behaviour examples
+
+* Multiple beds: two agents try to sleep in same tile; capacity=1 ⇒ engine resolves reservation deterministically and the losing agent can choose alternate affordance or queue (queueing implemented in agent, not engine). This spawns interesting emergent choices: do I wait, steal someone’s bed, or choose a poorer bed? Exactly what you want.
+
+* Phone ambulance decisions: agent near death chooses between running to hospital affordance on map vs using a phone affordance that costs money but teleports. The decision emerges purely from bars (health, money, distance/time-to-hospital). No flashy code required.
+
+WEP: **very likely (~85%)** you'll see rich trade-offs with these simple rules.
+
+---
+
+### Small additions to `cues.yaml` to keep it minimal but expressive
+
+Add `salience`/`decay` maybe:
+
+```yaml
+- cue_id: "looks_tired"
+  conditions:
+    - { bar: "energy", op: "<", val: 20 }
+  salience: 0.8    # how strongly this cue should influence social inference
+  decay_ticks: 3   # how long cue persists in public perception
+```
+
+Engine note: `decay_ticks` is ephemeral: the cue existence is derived each tick from current bars, but `decay_ticks` helps model simulated perception lag or misattribution and is implemented in runtime perception (not in config logic).
+
+WEP: **plausible (~60%)** this adds nuance for ToM training without polluting configs with code.
+
+---
+
+## Tests & CI you should add for this no-code constraint
+
+1. **Affordance purity test** — assert every affordance `effects` contains only bar changes or a named `effect_type` from the engine whitelist. Fail CI if a new anonymous effect appears.
+2. **Reservation determinism test** — simulate many agents trying to reserve same affordance on seeded RNG; assert deterministic outcome across runs.
+3. **Interrupt semantics test** — start multi-tick affordance, interrupt, assert `on_interrupt` behaviour matches YAML-declared expectation.
+4. **No persistent ownership test** — after agent leaves affordance, assert affordance has no leftover state.
+
+WEP: **very likely (~85%)** these prevent drift from design.
+
+---
+
+## Short checklist to paste into your sprint ticket
+
+* [ ] Add optional fields to `affordances.yaml`: `capacity`, `exclusive`, `quality`, `interruptible`, `distance_limit`, `on_interrupt`.
+* [ ] Implement engine reservation token system (ephemeral, per-tick).
+* [ ] Implement deterministic contention tie-breaker (seeded).
+* [ ] Add `effect_type` whitelist and engine handlers for `teleport` and any future specials.
+* [ ] Add CI check: `affordances` must only reference bar-changes or official `effect_type` tokens.
+* [ ] Add unit tests: reservation, atomic application, interrupt, teleport resolution.
+* [ ] Log reservations and outcome to trace for Module B/C training.
+
+WEP: **very likely (~85%)** this will keep the system pure and training-ready.
+
+---
+
+## Final thought (short & cheeky)
+
+Your approach keeps the world small, clean and maximally useful for DRL. Low glitter, high emergent drama — much better for meaningful agent decisions. If you keep the engine semantics deterministic and the special effects small+whitelisted, you’ll get the emergent complexity you want without needing an explosion of bespoke event code.

@@ -67,7 +67,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--verbose",
-    "--cov=hamlet",
+    "--cov=townlet",
     "--cov-report=term-missing",
 ]
 markers = [

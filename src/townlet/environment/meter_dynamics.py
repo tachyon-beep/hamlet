@@ -3,8 +3,22 @@ Meter Dynamics Module
 
 Encapsulates meter depletion and cascade effects for the Hamlet environment.
 Implements the coupled cascade architecture where meters affect each other.
+
+Now supports both:
+- Config-driven cascades (via CascadeEngine + YAML)
+- Legacy hardcoded cascades (for backward compatibility)
 """
+
+from pathlib import Path
+from typing import Optional
+
 import torch
+
+from townlet.environment.cascade_config import (
+    load_default_config,
+    load_environment_config,
+)
+from townlet.environment.cascade_engine import CascadeEngine
 
 
 class MeterDynamics:
@@ -20,16 +34,38 @@ class MeterDynamics:
     Key Insight: Satiation is THE foundational need - affects BOTH primaries.
     """
 
-    def __init__(self, num_agents: int, device: torch.device):
+    def __init__(
+        self,
+        num_agents: int,
+        device: torch.device,
+        use_cascade_engine: bool = False,
+        cascade_config_dir: Optional[Path] = None,
+    ):
         """
         Initialize meter dynamics.
 
         Args:
             num_agents: Number of agents in the environment
             device: torch device for tensor operations
+            use_cascade_engine: If True, use config-driven CascadeEngine
+            cascade_config_dir: Directory containing bars.yaml and cascades.yaml
+                              (defaults to project configs/ directory)
         """
         self.num_agents = num_agents
         self.device = device
+        self.use_cascade_engine = use_cascade_engine
+
+        # Initialize CascadeEngine if requested
+        if use_cascade_engine:
+            if cascade_config_dir is None:
+                # Load from project configs/ directory
+                env_config = load_default_config()
+            else:
+                env_config = load_environment_config(cascade_config_dir)
+
+            self.cascade_engine = CascadeEngine(env_config, device)
+        else:
+            self.cascade_engine = None
 
     def deplete_meters(self, meters: torch.Tensor) -> torch.Tensor:
         """
@@ -41,16 +77,23 @@ class MeterDynamics:
         Returns:
             meters: [num_agents, 8] meters after depletion
         """
+        if self.use_cascade_engine:
+            # Use config-driven CascadeEngine
+            meters = self.cascade_engine.apply_base_depletions(meters)
+            meters = self.cascade_engine.apply_modulations(meters)
+            return meters
+
+        # Legacy hardcoded implementation
         # Base depletion rates (per step)
         depletions = torch.tensor(
             [
                 0.005,  # energy: 0.5% per step
                 0.003,  # hygiene: 0.3%
                 0.004,  # satiation: 0.4%
-                0.0,    # money: no passive depletion
+                0.0,  # money: no passive depletion
                 0.001,  # mood: 0.1%
                 0.006,  # social: 0.6%
-                0.0,    # health: modulated by fitness (see below)
+                0.0,  # health: modulated by fitness (see below)
                 0.002,  # fitness: 0.2% (slower than energy, faster than health)
             ],
             device=self.device,
@@ -96,6 +139,11 @@ class MeterDynamics:
         Returns:
             meters: [num_agents, 8] meters after cascade effects
         """
+        if self.use_cascade_engine:
+            # Use config-driven CascadeEngine
+            return self.cascade_engine.apply_threshold_cascades(meters, ["primary_to_pivotal"])
+
+        # Legacy hardcoded implementation
         threshold = 0.3  # below this, aggressive penalties apply
 
         # SATIATION → BOTH PRIMARIES (fundamental need!)
@@ -126,9 +174,7 @@ class MeterDynamics:
         if low_mood.any():
             deficit = (threshold - mood[low_mood]) / threshold
             energy_penalty = 0.005 * deficit  # 0.5% at threshold, up to ~1.0% at 0
-            meters[low_mood, 0] = torch.clamp(
-                meters[low_mood, 0] - energy_penalty, 0.0, 1.0
-            )
+            meters[low_mood, 0] = torch.clamp(meters[low_mood, 0] - energy_penalty, 0.0, 1.0)
 
         return meters
 
@@ -145,6 +191,11 @@ class MeterDynamics:
         Returns:
             meters: [num_agents, 8] meters after cascade effects
         """
+        if self.use_cascade_engine:
+            # Use config-driven CascadeEngine
+            return self.cascade_engine.apply_threshold_cascades(meters, ["secondary_to_primary"])
+
+        # Legacy hardcoded implementation
         threshold = 0.3
 
         # Low hygiene → secondary meters
@@ -161,15 +212,11 @@ class MeterDynamics:
 
             # Fitness penalty (being dirty → harder to exercise)
             fitness_penalty = 0.002 * deficit
-            meters[low_hygiene, 7] = torch.clamp(
-                meters[low_hygiene, 7] - fitness_penalty, 0.0, 1.0
-            )
+            meters[low_hygiene, 7] = torch.clamp(meters[low_hygiene, 7] - fitness_penalty, 0.0, 1.0)
 
             # Mood penalty (being dirty → feel bad)
             mood_penalty = 0.003 * deficit
-            meters[low_hygiene, 4] = torch.clamp(
-                meters[low_hygiene, 4] - mood_penalty, 0.0, 1.0
-            )
+            meters[low_hygiene, 4] = torch.clamp(meters[low_hygiene, 4] - mood_penalty, 0.0, 1.0)
 
         # Low social → mood
         social = meters[:, 5]
@@ -177,9 +224,7 @@ class MeterDynamics:
         if low_social.any():
             deficit = (threshold - social[low_social]) / threshold
             mood_penalty = 0.004 * deficit  # Stronger than hygiene
-            meters[low_social, 4] = torch.clamp(
-                meters[low_social, 4] - mood_penalty, 0.0, 1.0
-            )
+            meters[low_social, 4] = torch.clamp(meters[low_social, 4] - mood_penalty, 0.0, 1.0)
 
         return meters
 
@@ -196,6 +241,13 @@ class MeterDynamics:
         Returns:
             meters: [num_agents, 8] meters after cascade effects
         """
+        if self.use_cascade_engine:
+            # Use config-driven CascadeEngine
+            return self.cascade_engine.apply_threshold_cascades(
+                meters, ["secondary_to_pivotal_weak"]
+            )
+
+        # Legacy hardcoded implementation
         threshold = 0.3
 
         # Low hygiene → health (weak)
@@ -205,14 +257,10 @@ class MeterDynamics:
             deficit = (threshold - hygiene[low_hygiene]) / threshold
 
             health_penalty = 0.0005 * deficit  # Weak effect
-            meters[low_hygiene, 6] = torch.clamp(
-                meters[low_hygiene, 6] - health_penalty, 0.0, 1.0
-            )
+            meters[low_hygiene, 6] = torch.clamp(meters[low_hygiene, 6] - health_penalty, 0.0, 1.0)
 
             energy_penalty = 0.0005 * deficit  # Weak effect
-            meters[low_hygiene, 0] = torch.clamp(
-                meters[low_hygiene, 0] - energy_penalty, 0.0, 1.0
-            )
+            meters[low_hygiene, 0] = torch.clamp(meters[low_hygiene, 0] - energy_penalty, 0.0, 1.0)
 
         # Low social → energy (weak)
         social = meters[:, 5]
@@ -220,15 +268,11 @@ class MeterDynamics:
         if low_social.any():
             deficit = (threshold - social[low_social]) / threshold
             energy_penalty = 0.0008 * deficit  # Weak effect
-            meters[low_social, 0] = torch.clamp(
-                meters[low_social, 0] - energy_penalty, 0.0, 1.0
-            )
+            meters[low_social, 0] = torch.clamp(meters[low_social, 0] - energy_penalty, 0.0, 1.0)
 
         return meters
 
-    def check_terminal_conditions(
-        self, meters: torch.Tensor, dones: torch.Tensor
-    ) -> torch.Tensor:
+    def check_terminal_conditions(self, meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
         """
         Check terminal conditions.
 

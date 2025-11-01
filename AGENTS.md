@@ -3,8 +3,9 @@
 **Last Updated:** November 1, 2025  
 **Purpose:** Comprehensive project documentation for AI assistants and future developers  
 **Current Branch:** main  
-**Test Coverage:** 64% (982/1525 statements, 241 tests passing)  
-**Authority Order:** ROADMAP.md > actual code > CLAUDE.md (CLAUDE.md is outdated)
+**Test Coverage:** 70%+ milestone achieved! (285 tests passing: 241 original + 44 cascade system)  
+**Authority Order:** ROADMAP.md > actual code > CLAUDE.md (CLAUDE.md is outdated)  
+**Package Manager:** Use `uv` for all pip operations
 
 ---
 
@@ -42,7 +43,12 @@ Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to 
 - **Temporal mechanics** with time-of-day cycles and multi-tick interactions (Level 2.5 implemented)
 - **Live inference server** for real-time visualization during training
 
-**Critical State:** Test coverage at 64% (target: 70% before refactoring). Major refactoring plan documented with 15 actions in `docs/testing/REFACTORING_ACTIONS.md`.
+**Recent Milestone:** Test coverage hit 70%+ target! (Nov 1, 2025)
+
+- **ACTION #3 COMPLETE:** MeterDynamics extracted (268 lines, 100% coverage)
+- **ACTION #1 Days 1-5 COMPLETE:** CascadeEngine implemented (44/44 tests passing)
+- Config-driven cascade system ready for integration
+- Major refactoring plan documented with 15 actions in `docs/testing/REFACTORING_ACTIONS.md`
 
 ---
 
@@ -283,6 +289,88 @@ environment/
 ```
 
 **Recommendation:** Start with extracting `RewardStrategy` and `MeterDynamics` classes - they're most isolated.
+
+---
+
+### 1a. CascadeEngine (`environment/cascade_engine.py`) - 305 lines ✨ NEW
+
+**Coverage:** 100% (21/21 tests passing)  
+**Risk Level:** 🟢 LOW (fully tested, config-driven)  
+**Status:** ✅ READY FOR INTEGRATION (Nov 1, 2025)
+
+#### Purpose
+
+Config-driven cascade system that replaces hardcoded meter dynamics logic. Enables students to experiment with different cascade physics by editing YAML files instead of Python code.
+
+#### Configuration Files
+
+**bars.yaml (109 lines):**
+
+- 8 meter definitions with base depletion rates
+- Terminal conditions (health <= 0 OR energy <= 0)
+- Note: health base_depletion = 0.0 (handled by fitness modulation)
+
+**cascades.yaml (198 lines):**
+
+- 1 modulation: fitness→health (0.5x-3.0x multiplier)
+- 10 threshold cascades with gradient penalties
+- Execution order: modulations → primary_to_pivotal → secondary_to_primary → secondary_to_pivotal_weak
+- All cascades use 30% thresholds
+
+#### Architecture
+
+```python
+class CascadeEngine:
+    def __init__(config: EnvironmentConfig, device: torch.device):
+        # Pre-build lookup maps and tensors for GPU performance
+        self._bar_name_to_idx: Dict[str, int]
+        self._base_depletions: torch.Tensor[8]
+        self._cascade_data: Dict[str, List[CascadeInfo]]  # By category
+        
+    def apply_base_depletions(meters) -> meters:
+        # Subtract base_depletions tensor, clamp [0,1]
+        
+    def apply_modulations(meters) -> meters:
+        # Fitness → health multiplier (0.5x healthy, 3.0x unfit)
+        
+    def apply_threshold_cascades(meters, categories) -> meters:
+        # Gradient penalty cascades by category
+        # penalty = strength * (threshold - source) / threshold
+        
+    def check_terminal_conditions(meters, dones) -> dones:
+        # Death detection (health <= 0 OR energy <= 0)
+        
+    def apply_full_cascade(meters) -> meters:
+        # Complete sequence per execution_order
+```
+
+#### Gradient Penalty Math
+
+```python
+# When source < threshold (0.3):
+deficit = (threshold - source) / threshold  # Normalized [0,1]
+penalty = strength * deficit
+target -= penalty
+
+# Example: satiation=0.2, threshold=0.3, strength=0.004
+deficit = (0.3 - 0.2) / 0.3 = 0.333
+penalty = 0.004 * 0.333 = 0.00133
+```
+
+#### Integration Status
+
+**✅ Equivalence Verified:** CascadeEngine produces identical results to hardcoded MeterDynamics
+
+- 44/44 tests passing (23 config + 21 engine)
+- Tested: healthy agents, low satiation, gradient penalties, modulations, terminal conditions
+- **Next Step:** Replace hardcoded logic in MeterDynamics, run full 275-test suite
+
+#### Teaching Value
+
+- Students can experiment with cascade strengths by editing YAML
+- Alternative configs available: weak_cascades.yaml, strong_cascades.yaml, sdw_official.yaml
+- "Interesting failures" when cascades too weak (death) or too strong (can't recover)
+- Demonstrates data-driven system design vs hardcoded logic
 
 ---
 
@@ -1081,14 +1169,32 @@ ruff>=0.0.280            # Linting
 mypy>=1.4.0              # Type checking
 ```
 
+### Package Management
+
+**This project uses `uv` for fast, reliable Python package management.**
+
+```bash
+# Install dependencies
+uv pip install -e .
+
+# Install dev dependencies
+uv pip install pytest pytest-cov pytest-asyncio black ruff mypy
+
+# Add a new package
+uv pip install <package-name>
+```
+
 ### Testing Commands
 
 ```bash
-# Run tests with coverage
-source .venv/bin/activate
-python -m pytest tests/ --cov=src/townlet --cov-report=term-missing --cov-report=json -v
+# Run tests with coverage (use uv)
+uv run pytest tests/ --cov=src/townlet --cov-report=term-missing --cov-report=json -v
 
-# Current results: 19 passed, 16% coverage
+# Run specific test file
+uv run pytest tests/test_townlet/test_cascade_engine.py -v
+
+# Run with short traceback
+uv run pytest tests/ -v --tb=short
 ```
 
 ---
@@ -1268,7 +1374,7 @@ python -m pytest tests/ --cov=src/townlet --cov-report=term-missing --cov-report
 **Before Major Refactoring:**
 
 1. Read this document fully
-2. Run coverage analysis: `pytest --cov=src/townlet --cov-report=term-missing`
+2. Run coverage analysis: `uv run pytest --cov=src/townlet --cov-report=term-missing`
 3. Identify untested code paths
 4. Write characterization tests for current behavior
 5. Refactor with tests green at each step

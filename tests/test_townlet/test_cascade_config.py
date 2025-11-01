@@ -128,7 +128,7 @@ def test_bars_config_validates_depletion_rates(bars_path: Path):
         "money": 0.0,
         "mood": 0.001,
         "social": 0.006,
-        "health": 0.001,
+        "health": 0.0,  # No base depletion - handled by fitness modulation
         "fitness": 0.002,
     }
 

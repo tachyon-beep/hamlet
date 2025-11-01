@@ -29,7 +29,7 @@ bars:
     tier: "pivotal"
     range: [0.0, 1.0]
     initial: 1.0
-    base_depletion: 0.001  # Baseline - modulated by fitness (0.5x-3.0x multiplier)
+    base_depletion: 0.0  # No base depletion - entirely handled by fitness modulation (see cascades.yaml)
     description: "Are you alive? Death if depleted. Affected by satiation (fundamental) and fitness (modulation)."
   
   # PRIMARY METERS: Strong effects on pivotal meters
