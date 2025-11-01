@@ -123,7 +123,24 @@ Before each refactoring action, ensure:
 - ACTION #9: Network architecture redesign (fix POMDP/LSTM issues)
 - **Note**: This is the CRITICAL PATH to unblock Levels 3-5
 
-**Recommendation**: **Option C (Phase 1)** - The LSTM/POMDP fix is the blocker for everything. Phase 4 polish is done enough (30% reduction achieved, 70% coverage hit). Should tackle the hard problem now.
+**Recommendation**: **Option B + C Hybrid** - Do ACTION #1 (Configurable Cascades) first for moonshot prerequisite, then tackle LSTM. Build momentum with productive work while preparing for the harder problems.
+
+**Decision Made (Nov 1, 2025)**: ✅ **Going with B+C Hybrid**
+
+- Weeks 1-3: ACTION #1 (Configurable Cascades) - moonshot prerequisite
+- Weeks 4-5: ACTION #7 (Sequential Replay Buffer)  
+- Weeks 6-9: ACTION #9 (LSTM Redesign)
+- Timeline: ~9 weeks to complete both moonshot prerequisite AND LSTM fix
+
+**ACTION #1 Design Approach (Nov 1, 2025)**: ✅ **SDW Structure + Our Math**
+
+After evaluating the existing SOFTWARE_DEFINED_WORLD.md spec (approved design for config-driven environment), we're adopting a hybrid approach:
+
+- **Structure from SDW**: 4-file YAML organization (bars.yaml, cascades.yaml, affordances.yaml, cues.yaml)
+- **Math from Us**: Gradient penalties with 30% thresholds (validated with 275 passing tests)
+- **Risk Level**: ZERO - Keep proven behavior, gain SDW compliance
+- **Benefits**: Module B ready + Clean architecture + Zero behavioral change
+- **Documents**: See `docs/ACTION_1_DESIGN.md` and `docs/ACTION_1_EVALUATION.md` for full analysis
 
 ---
 
