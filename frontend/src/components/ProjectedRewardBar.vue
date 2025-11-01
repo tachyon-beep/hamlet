@@ -9,7 +9,7 @@
         <span>PROJECTED REWARD</span>
       </div>
 
-      <div class="reward-bar-background">
+      <div class="reward-bar-background" :style="{ background: backgroundColor }">
         <!-- Progress indicator with glow -->
         <div
           class="reward-progress"
@@ -139,6 +139,15 @@ const markerColor = computed(() => {
   if (tier === 1) return '#ffeb3b'  // Yellow
   if (tier === 2) return '#4caf50'  // Green
   return '#2196f3'  // Blue
+})
+
+// Background color - shows previous tier color being "painted over"
+const backgroundColor = computed(() => {
+  const tier = currentTier.value
+  if (tier === 0) return 'rgba(255, 255, 255, 0.1)'  // Gray - starting tier
+  if (tier === 1) return 'rgba(244, 67, 54, 0.3)'    // Red - painting over red with yellow
+  if (tier === 2) return 'rgba(255, 235, 59, 0.3)'   // Yellow - painting over yellow with green
+  return 'rgba(76, 175, 80, 0.3)'                    // Green - painting over green with blue
 })
 </script>
 
