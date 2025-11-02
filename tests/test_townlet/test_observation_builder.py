@@ -37,7 +37,7 @@ class TestObservationConstruction:
             vision_range=2,
             enable_temporal_mechanics=True,
         )
-        assert env.observation_dim == 52
+        assert env.observation_dim == 53
         env.reset()
         obs = env._get_observations()
         assert obs.shape[1] == env.observation_dim

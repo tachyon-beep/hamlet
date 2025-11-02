@@ -8,6 +8,23 @@ Reward = steps_survived - R (baseline survival)
 import torch
 
 from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.population.runtime_registry import AgentRuntimeRegistry
+
+
+def _attach_registry_with_baseline(env: VectorizedHamletEnv, baseline: float | list[float]) -> AgentRuntimeRegistry:
+    registry = AgentRuntimeRegistry(
+        agent_ids=[f"agent-{idx}" for idx in range(env.num_agents)],
+        device=env.device,
+    )
+    env.attach_runtime_registry(registry)
+
+    if isinstance(baseline, (float, int)):
+        values = torch.full((env.num_agents,), float(baseline), dtype=torch.float32, device=env.device)
+    else:
+        values = torch.tensor(baseline, dtype=torch.float32, device=env.device)
+
+    registry.set_baselines(values)
+    return registry
 
 
 class TestBaselineRelativeRewards:
@@ -23,6 +40,8 @@ class TestBaselineRelativeRewards:
             enable_temporal_mechanics=False,
         )
         env.reset()
+
+        _attach_registry_with_baseline(env, 100.0)
 
         # Agent alive at step 50
         env.step_counts[0] = 50
@@ -44,8 +63,7 @@ class TestBaselineRelativeRewards:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # Agent dies at step 50 (below baseline)
         env.step_counts[0] = 50
@@ -67,8 +85,7 @@ class TestBaselineRelativeRewards:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # Agent dies at step 150 (above baseline)
         env.step_counts[0] = 150
@@ -90,8 +107,7 @@ class TestBaselineRelativeRewards:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # Agent dies at exactly baseline
         env.step_counts[0] = 100
@@ -113,8 +129,7 @@ class TestBaselineRelativeRewards:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # Agent 0: dies at 50 (below baseline)
         # Agent 1: dies at 100 (at baseline)
@@ -140,8 +155,7 @@ class TestBaselineRelativeRewards:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # All at step 150, but only agent 1 is dead
         env.step_counts = torch.tensor([150, 150, 150])
@@ -171,12 +185,10 @@ class TestBaselineRelativeRewards:
         env.step_counts = torch.tensor([100, 100])
         env.dones = torch.tensor([True, True])
 
-        # Test with baseline = 50
-        env.reward_strategy.set_baseline_survival_steps(50.0)
+        registry = _attach_registry_with_baseline(env, 50.0)
         rewards_low_baseline = env._calculate_shaped_rewards()
 
-        # Test with baseline = 150
-        env.reward_strategy.set_baseline_survival_steps(150.0)
+        registry.set_baselines(torch.full((env.num_agents,), 150.0, dtype=torch.float32, device=env.device))
         rewards_high_baseline = env._calculate_shaped_rewards()
 
         # Low baseline: 100 - 50 = +50

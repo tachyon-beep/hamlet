@@ -141,6 +141,7 @@ class AdversarialCurriculum(CurriculumManager):
         self.device = device
 
         self.tracker: PerformanceTracker | None = None  # Set when population initialized
+        self.transition_events: list[dict[str, Any]] = []
 
     @classmethod
     def from_yaml(cls, config_path: str) -> "AdversarialCurriculum":
@@ -173,6 +174,7 @@ class AdversarialCurriculum(CurriculumManager):
     def initialize_population(self, num_agents: int):
         """Initialize performance tracking for population."""
         self.tracker = PerformanceTracker(num_agents, self.device)
+        self.transition_events.clear()
 
     def _get_active_meters(self, stage: int) -> list[str]:
         """Get active meters for stage."""
@@ -249,8 +251,16 @@ class AdversarialCurriculum(CurriculumManager):
         # Calculate entropy from Q-values
         entropies = self._calculate_action_entropy(q_values)
 
+        survival_rates = self.tracker.get_survival_rate(self.max_steps_per_episode)
+        learning_progress = self.tracker.get_learning_progress()
+
         decisions = []
         for i, agent_id in enumerate(agent_ids):
+            from_stage = self.tracker.agent_stages[i].item()
+            steps_before = int(self.tracker.steps_at_stage[i].item())
+            entropy_value = entropies[i].item()
+            transition_reason: str | None = None
+
             # Check for retreat first (takes priority)
             if self._should_retreat(i):
                 self.tracker.agent_stages[i] -= 1
@@ -258,6 +268,7 @@ class AdversarialCurriculum(CurriculumManager):
                 # Update baseline for retreating agent only
                 current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
                 self.tracker.prev_avg_reward[i] = current_avg_i
+                transition_reason = "retreat"
             # Then check for advancement
             elif self._should_advance(i, entropies[i].item()):
                 self.tracker.agent_stages[i] += 1
@@ -265,10 +276,23 @@ class AdversarialCurriculum(CurriculumManager):
                 # Update baseline for advancing agent only (not all agents)
                 current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
                 self.tracker.prev_avg_reward[i] = current_avg_i
+                transition_reason = "advance"
 
             # Get current stage
             stage = self.tracker.agent_stages[i].item()
             config = STAGE_CONFIGS[stage - 1]
+
+            if transition_reason is not None:
+                self._record_transition_event(
+                    agent_id=agent_id,
+                    from_stage=from_stage,
+                    to_stage=stage,
+                    reason=transition_reason,
+                    survival_rate=survival_rates[i].item(),
+                    learning_progress=learning_progress[i].item(),
+                    entropy=entropy_value,
+                    steps_at_stage=steps_before,
+                )
 
             # Normalize stage (1-5) to difficulty_level (0.0-1.0)
             # This maps Stage 1 -> 0.0 (easiest), Stage 5 -> 1.0 (hardest sparse rewards)
@@ -288,6 +312,32 @@ class AdversarialCurriculum(CurriculumManager):
         # incorrectly updating all agents simultaneously.
 
         return decisions
+
+    def _record_transition_event(
+        self,
+        *,
+        agent_id: str,
+        from_stage: int,
+        to_stage: int,
+        reason: str,
+        survival_rate: float,
+        learning_progress: float,
+        entropy: float,
+        steps_at_stage: int,
+    ) -> None:
+        """Append structured telemetry for stage transitions."""
+        self.transition_events.append(
+            {
+                "agent_id": agent_id,
+                "from_stage": from_stage,
+                "to_stage": to_stage,
+                "reason": reason,
+                "survival_rate": survival_rate,
+                "learning_progress": learning_progress,
+                "entropy": entropy,
+                "steps_at_stage": steps_at_stage,
+            }
+        )
 
     def get_batch_decisions(
         self,

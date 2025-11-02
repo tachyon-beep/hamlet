@@ -16,6 +16,9 @@
 # - 30-40% of time spent exploring
 # - Realistic cognitive behavior (memory, mistakes, getting lost)
 
+run_metadata:
+  output_subdir: L2_partial_observability
+
 # Environment configuration
 environment:
   grid_size: 8  # 8×8 grid world

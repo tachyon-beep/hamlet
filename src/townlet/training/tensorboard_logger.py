@@ -121,6 +121,41 @@ class TensorBoardLogger:
             self.writer.flush()
             self.last_flush_episode = episode
 
+    def log_multi_agent_episode(self, episode: int, agents: list[dict[str, float]]) -> None:
+        """Log per-episode metrics for multiple agents."""
+        for data in agents:
+            self.log_episode(
+                episode=episode,
+                survival_time=int(data.get("survival_time", 0)),
+                total_reward=float(data.get("total_reward", 0.0)),
+                extrinsic_reward=float(data.get("extrinsic_reward", 0.0)),
+                intrinsic_reward=float(data.get("intrinsic_reward", 0.0)),
+                curriculum_stage=int(data.get("curriculum_stage", 1)),
+                epsilon=float(data.get("epsilon", 0.0)),
+                intrinsic_weight=float(data.get("intrinsic_weight", 0.0)),
+                agent_id=data.get("agent_id", ""),
+            )
+
+    def log_curriculum_transitions(self, episode: int, events: list[dict[str, float]]) -> None:
+        """Log curriculum transition rationale events."""
+        for event in events:
+            agent_id = event.get("agent_id", "")
+            prefix = f"{agent_id}/Curriculum/" if agent_id else "Curriculum/"
+            self.writer.add_scalar(f"{prefix}Stage", event.get("to_stage", 0), episode)
+            self.writer.add_scalar(f"{prefix}Survival_Rate", event.get("survival_rate", 0.0), episode)
+            self.writer.add_scalar(f"{prefix}Learning_Progress", event.get("learning_progress", 0.0), episode)
+            self.writer.add_scalar(f"{prefix}Entropy", event.get("entropy", 0.0), episode)
+            if hasattr(self.writer, "add_text"):
+                summary = (
+                    f"{event.get('reason', 'unknown').upper()} "
+                    f"{event.get('from_stage')}→{event.get('to_stage')} | "
+                    f"survival={event.get('survival_rate', 0.0):.3f}, "
+                    f"learning={event.get('learning_progress', 0.0):.3f}, "
+                    f"entropy={event.get('entropy', 0.0):.3f}, "
+                    f"steps_at_stage={event.get('steps_at_stage', 0)}"
+                )
+                self.writer.add_text(f"{prefix}Transition", summary, episode)
+
     def log_training_step(
         self,
         step: int,

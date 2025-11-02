@@ -33,9 +33,9 @@ def device():
 @pytest.fixture
 def affordance_engine(device):
     """Create AffordanceEngine from corrected config (matches hardcoded logic)."""
-    config_path = Path("configs/affordances_corrected.yaml")
+    config_path = Path("configs/affordances.yaml")
     if not config_path.exists():
-        pytest.skip("affordances_corrected.yaml not found")
+        pytest.skip("affordances.yaml not found")
 
     config = load_affordance_config(config_path)
     return AffordanceEngine(config, num_agents=4, device=device)
@@ -81,15 +81,9 @@ class TestAffordanceEquivalence:
         money_delta = result_meters[0, 3] - initial_meters[0, 3]
 
         # Assert EXACT match (no tolerance)
-        assert abs(energy_delta - expected_energy_delta) < 1e-6, (
-            f"Bed energy: expected {expected_energy_delta}, got {energy_delta}"
-        )
-        assert abs(health_delta - expected_health_delta) < 1e-6, (
-            f"Bed health: expected {expected_health_delta}, got {health_delta}"
-        )
-        assert abs(money_delta - expected_money_delta) < 1e-6, (
-            f"Bed money: expected {expected_money_delta}, got {money_delta}"
-        )
+        assert abs(energy_delta - expected_energy_delta) < 1e-6, f"Bed energy: expected {expected_energy_delta}, got {energy_delta}"
+        assert abs(health_delta - expected_health_delta) < 1e-6, f"Bed health: expected {expected_health_delta}, got {health_delta}"
+        assert abs(money_delta - expected_money_delta) < 1e-6, f"Bed money: expected {expected_money_delta}, got {money_delta}"
 
     def test_shower_equivalence(self, affordance_engine, device):
         """Test Shower: Hygiene +40%, Money -$3"""

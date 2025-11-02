@@ -15,6 +15,9 @@
 # - Faster learning than Level 2 (has full information)
 # - Clean baseline for comparing POMDP performance
 
+run_metadata:
+  output_subdir: L1_full_observability
+
 # Environment configuration
 environment:
   grid_size: 8  # 8×8 grid world

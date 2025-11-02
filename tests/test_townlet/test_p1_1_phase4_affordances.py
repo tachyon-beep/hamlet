@@ -20,6 +20,11 @@ import yaml
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
+def _extract_positions(data: dict) -> dict:
+    """Compatibility helper for get_affordance_positions return format."""
+    return data.get("positions", data)
+
+
 class TestAffordanceLayoutCheckpointing:
     """Test that affordance positions are saved and restored."""
 
@@ -35,7 +40,8 @@ class TestAffordanceLayoutCheckpointing:
         # Verify method exists
         assert hasattr(env, "get_affordance_positions"), "Environment should have get_affordance_positions()"
 
-        positions = env.get_affordance_positions()
+        data = env.get_affordance_positions()
+        positions = _extract_positions(data)
         assert isinstance(positions, dict), "Should return dict"
         assert len(positions) == 14, "Should have 14 affordances"
         # Verify each position has x,y coordinates
@@ -65,7 +71,8 @@ class TestAffordanceLayoutCheckpointing:
         )
 
         # Get original positions
-        original_positions = env.get_affordance_positions()
+        original_data = env.get_affordance_positions()
+        original_positions = _extract_positions(original_data)
 
         # Create modified positions - move Bed from wherever it is to (5, 5)
         modified_positions = {k: v[:] for k, v in original_positions.items()}  # Deep copy
@@ -73,10 +80,16 @@ class TestAffordanceLayoutCheckpointing:
         modified_positions["Bed"] = [5, 5]
 
         # Set new positions
-        env.set_affordance_positions(modified_positions)
+        updated_data = {**original_data}
+        if "positions" in updated_data:
+            updated_data["positions"] = modified_positions
+        else:
+            updated_data = modified_positions
+        env.set_affordance_positions(updated_data)
 
         # Get positions again
-        restored_positions = env.get_affordance_positions()
+        restored_data = env.get_affordance_positions()
+        restored_positions = _extract_positions(restored_data)
 
         # Verify Bed moved to [5, 5]
         assert restored_positions["Bed"] == [5, 5], "Bed position should be updated to [5, 5]"
@@ -210,10 +223,16 @@ class TestAffordanceLayoutCheckpointing:
             )
 
             # Get original positions and modify them - move Bed to (7, 7)
-            original_positions = runner1.env.get_affordance_positions()
+            original_data = runner1.env.get_affordance_positions()
+            original_positions = _extract_positions(original_data)
             modified_positions = {k: v[:] for k, v in original_positions.items()}
             modified_positions["Bed"] = [7, 7]
-            runner1.env.set_affordance_positions(modified_positions)
+            payload = {**original_data}
+            if "positions" in payload:
+                payload["positions"] = modified_positions
+            else:
+                payload = modified_positions
+            runner1.env.set_affordance_positions(payload)
 
             runner1.save_checkpoint()
 
@@ -247,5 +266,6 @@ class TestAffordanceLayoutCheckpointing:
             runner2.load_checkpoint()
 
             # Verify Bed position was restored to [7, 7]
-            restored_positions = runner2.env.get_affordance_positions()
+            restored_data = runner2.env.get_affordance_positions()
+            restored_positions = _extract_positions(restored_data)
             assert restored_positions["Bed"] == [7, 7], "Bed position should match saved position [7, 7]"

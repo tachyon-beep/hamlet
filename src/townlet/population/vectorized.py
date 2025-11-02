@@ -17,6 +17,7 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.base import ExplorationStrategy
 from townlet.exploration.rnd import RNDExploration
 from townlet.population.base import PopulationManager
+from townlet.population.runtime_registry import AgentRuntimeRegistry
 from townlet.training.replay_buffer import ReplayBuffer
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
 from townlet.training.state import BatchedAgentState, PopulationCheckpoint
@@ -77,6 +78,10 @@ class VectorizedPopulation(PopulationManager):
         self.is_recurrent = network_type == "recurrent"
         self.tb_logger = tb_logger
 
+        # Agent runtime metrics (telemetry + reward baseline source of truth)
+        self.runtime_registry = AgentRuntimeRegistry(agent_ids=agent_ids, device=device)
+        self.env.attach_runtime_registry(self.runtime_registry)
+
         # Training metrics (for TensorBoard logging)
         self.last_td_error = 0.0
         self.last_loss = 0.0
@@ -118,16 +123,7 @@ class VectorizedPopulation(PopulationManager):
         if self.is_recurrent:
             self.replay_buffer = SequentialReplayBuffer(capacity=replay_buffer_capacity, device=device)
             # Episode tracking for sequential buffer
-            self.current_episodes = [
-                {
-                    "observations": [],
-                    "actions": [],
-                    "rewards_extrinsic": [],
-                    "rewards_intrinsic": [],
-                    "dones": [],
-                }
-                for _ in range(self.num_agents)
-            ]
+            self.current_episodes = [self._new_episode_container() for _ in range(self.num_agents)]
         else:
             self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity, device=device)
 
@@ -150,19 +146,149 @@ class VectorizedPopulation(PopulationManager):
         self.current_obs = self.env.reset()
 
         # Initialize reward baseline for current curriculum
-        self._update_reward_baseline()
+        baselines = self._update_reward_baseline()
 
         # Reset recurrent network hidden state (if applicable)
         if self.is_recurrent:
             self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
 
         # Get epsilon from exploration strategy (handle both direct and composed)
-        if isinstance(self.exploration, AdaptiveIntrinsicExploration):
-            epsilon = self.exploration.rnd.epsilon
-        else:
-            epsilon = self.exploration.epsilon
+        # Sync telemetry + exploration metrics (initial epsilon / stage)
+        self.sync_exploration_metrics()
+        self._sync_curriculum_metrics(baselines)
 
-        self.current_epsilons = torch.full((self.num_agents,), epsilon, device=self.device)
+    # ------------------------------------------------------------------ #
+    # Episode lifecycle helpers
+    # ------------------------------------------------------------------ #
+    def _new_episode_container(self) -> dict[str, list[torch.Tensor]]:
+        """Create a fresh container for accumulating episode data."""
+        return {
+            "observations": [],
+            "actions": [],
+            "rewards_extrinsic": [],
+            "rewards_intrinsic": [],
+            "dones": [],
+        }
+
+    def _store_episode_and_reset(self, agent_idx: int) -> bool:
+        """Store accumulated episode for agent and reset buffers."""
+        if not self.is_recurrent:
+            return False
+
+        episode = self.current_episodes[agent_idx]
+        if len(episode["observations"]) == 0:
+            return False
+
+        self.replay_buffer.store_episode(
+            {
+                "observations": torch.stack(episode["observations"]),
+                "actions": torch.stack(episode["actions"]),
+                "rewards_extrinsic": torch.stack(episode["rewards_extrinsic"]),
+                "rewards_intrinsic": torch.stack(episode["rewards_intrinsic"]),
+                "dones": torch.stack(episode["dones"]),
+            }
+        )
+
+        self.current_episodes[agent_idx] = self._new_episode_container()
+        return True
+
+    def _reset_hidden_state(self, agent_idx: int) -> None:
+        """Zero recurrent hidden state for a single agent."""
+        if not self.is_recurrent:
+            return
+
+        if not hasattr(self.q_network, "get_hidden_state"):
+            return
+
+        h, c = self.q_network.get_hidden_state()
+        if h is None or c is None:
+            return
+
+        h[:, agent_idx, :] = 0.0
+        c[:, agent_idx, :] = 0.0
+        self.q_network.set_hidden_state((h, c))
+
+    # ------------------------------------------------------------------ #
+    # Telemetry synchronisation helpers
+    # ------------------------------------------------------------------ #
+    def _get_current_epsilon_value(self) -> float:
+        """Return current exploration epsilon (global for now)."""
+        if isinstance(self.exploration, AdaptiveIntrinsicExploration):
+            return float(self.exploration.rnd.epsilon)
+        if hasattr(self.exploration, "epsilon"):
+            return float(self.exploration.epsilon)
+        return 0.0
+
+    def _get_current_intrinsic_weight_value(self) -> float:
+        """Return current intrinsic reward weight."""
+        if hasattr(self.exploration, "get_intrinsic_weight"):
+            return float(self.exploration.get_intrinsic_weight())
+        return 0.0
+
+    def _sync_curriculum_metrics(self, baselines: torch.Tensor | None = None) -> None:
+        """
+        Write curriculum metadata (stage + baseline) into the runtime registry.
+
+        Prefers the most recent curriculum decisions; falls back to tracker state
+        when decisions are unavailable (e.g. before the first population step).
+        """
+        if self.current_curriculum_decisions:
+            stage_baseline = baselines if baselines is not None else self.runtime_registry.get_baseline_tensor()
+
+            for idx, decision in enumerate(self.current_curriculum_decisions):
+                stage_value = self._difficulty_to_stage(float(decision.difficulty_level))
+                self.runtime_registry.set_curriculum_stage(agent_idx=idx, stage=stage_value)
+                self.runtime_registry.set_baseline(agent_idx=idx, value=stage_baseline[idx])
+            return
+
+        tracker = getattr(self.curriculum, "tracker", None)
+        if tracker is None or not hasattr(tracker, "agent_stages"):
+            return
+
+        stage_baseline = baselines if baselines is not None else self.runtime_registry.get_baseline_tensor()
+        for idx in range(self.num_agents):
+            stage_value = int(tracker.agent_stages[idx].item())
+            self.runtime_registry.set_curriculum_stage(agent_idx=idx, stage=stage_value)
+            self.runtime_registry.set_baseline(agent_idx=idx, value=stage_baseline[idx])
+
+    @staticmethod
+    def _difficulty_to_stage(difficulty_level: float) -> int:
+        """Convert curriculum difficulty (0.0-1.0) to discrete stage (1-5)."""
+        stage = int(round(difficulty_level * 4.0)) + 1
+        return max(1, min(5, stage))
+
+    def sync_exploration_metrics(self) -> None:
+        """
+        Synchronise exploration parameters (epsilon, intrinsic weight) to registry.
+
+        Also refreshes current_epsilons to keep action selection in sync with telemetry.
+        """
+        epsilon_tensor = torch.full(
+            (self.num_agents,),
+            self._get_current_epsilon_value(),
+            dtype=torch.float32,
+            device=self.device,
+        )
+        self.current_epsilons = epsilon_tensor
+
+        intrinsic_weight = self._get_current_intrinsic_weight_value()
+
+        for idx in range(self.num_agents):
+            self.runtime_registry.set_epsilon(agent_idx=idx, epsilon=epsilon_tensor[idx])
+            self.runtime_registry.set_intrinsic_weight(agent_idx=idx, weight=intrinsic_weight)
+
+    def _finalize_episode(self, agent_idx: int, survival_time: int) -> None:
+        """Finalize episode metadata and bookkeeping after store."""
+        self.runtime_registry.record_survival_time(agent_idx=agent_idx, steps=survival_time)
+
+        if isinstance(self.exploration, AdaptiveIntrinsicExploration):
+            self.exploration.update_on_episode_end(survival_time=survival_time)
+
+        # Sync exploration telemetry after any annealing/decay changes
+        self.sync_exploration_metrics()
+
+        self.episode_step_counts[agent_idx] = 0
+        self._reset_hidden_state(agent_idx)
 
     def flush_episode(self, agent_idx: int, synthetic_done: bool = False) -> None:
         """
@@ -187,49 +313,9 @@ class VectorizedPopulation(PopulationManager):
             # Nothing to flush
             return
 
-        # Store episode in sequential buffer (convert lists to stacked tensors)
-        self.replay_buffer.store_episode(
-            {
-                "observations": torch.stack(episode["observations"]),
-                "actions": torch.stack(episode["actions"]),
-                "rewards_extrinsic": torch.stack(episode["rewards_extrinsic"]),
-                "rewards_intrinsic": torch.stack(episode["rewards_intrinsic"]),
-                "dones": torch.stack(episode["dones"]),
-            }
-        )
-
-        # Update exploration annealing
         survival_time = len(episode["observations"])
-        if isinstance(self.exploration, AdaptiveIntrinsicExploration):
-            self.exploration.update_on_episode_end(survival_time=survival_time)
-
-        # Clear accumulator
-        self.current_episodes[agent_idx] = {
-            "observations": [],
-            "actions": [],
-            "rewards_extrinsic": [],
-            "rewards_intrinsic": [],
-            "dones": [],
-        }
-
-        # Reset episode counter
-        self.episode_step_counts[agent_idx] = 0
-
-        # CRITICAL: Zero hidden state for recurrent networks
-        # Prevents temporal contamination - new episode should not inherit
-        # LSTM activations from previous life (whether natural or synthetic done)
-        if self.is_recurrent:
-            h, c = self.q_network.get_hidden_state()
-            # Zero out hidden state for this specific agent
-            h[:, agent_idx, :] = 0.0
-            c[:, agent_idx, :] = 0.0
-            self.q_network.set_hidden_state((h, c))
-        if self.q_network and hasattr(self.q_network, "reset_hidden_state"):
-            h, c = self.q_network.get_hidden_state()
-            if h is not None and c is not None:
-                h[:, agent_idx, :] = 0.0
-                c[:, agent_idx, :] = 0.0
-                self.q_network.set_hidden_state((h, c))
+        self._store_episode_and_reset(agent_idx)
+        self._finalize_episode(agent_idx, survival_time)
 
     def _update_reward_baseline(self):
         """Update reward baseline when curriculum changes (P2.1: per-agent support)."""
@@ -243,11 +329,19 @@ class VectorizedPopulation(PopulationManager):
 
             # Check if any agent's multiplier changed
             if not hasattr(self, "current_depletion_multipliers"):
-                self.current_depletion_multipliers = multipliers
-                self.env.update_baseline_for_curriculum(multipliers)
+                self.current_depletion_multipliers = multipliers.clone()
+                baselines = self.env.update_baseline_for_curriculum(multipliers)
+                self.runtime_registry.set_baselines(baselines.clone())
             elif not torch.equal(multipliers, self.current_depletion_multipliers):
-                self.current_depletion_multipliers = multipliers
-                self.env.update_baseline_for_curriculum(multipliers)
+                self.current_depletion_multipliers = multipliers.clone()
+                baselines = self.env.update_baseline_for_curriculum(multipliers)
+                self.runtime_registry.set_baselines(baselines.clone())
+            else:
+                baselines = self.runtime_registry.get_baseline_tensor()
+
+            return baselines
+
+        return None
 
     def select_greedy_actions(self, env: "VectorizedHamletEnv") -> torch.Tensor:
         """
@@ -362,7 +456,8 @@ class VectorizedPopulation(PopulationManager):
             )
 
         # 3.5 Update reward baseline if curriculum changed
-        self._update_reward_baseline()
+        baselines = self._update_reward_baseline()
+        self._sync_curriculum_metrics(baselines)
 
         # 4. Get action masks from environment
         action_masks = envs.get_action_masks()
@@ -549,41 +644,10 @@ class VectorizedPopulation(PopulationManager):
         if dones.any():
             reset_indices = torch.where(dones)[0]
             for idx in reset_indices:
-                # Update adaptive intrinsic annealing
-                if isinstance(self.exploration, AdaptiveIntrinsicExploration):
-                    survival_time = self.episode_step_counts[idx].item()
-                    self.exploration.update_on_episode_end(survival_time=survival_time)
-
-                # Store complete episode in sequential buffer (for recurrent networks)
-                if self.is_recurrent and len(self.current_episodes[idx]["observations"]) > 0:
-                    episode = {
-                        "observations": torch.stack(self.current_episodes[idx]["observations"]),
-                        "actions": torch.stack(self.current_episodes[idx]["actions"]),
-                        "rewards_extrinsic": torch.stack(self.current_episodes[idx]["rewards_extrinsic"]),
-                        "rewards_intrinsic": torch.stack(self.current_episodes[idx]["rewards_intrinsic"]),
-                        "dones": torch.stack(self.current_episodes[idx]["dones"]),
-                    }
-                    self.replay_buffer.store_episode(episode)
-                    # Reset episode accumulator
-                    self.current_episodes[idx] = {
-                        "observations": [],
-                        "actions": [],
-                        "rewards_extrinsic": [],
-                        "rewards_intrinsic": [],
-                        "dones": [],
-                    }
-
-                # Reset episode counter
-                self.episode_step_counts[idx] = 0
-
-            # Reset hidden states for agents that terminated (if using recurrent network)
-            if self.is_recurrent:
-                # Get current hidden state
-                h, c = self.q_network.get_hidden_state()
-                # Zero out hidden states for terminated agents
-                h[:, reset_indices, :] = 0.0
-                c[:, reset_indices, :] = 0.0
-                self.q_network.set_hidden_state((h, c))
+                survival_time = self.episode_step_counts[idx].item()
+                if self.is_recurrent:
+                    self._store_episode_and_reset(idx)
+                self._finalize_episode(idx, survival_time)
 
         # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
         total_rewards = rewards + intrinsic_rewards * (
@@ -605,6 +669,24 @@ class VectorizedPopulation(PopulationManager):
         )
 
         return state
+
+    def build_telemetry_snapshot(self, episode_index: int | None = None) -> dict:
+        """
+        Construct JSON-safe telemetry snapshot for all agents.
+
+        Args:
+            episode_index: Optional episode index to include in payload.
+
+        Returns:
+            Dict with schema version, episode index, and per-agent telemetry.
+        """
+        agents = [self.runtime_registry.get_snapshot_for_agent(i).to_dict() for i in range(self.num_agents)]
+        payload = {
+            "schema_version": "1.0.0",
+            "episode_index": int(episode_index) if episode_index is not None else None,
+            "agents": agents,
+        }
+        return payload
 
     def update_curriculum_tracker(self, rewards: torch.Tensor, dones: torch.Tensor) -> None:
         """Update curriculum tracker with episode rewards/dones."""

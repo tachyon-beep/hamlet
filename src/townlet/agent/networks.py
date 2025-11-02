@@ -165,7 +165,7 @@ class RecurrentSpatialQNetwork(nn.Module):
         idx += self.num_affordance_dims
 
         # Temporal features are ignored (we encode spatial + meter state)
-        # If enable_temporal_features is True, there will be 2 extra dims at the end
+        # If enable_temporal_features is True, there will be 3 extra dims (sin(time), cos(time), progress)
         # but we don't need to process them separately for now
 
         # Reshape grid for CNN: [batch, 1, window_size, window_size]

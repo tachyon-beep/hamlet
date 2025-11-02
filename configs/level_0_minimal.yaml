@@ -15,6 +15,9 @@
 # - Fast iteration for testing changes
 # - Teaching demo: "simplest possible RL problem"
 
+run_metadata:
+  output_subdir: L0_minimal
+
 # Environment configuration
 environment:
   grid_size: 5  # 5×5 grid world (25 cells)

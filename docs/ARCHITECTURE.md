@@ -213,13 +213,14 @@ def __init__(
 
 **Return:** `[num_agents, 5]` bool tensor (True=valid, False=invalid)
 
-**Design Note:** INTERACT action is ONLY valid when:
+**Design Note:** INTERACT action is ONLY masked when physically impossible:
 
-- Agent is on an affordance
-- Agent can afford it
-- Affordance is open (temporal mechanics)
+- Agent must be on an affordance tile
+- Affordance must be open (temporal mechanics)
 
-**Known Issue (ACTION #8):** No WAIT action causes oscillation near affordances.
+Affordability is enforced inside the interaction handler; if the agent is broke, the step is spent with only passive decay.
+
+**WAIT Action:** WAIT (action index 5) is always available. Environment initialization enforces `wait_energy_cost < move_energy_cost` so WAIT remains a low-cost recovery move (only passive decay applies).
 
 ---
 

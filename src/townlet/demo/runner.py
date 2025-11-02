@@ -3,6 +3,7 @@
 import logging
 import signal
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import torch
@@ -13,6 +14,7 @@ from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
+from townlet.training.state import BatchedAgentState
 from townlet.training.tensorboard_logger import TensorBoardLogger
 
 logger = logging.getLogger(__name__)
@@ -329,90 +331,111 @@ class DemoRunner:
                 self.population.reset()
 
                 # Run episode
-                survival_time = 0
-                episode_reward = 0.0
-                episode_extrinsic_reward = 0.0
-                episode_intrinsic_reward = 0.0
+                num_agents = self.population.num_agents
                 max_steps = 500
-
-                # Track meters and affordances for Phase 3
-                final_meters = None
-                affordance_visits = {}
+                episode_reward = torch.zeros(num_agents, device=self.env.device)
+                episode_extrinsic_reward = torch.zeros(num_agents, device=self.env.device)
+                episode_intrinsic_reward = torch.zeros(num_agents, device=self.env.device)
+                final_meters = [None for _ in range(num_agents)]
+                affordance_visits = [defaultdict(int) for _ in range(num_agents)]
+                last_agent_state: BatchedAgentState | None = None
 
                 for step in range(max_steps):
                     agent_state = self.population.step_population(self.env)
+                    last_agent_state = agent_state
 
-                    survival_time += 1
+                    if self.curriculum.transition_events:
+                        self.tb_logger.log_curriculum_transitions(
+                            episode=self.current_episode,
+                            events=list(self.curriculum.transition_events),
+                        )
+                        self.curriculum.transition_events.clear()
 
-                    # Track rewards separately
-                    # agent_state.rewards is total (extrinsic + intrinsic * weight)
-                    # agent_state.intrinsic_rewards is just intrinsic component
-                    intrinsic_weight = self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 1.0
+                    intrinsic_weight = (
+                        self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 1.0
+                    )
 
-                    # Calculate extrinsic reward tensor for curriculum (not just scalar)
                     extrinsic_reward_tensor = agent_state.rewards - (agent_state.intrinsic_rewards * intrinsic_weight)
 
-                    # NOTE: Curriculum update removed from here (was per-step, now per-episode)
-                    # See curriculum update after episode ends below
+                    episode_reward += agent_state.rewards
+                    episode_extrinsic_reward += extrinsic_reward_tensor
+                    episode_intrinsic_reward += agent_state.intrinsic_rewards
 
-                    # Extract scalars for logging
-                    extrinsic_component = extrinsic_reward_tensor[0].item()
-                    intrinsic_component = agent_state.intrinsic_rewards[0].item()
-
-                    episode_reward += agent_state.rewards[0].item()
-                    episode_extrinsic_reward += extrinsic_component
-                    episode_intrinsic_reward += intrinsic_component
-
-                    # Track affordance usage from info dict
                     if "successful_interactions" in agent_state.info:
                         for agent_idx, affordance_name in agent_state.info["successful_interactions"].items():
-                            affordance_visits[affordance_name] = affordance_visits.get(affordance_name, 0) + 1
+                            if 0 <= agent_idx < num_agents:
+                                affordance_visits[agent_idx][affordance_name] += 1
 
-                    if agent_state.dones[0]:
-                        # Capture final meters before reset
-                        final_meters = self.env.meters[0].cpu()
+                    for idx in range(num_agents):
+                        if agent_state.dones[idx] and final_meters[idx] is None:
+                            final_meters[idx] = self.env.meters[idx].detach().cpu()
+
+                    if torch.all(agent_state.dones).item():
                         break
 
-                # If episode didn't end, capture current meters
-                if final_meters is None:
-                    final_meters = self.env.meters[0].cpu()
+                if last_agent_state is None:
+                    continue
 
-                # Update curriculum ONCE per episode with pure survival signal
-                # This gives curriculum a clean, interpretable metric: steps survived
-                curriculum_survival_tensor = torch.tensor([float(survival_time)], dtype=torch.float32, device=self.env.device)
-                curriculum_done_tensor = torch.tensor([True], dtype=torch.bool, device=self.env.device)
+                for idx in range(num_agents):
+                    if final_meters[idx] is None:
+                        final_meters[idx] = self.env.meters[idx].detach().cpu()
+
+                step_counts = last_agent_state.info.get("step_counts", self.population.episode_step_counts.clone())
+                step_counts = step_counts.to(self.env.device)
+                curriculum_survival_tensor = step_counts.float()
+                curriculum_done_tensor = torch.ones_like(last_agent_state.dones, dtype=torch.bool, device=self.env.device)
                 self.population.update_curriculum_tracker(curriculum_survival_tensor, curriculum_done_tensor)
 
                 # P1.2: Flush episode if agent survived to max_steps (recurrent networks only)
                 # Without this, successful episodes never reach replay buffer → memory leak + data loss
                 # CRITICAL: Loop over all agents to support multi-agent configs (not just agent 0)
                 for agent_idx in range(self.population.num_agents):
-                    if not agent_state.dones[agent_idx]:  # Agent survived to max_steps without dying
+                    if not last_agent_state.dones[agent_idx]:  # Agent survived to max_steps without dying
                         self.population.flush_episode(agent_idx=agent_idx, synthetic_done=True)
+
+                epsilon_value = self.exploration.rnd.epsilon if hasattr(self.exploration, "rnd") else getattr(self.exploration, "epsilon", 0.0)
+                intrinsic_weight_value = (
+                    self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 0.0
+                )
+
+                episode_reward_cpu = episode_reward.detach().cpu()
+                episode_extrinsic_cpu = episode_extrinsic_reward.detach().cpu()
+                episode_intrinsic_cpu = episode_intrinsic_reward.detach().cpu()
+                step_counts_cpu = step_counts.detach().cpu().long()
+                stages_cpu = self.curriculum.tracker.agent_stages.detach().cpu()
 
                 # Log metrics to database
                 self.db.insert_episode(
                     episode_id=self.current_episode,
                     timestamp=time.time(),
-                    survival_time=survival_time,
-                    total_reward=episode_reward,
-                    extrinsic_reward=episode_extrinsic_reward,
-                    intrinsic_reward=episode_intrinsic_reward,
-                    intrinsic_weight=self.exploration.get_intrinsic_weight(),
-                    curriculum_stage=self.curriculum.tracker.agent_stages[0].item(),
-                    epsilon=self.exploration.rnd.epsilon,
+                    survival_time=int(step_counts_cpu[0].item()),
+                    total_reward=float(episode_reward_cpu[0].item()),
+                    extrinsic_reward=float(episode_extrinsic_cpu[0].item()),
+                    intrinsic_reward=float(episode_intrinsic_cpu[0].item()),
+                    intrinsic_weight=intrinsic_weight_value,
+                    curriculum_stage=int(stages_cpu[0].item()),
+                    epsilon=epsilon_value,
                 )
 
+                agent_metrics = []
+                for idx, agent_id in enumerate(self.population.agent_ids):
+                    agent_metrics.append(
+                        {
+                            "agent_id": agent_id,
+                            "survival_time": int(step_counts_cpu[idx].item()),
+                            "total_reward": float(episode_reward_cpu[idx].item()),
+                            "extrinsic_reward": float(episode_extrinsic_cpu[idx].item()),
+                            "intrinsic_reward": float(episode_intrinsic_cpu[idx].item()),
+                            "curriculum_stage": int(stages_cpu[idx].item()),
+                            "epsilon": epsilon_value,
+                            "intrinsic_weight": intrinsic_weight_value,
+                        }
+                    )
+
                 # Log to TensorBoard (Phase 1 - Episode metrics)
-                self.tb_logger.log_episode(
+                self.tb_logger.log_multi_agent_episode(
                     episode=self.current_episode,
-                    survival_time=survival_time,
-                    total_reward=episode_reward,
-                    extrinsic_reward=episode_extrinsic_reward,
-                    intrinsic_reward=episode_intrinsic_reward,
-                    curriculum_stage=int(self.curriculum.tracker.agent_stages[0].item()),
-                    epsilon=self.exploration.rnd.epsilon,
-                    intrinsic_weight=self.exploration.get_intrinsic_weight(),
+                    agents=agent_metrics,
                 )
 
                 # Phase 2 - Training metrics (if training occurred this episode)
@@ -425,38 +448,45 @@ class DemoRunner:
                     )
 
                 # Phase 3 - Meter dynamics and affordance usage
-                if final_meters is not None:
-                    # Convert meter names to indices (energy, hygiene, satiation, money, mood, social, health, fitness)
-                    meter_names = [
-                        "energy",
-                        "hygiene",
-                        "satiation",
-                        "money",
-                        "mood",
-                        "social",
-                        "health",
-                        "fitness",
-                    ]
-                    meter_dict = {name: final_meters[i].item() for i, name in enumerate(meter_names)}
-                    self.tb_logger.log_meters(
-                        episode=self.current_episode,
-                        step=survival_time,
-                        meters=meter_dict,
-                    )
+                meter_names = [
+                    "energy",
+                    "hygiene",
+                    "satiation",
+                    "money",
+                    "mood",
+                    "social",
+                    "health",
+                    "fitness",
+                ]
+                for idx, agent_id in enumerate(self.population.agent_ids):
+                    meters_tensor = final_meters[idx]
+                    if meters_tensor is not None:
+                        meter_dict = {name: meters_tensor[i].item() for i, name in enumerate(meter_names)}
+                        self.tb_logger.log_meters(
+                            episode=self.current_episode,
+                            step=int(step_counts_cpu[idx].item()),
+                            meters=meter_dict,
+                            agent_id=agent_id,
+                        )
 
-                # Log affordance usage
-                if affordance_visits:
-                    self.tb_logger.log_affordance_usage(episode=self.current_episode, affordance_counts=affordance_visits)
+                for idx, visits in enumerate(affordance_visits):
+                    if visits:
+                        self.tb_logger.log_affordance_usage(
+                            episode=self.current_episode,
+                            affordance_counts=dict(visits),
+                            agent_id=self.population.agent_ids[idx],
+                        )
 
                 # Heartbeat log every 10 episodes
                 if self.current_episode % 10 == 0:
                     elapsed = time.time() - episode_start
+                    stage_overview = "/".join(str(int(s.item())) for s in stages_cpu)
                     logger.info(
                         f"Episode {self.current_episode}/{self.max_episodes} | "
-                        f"Survival: {survival_time} steps | "
-                        f"Reward: {episode_reward:.2f} | "
-                        f"Intrinsic Weight: {self.exploration.get_intrinsic_weight():.3f} | "
-                        f"Stage: {self.curriculum.tracker.agent_stages[0].item()}/5 | "
+                        f"Survival: {int(step_counts_cpu[0].item())} steps | "
+                        f"Reward: {episode_reward_cpu[0].item():.2f} | "
+                        f"Intrinsic Weight: {intrinsic_weight_value:.3f} | "
+                        f"Stage(s): {stage_overview} | "
                         f"Time: {elapsed:.2f}s"
                     )
 
@@ -464,8 +494,9 @@ class DemoRunner:
                 if self.current_episode % 100 == 0:
                     self.save_checkpoint()
 
-                # Decay epsilon for next episode
+                # Decay epsilon for next episode and sync telemetry
                 self.exploration.decay_epsilon()
+                self.population.sync_exploration_metrics()
 
                 self.current_episode += 1
 

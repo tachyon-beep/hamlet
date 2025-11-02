@@ -9,6 +9,24 @@ import torch
 
 from townlet.environment.reward_strategy import RewardStrategy
 from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.population.runtime_registry import AgentRuntimeRegistry
+
+
+def _attach_registry_with_baseline(env: VectorizedHamletEnv, baseline: float | list[float]) -> AgentRuntimeRegistry:
+    """Helper to attach runtime registry to environment with preset baseline."""
+    registry = AgentRuntimeRegistry(
+        agent_ids=[f"agent-{idx}" for idx in range(env.num_agents)],
+        device=env.device,
+    )
+    env.attach_runtime_registry(registry)
+
+    if isinstance(baseline, (float, int)):
+        values = torch.full((env.num_agents,), float(baseline), dtype=torch.float32, device=env.device)
+    else:
+        values = torch.tensor(baseline, dtype=torch.float32, device=env.device)
+
+    registry.set_baselines(values)
+    return registry
 
 
 class TestRewardCalculationViaEnv:
@@ -23,6 +41,8 @@ class TestRewardCalculationViaEnv:
             enable_temporal_mechanics=False,
         )
         env.reset()
+
+        _attach_registry_with_baseline(env, 100.0)
 
         # Both alive at steps 10 and 20
         env.step_counts = torch.tensor([10, 20])
@@ -44,6 +64,8 @@ class TestRewardCalculationViaEnv:
         )
         env.reset()
 
+        _attach_registry_with_baseline(env, 100.0)
+
         # Both alive at steps 100 and 200
         env.step_counts = torch.tensor([100, 200])
         env.dones = torch.tensor([False, False])
@@ -64,8 +86,7 @@ class TestRewardCalculationViaEnv:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # One alive, one dead at step 50
         env.step_counts = torch.tensor([50, 50])
@@ -88,8 +109,7 @@ class TestRewardCalculationViaEnv:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # Dead agent at step 150
         env.step_counts = torch.tensor([150])
@@ -110,8 +130,7 @@ class TestRewardCalculationViaEnv:
         )
         env.reset()
 
-        # Set baseline to 100 steps
-        env.reward_strategy.set_baseline_survival_steps(100.0)
+        _attach_registry_with_baseline(env, 100.0)
 
         # Both dead at step 0 (immediate death)
         env.step_counts = torch.tensor([0, 0])
@@ -133,8 +152,7 @@ class TestRewardCalculationViaEnv:
         )
         env.reset()
 
-        # Set baseline to 50 steps
-        env.reward_strategy.set_baseline_survival_steps(50.0)
+        _attach_registry_with_baseline(env, 50.0)
 
         # Agent dies at step 100
         env.step_counts = torch.tensor([100])
@@ -151,89 +169,90 @@ class TestRewardStrategyDirect:
 
     def test_decade_milestone_direct(self):
         """Alive agents get zero reward."""
-        strategy = RewardStrategy(device=torch.device("cpu"))
-        strategy.set_baseline_survival_steps(100.0)
+        device = torch.device("cpu")
+        strategy = RewardStrategy(device=device, num_agents=3)
 
-        step_counts = torch.tensor([10, 20, 30])
-        dones = torch.tensor([False, False, False])
+        step_counts = torch.tensor([10, 20, 30], device=device)
+        dones = torch.tensor([False, False, False], device=device)
+        baseline = torch.full((3,), 100.0, dtype=torch.float32, device=device)
 
-        rewards = strategy.calculate_rewards(step_counts, dones)
-
-        # All alive: no reward
-        assert torch.all(torch.isclose(rewards, torch.tensor(0.0)))
+        rewards = strategy.calculate_rewards(step_counts, dones, baseline)
+        assert torch.allclose(rewards, torch.zeros_like(rewards))
 
     def test_century_milestone_direct(self):
         """Dead agents get baseline-relative reward."""
-        strategy = RewardStrategy(device=torch.device("cpu"))
-        strategy.set_baseline_survival_steps(100.0)
+        device = torch.device("cpu")
+        strategy = RewardStrategy(device=device, num_agents=2)
 
-        step_counts = torch.tensor([100, 200])
-        dones = torch.tensor([True, True])
+        step_counts = torch.tensor([100, 200], device=device)
+        dones = torch.tensor([True, True], device=device)
+        baseline = torch.full((2,), 100.0, dtype=torch.float32, device=device)
 
-        rewards = strategy.calculate_rewards(step_counts, dones)
-
-        # 100 - 100 = 0, 200 - 100 = +100
+        rewards = strategy.calculate_rewards(step_counts, dones, baseline)
         assert torch.isclose(rewards[0], torch.tensor(0.0))
         assert torch.isclose(rewards[1], torch.tensor(100.0))
 
     def test_death_penalty_direct(self):
         """Dead agents get baseline-relative reward (not fixed penalty)."""
-        strategy = RewardStrategy(device=torch.device("cpu"))
-        strategy.set_baseline_survival_steps(100.0)
+        device = torch.device("cpu")
+        strategy = RewardStrategy(device=device, num_agents=2)
 
-        step_counts = torch.tensor([50, 80])
-        dones = torch.tensor([True, True])
+        step_counts = torch.tensor([50, 80], device=device)
+        dones = torch.tensor([True, True], device=device)
+        baseline = torch.full((2,), 100.0, dtype=torch.float32, device=device)
 
-        rewards = strategy.calculate_rewards(step_counts, dones)
-
-        # 50 - 100 = -50, 80 - 100 = -20
+        rewards = strategy.calculate_rewards(step_counts, dones, baseline)
         assert torch.isclose(rewards[0], torch.tensor(-50.0))
         assert torch.isclose(rewards[1], torch.tensor(-20.0))
 
     def test_mixed_alive_dead_direct(self):
         """Mixed alive/dead: alive get 0, dead get baseline-relative."""
-        strategy = RewardStrategy(device=torch.device("cpu"))
-        strategy.set_baseline_survival_steps(100.0)
+        device = torch.device("cpu")
+        strategy = RewardStrategy(device=device, num_agents=3)
 
-        step_counts = torch.tensor([50, 150, 100])
-        dones = torch.tensor([False, True, True])
+        step_counts = torch.tensor([50, 150, 100], device=device)
+        dones = torch.tensor([False, True, True], device=device)
+        baseline = torch.full((3,), 100.0, dtype=torch.float32, device=device)
 
-        rewards = strategy.calculate_rewards(step_counts, dones)
-
-        # Agent 0: alive = 0
-        # Agent 1: dead, 150 - 100 = +50
-        # Agent 2: dead, 100 - 100 = 0
+        rewards = strategy.calculate_rewards(step_counts, dones, baseline)
         assert torch.isclose(rewards[0], torch.tensor(0.0))
         assert torch.isclose(rewards[1], torch.tensor(50.0))
         assert torch.isclose(rewards[2], torch.tensor(0.0))
 
     def test_step_zero_edge_case_direct(self):
         """Immediate death (step 0) gets large negative reward."""
-        strategy = RewardStrategy(device=torch.device("cpu"))
-        strategy.set_baseline_survival_steps(100.0)
+        device = torch.device("cpu")
+        strategy = RewardStrategy(device=device, num_agents=2)
 
-        step_counts = torch.tensor([0, 0])
-        dones = torch.tensor([True, True])
+        step_counts = torch.tensor([0, 0], device=device)
+        dones = torch.tensor([True, True], device=device)
+        baseline = torch.full((2,), 100.0, dtype=torch.float32, device=device)
 
-        rewards = strategy.calculate_rewards(step_counts, dones)
-
-        # 0 - 100 = -100
-        assert torch.all(torch.isclose(rewards, torch.tensor(-100.0)))
+        rewards = strategy.calculate_rewards(step_counts, dones, baseline)
+        assert torch.allclose(rewards, torch.tensor([-100.0, -100.0]))
 
     def test_non_milestone_steps_direct(self):
         """Test non-milestone steps through RewardStrategy."""
-        strategy = RewardStrategy(device=torch.device("cpu"))
+        device = torch.device("cpu")
+        strategy = RewardStrategy(device=device, num_agents=4)
 
-        step_counts = torch.tensor([5, 15, 25, 99])
-        dones = torch.tensor([False, False, False, False])
+        step_counts = torch.tensor([5, 15, 25, 99], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+        baseline = torch.full((4,), 100.0, dtype=torch.float32, device=device)
 
-        rewards = strategy.calculate_rewards(step_counts, dones)
+        rewards = strategy.calculate_rewards(step_counts, dones, baseline)
+        assert torch.allclose(rewards, torch.zeros_like(rewards))
 
-        # Steps 5, 15, 25 at decade milestones (10, 20, 30 nearby but not exact)
-        # Actually: 15, 25 ARE decade milestones (15 % 10 == 5, 25 % 10 == 5)
-        # Let me reconsider: 15 % 10 == 5 (not 0), so NOT a milestone
-        # 5, 15, 25, 99 are all NOT milestones
-        assert torch.isclose(rewards[0], torch.tensor(0.0))  # 5 % 10 = 5
-        assert torch.isclose(rewards[1], torch.tensor(0.0))  # 15 % 10 = 5
-        assert torch.isclose(rewards[2], torch.tensor(0.0))  # 25 % 10 = 5
-        assert torch.isclose(rewards[3], torch.tensor(0.0))  # 99 % 10 = 9
+    def test_vectorized_baseline_support(self):
+        """Different per-agent baselines produce different rewards."""
+        device = torch.device("cpu")
+        strategy = RewardStrategy(device=device, num_agents=3)
+
+        step_counts = torch.tensor([100, 100, 100], device=device)
+        dones = torch.tensor([True, True, True], device=device)
+        baseline = torch.tensor([80.0, 100.0, 120.0], dtype=torch.float32, device=device)
+
+        rewards = strategy.calculate_rewards(step_counts, dones, baseline)
+        assert torch.isclose(rewards[0], torch.tensor(20.0))
+        assert torch.isclose(rewards[1], torch.tensor(0.0))
+        assert torch.isclose(rewards[2], torch.tensor(-20.0))

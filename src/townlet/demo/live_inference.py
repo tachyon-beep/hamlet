@@ -7,6 +7,7 @@ Provides step-by-step visualization at human-watchable speed.
 import asyncio
 import logging
 from pathlib import Path
+from typing import Any
 
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -21,6 +22,25 @@ logger = logging.getLogger(__name__)
 
 # Q-value log file (opened at module level)
 qvalue_log_file = None
+
+TELEMETRY_SCHEMA_VERSION = "1.0.0"
+
+
+def build_agent_telemetry_payload(
+    population: VectorizedPopulation | None,
+    episode_index: int | None = None,
+) -> dict[str, Any]:
+    """Build JSON-safe telemetry snapshot for all agents."""
+    if population is None:
+        return {
+            "schema_version": TELEMETRY_SCHEMA_VERSION,
+            "episode_index": episode_index,
+            "agents": [],
+        }
+
+    snapshot = population.build_telemetry_snapshot(episode_index=episode_index)
+    snapshot["schema_version"] = TELEMETRY_SCHEMA_VERSION
+    return snapshot
 
 
 class LiveInferenceServer:
@@ -96,6 +116,12 @@ class LiveInferenceServer:
         self.app.websocket("/ws/training")(self.websocket_endpoint)  # Same endpoint, different name
         self.app.on_event("startup")(self.startup)
         self.app.on_event("shutdown")(self.shutdown)
+
+    def _build_agent_telemetry(self) -> dict[str, Any]:
+        """Return telemetry payload for current agent registry."""
+        if not self.population:
+            return {"schema_version": TELEMETRY_SCHEMA_VERSION, "episode_index": None, "agents": []}
+        return build_agent_telemetry_payload(self.population, episode_index=self.current_episode)
 
     async def startup(self):
         """Initialize environment and start checkpoint monitoring."""
@@ -412,9 +438,19 @@ class LiveInferenceServer:
         current_stage = curriculum_decisions[0].difficulty_level
         current_multiplier = curriculum_decisions[0].depletion_multiplier
 
-        # Update environment baseline for correct reward display
-        self.env.update_baseline_for_curriculum(current_multiplier)
-        baseline_survival = self.env.reward_strategy.baseline_survival_steps
+        # Align baseline handling with training loop
+        self.population.current_curriculum_decisions = curriculum_decisions
+        baselines = self.population._update_reward_baseline()
+        self.population._sync_curriculum_metrics(baselines)
+        episode_telemetry = self._build_agent_telemetry()
+        agent_snapshot = episode_telemetry["agents"][0] if episode_telemetry["agents"] else {
+            "baseline_survival_steps": 0.0,
+            "curriculum_stage": 1,
+            "epsilon": self.current_epsilon,
+        }
+        baseline_survival = float(agent_snapshot["baseline_survival_steps"])
+        current_stage = int(agent_snapshot["curriculum_stage"])
+        epsilon_snapshot = float(agent_snapshot["epsilon"])
 
         # Send episode start with curriculum info
         await self._broadcast_to_clients(
@@ -424,10 +460,11 @@ class LiveInferenceServer:
                 "checkpoint": f"checkpoint_ep{self.current_checkpoint_episode:05d}",
                 "checkpoint_episode": self.current_checkpoint_episode,
                 "total_episodes": self.total_episodes,
-                "epsilon": self.current_epsilon,
-                "curriculum_stage": int(current_stage),
-                "curriculum_multiplier": current_multiplier,
+                "epsilon": epsilon_snapshot,
+                "curriculum_stage": current_stage,
+                "curriculum_multiplier": float(current_multiplier),
                 "baseline_survival": baseline_survival,
+                "telemetry": episode_telemetry,
             }
         )
 
@@ -468,10 +505,13 @@ class LiveInferenceServer:
                 await asyncio.sleep(self.step_delay)
 
         # Episode complete - calculate performance vs baseline
-        performance_vs_baseline = self.current_step - baseline_survival
+        performance_vs_baseline = float(self.current_step) - baseline_survival
 
-        # Calculate final reward using baseline-relative formula: reward = steps_lived - R
-        final_reward = float(self.current_step) - baseline_survival
+        final_reward = float(self.env.step_counts[0].item()) - baseline_survival
+        final_telemetry = self._build_agent_telemetry()
+        final_agent_snapshot = final_telemetry["agents"][0] if final_telemetry["agents"] else agent_snapshot
+        final_stage = int(final_agent_snapshot["curriculum_stage"])
+        final_epsilon = float(final_agent_snapshot["epsilon"])
 
         await self._broadcast_to_clients(
             {
@@ -483,10 +523,11 @@ class LiveInferenceServer:
                 "checkpoint": f"checkpoint_ep{self.current_checkpoint_episode:05d}",
                 "checkpoint_episode": self.current_checkpoint_episode,
                 "total_episodes": self.total_episodes,
-                "epsilon": self.current_epsilon,
+                "epsilon": final_epsilon,
                 "baseline_survival": baseline_survival,
                 "performance_vs_baseline": performance_vs_baseline,
-                "curriculum_stage": int(current_stage),
+                "curriculum_stage": final_stage,
+                "telemetry": final_telemetry,
             }
         )
 
@@ -502,9 +543,9 @@ class LiveInferenceServer:
         agent_pos = self.env.positions[0].cpu().tolist()
 
         # Get action masks (which actions are valid)
-        action_masks = self.env.get_action_masks()[0].cpu().tolist()  # [5] bool list
-        # Pad with False for Wait action (not yet implemented in backend)
-        action_masks.append(False)
+        action_masks = self.env.get_action_masks()[0].cpu().tolist()
+        if len(action_masks) < 6:
+            action_masks.extend([False] * (6 - len(action_masks)))
 
         # Get meters (all 8: energy, hygiene, satiation, money, health, mood, social, fitness)
         # Note: Backend order is [energy, hygiene, satiation, money, mood, social, health, fitness]
@@ -535,17 +576,20 @@ class LiveInferenceServer:
                 }
             )
 
-        # Convert Q-values to list for JSON serialization
+        # Convert Q-values to list for JSON serialization (supports legacy 5-action checkpoints)
         q_values_list = q_values.cpu().tolist()
-        # Pad with 0 for Wait action (not yet implemented in backend)
-        q_values_list.append(0.0)
+        if len(q_values_list) < 6:
+            # Pad with NaNs so downstream consumers can detect legacy models gracefully
+            q_values_list.extend([float("nan")] * (6 - len(q_values_list)))
 
         # Log Q-values and chosen action to file for debugging
         action_names = ["Up", "Down", "Left", "Right", "Interact", "Wait"]
+        padded_for_log = q_values_list[:6]
         log_line = (
             f"Step {self.current_step}: Action={action_names[last_action]}, "
-            f"Q-values: Up={q_values_list[0]:.2f}, Down={q_values_list[1]:.2f}, "
-            f"Left={q_values_list[2]:.2f}, Right={q_values_list[3]:.2f}, Interact={q_values_list[4]:.2f}\n"
+            f"Q-values: Up={padded_for_log[0]:.2f}, Down={padded_for_log[1]:.2f}, "
+            f"Left={padded_for_log[2]:.2f}, Right={padded_for_log[3]:.2f}, "
+            f"Interact={padded_for_log[4]:.2f}, Wait={padded_for_log[5]:.2f}\n"
         )
         if qvalue_log_file:
             qvalue_log_file.write(log_line)
@@ -557,7 +601,8 @@ class LiveInferenceServer:
         ]
 
         # Calculate projected reward based on current progress
-        baseline_survival = self.env.reward_strategy.baseline_survival_steps
+        baseline_tensor = self.population.runtime_registry.get_baseline_tensor()
+        baseline_survival = float(baseline_tensor[0].item())
         projected_reward = float(self.current_step) - baseline_survival
 
         # Build state update message
@@ -588,10 +633,11 @@ class LiveInferenceServer:
                     "meters": meters  # MeterPanel expects agent_0.meters nested structure
                 }
             },
-            "q_values": q_values_list,  # Q-values for all 6 actions (5 real + Wait padded)
-            "action_masks": action_masks,  # Which actions are valid [5] bool list
+            "q_values": q_values_list,  # Q-values for all 6 actions
+            "action_masks": action_masks,  # Which actions are valid [6] bool list
             "affordance_stats": affordance_stats,  # Interaction counts sorted by frequency
             "baseline_survival": baseline_survival,  # For UI display
+            "telemetry": self._build_agent_telemetry(),
         }
 
         # Add temporal mechanics data if enabled

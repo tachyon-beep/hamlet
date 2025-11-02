@@ -506,11 +506,13 @@ class TestEnvironmentLayoutCheckpointing:
     def test_get_affordance_positions_returns_dict(self, simple_env):
         """get_affordance_positions should return dict of positions."""
         simple_env.reset()
-        positions = simple_env.get_affordance_positions()
-        
+        data = simple_env.get_affordance_positions()
+
+        assert isinstance(data, dict)
+        positions = data.get("positions", data)
         assert isinstance(positions, dict)
         assert len(positions) > 0  # Should have affordances
-        
+
         # Check a known affordance
         assert "Bed" in positions
         assert isinstance(positions["Bed"], list)
@@ -521,19 +523,22 @@ class TestEnvironmentLayoutCheckpointing:
         simple_env.reset()
         
         # Get original positions
-        original_positions = simple_env.get_affordance_positions()
+        original_data = simple_env.get_affordance_positions()
+        original_positions = original_data.get("positions", original_data)
         original_bed_pos = original_positions["Bed"].copy()
         
         # Randomize layout
         simple_env.randomize_affordance_positions()
-        new_positions = simple_env.get_affordance_positions()
+        new_data = simple_env.get_affordance_positions()
+        new_positions = new_data.get("positions", new_data)
         
         # Verify layout changed
         assert new_positions["Bed"] != original_bed_pos
         
         # Restore original layout
-        simple_env.set_affordance_positions(original_positions)
-        restored_positions = simple_env.get_affordance_positions()
+        simple_env.set_affordance_positions(original_data)
+        restored_data = simple_env.get_affordance_positions()
+        restored_positions = restored_data.get("positions", restored_data)
         
         # Verify exact restoration
         assert restored_positions["Bed"] == original_bed_pos
@@ -543,13 +548,15 @@ class TestEnvironmentLayoutCheckpointing:
         simple_env.reset()
         
         # Set specific positions
-        custom_positions = simple_env.get_affordance_positions()
-        custom_positions["Bed"] = [1, 1]
-        simple_env.set_affordance_positions(custom_positions)
+        custom_data = simple_env.get_affordance_positions()
+        positions = custom_data.get("positions", custom_data)
+        positions["Bed"] = [1, 1]
+        simple_env.set_affordance_positions(custom_data)
         
         # Reset environment
         simple_env.reset()
         
         # Verify positions persisted
-        restored_positions = simple_env.get_affordance_positions()
+        restored_data = simple_env.get_affordance_positions()
+        restored_positions = restored_data.get("positions", restored_data)
         assert restored_positions["Bed"] == [1, 1]

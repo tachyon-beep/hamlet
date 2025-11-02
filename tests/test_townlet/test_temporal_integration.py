@@ -38,16 +38,18 @@ def test_observation_dimensions_with_temporal():
 
     obs = env.reset()
 
-    # Full observability: 64 (grid) + 8 (meters) + (num_affordance_types + 1) + 2 (temporal)
-    # num_affordance_types = 15 (including CoffeeShop), encoding = 16
-    expected_dim = 64 + 8 + (env.num_affordance_types + 1) + 2
+    # Full observability: 64 (grid) + 8 (meters) + (num_affordance_types + 1) + 3 (temporal)
+    # Temporal features: sin(time), cos(time), normalized interaction progress
+    expected_dim = 64 + 8 + (env.num_affordance_types + 1) + 3
     assert obs.shape == (2, expected_dim)
 
-    # Last two features are time_of_day and interaction_progress
-    time_feature = obs[0, -2]
+    time_sin = obs[0, -3]
+    time_cos = obs[0, -2]
     progress_feature = obs[0, -1]
 
-    assert 0.0 <= time_feature <= 1.0
+    # time_of_day = 0 at reset ⇒ sin = 0, cos = 1
+    assert time_sin == pytest.approx(0.0, abs=1e-6)
+    assert time_cos == pytest.approx(1.0, abs=1e-6)
     assert progress_feature == 0.0  # No interaction yet
 
 

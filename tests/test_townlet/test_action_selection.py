@@ -251,8 +251,8 @@ class TestGreedyActionSelection:
             actions = population.select_greedy_actions(env)
             assert actions.shape == (2,)
 
-            # Should only be DOWN (1), RIGHT (3), or INTERACT (4)
-            assert all(a in [1, 3, 4] for a in actions.tolist())
+            # Should only be DOWN (1), RIGHT (3), INTERACT (4), or WAIT (5)
+            assert all(a in [1, 3, 4, 5] for a in actions.tolist())
 
     def test_greedy_selects_highest_q_value(self, simple_setup):
         """Greedy selection should choose action with highest Q-value."""

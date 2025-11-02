@@ -9,6 +9,9 @@
 # - Temporal planning and opportunity cost learning
 # - LSTM learns time-dependent strategies
 
+run_metadata:
+  output_subdir: L3_temporal_mechanics
+
 # Environment configuration
 environment:
   grid_size: 8

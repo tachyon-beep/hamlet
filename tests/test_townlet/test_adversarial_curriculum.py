@@ -4,6 +4,7 @@ Tests for Adversarial Curriculum Manager.
 Focus on business logic: stage progression, entropy gating, retreat conditions.
 """
 
+import pytest
 import torch
 
 from townlet.curriculum.adversarial import AdversarialCurriculum, PerformanceTracker
@@ -217,6 +218,54 @@ class TestStageAdvancement:
         curriculum.tracker.prev_avg_reward[0] = 0.01
 
         assert not curriculum._should_advance(0, entropy=0.3)
+
+    def test_stage_transition_logs_reason(self):
+        """Advancement should emit structured transition telemetry."""
+        curriculum = AdversarialCurriculum(
+            max_steps_per_episode=500,
+            survival_advance_threshold=0.7,
+            entropy_gate=0.5,
+            min_steps_at_stage=100,
+            device=torch.device("cpu"),
+        )
+        curriculum.initialize_population(num_agents=1)
+
+        # Pre-condition: agent at stage 1 with sufficient steps
+        curriculum.tracker.agent_stages[0] = 1
+        curriculum.tracker.steps_at_stage[0] = 1000
+        curriculum.tracker.episode_steps[0] = 450  # High survival (0.9)
+        curriculum.tracker.episode_rewards[0] = 90.0  # Average reward = 0.2
+        curriculum.tracker.prev_avg_reward[0] = 0.05  # Positive learning progress
+
+        # Dummy agent state (values unused by curriculum logic)
+        agent_state = BatchedAgentState(
+            observations=torch.zeros((1, 1)),
+            actions=torch.zeros(1, dtype=torch.long),
+            rewards=torch.zeros(1),
+            dones=torch.tensor([True]),
+            epsilons=torch.zeros(1),
+            intrinsic_rewards=torch.zeros(1),
+            survival_times=torch.tensor([450.0]),
+            curriculum_difficulties=torch.zeros(1),
+            device=torch.device("cpu"),
+        )
+
+        q_values = torch.tensor([[10.0, 0.0, 0.0, 0.0, 0.0]], dtype=torch.float32)
+
+        # Expect curriculum to expose telemetry container
+        assert hasattr(curriculum, "transition_events")
+        curriculum.transition_events.clear()
+
+        curriculum.get_batch_decisions_with_qvalues(agent_state, ["agent_0"], q_values)
+
+        assert len(curriculum.transition_events) == 1
+        event = curriculum.transition_events[0]
+        assert event["agent_id"] == "agent_0"
+        assert event["from_stage"] == 1
+        assert event["to_stage"] == 2
+        assert event["reason"] == "advance"
+        assert event["survival_rate"] == pytest.approx(0.9, rel=1e-3)
+        assert event["learning_progress"] > 0.0
 
     def test_should_not_advance_with_high_entropy(self):
         """Should not advance with high entropy (not converged)."""

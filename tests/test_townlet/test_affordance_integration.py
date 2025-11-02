@@ -27,8 +27,8 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 @pytest.fixture
 def affordance_config():
-    """Load production config (affordances_corrected.yaml)."""
-    config_path = Path(__file__).parent.parent.parent / "configs" / "affordances_corrected.yaml"
+    """Load production config (affordances.yaml)."""
+    config_path = Path(__file__).parent.parent.parent / "configs" / "affordances.yaml"
     with open(config_path) as f:
         config_dict = yaml.safe_load(f)
     return AffordanceConfigCollection.model_validate(config_dict)
@@ -92,12 +92,8 @@ class TestAffordanceEngineIntegration:
         expected_energy = min(1.0, initial_energy + 0.50 - 0.005)  # +Bed -depletion
         expected_money = initial_money - 0.05  # $5
 
-        assert abs(env.meters[0, 0].item() - expected_energy) < 1e-3, (
-            f"Energy should be ~{expected_energy}, got {env.meters[0, 0].item()}"
-        )
-        assert abs(env.meters[0, 3].item() - expected_money) < 1e-3, (
-            f"Money should be ~{expected_money}, got {env.meters[0, 3].item()}"
-        )
+        assert abs(env.meters[0, 0].item() - expected_energy) < 1e-3, f"Energy should be ~{expected_energy}, got {env.meters[0, 0].item()}"
+        assert abs(env.meters[0, 3].item() - expected_money) < 1e-3, f"Money should be ~{expected_money}, got {env.meters[0, 3].item()}"
 
         # This test will PASS even with hardcoded logic (validates baseline)
         # But we'll refactor to use engine for maintainability
@@ -171,9 +167,7 @@ class TestAffordanceEngineIntegration:
         assert abs(env.meters[0, 0].item() - expected_energy_after_depletion) < 1e-3, (
             f"Energy should be {expected_energy_after_depletion} (passive depletion only), got {env.meters[0, 0].item()}"
         )
-        assert abs(env.meters[0, 3].item() - initial_money) < 1e-3, (
-            "Money should not change (can't afford)"
-        )
+        assert abs(env.meters[0, 3].item() - initial_money) < 1e-3, "Money should not change (can't afford)"
 
     def test_park_is_free(self, simple_env_config, affordance_config):
         """RED: Park should work even with $0."""
@@ -199,9 +193,7 @@ class TestAffordanceEngineIntegration:
 
         # Verify effects applied (Park: +20% fitness, +15% social, +15% mood, -15% energy)
         assert env.meters[0, 7].item() > initial_fitness, "Fitness should increase"
-        assert abs(env.meters[0, 3].item() - initial_money) < 1e-6, (
-            "Money should not change (Park is free)"
-        )
+        assert abs(env.meters[0, 3].item() - initial_money) < 1e-6, "Money should not change (Park is free)"
 
     def test_engine_method_exists(self, simple_env_config, affordance_config):
         """RED: AffordanceEngine should have apply_interaction method."""
@@ -236,9 +228,7 @@ class TestAffordanceEngineMethod:
 
         # Apply Bed interaction
         agent_mask = torch.tensor([True])
-        result_meters = engine.apply_interaction(
-            meters=meters, affordance_name="Bed", agent_mask=agent_mask
-        )
+        result_meters = engine.apply_interaction(meters=meters, affordance_name="Bed", agent_mask=agent_mask)
 
         # Verify Bed effects
         # Bed: +50% energy, +2% health, -$5
@@ -260,9 +250,7 @@ class TestAffordanceEngineMethod:
         # Only agent 0 and 2 interact
         agent_mask = torch.tensor([True, False, True])
 
-        result_meters = engine.apply_interaction(
-            meters=meters, affordance_name="Bed", agent_mask=agent_mask
-        )
+        result_meters = engine.apply_interaction(meters=meters, affordance_name="Bed", agent_mask=agent_mask)
 
         # Agent 0: effects applied
         assert result_meters[0, 0].item() > 0.3
@@ -334,14 +322,10 @@ class TestFullIntegration:
 
         # After integration, hardcoded elif blocks should be GONE
         # Integration complete: replaced ~160 lines with engine call
-        assert "elif affordance_name ==" not in source, (
-            "Hardcoded elif blocks should be removed (integration complete)"
-        )
+        assert "elif affordance_name ==" not in source, "Hardcoded elif blocks should be removed (integration complete)"
 
         # Verify engine is being used instead
-        assert "affordance_engine.apply_interaction" in source, (
-            "Should delegate to AffordanceEngine.apply_interaction()"
-        )
+        assert "affordance_engine.apply_interaction" in source, "Should delegate to AffordanceEngine.apply_interaction()"
 
 
 if __name__ == "__main__":

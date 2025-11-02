@@ -13,9 +13,13 @@ Date: November 2, 2025
 """
 
 import logging
+import re
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,7 @@ class UnifiedServer:
         self.total_episodes = total_episodes
         self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
         self.inference_port = inference_port
+        self._config_cache: dict | None = None
 
         # Component handles (initialized in start())
         self.training_thread: threading.Thread | None = None
@@ -80,28 +85,8 @@ class UnifiedServer:
         try:
             # Determine checkpoint directory upfront (before any threads start)
             if self.checkpoint_dir is None:
-                from datetime import datetime
-
-                # Infer level name from config
-                config_stem = self.config_path.stem
-                if "level_1" in config_stem or "full_observability" in config_stem:
-                    level_name = "L1_full_observability"
-                elif (
-                    "level_2" in config_stem
-                    or "partial_observability" in config_stem
-                    or "pomdp" in config_stem
-                ):
-                    level_name = "L2_partial_observability"
-                elif "level_3" in config_stem or "temporal" in config_stem:
-                    level_name = "L3_temporal_mechanics"
-                elif "level_4" in config_stem or "multi_agent" in config_stem:
-                    level_name = "L4_multi_agent"
-                else:
-                    level_name = "training"
-
-                # Generate timestamp directory
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-                base_dir = Path("runs") / level_name / timestamp
+                base_dir = self._determine_run_directory(timestamp)
                 self.checkpoint_dir = base_dir / "checkpoints"
                 logger.info(f"Auto-generated checkpoint dir: {self.checkpoint_dir}")
 
@@ -172,6 +157,63 @@ class UnifiedServer:
             self.stop()
 
         logger.info("UnifiedServer.start() exiting")
+ 
+    def _load_config(self) -> dict:
+        """Load and cache the YAML configuration."""
+        if self._config_cache is None:
+            with open(self.config_path) as f:
+                data = yaml.safe_load(f) or {}
+            self._config_cache = data
+        return self._config_cache
+
+    def _determine_run_directory(self, timestamp: str) -> Path:
+        """
+        Determine the base run directory for auto-generated checkpoints.
+
+        Prefers explicit output_subdir specified in config; falls back to
+        legacy name inference from config file path.
+        """
+        config = self._load_config()
+        run_metadata = config.get("run_metadata") or {}
+        output_subdir = run_metadata.get("output_subdir")
+
+        if output_subdir:
+            level_name = self._sanitize_folder_name(str(output_subdir))
+            if not level_name:
+                logger.warning(
+                    "Config run_metadata.output_subdir is empty after sanitisation; "
+                    "falling back to legacy level detection."
+                )
+                level_name = self._infer_level_name()
+        else:
+            level_name = self._infer_level_name()
+
+        return Path("runs") / level_name / timestamp
+
+    def _infer_level_name(self) -> str:
+        """Legacy fallback: infer run folder name from config stem."""
+        config_stem = self.config_path.stem.lower()
+        if "level_1" in config_stem or "full_observability" in config_stem:
+            return "L1_full_observability"
+        if "level_2" in config_stem or "partial_observability" in config_stem or "pomdp" in config_stem:
+            return "L2_partial_observability"
+        if "level_3" in config_stem or "temporal" in config_stem:
+            return "L3_temporal_mechanics"
+        if "level_4" in config_stem or "multi_agent" in config_stem:
+            return "L4_multi_agent"
+        if "level_0" in config_stem or "minimal" in config_stem:
+            return "L0_minimal"
+        return "training"
+
+    @staticmethod
+    def _sanitize_folder_name(value: str) -> str:
+        """
+        Make a filesystem-safe folder name.
+
+        Keeps alphanumerics, dash, underscore, and dot, replacing others with underscores.
+        """
+        sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
+        return sanitized
 
     def stop(self) -> None:
         """

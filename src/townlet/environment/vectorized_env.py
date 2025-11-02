@@ -6,6 +6,7 @@ environment with tensor operations [num_agents, ...].
 """
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 import yaml
@@ -15,6 +16,9 @@ from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.observation_builder import ObservationBuilder
 from townlet.environment.reward_strategy import RewardStrategy
+
+if TYPE_CHECKING:
+    from townlet.population.runtime_registry import AgentRuntimeRegistry
 
 
 class VectorizedHamletEnv:
@@ -64,6 +68,9 @@ class VectorizedHamletEnv:
         self.move_energy_cost = move_energy_cost
         self.wait_energy_cost = wait_energy_cost
         self.interact_energy_cost = interact_energy_cost
+
+        if self.wait_energy_cost >= self.move_energy_cost:
+            raise ValueError("wait_energy_cost must be less than move_energy_cost to preserve WAIT as a low-cost recovery action")
 
         # Affordance positions (from Hamlet default layout)
         all_affordances = {
@@ -126,13 +133,15 @@ class VectorizedHamletEnv:
 
         # Initialize reward strategy (P2.1: per-agent baseline support)
         self.reward_strategy = RewardStrategy(device=device, num_agents=num_agents)
+        self.runtime_registry = None  # Injected by population/inference controllers
+        self._cached_baseline_tensor = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
 
         # Initialize meter dynamics
         self.meter_dynamics = MeterDynamics(num_agents=num_agents, device=device)
 
         # Initialize affordance engine
         # Path from src/townlet/environment/ → project root
-        config_path = Path(__file__).parent.parent.parent.parent / "configs" / "affordances_corrected.yaml"
+        config_path = Path(__file__).parent.parent.parent.parent / "configs" / "affordances.yaml"
         with open(config_path) as f:
             config_dict = yaml.safe_load(f)
         affordance_config = AffordanceConfigCollection.model_validate(config_dict)
@@ -152,6 +161,18 @@ class VectorizedHamletEnv:
             self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
             self.last_interaction_affordance = [None] * self.num_agents
             self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+
+    def attach_runtime_registry(self, registry: "AgentRuntimeRegistry") -> None:
+        """Attach runtime registry for telemetry-aware reward baselines."""
+        if registry.get_baseline_tensor().shape != (self.num_agents,):
+            raise ValueError(f"Registry baseline shape {registry.get_baseline_tensor().shape} does not match num_agents={self.num_agents}")
+
+        self.runtime_registry = registry
+
+        # Initialise registry with current cached baseline if empty (fresh attach).
+        baseline_tensor = registry.get_baseline_tensor()
+        if torch.allclose(baseline_tensor, torch.zeros_like(baseline_tensor)):
+            registry.set_baselines(self._cached_baseline_tensor.clone())
 
     def reset(self) -> torch.Tensor:
         """
@@ -525,6 +546,12 @@ class VectorizedHamletEnv:
 
         return successful_interactions
 
+    def _get_current_baseline_tensor(self) -> torch.Tensor:
+        """Return current baseline tensor from registry or cached fallback."""
+        if self.runtime_registry is not None:
+            return self.runtime_registry.get_baseline_tensor()
+        return self._cached_baseline_tensor
+
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """
         Calculate rewards relative to baseline survival.
@@ -534,9 +561,11 @@ class VectorizedHamletEnv:
         Returns:
             rewards: [num_agents]
         """
+        baseline_tensor = self._get_current_baseline_tensor()
         return self.reward_strategy.calculate_rewards(
             step_counts=self.step_counts,
             dones=self.dones,
+            baseline_steps=baseline_tensor,
         )
 
     def calculate_baseline_survival(self, depletion_multiplier: float = 1.0) -> float:
@@ -581,15 +610,31 @@ class VectorizedHamletEnv:
                 - float: Shared multiplier (broadcasts to all agents)
         """
         if isinstance(depletion_multipliers, torch.Tensor):
-            # P2.1: Per-agent baselines
+            multipliers = depletion_multipliers.to(self.device, dtype=torch.float32)
             baselines = torch.stack(
-                [torch.tensor(self.calculate_baseline_survival(m.item()), device=self.device) for m in depletion_multipliers]
+                [
+                    torch.tensor(
+                        self.calculate_baseline_survival(multiplier.item()),
+                        dtype=torch.float32,
+                        device=self.device,
+                    )
+                    for multiplier in multipliers
+                ]
             )
-            self.reward_strategy.set_baseline_survival_steps(baselines)
         else:
-            # Backwards compatibility: scalar multiplier
-            baseline = self.calculate_baseline_survival(depletion_multipliers)
-            self.reward_strategy.set_baseline_survival_steps(baseline)
+            baseline_value = self.calculate_baseline_survival(float(depletion_multipliers))
+            baselines = torch.full(
+                (self.num_agents,),
+                float(baseline_value),
+                dtype=torch.float32,
+                device=self.device,
+            )
+
+        self._cached_baseline_tensor = baselines
+        if self.runtime_registry is not None:
+            self.runtime_registry.set_baselines(baselines.clone())
+
+        return baselines
 
     def get_affordance_positions(self) -> dict:
         """Get current affordance positions (P1.1 checkpointing).

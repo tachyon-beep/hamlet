@@ -38,7 +38,7 @@ def device():
 @pytest.fixture
 def affordance_config():
     """Load affordance configuration (corrected version matching hardcoded logic)."""
-    config_path = Path("configs/affordances_corrected.yaml")
+    config_path = Path("configs/affordances.yaml")
     if not config_path.exists():
         pytest.skip(f"Config file not found: {config_path}")
     return load_affordance_config(config_path)
@@ -262,12 +262,8 @@ class TestMultiTickInteractions:
         expected_money = min(1.0, initial_money + 0.225)  # Clamped to [0,1]
         expected_energy = max(0.0, initial_energy - 0.15)
 
-        assert abs(meters[0, 3] - expected_money) < 0.01, (
-            f"Money: expected {expected_money}, got {meters[0, 3]}"
-        )
-        assert abs(meters[0, 0] - expected_energy) < 0.01, (
-            f"Energy: expected {expected_energy}, got {meters[0, 0]}"
-        )
+        assert abs(meters[0, 3] - expected_money) < 0.01, f"Money: expected {expected_money}, got {meters[0, 3]}"
+        assert abs(meters[0, 0] - expected_energy) < 0.01, f"Energy: expected {expected_energy}, got {meters[0, 0]}"
 
 
 class TestOperatingHours:
@@ -331,9 +327,7 @@ class TestOperatingHours:
         # Bed operating_hours: [0, 24]
 
         for hour in range(24):
-            assert engine.is_affordance_open("Bed", time_of_day=hour), (
-                f"Bed should be open at {hour}:00"
-            )
+            assert engine.is_affordance_open("Bed", time_of_day=hour), f"Bed should be open at {hour}:00"
 
 
 class TestCostApplication:
@@ -406,9 +400,7 @@ class TestAffordanceEngineIntegration:
         time_of_day = 10  # 10am
 
         # Get action masks
-        action_masks = engine.get_action_masks(
-            meters=meters, time_of_day=time_of_day, check_affordability=True, check_hours=True
-        )
+        action_masks = engine.get_action_masks(meters=meters, time_of_day=time_of_day, check_affordability=True, check_hours=True)
 
         # At 10am:
         # - Job should be AVAILABLE (8am-6pm)
@@ -433,9 +425,7 @@ class TestAffordanceEngineIntegration:
         # Apply Shower to all agents
         agent_mask = torch.ones(num_agents, dtype=torch.bool, device=device)
 
-        updated_meters = engine.apply_instant_interaction(
-            meters=meters, affordance_name="Shower", agent_mask=agent_mask
-        )
+        updated_meters = engine.apply_instant_interaction(meters=meters, affordance_name="Shower", agent_mask=agent_mask)
 
         # All agents should have hygiene increased
         assert torch.all(updated_meters[:, 1] > meters[:, 1])

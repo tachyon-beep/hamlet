@@ -1,358 +1,472 @@
-# affordances.yaml - Affordance Definitions & Effects
-# This defines how agents interact with the environment and what effects those interactions have.
+# affordances_corrected.yaml - Unified config supporting both instant and temporal mechanics
 #
-# PURPOSE: Replace 200+ line elif blocks with data-driven affordance system
-# STATUS: TEMPLATE (ACTION #12 will implement AffordanceEngine to process this)
+# This file contains DUAL-MODE affordances that work in both Level 1 and Level 2:
+#   - Level 1 (enable_temporal_mechanics=False): Uses instant effects
+#   - Level 2 (enable_temporal_mechanics=True): Uses multi-tick effects
 #
-# Structure:
-# - Each affordance defines its interaction type (instant, multi_tick, continuous)
-# - Effects can be immediate or distributed over ticks
-# - Costs are subtracted before effects are applied
-# - Teaching notes explain game design intent
+# Benefits of dual-mode:
+#   - Single source of truth for all training levels
+#   - Instant mode validated against hardcoded logic (EXACT match)
+#   - Temporal mode uses 75%/25% split (linear/completion)
 
-version: "1.0"
-description: "Affordance definitions for Hamlet Level 1.5 (15 affordances)"
-status: "TEMPLATE - Awaiting ACTION #12 implementation"
+version: "2.0"
+description: "Unified affordance definitions for Level 1 (instant) and Level 2 (temporal)"
+status: "PRODUCTION - Dual-mode ready"
+
+# Meter definitions (for reference)
+meters:
+  - { id: 0, name: "energy", range: [0.0, 1.0] }
+  - { id: 1, name: "hygiene", range: [0.0, 1.0] }
+  - { id: 2, name: "satiation", range: [0.0, 1.0] }
+  - { id: 3, name: "money", range: [0.0, 1.0] }  # $0-$100 = 0.0-1.0
+  - { id: 4, name: "mood", range: [0.0, 1.0] }
+  - { id: 5, name: "social", range: [0.0, 1.0] }
+  - { id: 6, name: "health", range: [0.0, 1.0] }
+  - { id: 7, name: "fitness", range: [0.0, 1.0] }
 
 affordances:
   # ============================================================================
   # ENERGY RESTORATION
   # ============================================================================
   
-  - id: "Bed"
+  - id: "0"
     name: "Bed"
     category: "energy_restoration"
-    interaction_type: "multi_tick"
+    interaction_type: "dual"  # Supports both instant and multi-tick
+    
+    # INSTANT MODE (Level 1: enable_temporal_mechanics=False)
+    costs:
+      - { meter: "money", amount: 0.05 }  # $5 total
+    effects:
+      - { meter: "energy", amount: 0.50 }  # +50% instantly
+      - { meter: "health", amount: 0.02 }  # +2%
+    
+    # TEMPORAL MODE (Level 2: enable_temporal_mechanics=True)
     required_ticks: 5
-    
     costs_per_tick:
-      - { meter: "money", amount: 0.01 }  # $1 per tick
-    
+      - { meter: "money", amount: 0.01 }  # $1/tick ($5 total)
     effects_per_tick:
-      - { meter: "energy", amount: 0.075, type: "linear" }  # 75% distributed over ticks
-    
+      - { meter: "energy", amount: 0.075 }  # 75% of 50% = 37.5%, distributed over 5 ticks
     completion_bonus:
-      - { meter: "energy", amount: 0.125 }  # 25% bonus for completing
+      - { meter: "energy", amount: 0.125 }  # 25% of 50% = 12.5%
       - { meter: "health", amount: 0.02 }
     
-    operating_hours: [0, 24]  # 24/7 available
-    
-    teaching_note: "Multi-tick interaction teaches commitment - must stay to get completion bonus"
-    design_intent: "Primary energy restoration, requires time investment"
+    operating_hours: [0, 24]  # Always available
 
-  - id: "LuxuryBed"
-    name: "Luxury Bed"
+  - id: "1"
+    name: "LuxuryBed"
     category: "energy_restoration"
-    interaction_type: "multi_tick"
-    required_ticks: 3  # Faster than regular bed
+    interaction_type: "dual"
     
+    # Instant mode (Level 1)
+    costs:
+      - { meter: "money", amount: 0.11 }  # $11
+    
+    effects:
+      - { meter: "energy", amount: 0.75 }  # +75%
+      - { meter: "health", amount: 0.05 }  # +5%
+    
+    # Temporal mode (Level 2) - 6 ticks for luxury rest
+    required_ticks: 6
     costs_per_tick:
-      - { meter: "money", amount: 0.05 }  # $5 per tick (expensive!)
+      - { meter: "money", amount: 0.01833 }  # ~$1.83/tick
     
     effects_per_tick:
-      - { meter: "energy", amount: 0.10 }  # 100% over 3 ticks (33% per tick)
+      - { meter: "energy", amount: 0.09375 }  # 0.75 * 0.75 / 6 = +9.375%/tick
     
     completion_bonus:
-      - { meter: "health", amount: 0.05 }
-      - { meter: "mood", amount: 0.03 }  # Luxury feels good!
+      - { meter: "energy", amount: 0.1875 }  # 0.75 * 0.25 = +18.75% final
+      - { meter: "health", amount: 0.05 }  # +5% final
     
     operating_hours: [0, 24]
-    
-    teaching_note: "Money can buy time - luxury version is faster but expensive"
-    design_intent: "Advanced option when agent has money but needs speed"
 
   # ============================================================================
   # HYGIENE RESTORATION
   # ============================================================================
   
-  - id: "Shower"
+  - id: "2"
     name: "Shower"
     category: "hygiene"
-    interaction_type: "instant"
+    interaction_type: "dual"
     
+    # Instant mode (Level 1)
     costs:
-      - { meter: "money", amount: 0.01 }  # $1
+      - { meter: "money", amount: 0.03 }  # $3
     
     effects:
-      - { meter: "hygiene", amount: 0.50 }  # 50% restoration
+      - { meter: "hygiene", amount: 0.40 }  # +40%
+    
+    # Temporal mode (Level 2) - 3 ticks for thorough cleaning
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.01 }  # $1/tick
+    
+    effects_per_tick:
+      - { meter: "hygiene", amount: 0.10 }  # 0.40 * 0.75 / 3 = +10%/tick
+    
+    completion_bonus:
+      - { meter: "hygiene", amount: 0.10 }  # 0.40 * 0.25 = +10% final
     
     operating_hours: [0, 24]
-    
-    teaching_note: "Instant effect - no commitment required"
-    design_intent: "Tertiary meter maintenance, prevents cascade penalties"
 
   # ============================================================================
   # SATIATION (FOOD)
   # ============================================================================
   
-  - id: "HomeMeal"
-    name: "Home Meal"
+  - id: "3"
+    name: "HomeMeal"
     category: "food"
-    interaction_type: "instant"
+    interaction_type: "dual"
     
+    # Instant mode (Level 1)
     costs:
-      - { meter: "money", amount: 0.15 }  # $15
+      - { meter: "money", amount: 0.03 }  # $3
     
     effects:
-      - { meter: "satiation", amount: 0.60 }  # 60% restoration
-      - { meter: "health", amount: 0.03 }  # Healthy bonus
+      - { meter: "satiation", amount: 0.45 }  # +45%
+      - { meter: "health", amount: 0.03 }     # +3%
+    
+    # Temporal mode (Level 2) - 3 ticks for cooking and eating
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.01 }  # $1/tick
+    
+    effects_per_tick:
+      - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.75 / 3 = +11.25%/tick
+    
+    completion_bonus:
+      - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.25 = +11.25% final
+      - { meter: "health", amount: 0.03 }  # +3% final
     
     operating_hours: [0, 24]
-    
-    teaching_note: "Fundamental need - satiation affects BOTH pivotal meters"
-    design_intent: "Primary food source, balanced cost/benefit"
 
-  - id: "FastFood"
-    name: "Fast Food"
+  - id: "4"
+    name: "FastFood"
     category: "food"
-    interaction_type: "instant"
+    interaction_type: "dual"
     
+    # Instant mode (Level 1)
     costs:
-      - { meter: "money", amount: 0.10 }  # $10 (cheaper)
+      - { meter: "money", amount: 0.10 }  # $10
     
     effects:
-      - { meter: "satiation", amount: 0.45 }  # Less restoration
-      - { meter: "fitness", amount: -0.03 }  # Unhealthy!
-      - { meter: "health", amount: -0.02 }
+      - { meter: "satiation", amount: 0.45 }  # +45%
+      - { meter: "energy", amount: 0.15 }     # +15%
+      - { meter: "social", amount: 0.01 }     # +1%
+      - { meter: "fitness", amount: -0.03 }   # -3% (penalty!)
+      - { meter: "health", amount: -0.02 }    # -2% (penalty!)
+    
+    # Temporal mode (Level 2) - 2 ticks for quick meal
+    required_ticks: 2
+    costs_per_tick:
+      - { meter: "money", amount: 0.05 }  # $5/tick
+    
+    effects_per_tick:
+      - { meter: "satiation", amount: 0.16875 }  # 0.45 * 0.75 / 2 = +16.875%/tick
+      - { meter: "energy", amount: 0.05625 }     # 0.15 * 0.75 / 2 = +5.625%/tick
+    
+    completion_bonus:
+      - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.25 = +11.25% final
+      - { meter: "energy", amount: 0.0375 }     # 0.15 * 0.25 = +3.75% final
+      - { meter: "social", amount: 0.01 }       # +1% final
+      - { meter: "fitness", amount: -0.03 }     # -3% penalty at end
+      - { meter: "health", amount: -0.02 }      # -2% penalty at end
     
     operating_hours: [0, 24]
-    
-    teaching_note: "Cheap but unhealthy - demonstrates trade-offs and cascading effects"
-    design_intent: "Tempting short-term option with long-term consequences"
 
   # ============================================================================
   # HEALTH RESTORATION
   # ============================================================================
   
-  - id: "Doctor"
+  - id: "5"
     name: "Doctor"
     category: "health"
-    interaction_type: "instant"
+    interaction_type: "dual"
     
+    # Instant mode (Level 1)
     costs:
-      - { meter: "money", amount: 0.30 }  # $30
+      - { meter: "money", amount: 0.08 }  # $8
     
     effects:
-      - { meter: "health", amount: 0.25 }  # 25% restoration
+      - { meter: "health", amount: 0.25 }  # +25%
     
-    operating_hours: [8, 18]  # Business hours only
+    # Temporal mode (Level 2) - 2 ticks for examination
+    required_ticks: 2
+    costs_per_tick:
+      - { meter: "money", amount: 0.04 }  # $4/tick
     
-    teaching_note: "Tier 1 health restoration - cheaper but limited hours"
-    design_intent: "Affordable healthcare option with scheduling constraint"
+    effects_per_tick:
+      - { meter: "health", amount: 0.09375 }  # 0.25 * 0.75 / 2 = +9.375%/tick
+    
+    completion_bonus:
+      - { meter: "health", amount: 0.0625 }  # 0.25 * 0.25 = +6.25% final
+    
+    operating_hours: [8, 18]  # Business hours (8am-6pm)
 
-  - id: "Hospital"
+  - id: "6"
     name: "Hospital"
     category: "health"
-    interaction_type: "instant"
+    interaction_type: "dual"
     
+    # Instant mode (Level 1)
     costs:
-      - { meter: "money", amount: 0.60 }  # $60 (expensive!)
+      - { meter: "money", amount: 0.15 }  # $15
     
     effects:
-      - { meter: "health", amount: 0.40 }  # 40% restoration (stronger)
+      - { meter: "health", amount: 0.40 }  # +40%
     
-    operating_hours: [0, 24]  # 24/7 emergency care
+    # Temporal mode (Level 2) - 3 ticks for emergency treatment
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.05 }  # $5/tick
     
-    teaching_note: "Tier 2 health restoration - expensive but always available"
-    design_intent: "Emergency option when money is available"
+    effects_per_tick:
+      - { meter: "health", amount: 0.10 }  # 0.40 * 0.75 / 3 = +10%/tick
+    
+    completion_bonus:
+      - { meter: "health", amount: 0.10 }  # 0.40 * 0.25 = +10% final
+    
+    operating_hours: [0, 24]  # Emergency - always open
 
   # ============================================================================
   # MOOD RESTORATION
   # ============================================================================
   
-  - id: "Therapist"
+  - id: "7"
     name: "Therapist"
     category: "mood"
-    interaction_type: "instant"
+    interaction_type: "dual"
     
-    costs:
-      - { meter: "money", amount: 0.50 }  # $50
-    
-    effects:
-      - { meter: "mood", amount: 0.40 }  # 40% restoration
-    
-    operating_hours: [8, 18]  # Business hours
-    
-    teaching_note: "Tier 2 mood restoration - expensive specialist"
-    design_intent: "Advanced option for mood management"
-
-  - id: "Recreation"
-    name: "Recreation"
-    category: "mood"
-    interaction_type: "instant"
-    
-    costs:
-      - { meter: "money", amount: 0.20 }  # $20
-    
-    effects:
-      - { meter: "mood", amount: 0.25 }
-      - { meter: "social", amount: 0.15 }
-    
-    operating_hours: [8, 22]  # 8am-10pm
-    
-    teaching_note: "Multi-benefit affordance - mood AND social"
-    design_intent: "Efficient dual-purpose option"
-
-  # ============================================================================
-  # SOCIAL + MOOD COMBINATION
-  # ============================================================================
-  
-  - id: "Bar"
-    name: "Bar"
-    category: "social"
-    interaction_type: "instant"
-    
-    costs:
-      - { meter: "money", amount: 0.25 }  # $25
-    
-    effects:
-      - { meter: "social", amount: 0.50 }  # BEST social restoration!
-      - { meter: "mood", amount: 0.25 }
-      - { meter: "health", amount: -0.05 }  # Alcohol penalty
-    
-    operating_hours: [18, 28]  # 6pm-4am (wraps midnight!)
-    
-    teaching_note: "Night-time social hub - high social gain but health cost"
-    design_intent: "Demonstrates time-of-day mechanics and trade-offs"
-
-  - id: "CoffeeShop"
-    name: "Coffee Shop"
-    category: "social"
-    interaction_type: "instant"
-    
-    costs:
-      - { meter: "money", amount: 0.05 }  # $5 (cheap!)
-    
-    effects:
-      - { meter: "energy", amount: 0.10 }  # Caffeine boost
-      - { meter: "mood", amount: 0.10 }
-      - { meter: "social", amount: 0.15 }
-    
-    operating_hours: [6, 18]  # 6am-6pm
-    
-    teaching_note: "Triple benefit, cheap, but effects are modest"
-    design_intent: "Efficient morning routine option"
-
-  # ============================================================================
-  # INCOME GENERATION (JOBS)
-  # ============================================================================
-  
-  - id: "Job"
-    name: "Office Job"
-    category: "income"
-    interaction_type: "multi_tick"
-    required_ticks: 3
-    
-    costs_per_tick:
-      - { meter: "energy", amount: 0.05 }  # Work is tiring
-    
-    effects_per_tick:
-      - { meter: "money", amount: 0.075 }  # $7.50 per tick
-    
-    completion_bonus:
-      - { meter: "money", amount: 0.075 }  # $7.50 bonus = $30 total for 3 ticks
-    
-    operating_hours: [8, 18]  # Business hours
-    
-    teaching_note: "Primary income source - must work to afford other affordances"
-    design_intent: "Creates economic pressure and strategic planning"
-
-  - id: "Labor"
-    name: "Manual Labor"
-    category: "income"
-    interaction_type: "multi_tick"
-    required_ticks: 3
-    
-    costs_per_tick:
-      - { meter: "energy", amount: 0.067 }  # More tiring than office job
-    
-    effects_per_tick:
-      - { meter: "money", amount: 0.10 }  # $10 per tick (better pay!)
-      - { meter: "fitness", amount: -0.017 }  # Physical toll
-      - { meter: "health", amount: -0.017 }
-    
-    completion_bonus:
-      - { meter: "money", amount: 0.10 }  # $10 bonus = $40 total
-    
-    operating_hours: [8, 18]
-    
-    teaching_note: "Higher pay but physical costs - demonstrates specialization"
-    design_intent: "Risk/reward alternative to office job"
-
-  # ============================================================================
-  # FITNESS BUILDING
-  # ============================================================================
-  
-  - id: "Gym"
-    name: "Gym"
-    category: "fitness"
-    interaction_type: "instant"
-    
+    # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.15 }  # $15
-      - { meter: "energy", amount: 0.10 }  # Working out is tiring
     
     effects:
-      - { meter: "fitness", amount: 0.20 }  # 20% fitness gain
+      - { meter: "mood", amount: 0.40 }  # +40%
     
-    operating_hours: [0, 24]
+    # Temporal mode (Level 2) - 3 ticks for therapy session
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.05 }  # $5/tick
     
-    teaching_note: "Costs both money AND energy but builds fitness (prevents health cascade)"
-    design_intent: "Proactive health maintenance, prevents death spiral"
+    effects_per_tick:
+      - { meter: "mood", amount: 0.10 }  # 0.40 * 0.75 / 3 = +10%/tick
+    
+    completion_bonus:
+      - { meter: "mood", amount: 0.10 }  # 0.40 * 0.25 = +10% final
+    
+    operating_hours: [8, 18]  # Business hours
 
-  - id: "Park"
+  - id: "8"
+    name: "Recreation"
+    category: "mood"
+    interaction_type: "dual"
+    
+    # Instant mode (Level 1)
+    costs:
+      - { meter: "money", amount: 0.06 }  # $6
+    
+    effects:
+      - { meter: "mood", amount: 0.25 }    # +25%
+      - { meter: "energy", amount: 0.12 }  # +12%
+    
+    # Temporal mode (Level 2) - 2 ticks for recreational activity
+    required_ticks: 2
+    costs_per_tick:
+      - { meter: "money", amount: 0.03 }  # $3/tick
+    
+    effects_per_tick:
+      - { meter: "mood", amount: 0.09375 }    # 0.25 * 0.75 / 2 = +9.375%/tick
+      - { meter: "energy", amount: 0.045 }    # 0.12 * 0.75 / 2 = +4.5%/tick
+    
+    completion_bonus:
+      - { meter: "mood", amount: 0.0625 }   # 0.25 * 0.25 = +6.25% final
+      - { meter: "energy", amount: 0.03 }   # 0.12 * 0.25 = +3% final
+    
+    operating_hours: [8, 22]  # 8am-10pm
+
+  # ============================================================================
+  # SOCIAL
+  # ============================================================================
+  
+  - id: "9"
+    name: "Bar"
+    category: "social"
+    interaction_type: "dual"
+    
+    # Instant mode (Level 1)
+    costs:
+      - { meter: "money", amount: 0.15 }  # $15
+    
+    effects:
+      - { meter: "social", amount: 0.50 }    # +50% (BEST social!)
+      - { meter: "mood", amount: 0.25 }      # +25%
+      - { meter: "satiation", amount: 0.30 } # +30%
+      - { meter: "energy", amount: -0.20 }   # -20% (drunk/tired)
+      - { meter: "hygiene", amount: -0.15 }  # -15% (messy)
+      - { meter: "health", amount: -0.05 }   # -5% (hangover)
+    
+    # Temporal mode (Level 2) - 2 ticks for full night out
+    required_ticks: 2
+    costs_per_tick:
+      - { meter: "money", amount: 0.075 }  # $7.50/tick
+    
+    effects_per_tick:
+      - { meter: "social", amount: 0.1875 }   # 0.50 * 0.75 / 2 = +18.75%/tick
+      - { meter: "mood", amount: 0.09375 }    # 0.25 * 0.75 / 2 = +9.375%/tick
+      - { meter: "satiation", amount: 0.1125 }  # 0.30 * 0.75 / 2 = +11.25%/tick
+    
+    completion_bonus:
+      - { meter: "social", amount: 0.125 }   # 0.50 * 0.25 = +12.5% final
+      - { meter: "mood", amount: 0.0625 }    # 0.25 * 0.25 = +6.25% final
+      - { meter: "satiation", amount: 0.075 }  # 0.30 * 0.25 = +7.5% final
+      - { meter: "energy", amount: -0.20 }   # -20% (drunk/tired) - at end
+      - { meter: "hygiene", amount: -0.15 }  # -15% (messy) - at end
+      - { meter: "health", amount: -0.05 }   # -5% (hangover) - at end
+    
+    operating_hours: [18, 28]  # 6pm-4am (wraparound format: 18 to 28=4am next day)
+
+  # ============================================================================
+  # INCOME GENERATION
+  # ============================================================================
+  
+  - id: "10"
+    name: "Job"
+    category: "income"
+    interaction_type: "dual"
+    
+    # Instant mode (Level 1)
+    costs: []  # FREE (you get paid!)
+    
+    effects:
+      - { meter: "money", amount: 0.225 }   # +$22.50
+      - { meter: "energy", amount: -0.15 }  # -15%
+      - { meter: "social", amount: 0.02 }   # +2%
+      - { meter: "health", amount: -0.03 }  # -3%
+    
+    # Temporal mode (Level 2) - 4 ticks for a full shift
+    required_ticks: 4
+    costs_per_tick: []  # FREE
+    
+    effects_per_tick:
+      - { meter: "money", amount: 0.05625 }  # 0.225 * 0.75 / 4 = +$5.625/tick
+    
+    completion_bonus:
+      - { meter: "money", amount: 0.05625 }  # 0.225 * 0.25 = +$5.625 final (total = $28.125)
+      - { meter: "energy", amount: -0.15 }  # -15% at end of shift
+      - { meter: "social", amount: 0.02 }   # +2% at end
+      - { meter: "health", amount: -0.03 }  # -3% at end
+    
+    operating_hours: [8, 18]  # Business hours
+
+  - id: "11"
+    name: "Labor"
+    category: "income"
+    interaction_type: "dual"
+    
+    # Instant mode (Level 1)
+    costs: []  # FREE (you get paid!)
+    
+    effects:
+      - { meter: "money", amount: 0.150 }    # +$30
+      - { meter: "energy", amount: -0.20 }  # -20%
+      - { meter: "fitness", amount: -0.05 } # -5%
+      - { meter: "health", amount: -0.05 }  # -5%
+      - { meter: "social", amount: 0.01 }   # +1%
+    
+    # Temporal mode (Level 2) - 4 ticks for hard labor
+    required_ticks: 4
+    costs_per_tick: []  # FREE
+    
+    effects_per_tick:
+      - { meter: "money", amount: 0.075 }  # 0.30 * 0.75 / 4 = +$7.50/tick
+    
+    completion_bonus:
+      - { meter: "money", amount: 0.075 }    # 0.30 * 0.25 = +$7.50 final (total = $37.50)
+      - { meter: "energy", amount: -0.20 }  # -20% at end
+      - { meter: "fitness", amount: -0.05 } # -5% at end
+      - { meter: "health", amount: -0.05 }  # -5% at end
+      - { meter: "social", amount: 0.01 }   # +1% at end
+    
+    operating_hours: [8, 18]  # Business hours
+
+  # ============================================================================
+  # FITNESS
+  # ============================================================================
+  
+  - id: "12"
+    name: "Gym"
+    category: "fitness"
+    interaction_type: "dual"
+    
+    # Instant mode (Level 1)
+    costs:
+      - { meter: "money", amount: 0.08 }  # $8
+    
+    effects:
+      - { meter: "fitness", amount: 0.30 }  # +30%
+      - { meter: "energy", amount: -0.08 }  # -8%
+    
+    # Temporal mode (Level 2) - 3 ticks for workout
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.02667 }  # ~$2.67/tick
+    
+    effects_per_tick:
+      - { meter: "fitness", amount: 0.075 }  # 0.30 * 0.75 / 3 = +7.5%/tick
+    
+    completion_bonus:
+      - { meter: "fitness", amount: 0.075 }  # 0.30 * 0.25 = +7.5% final
+      - { meter: "energy", amount: -0.08 }  # -8% at end
+    
+    operating_hours: [6, 22]  # 6am-10pm
+
+  - id: "13"
     name: "Park"
     category: "fitness"
-    interaction_type: "instant"
+    interaction_type: "dual"
     
+    # Instant mode (Level 1)
     costs: []  # FREE!
     
     effects:
-      - { meter: "fitness", amount: 0.20 }
-      - { meter: "social", amount: 0.15 }
-      - { meter: "mood", amount: 0.15 }
+      - { meter: "fitness", amount: 0.20 }  # +20%
+      - { meter: "social", amount: 0.15 }   # +15%
+      - { meter: "mood", amount: 0.15 }     # +15%
+      - { meter: "energy", amount: -0.15 }  # -15%
+    
+    # Temporal mode (Level 2) - 3 ticks for outdoor activity
+    required_ticks: 3
+    costs_per_tick: []  # FREE!
+    
+    effects_per_tick:
+      - { meter: "fitness", amount: 0.05 }  # 0.20 * 0.75 / 3 = +5%/tick
+      - { meter: "social", amount: 0.0375 }  # 0.15 * 0.75 / 3 = +3.75%/tick
+      - { meter: "mood", amount: 0.0375 }    # 0.15 * 0.75 / 3 = +3.75%/tick
+    
+    completion_bonus:
+      - { meter: "fitness", amount: 0.05 }  # 0.20 * 0.25 = +5% final
+      - { meter: "social", amount: 0.0375 }  # 0.15 * 0.25 = +3.75% final
+      - { meter: "mood", amount: 0.0375 }    # 0.15 * 0.25 = +3.75% final
+      - { meter: "energy", amount: -0.15 }  # -15% at end
     
     operating_hours: [6, 22]  # 6am-10pm
-    
-    teaching_note: "Free multi-benefit affordance - teaches optimal resource management"
-    design_intent: "Reward for discovering no-cost options"
 
-# ============================================================================
-# TEACHING NOTES & GAME DESIGN INSIGHTS
-# ============================================================================
-
-teaching_insights:
-  fundamental_loop: "Money (Jobs) → Satiation (Food) → Energy (Bed) → Work again"
+  # ============================================================================
+  # COFFEE SHOP (Not in hardcoded yet - commented out)
+  # ============================================================================
   
-  cascade_prevention: "Tertiary meters (Hygiene, Social) must be maintained to prevent cascades to Secondary (Satiation, Fitness, Mood) and ultimately Pivotal (Health, Energy)"
-  
-  time_constraints: "Operating hours force scheduling decisions - can't do everything at once"
-  
-  economic_pressure: "Money is the gate - must work to afford most recovery affordances"
-  
-  specialization: "Multiple paths to same goal (Doctor vs Hospital, Job vs Labor) teach trade-offs"
-  
-  free_options: "Park is free but limited hours - teaches optimal timing"
-  
-  multi_tick_commitment: "Bed and Jobs require commitment - can't interrupt without losing benefits"
-  
-  interesting_failures: "FastFood seems efficient but creates fitness/health problems later (cascade effect)"
-
-# ============================================================================
-# IMPLEMENTATION NOTES (for ACTION #12)
-# ============================================================================
-
-implementation_notes:
-  schema_validation: "Use Pydantic to validate all affordance configs at load time"
-  
-  equivalence_testing: "Must produce identical results to current elif blocks in vectorized_env.py"
-  
-  engine_architecture: "AffordanceEngine should handle instant, multi_tick, and continuous interaction types"
-  
-  time_of_day: "Operating hours use 24-hour clock, with wraparound support for midnight (e.g., Bar 18-28 means 6pm-4am)"
-  
-  cost_application: "Costs are checked before interaction, subtracted per tick for multi_tick"
-  
-  completion_bonus: "Only awarded if agent completes all required_ticks without interruption"
-  
-  teaching_examples: "Create affordances_creative.yaml with unusual affordances for experimentation"
+  # - id: 14
+  #   name: "CoffeeShop"
+  #   category: "energy"
+  #   interaction_type: "instant"
+  #   
+  #   costs:
+  #     - { meter: "money", amount: 0.04 }  # $4
+  #   
+  #   effects:
+  #     - { meter: "energy", amount: 0.20 }  # +20%
+  #     - { meter: "mood", amount: 0.10 }    # +10%
+  #     - { meter: "social", amount: 0.05 }  # +5%
+  #   
+  #   operating_hours: [6, 20]  # 6am-8pm

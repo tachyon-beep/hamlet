@@ -36,34 +36,12 @@ class RewardStrategy:
         """
         self.device = device
         self.num_agents = num_agents
-        # P2.1: Vectorized baseline - one per agent for multi-agent curriculum support
-        self.baseline_survival_steps = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
-
-    def set_baseline_survival_steps(self, baseline_steps: torch.Tensor | float):
-        """
-        Set the baseline survival steps (R) for current curriculum stage.
-
-        P2.1: Now accepts either:
-        - torch.Tensor[num_agents]: Per-agent baselines (multi-agent curriculum)
-        - float: Shared baseline (backwards compatibility, broadcasts to all agents)
-
-        Args:
-            baseline_steps: Expected survival time(s) of random-walking agent(s)
-        """
-        if isinstance(baseline_steps, torch.Tensor):
-            # P2.1: Per-agent baselines
-            assert baseline_steps.shape == (self.num_agents,), (
-                f"baseline_steps must be [num_agents={self.num_agents}], got {baseline_steps.shape}"
-            )
-            self.baseline_survival_steps = baseline_steps.to(self.device)
-        else:
-            # Backwards compatibility: broadcast scalar to all agents
-            self.baseline_survival_steps = torch.full((self.num_agents,), float(baseline_steps), dtype=torch.float32, device=self.device)
 
     def calculate_rewards(
         self,
         step_counts: torch.Tensor,
         dones: torch.Tensor,
+        baseline_steps: torch.Tensor | float | list[float],
     ) -> torch.Tensor:
         """
         Calculate baseline-relative rewards.
@@ -73,19 +51,42 @@ class RewardStrategy:
         Args:
             step_counts: [num_agents] current step count for each agent
             dones: [num_agents] whether each agent is dead
+            baseline_steps: Baseline survival expectation(s)
 
         Returns:
             rewards: [num_agents] calculated rewards (can be positive or negative)
         """
-        # Reward = steps survived - baseline
-        # Only give reward on death (terminal state)
-        rewards = torch.zeros(step_counts.shape[0], device=self.device)
+        if step_counts.shape[0] != self.num_agents or dones.shape[0] != self.num_agents:
+            raise ValueError(
+                f"RewardStrategy expected tensors shaped [{self.num_agents}], got "
+                f"step_counts={step_counts.shape}, dones={dones.shape}"
+            )
 
-        # On death: reward = steps_survived - R
+        baseline_tensor = self._prepare_baseline_tensor(baseline_steps)
+
+        rewards = torch.zeros(step_counts.shape[0], device=self.device)
         rewards = torch.where(
             dones,
-            step_counts.float() - self.baseline_survival_steps,
-            0.0,  # No reward for ongoing episode
+            step_counts.float() - baseline_tensor,
+            0.0,
         )
 
         return rewards
+
+    def _prepare_baseline_tensor(self, baseline_steps: torch.Tensor | float | list[float]) -> torch.Tensor:
+        """Normalise baseline input to [num_agents] float tensor on device."""
+        if isinstance(baseline_steps, torch.Tensor):
+            tensor = baseline_steps.to(self.device, dtype=torch.float32)
+        elif isinstance(baseline_steps, (float, int)):
+            tensor = torch.full((self.num_agents,), float(baseline_steps), dtype=torch.float32, device=self.device)
+        elif isinstance(baseline_steps, list):
+            tensor = torch.tensor(baseline_steps, dtype=torch.float32, device=self.device)
+        else:
+            raise TypeError(f"Unsupported baseline type: {type(baseline_steps)!r}")
+
+        if tensor.shape != (self.num_agents,):
+            raise ValueError(
+                f"baseline tensor shape {tensor.shape} does not match num_agents={self.num_agents}"
+            )
+
+        return tensor

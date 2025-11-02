@@ -2,7 +2,7 @@
 Test for observation dimension mismatch between environment and RecurrentSpatialQNetwork.
 
 This test demonstrates the bug where:
-- Environment produces: 25 (grid) + 2 (pos) + 8 (meters) + 16 (affordances with "none") = 51 dims
+- Environment produces: 25 (grid) + 2 (pos) + 8 (meters) + 15 (affordances with "none") = 50 dims + temporal extras
 - Network expects: 25 (grid) + 2 (pos) + 8 (meters) + 15 (affordances) = 50 dims
 
 This causes shape mismatches during training.
@@ -36,22 +36,22 @@ def test_observation_dimension_matches_network():
 
 
 def test_observation_dimension_with_temporal_mechanics():
-    """Temporal mechanics should add 2 dimensions (time_of_day + interaction_progress)."""
+    """Temporal mechanics should add 3 dimensions (time_of_day + interaction_progress)."""
     # Create POMDP environment with temporal mechanics
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
         partial_observability=True,
         vision_range=2,  # 5×5 window
-        enable_temporal_mechanics=True,  # +2 dims
+        enable_temporal_mechanics=True,  # +3 dims (sin, cos, progress)
         device=torch.device("cpu"),
     )
 
     obs_dim = env.observation_dim
 
-    # Expected: 25 (grid) + 2 (pos) + 8 (meters) + (num_affordance_types + 1) + 2 (temporal)
+    # Expected: 25 (grid) + 2 (pos) + 8 (meters) + (num_affordance_types + 1) + 3 (temporal)
     # num_affordance_types = 14, so affordance encoding = 15
-    expected_dim = 25 + 2 + 8 + (env.num_affordance_types + 1) + 2
+    expected_dim = 25 + 2 + 8 + (env.num_affordance_types + 1) + 3
     assert obs_dim == expected_dim, (
         f"Expected {expected_dim} dims, got {obs_dim}"
     )  # Create network with temporal support

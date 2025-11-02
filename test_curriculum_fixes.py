@@ -3,6 +3,7 @@
 
 import torch
 from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.population.runtime_registry import AgentRuntimeRegistry
 
 
 def test_baseline_calculation():
@@ -43,17 +44,20 @@ def test_reward_function():
 
     device = torch.device("cpu")
     env = VectorizedHamletEnv(num_agents=3, device=device)
+    registry = AgentRuntimeRegistry(agent_ids=[f"agent-{i}" for i in range(3)], device=device)
+    env.attach_runtime_registry(registry)
 
     # Set Stage 1 baseline
-    env.update_baseline_for_curriculum(0.2)
-    baseline = env.reward_strategy.baseline_survival_steps
+    baseline_tensor = env.update_baseline_for_curriculum(0.2)
+    registry.set_baselines(baseline_tensor)
+    baseline = baseline_tensor[0].item()
     print(f"\n✓ Baseline set to: {baseline:.1f} steps")
 
     # Test different survival times
     step_counts = torch.tensor([100, 167, 250], device=device)
     dones = torch.tensor([True, True, True], device=device)
 
-    rewards = env.reward_strategy.calculate_rewards(step_counts, dones)
+    rewards = env.reward_strategy.calculate_rewards(step_counts, dones, registry.get_baseline_tensor())
 
     print(f"\n✓ Agent 1: 100 steps → reward = {rewards[0]:.1f}")
     print(f"  Expected: ~-67 (below baseline)")
