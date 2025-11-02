@@ -225,8 +225,11 @@ class VectorizedHamletEnv:
         action_masks[at_left, 2] = False  # Can't go LEFT at left edge
         action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
 
-        # Mask INTERACT (action 4) - only valid when on an affordable affordance
-        on_affordable_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+        # Mask INTERACT (action 4) - only valid when on an open affordance
+        # P1.4: Removed affordability check - agents can attempt INTERACT even when broke
+        # Affordability is checked inside interaction handlers; failing to afford just
+        # wastes a turn (passive decay) and teaches economic planning
+        on_valid_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
         # Check each affordance using AffordanceEngine
         for affordance_name, affordance_pos in self.affordances.items():
@@ -239,15 +242,10 @@ class VectorizedHamletEnv:
                     # Affordance is closed, skip
                     continue
 
-            # Check affordability using AffordanceEngine
-            cost_mode = "per_tick" if self.enable_temporal_mechanics else "instant"
-            cost_normalized = self.affordance_engine.get_affordance_cost(affordance_name, cost_mode)
-            can_afford = self.meters[:, 3] >= cost_normalized
+            # Valid if on affordance AND is open (affordability checked in handler)
+            on_valid_affordance |= on_this_affordance
 
-            # Valid if on affordance AND can afford it AND is open
-            on_affordable_affordance |= on_this_affordance & can_afford
-
-        action_masks[:, 4] = on_affordable_affordance
+        action_masks[:, 4] = on_valid_affordance
 
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking

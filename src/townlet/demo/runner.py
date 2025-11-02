@@ -355,8 +355,10 @@ class DemoRunner:
 
                 # P1.2: Flush episode if agent survived to max_steps (recurrent networks only)
                 # Without this, successful episodes never reach replay buffer → memory leak + data loss
-                if not agent_state.dones[0]:  # Agent survived to max_steps without dying
-                    self.population.flush_episode(agent_idx=0, synthetic_done=True)
+                # CRITICAL: Loop over all agents to support multi-agent configs (not just agent 0)
+                for agent_idx in range(self.population.num_agents):
+                    if not agent_state.dones[agent_idx]:  # Agent survived to max_steps without dying
+                        self.population.flush_episode(agent_idx=agent_idx, synthetic_done=True)
 
                 # Log metrics to database
                 self.db.insert_episode(

@@ -212,7 +212,18 @@ class VectorizedPopulation(PopulationManager):
             "dones": [],
         }
 
-        # Reset hidden state for this agent
+        # Reset episode counter
+        self.episode_step_counts[agent_idx] = 0
+
+        # CRITICAL: Zero hidden state for recurrent networks
+        # Prevents temporal contamination - new episode should not inherit
+        # LSTM activations from previous life (whether natural or synthetic done)
+        if self.is_recurrent:
+            h, c = self.q_network.get_hidden_state()
+            # Zero out hidden state for this specific agent
+            h[:, agent_idx, :] = 0.0
+            c[:, agent_idx, :] = 0.0
+            self.q_network.set_hidden_state((h, c))
         if self.q_network and hasattr(self.q_network, "reset_hidden_state"):
             h, c = self.q_network.get_hidden_state()
             if h is not None and c is not None:

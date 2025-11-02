@@ -101,6 +101,8 @@ class SequentialReplayBuffer:
                 - 'actions': [batch_size, seq_len]
                 - 'rewards': [batch_size, seq_len]
                 - 'dones': [batch_size, seq_len]
+                - 'mask': [batch_size, seq_len] bool - True for valid timesteps,
+                          False after terminal (for post-terminal masking in loss)
 
         Raises:
             ValueError: If not enough data to sample
@@ -143,6 +145,21 @@ class SequentialReplayBuffer:
                 intrinsic = episode["rewards_intrinsic"][start_idx:end_idx]
                 sequence["rewards"] = extrinsic + intrinsic * intrinsic_weight
 
+            # Create validity mask (P2.2: Post-terminal masking)
+            # Mask is True up to and including terminal, False after
+            dones_seq = episode["dones"][start_idx:end_idx]
+            mask = torch.ones(seq_len, dtype=torch.bool, device=self.device)
+
+            # Find first terminal in sequence
+            terminal_indices = torch.where(dones_seq)[0]
+            if len(terminal_indices) > 0:
+                terminal_idx = terminal_indices[0].item()
+                # Mask out everything AFTER terminal (terminal itself is valid)
+                if terminal_idx < seq_len - 1:
+                    mask[terminal_idx + 1 :] = False
+
+            sequence["mask"] = mask
+
             sampled_sequences.append(sequence)
 
         # Stack sequences into batch
@@ -151,6 +168,7 @@ class SequentialReplayBuffer:
             "actions": torch.stack([s["actions"] for s in sampled_sequences]),
             "rewards": torch.stack([s["rewards"] for s in sampled_sequences]),
             "dones": torch.stack([s["dones"] for s in sampled_sequences]),
+            "mask": torch.stack([s["mask"] for s in sampled_sequences]),
         }
 
         return batch
