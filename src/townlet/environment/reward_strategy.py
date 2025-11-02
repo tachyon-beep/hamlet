@@ -37,9 +37,7 @@ class RewardStrategy:
         self.device = device
         self.num_agents = num_agents
         # P2.1: Vectorized baseline - one per agent for multi-agent curriculum support
-        self.baseline_survival_steps = torch.full(
-            (num_agents,), 100.0, dtype=torch.float32, device=device
-        )
+        self.baseline_survival_steps = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
 
     def set_baseline_survival_steps(self, baseline_steps: torch.Tensor | float):
         """
@@ -54,14 +52,13 @@ class RewardStrategy:
         """
         if isinstance(baseline_steps, torch.Tensor):
             # P2.1: Per-agent baselines
-            assert baseline_steps.shape == (self.num_agents,), \
+            assert baseline_steps.shape == (self.num_agents,), (
                 f"baseline_steps must be [num_agents={self.num_agents}], got {baseline_steps.shape}"
+            )
             self.baseline_survival_steps = baseline_steps.to(self.device)
         else:
             # Backwards compatibility: broadcast scalar to all agents
-            self.baseline_survival_steps = torch.full(
-                (self.num_agents,), float(baseline_steps), dtype=torch.float32, device=self.device
-            )
+            self.baseline_survival_steps = torch.full((self.num_agents,), float(baseline_steps), dtype=torch.float32, device=self.device)
 
     def calculate_rewards(
         self,

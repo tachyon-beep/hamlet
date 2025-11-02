@@ -192,12 +192,13 @@ class TestInteractMaskingStillWorksForPhysical:
 
         # INTERACT should be masked (closed)
         assert not masks[0, 4], "INTERACT should be masked at closed affordance"
-        
+
         # Verify time_of_day is exposed in observation
         obs = env_temporal._get_observations()
         # Observation should include time_of_day as last 2 features (time, interaction_progress)
-        assert obs.shape[1] > env_temporal.grid_size * env_temporal.grid_size + 8, \
+        assert obs.shape[1] > env_temporal.grid_size * env_temporal.grid_size + 8, (
             "Temporal observations should include time_of_day and interaction_progress"
+        )
 
     def test_interact_masked_for_dead_agent(self, env, device):
         """INTERACT should be masked for dead agents."""

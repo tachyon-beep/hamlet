@@ -582,10 +582,9 @@ class VectorizedHamletEnv:
         """
         if isinstance(depletion_multipliers, torch.Tensor):
             # P2.1: Per-agent baselines
-            baselines = torch.stack([
-                torch.tensor(self.calculate_baseline_survival(m.item()), device=self.device)
-                for m in depletion_multipliers
-            ])
+            baselines = torch.stack(
+                [torch.tensor(self.calculate_baseline_survival(m.item()), device=self.device) for m in depletion_multipliers]
+            )
             self.reward_strategy.set_baseline_survival_steps(baselines)
         else:
             # Backwards compatibility: scalar multiplier
@@ -605,11 +604,11 @@ class VectorizedHamletEnv:
             # Convert tensor position to list (for JSON serialization)
             pos = pos_tensor.cpu().tolist()
             positions[name] = [int(pos[0]), int(pos[1])]
-        
+
         # Include affordance ordering for consistent observation encoding
         return {
-            'positions': positions,
-            'ordering': self.affordance_names,
+            "positions": positions,
+            "ordering": self.affordance_names,
         }
 
     def set_affordance_positions(self, checkpoint_data: dict) -> None:
@@ -621,18 +620,18 @@ class VectorizedHamletEnv:
                 - Otherwise, use current affordance_names (backwards compatible)
         """
         # Handle backwards compatibility: checkpoint might be old format (just positions dict)
-        if 'positions' in checkpoint_data:
-            positions = checkpoint_data['positions']
-            ordering = checkpoint_data.get('ordering', self.affordance_names)
+        if "positions" in checkpoint_data:
+            positions = checkpoint_data["positions"]
+            ordering = checkpoint_data.get("ordering", self.affordance_names)
         else:
             # Old format: checkpoint_data is the positions dict directly
             positions = checkpoint_data
             ordering = self.affordance_names
-        
+
         # Restore ordering first (critical for consistent observation encoding)
         self.affordance_names = ordering
         self.num_affordance_types = len(self.affordance_names)
-        
+
         # Rebuild affordances dict in correct order
         for name, pos in positions.items():
             if name in self.affordances:

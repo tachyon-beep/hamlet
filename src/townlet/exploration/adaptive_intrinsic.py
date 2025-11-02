@@ -32,7 +32,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         epsilon_start: float = 1.0,
         epsilon_min: float = 0.01,
         epsilon_decay: float = 0.995,
-        device: torch.device = torch.device('cpu'),
+        device: torch.device = torch.device("cpu"),
     ):
         """Initialize adaptive intrinsic exploration.
 
@@ -130,7 +130,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
 
         # Keep only recent window
         if len(self.survival_history) > self.survival_window:
-            self.survival_history = self.survival_history[-self.survival_window:]
+            self.survival_history = self.survival_history[-self.survival_window :]
 
         # Check for annealing
         if self.should_anneal():
@@ -146,7 +146,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             return False  # Not enough data
 
         recent_survivals = torch.tensor(
-            self.survival_history[-self.survival_window:],
+            self.survival_history[-self.survival_window :],
             dtype=torch.float32,
         )
         variance = torch.var(recent_survivals).item()
@@ -157,8 +157,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         # Low variance + high survival = "consistently succeeding" (ready to anneal)
         MIN_SURVIVAL_FOR_ANNEALING = 50.0  # Don't anneal until surviving at least 50 steps
 
-        return (variance < self.variance_threshold and
-                mean_survival > MIN_SURVIVAL_FOR_ANNEALING)
+        return variance < self.variance_threshold and mean_survival > MIN_SURVIVAL_FOR_ANNEALING
 
     def anneal_weight(self) -> None:
         """Reduce intrinsic weight via exponential decay."""
@@ -180,13 +179,13 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             Dict with RND state, intrinsic weight, and survival history
         """
         return {
-            'rnd_state': self.rnd.checkpoint_state(),
-            'current_intrinsic_weight': self.current_intrinsic_weight,
-            'min_intrinsic_weight': self.min_intrinsic_weight,
-            'variance_threshold': self.variance_threshold,
-            'survival_window': self.survival_window,
-            'decay_rate': self.decay_rate,
-            'survival_history': self.survival_history,
+            "rnd_state": self.rnd.checkpoint_state(),
+            "current_intrinsic_weight": self.current_intrinsic_weight,
+            "min_intrinsic_weight": self.min_intrinsic_weight,
+            "variance_threshold": self.variance_threshold,
+            "survival_window": self.survival_window,
+            "decay_rate": self.decay_rate,
+            "survival_history": self.survival_history,
         }
 
     def load_state(self, state: dict[str, Any]) -> None:
@@ -195,15 +194,15 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         Args:
             state: Dict from checkpoint_state()
         """
-        self.rnd.load_state(state['rnd_state'])
-        self.current_intrinsic_weight = state['current_intrinsic_weight']
-        self.min_intrinsic_weight = state['min_intrinsic_weight']
-        self.variance_threshold = state['variance_threshold']
-        self.survival_window = state['survival_window']
-        self.decay_rate = state['decay_rate']
+        self.rnd.load_state(state["rnd_state"])
+        self.current_intrinsic_weight = state["current_intrinsic_weight"]
+        self.min_intrinsic_weight = state["min_intrinsic_weight"]
+        self.variance_threshold = state["variance_threshold"]
+        self.survival_window = state["survival_window"]
+        self.decay_rate = state["decay_rate"]
 
         # Gracefully handle missing survival_history (backwards compatibility)
-        if 'survival_history' in state:
-            self.survival_history = state['survival_history']
+        if "survival_history" in state:
+            self.survival_history = state["survival_history"]
         else:
             self.survival_history = []

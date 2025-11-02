@@ -25,13 +25,12 @@ class TestMaskedLossComputation:
         # Compute both losses
         unmasked_loss = F.mse_loss(q_pred, q_target)
 
-        losses = F.mse_loss(q_pred, q_target, reduction='none')
+        losses = F.mse_loss(q_pred, q_target, reduction="none")
         mask = torch.ones(batch_size, seq_len)  # All True
         masked_loss = (losses * mask).sum() / mask.sum().clamp_min(1)
 
         # Should be identical when mask is all True
-        assert torch.allclose(masked_loss, unmasked_loss), \
-            "Masked loss with all-True mask should equal unmasked loss"
+        assert torch.allclose(masked_loss, unmasked_loss), "Masked loss with all-True mask should equal unmasked loss"
 
     def test_mask_zeros_out_invalid_timesteps(self):
         """Test that masked loss ignores timesteps where mask is False."""
@@ -47,7 +46,7 @@ class TestMaskedLossComputation:
         mask[:, :4] = True  # First 4 valid, last 4 invalid
 
         # Compute masked loss
-        losses = F.mse_loss(q_pred, q_target, reduction='none')  # All losses = 1.0
+        losses = F.mse_loss(q_pred, q_target, reduction="none")  # All losses = 1.0
         mask_float = mask.float()
         masked_loss = (losses * mask_float).sum() / mask_float.sum().clamp_min(1)
 
@@ -57,29 +56,25 @@ class TestMaskedLossComputation:
         # Expected loss: 8.0 / 8 = 1.0
         expected_loss = 1.0
 
-        assert torch.allclose(masked_loss, torch.tensor(expected_loss)), \
-            f"Masked loss should be {expected_loss}, got {masked_loss.item()}"
+        assert torch.allclose(masked_loss, torch.tensor(expected_loss)), f"Masked loss should be {expected_loss}, got {masked_loss.item()}"
 
         # Verify this is different from unmasked loss
         unmasked_loss = F.mse_loss(q_pred, q_target)
-        assert torch.allclose(unmasked_loss, torch.tensor(1.0)), \
-            "Unmasked loss should also be 1.0 in this case (all errors are 1.0)"
+        assert torch.allclose(unmasked_loss, torch.tensor(1.0)), "Unmasked loss should also be 1.0 in this case (all errors are 1.0)"
 
         # But if we corrupt the invalid timesteps with huge errors...
         q_target_corrupt = q_target.clone()
         q_target_corrupt[:, 4:] = 1000.0  # Huge errors in invalid region
 
         unmasked_loss_corrupt = F.mse_loss(q_pred, q_target_corrupt)
-        losses_corrupt = F.mse_loss(q_pred, q_target_corrupt, reduction='none')
+        losses_corrupt = F.mse_loss(q_pred, q_target_corrupt, reduction="none")
         masked_loss_corrupt = (losses_corrupt * mask_float).sum() / mask_float.sum().clamp_min(1)
 
         # Masked loss should still be 1.0 (ignoring corrupted region)
-        assert torch.allclose(masked_loss_corrupt, torch.tensor(1.0)), \
-            "Masked loss should ignore corrupted invalid region"
+        assert torch.allclose(masked_loss_corrupt, torch.tensor(1.0)), "Masked loss should ignore corrupted invalid region"
 
         # But unmasked loss should be huge
-        assert unmasked_loss_corrupt > 100.0, \
-            "Unmasked loss should be affected by corruption"
+        assert unmasked_loss_corrupt > 100.0, "Unmasked loss should be affected by corruption"
 
         print("✅ Mask correctly zeros out invalid timesteps")
         print(f"   Clean unmasked loss: {unmasked_loss.item():.2f}")

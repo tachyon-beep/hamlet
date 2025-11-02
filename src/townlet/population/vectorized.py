@@ -240,9 +240,9 @@ class VectorizedPopulation(PopulationManager):
                 dtype=torch.float32,
                 device=self.device,
             )
-            
+
             # Check if any agent's multiplier changed
-            if not hasattr(self, 'current_depletion_multipliers'):
+            if not hasattr(self, "current_depletion_multipliers"):
                 self.current_depletion_multipliers = multipliers
                 self.env.update_baseline_for_curriculum(multipliers)
             elif not torch.equal(multipliers, self.current_depletion_multipliers):
@@ -470,9 +470,9 @@ class VectorizedPopulation(PopulationManager):
                 # Compute loss across all timesteps with post-terminal masking (P2.2)
                 q_pred_all = torch.stack(q_pred_list, dim=1)  # [batch, seq_len]
                 q_target_all = torch.stack(q_target_list, dim=1)  # [batch, seq_len]
-                
+
                 # P2.2: Apply mask to prevent gradients from post-terminal garbage
-                losses = F.mse_loss(q_pred_all, q_target_all, reduction='none')  # [batch, seq_len]
+                losses = F.mse_loss(q_pred_all, q_target_all, reduction="none")  # [batch, seq_len]
                 mask = batch["mask"].float()  # [batch, seq_len] - True for valid timesteps
                 masked_loss = (losses * mask).sum() / mask.sum().clamp_min(1)
                 loss = masked_loss

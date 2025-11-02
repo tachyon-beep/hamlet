@@ -154,13 +154,13 @@ class DemoRunner:
         logger.info(f"Loading checkpoint: {latest_checkpoint}")
 
         checkpoint = torch.load(latest_checkpoint, weights_only=False)
-        
+
         # P1.1: Check checkpoint version
         checkpoint_version = checkpoint.get("version", 1)  # Default to v1 for legacy checkpoints
         if checkpoint_version != 2:
             logger.warning(f"Loading v{checkpoint_version} checkpoint (current version is 2)")
             # Future: Add migration logic here if needed
-        
+
         self.current_episode = checkpoint["episode"]
 
         # P1.1 Phase 2: Load full population state

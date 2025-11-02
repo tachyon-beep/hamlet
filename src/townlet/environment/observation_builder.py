@@ -3,7 +3,6 @@
 Handles full observability, partial observability (POMDP), and temporal features.
 """
 
-
 import torch
 
 
@@ -75,10 +74,11 @@ class ObservationBuilder:
             # Encode time_of_day as [sin, cos] for cyclical representation
             # This allows the network to understand that 23:00 and 00:00 are close
             import math
+
             angle = (time_of_day / 24.0) * 2 * math.pi
             time_sin = torch.full((self.num_agents, 1), math.sin(angle), device=self.device)
             time_cos = torch.full((self.num_agents, 1), math.cos(angle), device=self.device)
-            
+
             normalized_progress = interaction_progress.unsqueeze(1) / 10.0
             obs = torch.cat([obs, time_sin, time_cos, normalized_progress], dim=1)
 
@@ -101,9 +101,7 @@ class ObservationBuilder:
             observations: [num_agents, grid_size² + 8 + num_affordance_types + 1]
         """
         # Grid encoding: one-hot position
-        grid_encoding = torch.zeros(
-            self.num_agents, self.grid_size * self.grid_size, device=self.device
-        )
+        grid_encoding = torch.zeros(self.num_agents, self.grid_size * self.grid_size, device=self.device)
         flat_indices = positions[:, 1] * self.grid_size + positions[:, 0]
         grid_encoding.scatter_(1, flat_indices.unsqueeze(1), 1.0)
 
@@ -174,9 +172,7 @@ class ObservationBuilder:
         affordance_encoding = self._build_affordance_encoding(positions, affordances)
 
         # Concatenate: local_grid + position + meters + affordance
-        observations = torch.cat(
-            [local_grids_batch, normalized_positions, meters, affordance_encoding], dim=1
-        )
+        observations = torch.cat([local_grids_batch, normalized_positions, meters, affordance_encoding], dim=1)
 
         return observations
 
@@ -196,9 +192,7 @@ class ObservationBuilder:
                 Last dimension is "none" (not on any affordance)
         """
         # Initialize with "none" (all zeros except last column)
-        affordance_encoding = torch.zeros(
-            self.num_agents, self.num_affordance_types + 1, device=self.device
-        )
+        affordance_encoding = torch.zeros(self.num_agents, self.num_affordance_types + 1, device=self.device)
         affordance_encoding[:, -1] = 1.0  # Default to "none"
 
         # Check each affordance
