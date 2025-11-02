@@ -173,6 +173,7 @@ class DemoRunner:
         grid_size = environment_cfg.get("grid_size", 8)
         partial_observability = environment_cfg.get("partial_observability", False)
         vision_range = environment_cfg.get("vision_range", 2)
+        enabled_affordances = environment_cfg.get("enabled_affordances", None)  # None = all affordances
 
         # Create environment FIRST (need it to auto-detect dimensions)
         self.env = VectorizedHamletEnv(
@@ -181,6 +182,7 @@ class DemoRunner:
             device=device,
             partial_observability=partial_observability,
             vision_range=vision_range,
+            enabled_affordances=enabled_affordances,
         )
 
         # Auto-detect dimensions from environment (avoids hardcoded config values)
@@ -308,7 +310,6 @@ class DemoRunner:
 
                 for step in range(max_steps):
                     agent_state = self.population.step_population(self.env)
-                    self.population.update_curriculum_tracker(agent_state.rewards, agent_state.dones)
 
                     survival_time += 1
 
@@ -316,16 +317,24 @@ class DemoRunner:
                     # agent_state.rewards is total (extrinsic + intrinsic * weight)
                     # agent_state.intrinsic_rewards is just intrinsic component
                     intrinsic_weight = self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 1.0
-                    extrinsic_component = agent_state.rewards[0].item() - (agent_state.intrinsic_rewards[0].item() * intrinsic_weight)
+
+                    # Calculate extrinsic reward tensor for curriculum (not just scalar)
+                    extrinsic_reward_tensor = agent_state.rewards - (agent_state.intrinsic_rewards * intrinsic_weight)
+
+                    # Update curriculum with EXTRINSIC rewards only (prevents reward hacking via curiosity)
+                    self.population.update_curriculum_tracker(extrinsic_reward_tensor, agent_state.dones)
+
+                    # Extract scalars for logging
+                    extrinsic_component = extrinsic_reward_tensor[0].item()
                     intrinsic_component = agent_state.intrinsic_rewards[0].item()
 
                     episode_reward += agent_state.rewards[0].item()
                     episode_extrinsic_reward += extrinsic_component
                     episode_intrinsic_reward += intrinsic_component
 
-                    # Track affordance usage
-                    if hasattr(self.env, "last_interaction_affordances"):
-                        for affordance_name in self.env.last_interaction_affordances:
+                    # Track affordance usage from info dict
+                    if "successful_interactions" in agent_state.info:
+                        for agent_idx, affordance_name in agent_state.info["successful_interactions"].items():
                             affordance_visits[affordance_name] = affordance_visits.get(affordance_name, 0) + 1
 
                     if agent_state.dones[0]:
@@ -410,6 +419,9 @@ class DemoRunner:
                 # Checkpoint every 100 episodes
                 if self.current_episode % 100 == 0:
                     self.save_checkpoint()
+
+                # Decay epsilon for next episode
+                self.exploration.decay_epsilon()
 
                 self.current_episode += 1
 

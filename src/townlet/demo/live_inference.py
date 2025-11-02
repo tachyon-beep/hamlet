@@ -130,6 +130,7 @@ class LiveInferenceServer:
         partial_observability = False
         vision_range = 2
         enable_temporal_mechanics = False
+        enabled_affordances = None  # None = all affordances
         network_type = "simple"
         vision_window_size = 5
 
@@ -141,6 +142,7 @@ class LiveInferenceServer:
             partial_observability = env_cfg.get("partial_observability", False)
             vision_range = env_cfg.get("vision_range", 2)
             enable_temporal_mechanics = env_cfg.get("enable_temporal_mechanics", False)
+            enabled_affordances = env_cfg.get("enabled_affordances", None)  # Override default
             network_type = pop_cfg.get("network_type", "simple")
             vision_window_size = 2 * vision_range + 1
 
@@ -148,7 +150,8 @@ class LiveInferenceServer:
                 f"Environment config: grid={grid_size}, "
                 f"POMDP={partial_observability}, "
                 f"vision={vision_range}, "
-                f"temporal={enable_temporal_mechanics}"
+                f"temporal={enable_temporal_mechanics}, "
+                f"affordances={enabled_affordances if enabled_affordances else 'all'}"
             )
             logger.info(f"Network type: {network_type}")
 
@@ -160,6 +163,7 @@ class LiveInferenceServer:
             partial_observability=partial_observability,
             vision_range=vision_range,
             enable_temporal_mechanics=enable_temporal_mechanics,
+            enabled_affordances=enabled_affordances,
         )
 
         # Auto-detect observation dimension from environment
@@ -347,6 +351,14 @@ class LiveInferenceServer:
             logger.info(f"Auto checkpoint mode {status}")
             # Broadcast mode change to all clients
             await self._broadcast_to_clients({"type": "auto_checkpoint_mode", "enabled": self.auto_checkpoint_mode})
+
+        elif command == "set_speed":
+            # Update step delay (convert speed multiplier to delay)
+            # speed 1.0 = 0.2s delay (5 steps/sec)
+            # speed 10.0 = 0.02s delay (50 steps/sec)
+            speed = data.get("speed", 1.0)
+            self.step_delay = 0.2 / speed  # Inverse relationship
+            logger.info(f"Speed set to {speed}x (delay: {self.step_delay:.3f}s)")
 
     async def _run_inference_loop(self):
         """Main inference loop - runs episodes continuously."""

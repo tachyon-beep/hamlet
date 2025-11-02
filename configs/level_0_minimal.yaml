@@ -1,0 +1,52 @@
+# Level 0: Minimal Training Environment
+#
+# Ultra-simplified environment for debugging and proof-of-concept.
+#
+# Key features:
+# - Tiny 5×5 grid (25 cells total)
+# - Only ONE affordance: Bed ($1 cost)
+# - Agent only needs to learn: walk to bed, interact, repeat
+# - Full observability (agent sees entire grid)
+# - Should learn in <100 episodes
+#
+# Purpose:
+# - Validate training pipeline works
+# - Debug Q-value learning
+# - Fast iteration for testing changes
+# - Teaching demo: "simplest possible RL problem"
+
+# Environment configuration
+environment:
+  grid_size: 5  # 5×5 grid world (25 cells)
+  partial_observability: false  # Agent sees full grid
+  vision_range: 5  # Full vision (not used when partial_observability=false)
+  enable_temporal_mechanics: false  # No time-of-day complexity
+  enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
+
+# Population configuration
+population:
+  num_agents: 1  # Single agent
+  learning_rate: 0.001  # Higher learning rate for faster learning
+  gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
+  replay_buffer_capacity: 5000  # Smaller buffer for minimal world
+  network_type: simple  # Standard MLP Q-Network
+
+# Curriculum configuration (simpler than Level 1)
+curriculum:
+  max_steps_per_episode: 200  # Shorter episodes (5x5 world)
+  survival_advance_threshold: 0.8  # Advance if 80% survival
+  survival_retreat_threshold: 0.2  # Retreat if <20% survival
+  entropy_gate: 0.3  # Lower entropy gate (simpler problem)
+  min_steps_at_stage: 100  # Fewer steps before stage change
+
+# Exploration configuration
+exploration:
+  embed_dim: 64  # Smaller embedding (simpler observations)
+  initial_intrinsic_weight: 0.5  # Lower intrinsic weight (extrinsic is clearer)
+  variance_threshold: 50.0  # Lower threshold for faster annealing
+  survival_window: 50  # Smaller window
+
+# Training configuration
+training:
+  device: cuda  # Use GPU if available
+  max_episodes: 500  # Should learn in <100, but allow buffer

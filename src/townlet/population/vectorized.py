@@ -504,6 +504,7 @@ class VectorizedPopulation(PopulationManager):
             self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0
         )
 
+        # 10. Construct and return batched agent state
         state = BatchedAgentState(
             observations=next_obs,
             actions=actions,
@@ -514,6 +515,7 @@ class VectorizedPopulation(PopulationManager):
             survival_times=info["step_counts"],
             curriculum_difficulties=torch.zeros(self.num_agents, device=self.device),
             device=self.device,
+            info=info,  # Pass environment info (includes successful_interactions)
         )
 
         return state

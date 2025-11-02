@@ -33,6 +33,7 @@ class VectorizedHamletEnv:
         partial_observability: bool = False,
         vision_range: int = 2,
         enable_temporal_mechanics: bool = False,
+        enabled_affordances: list[str] | None = None,
     ):
         """
         Initialize vectorized environment.
@@ -44,6 +45,7 @@ class VectorizedHamletEnv:
             partial_observability: If True, agent sees only local window (POMDP)
             vision_range: Radius of vision window (2 = 5×5 window)
             enable_temporal_mechanics: Enable time-based mechanics and multi-tick interactions
+            enabled_affordances: List of affordance names to enable (None = all affordances)
         """
         self.num_agents = num_agents
         self.grid_size = grid_size
@@ -53,7 +55,7 @@ class VectorizedHamletEnv:
         self.enable_temporal_mechanics = enable_temporal_mechanics
 
         # Affordance positions (from Hamlet default layout)
-        self.affordances = {
+        all_affordances = {
             # Basic survival (tiered)
             "Bed": torch.tensor([1, 1], device=device),  # Energy restoration tier 1
             "LuxuryBed": torch.tensor([2, 1], device=device),  # Energy restoration tier 2
@@ -74,6 +76,12 @@ class VectorizedHamletEnv:
             "Doctor": torch.tensor([5, 1], device=device),
             "Hospital": torch.tensor([6, 1], device=device),
         }
+
+        # Filter affordances if enabled_affordances is specified
+        if enabled_affordances is not None:
+            self.affordances = {name: pos for name, pos in all_affordances.items() if name in enabled_affordances}
+        else:
+            self.affordances = all_affordances
 
         # Create ordered list of affordance names for consistent encoding
         self.affordance_names = list(self.affordances.keys())
