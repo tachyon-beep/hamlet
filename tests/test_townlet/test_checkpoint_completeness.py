@@ -113,7 +113,7 @@ class TestCheckpointVersioning:
 
 
 class TestTargetNetworkCheckpointing:
-    """Test target network state is saved and restored (recurrent mode)."""
+    """Test target network state is saved and restored for all network types."""
 
     def test_target_network_saved_when_exists(self, recurrent_env, curriculum, device):
         """Target network state should be in checkpoint if network exists."""
@@ -135,8 +135,8 @@ class TestTargetNetworkCheckpointing:
         assert checkpoint["target_network"] is not None
         assert isinstance(checkpoint["target_network"], dict)
 
-    def test_target_network_not_saved_when_absent(self, simple_env, curriculum, device):
-        """Target network should not be in checkpoint for simple networks."""
+    def test_target_network_saved_for_simple_network(self, simple_env, curriculum, device):
+        """Target network should also be saved for simple feed-forward networks."""
         exploration = create_exploration(simple_env.observation_dim, device)
         population = VectorizedPopulation(
             env=simple_env,
@@ -151,8 +151,9 @@ class TestTargetNetworkCheckpointing:
 
         checkpoint = population.get_checkpoint_state()
 
-        # Should either not have key or be None
-        assert checkpoint.get("target_network") is None
+        assert "target_network" in checkpoint
+        assert checkpoint["target_network"] is not None
+        assert isinstance(checkpoint["target_network"], dict)
 
     def test_target_network_restored_correctly(self, recurrent_env, curriculum, device):
         """Target network weights should match after save/load cycle."""
