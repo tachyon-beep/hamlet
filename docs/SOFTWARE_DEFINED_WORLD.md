@@ -512,7 +512,7 @@ This preserves data-driven control and keeps the engines clean.
   * normal: `[open, close]` with 0 ≤ open < close ≤ 24 and open ≤ time < close
   * wrap-around: allow close up to 28. Env computes `close % 24` and treats it as open if `time ≥ open or time < close%24`
 * The env increments `time_of_day = (time_of_day + 1) % 24` per step when temporal mechanics are enabled.
-* Action space is `[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`. Movement and wait costs are applied by the env, not the YAML.
+* Action space is `[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`. Movement, wait, and interact energy costs are applied by the env; defaults live in code but can be overridden per pack via `environment.energy_move_depletion`, `environment.energy_wait_depletion`, and `environment.energy_interact_depletion`.
 
   * default move costs applied by the env include energy 0.005 (configurable via `energy_move_depletion`), hygiene 0.003, satiation 0.004
   * wait uses a lighter energy cost (default 0.001, configurable via `energy_wait_depletion`), no other passives
@@ -531,7 +531,7 @@ This preserves data-driven control and keeps the engines clean.
 
 Default positions, for reference:
 
-```
+```text
 Bed:        [1,1]
 LuxuryBed:  [2,1]
 Shower:     [2,2]
@@ -613,7 +613,7 @@ It also gives the World Model a nice spread of options to learn, and a reason to
 
 Put these side by side. The env loads them by directory.
 
-```
+```text
 configs/test/
   bars.yaml
   cascades.yaml

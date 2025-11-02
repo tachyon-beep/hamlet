@@ -19,7 +19,7 @@ Hamlet is a GPU-accelerated DRL training environment where agents learn to survi
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.13+
 - [uv](https://github.com/astral-sh/uv) package manager
 - CUDA-capable GPU (optional but recommended)
 - Node.js 18+ (for frontend visualization)
@@ -37,6 +37,35 @@ uv sync
 # Run tests (387 tests, 70%+ coverage)
 uv run pytest tests/ --cov=src/townlet --cov-report=term-missing -v
 ```
+
+## Development Workflow
+
+### Pre-commit hooks
+
+We ship a `.pre-commit-config.yaml` that runs Ruff and Black before every commit. Once per clone:
+
+```bash
+uv tool install pre-commit  # optional, or pipx install pre-commit
+pre-commit install
+```
+
+You can lint the entire repo manually with:
+
+```bash
+uv run pre-commit run --all-files
+```
+
+### Continuous Integration
+
+GitHub Actions keeps the main branch green:
+
+| Workflow | Trigger | What it runs |
+| --- | --- | --- |
+| `Lint` | push / PR | Ruff (`ruff check`), Black (`--check`), Mypy |
+| `Tests` | push / PR | `pytest` (default suite, skips `slow`) |
+| `Full Test Suite` | nightly @ 06:00 UTC & manual dispatch | `pytest -m "slow or not slow"` to exercise the entire matrix |
+
+All workflows use `uv` to create the environment and install `.[dev]`, so local parity is as simple as `uv sync`.
 
 ### Run Training + Visualization
 
@@ -317,7 +346,7 @@ See [ROADMAP.md](ROADMAP.md) for complete strategic plan.
 
 ## Technologies
 
-- **Python 3.12** - Modern Python with typing
+- **Python 3.13** - Modern Python baseline
 - **PyTorch 2.9** - GPU-accelerated neural networks
 - **FastAPI + uvicorn** - Async inference server
 - **Vue 3 + Vite** - Reactive frontend visualization

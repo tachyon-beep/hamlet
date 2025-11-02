@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv with Python
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv pip install --system ".[dev]"
+
+      - name: Run fast test suite
+        env:
+          PYTEST_ADDOPTS: ""
+        run: uv run pytest

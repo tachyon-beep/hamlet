@@ -233,9 +233,7 @@ class TestRecurrentNetworkTraining:
 
                 # For agents that finished, hidden state should be zeroed
                 done_idx = torch.where(state.dones)[0][0].item()
-                assert h[:, done_idx, :].abs().sum() < 1e-6, (
-                    "Hidden state should be zeroed for done agent"
-                )
+                assert h[:, done_idx, :].abs().sum() < 1e-6, "Hidden state should be zeroed for done agent"
                 break
 
         # Should eventually get a done state
@@ -246,9 +244,7 @@ class TestRecurrentNetworkTraining:
         population, env = recurrent_training_setup
 
         # Get initial LSTM parameters
-        initial_lstm_params = [
-            p.clone() for name, p in population.q_network.named_parameters() if "lstm" in name
-        ]
+        initial_lstm_params = [p.clone() for name, p in population.q_network.named_parameters() if "lstm" in name]
 
         # Train for enough steps to complete episodes and trigger training
         # Episodes take ~70-80 steps to complete, need 16+ episodes for training

@@ -72,7 +72,6 @@ class TestCurriculumStateCheckpointing:
         curriculum1.tracker.steps_at_stage[0] = 5000
 
         original_stage = curriculum1.tracker.agent_stages[0].item()
-        original_steps = curriculum1.tracker.steps_at_stage[0].item()
         assert original_stage == 3, "Should be at stage 3"
 
         # Save state

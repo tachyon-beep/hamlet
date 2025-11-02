@@ -28,7 +28,7 @@ class PopulationManager(ABC):
     @abstractmethod
     def step_population(
         self,
-        envs: 'VectorizedHamletEnv',  # Forward reference
+        envs: "VectorizedHamletEnv",  # Forward reference
     ) -> BatchedAgentState:
         """
         Execute one training step for entire population (GPU).

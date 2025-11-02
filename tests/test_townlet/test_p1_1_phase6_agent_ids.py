@@ -8,14 +8,11 @@ RED → GREEN → REFACTOR methodology.
 """
 
 import tempfile
-import torch
 from pathlib import Path
 
-from townlet.curriculum.adversarial import AdversarialCurriculum
+import torch
+
 from townlet.demo.runner import DemoRunner
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
-from townlet.population.vectorized import VectorizedPopulation
 
 
 class TestAgentIdsCheckpointing:
@@ -30,7 +27,8 @@ class TestAgentIdsCheckpointing:
 
             # Create config with 2 agents
             config_path = tmpdir / "config.yaml"
-            config_path.write_text("""
+            config_path.write_text(
+                """
 environment:
   grid_size: 8
   partial_observability: false
@@ -48,7 +46,8 @@ exploration:
   strategy: adaptive_intrinsic
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
-""")
+"""
+            )
 
             from townlet.curriculum.adversarial import AdversarialCurriculum
             from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -97,7 +96,8 @@ exploration:
             checkpoint_dir.mkdir()
 
             config_path = tmpdir / "config.yaml"
-            config_path.write_text("""
+            config_path.write_text(
+                """
 environment:
   grid_size: 8
   partial_observability: false
@@ -115,7 +115,8 @@ exploration:
   strategy: adaptive_intrinsic
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
-""")
+"""
+            )
 
             from townlet.curriculum.adversarial import AdversarialCurriculum
             from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -157,9 +158,11 @@ exploration:
             agent_ids = checkpoint.get("agent_ids")
             assert agent_ids is not None, "agent_ids should be in checkpoint"
             assert len(agent_ids) == 3, "Should have 3 agent IDs"
-            assert agent_ids == ["agent_0", "agent_1", "agent_2"], (
-                f"Agent IDs should be ['agent_0', 'agent_1', 'agent_2'], got: {agent_ids}"
-            )
+            assert agent_ids == [
+                "agent_0",
+                "agent_1",
+                "agent_2",
+            ], f"Agent IDs should be ['agent_0', 'agent_1', 'agent_2'], got: {agent_ids}"
 
     def test_curriculum_state_aligned_with_agent_ids(self):
         """Verify curriculum state can be indexed by agent_ids."""
@@ -169,7 +172,8 @@ exploration:
             checkpoint_dir.mkdir()
 
             config_path = tmpdir / "config.yaml"
-            config_path.write_text("""
+            config_path.write_text(
+                """
 environment:
   grid_size: 8
   partial_observability: false
@@ -187,7 +191,8 @@ exploration:
   strategy: adaptive_intrinsic
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
-""")
+"""
+            )
 
             from townlet.curriculum.adversarial import AdversarialCurriculum
             from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -239,9 +244,9 @@ exploration:
             assert agent_stages is not None, "curriculum should have agent_stages"
 
             # Verify tensor size matches number of agents
-            assert len(agent_stages) == len(agent_ids), (
-                f"Curriculum stages ({len(agent_stages)}) should match agent count ({len(agent_ids)})"
-            )
+            assert len(agent_stages) == len(
+                agent_ids
+            ), f"Curriculum stages ({len(agent_stages)}) should match agent count ({len(agent_ids)})"
 
     def test_runner_restores_agent_ids(self):
         """Verify runner can restore agent_ids from checkpoint."""
@@ -251,7 +256,8 @@ exploration:
             checkpoint_dir.mkdir()
 
             config_path = tmpdir / "config.yaml"
-            config_path.write_text("""
+            config_path.write_text(
+                """
 environment:
   grid_size: 8
   partial_observability: false
@@ -269,7 +275,8 @@ exploration:
   strategy: adaptive_intrinsic
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
-""")
+"""
+            )
 
             from townlet.curriculum.adversarial import AdversarialCurriculum
             from townlet.environment.vectorized_env import VectorizedHamletEnv

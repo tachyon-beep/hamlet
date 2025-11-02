@@ -3,7 +3,6 @@ Tests for UnifiedServer run directory derivation (config-driven runs layout).
 """
 
 import textwrap
-
 from pathlib import Path
 
 from townlet.demo.unified_server import UnifiedServer

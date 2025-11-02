@@ -17,7 +17,8 @@ Critical Areas:
 import pytest
 import torch
 import torch.nn as nn
-from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+
+from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 
 
 class TestSimpleQNetwork:
@@ -225,8 +226,6 @@ class TestRecurrentSpatialQNetwork:
     def test_vision_encoding(self, network):
         """Vision encoder should process 5×5 window correctly."""
         # Test just the vision encoder component
-        vision_input = torch.randn(4, 25)  # 4 agents, 5×5=25 cells
-
         # Vision goes through conv-like processing (reshaped to spatial)
         # This is tested implicitly in full forward pass
         obs = torch.randn(4, 51)
@@ -322,7 +321,7 @@ class TestNetworkComparison:
         simple_params = sum(p.numel() for p in simple_net.parameters())
         recurrent_params = sum(p.numel() for p in recurrent_net.parameters())
 
-        print(f"\n📊 Parameter counts:")
+        print("\n📊 Parameter counts:")
         print(f"   SimpleQNetwork: {simple_params:,} parameters")
         print(f"   RecurrentSpatialQNetwork: {recurrent_params:,} parameters")
 
@@ -357,7 +356,7 @@ class TestNetworkComparison:
             _ = recurrent_net(obs_recurrent)
         recurrent_time = time.time() - start
 
-        print(f"\n⏱️ Inference time (100 forward passes):")
+        print("\n⏱️ Inference time (100 forward passes):")
         print(f"   SimpleQNetwork: {simple_time * 1000:.2f}ms")
         print(f"   RecurrentSpatialQNetwork: {recurrent_time * 1000:.2f}ms")
         print(f"   Ratio: {recurrent_time / simple_time:.2f}x slower")

@@ -58,8 +58,7 @@ class RewardStrategy:
         """
         if step_counts.shape[0] != self.num_agents or dones.shape[0] != self.num_agents:
             raise ValueError(
-                f"RewardStrategy expected tensors shaped [{self.num_agents}], got "
-                f"step_counts={step_counts.shape}, dones={dones.shape}"
+                f"RewardStrategy expected tensors shaped [{self.num_agents}], got " f"step_counts={step_counts.shape}, dones={dones.shape}"
             )
 
         baseline_tensor = self._prepare_baseline_tensor(baseline_steps)
@@ -85,8 +84,6 @@ class RewardStrategy:
             raise TypeError(f"Unsupported baseline type: {type(baseline_steps)!r}")
 
         if tensor.shape != (self.num_agents,):
-            raise ValueError(
-                f"baseline tensor shape {tensor.shape} does not match num_agents={self.num_agents}"
-            )
+            raise ValueError(f"baseline tensor shape {tensor.shape} does not match num_agents={self.num_agents}")
 
         return tensor

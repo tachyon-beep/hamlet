@@ -5,6 +5,7 @@ then we extract ObservationBuilder class, then tests should still pass (Green).
 """
 
 import torch
+
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 

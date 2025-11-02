@@ -4,8 +4,6 @@ Tests for TensorBoardLogger utility helpers.
 
 from unittest.mock import patch
 
-import torch
-
 from townlet.training.tensorboard_logger import TensorBoardLogger
 
 
@@ -39,17 +37,17 @@ def test_log_multi_agent_episode_records_all_agents(tmp_path):
                 "survival_time": 100,
                 "total_reward": 42.0,
                 "extrinsic_reward": 40.0,
-            "intrinsic_reward": 2.0,
-            "curriculum_stage": 3,
-            "epsilon": 0.1,
-            "intrinsic_weight": 0.5,
-        },
-        {
-            "agent_id": "agent_1",
-            "survival_time": 80,
-            "total_reward": 30.0,
-            "extrinsic_reward": 28.0,
-            "intrinsic_reward": 2.0,
+                "intrinsic_reward": 2.0,
+                "curriculum_stage": 3,
+                "epsilon": 0.1,
+                "intrinsic_weight": 0.5,
+            },
+            {
+                "agent_id": "agent_1",
+                "survival_time": 80,
+                "total_reward": 30.0,
+                "extrinsic_reward": 28.0,
+                "intrinsic_reward": 2.0,
                 "curriculum_stage": 2,
                 "epsilon": 0.2,
                 "intrinsic_weight": 0.4,

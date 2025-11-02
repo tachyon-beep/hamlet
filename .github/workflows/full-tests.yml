@@ -1,0 +1,29 @@
+name: Full Test Suite
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  full:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv with Python
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv pip install --system ".[dev]"
+
+      - name: Run complete test matrix (including slow markers)
+        env:
+          PYTEST_ADDOPTS: ""
+        run: uv run pytest -m "slow or not slow"

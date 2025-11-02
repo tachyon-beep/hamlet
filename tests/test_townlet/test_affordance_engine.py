@@ -13,15 +13,15 @@ Test Coverage:
 6. Integration with vectorized environment
 """
 
-import pytest
-import torch
 from pathlib import Path
 
+import pytest
+import torch
 
 # These imports will fail initially - that's expected in TDD!
 try:
-    from townlet.environment.affordance_engine import AffordanceEngine
     from townlet.environment.affordance_config import load_affordance_config
+    from townlet.environment.affordance_engine import AffordanceEngine
 
     IMPORTS_AVAILABLE = True
 except ImportError:
@@ -101,8 +101,6 @@ class TestInstantInteractions:
 
     def test_shower_instant_effect(self, engine, device):
         """Test Shower (instant hygiene restoration)."""
-        num_agents = 4
-
         # Initial meters (hygiene low, money available)
         meters = torch.tensor(
             [
@@ -131,8 +129,6 @@ class TestInstantInteractions:
 
     def test_home_meal_multi_effect(self, engine, device):
         """Test HomeMeal (instant satiation + health restoration)."""
-        num_agents = 2
-
         # Initial meters (low satiation, money available)
         meters = torch.tensor(
             [
@@ -155,8 +151,6 @@ class TestInstantInteractions:
 
     def test_fastfood_penalties(self, engine, device):
         """Test FastFood (satiation + fitness/health penalties)."""
-        num_agents = 1
-
         # Initial meters
         meters = torch.tensor(
             [
@@ -183,8 +177,6 @@ class TestMultiTickInteractions:
 
     def test_bed_multi_tick_progression(self, engine, device):
         """Test Bed multi-tick interaction (5 ticks)."""
-        num_agents = 1
-
         # Initial meters (low energy, money available)
         meters = torch.tensor(
             [
@@ -213,8 +205,6 @@ class TestMultiTickInteractions:
 
     def test_bed_early_exit_no_bonus(self, engine, device):
         """Test Bed early exit (no completion bonus)."""
-        num_agents = 1
-
         meters = torch.tensor(
             [
                 [0.2, 0.5, 0.5, 0.50, 0.5, 0.5, 0.5, 0.5],
@@ -237,8 +227,6 @@ class TestMultiTickInteractions:
 
     def test_job_income_generation(self, engine, device):
         """Test Job INSTANT interaction (income generation) - matches hardcoded logic."""
-        num_agents = 1
-
         # Initial meters (moderate energy, some money)
         meters = torch.tensor(
             [
@@ -271,9 +259,6 @@ class TestOperatingHours:
 
     def test_job_business_hours_only(self, engine, device):
         """Test Job is only available during business hours (8am-6pm)."""
-        num_agents = 1
-        meters = torch.tensor([[0.5] * 8], device=device)
-
         # Test various times of day
         # Job operating_hours: [8, 18] (8am-6pm)
 
@@ -335,8 +320,6 @@ class TestCostApplication:
 
     def test_insufficient_money_blocks_interaction(self, engine, device):
         """Test that insufficient money prevents interaction."""
-        num_agents = 1
-
         # Agent with no money
         meters = torch.tensor(
             [
@@ -358,8 +341,6 @@ class TestCostApplication:
 
     def test_sufficient_money_allows_interaction(self, engine, device):
         """Test that sufficient money allows interaction."""
-        num_agents = 1
-
         # Agent with money
         meters = torch.tensor(
             [
@@ -386,8 +367,6 @@ class TestAffordanceEngineIntegration:
 
     def test_get_action_masks_with_time(self, engine, device):
         """Test action masking based on time of day."""
-        num_agents = 2
-
         # Create state at 10am (business hours)
         meters = torch.tensor(
             [

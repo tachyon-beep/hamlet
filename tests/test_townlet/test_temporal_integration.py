@@ -3,6 +3,7 @@
 
 import pytest
 import torch
+
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
@@ -101,12 +102,12 @@ def test_operating_hours_mask_job():
     # 10am: Job open
     env.time_of_day = 10
     masks = env.get_action_masks()
-    assert masks[0, 4] == True  # INTERACT allowed
+    assert masks[0, 4]  # INTERACT allowed
 
     # 7pm: Job closed
     env.time_of_day = 19
     masks = env.get_action_masks()
-    assert masks[0, 4] == False  # INTERACT blocked
+    assert not masks[0, 4]  # INTERACT blocked
 
 
 def test_early_exit_from_interaction():

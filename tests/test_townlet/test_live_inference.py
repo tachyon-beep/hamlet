@@ -5,12 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import torch
 
+from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.live_inference import LiveInferenceServer
 from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.population.runtime_registry import AgentRuntimeRegistry
-from townlet.population.vectorized import VectorizedPopulation
-from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+from townlet.population.vectorized import VectorizedPopulation
 
 
 class _DummyQueueClient:

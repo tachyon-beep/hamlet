@@ -155,9 +155,9 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         # DEFENSIVE: Only anneal if BOTH low variance AND good performance
         # Low variance + low survival = "consistently failing" (NOT ready to anneal)
         # Low variance + high survival = "consistently succeeding" (ready to anneal)
-        MIN_SURVIVAL_FOR_ANNEALING = 50.0  # Don't anneal until surviving at least 50 steps
+        min_survival_for_annealing = 50.0  # Don't anneal until surviving at least 50 steps
 
-        return variance < self.variance_threshold and mean_survival > MIN_SURVIVAL_FOR_ANNEALING
+        return variance < self.variance_threshold and mean_survival > min_survival_for_annealing
 
     def anneal_weight(self) -> None:
         """Reduce intrinsic weight via exponential decay."""

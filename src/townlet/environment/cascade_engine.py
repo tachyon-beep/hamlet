@@ -11,11 +11,14 @@ Key Features:
 - Zero behavioral change from hardcoded implementation
 """
 
+from __future__ import annotations
+
 import torch
 
-from townlet.environment.cascade_config import (
-    EnvironmentConfig,
-)
+from townlet.environment.cascade_config import EnvironmentConfig
+
+CascadeEntry = dict[str, float | int | str]
+CascadeData = dict[str, list[CascadeEntry]]
 
 
 class CascadeEngine:
@@ -103,7 +106,7 @@ class CascadeEngine:
         Returns:
             Dict mapping category -> list of cascade dicts
         """
-        cascade_data = {}
+        cascade_data: CascadeData = {}
 
         for cascade in self.config.cascades.cascades:
             category = cascade.category

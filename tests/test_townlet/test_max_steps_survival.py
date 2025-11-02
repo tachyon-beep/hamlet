@@ -9,11 +9,11 @@ Verifies that agents surviving to max_steps:
 5. Reset hidden state (recurrent mode)
 """
 
-import torch
 import pytest
+import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.curriculum.static import StaticCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 
@@ -220,8 +220,6 @@ class TestFlushEpisodeBehavior:
             if state.dones[0]:
                 break
 
-        episode_length = len(recurrent_population.current_episodes[0]["observations"])
-
         # Flush
         recurrent_population.flush_episode(agent_idx=0, synthetic_done=True)
 
@@ -233,9 +231,6 @@ class TestFlushEpisodeBehavior:
         """Test that flush_episode triggers exploration annealing update."""
         recurrent_env.reset()
         recurrent_population.reset()
-
-        # Get initial intrinsic weight
-        initial_weight = recurrent_population.exploration.get_intrinsic_weight()
 
         # Accumulate enough steps to potentially trigger annealing
         for _ in range(50):
@@ -363,33 +358,29 @@ class TestRunnerIntegration:
 
         This test documents the expected behavior.
         """
-        # This is a specification test - documents what runner.py should do
-        expected_behavior = """
-        After the episode loop:
-        
-        if agent_state.dones[0]:
-            # Agent died naturally
-            final_meters = self.env.meters[0].cpu()
-        else:
-            # Agent survived to max_steps
-            final_meters = self.env.meters[0].cpu()
-            
-            # MUST flush episode to prevent memory leak and data loss
-            self.population.flush_episode(agent_idx=0, synthetic_done=True)
-        
-        # Curriculum update happens for both cases
-        """
+        # This is a specification test - documents what runner.py should do:
+        # After the episode loop:
+        #
+        # if agent_state.dones[0]:
+        #     # Agent died naturally
+        #     final_meters = self.env.meters[0].cpu()
+        # else:
+        #     # Agent survived to max_steps
+        #     final_meters = self.env.meters[0].cpu()
+        #     # MUST flush episode to prevent memory leak and data loss
+        #     self.population.flush_episode(agent_idx=0, synthetic_done=True)
+        #
+        # Curriculum update happens for both cases.
         assert True  # This is a documentation test
 
     def test_runner_should_update_curriculum_for_max_steps(self):
         """
         Specification: DemoRunner should update curriculum for max_steps survival.
         """
-        expected_behavior = """
-        Curriculum update should happen regardless of how episode ended:
-        - If died: survival_time = steps until death
-        - If max_steps: survival_time = max_steps
-        
-        Both cases should trigger curriculum.update_tracker()
-        """
+        # Expected behavior:
+        # Curriculum update should happen regardless of how episode ended:
+        # - If died: survival_time = steps until death
+        # - If max_steps: survival_time = max_steps
+        #
+        # Both cases should trigger curriculum.update_tracker().
         assert True  # This is a documentation test

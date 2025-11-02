@@ -1,0 +1,30 @@
+name: Lint
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv with Python
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv pip install --system ".[dev]"
+
+      - name: Ruff (lint)
+        run: uv run ruff check src tests
+
+      - name: Black (format check)
+        run: uv run black --check src tests

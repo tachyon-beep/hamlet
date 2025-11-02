@@ -1,5 +1,8 @@
 """Neural network architectures for townlet agents."""
 
+from __future__ import annotations
+
+from typing import cast
 
 import torch
 import torch.nn as nn
@@ -27,7 +30,7 @@ class SimpleQNetwork(nn.Module):
         Returns:
             q_values: [batch, action_dim]
         """
-        return self.net(x)
+        return cast(torch.Tensor, self.net(x))
 
 
 class RecurrentSpatialQNetwork(nn.Module):
@@ -111,14 +114,10 @@ class RecurrentSpatialQNetwork(nn.Module):
 
         # LSTM: 224 input (128 + 32 + 32 + 32) → hidden_dim
         self.lstm_input_dim = 128 + 32 + 32 + 32
-        self.lstm = nn.LSTM(
-            input_size=self.lstm_input_dim, hidden_size=hidden_dim, num_layers=1, batch_first=True
-        )
+        self.lstm = nn.LSTM(input_size=self.lstm_input_dim, hidden_size=hidden_dim, num_layers=1, batch_first=True)
 
         # Q-Head: hidden_dim → 128 → action_dim
-        self.q_head = nn.Sequential(
-            nn.Linear(hidden_dim, 128), nn.ReLU(), nn.Linear(128, action_dim)
-        )
+        self.q_head = nn.Sequential(nn.Linear(hidden_dim, 128), nn.ReLU(), nn.Linear(128, action_dim))
 
         # Hidden state (initialized per episode)
         self.hidden_state: tuple[torch.Tensor, torch.Tensor] | None = None
@@ -178,9 +177,7 @@ class RecurrentSpatialQNetwork(nn.Module):
         affordance_features = self.affordance_encoder(affordance)  # [batch, 32]
 
         # Concatenate features
-        combined = torch.cat(
-            [vision_features, position_features, meter_features, affordance_features], dim=1
-        )  # [batch, 224]
+        combined = torch.cat([vision_features, position_features, meter_features, affordance_features], dim=1)  # [batch, 224]
 
         # LSTM expects [batch, seq_len, input_dim]
         combined = combined.unsqueeze(1)  # [batch, 1, 224]
@@ -204,7 +201,7 @@ class RecurrentSpatialQNetwork(nn.Module):
 
         return q_values, new_hidden
 
-    def reset_hidden_state(self, batch_size: int = 1, device: torch.device = None) -> None:
+    def reset_hidden_state(self, batch_size: int = 1, device: torch.device | None = None) -> None:
         """
         Reset LSTM hidden state (call at episode start).
 

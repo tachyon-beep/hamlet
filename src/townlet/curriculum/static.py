@@ -5,6 +5,8 @@ Always returns the same curriculum decision. Used for baseline testing
 and to validate the curriculum interface works.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from townlet.curriculum.base import CurriculumManager
@@ -22,8 +24,8 @@ class StaticCurriculum(CurriculumManager):
     def __init__(
         self,
         difficulty_level: float = 0.5,
-        reward_mode: str = 'shaped',
-        active_meters: list[str] = None,
+        reward_mode: str = "shaped",
+        active_meters: list[str] | None = None,
         depletion_multiplier: float = 1.0,
     ):
         """
@@ -37,9 +39,7 @@ class StaticCurriculum(CurriculumManager):
         """
         self.difficulty_level = difficulty_level
         self.reward_mode = reward_mode
-        self.active_meters = active_meters or [
-            'energy', 'hygiene', 'satiation', 'money', 'mood', 'social'
-        ]
+        self.active_meters = active_meters or ["energy", "hygiene", "satiation", "money", "mood", "social"]
         self.depletion_multiplier = depletion_multiplier
 
     def get_batch_decisions(
@@ -76,10 +76,10 @@ class StaticCurriculum(CurriculumManager):
             Dict with all configuration
         """
         return {
-            'difficulty_level': self.difficulty_level,
-            'reward_mode': self.reward_mode,
-            'active_meters': self.active_meters,
-            'depletion_multiplier': self.depletion_multiplier,
+            "difficulty_level": self.difficulty_level,
+            "reward_mode": self.reward_mode,
+            "active_meters": self.active_meters,
+            "depletion_multiplier": self.depletion_multiplier,
         }
 
     def load_state(self, state: dict[str, Any]) -> None:
@@ -89,7 +89,7 @@ class StaticCurriculum(CurriculumManager):
         Args:
             state: Dict from checkpoint_state()
         """
-        self.difficulty_level = state['difficulty_level']
-        self.reward_mode = state['reward_mode']
-        self.active_meters = state['active_meters']
-        self.depletion_multiplier = state['depletion_multiplier']
+        self.difficulty_level = state["difficulty_level"]
+        self.reward_mode = state["reward_mode"]
+        self.active_meters = state["active_meters"]
+        self.depletion_multiplier = state["depletion_multiplier"]

@@ -8,11 +8,10 @@ This test demonstrates the bug where:
 This causes shape mismatches during training.
 """
 
-import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.agent.networks import RecurrentSpatialQNetwork
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
 def test_observation_dimension_matches_network():
@@ -52,9 +51,7 @@ def test_observation_dimension_with_temporal_mechanics():
     # Expected: 25 (grid) + 2 (pos) + 8 (meters) + (num_affordance_types + 1) + 3 (temporal)
     # num_affordance_types = 14, so affordance encoding = 15
     expected_dim = 25 + 2 + 8 + (env.num_affordance_types + 1) + 3
-    assert obs_dim == expected_dim, (
-        f"Expected {expected_dim} dims, got {obs_dim}"
-    )  # Create network with temporal support
+    assert obs_dim == expected_dim, f"Expected {expected_dim} dims, got {obs_dim}"  # Create network with temporal support
     network = RecurrentSpatialQNetwork(
         action_dim=6,
         window_size=5,

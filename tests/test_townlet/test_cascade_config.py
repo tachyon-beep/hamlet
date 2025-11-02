@@ -21,8 +21,6 @@ from townlet.environment.cascade_config import (
     CascadeConfig,
     CascadesConfig,
     EnvironmentConfig,
-    ModulationConfig,
-    TerminalCondition,
     load_bars_config,
     load_cascades_config,
     load_default_config,
@@ -134,9 +132,7 @@ def test_bars_config_validates_depletion_rates(bars_path: Path):
 
     for bar in config.bars:
         expected = expected_depletions[bar.name]
-        assert bar.base_depletion == expected, (
-            f"{bar.name}: expected base_depletion={expected}, got {bar.base_depletion}"
-        )
+        assert bar.base_depletion == expected, f"{bar.name}: expected base_depletion={expected}, got {bar.base_depletion}"
 
 
 def test_bars_config_validates_terminal_conditions(bars_path: Path):
@@ -265,9 +261,7 @@ def test_cascades_config_validates_cascade_strengths(cascades_path: Path):
 
     for name, expected_strength in expected_strengths.items():
         cascade = cascades_by_name[name]
-        assert cascade.strength == expected_strength, (
-            f"{name}: expected strength={expected_strength}, got {cascade.strength}"
-        )
+        assert cascade.strength == expected_strength, f"{name}: expected strength={expected_strength}, got {cascade.strength}"
 
 
 def test_cascades_config_validates_thresholds(cascades_path: Path):
@@ -275,9 +269,7 @@ def test_cascades_config_validates_thresholds(cascades_path: Path):
     config = load_cascades_config(cascades_path)
 
     for cascade in config.cascades:
-        assert cascade.threshold == 0.3, (
-            f"{cascade.name}: expected threshold=0.3, got {cascade.threshold}"
-        )
+        assert cascade.threshold == 0.3, f"{cascade.name}: expected threshold=0.3, got {cascade.threshold}"
 
 
 def test_cascades_config_validates_execution_order(cascades_path: Path):

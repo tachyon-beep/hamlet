@@ -3,6 +3,7 @@
 import sqlite3
 from pathlib import Path
 from typing import Any
+from typing import Any
 
 
 class DemoDatabase:
@@ -32,7 +33,8 @@ class DemoDatabase:
 
     def _create_schema(self):
         """Create database schema if it doesn't exist."""
-        self.conn.executescript("""
+        self.conn.executescript(
+            """
             CREATE TABLE IF NOT EXISTS episodes (
                 episode_id INTEGER PRIMARY KEY,
                 timestamp REAL NOT NULL,
@@ -69,7 +71,8 @@ class DemoDatabase:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
-        """)
+        """
+        )
         self.conn.commit()
 
     def insert_episode(
@@ -179,7 +182,7 @@ class DemoDatabase:
         """
         pass
 
-    def get_position_heatmap(self, episode_id: int) -> list[dict[str, any]]:
+    def get_position_heatmap(self, episode_id: int) -> list[dict[str, Any]]:
         """Get position heatmap data for an episode.
 
         Args:
@@ -190,7 +193,7 @@ class DemoDatabase:
 
         TODO: Implement in Task 5 for visualization
         """
-        pass
+        raise NotImplementedError("Position heatmap retrieval will be implemented in Task 5.")
 
     def close(self):
         """Close database connection."""

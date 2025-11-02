@@ -12,6 +12,7 @@ Test Structure:
 5. Replay Buffer State
 6. Environment Layout (affordance positions)
 """
+
 import pytest
 import torch
 
@@ -103,9 +104,9 @@ class TestCheckpointVersioning:
             action_dim=6,
             network_type="simple",
         )
-        
+
         checkpoint = population.get_checkpoint_state()
-        
+
         assert "version" in checkpoint
         assert isinstance(checkpoint["version"], int)
         assert checkpoint["version"] >= 2  # v2 includes all P1.1 fixes
@@ -127,9 +128,9 @@ class TestTargetNetworkCheckpointing:
             action_dim=6,
             network_type="recurrent",
         )
-        
+
         checkpoint = population.get_checkpoint_state()
-        
+
         assert "target_network" in checkpoint
         assert checkpoint["target_network"] is not None
         assert isinstance(checkpoint["target_network"], dict)
@@ -147,9 +148,9 @@ class TestTargetNetworkCheckpointing:
             action_dim=6,
             network_type="simple",
         )
-        
+
         checkpoint = population.get_checkpoint_state()
-        
+
         # Should either not have key or be None
         assert checkpoint.get("target_network") is None
 
@@ -166,17 +167,17 @@ class TestTargetNetworkCheckpointing:
             action_dim=6,
             network_type="recurrent",
         )
-        
+
         # Train a bit to change weights
         recurrent_env.reset()
         population.reset()
         for _ in range(10):
             population.step_population(recurrent_env)
-        
+
         # Save checkpoint
         checkpoint = population.get_checkpoint_state()
         original_target_weights = checkpoint["target_network"]["lstm.weight_ih_l0"].clone()
-        
+
         # Create new population and restore
         new_population = VectorizedPopulation(
             env=recurrent_env,
@@ -189,7 +190,7 @@ class TestTargetNetworkCheckpointing:
             network_type="recurrent",
         )
         new_population.load_checkpoint_state(checkpoint)
-        
+
         # Verify target network matches
         restored_target_weights = new_population.target_network.state_dict()["lstm.weight_ih_l0"]
         assert torch.allclose(original_target_weights, restored_target_weights)
@@ -211,15 +212,15 @@ class TestTrainingCountersCheckpointing:
             action_dim=6,
             network_type="simple",
         )
-        
+
         # Simulate some training
         simple_env.reset()
         population.reset()
         for _ in range(50):
             population.step_population(simple_env)
-        
+
         checkpoint = population.get_checkpoint_state()
-        
+
         assert "total_steps" in checkpoint
         assert checkpoint["total_steps"] == population.total_steps
         assert checkpoint["total_steps"] > 0
@@ -237,15 +238,15 @@ class TestTrainingCountersCheckpointing:
             action_dim=6,
             network_type="recurrent",
         )
-        
+
         # Simulate training
         recurrent_env.reset()
         population.reset()
         for _ in range(20):
             population.step_population(recurrent_env)
-        
+
         checkpoint = population.get_checkpoint_state()
-        
+
         assert "training_step_counter" in checkpoint
         assert checkpoint["training_step_counter"] == population.training_step_counter
 
@@ -262,16 +263,16 @@ class TestTrainingCountersCheckpointing:
             action_dim=6,
             network_type="simple",
         )
-        
+
         # Train to specific step count
         simple_env.reset()
         population.reset()
         for _ in range(73):  # Odd number to test exact restoration
             population.step_population(simple_env)
-        
+
         original_total_steps = population.total_steps
         checkpoint = population.get_checkpoint_state()
-        
+
         # Create new population and restore
         new_population = VectorizedPopulation(
             env=simple_env,
@@ -284,7 +285,7 @@ class TestTrainingCountersCheckpointing:
             network_type="simple",
         )
         new_population.load_checkpoint_state(checkpoint)
-        
+
         assert new_population.total_steps == original_total_steps
 
 
@@ -305,9 +306,9 @@ class TestCurriculumCheckpointing:
         """Curriculum stage should be in checkpoint."""
         # Advance to stage 2
         adversarial_curriculum.tracker.agent_stages[0] = 2
-        
+
         checkpoint = adversarial_curriculum.checkpoint_state()
-        
+
         assert "agent_stages" in checkpoint
         assert checkpoint["agent_stages"][0] == 2
 
@@ -316,9 +317,9 @@ class TestCurriculumCheckpointing:
         # Set some tracker state
         adversarial_curriculum.tracker.steps_at_stage[0] = 1500
         adversarial_curriculum.tracker.prev_avg_reward[0] = 42.5
-        
+
         checkpoint = adversarial_curriculum.checkpoint_state()
-        
+
         assert "steps_at_stage" in checkpoint
         assert "prev_avg_reward" in checkpoint
         assert checkpoint["steps_at_stage"][0] == 1500
@@ -331,14 +332,14 @@ class TestCurriculumCheckpointing:
             device=device,
         )
         curriculum.initialize_population(num_agents=1)
-        
+
         # Set specific state
         curriculum.tracker.agent_stages[0] = 3
         curriculum.tracker.steps_at_stage[0] = 2500
         curriculum.tracker.prev_avg_reward[0] = 123.45
-        
+
         checkpoint = curriculum.checkpoint_state()
-        
+
         # Create new curriculum and restore
         new_curriculum = AdversarialCurriculum(
             max_steps_per_episode=500,
@@ -346,7 +347,7 @@ class TestCurriculumCheckpointing:
         )
         new_curriculum.initialize_population(num_agents=1)
         new_curriculum.load_checkpoint_state(checkpoint)
-        
+
         assert new_curriculum.tracker.agent_stages[0] == 3
         assert new_curriculum.tracker.steps_at_stage[0] == 2500
         assert abs(new_curriculum.tracker.prev_avg_reward[0] - 123.45) < 1e-6
@@ -370,7 +371,7 @@ class TestReplayBufferCheckpointing:
     def test_replay_buffer_serializes_contents(self, device):
         """Buffer serialization should include all transitions."""
         buffer = ReplayBuffer(capacity=100, device=device)
-        
+
         # Add some transitions
         for i in range(10):
             obs = torch.randn(1, 40)
@@ -379,11 +380,11 @@ class TestReplayBufferCheckpointing:
             reward_int = torch.tensor([float(i * 2)])
             next_obs = torch.randn(1, 40)
             done = torch.tensor([False])
-            
+
             buffer.push(obs, action, reward_ext, reward_int, next_obs, done)
-        
+
         serialized = buffer.serialize()
-        
+
         assert "size" in serialized
         assert serialized["size"] == 10
         assert "position" in serialized
@@ -397,7 +398,7 @@ class TestReplayBufferCheckpointing:
     def test_replay_buffer_restores_correctly(self, device):
         """Buffer should restore exact contents after serialize/deserialize."""
         buffer = ReplayBuffer(capacity=100, device=device)
-        
+
         # Add transitions
         expected_actions = []
         for i in range(10):
@@ -408,19 +409,19 @@ class TestReplayBufferCheckpointing:
             reward_int = torch.tensor([float(i * 2)])
             next_obs = torch.randn(1, 40)
             done = torch.tensor([False])
-            
+
             buffer.push(obs, action, reward_ext, reward_int, next_obs, done)
-        
+
         # Serialize
         serialized = buffer.serialize()
-        
+
         # Create new buffer and restore
         new_buffer = ReplayBuffer(capacity=100, device=device)
         new_buffer.load_from_serialized(serialized)
-        
+
         # Verify size matches
         assert len(new_buffer) == len(buffer)
-        
+
         # Verify actions match
         for i, expected_action in enumerate(expected_actions):
             assert new_buffer.actions[i].item() == expected_action
@@ -440,7 +441,7 @@ class TestReplayBufferCheckpointing:
     def test_sequential_buffer_serializes_episodes(self, device):
         """Sequential buffer should serialize complete episodes."""
         buffer = SequentialReplayBuffer(capacity=1000, device=device)
-        
+
         # Add an episode
         episode = {
             "observations": torch.stack([torch.randn(40) for _ in range(5)]),
@@ -450,9 +451,9 @@ class TestReplayBufferCheckpointing:
             "dones": torch.stack([torch.tensor(False) for _ in range(5)]),
         }
         buffer.store_episode(episode)
-        
+
         serialized = buffer.serialize()
-        
+
         assert "num_transitions" in serialized
         assert serialized["num_transitions"] == 5
         assert "episodes" in serialized
@@ -461,7 +462,7 @@ class TestReplayBufferCheckpointing:
     def test_sequential_buffer_restores_correctly(self, device):
         """Sequential buffer should restore episodes after serialize/deserialize."""
         buffer = SequentialReplayBuffer(capacity=1000, device=device)
-        
+
         # Add episode
         episode = {
             "observations": torch.stack([torch.randn(40) for _ in range(5)]),
@@ -471,20 +472,20 @@ class TestReplayBufferCheckpointing:
             "dones": torch.stack([torch.tensor(False) for _ in range(5)]),
         }
         buffer.store_episode(episode)
-        
+
         original_actions = episode["actions"].clone()
-        
+
         # Serialize
         serialized = buffer.serialize()
-        
+
         # Create new buffer and restore
         new_buffer = SequentialReplayBuffer(capacity=1000, device=device)
         new_buffer.load_from_serialized(serialized)
-        
+
         # Verify episode count
         assert len(new_buffer) == 1
         assert new_buffer.num_transitions == 5
-        
+
         # Verify actions match
         restored_episode = new_buffer.episodes[0]
         assert torch.allclose(restored_episode["actions"], original_actions)
@@ -521,41 +522,41 @@ class TestEnvironmentLayoutCheckpointing:
     def test_set_affordance_positions_restores_layout(self, simple_env):
         """set_affordance_positions should restore exact positions."""
         simple_env.reset()
-        
+
         # Get original positions
         original_data = simple_env.get_affordance_positions()
         original_positions = original_data.get("positions", original_data)
         original_bed_pos = original_positions["Bed"].copy()
-        
+
         # Randomize layout
         simple_env.randomize_affordance_positions()
         new_data = simple_env.get_affordance_positions()
         new_positions = new_data.get("positions", new_data)
-        
+
         # Verify layout changed
         assert new_positions["Bed"] != original_bed_pos
-        
+
         # Restore original layout
         simple_env.set_affordance_positions(original_data)
         restored_data = simple_env.get_affordance_positions()
         restored_positions = restored_data.get("positions", restored_data)
-        
+
         # Verify exact restoration
         assert restored_positions["Bed"] == original_bed_pos
 
     def test_affordance_positions_survive_reset(self, simple_env):
         """Set positions should persist across env.reset()."""
         simple_env.reset()
-        
+
         # Set specific positions
         custom_data = simple_env.get_affordance_positions()
         positions = custom_data.get("positions", custom_data)
         positions["Bed"] = [1, 1]
         simple_env.set_affordance_positions(custom_data)
-        
+
         # Reset environment
         simple_env.reset()
-        
+
         # Verify positions persisted
         restored_data = simple_env.get_affordance_positions()
         restored_positions = restored_data.get("positions", restored_data)

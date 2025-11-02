@@ -6,7 +6,14 @@ this buffer stores complete episodes and samples sequences of consecutive
 transitions to maintain temporal structure for recurrent networks.
 """
 
+from __future__ import annotations
+
+import random
+from typing import Any
+
 import torch
+
+Episode = dict[str, torch.Tensor]
 
 
 class SequentialReplayBuffer:
@@ -33,14 +40,14 @@ class SequentialReplayBuffer:
         """
         self.capacity = capacity
         self.device = device
-        self.episodes = []
+        self.episodes: list[Episode] = []
         self.num_transitions = 0
 
     def __len__(self) -> int:
         """Return number of episodes stored."""
         return len(self.episodes)
 
-    def store_episode(self, episode: dict[str, torch.Tensor]) -> None:
+    def store_episode(self, episode: Episode) -> None:
         """
         Store a complete episode.
 
@@ -75,7 +82,7 @@ class SequentialReplayBuffer:
                 raise ValueError(f"Episode tensor length mismatch: observations has {seq_len} steps, but {key} has {len(tensor)} steps")
 
         # Move episode to correct device
-        episode_on_device = {key: tensor.to(self.device) for key, tensor in episode.items()}
+        episode_on_device: Episode = {key: tensor.to(self.device) for key, tensor in episode.items()}
 
         # Add episode
         self.episodes.append(episode_on_device)
@@ -112,9 +119,9 @@ class SequentialReplayBuffer:
             raise ValueError("Cannot sample: buffer is empty (not enough data)")
 
         # Find episodes long enough for the requested sequence length
-        valid_episodes = [(i, ep) for i, ep in enumerate(self.episodes) if len(ep["observations"]) >= seq_len]
+        valid_episodes = [ep for ep in self.episodes if len(ep["observations"]) >= seq_len]
 
-        if len(valid_episodes) == 0:
+        if not valid_episodes:
             raise ValueError(f"Cannot sample: no episodes long enough for seq_len={seq_len} (not enough data)")
 
         # Sample batch_size sequences
@@ -122,11 +129,12 @@ class SequentialReplayBuffer:
 
         for _ in range(batch_size):
             # Randomly select an episode
-            ep_idx, episode = valid_episodes[torch.randint(len(valid_episodes), (1,)).item()]
+            episode = random.choice(valid_episodes)
 
             # Randomly select a starting position (ensuring we can get seq_len transitions)
-            ep_len = len(episode["observations"])
-            start_idx = torch.randint(0, ep_len - seq_len + 1, (1,)).item()
+            ep_len = episode["observations"].shape[0]
+            max_start = ep_len - seq_len
+            start_idx = random.randint(0, max_start)
             end_idx = start_idx + seq_len
 
             # Extract sequence
@@ -151,9 +159,9 @@ class SequentialReplayBuffer:
             mask = torch.ones(seq_len, dtype=torch.bool, device=self.device)
 
             # Find first terminal in sequence
-            terminal_indices = torch.where(dones_seq)[0]
-            if len(terminal_indices) > 0:
-                terminal_idx = terminal_indices[0].item()
+            terminal_positions = torch.nonzero(dones_seq, as_tuple=False)
+            if terminal_positions.numel() > 0:
+                terminal_idx = int(terminal_positions[0].item())
                 # Mask out everything AFTER terminal (terminal itself is valid)
                 if terminal_idx < seq_len - 1:
                     mask[terminal_idx + 1 :] = False
@@ -173,7 +181,7 @@ class SequentialReplayBuffer:
 
         return batch
 
-    def serialize(self) -> dict:
+    def serialize(self) -> dict[str, Any]:
         """
         Serialize episode buffer for checkpointing (P1.1).
 
@@ -188,7 +196,7 @@ class SequentialReplayBuffer:
             }
 
         # Convert episodes to CPU tensors
-        serialized_episodes = []
+        serialized_episodes: list[dict[str, torch.Tensor]] = []
         for episode in self.episodes:
             serialized_episodes.append(
                 {
@@ -206,7 +214,7 @@ class SequentialReplayBuffer:
             "capacity": self.capacity,
         }
 
-    def load_from_serialized(self, state: dict) -> None:
+    def load_from_serialized(self, state: dict[str, Any]) -> None:
         """
         Restore episode buffer from serialized state (P1.1).
 

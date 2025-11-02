@@ -5,6 +5,8 @@ Batches multiple independent Hamlet environments into a single vectorized
 environment with tensor operations [num_agents, ...].
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -140,7 +142,7 @@ class VectorizedHamletEnv:
 
         # Initialize reward strategy (P2.1: per-agent baseline support)
         self.reward_strategy = RewardStrategy(device=device, num_agents=num_agents)
-        self.runtime_registry = None  # Injected by population/inference controllers
+        self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
         self._cached_baseline_tensor = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
 
         # Initialize meter dynamics
@@ -159,17 +161,20 @@ class VectorizedHamletEnv:
         self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 
         # State tensors (initialized in reset)
-        self.positions: torch.Tensor | None = None  # [num_agents, 2]
-        self.meters: torch.Tensor | None = None  # [num_agents, 8]
-        self.dones: torch.Tensor | None = None  # [num_agents]
-        self.step_counts: torch.Tensor | None = None  # [num_agents]
+        self.positions = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+        self.meters = torch.zeros((self.num_agents, 8), dtype=torch.float32, device=self.device)
+        self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+        self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
 
         # Temporal mechanics state
-        if self.enable_temporal_mechanics:
-            self.time_of_day = 0  # 0-23 tick cycle
-            self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
-            self.last_interaction_affordance = [None] * self.num_agents
-            self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+        self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+        self.last_interaction_affordance: list[str | None] = [None] * self.num_agents
+        self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+        self.time_of_day = 0
+
+        if not self.enable_temporal_mechanics:
+            # When temporal mechanics are disabled, interaction progress is unused but kept for typing consistency.
+            self.interaction_progress.zero_()
 
     def attach_runtime_registry(self, registry: "AgentRuntimeRegistry") -> None:
         """Attach runtime registry for telemetry-aware reward baselines."""
@@ -482,7 +487,7 @@ class VectorizedHamletEnv:
                     self.last_interaction_affordance[agent_idx_int] = affordance_name
                     self.last_interaction_position[agent_idx_int] = current_pos.clone()
 
-                ticks_done = self.interaction_progress[agent_idx].item()
+                ticks_done = int(self.interaction_progress[agent_idx].item())
 
                 # Create single-agent mask for this agent
                 single_agent_mask = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)

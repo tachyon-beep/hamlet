@@ -116,9 +116,6 @@ class TestMovementActions:
 
     def test_movement_costs_energy(self, env):
         """All movement actions should cost energy."""
-        env.reset()
-        initial_energy = env.meters[0, 0].item()
-
         # Test each movement action
         for action in [0, 1, 2, 3]:  # UP, DOWN, LEFT, RIGHT
             env.reset()
@@ -144,7 +141,7 @@ class TestMovementActions:
 
         # All drains should be equal (within floating point tolerance)
         for drain in energy_drains[1:]:
-            assert abs(drain - energy_drains[0]) < 1e-6, f"All movements should cost same energy"
+            assert abs(drain - energy_drains[0]) < 1e-6, "All movements should cost same energy"
 
 
 class TestBoundaryHandling:
@@ -383,7 +380,6 @@ class TestActionCosts:
         env.reset()
 
         initial_hygiene = env.meters[0, 1].item()
-        initial_hygiene_decay = initial_hygiene
 
         actions = torch.tensor([5, 5], device=env.device)  # WAIT
         env.step(actions)

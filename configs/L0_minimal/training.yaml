@@ -39,7 +39,7 @@ population:
 
 # Curriculum configuration (simpler than Level 1)
 curriculum:
-  max_steps_per_episode: 200  # Shorter episodes (5x5 world)
+  max_steps_per_episode: 1000  # Shorter episodes (5x5 world)
   survival_advance_threshold: 0.8  # Advance if 80% survival
   survival_retreat_threshold: 0.2  # Retreat if <20% survival
   entropy_gate: 0.3  # Lower entropy gate (simpler problem)
@@ -55,4 +55,4 @@ exploration:
 # Training configuration
 training:
   device: cuda  # Use GPU if available
-  max_episodes: 500  # Should learn in <100, but allow buffer
+  max_episodes: 1000  # Should learn in <100, but allow buffer

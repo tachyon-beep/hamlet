@@ -16,12 +16,13 @@ Test Strategy:
 This is the most important test suite for ACTION #12 integration!
 """
 
-import pytest
-import torch
 from pathlib import Path
 
-from townlet.environment.affordance_engine import AffordanceEngine
+import pytest
+import torch
+
 from townlet.environment.affordance_config import load_affordance_config
+from townlet.environment.affordance_engine import AffordanceEngine
 
 
 @pytest.fixture

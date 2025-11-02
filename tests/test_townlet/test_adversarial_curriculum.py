@@ -515,9 +515,7 @@ class TestBatchDecisions:
             device=device,
         )
 
-        decisions = curriculum.get_batch_decisions_with_qvalues(
-            agent_states, ["a0", "a1", "a2", "a3", "a4"], q_values
-        )
+        decisions = curriculum.get_batch_decisions_with_qvalues(agent_states, ["a0", "a1", "a2", "a3", "a4"], q_values)
 
         # Stage 1 -> 0.0, Stage 2 -> 0.25, Stage 3 -> 0.5, Stage 4 -> 0.75, Stage 5 -> 1.0
         assert abs(decisions[0].difficulty_level - 0.0) < 1e-6

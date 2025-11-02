@@ -6,7 +6,6 @@ BEFORE extraction, to ensure zero behavioral changes during refactoring.
 """
 
 import torch
-import pytest
 
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
@@ -318,7 +317,7 @@ class TestTerminalConditions:
 
         env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
-        assert env.dones[0] == True
+        assert env.dones[0]
 
     def test_energy_zero_death(self):
         """Energy at 0 → death."""
@@ -336,7 +335,7 @@ class TestTerminalConditions:
 
         env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
-        assert env.dones[0] == True
+        assert env.dones[0]
 
     def test_both_primaries_above_zero_alive(self):
         """Both primaries > 0 → alive."""
@@ -355,7 +354,7 @@ class TestTerminalConditions:
 
         env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
-        assert env.dones[0] == False
+        assert not env.dones[0]
 
     def test_multi_agent_selective_death(self):
         """Multiple agents: only those with primary=0 die."""
@@ -375,9 +374,9 @@ class TestTerminalConditions:
 
         env.dones = env.meter_dynamics.check_terminal_conditions(env.meters, env.dones)
 
-        assert env.dones[0] == True  # dead (health=0)
-        assert env.dones[1] == True  # dead (energy=0)
-        assert env.dones[2] == False  # alive
+        assert env.dones[0]  # dead (health=0)
+        assert env.dones[1]  # dead (energy=0)
+        assert not env.dones[2]  # alive
 
 
 class TestCascadeIntegration:
@@ -420,4 +419,4 @@ class TestCascadeIntegration:
         assert env.meters[0, 0] > initial_energy - 0.008  # energy: less than 0.8% reduction
 
         # Agent should still be alive (primaries not at 0 yet)
-        assert env.dones[0] == False
+        assert not env.dones[0]

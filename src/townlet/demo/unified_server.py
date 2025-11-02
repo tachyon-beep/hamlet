@@ -166,7 +166,7 @@ class UnifiedServer:
             self.stop()
 
         logger.info("UnifiedServer.start() exiting")
- 
+
     def _load_config(self) -> dict:
         """Load and cache the YAML configuration."""
         if self._config_cache is None:
@@ -189,10 +189,7 @@ class UnifiedServer:
         if output_subdir:
             level_name = self._sanitize_folder_name(str(output_subdir))
             if not level_name:
-                logger.warning(
-                    "Config run_metadata.output_subdir is empty after sanitisation; "
-                    "falling back to legacy level detection."
-                )
+                logger.warning("Config run_metadata.output_subdir is empty after sanitisation; " "falling back to legacy level detection.")
                 level_name = self._infer_level_name()
         else:
             level_name = self._infer_level_name()
@@ -434,9 +431,7 @@ class UnifiedServer:
                 # Open browser if requested
                 if self.open_browser:
                     time.sleep(1)  # Give server a moment to fully stabilize
-                    logger.info(
-                        f"[Frontend] Opening browser to http://localhost:{self.frontend_port}"
-                    )
+                    logger.info(f"[Frontend] Opening browser to http://localhost:{self.frontend_port}")
                     webbrowser.open(f"http://localhost:{self.frontend_port}")
             else:
                 logger.warning("[Frontend] Server did not become ready within timeout")

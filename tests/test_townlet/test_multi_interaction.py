@@ -1,6 +1,7 @@
 # tests/test_townlet/test_multi_interaction.py
 import pytest
 import torch
+
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
@@ -10,7 +11,7 @@ def env():
     return VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -84,8 +85,6 @@ def test_early_exit_keeps_progress(env):
 
     # Move away (UP action)
     env.step(torch.tensor([0]))
-
-    final_energy = env.meters[0, 0].item()
 
     # Energy should be at approximately 3 × 7% = 21% gain
     # (3 ticks of benefit minus depletion, no completion bonus)

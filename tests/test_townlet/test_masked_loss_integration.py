@@ -7,7 +7,7 @@ This verifies the fix where masked loss is computed as:
 """
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as torch_fn
 
 
 class TestMaskedLossComputation:
@@ -23,9 +23,9 @@ class TestMaskedLossComputation:
         q_target = torch.randn(batch_size, seq_len)
 
         # Compute both losses
-        unmasked_loss = F.mse_loss(q_pred, q_target)
+        unmasked_loss = torch_fn.mse_loss(q_pred, q_target)
 
-        losses = F.mse_loss(q_pred, q_target, reduction="none")
+        losses = torch_fn.mse_loss(q_pred, q_target, reduction="none")
         mask = torch.ones(batch_size, seq_len)  # All True
         masked_loss = (losses * mask).sum() / mask.sum().clamp_min(1)
 
@@ -46,7 +46,7 @@ class TestMaskedLossComputation:
         mask[:, :4] = True  # First 4 valid, last 4 invalid
 
         # Compute masked loss
-        losses = F.mse_loss(q_pred, q_target, reduction="none")  # All losses = 1.0
+        losses = torch_fn.mse_loss(q_pred, q_target, reduction="none")  # All losses = 1.0
         mask_float = mask.float()
         masked_loss = (losses * mask_float).sum() / mask_float.sum().clamp_min(1)
 
@@ -59,15 +59,15 @@ class TestMaskedLossComputation:
         assert torch.allclose(masked_loss, torch.tensor(expected_loss)), f"Masked loss should be {expected_loss}, got {masked_loss.item()}"
 
         # Verify this is different from unmasked loss
-        unmasked_loss = F.mse_loss(q_pred, q_target)
+        unmasked_loss = torch_fn.mse_loss(q_pred, q_target)
         assert torch.allclose(unmasked_loss, torch.tensor(1.0)), "Unmasked loss should also be 1.0 in this case (all errors are 1.0)"
 
         # But if we corrupt the invalid timesteps with huge errors...
         q_target_corrupt = q_target.clone()
         q_target_corrupt[:, 4:] = 1000.0  # Huge errors in invalid region
 
-        unmasked_loss_corrupt = F.mse_loss(q_pred, q_target_corrupt)
-        losses_corrupt = F.mse_loss(q_pred, q_target_corrupt, reduction="none")
+        unmasked_loss_corrupt = torch_fn.mse_loss(q_pred, q_target_corrupt)
+        losses_corrupt = torch_fn.mse_loss(q_pred, q_target_corrupt, reduction="none")
         masked_loss_corrupt = (losses_corrupt * mask_float).sum() / mask_float.sum().clamp_min(1)
 
         # Masked loss should still be 1.0 (ignoring corrupted region)

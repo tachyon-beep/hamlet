@@ -86,7 +86,7 @@ bars:
     index: 3
     tier: "resource"
     range: [0.0, 1.0]  # $0-$100 normalized to [0.0, 1.0]
-    initial: 0.5       # Start with $50
+    initial: 0.25       # Start with $25 so they run out and learn that money is important.
     base_depletion: 0.0  # No passive decay
     description: "Currency for purchasing affordances. No cascade effects."
 

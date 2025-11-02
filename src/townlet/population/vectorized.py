@@ -5,9 +5,12 @@ Coordinates multiple agents with shared curriculum and exploration strategies.
 Manages Q-networks, replay buffers, and training loops.
 """
 
-from typing import TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
@@ -20,10 +23,12 @@ from townlet.population.base import PopulationManager
 from townlet.population.runtime_registry import AgentRuntimeRegistry
 from townlet.training.replay_buffer import ReplayBuffer
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
-from townlet.training.state import BatchedAgentState, PopulationCheckpoint
+from townlet.training.state import BatchedAgentState, CurriculumDecision, PopulationCheckpoint
 
 if TYPE_CHECKING:
     from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+EpisodeContainer = dict[str, list[torch.Tensor]]
 
 
 class VectorizedPopulation(PopulationManager):
@@ -89,6 +94,7 @@ class VectorizedPopulation(PopulationManager):
         self.last_training_step = 0
 
         # Q-network (shared across all agents for now)
+        self.q_network: nn.Module
         if network_type == "recurrent":
             self.q_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
@@ -101,6 +107,7 @@ class VectorizedPopulation(PopulationManager):
             self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
 
         # Target network (for stable LSTM training with temporal dependencies)
+        self.target_network: Optional[RecurrentSpatialQNetwork]
         if self.is_recurrent:
             self.target_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
@@ -120,6 +127,8 @@ class VectorizedPopulation(PopulationManager):
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
 
         # Replay buffer (dual system: sequential for recurrent, standard for feedforward)
+        self.replay_buffer: ReplayBuffer | SequentialReplayBuffer
+        self.current_episodes: list[EpisodeContainer] = []
         if self.is_recurrent:
             self.replay_buffer = SequentialReplayBuffer(capacity=replay_buffer_capacity, device=device)
             # Episode tracking for sequential buffer
@@ -136,9 +145,9 @@ class VectorizedPopulation(PopulationManager):
         self.episode_step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=device)
 
         # Current state
-        self.current_obs: torch.Tensor = None
-        self.current_epsilons: torch.Tensor = None
-        self.current_curriculum_decisions: list = []  # Store curriculum decisions
+        self.current_obs = torch.zeros((self.num_agents, obs_dim), dtype=torch.float32, device=device)
+        self.current_epsilons = torch.zeros(self.num_agents, dtype=torch.float32, device=device)
+        self.current_curriculum_decisions: list[CurriculumDecision] = []  # Store curriculum decisions
         self.current_depletion_multiplier: float = 1.0  # Track curriculum difficulty
 
     def reset(self) -> None:
@@ -150,7 +159,8 @@ class VectorizedPopulation(PopulationManager):
 
         # Reset recurrent network hidden state (if applicable)
         if self.is_recurrent:
-            self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
+            recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
+            recurrent_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
 
         # Get epsilon from exploration strategy (handle both direct and composed)
         # Sync telemetry + exploration metrics (initial epsilon / stage)
@@ -160,7 +170,7 @@ class VectorizedPopulation(PopulationManager):
     # ------------------------------------------------------------------ #
     # Episode lifecycle helpers
     # ------------------------------------------------------------------ #
-    def _new_episode_container(self) -> dict[str, list[torch.Tensor]]:
+    def _new_episode_container(self) -> EpisodeContainer:
         """Create a fresh container for accumulating episode data."""
         return {
             "observations": [],
@@ -172,14 +182,16 @@ class VectorizedPopulation(PopulationManager):
 
     def _store_episode_and_reset(self, agent_idx: int) -> bool:
         """Store accumulated episode for agent and reset buffers."""
-        if not self.is_recurrent:
+        if not self.is_recurrent or not self.current_episodes:
             return False
 
         episode = self.current_episodes[agent_idx]
         if len(episode["observations"]) == 0:
             return False
 
-        self.replay_buffer.store_episode(
+        sequential_buffer = cast(SequentialReplayBuffer, self.replay_buffer)
+
+        sequential_buffer.store_episode(
             {
                 "observations": torch.stack(episode["observations"]),
                 "actions": torch.stack(episode["actions"]),
@@ -197,16 +209,16 @@ class VectorizedPopulation(PopulationManager):
         if not self.is_recurrent:
             return
 
-        if not hasattr(self.q_network, "get_hidden_state"):
+        recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
+        hidden = recurrent_network.get_hidden_state()
+        if hidden is None:
             return
 
-        h, c = self.q_network.get_hidden_state()
-        if h is None or c is None:
-            return
+        h, c = hidden
 
         h[:, agent_idx, :] = 0.0
         c[:, agent_idx, :] = 0.0
-        self.q_network.set_hidden_state((h, c))
+        recurrent_network.set_hidden_state((h, c))
 
     # ------------------------------------------------------------------ #
     # Telemetry synchronisation helpers

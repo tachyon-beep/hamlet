@@ -116,7 +116,7 @@ class TestPostTerminalMasking:
         assert mask[terminal_idx], f"Mask should be True at terminal timestep {terminal_idx}"
 
         # Only timesteps AFTER terminal should be False
-        assert torch.all(~mask[terminal_idx + 1 :]), f"Only timesteps after terminal should be False"
+        assert torch.all(~mask[terminal_idx + 1 :]), "Only timesteps after terminal should be False"
 
     def test_mask_with_multiple_sequences(self, buffer, device):
         """Each sequence in batch should have its own mask based on its terminal."""

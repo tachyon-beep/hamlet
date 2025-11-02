@@ -12,7 +12,7 @@ RED → GREEN workflow:
 
 import pytest
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as torch_fn
 
 from townlet.agent.networks import RecurrentSpatialQNetwork
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
@@ -138,9 +138,7 @@ def test_lstm_learns_temporal_sequence():
                 if t < 2:
                     # Use Q-values from t+1 (already computed with hidden state from t)
                     q_next = q_values_list[t + 1].max(1)[0]
-                    q_target = (
-                        batch["rewards"][:, t] + gamma * q_next * (~batch["dones"][:, t]).float()
-                    )
+                    q_target = batch["rewards"][:, t] + gamma * q_next * (~batch["dones"][:, t]).float()
                 else:
                     # Terminal state
                     q_target = batch["rewards"][:, t]
@@ -150,7 +148,7 @@ def test_lstm_learns_temporal_sequence():
         # Compute loss
         q_pred_all = torch.stack(q_pred_list, dim=1)
         q_target_all = torch.stack(q_target_list, dim=1)
-        loss = F.mse_loss(q_pred_all, q_target_all)
+        loss = torch_fn.mse_loss(q_pred_all, q_target_all)
 
         # Backprop through time
         optimizer.zero_grad()
@@ -191,8 +189,7 @@ def test_lstm_learns_temporal_sequence():
     final_loss = sum(losses[-10:]) / 10
 
     assert final_loss < initial_loss * 0.5, (
-        f"Loss should decrease during training. "
-        f"Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
+        f"Loss should decrease during training. " f"Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
     )
 
     # Optional: print Q-values for debugging (not asserted due to random init sensitivity)

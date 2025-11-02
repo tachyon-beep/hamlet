@@ -1,6 +1,8 @@
 """Random Network Distillation (RND) for intrinsic motivation."""
 
-from typing import Any
+from __future__ import annotations
+
+from typing import Any, cast
 
 import torch
 import torch.nn as nn
@@ -37,7 +39,7 @@ class RNDNetwork(nn.Module):
         Returns:
             [batch, embed_dim] embeddings
         """
-        return self.net(x)
+        return cast(torch.Tensor, self.net(x))
 
 
 class RNDExploration(ExplorationStrategy):
@@ -93,7 +95,7 @@ class RNDExploration(ExplorationStrategy):
         self.optimizer = torch.optim.Adam(self.predictor_network.parameters(), lr=learning_rate)
 
         # Observation buffer for mini-batch training
-        self.obs_buffer = []
+        self.obs_buffer: list[torch.Tensor] = []
         self.step_counter = 0
 
     def select_actions(
@@ -131,12 +133,12 @@ class RNDExploration(ExplorationStrategy):
             [batch] intrinsic rewards (MSE between fixed and predictor)
         """
         with torch.no_grad():
-            target_features = self.fixed_network(observations)
-            predicted_features = self.predictor_network(observations)
+            target_features: torch.Tensor = self.fixed_network(observations)
+            predicted_features: torch.Tensor = self.predictor_network(observations)
             # MSE per sample (high error = novel = high reward)
             mse_per_sample = ((target_features - predicted_features) ** 2).mean(dim=1)
 
-        return mse_per_sample
+        return cast(torch.Tensor, mse_per_sample)
 
     def update(self, batch: dict[str, torch.Tensor]) -> None:
         """Update predictor network from experience batch.

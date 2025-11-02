@@ -210,8 +210,10 @@ class AffordanceEngine:
             meter_idx = METER_NAME_TO_IDX[effect.meter]
             updated_meters[agent_mask, meter_idx] += effect.amount
 
+        required_ticks = affordance.required_ticks or 1
+
         # Check if this is the final tick - if so, apply completion bonus
-        is_final_tick = current_tick == (affordance.required_ticks - 1)
+        is_final_tick = current_tick == (required_ticks - 1)
         if is_final_tick and len(affordance.completion_bonus) > 0:
             for effect in affordance.completion_bonus:
                 meter_idx = METER_NAME_TO_IDX[effect.meter]

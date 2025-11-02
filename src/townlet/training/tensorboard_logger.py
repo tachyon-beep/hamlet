@@ -121,9 +121,10 @@ class TensorBoardLogger:
             self.writer.flush()
             self.last_flush_episode = episode
 
-    def log_multi_agent_episode(self, episode: int, agents: list[dict[str, float]]) -> None:
+    def log_multi_agent_episode(self, episode: int, agents: list[dict[str, Any]]) -> None:
         """Log per-episode metrics for multiple agents."""
         for data in agents:
+            agent_identifier = str(data.get("agent_id", ""))
             self.log_episode(
                 episode=episode,
                 survival_time=int(data.get("survival_time", 0)),
@@ -133,21 +134,22 @@ class TensorBoardLogger:
                 curriculum_stage=int(data.get("curriculum_stage", 1)),
                 epsilon=float(data.get("epsilon", 0.0)),
                 intrinsic_weight=float(data.get("intrinsic_weight", 0.0)),
-                agent_id=data.get("agent_id", ""),
+                agent_id=agent_identifier,
             )
 
-    def log_curriculum_transitions(self, episode: int, events: list[dict[str, float]]) -> None:
+    def log_curriculum_transitions(self, episode: int, events: list[dict[str, Any]]) -> None:
         """Log curriculum transition rationale events."""
         for event in events:
-            agent_id = event.get("agent_id", "")
+            agent_id = str(event.get("agent_id", ""))
             prefix = f"{agent_id}/Curriculum/" if agent_id else "Curriculum/"
             self.writer.add_scalar(f"{prefix}Stage", event.get("to_stage", 0), episode)
             self.writer.add_scalar(f"{prefix}Survival_Rate", event.get("survival_rate", 0.0), episode)
             self.writer.add_scalar(f"{prefix}Learning_Progress", event.get("learning_progress", 0.0), episode)
             self.writer.add_scalar(f"{prefix}Entropy", event.get("entropy", 0.0), episode)
             if hasattr(self.writer, "add_text"):
+                reason = str(event.get("reason", "unknown"))
                 summary = (
-                    f"{event.get('reason', 'unknown').upper()} "
+                    f"{reason.upper()} "
                     f"{event.get('from_stage')}→{event.get('to_stage')} | "
                     f"survival={event.get('survival_rate', 0.0):.3f}, "
                     f"learning={event.get('learning_progress', 0.0):.3f}, "

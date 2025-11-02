@@ -1,6 +1,6 @@
 # tests/test_townlet/test_time_based_masking.py
-import pytest
 import torch
+
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
@@ -9,7 +9,7 @@ def test_job_closed_outside_business_hours():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -20,12 +20,12 @@ def test_job_closed_outside_business_hours():
     # Tick 10 (10am): Job is open (8-18)
     env.time_of_day = 10
     masks = env.get_action_masks()
-    assert masks[0, 4] == True  # INTERACT allowed
+    assert masks[0, 4]  # INTERACT allowed
 
     # Tick 19 (7pm): Job is closed
     env.time_of_day = 19
     masks = env.get_action_masks()
-    assert masks[0, 4] == False  # INTERACT blocked
+    assert not masks[0, 4]  # INTERACT blocked
 
 
 def test_bar_open_after_6pm():
@@ -33,7 +33,7 @@ def test_bar_open_after_6pm():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -44,12 +44,12 @@ def test_bar_open_after_6pm():
     # Tick 12 (noon): Bar is closed (opens at 18)
     env.time_of_day = 12
     masks = env.get_action_masks()
-    assert masks[0, 4] == False
+    assert not masks[0, 4]
 
     # Tick 20 (8pm): Bar is open
     env.time_of_day = 20
     masks = env.get_action_masks()
-    assert masks[0, 4] == True
+    assert masks[0, 4]
 
 
 def test_bar_wraparound_midnight():
@@ -57,7 +57,7 @@ def test_bar_wraparound_midnight():
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=8,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         enable_temporal_mechanics=True,
     )
 
@@ -68,9 +68,9 @@ def test_bar_wraparound_midnight():
     # Tick 2 (2am): Bar is still open (wraps to 4am)
     env.time_of_day = 2
     masks = env.get_action_masks()
-    assert masks[0, 4] == True
+    assert masks[0, 4]
 
     # Tick 5 (5am): Bar is closed
     env.time_of_day = 5
     masks = env.get_action_masks()
-    assert masks[0, 4] == False
+    assert not masks[0, 4]

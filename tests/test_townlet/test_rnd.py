@@ -55,9 +55,7 @@ class TestIntrinsicRewardComputation:
     @pytest.fixture
     def rnd(self):
         """Create RND exploration with small networks."""
-        return RNDExploration(
-            obs_dim=10, embed_dim=8, learning_rate=0.01, device=torch.device("cpu")
-        )
+        return RNDExploration(obs_dim=10, embed_dim=8, learning_rate=0.01, device=torch.device("cpu"))
 
     def test_intrinsic_rewards_are_nonnegative(self, rnd):
         """Prediction errors (MSE) should always be non-negative."""
@@ -265,8 +263,7 @@ class TestRNDLearningBehavior:
 
         # Novel states should have higher intrinsic reward
         assert novel_reward > familiar_reward, (
-            f"Novel states should have higher reward: "
-            f"novel={novel_reward:.4f}, familiar={familiar_reward:.4f}"
+            f"Novel states should have higher reward: " f"novel={novel_reward:.4f}, familiar={familiar_reward:.4f}"
         )
 
     def test_fixed_network_never_changes(self):
@@ -290,6 +287,4 @@ class TestRNDLearningBehavior:
 
         # Fixed network should be unchanged
         for initial_w, current_w in zip(initial_weights, rnd.fixed_network.parameters()):
-            assert torch.allclose(initial_w, current_w, atol=1e-6), (
-                "Fixed network should never change"
-            )
+            assert torch.allclose(initial_w, current_w, atol=1e-6), "Fixed network should never change"

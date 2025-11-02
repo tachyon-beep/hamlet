@@ -375,9 +375,7 @@ class DemoRunner:
                         )
                         self.curriculum.transition_events.clear()
 
-                    intrinsic_weight = (
-                        self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 1.0
-                    )
+                    intrinsic_weight = self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 1.0
 
                     extrinsic_reward_tensor = agent_state.rewards - (agent_state.intrinsic_rewards * intrinsic_weight)
 
@@ -417,7 +415,9 @@ class DemoRunner:
                     if not last_agent_state.dones[agent_idx]:  # Agent survived to max_steps without dying
                         self.population.flush_episode(agent_idx=agent_idx, synthetic_done=True)
 
-                epsilon_value = self.exploration.rnd.epsilon if hasattr(self.exploration, "rnd") else getattr(self.exploration, "epsilon", 0.0)
+                epsilon_value = (
+                    self.exploration.rnd.epsilon if hasattr(self.exploration, "rnd") else getattr(self.exploration, "epsilon", 0.0)
+                )
                 intrinsic_weight_value = (
                     self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 0.0
                 )

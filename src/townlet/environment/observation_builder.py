@@ -3,6 +3,8 @@
 Handles full observability, partial observability (POMDP), and temporal features.
 """
 
+from __future__ import annotations
+
 import torch
 
 
@@ -50,7 +52,7 @@ class ObservationBuilder:
         meters: torch.Tensor,
         affordances: dict[str, torch.Tensor],
         time_of_day: int = 0,
-        interaction_progress: torch.Tensor = None,
+        interaction_progress: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Build observations for all agents.
 
@@ -71,6 +73,9 @@ class ObservationBuilder:
 
         # Add temporal features if enabled
         if self.enable_temporal_mechanics:
+            if interaction_progress is None:
+                interaction_progress = torch.zeros(self.num_agents, device=self.device)
+
             # Encode time_of_day as [sin, cos] for cyclical representation
             # This allows the network to understand that 23:00 and 00:00 are close
             import math

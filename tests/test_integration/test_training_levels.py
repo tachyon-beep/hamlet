@@ -208,7 +208,7 @@ def test_level_1_full_observability_integration(temp_run_dir):
     assert hasattr(checkpoint, "curriculum_states"), "Checkpoint should contain curriculum_states"
     assert hasattr(checkpoint, "exploration_states"), "Checkpoint should contain exploration_states"
 
-    print(f"\n✅ Level 1 Integration Test PASSED")
+    print("\n✅ Level 1 Integration Test PASSED")
     print(f"   Episodes: {metrics['final_episode']}")
     print(f"   Avg survival (last 20): {metrics['avg_survival']:.1f} steps")
     print(f"   Checkpoints saved: {metrics['checkpoints_saved']}")
@@ -254,7 +254,7 @@ def test_level_2_pomdp_integration(temp_run_dir):
     # Note: Target network is not in checkpoint (needs implementation - see ACTION #5)
     print("   ℹ Target network not in checkpoint (Q-network weights not saved)")
 
-    print(f"\n✅ Level 2 Integration Test PASSED")
+    print("\n✅ Level 2 Integration Test PASSED")
     print(f"   Episodes: {metrics['final_episode']}")
     print(f"   Avg survival (last 20): {metrics['avg_survival']:.1f} steps")
     print(f"   Checkpoints saved: {metrics['checkpoints_saved']}")
@@ -287,7 +287,7 @@ def test_level_3_temporal_integration(temp_run_dir):
     assert metrics["final_episode"] == 200, "Should complete 200 episodes"
     assert metrics["checkpoints_saved"] >= 1, "Should save at least 1 checkpoint"
 
-    print(f"\n✅ Level 3 Integration Test PASSED")
+    print("\n✅ Level 3 Integration Test PASSED")
     print(f"   Episodes: {metrics['final_episode']}")
     print(f"   Avg survival (last 20): {metrics['avg_survival']:.1f} steps")
     print(f"   Checkpoints saved: {metrics['checkpoints_saved']}")
@@ -333,9 +333,9 @@ def test_checkpoint_resume(temp_run_dir):
     assert hasattr(checkpoint, "num_agents")
     assert hasattr(checkpoint, "agent_ids")
 
-    print(f"\n✅ Checkpoint Resume Test PASSED")
+    print("\n✅ Checkpoint Resume Test PASSED")
     print(f"   First run: {metrics1['final_episode']} episodes")
-    print(f"   Checkpoint saved and loadable")
+    print("   Checkpoint saved and loadable")
 
 
 @pytest.mark.integration
@@ -376,4 +376,4 @@ def test_all_configs_valid():
 
         print(f"✅ {config_file} is valid")
 
-    print(f"\n✅ All Config Validation Test PASSED")
+    print("\n✅ All Config Validation Test PASSED")

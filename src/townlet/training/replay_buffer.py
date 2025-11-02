@@ -1,5 +1,9 @@
 """Replay buffer for off-policy learning with dual rewards."""
 
+from __future__ import annotations
+
+from typing import Any
+
 import torch
 
 
@@ -23,12 +27,12 @@ class ReplayBuffer:
         self.size = 0
 
         # Storage tensors (initialized on first push)
-        self.observations = None
-        self.actions = None
-        self.rewards_extrinsic = None
-        self.rewards_intrinsic = None
-        self.next_observations = None
-        self.dones = None
+        self.observations: torch.Tensor | None = None
+        self.actions: torch.Tensor | None = None
+        self.rewards_extrinsic: torch.Tensor | None = None
+        self.rewards_intrinsic: torch.Tensor | None = None
+        self.next_observations: torch.Tensor | None = None
+        self.dones: torch.Tensor | None = None
 
     def push(
         self,
@@ -54,6 +58,14 @@ class ReplayBuffer:
             self.rewards_intrinsic = torch.zeros(self.capacity, device=self.device)
             self.next_observations = torch.zeros(self.capacity, obs_dim, device=self.device)
             self.dones = torch.zeros(self.capacity, dtype=torch.bool, device=self.device)
+
+        # Mypy: guard attributes after allocation
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards_extrinsic is not None
+        assert self.rewards_intrinsic is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
 
         # Move tensors to device
         observations = observations.to(self.device)
@@ -99,6 +111,13 @@ class ReplayBuffer:
             indices = torch.randint(0, self.size, (batch_size,), device=self.device)
 
         # Combine rewards
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards_extrinsic is not None
+        assert self.rewards_intrinsic is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
+
         combined_rewards = self.rewards_extrinsic[indices] + self.rewards_intrinsic[indices] * intrinsic_weight
 
         return {
@@ -114,7 +133,7 @@ class ReplayBuffer:
         """Return current buffer size."""
         return self.size
 
-    def serialize(self) -> dict:
+    def serialize(self) -> dict[str, Any]:
         """
         Serialize buffer contents for checkpointing (P1.1).
 
@@ -135,6 +154,13 @@ class ReplayBuffer:
                 "dones": None,
             }
 
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards_extrinsic is not None
+        assert self.rewards_intrinsic is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
+
         return {
             "size": self.size,
             "position": self.position,
@@ -147,7 +173,7 @@ class ReplayBuffer:
             "dones": self.dones[: self.size].cpu(),
         }
 
-    def load_from_serialized(self, state: dict) -> None:
+    def load_from_serialized(self, state: dict[str, Any]) -> None:
         """
         Restore buffer from serialized state (P1.1).
 
@@ -172,6 +198,13 @@ class ReplayBuffer:
             self.rewards_intrinsic = torch.zeros(self.capacity, device=self.device)
             self.next_observations = torch.zeros(self.capacity, obs_dim, device=self.device)
             self.dones = torch.zeros(self.capacity, dtype=torch.bool, device=self.device)
+
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards_extrinsic is not None
+        assert self.rewards_intrinsic is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
 
         # Restore data
         self.observations[: self.size] = state["observations"].to(self.device)

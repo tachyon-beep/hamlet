@@ -20,11 +20,12 @@ Critical Areas:
 
 import pytest
 import torch
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
-from townlet.population.vectorized import VectorizedPopulation
+
+from townlet.agent.networks import SimpleQNetwork
 from townlet.curriculum.static import StaticCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.population.vectorized import VectorizedPopulation
 
 
 class TestActionMasking:

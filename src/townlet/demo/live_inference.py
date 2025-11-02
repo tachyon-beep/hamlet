@@ -281,8 +281,9 @@ class LiveInferenceServer:
         try:
             episode_str = latest_checkpoint.stem.split("_ep")[1]
             episode_num = int(episode_str)
-        except:
+        except (IndexError, ValueError) as exc:
             logger.error(f"Could not parse episode number from {latest_checkpoint.name}")
+            logger.debug("Checkpoint parsing error", exc_info=exc)
             return False
 
         # Load checkpoint
@@ -304,7 +305,11 @@ class LiveInferenceServer:
             progress = episode_num / self.total_episodes if self.total_episodes > 0 else 0
             epsilon = max(0.05, 1.0 - (progress * 0.95))  # Decay from 1.0 to 0.05
             logger.info(
-                f"Estimated epsilon from training progress: episode={episode_num}, total={self.total_episodes}, progress={progress:.3f}, epsilon={epsilon:.3f}"
+                "Estimated epsilon from training progress: episode=%s, total=%s, progress=%.3f, epsilon=%.3f",
+                episode_num,
+                self.total_episodes,
+                progress,
+                epsilon,
             )
         else:
             logger.info(f"Loaded epsilon from checkpoint: {epsilon:.3f}")
@@ -469,11 +474,15 @@ class LiveInferenceServer:
         baselines = self.population._update_reward_baseline()
         self.population._sync_curriculum_metrics(baselines)
         episode_telemetry = self._build_agent_telemetry()
-        agent_snapshot = episode_telemetry["agents"][0] if episode_telemetry["agents"] else {
-            "baseline_survival_steps": 0.0,
-            "curriculum_stage": 1,
-            "epsilon": self.current_epsilon,
-        }
+        agent_snapshot = (
+            episode_telemetry["agents"][0]
+            if episode_telemetry["agents"]
+            else {
+                "baseline_survival_steps": 0.0,
+                "curriculum_stage": 1,
+                "epsilon": self.current_epsilon,
+            }
+        )
         baseline_survival = float(agent_snapshot["baseline_survival_steps"])
         current_stage = int(agent_snapshot["curriculum_stage"])
         epsilon_snapshot = float(agent_snapshot["epsilon"])
@@ -654,11 +663,7 @@ class LiveInferenceServer:
                 ],
                 "affordances": affordances,
             },
-            "agent_meters": {
-                "agent_0": {
-                    "meters": meters  # MeterPanel expects agent_0.meters nested structure
-                }
-            },
+            "agent_meters": {"agent_0": {"meters": meters}},  # MeterPanel expects agent_0.meters nested structure
             "q_values": q_values_list,  # Q-values for all 6 actions
             "action_masks": action_masks,  # Which actions are valid [6] bool list
             "affordance_stats": affordance_stats,  # Interaction counts sorted by frequency

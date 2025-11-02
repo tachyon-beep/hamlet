@@ -3,7 +3,7 @@ name = "townlet"
 version = "0.1.0"
 description = "A Deep Reinforcement Learning demonstrator where agents learn to survive in a grid world"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 authors = [
     { name = "John", email = "john@foundryside.dev" }
 ]
@@ -11,7 +11,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 dependencies = [
@@ -36,6 +36,7 @@ dev = [
     "black>=23.7.0",
     "ruff>=0.0.280",
     "mypy>=1.4.0",
+    "types-PyYAML>=6.0.12.12",
 ]
 
 [build-system]
@@ -47,17 +48,17 @@ packages = ["src/townlet"]
 
 [tool.black]
 line-length = 140
-target-version = ['py312']
+target-version = ['py313']
 
 [tool.ruff]
 line-length = 140
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # Start lenient, can tighten later

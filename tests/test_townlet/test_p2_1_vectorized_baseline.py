@@ -97,7 +97,7 @@ class TestVectorizedRewardBaseline:
             device=device,
             partial_observability=False,
         )
-        registry = _attach_registry(env)
+        _attach_registry(env)
 
         multipliers = torch.tensor([0.2, 0.4, 0.6, 1.0], device=device)
         env.update_baseline_for_curriculum(multipliers)

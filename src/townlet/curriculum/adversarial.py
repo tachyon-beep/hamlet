@@ -190,20 +190,24 @@ class AdversarialCurriculum(CurriculumManager):
 
     def _should_advance(self, agent_idx: int, entropy: float) -> bool:
         """Check if agent should advance to next stage."""
-        # Bounds checking
-        if not (0 <= agent_idx < self.tracker.num_agents):
-            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
+        tracker = self.tracker
+        if tracker is None:
+            raise RuntimeError("Performance tracker not initialized. Call initialize_population first.")
 
-        if self.tracker.agent_stages[agent_idx] >= 5:
+        # Bounds checking
+        if not (0 <= agent_idx < tracker.num_agents):
+            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {tracker.num_agents})")
+
+        if tracker.agent_stages[agent_idx] >= 5:
             return False  # Already at max stage
 
         # Check minimum steps at stage
-        if self.tracker.steps_at_stage[agent_idx] < self.min_steps_at_stage:
+        if tracker.steps_at_stage[agent_idx] < self.min_steps_at_stage:
             return False
 
         # Calculate metrics
-        survival_rate = self.tracker.get_survival_rate(self.max_steps_per_episode)[agent_idx]
-        learning_progress = self.tracker.get_learning_progress()[agent_idx]
+        survival_rate = float(tracker.get_survival_rate(self.max_steps_per_episode)[agent_idx].item())
+        learning_progress = float(tracker.get_learning_progress()[agent_idx].item())
 
         # Multi-signal decision
         high_survival = survival_rate > self.survival_advance_threshold
@@ -214,20 +218,24 @@ class AdversarialCurriculum(CurriculumManager):
 
     def _should_retreat(self, agent_idx: int) -> bool:
         """Check if agent should retreat to previous stage."""
-        # Bounds checking
-        if not (0 <= agent_idx < self.tracker.num_agents):
-            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
+        tracker = self.tracker
+        if tracker is None:
+            raise RuntimeError("Performance tracker not initialized. Call initialize_population first.")
 
-        if self.tracker.agent_stages[agent_idx] <= 1:
+        # Bounds checking
+        if not (0 <= agent_idx < tracker.num_agents):
+            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {tracker.num_agents})")
+
+        if tracker.agent_stages[agent_idx] <= 1:
             return False  # Already at minimum stage
 
         # Check minimum steps at stage
-        if self.tracker.steps_at_stage[agent_idx] < self.min_steps_at_stage:
+        if tracker.steps_at_stage[agent_idx] < self.min_steps_at_stage:
             return False
 
         # Calculate metrics
-        survival_rate = self.tracker.get_survival_rate(self.max_steps_per_episode)[agent_idx]
-        learning_progress = self.tracker.get_learning_progress()[agent_idx]
+        survival_rate = float(tracker.get_survival_rate(self.max_steps_per_episode)[agent_idx].item())
+        learning_progress = float(tracker.get_learning_progress()[agent_idx].item())
 
         # Retreat conditions
         low_survival = survival_rate < self.survival_retreat_threshold
@@ -245,41 +253,42 @@ class AdversarialCurriculum(CurriculumManager):
 
         This is the main entry point when called from VectorizedPopulation.
         """
-        if self.tracker is None:
+        tracker = self.tracker
+        if tracker is None:
             raise RuntimeError("Must call initialize_population before get_batch_decisions")
 
         # Calculate entropy from Q-values
         entropies = self._calculate_action_entropy(q_values)
 
-        survival_rates = self.tracker.get_survival_rate(self.max_steps_per_episode)
-        learning_progress = self.tracker.get_learning_progress()
+        survival_rates = tracker.get_survival_rate(self.max_steps_per_episode)
+        learning_progress = tracker.get_learning_progress()
 
         decisions = []
         for i, agent_id in enumerate(agent_ids):
-            from_stage = self.tracker.agent_stages[i].item()
-            steps_before = int(self.tracker.steps_at_stage[i].item())
+            from_stage = int(tracker.agent_stages[i].item())
+            steps_before = int(tracker.steps_at_stage[i].item())
             entropy_value = entropies[i].item()
             transition_reason: str | None = None
 
             # Check for retreat first (takes priority)
             if self._should_retreat(i):
-                self.tracker.agent_stages[i] -= 1
-                self.tracker.steps_at_stage[i] = 0
+                tracker.agent_stages[i] -= 1
+                tracker.steps_at_stage[i] = 0
                 # Update baseline for retreating agent only
-                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
-                self.tracker.prev_avg_reward[i] = current_avg_i
+                current_avg_i = tracker.episode_rewards[i] / torch.clamp(tracker.episode_steps[i], min=1.0)
+                tracker.prev_avg_reward[i] = current_avg_i
                 transition_reason = "retreat"
             # Then check for advancement
             elif self._should_advance(i, entropies[i].item()):
-                self.tracker.agent_stages[i] += 1
-                self.tracker.steps_at_stage[i] = 0
+                tracker.agent_stages[i] += 1
+                tracker.steps_at_stage[i] = 0
                 # Update baseline for advancing agent only (not all agents)
-                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
-                self.tracker.prev_avg_reward[i] = current_avg_i
+                current_avg_i = tracker.episode_rewards[i] / torch.clamp(tracker.episode_steps[i], min=1.0)
+                tracker.prev_avg_reward[i] = current_avg_i
                 transition_reason = "advance"
 
             # Get current stage
-            stage = self.tracker.agent_stages[i].item()
+            stage = int(tracker.agent_stages[i].item())
             config = STAGE_CONFIGS[stage - 1]
 
             if transition_reason is not None:

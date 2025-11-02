@@ -11,19 +11,19 @@ Test Coverage:
 4. Operating hours validation
 """
 
-import pytest
 from pathlib import Path
-from pydantic import ValidationError
 
+import pytest
+from pydantic import ValidationError
 
 # These imports will fail initially - that's expected in TDD!
 # We'll create these modules to make the tests pass.
 try:
     from townlet.environment.affordance_config import (
         AffordanceConfig,
-        AffordanceEffect,
-        AffordanceCost,
         AffordanceConfigCollection,
+        AffordanceCost,
+        AffordanceEffect,
         load_affordance_config,
     )
 
@@ -254,9 +254,7 @@ class TestAffordanceCategories:
         multi_tick = [aff for aff in collection.affordances if aff.interaction_type == "multi_tick"]
 
         # Expected counts based on affordances.yaml
-        assert (
-            len(instant) == 11
-        )  # Shower, HomeMeal, FastFood, Doctor, Hospital, Therapist, Recreation, Bar, CoffeeShop, Gym, Park
+        assert len(instant) == 11  # Shower, HomeMeal, FastFood, Doctor, Hospital, Therapist, Recreation, Bar, CoffeeShop, Gym, Park
         assert len(multi_tick) == 4  # Bed, LuxuryBed, Job, Labor
 
     def test_free_affordances(self):

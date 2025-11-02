@@ -164,9 +164,9 @@ class TestAffordanceEngineIntegration:
         # Verify NO AFFORDANCE effects applied (but passive depletion still happens)
         # Energy: 0.2 - 0.005 (passive) = 0.195 (Bed effect NOT applied)
         expected_energy_after_depletion = initial_energy - 0.005
-        assert abs(env.meters[0, 0].item() - expected_energy_after_depletion) < 1e-3, (
-            f"Energy should be {expected_energy_after_depletion} (passive depletion only), got {env.meters[0, 0].item()}"
-        )
+        assert (
+            abs(env.meters[0, 0].item() - expected_energy_after_depletion) < 1e-3
+        ), f"Energy should be {expected_energy_after_depletion} (passive depletion only), got {env.meters[0, 0].item()}"
         assert abs(env.meters[0, 3].item() - initial_money) < 1e-3, "Money should not change (can't afford)"
 
     def test_park_is_free(self, simple_env_config, affordance_config):

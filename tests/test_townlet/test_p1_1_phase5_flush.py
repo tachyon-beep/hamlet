@@ -8,8 +8,9 @@ RED → GREEN → REFACTOR methodology.
 """
 
 import tempfile
-import torch
 from pathlib import Path
+
+import torch
 
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.runner import DemoRunner
@@ -171,25 +172,24 @@ class TestFlushBeforeCheckpoint:
             checkpoint_dir.mkdir()
 
             config_path = tmpdir / "config.yaml"
-            config_path.write_text("""
+            config_path.write_text(
+                """
 environment:
   grid_size: 8
   partial_observability: false
-  
 population:
   num_agents: 2
   learning_rate: 0.00025
   gamma: 0.99
   network_type: simple
-  
 curriculum:
   max_steps_per_episode: 100
-  
 exploration:
   strategy: adaptive_intrinsic
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
-""")
+"""
+            )
 
             runner = DemoRunner(
                 config_dir=config_path.parent,

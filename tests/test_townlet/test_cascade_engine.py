@@ -83,9 +83,7 @@ def test_engine_initialization(engine, config):
     # Check cascade data built
     assert len(engine._cascade_data) > 0
     assert "primary_to_pivotal" in engine._cascade_data
-    assert (
-        len(engine._cascade_data["primary_to_pivotal"]) == 3
-    )  # satiation→health, satiation→energy, mood→energy
+    assert len(engine._cascade_data["primary_to_pivotal"]) == 3  # satiation→health, satiation→energy, mood→energy
 
     # Check modulation data built
     assert len(engine._modulation_data) == 1
@@ -194,9 +192,7 @@ def test_fitness_modulation_gradient(engine, device):
         expected_depletion = 0.001 * expected_mult
         expected_health = initial_health - expected_depletion
 
-        assert torch.isclose(result[0, 6], torch.tensor(expected_health), atol=1e-5), (
-            f"fitness={fitness}, mult={expected_mult}"
-        )
+        assert torch.isclose(result[0, 6], torch.tensor(expected_health), atol=1e-5), f"fitness={fitness}, mult={expected_mult}"
 
 
 # ============================================================================

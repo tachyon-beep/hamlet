@@ -47,9 +47,7 @@ class AffordanceEffect(BaseModel):
     def validate_meter_name(self) -> "AffordanceEffect":
         """Ensure meter name is valid."""
         if self.meter not in METER_NAME_TO_IDX:
-            raise ValueError(
-                f"Invalid meter name: {self.meter}. Valid names: {list(METER_NAME_TO_IDX.keys())}"
-            )
+            raise ValueError(f"Invalid meter name: {self.meter}. Valid names: {list(METER_NAME_TO_IDX.keys())}")
         return self
 
 
@@ -63,9 +61,7 @@ class AffordanceCost(BaseModel):
     def validate_meter_name(self) -> "AffordanceCost":
         """Ensure meter name is valid."""
         if self.meter not in METER_NAME_TO_IDX:
-            raise ValueError(
-                f"Invalid meter name: {self.meter}. Valid names: {list(METER_NAME_TO_IDX.keys())}"
-            )
+            raise ValueError(f"Invalid meter name: {self.meter}. Valid names: {list(METER_NAME_TO_IDX.keys())}")
         return self
 
 
@@ -106,17 +102,13 @@ class AffordanceConfig(BaseModel):
     def validate_multi_tick_requirements(self) -> "AffordanceConfig":
         """Ensure multi_tick and dual affordances have required_ticks set."""
         if self.interaction_type == "multi_tick" and self.required_ticks is None:
-            raise ValueError(
-                f"Affordance '{self.id}': multi_tick type requires 'required_ticks' field"
-            )
+            raise ValueError(f"Affordance '{self.id}': multi_tick type requires 'required_ticks' field")
 
         if self.interaction_type == "dual" and self.required_ticks is None:
             raise ValueError(f"Affordance '{self.id}': dual type requires 'required_ticks' field")
 
         if self.interaction_type not in ["multi_tick", "dual"] and self.required_ticks is not None:
-            raise ValueError(
-                f"Affordance '{self.id}': 'required_ticks' only valid for multi_tick or dual types"
-            )
+            raise ValueError(f"Affordance '{self.id}': 'required_ticks' only valid for multi_tick or dual types")
 
         return self
 

@@ -16,6 +16,7 @@ Critical Areas:
 
 import pytest
 import torch
+
 from townlet.training.replay_buffer import ReplayBuffer
 
 
@@ -198,7 +199,7 @@ class TestReplayBufferCircularLogic:
         # Position 0 should now have value 5 (overwritten)
         assert small_buffer.observations[0, 0] == 5.0
         assert small_buffer.actions[0] == 5
-        assert small_buffer.dones[0] == True
+        assert small_buffer.dones[0]
 
     def test_wraparound_multiple_times(self, small_buffer):
         """Buffer should handle multiple wraparounds correctly."""

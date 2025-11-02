@@ -10,7 +10,7 @@ Configuration Files:
 """
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -25,9 +25,7 @@ class BarConfig(BaseModel):
 
     name: str = Field(description="Meter name (e.g., 'energy', 'health')")
     index: int = Field(ge=0, le=7, description="Meter index in tensor [0-7]")
-    tier: Literal["pivotal", "primary", "secondary", "resource"] = Field(
-        description="Tier in cascade hierarchy"
-    )
+    tier: Literal["pivotal", "primary", "secondary", "resource"] = Field(description="Tier in cascade hierarchy")
     range: tuple[float, float] = Field(default=(0.0, 1.0), description="Min and max values")
     initial: float = Field(ge=0.0, le=1.0, description="Initial value at spawn")
     base_depletion: float = Field(ge=0.0, description="Passive decay per step")
@@ -97,9 +95,7 @@ class ModulationConfig(BaseModel):
     description: str = Field(description="Human-readable description")
     source: str = Field(description="Source meter name")
     target: str = Field(description="Target meter name")
-    type: Literal["depletion_multiplier"] = Field(
-        description="Modulation type (currently only depletion_multiplier)"
-    )
+    type: Literal["depletion_multiplier"] = Field(description="Modulation type (currently only depletion_multiplier)")
 
     # Gradient multiplier parameters
     base_multiplier: float = Field(gt=0.0, description="Base multiplier (at source=100%)")
@@ -115,9 +111,7 @@ class CascadeConfig(BaseModel):
 
     name: str = Field(description="Cascade name")
     description: str = Field(description="Human-readable description")
-    category: str = Field(
-        description="Category (e.g., 'primary_to_pivotal', 'secondary_to_primary')"
-    )
+    category: str = Field(description="Category (e.g., 'primary_to_pivotal', 'secondary_to_primary')")
 
     source: str = Field(description="Source meter name")
     source_index: int = Field(ge=0, le=7, description="Source meter index")
@@ -137,9 +131,7 @@ class CascadesConfig(BaseModel):
 
     version: str = Field(description="Config version")
     description: str = Field(description="Config description")
-    math_type: Literal["gradient_penalty", "multiplier"] = Field(
-        description="Cascade math approach"
-    )
+    math_type: Literal["gradient_penalty", "multiplier"] = Field(description="Cascade math approach")
 
     modulations: list[ModulationConfig] = Field(description="Depletion rate modulations")
     cascades: list[CascadeConfig] = Field(description="Threshold-based cascades")
@@ -199,7 +191,7 @@ class EnvironmentConfig(BaseModel):
 # ============================================================================
 
 
-def load_yaml_file(filepath: Path) -> dict:
+def load_yaml_file(filepath: Path) -> Any:
     """
     Load and parse a YAML file.
 
