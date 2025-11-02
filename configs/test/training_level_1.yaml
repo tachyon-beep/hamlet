@@ -1,23 +1,26 @@
-# Level 2.1: POMDP - Integration Test
+# Level 1.1: Full Observability - Integration Test
 #
-# Lite version for automated testing (200 episodes, ~8 minutes)
+# Lite version for automated testing (200 episodes, ~5 minutes)
 #
-# See docs/TRAINING_LEVELS.md for full Level 2 specification.
-# This config validates that LSTM + POMDP training works end-to-end.
+# See docs/TRAINING_LEVELS.md for full Level 1 specification.
+# This config validates that basic training works end-to-end.
+
+run_metadata:
+  output_subdir: test_level_1
 
 # Environment configuration
 environment:
   grid_size: 8
-  partial_observability: true  # LEVEL 2: Agent sees 5×5 window
-  vision_range: 2
+  partial_observability: false  # LEVEL 1: Agent sees full grid
+  vision_range: 8
 
 # Population configuration
 population:
   num_agents: 1
-  learning_rate: 0.0001  # Lower LR for recurrent networks
+  learning_rate: 0.00025
   gamma: 0.99
   replay_buffer_capacity: 2000  # Reduced for lite version
-  network_type: recurrent  # RecurrentSpatialQNetwork with LSTM
+  network_type: simple  # Standard MLP Q-Network
 
 # Curriculum configuration
 curriculum:
@@ -30,7 +33,7 @@ curriculum:
 # Exploration configuration
 exploration:
   embed_dim: 128
-  initial_intrinsic_weight: 0.1  # Lower for stability
+  initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
   survival_window: 50  # Reduced from 100
   epsilon_start: 1.0
@@ -40,4 +43,4 @@ exploration:
 # Training configuration
 training:
   device: cuda
-  max_episodes: 200  # Integration test: ~8 minutes
+  max_episodes: 200  # Integration test: ~5 minutes

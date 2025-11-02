@@ -56,10 +56,11 @@ exploration:
             from townlet.population.vectorized import VectorizedPopulation
 
             runner = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             # Initialize components manually
@@ -122,10 +123,11 @@ exploration:
             from townlet.population.vectorized import VectorizedPopulation
 
             runner = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             # Initialize components manually
@@ -193,10 +195,11 @@ exploration:
             from townlet.population.vectorized import VectorizedPopulation
 
             runner = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             # Initialize components manually
@@ -275,10 +278,11 @@ exploration:
 
             # First runner - save checkpoint
             runner1 = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test1.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             device = torch.device("cpu")
@@ -301,10 +305,11 @@ exploration:
 
             # Second runner - load checkpoint
             runner2 = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test2.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             runner2.env = VectorizedHamletEnv(num_agents=2, grid_size=8, device=device, partial_observability=False)

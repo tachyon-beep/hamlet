@@ -192,10 +192,11 @@ exploration:
 """)
 
             runner = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             # RED TEST: This will FAIL - flush_all_agents method doesn't exist yet

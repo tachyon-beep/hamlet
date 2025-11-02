@@ -255,12 +255,16 @@ class TestReplayBufferSampling:
         assert "rewards" in batch
         assert "next_observations" in batch
         assert "dones" in batch
+        assert "mask" in batch
 
         assert batch["observations"].shape == (8, 2)  # batch × obs_dim
         assert batch["actions"].shape == (8,)
         assert batch["rewards"].shape == (8,)
         assert batch["next_observations"].shape == (8, 2)
         assert batch["dones"].shape == (8,)
+        assert batch["mask"].shape == (8,)
+        assert batch["mask"].dtype == torch.bool
+        assert torch.all(batch["mask"]), "Feed-forward mask should be all True"
 
     def test_sample_insufficient_data_raises_error(self):
         """Should raise error if buffer has fewer transitions than batch_size."""
@@ -319,6 +323,7 @@ class TestReplayBufferSampling:
         # With 20 transitions and sampling 5, very unlikely to get identical batches
         # Check if at least one observation differs
         assert not torch.equal(batch1["observations"], batch2["observations"])
+        assert torch.equal(batch1["mask"], torch.ones_like(batch1["mask"]))
 
     def test_sample_full_buffer(self, filled_buffer):
         """Should be able to sample entire buffer (uses permutation)."""
@@ -326,6 +331,8 @@ class TestReplayBufferSampling:
 
         assert batch["observations"].shape == (20, 2)
         assert batch["actions"].shape == (20,)
+        assert batch["mask"].shape == (20,)
+        assert torch.all(batch["mask"])
 
         # When sampling full buffer, should get permutation (no duplicates)
         # Verify by checking all values 0-19 are present

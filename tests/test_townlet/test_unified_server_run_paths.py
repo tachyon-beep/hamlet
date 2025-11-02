@@ -2,23 +2,25 @@
 Tests for UnifiedServer run directory derivation (config-driven runs layout).
 """
 
-from pathlib import Path
-
 import textwrap
+
+from pathlib import Path
 
 from townlet.demo.unified_server import UnifiedServer
 
 
-def _make_config(tmp_path, filename, body: str) -> Path:
-    path = tmp_path / filename
-    path.write_text(textwrap.dedent(body))
-    return path
+def _make_config_pack(tmp_path, folder_name: str, body: str) -> tuple[Path, Path]:
+    pack_dir = tmp_path / folder_name
+    pack_dir.mkdir()
+    training_path = pack_dir / "training.yaml"
+    training_path.write_text(textwrap.dedent(body))
+    return pack_dir, training_path
 
 
 def test_run_directory_uses_configured_output_subdir(tmp_path):
-    config_path = _make_config(
+    config_dir, training_path = _make_config_pack(
         tmp_path,
-        "level_0_minimal.yaml",
+        "level_0_minimal",
         """
         run_metadata:
           output_subdir: L0_minimal
@@ -26,10 +28,11 @@ def test_run_directory_uses_configured_output_subdir(tmp_path):
     )
 
     server = UnifiedServer(
-        config_path=str(config_path),
+        config_dir=str(config_dir),
         total_episodes=10,
         checkpoint_dir=None,
         inference_port=8766,
+        training_config_path=str(training_path),
     )
 
     run_dir = server._determine_run_directory(timestamp="2025-01-01_010203")
@@ -37,9 +40,9 @@ def test_run_directory_uses_configured_output_subdir(tmp_path):
 
 
 def test_run_directory_falls_back_to_legacy_detection(tmp_path):
-    config_path = _make_config(
+    config_dir, training_path = _make_config_pack(
         tmp_path,
-        "level_2_custom.yaml",
+        "level_2_custom",
         """
         environment:
           grid_size: 8
@@ -47,10 +50,11 @@ def test_run_directory_falls_back_to_legacy_detection(tmp_path):
     )
 
     server = UnifiedServer(
-        config_path=str(config_path),
+        config_dir=str(config_dir),
         total_episodes=10,
         checkpoint_dir=None,
         inference_port=8766,
+        training_config_path=str(training_path),
     )
 
     run_dir = server._determine_run_directory(timestamp="2025-01-01_010203")
@@ -58,9 +62,9 @@ def test_run_directory_falls_back_to_legacy_detection(tmp_path):
 
 
 def test_run_directory_sanitises_invalid_characters(tmp_path):
-    config_path = _make_config(
+    config_dir, training_path = _make_config_pack(
         tmp_path,
-        "custom.yaml",
+        "custom",
         """
         run_metadata:
           output_subdir: "My Fancy Level!"
@@ -68,10 +72,11 @@ def test_run_directory_sanitises_invalid_characters(tmp_path):
     )
 
     server = UnifiedServer(
-        config_path=str(config_path),
+        config_dir=str(config_dir),
         total_episodes=10,
         checkpoint_dir=None,
         inference_port=8766,
+        training_config_path=str(training_path),
     )
 
     run_dir = server._determine_run_directory(timestamp="2025-01-01_010203")

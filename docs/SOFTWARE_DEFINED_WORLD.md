@@ -1,696 +1,637 @@
-Here is the full "Software Defined World" specification, consolidating our decisions into a single design document for your architect.
+# Hamlet v2.0: Software Defined World (Code-accurate)
 
------
+Document Date: 3 November 2025
+Status: Approved for Implementation
+Owner: Principal Technical Advisor (AI)
 
-### **Hamlet v2.0: "Software Defined World" Specification (v1.0)**
+## 1. Purpose
 
-**Document Date:** November 1, 2025
-**Status:** **APPROVED FOR IMPLEMENTATION**
-**Owner:** Principal Technical Advisor (AI)
+This spec defines the configuration contract for the Software Defined World. It is written to match the current code paths:
 
-### 1. 🚀 Purpose & Core Philosophy
+* `townlet.environment.cascade_config` for bars and cascades
+* `townlet.environment.cascade_engine.CascadeEngine`
+* `townlet.environment.affordance_config` and `affordance_engine.AffordanceEngine`
+* `townlet.environment.vectorized_env.VectorizedHamletEnv` temporal mechanics, action masks and interaction flow
 
-This document defines the data-driven configuration files that will **replace all hardcoded environment logic** (e.g., "god objects," `elif` blocks, hardcoded physics). This "Software Defined World" (SDW) is the foundational prerequisite for the v2.0 "Smart Collection" architecture.
+The SDW is the single source of truth for:
 
-This SDW acts as the **"grammar textbook"** for the agent's "grammar engine":
+* meter definitions and terminal conditions
+* depletion, modulations, and threshold cascades
+* affordance catalogue, costs, effects, and opening hours
+* time-of-day behaviour and multi-tick interactions
 
-* **Module B (World Model)** will be pre-trained to learn the rules defined in `bars.yaml`, `cascades.yaml`, and `affordances.yaml`.
-* **Module C (Social Model)** will be pre-trained to learn the "dictionary" defined in `cues.yaml`.
+All meters are normalised to [0.0, 1.0]. Money uses 1.0 to represent 100 dollars by default, which keeps code simple and avoids mixed units.
 
-This refactor is the *mandatory first step* of the v2.0 migration path.
+## 2. Meter Canon
 
-### 2. 🧠 The "Bar Hierarchy" (Core Design)
+The code expects exactly 8 meters with fixed indices. Keep these names and the index mapping.
 
-The environment's physics are built on a 4-tier hierarchy of agent "bars" (meters). This non-linear, cascading design is the primary source of long-term strategic challenge for the agent.
-
-* **Tier 0: Pivotal Bars (Death)**
-  * `energy`, `health`
-  * If either hits 0, the agent dies (`set_done: true`).
-* **Tier 1: Primary Bars (Gates)**
-  * `money`
-  * If 0, does not cause death, but "gates" access to most recovery affordances.
-* **Tier 2: Secondary Bars (Primary Penalties)**
-  * `satiation`, `mood`, `fitness`
-  * When low, these bars apply **depletion rate multipliers** to the Pivotal Bars (Energy & Health).
-* **Tier 3: Tertiary Bars (Secondary Penalties)**
-  * `hygiene`, `social`, `stimulation`
-  * When low, these bars apply depletion rate multipliers to the Secondary Bars, creating a slow-burn, cascading "death spiral" if left unmanaged.
-
------
-
-### 3. 📄 Specification File 1: `bars.yaml`
-
-**Purpose:** Defines all `M_MAX` bars, their limits, and their default passive depletion rates.
-**Replaces:** Hardcoded `self.energy -= 0.1` logic.
-
-**File:** `config/bars.yaml`
-
-```yaml
-# Defines all core "bars" or "meters" (M_MAX = 12)
-
-# --- Tier 0: Pivotal ---
-- id: "energy"
-  initial_value: 100
-  min_value: 0
-  max_value: 100
-  depletion_rate: -0.1 # Base depletion
-
-- id: "health"
-  initial_value: 100
-  min_value: 0
-  max_value: 100
-  depletion_rate: -0.05 # Base health depletion (slower)
-
-# --- Tier 1: Primary ---
-- id: "money"
-  initial_value: 50
-  min_value: 0
-  max_value: 9999999
-  depletion_rate: 0
-
-# --- Tier 2: Secondary ---
-- id: "satiation"
-  initial_value: 100
-  min_value: 0
-  max_value: 100
-  depletion_rate: -0.2
-
-- id: "mood"
-  initial_value: 70
-  min_value: 0
-  max_value: 100
-  depletion_rate: -0.1
-
-- id: "fitness"
-  initial_value: 50
-  min_value: 0
-  max_value: 100
-  depletion_rate: 0 # Fitness is passive unless impacted by cascades
-
-# --- Tier 3: Tertiary ---
-- id: "hygiene"
-  initial_value: 100
-  min_value: 0
-  max_value: 100
-  depletion_rate: -0.5
-
-- id: "social"
-  initial_value: 50
-  min_value: 0
-  max_value: 100
-  depletion_rate: -0.2
-
-- id: "stimulation" # The new 'boredom' bar
-  initial_value: 50
-  min_value: 0
-  max_value: 100
-  depletion_rate: -0.1
+```
+# METER_NAME_TO_IDX
+energy:   0
+hygiene:  1
+satiation:2
+money:    3
+mood:     4
+social:   5
+health:   6
+fitness:  7
 ```
 
------
+Notes
 
-### 4. 📄 Specification File 2: `cascades.yaml`
+* energy and health are pivotal. Hitting zero on either is terminal.
+* money is a resource gate. Affordability checks are performed by the AffordanceEngine or at interaction time in the env.
+* meters are clamped to [0, 1] after each operation inside the engines.
 
-**Purpose:** Defines the complete hierarchical "physics" of how bars interact, including death conditions and multipliers.
-**Replaces:** All hardcoded `if self.satiation < 20:` logic.
+## 3. bars.yaml (code-accurate schema)
 
-**File:** `config/cascades.yaml`
+`BarsConfig` schema fields are enforced by Pydantic. Exactly 8 bars. Range must be [0.0, 1.0]. Terminal conditions live here too.
 
 ```yaml
-# Defines the "physics" of how bars interact based on the 4-tier hierarchy.
+version: "1.0"
+description: "Hamlet v2 meters"
+bars:
+  - name: "energy"
+    index: 0
+    tier: "pivotal"
+    range: [0.0, 1.0]
+    initial: 1.0
+    base_depletion: 0.005
+    description: "Ability to act and move"
+    key_insight: "Dies if zero"
+  - name: "hygiene"
+    index: 1
+    tier: "resource"
+    range: [0.0, 1.0]
+    initial: 1.0
+    base_depletion: 0.003
+    description: "Cleanliness supports health and mood"
+  - name: "satiation"
+    index: 2
+    tier: "secondary"
+    range: [0.0, 1.0]
+    initial: 1.0
+    base_depletion: 0.004
+    description: "Food level; core driver of survival"
+    cascade_pattern: "strong to energy and health when low"
+  - name: "money"
+    index: 3
+    tier: "resource"
+    range: [0.0, 1.0]
+    initial: 0.5             # 0.5 = $50
+    base_depletion: 0.0
+    description: "Budget for affordances"
+  - name: "mood"
+    index: 4
+    tier: "secondary"
+    range: [0.0, 1.0]
+    initial: 0.7
+    base_depletion: 0.001
+    description: "Affects energy dynamics when low"
+  - name: "social"
+    index: 5
+    tier: "resource"
+    range: [0.0, 1.0]
+    initial: 0.5
+    base_depletion: 0.002
+    description: "Supports mood over time"
+  - name: "health"
+    index: 6
+    tier: "pivotal"
+    range: [0.0, 1.0]
+    initial: 1.0
+    base_depletion: 0.002
+    description: "General condition; death if zero"
+  - name: "fitness"
+    index: 7
+    tier: "secondary"
+    range: [0.0, 1.0]
+    initial: 0.5
+    base_depletion: 0.0
+    description: "Improves health dynamics when high"
 
-# --- TIER 0: PIVOTAL (DEATH) CASCADES ---
-- id: "death_by_energy"
-  condition:
-    - { bar: "energy", op: "<=", val: 0 }
-  effect:
-    - { type: "set_done", value: true, reason: "exhaustion" }
+terminal_conditions:
+  - meter: "energy"
+    operator: "<="
+    value: 0.0
+    description: "Death by exhaustion"
+  - meter: "health"
+    operator: "<="
+    value: 0.0
+    description: "Death by health failure"
 
-- id: "death_by_health"
-  condition:
-    - { bar: "health", op: "<=", val: 0 }
-  effect:
-    - { type: "set_done", value: true, reason: "health_failure" }
-
-# --- TIER 2: SECONDARY CASCADES (Penalty on Primaries) ---
-- id: "low_satiation_penalty"
-  condition:
-    - { bar: "satiation", op: "<", val: 20 }
-  effect:
-    - { type: "modify_depletion_rate", bar: "health", multiplier: 1.5 }
-    - { type: "modify_depletion_rate", bar: "energy", multiplier: 1.5 }
-
-- id: "low_mood_penalty"
-  condition:
-    - { bar: "mood", op: "<", val: 20 }
-  effect:
-    - { type: "modify_depletion_rate", bar: "energy", multiplier: 2.0 }
-
-- id: "low_fitness_penalty"
-  condition:
-    - { bar: "fitness", op: "<", val: 20 }
-  effect:
-    - { type: "modify_depletion_rate", bar: "health", multiplier: 1.5 }
-
-# --- TIER 3: TERTIARY CASCADES (Penalty on Secondaries) ---
-- id: "low_hygiene_penalty"
-  condition:
-    - { bar: "hygiene", op: "<", val: 20 }
-  effect:
-    - { type: "modify_depletion_rate", bar: "fitness", multiplier: 1.2 }
-    - { type: "modify_depletion_rate", bar: "mood", multiplier: 1.2 }
-    - { type: "modify_depletion_rate", bar: "satiation", multiplier: 1.2 }
-
-- id: "low_social_penalty"
-  condition:
-    - { bar: "social", op: "<", val: 20 }
-  effect:
-    - { type: "modify_depletion_rate", bar: "mood", multiplier: 1.5 }
-    
-- id: "low_stimulation_penalty"
-  condition:
-    - { bar: "stimulation", op: "<", val: 20 }
-  effect:
-    - { type: "modify_depletion_rate", bar: "fitness", multiplier: 1.5 }
+notes:
+  - "All values normalised. Money: 1.0 means $100."
 ```
 
------
+## 4. cascades.yaml (code-accurate schema and math)
 
-### 5. 📄 Specification File 3: `affordances.yaml`
+The engine supports:
 
-**Purpose:** Defines all `A_MAX` agent-world interactions, including costs, effects, and interaction types.
-**Replaces:** The giant, hardcoded `elif` block for affordance interactions.
+* Modulations which are depletion multipliers parameterised by a source meter. Example: fitness modifies how quickly health decays.
+* Threshold cascades which apply penalties to a target when a source is below a threshold. The penalty strength scales with the deficit.
 
-**File:** `config/affordances.yaml`
+Execution order comes from YAML and is applied in order each step. The code uses gradient penalty maths for cascades and your modulation field names.
 
 ```yaml
-# Defines all "affordances" (A_MAX) and their effects
+version: "1.0"
+description: "Hamlet cascade physics"
+math_type: "gradient_penalty"
 
-# 1. Simple, instant-effect affordance (The "Fridge")
-- id: "fridge"
+modulations:
+  - name: "fitness_modulates_health_decay"
+    description: "Good fitness reduces health decay; poor fitness increases it"
+    source: "fitness"
+    target: "health"
+    type: "depletion_multiplier"
+    base_multiplier: 0.5       # at fitness = 1.0
+    range: 2.5                 # 0.5 + 2.5 = 3.0 at fitness = 0.0
+    baseline_depletion: 0.002  # align with bars.health.base_depletion
+    note: "Replicates legacy behaviour"
+
+cascades:
+  # secondary to pivotal via primary_to_pivotal category label
+  - name: "low_satiation_hits_energy"
+    description: "Hungry drains energy quickly"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "energy"
+    target_index: 0
+    threshold: 0.2
+    strength: 0.015
+
+  - name: "low_satiation_hits_health"
+    description: "Hungry also undermines health"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "health"
+    target_index: 6
+    threshold: 0.2
+    strength: 0.010
+
+  - name: "low_mood_hits_energy"
+    description: "Depressed, low energy"
+    category: "primary_to_pivotal"
+    source: "mood"
+    source_index: 4
+    target: "energy"
+    target_index: 0
+    threshold: 0.2
+    strength: 0.010
+
+  - name: "low_fitness_hits_health"
+    description: "Unfit, poor health dynamics"
+    category: "primary_to_pivotal"
+    source: "fitness"
+    source_index: 7
+    target: "health"
+    target_index: 6
+    threshold: 0.2
+    strength: 0.010
+
+  # tertiary to secondary via secondary_to_primary category label
+  - name: "low_hygiene_hits_secondary"
+    description: "Poor hygiene worsens satiation, mood, fitness dynamics"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "satiation"
+    target_index: 2
+    threshold: 0.2
+    strength: 0.006
+  - name: "low_hygiene_hits_mood"
+    description: "Hygiene affects mood"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "mood"
+    target_index: 4
+    threshold: 0.2
+    strength: 0.006
+  - name: "low_hygiene_hits_fitness"
+    description: "Hygiene affects fitness"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "fitness"
+    target_index: 7
+    threshold: 0.2
+    strength: 0.006
+
+  - name: "low_social_hits_mood"
+    description: "Isolation reduces mood"
+    category: "secondary_to_primary"
+    source: "social"
+    source_index: 5
+    target: "mood"
+    target_index: 4
+    threshold: 0.2
+    strength: 0.010
+
+  # weak tertiary to pivotal route if desired
+  - name: "low_hygiene_hits_health_weak"
+    description: "Hygiene to health weak path"
+    category: "secondary_to_pivotal_weak"
+    source: "hygiene"
+    source_index: 1
+    target: "health"
+    target_index: 6
+    threshold: 0.1
+    strength: 0.003
+
+execution_order:
+  - "modulations"
+  - "primary_to_pivotal"
+  - "secondary_to_primary"
+  - "secondary_to_pivotal_weak"
+
+notes:
+  - "Engine applies each category in order per step"
+  - "Penalty = strength * ((threshold - source)/threshold) for source below threshold"
+```
+
+## 5. affordances.yaml (code-accurate schema and examples)
+
+`AffordanceConfigCollection` and `AffordanceConfig` are enforced by Pydantic. Interaction types supported by code:
+
+* instant
+* multi_tick
+* continuous
+* dual
+
+Fields:
+
+* `required_ticks` must be set for `multi_tick` and `dual`. Omit it otherwise.
+* `operating_hours` is a two element list. Example `[8, 18]` means 8 to 18. Wrap past midnight by using a close hour up to 28. Example `[18, 28]` means 18 to 4.
+* amounts in costs and effects are normalised to [0.0, 1.0]. For money, 0.1 is 10 dollars by default.
+
+Important flow from the code:
+
+* The env computes action masks for INTERACT based on location and hours. It does not mask on affordability. If you cannot afford the instant cost, the affordance handler simply does nothing productive that tick, which is a teaching feature.
+* Multi-tick progress is tracked per agent. Moving off the tile resets progress.
+
+Example configuration with the standard world objects placed in `VectorizedHamletEnv`:
+
+```yaml
+version: "1.0"
+description: "Hamlet affordances"
+status: "PRODUCTION"
+
+affordances:
+  - id: "bed"
+    name: "Bed"
+    category: "energy_restoration"
+    interaction_type: "multi_tick"
+    required_ticks: 4
+    costs: []                       # instant costs (not used here)
+    costs_per_tick: []              # free to sleep
+    effects: []                     # not used for multi_tick
+    effects_per_tick:
+      - { meter: "energy", amount: 0.25, type: "linear" }
+    completion_bonus:
+      - { meter: "energy", amount: 0.25 }
+    operating_hours: [0, 24]
+    teaching_note: "Cheap but slow recovery"
+
+  - id: "luxury_bed"
+    name: "LuxuryBed"
+    category: "energy_restoration"
+    interaction_type: "multi_tick"
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.05 }    # 5 dollars per tick
+    effects_per_tick:
+      - { meter: "energy", amount: 0.30, type: "linear" }
+    completion_bonus:
+      - { meter: "hygiene", amount: 0.10 }
+    operating_hours: [0, 24]
+    design_intent: "Faster but costs money"
+
+  - id: "shower"
+    name: "Shower"
+    category: "hygiene_recovery"
+    interaction_type: "instant"
+    costs:
+      - { meter: "money", amount: 0.02 }    # 2 dollars
+    effects:
+      - { meter: "hygiene", amount: 0.40 }
+    operating_hours: [0, 24]
+
+  - id: "home_meal"
+    name: "HomeMeal"
+    category: "food"
+    interaction_type: "instant"
+    costs:
+      - { meter: "money", amount: 0.05 }    # 5 dollars
+    effects:
+      - { meter: "satiation", amount: 0.40 }
+    operating_hours: [6, 24]
+
+  - id: "fast_food"
+    name: "FastFood"
+    category: "food"
+    interaction_type: "instant"
+    costs:
+      - { meter: "money", amount: 0.08 }
+    effects:
+      - { meter: "satiation", amount: 0.50 }
+      - { meter: "hygiene", amount: -0.05 }
+    operating_hours: [10, 28]   # 10 to 4
+
+  - id: "job"
+    name: "Job"
+    category: "income"
+    interaction_type: "multi_tick"
+    required_ticks: 8
+    costs_per_tick:
+      - { meter: "energy", amount: 0.05 }   # see env movement costs too
+    effects_per_tick:
+      - { meter: "money", amount: 0.10 }    # 10 dollars per tick
+      - { meter: "stimulation", amount: -0.02 }   # if you later add stimulation
+    completion_bonus:
+      - { meter: "money", amount: 0.40 }
+    operating_hours: [9, 18]
+
+  - id: "labor"
+    name: "Labor"
+    category: "income"
+    interaction_type: "multi_tick"
+    required_ticks: 4
+    costs_per_tick:
+      - { meter: "energy", amount: 0.08 }
+      - { meter: "hygiene", amount: 0.03 }
+    effects_per_tick:
+      - { meter: "money", amount: 0.12 }
+      - { meter: "fitness", amount: 0.04 }
+    completion_bonus: []
+    operating_hours: [7, 17]
+
+  - id: "gym"
+    name: "Gym"
+    category: "fitness_builder"
+    interaction_type: "multi_tick"
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "energy", amount: 0.06 }
+      - { meter: "money", amount: 0.05 }
+    effects_per_tick:
+      - { meter: "fitness", amount: 0.12 }
+      - { meter: "mood", amount: 0.04 }
+    completion_bonus: []
+    operating_hours: [6, 22]
+
+  - id: "bar"
+    name: "Bar"
+    category: "social_mood"
+    interaction_type: "instant"
+    costs:
+      - { meter: "money", amount: 0.20 }
+    effects:
+      - { meter: "social", amount: 0.30 }
+      - { meter: "mood", amount: 0.15 }
+    operating_hours: [18, 28]
+
+  - id: "park"
+    name: "Park"
+    category: "mood_social_free"
+    interaction_type: "instant"
+    costs: []
+    effects:
+      - { meter: "mood", amount: 0.10 }
+      - { meter: "social", amount: 0.05 }
+    operating_hours: [6, 20]
+
+  - id: "recreation"
+    name: "Recreation"
+    category: "mood_tier1"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    costs_per_tick:
+      - { meter: "money", amount: 0.05 }
+    effects_per_tick:
+      - { meter: "mood", amount: 0.20 }
+    completion_bonus: []
+    operating_hours: [10, 22]
+
+  - id: "therapist"
+    name: "Therapist"
+    category: "mood_tier2"
+    interaction_type: "multi_tick"
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.15 }
+    effects_per_tick:
+      - { meter: "mood", amount: 0.25 }
+    completion_bonus: []
+    operating_hours: [9, 17]
+
+  - id: "doctor"
+    name: "Doctor"
+    category: "health_tier1"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    costs_per_tick:
+      - { meter: "money", amount: 0.15 }
+    effects_per_tick:
+      - { meter: "health", amount: 0.25 }
+    completion_bonus: []
+    operating_hours: [8, 18]
+
+  - id: "hospital"
+    name: "Hospital"
+    category: "health_tier2"
+    interaction_type: "multi_tick"
+    required_ticks: 2
+    costs_per_tick:
+      - { meter: "money", amount: 0.30 }
+    effects_per_tick:
+      - { meter: "health", amount: 0.40 }
+      - { meter: "energy", amount: 0.10 }
+    completion_bonus: []
+    operating_hours: [0, 24]
+
+  # Ambulance by phone within the current engine model
+  - id: "call_ambulance"
+    name: "HomePhoneAmbulance"
+    category: "health_emergency"
+    interaction_type: "instant"
+    costs:
+      - { meter: "money", amount: 0.50 }     # 50 dollars
+    effects:
+      - { meter: "health", amount: 0.30 }    # immediate stabilisation
+      - { meter: "energy", amount: -0.05 }   # shock and fatigue
+    operating_hours: [0, 24]
+    teaching_note: "Approximates ambulance response without movement"
+```
+
+Why model ambulance like this
+
+* Today the engines do not implement a position-changing effect. Your code applies meter deltas and handles open hours, affordability, and tick progression, but it does not move the agent.
+* This version uses an instant health increase and cost to capture the decision trade-off. It teaches that an expensive emergency option exists even if you are nowhere near the Doctor or Hospital tiles.
+
+Optional extension for literal relocation
+
+If you do want real repositioning, the minimal change is:
+
+1. Extend `AffordanceEffect` with a controlled `type` enum and a payload for relocation.
+
+```python
+class AffordanceEffect(BaseModel):
+    meter: str | None = None
+    amount: float | None = None
+    type: Literal["linear", "relocate"] | None = None
+    destination: str | None = None
+```
+
+2. In `AffordanceEngine.apply_instant_interaction`, detect `type == "relocate"`. Return a side-channel in the step info dict, for example `info["relocations"] = [(agent_idx, destination_name)]`.
+3. In `VectorizedHamletEnv._handle_interactions_legacy` consume `relocations` and set `self.positions[agent_idx] = affordance_positions[destination_name]`.
+
+Then you can write:
+
+```yaml
+- id: "call_ambulance"
+  name: "HomePhoneAmbulance"
+  category: "health_emergency"
   interaction_type: "instant"
   costs:
-    - { bar: "money", change: -5 }
+    - { meter: "money", amount: 0.50 }
   effects:
-    - { bar: "satiation", change: +40 }
-
-# 2. Multi-tick interaction (The "Bed")
-- id: "bed"
-  interaction_type: "multi_tick"
-  duration_ticks: 4
-  effects_per_tick:
-    - { bar: "energy", change: +25 } # 25% per turn
-  completion_bonus:
-    - { bar: "energy", change: +25 } # 25% bonus for finishing
-
-# 3. Simple cost/gain affordance (The "Bar")
-- id: "bar"
-  interaction_type: "instant"
-  costs:
-    - { bar: "money", change: -20 }
-  effects:
-    - { bar: "social", change: +30 }
-    - { bar: "mood", change: +15 }
-    - { bar: "stimulation", change: +20 } # Fights boredom
-
-# 4. Special effect affordance (The "Home Phone")
-- id: "home_phone"
-  interaction_type: "instant"
-  costs:
-    - { bar: "money", change: -1000 }
-  effects:
-    # 'teleport' is a special effect_type the environment 
-    # must be coded to handle (set agent.pos = hospital.pos)
-    - { effect_type: "teleport", destination: "hospital" } 
-
-# 5. A job affordance (The "Office")
-- id: "office_job"
-  interaction_type: "multi_tick"
-  duration_ticks: 8 # A full "workday"
-  effects_per_tick:
-    - { bar: "money", change: +10 }
-    - { bar:S: "energy", change: -5 }
-    - { bar: "stimulation", change: -2 } # Job is boring
-  completion_bonus:
-    - { bar: "money", change: +40 } # "End of day bonus"
+    - { type: "relocate", destination: "Hospital" }
+  operating_hours: [0, 24]
 ```
 
------
+This preserves data-driven control and keeps the engines clean.
 
-### 6. 📄 Specification File 4: `cues.yaml`
+## 6. Time of day and action masks
 
-**Purpose:** Defines the "social" layer, linking internal bar states to the `public_cues` (tells) that **Module C (Social Model)** will learn from.
-**Replaces:** Any hardcoded logic for social "tells."
+* `operating_hours` follow the rule:
 
-**File:** `config/cues.yaml`
+  * normal: `[open, close]` with 0 ≤ open < close ≤ 24 and open ≤ time < close
+  * wrap-around: allow close up to 28. Env computes `close % 24` and treats it as open if `time ≥ open or time < close%24`
+* The env increments `time_of_day = (time_of_day + 1) % 24` per step when temporal mechanics are enabled.
+* Action space is `[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`. Movement and wait costs are applied by the env, not the YAML.
 
-```yaml
-# Defines the 'public_cues' (C_MAX) generated from internal bar states.
-# This is the "dictionary" for the Module C "detective".
+  * default move costs applied by env per movement step include energy 0.005, hygiene 0.003, satiation 0.004
+  * wait uses a lighter energy cost (default 0.001), no other passives
+* INTERACT is valid if the agent is exactly on an affordance tile and it is open. Affordability is not part of action masking. Failing to afford is a wasted turn and a learning signal.
 
-# 1. Simple Cue (from a Tertiary bar)
-- cue_id: "looks_dirty"
-  conditions:
-    - { bar: "hygiene", op: "<", val: 10 }
+## 7. Multi-tick semantics
 
-# 2. Simple Cue (from a Secondary bar)
-- cue_id: "looks_sad"
-  conditions:
-    - { bar: "mood", op: "<", val: 20 }
+* For `multi_tick` and `dual`, the env tracks `interaction_progress` per agent.
+* Movement off the tile or switching affordances resets progress.
+* On the last tick of a completed interaction, `completion_bonus` is added after per-tick effects. All amounts are clamped after application.
 
-# 3. Simple Cue (from a Pivotal bar)
-- cue_id: "looks_tired"
-  conditions:
-    - { bar: "energy", op: "<", val: 20 }
+## 8. Positions and observation alignment
 
-# 4. Compound "AND" Cue (The "Shambling Sob")
-- cue_id: "shambling_sob"
-  condition_logic: "all_of" # Default, but explicit
-  conditions:
-    - { bar: "energy", op: "<", val: 20 } # looks_tired
-    - { bar: "mood", op: "<", val: 20 } # looks_sad
+`VectorizedHamletEnv` seeds a default layout keyed by the `name` fields above. Keep the names identical or update both config and env.
 
-# 5. Compound "OR" Cue
-- cue_id: "looks_unwell"
-  condition_logic: "any_of" # "OR" logic
-  conditions:
-    - { bar: "health", op: "<", val: 30 }
-    - { bar: "satiation", op: "<", val: 10 }
-```
-
-### 7. 🏗️ Implementation Strategy
-
-#### Phase 1: Configuration Layer (✅ DONE - ACTION #1)
-
-**Goal**: Make meter cascades config-driven
-
-**Deliverables**:
-* ✅ `bars.yaml` - Meter definitions with base depletion rates
-* ✅ `cascades.yaml` - Cascade effects (modulations + threshold cascades)
-* ✅ Type-safe loader with Pydantic validation
-* ✅ CascadeEngine that reads and applies config
-* ✅ 100% equivalence with hardcoded logic (all tests passing)
-
-**Status**: COMPLETE (Nov 1, 2025)
-
-#### Phase 2: Affordance Layer (🎯 NEXT - ACTION #12)
-
-**Goal**: Make affordance effects config-driven
-
-**Deliverables**:
-* `affordances.yaml` - All affordance definitions with effects
-* Type-safe AffordanceConfig loader
-* AffordanceEngine that processes interactions
-* Remove 200+ line elif blocks from environment
-* Teaching examples (weak/strong/creative affordances)
-
-**Estimated**: 1-2 weeks
-
-#### Phase 3: Social Layer (📋 FUTURE)
-
-**Goal**: Make social cues config-driven
-
-**Deliverables**:
-* `cues.yaml` - Public cue definitions and mappings
-* CueGenerator that emits observable signals
-* Enable Module C (Social Model) to learn from cues
-* Multi-agent opponent modeling foundation
-
-**Estimated**: 2-3 weeks (after Level 4 multi-agent)
-
-### 8. 🎓 Design Principles
-
-#### Principle 1: "Grammar Engine, Not Flashcard Memorizer"
-
-**Problem**: Current v1.0 DQN memorizes `Q(s,a)` values - doesn't understand *why* actions work
-
-**Solution**: Module B learns the *rules* (physics) from config, then *reasons* about consequences
-
-**Example**:
-* **Flashcard**: "When energy=20%, go to bed" (memorized)
-* **Grammar**: "Bed restores energy by 25% per tick over 4 ticks" (understood rule)
-* **Reasoning**: "If energy=30%, I need 2 ticks to recover to safe threshold"
-
-#### Principle 2: "Configuration as Ground Truth"
-
-**Problem**: Code and documentation drift, become inconsistent
-
-**Solution**: YAML is the single source of truth - code *implements* config, never hardcodes
-
-**Example**:
-
-```python
-# ❌ BAD (Hardcoded)
-if agent.satiation < 0.2:
-    agent.health -= 0.004 * ((0.3 - agent.satiation) / 0.3)
-
-# ✅ GOOD (Config-Driven)
-cascades = load_cascades_config()
-meters = cascade_engine.apply_threshold_cascades(meters, ["primary_to_pivotal"])
-```
-
-#### Principle 3: "Interesting Failures Are Features"
-
-**Problem**: Over-tuning creates boring, deterministic gameplay
-
-**Solution**: Expose cascade strengths in config, let students discover "too weak" and "too strong"
-
-**Example**:
-* `cascades_weak.yaml` (50% strength) - Agent survives easily, learns affordances
-* `cascades.yaml` (100% strength) - Balanced challenge, strategic planning required
-* `cascades_strong.yaml` (150% strength) - Death spirals frequent, must prioritize perfectly
-
-**Teaching Value**: Students learn system design trade-offs through experimentation
-
-#### Principle 4: "Zero Behavioral Change (Until We Choose)"
-
-**Problem**: Refactoring introduces subtle bugs that break training
-
-**Solution**: Config replicates exact hardcoded behavior, validated by equivalence tests
-
-**Example**:
-
-```python
-def test_equivalence_with_meter_dynamics_low_satiation():
-    """CascadeEngine produces IDENTICAL results to hardcoded logic"""
-    # Create both systems
-    hardcoded = MeterDynamics(use_cascade_engine=False)
-    config_driven = MeterDynamics(use_cascade_engine=True)
-    
-    # Same input
-    meters = create_low_satiation_state()
-    
-    # Same output (within floating point tolerance)
-    assert torch.allclose(hardcoded.deplete(meters), config_driven.deplete(meters))
-```
-
-### 9. 🧪 Validation & Testing Strategy
-
-#### Equivalence Testing (Critical!)
-
-Every config-driven system MUST pass equivalence tests against hardcoded baseline:
-
-```python
-@pytest.mark.parametrize("scenario", [
-    "healthy_agent",
-    "low_satiation",
-    "low_mood",
-    "low_hygiene",
-    "cascade_combinations",
-])
-def test_config_matches_hardcoded(scenario):
-    """Config-driven produces identical results to hardcoded logic"""
-    legacy = create_legacy_system()
-    config = create_config_system()
-    
-    state = load_scenario(scenario)
-    
-    legacy_result = legacy.step(state)
-    config_result = config.step(state)
-    
-    assert results_match(legacy_result, config_result, tolerance=1e-6)
-```
-
-#### Schema Validation (Catch Errors Early)
-
-Use Pydantic for runtime validation:
-
-```python
-class CascadeConfig(BaseModel):
-    """Threshold-based cascade with gradient penalties"""
-    name: str
-    source: str
-    source_index: int = Field(ge=0, le=7)  # Must be valid meter index
-    target: str
-    target_index: int = Field(ge=0, le=7)
-    threshold: float = Field(gt=0.0, le=1.0)  # Normalized [0,1]
-    strength: float = Field(gt=0.0)  # Positive penalty strength
-```
-
-**Benefits**:
-* Type errors caught at config load time (not runtime)
-* Clear error messages: "threshold must be in (0.0, 1.0], got 1.5"
-* Auto-generated documentation from field descriptions
-
-#### Teaching Example Validation
-
-Create validation scripts for pedagogical configs:
-
-```bash
-$ python scripts/validate_cascade_configs.py
-
-✅ cascades.yaml is VALID (100% strength, balanced)
-✅ cascades_weak.yaml is VALID (50% strength, easy mode)
-✅ cascades_strong.yaml is VALID (150% strength, hard mode)
-
-🎉 All teaching configs are valid!
-```
-
-### 10. 📚 Module B & C Training Strategy
-
-#### Module B (World Model) Pre-Training
-
-**Input**: Config files (`bars.yaml`, `cascades.yaml`, `affordances.yaml`)
-
-**Training Task**: Predict meter changes given actions and current state
-
-```python
-# Pseudo-code for Module B training
-def train_world_model():
-    config = load_environment_config()
-    
-    # Generate synthetic training data
-    for episode in range(10000):
-        state = sample_random_state()
-        action = sample_random_action()
-        
-        # Ground truth from config
-        next_state_true = config_engine.predict_next_state(state, action)
-        
-        # Model prediction
-        next_state_pred = world_model.forward(state, action)
-        
-        # Train to match config physics
-        loss = mse_loss(next_state_pred, next_state_true)
-        loss.backward()
-```
-
-**Success Metric**: Model predicts meter changes with <1% error vs config engine
-
-#### Module C (Social Model) Pre-Training
-
-**Input**: `cues.yaml` (mapping from hidden states to public cues)
-
-**Training Task**: Infer hidden bar states from observable cues
-
-```python
-# Pseudo-code for Module C training
-def train_social_model():
-    cues_config = load_cues_config()
-    
-    # Generate opponent observation data
-    for episode in range(10000):
-        # Sample hidden opponent state
-        opponent_bars = sample_random_bars()
-        
-        # Generate public cues (ground truth from config)
-        public_cues = cues_config.generate_cues(opponent_bars)
-        
-        # Model inference
-        inferred_bars = social_model.infer_from_cues(public_cues)
-        
-        # Train to recover hidden state
-        loss = mse_loss(inferred_bars, opponent_bars)
-        loss.backward()
-```
-
-**Success Metric**: Model infers opponent bar states with <10% error from cues
-
-### 11. 🚀 Migration Path (v1.0 → v2.0)
-
-#### v1.0 (Current - Monolithic DQN)
+Default positions, for reference:
 
 ```
-Observation → DQN(obs) → Q(s,a) → Action
+Bed:        [1,1]
+LuxuryBed:  [2,1]
+Shower:     [2,2]
+HomeMeal:   [1,3]
+FastFood:   [5,6]
+Job:        [6,6]
+Labor:      [7,6]
+Gym:        [7,3]
+Bar:        [7,0]
+Park:       [0,4]
+Recreation: [0,7]
+Therapist:  [1,7]
+Doctor:     [5,1]
+Hospital:   [6,1]
 ```
 
-**Limitations**:
-* Memorizes state-action values
-* No understanding of physics
-* Can't plan ahead
-* No opponent modeling
+The env exports and restores these via checkpoint to keep the observation encoding consistent.
 
-#### v1.5 (Hybrid - Module A + DQN)
+## 9. Validation rules you actually get from the loaders
+
+* bars.yaml
+
+  * exactly 8 bars, indices 0..7, unique names and indices
+  * range must be [0.0, 1.0]
+* cascades.yaml
+
+  * unique cascade names, categories are free-form strings used to group execution order
+  * modulations expect the depletion multiplier fields as defined
+* affordances.yaml
+
+  * `interaction_type` must be one of the literal values
+  * `required_ticks` is required for multi_tick and dual, invalid otherwise
+  * `operating_hours` must be two integers, 0 ≤ open ≤ 23, 1 ≤ close ≤ 28
+
+## 10. Equivalence, tests, and teaching packs
+
+* Keep your hardcoded legacy tests around and assert equivalence to the config-driven engines with tight tolerances.
+* Maintain three packs for pedagogy:
+
+  * `cascades_weak.yaml` halve the strength fields
+  * `cascades.yaml` baseline
+  * `cascades_strong.yaml` increase strength by 50 percent
+* Affordance packs can teach economic regimes:
+
+  * “austerity”: cheaper food and sleep, lower income
+  * “boom”: higher wages, higher rents (modelled as higher costs on beds or shower)
+  * “nightlife”: more things open with wrap-around hours
+
+## 11. Ambulance pathway design, end-to-end
+
+What the player can do under this spec
+
+1. Walk to Doctor during office hours. Slower but cheaper.
+2. Walk to Hospital, always open, more expensive but stronger restoration.
+3. Use HomePhoneAmbulance anywhere, any time. Expensive and does not relocate by default, but stabilises health immediately. If you adopt the `relocate` extension, it will reposition the agent to the Hospital tile as part of the instant effect.
+
+This yields a clear tactical set:
+
+* short-term stabilisation at cost
+* predictable, clock-aware clinic care
+* always-on emergency care that is pricier
+
+It also gives the World Model a nice spread of options to learn, and a reason to track the clock.
+
+## 12. Implementation notes that match the code
+
+* Movement and wait costs are part of `VectorizedHamletEnv._execute_actions` and are not configured in YAML.
+* Base depletions happen in `CascadeEngine.apply_base_depletions` with an optional curriculum multiplier you can change at runtime.
+* The main cascade sequence used by the env is:
+
+  * depletions
+  * primary_to_pivotal
+  * secondary_to_primary
+  * secondary_to_pivotal_weak
+    which matches the methods `apply_secondary_to_primary_effects`, etc. The exact order is pulled from YAML `execution_order`.
+* Terminal conditions are checked after cascades and set all actions invalid in masks for dead agents.
+
+## 13. Minimal “config pack” folder content
+
+Put these side by side. The env loads them by directory.
 
 ```
-Observation → Module A (Perception) → BeliefDistribution → DQN(belief) → Q(belief,a) → Action
+configs/test/
+  bars.yaml
+  cascades.yaml
+  affordances.yaml
 ```
 
-**Improvements**:
-* POMDP solved via belief states
-* Keeps proven DQN core
-* Validates Module A in isolation
+If you later add social cues, introduce `cues.yaml` in the same pack. Module C can then pre-train from it.
 
-#### v1.7 (Module B Added)
+## 14. Worked example: end-to-end tick with ambulance available
 
-```
-Observation → Module A → Belief → Module B (World Model) → ImaginedFutures
-                                  ↓
-                           DQN(belief + futures) → Q → Action
-```
+1. Tick t, agent at home, time 02:00, health 0.18, money 0.60, energy 0.40
+2. Agent presses INTERACT on HomePhoneAmbulance
+3. Env verifies the tile has that affordance, checks hours open, does not block on affordability in the mask
+4. AffordanceEngine applies instant costs and effects:
 
-**Improvements**:
-* Can imagine consequences
-* Plans 1-2 steps ahead
-* Still uses DQN for action selection
+   * money becomes 0.10
+   * health becomes 0.48
+   * energy becomes 0.35
+5. Base depletions and cascades then run as usual
+6. If you implement relocate, the env also sets position to Hospital before or after cascade, depending on your insertion point
 
-#### v2.0 (Full Stack - All Modules)
-
-```
-Observation → Module A → Belief
-              ↓
-Public Cues → Module C (Social Model) → OpponentBeliefs
-              ↓                          ↓
-              Module B (World Model) → ImaginedFutures (self + opponent)
-              ↓
-              Module D (Hierarchical Policy) → Goal → PrimitiveAction
-```
-
-**Improvements**:
-* Full opponent modeling
-* Multi-step strategic planning
-* Hierarchical reasoning (zone → transport → affordance)
-* No Q-values - pure model-based RL
-
-### 12. 📋 Implementation Checklist
-
-#### For Each Config File
-
-* [ ] Define YAML schema (structure and fields)
-* [ ] Create Pydantic validation models
-* [ ] Write type-safe loader function
-* [ ] Build processing engine (reads config, applies effects)
-* [ ] Write equivalence tests (config vs hardcoded)
-* [ ] Create teaching examples (weak/strong variants)
-* [ ] Validate all configs load successfully
-* [ ] Integrate with environment as default
-* [ ] Document config format and examples
-* [ ] Mark old hardcoded logic as `LEGACY` (keep for tests)
-
-#### bars.yaml (✅ COMPLETE)
-
-- [x] Schema defined
-* [x] Pydantic models (BarConfig, BarsConfig)
-* [x] Loader function (load_bars_config)
-* [x] CascadeEngine processes base depletions
-* [x] Equivalence tests pass
-* [x] Teaching examples (same bars for all variants)
-* [x] Validation script
-* [x] Default in MeterDynamics
-* [x] Documentation complete
-
-#### cascades.yaml (✅ COMPLETE)
-
-- [x] Schema defined
-* [x] Pydantic models (ModulationConfig, CascadeConfig, CascadesConfig)
-* [x] Loader function (load_cascades_config)
-* [x] CascadeEngine processes modulations + cascades
-* [x] Equivalence tests pass
-* [x] Teaching examples (weak 50%, normal 100%, strong 150%)
-* [x] Validation script
-* [x] Default in MeterDynamics
-* [x] Documentation complete
-
-#### affordances.yaml (🎯 NEXT - ACTION #12)
-
-- [ ] Schema defined
-* [ ] Pydantic models (AffordanceConfig, AffordancesConfig)
-* [ ] Loader function (load_affordances_config)
-* [ ] AffordanceEngine processes interactions
-* [ ] Equivalence tests pass
-* [ ] Teaching examples (creative affordance sets)
-* [ ] Validation script
-* [ ] Default in Environment
-* [ ] Documentation complete
-
-#### cues.yaml (📋 FUTURE)
-
-- [ ] Schema defined (after Level 4 multi-agent)
-* [ ] Pydantic models (CueConfig, CuesConfig)
-* [ ] Loader function (load_cues_config)
-* [ ] CueGenerator emits public signals
-* [ ] Equivalence tests pass
-* [ ] Teaching examples (subtle vs obvious cues)
-* [ ] Validation script
-* [ ] Default in Environment
-* [ ] Documentation complete
-
-### 13. 🎯 Success Metrics
-
-#### Technical Metrics
-
-* **Equivalence**: Config-driven produces identical results to hardcoded (within 1e-6 tolerance)
-* **Test Coverage**: 100% of config-driven code paths tested
-* **Performance**: No degradation vs hardcoded baseline (<5% slowdown acceptable)
-* **Maintainability**: Config changes don't require code changes
-
-#### Pedagogical Metrics
-
-* **Experimentation**: Students can modify configs without touching code
-* **Failure Discovery**: "Too weak" and "too strong" configs teach trade-offs
-* **Documentation**: Config files are self-documenting (comments explain intent)
-* **Teaching Time**: Reduce onboarding time by 50% (config vs code)
-
-#### Moonshot Metrics
-
-* **Module B Accuracy**: <1% error predicting meter changes from config
-* **Module C Accuracy**: <10% error inferring opponent bars from cues
-* **Planning Depth**: Agent plans 3-5 steps ahead using world model
-* **Win Rate**: v2.0 beats v1.0 DQN in multi-agent competition by 20%+
-
-### 14. 🏁 Conclusion & Next Steps
-
-#### What We've Accomplished
-
-**✅ Phase 1 Complete (ACTION #1)**:
-* Meter cascades are now config-driven
-* CascadeEngine validated with 44 tests
-* Teaching examples (weak/strong) created
-* Zero behavioral change confirmed
-* **Moonshot Prerequisite #1 achieved**
-
-#### What's Next
-
-**🎯 Phase 2 (ACTION #12) - 1-2 weeks**:
-* Move affordance effects to `affordances.yaml`
-* Build AffordanceEngine
-* Remove 200+ line elif blocks
-* Create teaching examples
-* **Complete Moonshot Prerequisite #2**
-
-**📋 Phase 3 (Future) - 2-3 weeks**:
-* Add `cues.yaml` for social signals
-* Enable Module C (Social Model) training
-* Foundation for Level 4 multi-agent
-
-#### The Big Picture
-
-This "Software Defined World" is **not just refactoring** - it's the launchpad for v2.0:
-
-1. **Module B (World Model)** can now learn physics from config
-2. **Module C (Social Model)** will learn cues from config
-3. **Students** can experiment without code changes
-4. **Teaching** becomes data-driven and systematic
-
-**We're not cleaning up code - we're building the grammar engine that will replace the flashcard memorizer.** 🚀
-
----
-
-**Document Status**: ✅ COMPLETE
-
-**Implementation Status**:
-* ✅ bars.yaml + cascades.yaml (ACTION #1 - DONE)
-* 🎯 affordances.yaml (ACTION #12 - NEXT)
-* 📋 cues.yaml (Future - Level 4+)
-
-**Ready to proceed with ACTION #12!**
+This path is consistent with the code as written and teaches trade-offs cleanly.

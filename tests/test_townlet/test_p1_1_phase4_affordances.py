@@ -121,10 +121,11 @@ class TestAffordanceLayoutCheckpointing:
             from townlet.population.vectorized import VectorizedPopulation
 
             runner = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             # Manually initialize components
@@ -197,10 +198,11 @@ class TestAffordanceLayoutCheckpointing:
 
             # First runner - save positions
             runner1 = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             device = torch.device("cpu")
@@ -238,10 +240,11 @@ class TestAffordanceLayoutCheckpointing:
 
             # Second runner - load and verify
             runner2 = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test2.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             runner2.env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=device, partial_observability=False)

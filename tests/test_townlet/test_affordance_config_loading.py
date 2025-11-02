@@ -161,7 +161,7 @@ class TestAffordanceConfigLoading:
 
     def test_load_main_affordances_yaml(self):
         """Test loading the main affordances.yaml config."""
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
@@ -174,7 +174,7 @@ class TestAffordanceConfigLoading:
 
     def test_loaded_affordances_have_valid_ids(self):
         """Test that loaded affordances have expected IDs."""
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
@@ -204,7 +204,7 @@ class TestAffordanceConfigLoading:
 
     def test_affordance_lookup_by_id(self):
         """Test that we can look up affordances by ID."""
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
@@ -224,7 +224,7 @@ class TestAffordanceConfigLoading:
 
     def test_operating_hours_for_all_affordances(self):
         """Test that all affordances have valid operating hours."""
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
@@ -243,7 +243,7 @@ class TestAffordanceCategories:
 
     def test_instant_vs_multi_tick_separation(self):
         """Test that instant and multi_tick affordances are correctly categorized."""
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
@@ -261,7 +261,7 @@ class TestAffordanceCategories:
 
     def test_free_affordances(self):
         """Test identification of free (no-cost) affordances."""
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
@@ -275,7 +275,7 @@ class TestAffordanceCategories:
 
     def test_affordances_with_penalties(self):
         """Test affordances that have negative effects (penalties)."""
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")

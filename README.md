@@ -45,7 +45,7 @@ uv run pytest tests/ --cov=src/townlet --cov-report=term-missing -v
 ```bash
 # Terminal 1: Training + Inference Server
 source .venv/bin/activate
-python run_demo.py --config configs/level_1_full_observability.yaml --episodes 10000
+python run_demo.py --config configs/L1_full_observability --episodes 10000
 
 # Terminal 2: Frontend (once checkpoints exist)
 cd frontend && npm run dev
@@ -65,10 +65,10 @@ See [UNIFIED_SERVER_USAGE.md](UNIFIED_SERVER_USAGE.md) for complete guide.
 
 ### Level 1: Full Observability Baseline
 
-**Config:** `configs/level_1_full_observability.yaml`
+**Config:** `configs/L1_full_observability`
 
 ```bash
-python run_demo.py --config configs/level_1_full_observability.yaml --episodes 10000
+python run_demo.py --config configs/L1_full_observability --episodes 10000
 ```
 
 **Features:**
@@ -82,10 +82,10 @@ python run_demo.py --config configs/level_1_full_observability.yaml --episodes 1
 
 ### Level 2: Partial Observability (POMDP)
 
-**Config:** `configs/level_2_pomdp.yaml`
+**Config:** `configs/L2_partial_observability`
 
 ```bash
-python run_demo.py --config configs/level_2_pomdp.yaml --episodes 10000
+python run_demo.py --config configs/L2_partial_observability --episodes 10000
 ```
 
 **Features:**
@@ -99,10 +99,10 @@ python run_demo.py --config configs/level_2_pomdp.yaml --episodes 10000
 
 ### Level 3: Temporal Mechanics
 
-**Config:** `configs/level_3_temporal.yaml`
+**Config:** `configs/L3_temporal_mechanics`
 
 ```bash
-python run_demo.py --config configs/level_3_temporal.yaml --episodes 10000
+python run_demo.py --config configs/L3_temporal_mechanics --episodes 10000
 ```
 
 **Features:**

@@ -418,7 +418,7 @@ def create_affordance_engine(
     Convenience function to create AffordanceEngine from config file.
 
     Args:
-        config_path: Path to affordances.yaml (default: configs/affordances.yaml)
+        config_path: Path to affordances.yaml (default: configs/test/affordances.yaml)
         num_agents: Number of agents
         device: torch device
 
@@ -426,7 +426,7 @@ def create_affordance_engine(
         Initialized AffordanceEngine
     """
     if config_path is None:
-        config_path = Path("configs/affordances.yaml")
+        config_path = Path("configs/test/affordances.yaml")
 
     affordance_config = load_affordance_config(config_path)
     return AffordanceEngine(affordance_config, num_agents, device)

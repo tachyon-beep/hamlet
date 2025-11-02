@@ -52,7 +52,8 @@ class LiveInferenceServer:
         port: int = 8766,
         step_delay: float = 0.2,
         total_episodes: int = 5000,  # Expected total episodes in training run
-        config_path: Path | str | None = None,  # Optional training config
+        config_dir: Path | str | None = None,  # Config pack directory
+        training_config_path: Path | str | None = None,  # Optional training config
     ):
         """Initialize live inference server.
 
@@ -67,7 +68,13 @@ class LiveInferenceServer:
         self.port = port
         self.step_delay = step_delay
         self.total_episodes = total_episodes
-        self.config_path = Path(config_path) if config_path else None
+        self.config_dir = Path(config_dir) if config_dir else None
+        if training_config_path:
+            self.config_path = Path(training_config_path)
+        elif self.config_dir is not None:
+            self.config_path = self.config_dir / "training.yaml"
+        else:
+            self.config_path = None
         self.config = None
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -190,6 +197,7 @@ class LiveInferenceServer:
             vision_range=vision_range,
             enable_temporal_mechanics=enable_temporal_mechanics,
             enabled_affordances=enabled_affordances,
+            config_pack_path=self.config_dir,
         )
 
         # Auto-detect observation dimension from environment
@@ -681,21 +689,31 @@ def run_server(
     port: int = 8766,
     step_delay: float = 0.2,
     total_episodes: int = 5000,
-    config_path: str = None,
+    config_dir: str | None = None,
+    training_config_path: str | None = None,
 ):
     """Run live inference server."""
     import uvicorn
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 
-    server = LiveInferenceServer(checkpoint_dir, port, step_delay, total_episodes, config_path)
+    server = LiveInferenceServer(
+        checkpoint_dir,
+        port,
+        step_delay,
+        total_episodes,
+        config_dir=config_dir,
+        training_config_path=training_config_path,
+    )
 
     logger.info(f"Starting live inference server on port {port}")
     logger.info(f"Checkpoint directory: {checkpoint_dir}")
     logger.info(f"Step delay: {step_delay}s ({1 / step_delay:.1f} steps/sec)")
     logger.info(f"Expected total training episodes: {total_episodes}")
-    if config_path:
-        logger.info(f"Training config: {config_path}")
+    if config_dir:
+        logger.info(f"Config directory: {config_dir}")
+    if training_config_path:
+        logger.info(f"Training config: {training_config_path}")
     logger.info(f"Connect Vue frontend to: ws://localhost:{port}/ws")
 
     uvicorn.run(server.app, host="0.0.0.0", port=port)
@@ -708,6 +726,17 @@ if __name__ == "__main__":
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8766
     step_delay = float(sys.argv[3]) if len(sys.argv) > 3 else 0.2
     total_episodes = int(sys.argv[4]) if len(sys.argv) > 4 else 5000
-    config_path = sys.argv[5] if len(sys.argv) > 5 else None
+    config_arg = sys.argv[5] if len(sys.argv) > 5 else None
+    config_dir = None
+    training_config = None
+    if config_arg:
+        candidate = Path(config_arg)
+        if candidate.is_dir():
+            config_dir = str(candidate)
+            training_candidate = candidate / "training.yaml"
+            training_config = str(training_candidate) if training_candidate.exists() else None
+        else:
+            config_dir = str(candidate.parent)
+            training_config = str(candidate)
 
-    run_server(checkpoint_dir, port, step_delay, total_episodes, config_path)
+    run_server(checkpoint_dir, port, step_delay, total_episodes, config_dir, training_config)

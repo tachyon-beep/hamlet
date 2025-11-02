@@ -297,6 +297,6 @@ def load_default_config() -> EnvironmentConfig:
     # Assume we're in src/townlet/environment/ and configs/ is at project root
     current_file = Path(__file__)
     project_root = current_file.parent.parent.parent.parent
-    config_dir = project_root / "configs"
+    config_dir = project_root / "configs" / "test"
 
     return load_environment_config(config_dir)

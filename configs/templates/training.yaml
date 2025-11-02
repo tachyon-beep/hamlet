@@ -1,0 +1,49 @@
+# training.yaml - TEMPLATE
+#
+# Copy this file into your config pack directory and customise the values below.
+# Every pack should include:
+#   - training.yaml          (this file)
+#   - affordances.yaml       (affordance definitions)
+#   - bars.yaml              (meter definitions)
+#   - cascades.yaml          (cascade physics)
+#   - cues.yaml              (observable cues, optional for now)
+#
+# The `run_metadata.output_subdir` controls where run outputs are saved under
+# the `runs/` directory. Use a short, filesystem-safe name (no spaces).
+#
+# Environment/population/curriculum/exploration values are the same ones used
+# in the previous single-file configs. Feel free to remove keys you don't need;
+# defaults in the training code will be used when available.
+
+run_metadata:
+  output_subdir: PACK_NAME_HERE
+
+environment:
+  grid_size: 8
+  partial_observability: false
+  vision_range: 8
+  enable_temporal_mechanics: false
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  gamma: 0.99
+  replay_buffer_capacity: 10000
+  network_type: simple
+
+curriculum:
+  max_steps_per_episode: 500
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 1000
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 100
+
+training:
+  device: cuda
+  max_episodes: 5000

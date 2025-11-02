@@ -194,8 +194,8 @@ def load_affordance_config(config_path: Path) -> AffordanceConfigCollection:
 
 # Convenience function for common use case
 def load_default_affordances() -> AffordanceConfigCollection:
-    """Load the default affordances.yaml from configs/ directory."""
-    config_path = Path("configs/affordances.yaml")
+    """Load the default affordances.yaml from the test config pack."""
+    config_path = Path("configs/test/affordances.yaml")
     return load_affordance_config(config_path)
 
 

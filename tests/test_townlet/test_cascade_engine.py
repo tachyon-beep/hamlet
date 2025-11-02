@@ -29,7 +29,7 @@ def device():
 @pytest.fixture
 def config():
     """Load default environment configuration."""
-    config_dir = Path(__file__).parent.parent.parent / "configs"
+    config_dir = Path(__file__).parent.parent.parent / "configs" / "test"
     return load_environment_config(config_dir)
 
 

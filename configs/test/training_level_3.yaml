@@ -1,23 +1,27 @@
-# Level 1.1: Full Observability - Integration Test
+# Level 3.1: Temporal Mechanics - Integration Test
 #
-# Lite version for automated testing (200 episodes, ~5 minutes)
+# Lite version for automated testing (200 episodes, ~8 minutes)
 #
-# See docs/TRAINING_LEVELS.md for full Level 1 specification.
-# This config validates that basic training works end-to-end.
+# See docs/TRAINING_LEVELS.md for full Level 3 specification.
+# This config validates that temporal mechanics work end-to-end.
+
+run_metadata:
+  output_subdir: test_level_3
 
 # Environment configuration
 environment:
   grid_size: 8
-  partial_observability: false  # LEVEL 1: Agent sees full grid
-  vision_range: 8
+  partial_observability: true
+  vision_range: 2
+  enable_temporal_mechanics: true  # NEW: Time-of-day cycles
 
 # Population configuration
 population:
   num_agents: 1
-  learning_rate: 0.00025
+  learning_rate: 0.0001
   gamma: 0.99
   replay_buffer_capacity: 2000  # Reduced for lite version
-  network_type: simple  # Standard MLP Q-Network
+  network_type: recurrent  # LSTM for POMDP + temporal
 
 # Curriculum configuration
 curriculum:
@@ -34,10 +38,10 @@ exploration:
   variance_threshold: 100.0
   survival_window: 50  # Reduced from 100
   epsilon_start: 1.0
-  epsilon_min: 0.1  # Higher min for faster convergence
+  epsilon_min: 0.1
   epsilon_decay: 0.99
 
 # Training configuration
 training:
   device: cuda
-  max_episodes: 200  # Integration test: ~5 minutes
+  max_episodes: 200  # Integration test: ~8 minutes

@@ -38,21 +38,29 @@ class UnifiedServer:
 
     def __init__(
         self,
-        config_path: str,
+        config_dir: str,
         total_episodes: int,
         checkpoint_dir: str | None = None,
         inference_port: int = 8766,
+        training_config_path: str | None = None,
     ):
         """
         Initialize unified server.
 
         Args:
-            config_path: Path to training configuration YAML
+            config_dir: Directory containing configuration pack (training.yaml, affordances.yaml, etc.)
             total_episodes: Total number of episodes to train
             checkpoint_dir: Directory for checkpoints (auto-generated if None)
             inference_port: Port for inference WebSocket server
         """
-        self.config_path = Path(config_path)
+        self.config_dir = Path(config_dir)
+        if training_config_path:
+            self.training_config_path = Path(training_config_path)
+        else:
+            # Legacy: assume training.yaml inside config_dir
+            self.training_config_path = self.config_dir / "training.yaml"
+        if not self.training_config_path.exists():
+            raise FileNotFoundError(f"Training config not found: {self.training_config_path}")
         self.total_episodes = total_episodes
         self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
         self.inference_port = inference_port
@@ -68,7 +76,8 @@ class UnifiedServer:
         self._shutdown_lock = threading.Lock()
 
         logger.debug(
-            f"UnifiedServer initialized with config={config_path}, "
+            f"UnifiedServer initialized with config_dir={self.config_dir}, "
+            f"training_config={self.training_config_path}, "
             f"episodes={total_episodes}, port={inference_port}"
         )
 
@@ -161,7 +170,7 @@ class UnifiedServer:
     def _load_config(self) -> dict:
         """Load and cache the YAML configuration."""
         if self._config_cache is None:
-            with open(self.config_path) as f:
+            with open(self.training_config_path) as f:
                 data = yaml.safe_load(f) or {}
             self._config_cache = data
         return self._config_cache
@@ -192,7 +201,10 @@ class UnifiedServer:
 
     def _infer_level_name(self) -> str:
         """Legacy fallback: infer run folder name from config stem."""
-        config_stem = self.config_path.stem.lower()
+        if self.config_dir:
+            config_stem = self.config_dir.name.lower()
+        else:
+            config_stem = self.training_config_path.stem.lower()
         if "level_1" in config_stem or "full_observability" in config_stem:
             return "L1_full_observability"
         if "level_2" in config_stem or "partial_observability" in config_stem or "pomdp" in config_stem:
@@ -281,7 +293,8 @@ class UnifiedServer:
 
             # Create DemoRunner
             self.runner = DemoRunner(
-                config_path=str(self.config_path),
+                config_dir=str(self.config_dir),
+                training_config_path=str(self.training_config_path),
                 db_path=str(db_path),
                 checkpoint_dir=str(self.checkpoint_dir),
                 max_episodes=self.total_episodes,
@@ -322,7 +335,8 @@ class UnifiedServer:
                 port=self.inference_port,
                 step_delay=0.2,  # 5 steps/sec
                 total_episodes=self.total_episodes,
-                config_path=self.config_path,
+                config_dir=self.config_dir,
+                training_config_path=self.training_config_path,
             )
 
             logger.info(f"[Inference] Starting uvicorn on 0.0.0.0:{self.inference_port}...")

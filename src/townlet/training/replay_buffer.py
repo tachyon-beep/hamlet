@@ -85,8 +85,9 @@ class ReplayBuffer:
             intrinsic_weight: Weight for intrinsic rewards (0.0-1.0)
 
         Returns:
-            Dictionary with keys: observations, actions, rewards, next_observations, dones
+            Dictionary with keys: observations, actions, rewards, next_observations, dones, mask
             'rewards' = rewards_extrinsic + rewards_intrinsic * intrinsic_weight
+            'mask' = bool tensor [batch_size] (all True for feed-forward training)
         """
         if self.size < batch_size:
             raise ValueError(f"Buffer size ({self.size}) < batch_size ({batch_size})")
@@ -106,6 +107,7 @@ class ReplayBuffer:
             "rewards": combined_rewards,
             "next_observations": self.next_observations[indices],
             "dones": self.dones[indices],
+            "mask": torch.ones(batch_size, dtype=torch.bool, device=self.device),
         }
 
     def __len__(self) -> int:

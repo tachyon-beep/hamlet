@@ -38,7 +38,7 @@ def device():
 @pytest.fixture
 def affordance_config():
     """Load affordance configuration (corrected version matching hardcoded logic)."""
-    config_path = Path("configs/affordances.yaml")
+    config_path = Path("configs/test/affordances.yaml")
     if not config_path.exists():
         pytest.skip(f"Config file not found: {config_path}")
     return load_affordance_config(config_path)

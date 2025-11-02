@@ -25,20 +25,28 @@ class DemoRunner:
 
     def __init__(
         self,
-        config_path: Path | str,
+        config_dir: Path | str,
         db_path: Path | str,
         checkpoint_dir: Path | str,
         max_episodes: int = 10000,
+        training_config_path: Path | str | None = None,
     ):
         """Initialize demo runner.
 
         Args:
-            config_path: Path to YAML config file
+            config_dir: Directory containing configuration pack
             db_path: Path to SQLite database
             checkpoint_dir: Directory for checkpoint files
             max_episodes: Maximum number of episodes to run
+            training_config_path: Optional explicit path to training YAML file
         """
-        self.config_path = Path(config_path)
+        self.config_dir = Path(config_dir)
+        if training_config_path is None:
+            self.training_config_path = self.config_dir / "training.yaml"
+        else:
+            self.training_config_path = Path(training_config_path)
+        if not self.training_config_path.exists():
+            raise FileNotFoundError(f"Training config not found: {self.training_config_path}")
         self.db_path = Path(db_path)
         self.checkpoint_dir = Path(checkpoint_dir)
         self.max_episodes = max_episodes
@@ -67,7 +75,7 @@ class DemoRunner:
         )
 
         # Load config
-        with open(self.config_path) as f:
+        with open(self.training_config_path) as f:
             self.config = yaml.safe_load(f)
 
         # Initialize components (will be created in run())
@@ -215,6 +223,7 @@ class DemoRunner:
             partial_observability=partial_observability,
             vision_range=vision_range,
             enabled_affordances=enabled_affordances,
+            config_pack_path=self.config_dir,
         )
 
         # Auto-detect dimensions from environment (avoids hardcoded config values)
@@ -531,15 +540,24 @@ if __name__ == "__main__":
     )
 
     # Get paths from environment or args
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "configs/townlet/sparse_adaptive.yaml"
+    config_arg = sys.argv[1] if len(sys.argv) > 1 else "configs/test"
     db_path = sys.argv[2] if len(sys.argv) > 2 else "demo_state.db"
     checkpoint_dir = sys.argv[3] if len(sys.argv) > 3 else "checkpoints"
     max_episodes = int(sys.argv[4]) if len(sys.argv) > 4 else 10000
 
+    config_path = Path(config_arg)
+    if config_path.is_dir():
+        config_dir = config_path
+        training_config = config_dir / "training.yaml"
+    else:
+        config_dir = config_path.parent
+        training_config = config_path
+
     runner = DemoRunner(
-        config_path=config_path,
+        config_dir=config_dir,
         db_path=db_path,
         checkpoint_dir=checkpoint_dir,
         max_episodes=max_episodes,
+        training_config_path=training_config,
     )
     runner.run()

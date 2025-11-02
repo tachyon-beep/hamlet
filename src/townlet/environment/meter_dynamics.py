@@ -30,7 +30,7 @@ class MeterDynamics:
 
     Key Insight: Satiation is THE foundational need - affects BOTH primaries.
 
-    All cascade physics are defined in configs/bars.yaml and configs/cascades.yaml.
+    All cascade physics are defined in the config pack's bars.yaml and cascades.yaml files.
     Students can experiment with different cascade strengths by editing YAML files.
     """
 

@@ -105,10 +105,11 @@ class TestRunnerCheckpointStructure:
             from townlet.demo.runner import DemoRunner
 
             runner = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             # Manually initialize components (bypass run() which starts training loop)

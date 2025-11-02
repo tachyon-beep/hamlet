@@ -11,12 +11,11 @@ Creates a clean directory structure for each training run:
             └── metrics.db
 
 Usage:
-    python scripts/start_training_run.py <config_path>
+    python scripts/start_training_run.py <config_dir_or_training_yaml>
 
 Examples:
-    python scripts/start_training_run.py configs/level_1_full_observability.yaml
-    python scripts/start_training_run.py configs/level_2_pomdp.yaml
-    python scripts/start_training_run.py configs/level_3_temporal.yaml
+    python scripts/start_training_run.py configs/L1_full_observability
+    python scripts/start_training_run.py configs/L2_partial_observability/training.yaml
 """
 
 import shutil
@@ -28,53 +27,46 @@ from pathlib import Path
 import yaml
 
 
-def infer_level_name(config_path: Path) -> str:
-    """Infer level name from config filename."""
-    filename = config_path.stem.lower()
-
-    # Map level prefixes to human-readable names
-    level_map = {
-        "level_1": "L1_full_observability",
-        "level_2": "L2_partial_observability",
-        "level_3": "L3_temporal_mechanics",
-        "level_4": "L4_multi_agent",
-    }
-
-    for prefix, level_name in level_map.items():
-        if prefix in filename:
-            return level_name
-
-    # Fallback: use filename as-is
-    return config_path.stem
+def infer_level_name(config_dir: Path, config: dict) -> str:
+    """Determine run folder name from config metadata."""
+    metadata = config.get("run_metadata") or {}
+    output_subdir = metadata.get("output_subdir")
+    if output_subdir:
+        return output_subdir
+    return config_dir.name
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python scripts/start_training_run.py <config_path>")
+        print("Usage: python scripts/start_training_run.py <config_dir_or_training_yaml>")
         print()
         print("See docs/TRAINING_LEVELS.md for level specifications.")
         print()
         print("Examples:")
-        print("  python scripts/start_training_run.py configs/level_1_full_observability.yaml")
-        print("  python scripts/start_training_run.py configs/level_2_pomdp.yaml")
-        print("  python scripts/start_training_run.py configs/level_3_temporal.yaml")
+        print("  python scripts/start_training_run.py configs/L1_full_observability")
+        print("  python scripts/start_training_run.py configs/L2_partial_observability/training.yaml")
         sys.exit(1)
 
-    config_path = Path(sys.argv[1])
+    config_input = Path(sys.argv[1])
+    if config_input.is_dir():
+        config_dir = config_input
+        training_config = config_dir / "training.yaml"
+    else:
+        training_config = config_input
+        config_dir = training_config.parent
 
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}")
+    if not training_config.exists():
+        print(f"Error: Training config not found: {training_config}")
         sys.exit(1)
 
-    # Infer level name from config filename
-    level_name = infer_level_name(config_path)
+    # Load config to get metadata and max_episodes
+    with open(training_config) as f:
+        config = yaml.safe_load(f)
+
+    level_name = infer_level_name(config_dir, config)
 
     # Generate timestamp for this run
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-
-    # Load config to get max_episodes
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
 
     num_episodes = config.get("training", {}).get("max_episodes")
     if num_episodes is None:
@@ -95,15 +87,19 @@ def main():
     tensorboard_dir = run_dir / "tensorboard"
     tensorboard_dir.mkdir(exist_ok=True)
 
-    # Copy config into run directory for reproducibility
-    config_copy = run_dir / config_path.name
-    shutil.copy2(config_path, config_copy)
+    # Copy entire config pack for reproducibility
+    pack_copy_dir = run_dir / "config_pack"
+    if pack_copy_dir.exists():
+        shutil.rmtree(pack_copy_dir)
+    shutil.copytree(config_dir, pack_copy_dir)
+
+    training_copy = pack_copy_dir / training_config.name
 
     # Database path
     db_path = run_dir / "metrics.db"
 
     print(f"🚀 Starting training run: {level_name}")
-    print(f"   Config: {config_path}")
+    print(f"   Config pack: {config_dir}")
     print(f"   Run directory: {run_dir}")
     print(f"   Episodes: {num_episodes}")
     print(f"   TensorBoard: tensorboard --logdir {tensorboard_dir}")
@@ -114,7 +110,7 @@ def main():
         "python",
         "-m",
         "townlet.demo.runner",
-        str(config_copy),  # Use the copied config
+        str(pack_copy_dir),
         str(db_path),
         str(checkpoint_dir),
         str(num_episodes),

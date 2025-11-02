@@ -69,6 +69,7 @@ def run_training_pipeline(
         partial_observability=env_config.get("partial_observability", False),
         vision_range=env_config.get("vision_range", 8),
         enable_temporal_mechanics=env_config.get("enable_temporal_mechanics", False),
+        config_pack_path=config_path.parent,
     )
 
     # Create curriculum
@@ -178,7 +179,7 @@ def test_level_1_full_observability_integration(temp_run_dir):
     - Agent shows learning progress
     - Database logging works
     """
-    config_path = Path("configs/level_1_1_integration_test.yaml")
+    config_path = Path("configs/test/training_level_1.yaml")
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
@@ -227,7 +228,7 @@ def test_level_2_pomdp_integration(temp_run_dir):
     - Partial observability works
     - Sequential replay buffer works
     """
-    config_path = Path("configs/level_2_1_integration_test.yaml")
+    config_path = Path("configs/test/training_level_2.yaml")
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
@@ -272,7 +273,7 @@ def test_level_3_temporal_integration(temp_run_dir):
     - Operating hours masking works
     - LSTM learns temporal patterns
     """
-    config_path = Path("configs/level_3_1_integration_test.yaml")
+    config_path = Path("configs/test/training_level_3.yaml")
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
@@ -302,7 +303,7 @@ def test_checkpoint_resume(temp_run_dir):
     - Load checkpoint and continue training
     - Learning progress is preserved
     """
-    config_path = Path("configs/level_1_1_integration_test.yaml")
+    config_path = Path("configs/test/training_level_1.yaml")
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
@@ -352,12 +353,13 @@ def test_all_configs_valid():
     }
 
     config_files = [
-        "configs/level_1_1_integration_test.yaml",
-        "configs/level_2_1_integration_test.yaml",
-        "configs/level_3_1_integration_test.yaml",
-        "configs/level_1_full_observability.yaml",
-        "configs/level_2_pomdp.yaml",
-        "configs/level_3_temporal.yaml",
+        "configs/test/training_level_1.yaml",
+        "configs/test/training_level_2.yaml",
+        "configs/test/training_level_3.yaml",
+        "configs/L0_minimal/training.yaml",
+        "configs/L1_full_observability/training.yaml",
+        "configs/L2_partial_observability/training.yaml",
+        "configs/L3_temporal_mechanics/training.yaml",
     ]
 
     for config_file in config_files:

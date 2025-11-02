@@ -118,10 +118,11 @@ class TestCurriculumStateCheckpointing:
             from townlet.demo.runner import DemoRunner
 
             runner = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             # Manually initialize components
@@ -194,10 +195,11 @@ class TestCurriculumStateCheckpointing:
 
             # First runner - advance and save
             runner1 = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             device = torch.device("cpu")
@@ -228,10 +230,11 @@ class TestCurriculumStateCheckpointing:
 
             # Second runner - load and verify
             runner2 = DemoRunner(
-                config_path=config_path,
+                config_dir=config_path.parent,
                 db_path=tmpdir / "test2.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
+                training_config_path=config_path,
             )
 
             runner2.env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=device, partial_observability=False)

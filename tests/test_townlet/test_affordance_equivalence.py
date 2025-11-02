@@ -33,7 +33,7 @@ def device():
 @pytest.fixture
 def affordance_engine(device):
     """Create AffordanceEngine from corrected config (matches hardcoded logic)."""
-    config_path = Path("configs/affordances.yaml")
+    config_path = Path("configs/test/affordances.yaml")
     if not config_path.exists():
         pytest.skip("affordances.yaml not found")
 

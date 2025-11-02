@@ -5,7 +5,7 @@ Unified Demo Server Entry Point
 Single-command interface for running Hamlet training, inference, and frontend together.
 
 Usage:
-    python run_demo.py --config configs/level_1_full_observability.yaml --episodes 10000
+    python run_demo.py --config configs/L1_full_observability --episodes 10000
 
 Author: Hamlet Project
 Date: November 2, 2025
@@ -37,15 +37,15 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Examples:
   # Start training + inference (then run frontend separately)
-  python run_demo.py --config configs/level_1_full_observability.yaml --episodes 10000
+  python run_demo.py --config configs/L1_full_observability --episodes 10000
   # In another terminal: cd frontend && npm run dev
 
   # Resume from checkpoint
-  python run_demo.py --config configs/level_1_full_observability.yaml \\
+  python run_demo.py --config configs/L1_full_observability \\
       --checkpoint-dir runs/L1_full_observability/2025-11-02_123456/checkpoints
 
   # Custom inference port
-  python run_demo.py --config configs/level_1_full_observability.yaml \\
+  python run_demo.py --config configs/L1_full_observability \\
       --episodes 5000 --inference-port 8800
 
 Note:
@@ -59,7 +59,7 @@ Note:
         "--config",
         type=str,
         required=True,
-        help="Path to training configuration YAML file (e.g., configs/level_1_full_observability.yaml)",
+        help="Path to configuration pack directory or training YAML (e.g., configs/L1_full_observability)",
     )
 
     parser.add_argument(
@@ -100,20 +100,30 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug logging enabled")
 
-    # Validate config file exists
-    config_path = Path(args.config)
-    if not config_path.exists():
-        logger.error(f"Config file not found: {config_path}")
-        logger.error(
-            "Please provide a valid config file path (e.g., configs/level_1_full_observability.yaml)"
-        )
-        sys.exit(1)
+    # Determine config pack directory and training config file
+    config_input = Path(args.config)
+    if config_input.is_dir():
+        config_dir = config_input
+        config_file = config_dir / "training.yaml"
+        if not config_file.exists():
+            logger.error(f"Config folder '{config_dir}' does not contain training.yaml")
+            sys.exit(1)
+    else:
+        config_file = config_input
+        if not config_file.exists():
+            logger.error(f"Config file not found: {config_file}")
+            logger.error(
+                "Provide a valid config path (directory with training.yaml or legacy YAML file)."
+            )
+            sys.exit(1)
+        config_dir = config_file.parent
 
     # Print startup banner
     logger.info("=" * 60)
     logger.info("Unified Demo Server Starting")
     logger.info("=" * 60)
-    logger.info(f"Config: {config_path}")
+    logger.info(f"Config Pack: {config_dir}")
+    logger.info(f"Training Config: {config_file}")
     logger.info(f"Episodes: {args.episodes}")
     if args.checkpoint_dir:
         logger.info(f"Checkpoint Dir: {args.checkpoint_dir}")
@@ -126,7 +136,8 @@ def main():
     # Create unified server
     try:
         server = UnifiedServer(
-            config_path=str(config_path),
+            config_dir=str(config_dir),
+            training_config_path=str(config_file),
             total_episodes=args.episodes,
             checkpoint_dir=args.checkpoint_dir,
             inference_port=args.inference_port,

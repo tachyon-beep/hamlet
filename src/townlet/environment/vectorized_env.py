@@ -9,9 +9,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-import yaml
 
-from townlet.environment.affordance_config import AffordanceConfigCollection
+from townlet.environment.affordance_config import load_affordance_config
 from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.observation_builder import ObservationBuilder
@@ -41,6 +40,7 @@ class VectorizedHamletEnv:
         move_energy_cost: float = 0.005,
         wait_energy_cost: float = 0.001,
         interact_energy_cost: float = 0.0,
+        config_pack_path: Path | None = None,
     ):
         """
         Initialize vectorized environment.
@@ -57,6 +57,13 @@ class VectorizedHamletEnv:
             wait_energy_cost: Energy cost per WAIT action (default 0.001 = 0.1%)
             interact_energy_cost: Energy cost per INTERACT action (default 0.0 = free)
         """
+        project_root = Path(__file__).parent.parent.parent.parent
+        default_pack = project_root / "configs" / "test"
+
+        self.config_pack_path = Path(config_pack_path) if config_pack_path else default_pack
+        if not self.config_pack_path.exists():
+            raise FileNotFoundError(f"Config pack directory not found: {self.config_pack_path}")
+
         self.num_agents = num_agents
         self.grid_size = grid_size
         self.device = device
@@ -137,14 +144,16 @@ class VectorizedHamletEnv:
         self._cached_baseline_tensor = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
 
         # Initialize meter dynamics
-        self.meter_dynamics = MeterDynamics(num_agents=num_agents, device=device)
+        self.meter_dynamics = MeterDynamics(
+            num_agents=num_agents,
+            device=device,
+            cascade_config_dir=self.config_pack_path,
+        )
 
         # Initialize affordance engine
         # Path from src/townlet/environment/ → project root
-        config_path = Path(__file__).parent.parent.parent.parent / "configs" / "affordances.yaml"
-        with open(config_path) as f:
-            config_dict = yaml.safe_load(f)
-        affordance_config = AffordanceConfigCollection.model_validate(config_dict)
+        config_path = self.config_pack_path / "affordances.yaml"
+        affordance_config = load_affordance_config(config_path)
         self.affordance_engine = AffordanceEngine(affordance_config, num_agents, device)
 
         self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
