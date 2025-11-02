@@ -31,7 +31,7 @@ from townlet.environment.cascade_config import (
 @pytest.fixture
 def config_dir() -> Path:
     """Get path to configs directory."""
-    return Path(__file__).parent.parent.parent / "configs"
+    return Path(__file__).parent.parent.parent / "configs" / "test"
 
 
 @pytest.fixture

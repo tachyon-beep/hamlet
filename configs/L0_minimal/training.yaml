@@ -26,8 +26,8 @@ environment:
   enable_temporal_mechanics: false  # No time-of-day complexity
   enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
   energy_move_depletion: 0.005
-  energy_wait_depletion: 0.001
-  energy_interact_depletion: 0.0
+  energy_wait_depletion: 0.003
+  energy_interact_depletion: 0.003
 
 # Population configuration
 population:

@@ -168,9 +168,9 @@ class TestAffordanceConfigLoading:
 
         collection = load_affordance_config(config_path)
 
-        assert collection.version == "1.0"
-        assert collection.status == "TEMPLATE - Awaiting ACTION #12 implementation"
-        assert len(collection.affordances) == 15  # All 15 affordances defined
+        assert collection.version == "2.0"
+        assert collection.status == "PRODUCTION - Dual-mode ready"
+        assert len(collection.affordances) == 14  # Dual-mode pack defines 14 affordances
 
     def test_loaded_affordances_have_valid_ids(self):
         """Test that loaded affordances have expected IDs."""
@@ -181,24 +181,7 @@ class TestAffordanceConfigLoading:
 
         collection = load_affordance_config(config_path)
 
-        expected_ids = {
-            "Bed",
-            "LuxuryBed",
-            "Shower",
-            "HomeMeal",
-            "FastFood",
-            "Doctor",
-            "Hospital",
-            "Therapist",
-            "Recreation",
-            "Bar",
-            "CoffeeShop",
-            "Job",
-            "Labor",
-            "Gym",
-            "Park",
-        }
-
+        expected_ids = {str(i) for i in range(14)}  # IDs 0-13 inclusive (CoffeeShop removed)
         actual_ids = {aff.id for aff in collection.affordances}
         assert actual_ids == expected_ids
 
@@ -212,10 +195,10 @@ class TestAffordanceConfigLoading:
         collection = load_affordance_config(config_path)
 
         # Test lookup
-        bed = collection.get_affordance("Bed")
+        bed = collection.get_affordance("0")  # Bed has ID "0" in dual-mode config
         assert bed is not None
-        assert bed.id == "Bed"
-        assert bed.interaction_type == "multi_tick"
+        assert bed.name == "Bed"
+        assert bed.interaction_type == "dual"
         assert bed.required_ticks == 5
 
         # Test missing affordance
@@ -250,12 +233,8 @@ class TestAffordanceCategories:
 
         collection = load_affordance_config(config_path)
 
-        instant = [aff for aff in collection.affordances if aff.interaction_type == "instant"]
-        multi_tick = [aff for aff in collection.affordances if aff.interaction_type == "multi_tick"]
-
-        # Expected counts based on affordances.yaml
-        assert len(instant) == 11  # Shower, HomeMeal, FastFood, Doctor, Hospital, Therapist, Recreation, Bar, CoffeeShop, Gym, Park
-        assert len(multi_tick) == 4  # Bed, LuxuryBed, Job, Labor
+        dual = [aff for aff in collection.affordances if aff.interaction_type == "dual"]
+        assert len(dual) == len(collection.affordances), "All affordances should be dual-mode in production config"
 
     def test_free_affordances(self):
         """Test identification of free (no-cost) affordances."""
@@ -266,10 +245,9 @@ class TestAffordanceCategories:
 
         collection = load_affordance_config(config_path)
 
-        # Park is the only free affordance
-        park = collection.get_affordance("Park")
-        assert park is not None
-        assert len(park.costs) == 0  # No costs
+        free_affordances = {aff.name for aff in collection.affordances if len(aff.costs) == 0}
+        # Park, Job, Labor are free in instant mode
+        assert {"Park", "Job", "Labor"}.issubset(free_affordances)
 
     def test_affordances_with_penalties(self):
         """Test affordances that have negative effects (penalties)."""
@@ -281,17 +259,19 @@ class TestAffordanceCategories:
         collection = load_affordance_config(config_path)
 
         # FastFood has fitness and health penalties
-        fastfood = collection.get_affordance("FastFood")
+        fastfood = collection.get_affordance("4")
         assert fastfood is not None
 
         negative_effects = [eff for eff in fastfood.effects if eff.amount < 0]
+        negative_effects += [eff for eff in fastfood.completion_bonus if eff.amount < 0]
         assert len(negative_effects) >= 2  # fitness and health penalties
 
-        # Bar has health penalty
-        bar = collection.get_affordance("Bar")
+        # Bar has health penalty (completion bonus contains -health)
+        bar = collection.get_affordance("9")
         assert bar is not None
 
         bar_penalties = [eff for eff in bar.effects if eff.amount < 0]
+        bar_penalties += [eff for eff in bar.completion_bonus if eff.amount < 0]
         assert len(bar_penalties) >= 1  # health penalty
 
 

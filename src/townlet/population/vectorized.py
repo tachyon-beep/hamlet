@@ -106,8 +106,8 @@ class VectorizedPopulation(PopulationManager):
         else:
             self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
 
-        # Target network (for stable LSTM training with temporal dependencies)
-        self.target_network: Optional[RecurrentSpatialQNetwork]
+        # Target network (stabilises training for both feed-forward and recurrent agents)
+        self.target_network: nn.Module
         if self.is_recurrent:
             self.target_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
@@ -116,13 +116,14 @@ class VectorizedPopulation(PopulationManager):
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
             ).to(device)
-            # Initialize target network with same weights as Q-network
-            self.target_network.load_state_dict(self.q_network.state_dict())
-            self.target_network.eval()  # Target network always in eval mode
-            self.target_update_frequency = 100  # Update target every N training steps
-            self.training_step_counter = 0
         else:
-            self.target_network = None
+            self.target_network = SimpleQNetwork(obs_dim, action_dim).to(device)
+
+        # Initialize common target network state
+        self.target_network.load_state_dict(self.q_network.state_dict())
+        self.target_network.eval()  # Target network always in eval mode
+        self.target_update_frequency = 100  # Update target every N training steps
+        self.training_step_counter = 0
 
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
 
@@ -622,7 +623,7 @@ class VectorizedPopulation(PopulationManager):
                 q_pred = self.q_network(batch["observations"]).gather(1, batch["actions"].unsqueeze(1)).squeeze()
 
                 with torch.no_grad():
-                    q_next = self.q_network(batch["next_observations"]).max(1)[0]
+                    q_next = self.target_network(batch["next_observations"]).max(1)[0]
                     q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
 
                 loss = F.mse_loss(q_pred, q_target)
@@ -638,6 +639,11 @@ class VectorizedPopulation(PopulationManager):
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
                 self.optimizer.step()
+
+                # Periodically sync target network for stability
+                self.training_step_counter += 1
+                if self.training_step_counter % self.target_update_frequency == 0:
+                    self.target_network.load_state_dict(self.q_network.state_dict())
 
                 # Log network statistics to TensorBoard (every 100 training steps)
                 if self.tb_logger is not None and self.total_steps % 100 == 0:

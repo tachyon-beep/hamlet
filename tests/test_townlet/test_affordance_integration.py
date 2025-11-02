@@ -28,7 +28,7 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 @pytest.fixture
 def affordance_config():
     """Load production config (affordances.yaml)."""
-    config_path = Path(__file__).parent.parent.parent / "configs" / "affordances.yaml"
+    config_path = Path(__file__).parent.parent.parent / "configs" / "L1_full_observability" / "affordances.yaml"
     with open(config_path) as f:
         config_dict = yaml.safe_load(f)
     return AffordanceConfigCollection.model_validate(config_dict)

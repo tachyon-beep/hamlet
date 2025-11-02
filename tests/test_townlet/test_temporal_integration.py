@@ -155,8 +155,9 @@ def test_temporal_mechanics_disabled_fallback():
     # Without temporal: 64 (grid) + 8 (meters) + 15 (affordance) = 87
     assert obs.shape == (1, 87)
 
-    # No time tracking
-    assert not hasattr(env, "time_of_day")
+    # Temporal state is dormant but present
+    assert hasattr(env, "time_of_day")
+    assert env.time_of_day == 0
 
     # Interactions work (legacy single-shot mode)
     env.positions[0] = torch.tensor([1, 1])  # On Bed

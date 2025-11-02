@@ -87,6 +87,7 @@ class TestFlushBeforeCheckpoint:
             device=device,
             obs_dim=env.observation_dim,
             action_dim=env.action_dim,
+            network_type="recurrent",
         )
 
         # Take some steps to accumulate data
@@ -96,12 +97,13 @@ class TestFlushBeforeCheckpoint:
             obs, rewards, dones, info = env.step(actions)
 
             # Store in accumulators (simulating normal training)
-            if hasattr(population, "episode_observations"):
-                population.episode_observations.append(obs)
-            if hasattr(population, "episode_actions"):
-                population.episode_actions.append(actions)
-            if hasattr(population, "episode_rewards"):
-                population.episode_rewards.append(rewards)
+            if population.is_recurrent and population.current_episodes:
+                episode = population.current_episodes[0]
+                episode["observations"].append(obs[0].clone())
+                episode["actions"].append(actions.clone())
+                episode["rewards_extrinsic"].append(rewards.clone())
+                episode["rewards_intrinsic"].append(torch.zeros_like(rewards))
+                episode["dones"].append(dones.clone())
 
         # Flush episode for agent 0
         population.flush_episode(agent_idx=0)

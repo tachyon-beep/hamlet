@@ -61,7 +61,7 @@ class TestAffordanceEngineBasics:
 
     def test_affordance_lookup_by_id(self, engine):
         """Test looking up affordances by ID (numeric IDs in corrected config)."""
-        bed = engine.get_affordance("0")  # Bed has ID "0" in corrected config
+        bed = engine.get_affordance("0")  # Bed has ID "0"
         assert bed is not None
         assert bed.name == "Bed"
         assert bed.id == "0"
@@ -69,7 +69,7 @@ class TestAffordanceEngineBasics:
         shower = engine.get_affordance("2")  # Shower has ID "2"
         assert shower is not None
         assert shower.name == "Shower"
-        assert shower.interaction_type == "dual"  # All affordances are now dual-mode
+        assert shower.interaction_type == "dual"  # All affordances are dual-mode
 
     def test_affordance_name_to_index_mapping(self, engine):
         """
