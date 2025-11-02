@@ -13,6 +13,9 @@ environment:
   grid_size: 8
   partial_observability: false  # LEVEL 1: Agent sees full grid
   vision_range: 8
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 # Population configuration
 population:

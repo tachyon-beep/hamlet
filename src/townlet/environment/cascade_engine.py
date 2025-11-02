@@ -302,3 +302,8 @@ class CascadeEngine:
     def get_bar_index(self, name: str) -> int:
         """Get bar index from name."""
         return self._bar_name_to_idx[name]
+
+    def get_base_depletion(self, name: str) -> float:
+        """Return base depletion rate for the specified meter."""
+        idx = self.get_bar_index(name)
+        return float(self._base_depletions[idx].item())

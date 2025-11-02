@@ -13,6 +13,9 @@ environment:
   grid_size: 8
   partial_observability: true  # LEVEL 2: Agent sees 5×5 window
   vision_range: 2
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 # Population configuration
 population:

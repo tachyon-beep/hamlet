@@ -23,6 +23,9 @@ environment:
   partial_observability: false
   vision_range: 8
   enable_temporal_mechanics: false
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 population:
   num_agents: 1

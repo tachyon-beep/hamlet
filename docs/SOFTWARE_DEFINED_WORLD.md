@@ -62,7 +62,7 @@ bars:
     key_insight: "Dies if zero"
   - name: "hygiene"
     index: 1
-    tier: "resource"
+    tier: "secondary"
     range: [0.0, 1.0]
     initial: 1.0
     base_depletion: 0.003
@@ -91,18 +91,18 @@ bars:
     description: "Affects energy dynamics when low"
   - name: "social"
     index: 5
-    tier: "resource"
+    tier: "secondary"
     range: [0.0, 1.0]
-    initial: 0.5
-    base_depletion: 0.002
+    initial: 1.0
+    base_depletion: 0.006
     description: "Supports mood over time"
   - name: "health"
     index: 6
     tier: "pivotal"
     range: [0.0, 1.0]
     initial: 1.0
-    base_depletion: 0.002
-    description: "General condition; death if zero"
+    base_depletion: 0.0
+    description: "General condition; death if zero (managed via fitness modulation)"
   - name: "fitness"
     index: 7
     tier: "secondary"
@@ -350,7 +350,7 @@ affordances:
       - { meter: "energy", amount: 0.05 }   # see env movement costs too
     effects_per_tick:
       - { meter: "money", amount: 0.10 }    # 10 dollars per tick
-      - { meter: "stimulation", amount: -0.02 }   # if you later add stimulation
+      - { meter: "mood", amount: -0.02 }   # consumed focus reduces mood
     completion_bonus:
       - { meter: "money", amount: 0.40 }
     operating_hours: [9, 18]
@@ -514,8 +514,9 @@ This preserves data-driven control and keeps the engines clean.
 * The env increments `time_of_day = (time_of_day + 1) % 24` per step when temporal mechanics are enabled.
 * Action space is `[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`. Movement and wait costs are applied by the env, not the YAML.
 
-  * default move costs applied by env per movement step include energy 0.005, hygiene 0.003, satiation 0.004
-  * wait uses a lighter energy cost (default 0.001), no other passives
+  * default move costs applied by the env include energy 0.005 (configurable via `energy_move_depletion`), hygiene 0.003, satiation 0.004
+  * wait uses a lighter energy cost (default 0.001, configurable via `energy_wait_depletion`), no other passives
+  * interact deducts `energy_interact_depletion` each time it is invoked (default 0.0)
 * INTERACT is valid if the agent is exactly on an affordance tile and it is open. Affordability is not part of action masking. Failing to afford is a wasted turn and a learning signal.
 
 ## 7. Multi-tick semantics

@@ -23,6 +23,9 @@ environment:
   grid_size: 8  # 8×8 grid world
   partial_observability: false  # LEVEL 1: Agent sees full grid
   vision_range: 8  # Full vision (not used when partial_observability=false)
+  energy_move_depletion: 0.005  # Energy cost per movement action
+  energy_wait_depletion: 0.001  # Energy cost per WAIT action
+  energy_interact_depletion: 0.0  # Energy cost per INTERACT action
 
 # Population configuration
 population:

@@ -591,15 +591,14 @@ class VectorizedHamletEnv:
             baseline_steps: Expected survival time in steps
         """
         # Energy is the most restrictive death condition
-        # Calculate energy depletion per step:
-        # - Base depletion: 0.005 * multiplier
-        # - Movement cost: 0.005 per step (always paid)
-        # Total: (0.005 * multiplier) + 0.005
+        # Base depletion comes from the active config pack (bars.yaml)
+        cascade_engine = self.meter_dynamics.cascade_engine
+        energy_base_depletion = cascade_engine.get_base_depletion("energy")
 
-        energy_base_depletion = 0.005  # From bars.yaml
-        movement_cost = 0.005  # From vectorized_env movement costs
+        # Longest survival assumes the agent repeatedly takes the cheapest non-affordance action.
+        min_action_cost = min(self.move_energy_cost, self.wait_energy_cost, self.interact_energy_cost)
 
-        total_energy_depletion_per_step = (energy_base_depletion * depletion_multiplier) + movement_cost
+        total_energy_depletion_per_step = (energy_base_depletion * depletion_multiplier) + min_action_cost
 
         # Starting energy: 1.0
         # Steps until death: 1.0 / depletion_per_step

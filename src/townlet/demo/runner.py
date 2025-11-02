@@ -214,6 +214,18 @@ class DemoRunner:
         partial_observability = environment_cfg.get("partial_observability", False)
         vision_range = environment_cfg.get("vision_range", 2)
         enabled_affordances = environment_cfg.get("enabled_affordances", None)  # None = all affordances
+        move_energy_cost = environment_cfg.get(
+            "energy_move_depletion",
+            environment_cfg.get("move_energy_cost", 0.005),
+        )
+        wait_energy_cost = environment_cfg.get(
+            "energy_wait_depletion",
+            environment_cfg.get("wait_energy_cost", 0.001),
+        )
+        interact_energy_cost = environment_cfg.get(
+            "energy_interact_depletion",
+            environment_cfg.get("interact_energy_cost", 0.0),
+        )
 
         # Create environment FIRST (need it to auto-detect dimensions)
         self.env = VectorizedHamletEnv(
@@ -223,6 +235,9 @@ class DemoRunner:
             partial_observability=partial_observability,
             vision_range=vision_range,
             enabled_affordances=enabled_affordances,
+            move_energy_cost=move_energy_cost,
+            wait_energy_cost=wait_energy_cost,
+            interact_energy_cost=interact_energy_cost,
             config_pack_path=self.config_dir,
         )
 

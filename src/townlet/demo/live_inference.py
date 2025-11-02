@@ -166,6 +166,9 @@ class LiveInferenceServer:
         enabled_affordances = None  # None = all affordances
         network_type = "simple"
         vision_window_size = 5
+        move_energy_cost = 0.005
+        wait_energy_cost = 0.001
+        interact_energy_cost = 0.0
 
         if self.config:
             env_cfg = self.config.get("environment", {})
@@ -178,6 +181,18 @@ class LiveInferenceServer:
             enabled_affordances = env_cfg.get("enabled_affordances", None)  # Override default
             network_type = pop_cfg.get("network_type", "simple")
             vision_window_size = 2 * vision_range + 1
+            move_energy_cost = env_cfg.get(
+                "energy_move_depletion",
+                env_cfg.get("move_energy_cost", move_energy_cost),
+            )
+            wait_energy_cost = env_cfg.get(
+                "energy_wait_depletion",
+                env_cfg.get("wait_energy_cost", wait_energy_cost),
+            )
+            interact_energy_cost = env_cfg.get(
+                "energy_interact_depletion",
+                env_cfg.get("interact_energy_cost", interact_energy_cost),
+            )
 
             logger.info(
                 f"Environment config: grid={grid_size}, "
@@ -197,6 +212,9 @@ class LiveInferenceServer:
             vision_range=vision_range,
             enable_temporal_mechanics=enable_temporal_mechanics,
             enabled_affordances=enabled_affordances,
+            move_energy_cost=move_energy_cost,
+            wait_energy_cost=wait_energy_cost,
+            interact_energy_cost=interact_energy_cost,
             config_pack_path=self.config_dir,
         )
 

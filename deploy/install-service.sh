@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Installation script for hamlet-demo systemd service
+# Installation script for townlet-demo systemd service
 
 # Get script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -15,7 +15,7 @@ CONFIG="${CONFIG:-$PROJECT_DIR/configs/townlet/sparse_adaptive.yaml}"
 DB_PATH="${DB_PATH:-$PROJECT_DIR/demo_state.db}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-$PROJECT_DIR/checkpoints}"
 
-echo "Installing hamlet-demo.service with:"
+echo "Installing townlet-demo.service with:"
 echo "  User: $USER"
 echo "  WorkingDirectory: $WORKDIR"
 echo "  Python: $VENV_PYTHON"
@@ -24,25 +24,25 @@ echo "  Database: $DB_PATH"
 echo "  Checkpoints: $CHECKPOINT_DIR"
 
 # Create service file with substitutions
-SERVICE_FILE="/tmp/hamlet-demo.service"
+SERVICE_FILE="/tmp/townlet-demo.service"
 sed -e "s|%USER%|$USER|g" \
     -e "s|%WORKDIR%|$WORKDIR|g" \
     -e "s|%VENV_PYTHON%|$VENV_PYTHON|g" \
     -e "s|%CONFIG%|$CONFIG|g" \
     -e "s|%DB_PATH%|$DB_PATH|g" \
     -e "s|%CHECKPOINT_DIR%|$CHECKPOINT_DIR|g" \
-    "$SCRIPT_DIR/hamlet-demo.service" > "$SERVICE_FILE"
+    "$SCRIPT_DIR/townlet-demo.service" > "$SERVICE_FILE"
 
 # Install service
-sudo cp "$SERVICE_FILE" /etc/systemd/system/hamlet-demo.service
+sudo cp "$SERVICE_FILE" /etc/systemd/system/townlet-demo.service
 sudo systemctl daemon-reload
 
 echo ""
 echo "Service installed! Commands:"
-echo "  sudo systemctl start hamlet-demo    # Start training"
-echo "  sudo systemctl stop hamlet-demo     # Stop training"
-echo "  sudo systemctl status hamlet-demo   # Check status"
-echo "  sudo journalctl -u hamlet-demo -f   # View logs"
+echo "  sudo systemctl start townlet-demo    # Start training"
+echo "  sudo systemctl stop townlet-demo     # Stop training"
+echo "  sudo systemctl status townlet-demo   # Check status"
+echo "  sudo journalctl -u townlet-demo -f   # View logs"
 echo ""
 echo "To enable auto-start on boot:"
-echo "  sudo systemctl enable hamlet-demo"
+echo "  sudo systemctl enable townlet-demo"
