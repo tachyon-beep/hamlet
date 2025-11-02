@@ -201,4 +201,9 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self.variance_threshold = state['variance_threshold']
         self.survival_window = state['survival_window']
         self.decay_rate = state['decay_rate']
-        self.survival_history = state['survival_history']
+
+        # Gracefully handle missing survival_history (backwards compatibility)
+        if 'survival_history' in state:
+            self.survival_history = state['survival_history']
+        else:
+            self.survival_history = []

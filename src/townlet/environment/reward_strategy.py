@@ -26,24 +26,42 @@ class RewardStrategy:
     R is recalculated when curriculum stage changes (different depletion rates).
     """
 
-    def __init__(self, device: torch.device):
+    def __init__(self, device: torch.device, num_agents: int = 1):
         """
         Initialize reward strategy.
 
         Args:
             device: torch device for tensor operations
+            num_agents: number of agents for vectorized baseline (P2.1)
         """
         self.device = device
-        self.baseline_survival_steps = 100.0  # Default R, updated via set_baseline()
+        self.num_agents = num_agents
+        # P2.1: Vectorized baseline - one per agent for multi-agent curriculum support
+        self.baseline_survival_steps = torch.full(
+            (num_agents,), 100.0, dtype=torch.float32, device=device
+        )
 
-    def set_baseline_survival_steps(self, baseline_steps: float):
+    def set_baseline_survival_steps(self, baseline_steps: torch.Tensor | float):
         """
         Set the baseline survival steps (R) for current curriculum stage.
 
+        P2.1: Now accepts either:
+        - torch.Tensor[num_agents]: Per-agent baselines (multi-agent curriculum)
+        - float: Shared baseline (backwards compatibility, broadcasts to all agents)
+
         Args:
-            baseline_steps: Expected survival time of random-walking agent
+            baseline_steps: Expected survival time(s) of random-walking agent(s)
         """
-        self.baseline_survival_steps = baseline_steps
+        if isinstance(baseline_steps, torch.Tensor):
+            # P2.1: Per-agent baselines
+            assert baseline_steps.shape == (self.num_agents,), \
+                f"baseline_steps must be [num_agents={self.num_agents}], got {baseline_steps.shape}"
+            self.baseline_survival_steps = baseline_steps.to(self.device)
+        else:
+            # Backwards compatibility: broadcast scalar to all agents
+            self.baseline_survival_steps = torch.full(
+                (self.num_agents,), float(baseline_steps), dtype=torch.float32, device=self.device
+            )
 
     def calculate_rewards(
         self,

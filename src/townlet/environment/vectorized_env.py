@@ -111,7 +111,7 @@ class VectorizedHamletEnv:
 
         # Add temporal features to observation if enabled
         if enable_temporal_mechanics:
-            self.observation_dim += 2  # time_of_day + interaction_progress
+            self.observation_dim += 3  # time_sin + time_cos + interaction_progress
 
         # Initialize observation builder
         self.observation_builder = ObservationBuilder(
@@ -124,8 +124,8 @@ class VectorizedHamletEnv:
             num_affordance_types=self.num_affordance_types,
         )
 
-        # Initialize reward strategy
-        self.reward_strategy = RewardStrategy(device=device)
+        # Initialize reward strategy (P2.1: per-agent baseline support)
+        self.reward_strategy = RewardStrategy(device=device, num_agents=num_agents)
 
         # Initialize meter dynamics
         self.meter_dynamics = MeterDynamics(num_agents=num_agents, device=device)
@@ -569,35 +569,71 @@ class VectorizedHamletEnv:
 
         return baseline_steps
 
-    def update_baseline_for_curriculum(self, depletion_multiplier: float):
+    def update_baseline_for_curriculum(self, depletion_multipliers: torch.Tensor | float):
         """
         Update reward baseline when curriculum stage changes.
 
-        Args:
-            depletion_multiplier: New curriculum difficulty multiplier
-        """
-        baseline = self.calculate_baseline_survival(depletion_multiplier)
-        self.reward_strategy.set_baseline_survival_steps(baseline)
+        P2.1: Now supports per-agent baselines for multi-agent curriculum.
 
-    def get_affordance_positions(self) -> dict[str, tuple[int, int] | list[int]]:
+        Args:
+            depletion_multipliers: Curriculum difficulty multiplier(s)
+                - torch.Tensor[num_agents]: Per-agent multipliers
+                - float: Shared multiplier (broadcasts to all agents)
+        """
+        if isinstance(depletion_multipliers, torch.Tensor):
+            # P2.1: Per-agent baselines
+            baselines = torch.stack([
+                torch.tensor(self.calculate_baseline_survival(m.item()), device=self.device)
+                for m in depletion_multipliers
+            ])
+            self.reward_strategy.set_baseline_survival_steps(baselines)
+        else:
+            # Backwards compatibility: scalar multiplier
+            baseline = self.calculate_baseline_survival(depletion_multipliers)
+            self.reward_strategy.set_baseline_survival_steps(baseline)
+
+    def get_affordance_positions(self) -> dict:
         """Get current affordance positions (P1.1 checkpointing).
 
         Returns:
-            Dictionary mapping affordance names to positions (tuple or list)
+            Dictionary with 'positions' and 'ordering' keys:
+            - 'positions': Dict mapping affordance names to [x, y] positions
+            - 'ordering': List of affordance names in consistent order
         """
         positions = {}
         for name, pos_tensor in self.affordances.items():
             # Convert tensor position to list (for JSON serialization)
             pos = pos_tensor.cpu().tolist()
             positions[name] = [int(pos[0]), int(pos[1])]
-        return positions
+        
+        # Include affordance ordering for consistent observation encoding
+        return {
+            'positions': positions,
+            'ordering': self.affordance_names,
+        }
 
-    def set_affordance_positions(self, positions: dict[str, list[int] | tuple[int, int]]) -> None:
+    def set_affordance_positions(self, checkpoint_data: dict) -> None:
         """Set affordance positions from checkpoint (P1.1 checkpointing).
 
         Args:
-            positions: Dictionary mapping affordance names to [x, y] positions
+            checkpoint_data: Dictionary with 'positions' and optionally 'ordering':
+                - If 'ordering' provided, rebuild affordances dict in that order
+                - Otherwise, use current affordance_names (backwards compatible)
         """
+        # Handle backwards compatibility: checkpoint might be old format (just positions dict)
+        if 'positions' in checkpoint_data:
+            positions = checkpoint_data['positions']
+            ordering = checkpoint_data.get('ordering', self.affordance_names)
+        else:
+            # Old format: checkpoint_data is the positions dict directly
+            positions = checkpoint_data
+            ordering = self.affordance_names
+        
+        # Restore ordering first (critical for consistent observation encoding)
+        self.affordance_names = ordering
+        self.num_affordance_types = len(self.affordance_names)
+        
+        # Rebuild affordances dict in correct order
         for name, pos in positions.items():
             if name in self.affordances:
                 self.affordances[name] = torch.tensor(pos, device=self.device, dtype=torch.long)

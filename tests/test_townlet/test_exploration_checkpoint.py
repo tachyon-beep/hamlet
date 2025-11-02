@@ -273,23 +273,22 @@ class TestEpsilonGreedyCheckpoint:
     def test_epsilon_greedy_saves_epsilon(self, device):
         """EpsilonGreedy should save epsilon parameters."""
         epsilon = EpsilonGreedyExploration(
-            epsilon_start=0.9,
+            epsilon=0.9,
             epsilon_min=0.1,
             epsilon_decay=0.999,
-            device=device,
         )
 
         state = epsilon.checkpoint_state()
         assert "epsilon" in state
         assert "epsilon_min" in state
         assert "epsilon_decay" in state
-        assert state["epsilon"] == 0.9
-        assert state["epsilon_min"] == 0.1
-        assert state["epsilon_decay"] == 0.999
+        assert abs(state["epsilon"] - 0.9) < 1e-6
+        assert abs(state["epsilon_min"] - 0.1) < 1e-6
+        assert abs(state["epsilon_decay"] - 0.999) < 1e-6
 
     def test_epsilon_greedy_restores_epsilon(self, device):
         """EpsilonGreedy should restore epsilon from checkpoint."""
-        epsilon = EpsilonGreedyExploration(epsilon_start=1.0, device=device)
+        epsilon = EpsilonGreedyExploration(epsilon=1.0)
 
         # Decay epsilon
         for _ in range(20):
@@ -299,7 +298,7 @@ class TestEpsilonGreedyCheckpoint:
         state = epsilon.checkpoint_state()
 
         # Restore
-        epsilon2 = EpsilonGreedyExploration(epsilon_start=1.0, device=device)
+        epsilon2 = EpsilonGreedyExploration(epsilon=1.0)
         epsilon2.load_state(state)
 
         assert abs(epsilon2.epsilon - decayed) < 1e-6

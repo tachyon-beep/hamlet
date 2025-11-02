@@ -232,12 +232,22 @@ class VectorizedPopulation(PopulationManager):
                 self.q_network.set_hidden_state((h, c))
 
     def _update_reward_baseline(self):
-        """Update reward baseline when curriculum changes."""
+        """Update reward baseline when curriculum changes (P2.1: per-agent support)."""
         if self.current_curriculum_decisions:
-            multiplier = self.current_curriculum_decisions[0].depletion_multiplier
-            if multiplier != self.current_depletion_multiplier:
-                self.current_depletion_multiplier = multiplier
-                self.env.update_baseline_for_curriculum(multiplier)
+            # P2.1: Extract per-agent multipliers
+            multipliers = torch.tensor(
+                [d.depletion_multiplier for d in self.current_curriculum_decisions],
+                dtype=torch.float32,
+                device=self.device,
+            )
+            
+            # Check if any agent's multiplier changed
+            if not hasattr(self, 'current_depletion_multipliers'):
+                self.current_depletion_multipliers = multipliers
+                self.env.update_baseline_for_curriculum(multipliers)
+            elif not torch.equal(multipliers, self.current_depletion_multipliers):
+                self.current_depletion_multipliers = multipliers
+                self.env.update_baseline_for_curriculum(multipliers)
 
     def select_greedy_actions(self, env: "VectorizedHamletEnv") -> torch.Tensor:
         """
@@ -457,16 +467,25 @@ class VectorizedPopulation(PopulationManager):
 
                         q_target_list.append(q_target)
 
-                # Compute loss across all timesteps
+                # Compute loss across all timesteps with post-terminal masking (P2.2)
                 q_pred_all = torch.stack(q_pred_list, dim=1)  # [batch, seq_len]
                 q_target_all = torch.stack(q_target_list, dim=1)  # [batch, seq_len]
-                loss = F.mse_loss(q_pred_all, q_target_all)
+                
+                # P2.2: Apply mask to prevent gradients from post-terminal garbage
+                losses = F.mse_loss(q_pred_all, q_target_all, reduction='none')  # [batch, seq_len]
+                mask = batch["mask"].float()  # [batch, seq_len] - True for valid timesteps
+                masked_loss = (losses * mask).sum() / mask.sum().clamp_min(1)
+                loss = masked_loss
 
                 # Store training metrics
                 with torch.no_grad():
-                    self.last_td_error = (q_target_all - q_pred_all).abs().mean().item()
+                    # Compute metrics only on valid (masked) timesteps
+                    valid_errors = ((q_target_all - q_pred_all).abs() * mask).sum() / mask.sum().clamp_min(1)
+                    self.last_td_error = valid_errors.item()
                     self.last_loss = loss.item()
-                    self.last_q_values_mean = q_pred_all.mean().item()
+                    # Q-values mean across valid timesteps only
+                    valid_q_mean = (q_pred_all * mask).sum() / mask.sum().clamp_min(1)
+                    self.last_q_values_mean = valid_q_mean.item()
                     self.last_training_step = self.total_steps
 
                 # Backprop and optimize

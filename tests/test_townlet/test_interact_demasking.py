@@ -31,6 +31,18 @@ def env(device):
     )
 
 
+@pytest.fixture
+def env_temporal(device):
+    """Environment with temporal mechanics enabled for testing closed affordances."""
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        device=device,
+        partial_observability=False,
+        enable_temporal_mechanics=True,
+    )
+
+
 class TestInteractDemasking:
     """Test that INTERACT is available on affordances regardless of money."""
 
@@ -167,23 +179,25 @@ class TestInteractTimeCosts:
 class TestInteractMaskingStillWorksForPhysical:
     """Test that INTERACT is still masked for physically impossible cases."""
 
-    def test_interact_still_masked_at_closed_affordance(self, env, device):
+    def test_interact_still_masked_at_closed_affordance(self, env_temporal, device):
         """INTERACT should be masked at closed affordances (temporal mechanics)."""
-        # Skip if temporal mechanics not enabled
-        if not env.enable_temporal_mechanics:
-            pytest.skip("Temporal mechanics not enabled")
+        env_temporal.reset()
 
-        env.reset()
+        # Place on Job at night (closed - Job operates 8am-6pm)
+        job_pos = env_temporal.affordances["Job"]
+        env_temporal.positions[0] = job_pos.clone()
+        env_temporal.time_of_day = 20  # 8pm (Job closed)
 
-        # Place on Job at night (closed)
-        job_pos = env.affordances["Job"]
-        env.positions[0] = job_pos.clone()
-        env.time_of_day = 20  # 8pm (Job closed)
-
-        masks = env.get_action_masks()
+        masks = env_temporal.get_action_masks()
 
         # INTERACT should be masked (closed)
         assert not masks[0, 4], "INTERACT should be masked at closed affordance"
+        
+        # Verify time_of_day is exposed in observation
+        obs = env_temporal._get_observations()
+        # Observation should include time_of_day as last 2 features (time, interaction_progress)
+        assert obs.shape[1] > env_temporal.grid_size * env_temporal.grid_size + 8, \
+            "Temporal observations should include time_of_day and interaction_progress"
 
     def test_interact_masked_for_dead_agent(self, env, device):
         """INTERACT should be masked for dead agents."""

@@ -90,28 +90,45 @@ class DemoRunner:
         logger.info(f"Received signal {signum}, initiating graceful shutdown...")
         self.should_shutdown = True
 
+    def flush_all_agents(self):
+        """Flush all agents' episodes to replay buffer before checkpoint."""
+        if not self.population:
+            return
+
+        for agent_idx in range(self.population.num_agents):
+            self.population.flush_episode(agent_idx, synthetic_done=False)
+
     def save_checkpoint(self):
         """Save checkpoint at current episode."""
+        # P1.1 Phase 5: Flush all agents before checkpoint
+        self.flush_all_agents()
+
         checkpoint_path = self.checkpoint_dir / f"checkpoint_ep{self.current_episode:05d}.pt"
 
-        # For now, just save episode number (full checkpoint implementation later)
+        # P1.1 Phase 2: Use population's complete checkpoint state
         checkpoint = {
+            "version": 2,  # P1.1: Checkpoint format version for future migration
             "episode": self.current_episode,
             "timestamp": time.time(),
         }
 
-        # Add population state if initialized
+        # Add full population state (includes q_network, optimizer, replay_buffer, etc.)
         if self.population:
-            checkpoint["population_state"] = {
-                "q_network": self.population.q_network.state_dict(),
-                "optimizer": self.population.optimizer.state_dict(),
-            }
+            checkpoint["population_state"] = self.population.get_checkpoint_state()
 
-            # Add exploration state
-            if hasattr(self.population.exploration, "checkpoint_state"):
-                checkpoint["exploration_state"] = self.population.exploration.checkpoint_state()
+        # P1.1 Phase 3: Add curriculum state (agent stages, performance trackers)
+        if self.curriculum:
+            checkpoint["curriculum_state"] = self.curriculum.state_dict()
 
-        # Add epsilon for inference server display
+        # P1.1 Phase 4: Add affordance layout (grid positions)
+        if self.env:
+            checkpoint["affordance_layout"] = self.env.get_affordance_positions()
+
+        # P1.1 Phase 6: Add agent_ids for multi-agent coordination
+        if self.population:
+            checkpoint["agent_ids"] = self.population.agent_ids
+
+        # Add epsilon for inference server display (legacy compatibility)
         if self.exploration and hasattr(self.exploration, "rnd") and hasattr(self.exploration.rnd, "epsilon"):
             checkpoint["epsilon"] = self.exploration.rnd.epsilon
 
@@ -137,17 +154,30 @@ class DemoRunner:
         logger.info(f"Loading checkpoint: {latest_checkpoint}")
 
         checkpoint = torch.load(latest_checkpoint, weights_only=False)
+        
+        # P1.1: Check checkpoint version
+        checkpoint_version = checkpoint.get("version", 1)  # Default to v1 for legacy checkpoints
+        if checkpoint_version != 2:
+            logger.warning(f"Loading v{checkpoint_version} checkpoint (current version is 2)")
+            # Future: Add migration logic here if needed
+        
         self.current_episode = checkpoint["episode"]
 
-        # Load population state if present
+        # P1.1 Phase 2: Load full population state
         if "population_state" in checkpoint and self.population:
-            self.population.q_network.load_state_dict(checkpoint["population_state"]["q_network"])
-            self.population.optimizer.load_state_dict(checkpoint["population_state"]["optimizer"])
+            self.population.load_checkpoint_state(checkpoint["population_state"])
 
-        # Load exploration state if present
-        if "exploration_state" in checkpoint and self.population:
-            if hasattr(self.population.exploration, "load_state"):
-                self.population.exploration.load_state(checkpoint["exploration_state"])
+        # P1.1 Phase 3: Load curriculum state (agent stages, performance trackers)
+        if "curriculum_state" in checkpoint and self.curriculum:
+            self.curriculum.load_state_dict(checkpoint["curriculum_state"])
+
+        # P1.1 Phase 4: Load affordance layout (grid positions)
+        if "affordance_layout" in checkpoint and self.env:
+            self.env.set_affordance_positions(checkpoint["affordance_layout"])
+
+        # P1.1 Phase 6: Restore agent_ids for multi-agent coordination
+        if "agent_ids" in checkpoint and self.population:
+            self.population.agent_ids = checkpoint["agent_ids"]
 
         logger.info(f"Resumed from episode {self.current_episode}")
         return self.current_episode

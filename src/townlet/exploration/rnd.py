@@ -246,7 +246,11 @@ class RNDExploration(ExplorationStrategy):
         """
         self.fixed_network.load_state_dict(state["fixed_network"])
         self.predictor_network.load_state_dict(state["predictor_network"])
-        self.optimizer.load_state_dict(state["optimizer"])
+
+        # Gracefully handle missing optimizer (backwards compatibility)
+        if "optimizer" in state:
+            self.optimizer.load_state_dict(state["optimizer"])
+
         self.epsilon = state["epsilon"]
         self.epsilon_min = state["epsilon_min"]
         self.epsilon_decay = state["epsilon_decay"]

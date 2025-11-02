@@ -86,6 +86,11 @@ class PerformanceTracker:
         self.episode_steps += 1.0
         self.steps_at_stage += 1.0
 
+        # P1.3: Update baseline BEFORE resetting (capture completed episode reward)
+        # This ensures prev_avg_reward reflects the most recent episode performance
+        current_avg = self.episode_rewards / torch.clamp(self.episode_steps, min=1.0)
+        self.prev_avg_reward = torch.where(dones, current_avg, self.prev_avg_reward)
+
         # Reset completed episodes
         self.episode_rewards = torch.where(dones, 0.0, self.episode_rewards)
         self.episode_steps = torch.where(dones, 0.0, self.episode_steps)
@@ -351,4 +356,12 @@ class AdversarialCurriculum(CurriculumManager):
 
     def load_checkpoint_state(self, state: dict[str, Any]) -> None:
         """Alias for load_state() for API consistency."""
+        self.load_state(state)
+
+    def state_dict(self) -> dict[str, Any]:
+        """PyTorch-style alias for checkpoint_state() for API consistency."""
+        return self.checkpoint_state()
+
+    def load_state_dict(self, state: dict[str, Any]) -> None:
+        """PyTorch-style alias for load_state() for API consistency."""
         self.load_state(state)

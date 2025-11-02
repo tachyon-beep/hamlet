@@ -72,11 +72,15 @@ class ObservationBuilder:
 
         # Add temporal features if enabled
         if self.enable_temporal_mechanics:
-            normalized_time = torch.full(
-                (self.num_agents, 1), time_of_day / 23.0, device=self.device
-            )
+            # Encode time_of_day as [sin, cos] for cyclical representation
+            # This allows the network to understand that 23:00 and 00:00 are close
+            import math
+            angle = (time_of_day / 24.0) * 2 * math.pi
+            time_sin = torch.full((self.num_agents, 1), math.sin(angle), device=self.device)
+            time_cos = torch.full((self.num_agents, 1), math.cos(angle), device=self.device)
+            
             normalized_progress = interaction_progress.unsqueeze(1) / 10.0
-            obs = torch.cat([obs, normalized_time, normalized_progress], dim=1)
+            obs = torch.cat([obs, time_sin, time_cos, normalized_progress], dim=1)
 
         return obs
 

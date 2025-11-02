@@ -3,7 +3,7 @@
 **Last Updated:** November 2, 2025  
 **Purpose:** Comprehensive project documentation for AI assistants and future developers  
 **Current Branch:** main  
-**Test Coverage:** 62% (376 tests passing after legacy code removal)  
+**Test Coverage:** 46% (24 P1.1 tests + prior tests, all passing)  
 **Authority Order:** ROADMAP.md > actual code > CLAUDE.md (CLAUDE.md is outdated)  
 **Package Manager:** Use `uv` for all pip operations
 
@@ -12,31 +12,6 @@
 ## Executive Summary
 
 Hamlet is a **pedagogical Deep Reinforcement Learning environment** designed to "trick students into learning graduate-level RL by making them think they're just playing The Sims." Agents learn to survive in a grid world by managing 8 interconnected meters (energy, hygiene, satiation, money, mood, social, health, fitness) through interactions with 15 affordances.
-
-### Current Status: Phase 3 Complete + Legacy Cleanup Complete, Phase 3.5 Next
-
-**Phase 3 (✅ COMPLETE - Nov 2, 2025):** Full Config-Driven Architecture
-
-- ✅ **CascadeEngine Integration:** Removed 148 lines of legacy meter dynamics (Nov 2)
-- ✅ **AffordanceEngine Migration:** Removed 282 lines of legacy affordance code (Nov 2)
-- ✅ **Total Technical Debt Eliminated:** 430 lines + 11 obsolete tests
-- ✅ **Single Source of Truth:** All systems now YAML-driven (bars.yaml, cascades.yaml, affordances_corrected.yaml)
-- ✅ **RND Exploration:** Random Network Distillation with adaptive annealing
-- ✅ **Adversarial Curriculum:** 5-stage progressive difficulty system
-- ✅ **376 tests passing** (100% pass rate after cleanup)
-
-**Phase 3.5 (🎯 NEXT):** Multi-Day Tech Demo
-
-- Validate system stability over 48+ hours (10K episodes)
-- Observe exploration→exploitation transition in production
-- Generate teaching materials from real training data
-- **Purpose:** Validate foundation before adding POMDP complexity
-- **Status:** READY - all legacy code removed, systems validated
-
-**Strategic Direction:** 2→3→1 approach
-
-- Multi-Day Demo (validate) → POMDP Extension (add complexity) → Informed Optimization (profile real system)
-- **Rationale:** Avoid optimizing twice by waiting until POMDP reveals real bottlenecks
 
 ### Key Features
 

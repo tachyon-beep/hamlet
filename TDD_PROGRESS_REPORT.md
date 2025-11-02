@@ -2,7 +2,7 @@
 
 **Date:** November 2, 2025  
 **Approach:** Test-Driven Development (RED → GREEN → REFACTOR)  
-**Status:** 2/10 tasks complete, 521 tests passing
+**Status:** 4/10 tasks complete, 560 tests passing (0 failures!), 69% coverage
 
 ---
 
@@ -35,6 +35,34 @@
 
 - Gap 3.1: Unify episode finalization logic (refactoring opportunity for P1.1)
 - Gap 3.2: Flush before checkpoint (required for P1.1)
+
+---
+
+### ✅ P1.3: Curriculum Signal Purity (20 minutes)
+
+**Discovery:** Runner was 95% correct but PerformanceTracker had a critical bug!
+
+**Problem:** `prev_avg_reward` was never updated, breaking learning progress metric
+
+- `update_step()` reset `episode_rewards` to 0 on done
+- But `prev_avg_reward` stayed at 0 forever
+- Learning progress calculations always wrong
+
+**Fix:** Update baseline BEFORE resetting (src/townlet/curriculum/adversarial.py lines 88-90)
+
+```python
+# P1.3: Update baseline BEFORE resetting (capture completed episode reward)
+current_avg = self.episode_rewards / torch.clamp(self.episode_steps, min=1.0)
+self.prev_avg_reward = torch.where(dones, current_avg, self.prev_avg_reward)
+```
+
+**Test Results:** ✅ 11/11 passing (all new tests)
+
+**Impact:**
+
+- Curriculum stage advancement now based on real performance data
+- Learning progress metric actually works
+- Agents can properly progress through all 5 stages
 
 ---
 

@@ -524,12 +524,12 @@ class TestActionSelectionEdgeCases:
         population.reset()
 
         # Place agent at top-left of 2×2 grid
-        # Only DOWN, RIGHT, and INTERACT are valid
+        # Only DOWN, RIGHT, INTERACT, and WAIT are valid
         minimal_env.positions = torch.tensor([[0, 0]], device=minimal_env.device)
 
         # Should select one of the valid actions
         actions = population.select_greedy_actions(minimal_env)
-        assert actions[0] in [1, 3, 4]  # DOWN, RIGHT, or INTERACT
+        assert actions[0] in [1, 3, 4, 5]  # DOWN, RIGHT, INTERACT, or WAIT
 
     def test_all_movement_actions_masked(self):
         """Test case where all movement actions are masked (edge case)."""
