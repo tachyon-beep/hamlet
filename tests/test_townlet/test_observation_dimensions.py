@@ -56,7 +56,7 @@ def test_observation_dimension_with_temporal_mechanics():
         f"Expected {expected_dim} dims, got {obs_dim}"
     )  # Create network with temporal support
     network = RecurrentSpatialQNetwork(
-        action_dim=5,
+        action_dim=6,
         window_size=5,
         num_meters=8,
         num_affordance_types=env.num_affordance_types,
@@ -68,7 +68,7 @@ def test_observation_dimension_with_temporal_mechanics():
     obs = env.reset()
     q_values, hidden = network(obs)
 
-    assert q_values.shape == (1, 5)
+    assert q_values.shape == (1, 6)
 
 
 def test_full_observability_dimension_matches():

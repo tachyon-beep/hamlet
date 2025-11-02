@@ -1,7 +1,8 @@
 """
 Tests for reward calculation in VectorizedHamletEnv.
 
-Focus on milestone survival rewards (active system).
+Focus on baseline-relative reward system (active system).
+Reward = steps_survived - R (baseline survival)
 """
 
 import torch
@@ -9,11 +10,11 @@ import torch
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
-class TestMilestoneRewards:
-    """Test milestone-based survival reward system."""
+class TestBaselineRelativeRewards:
+    """Test baseline-relative reward system."""
 
-    def test_no_milestone_no_bonus(self):
-        """No bonus if not at milestone."""
+    def test_no_reward_while_alive(self):
+        """No reward until agent dies (terminal state)."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -23,40 +24,17 @@ class TestMilestoneRewards:
         )
         env.reset()
 
-        # Step to 5 (not a milestone)
-        env.step_counts[0] = 5
+        # Agent alive at step 50
+        env.step_counts[0] = 50
         env.dones[0] = False
 
         rewards = env._calculate_shaped_rewards()
 
-        # No milestone, no bonus
+        # No reward until death
         assert abs(rewards[0] - 0.0) < 1e-6
 
-    def test_decade_milestone_bonus(self):
-        """Every 10 steps gives +0.5 bonus."""
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=5,
-            device=torch.device("cpu"),
-            partial_observability=False,
-            enable_temporal_mechanics=False,
-        )
-        env.reset()
-
-        # Agent 0 at step 10, agent 1 at step 20
-        env.step_counts[0] = 10
-        env.step_counts[1] = 20
-        env.dones[0] = False
-        env.dones[1] = False
-
-        rewards = env._calculate_shaped_rewards()
-
-        # Both get decade milestone bonus
-        assert abs(rewards[0] - 0.5) < 1e-6
-        assert abs(rewards[1] - 0.5) < 1e-6
-
-    def test_century_milestone_bonus(self):
-        """Every 100 steps gives +5.0 bonus."""
+    def test_reward_on_death_short_survival(self):
+        """Agent that dies early gets negative reward."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -66,17 +44,20 @@ class TestMilestoneRewards:
         )
         env.reset()
 
-        # Step 100 (both decade AND century milestone)
-        env.step_counts[0] = 100
-        env.dones[0] = False
+        # Set baseline to 100 steps
+        env.reward_strategy.set_baseline_survival_steps(100.0)
+
+        # Agent dies at step 50 (below baseline)
+        env.step_counts[0] = 50
+        env.dones[0] = True
 
         rewards = env._calculate_shaped_rewards()
 
-        # Gets both bonuses: 0.5 (decade) + 5.0 (century) = 5.5
-        assert abs(rewards[0] - 5.5) < 1e-6
+        # Reward = 50 - 100 = -50
+        assert abs(rewards[0] - (-50.0)) < 1e-6
 
-    def test_century_milestone_at_200(self):
-        """Century milestone works at 200, 300, etc."""
+    def test_reward_on_death_long_survival(self):
+        """Agent that survives longer than baseline gets positive reward."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -86,17 +67,20 @@ class TestMilestoneRewards:
         )
         env.reset()
 
-        # Step 200
-        env.step_counts[0] = 200
-        env.dones[0] = False
+        # Set baseline to 100 steps
+        env.reward_strategy.set_baseline_survival_steps(100.0)
+
+        # Agent dies at step 150 (above baseline)
+        env.step_counts[0] = 150
+        env.dones[0] = True
 
         rewards = env._calculate_shaped_rewards()
 
-        # Gets both bonuses
-        assert abs(rewards[0] - 5.5) < 1e-6
+        # Reward = 150 - 100 = +50
+        assert abs(rewards[0] - 50.0) < 1e-6
 
-    def test_death_penalty_overrides_milestones(self):
-        """Death gives -100.0 penalty regardless of milestones."""
+    def test_reward_at_baseline_is_zero(self):
+        """Agent that survives exactly baseline steps gets zero reward."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -106,17 +90,20 @@ class TestMilestoneRewards:
         )
         env.reset()
 
-        # Step 100 (would be +5.5 milestone) BUT agent died
+        # Set baseline to 100 steps
+        env.reward_strategy.set_baseline_survival_steps(100.0)
+
+        # Agent dies at exactly baseline
         env.step_counts[0] = 100
         env.dones[0] = True
 
         rewards = env._calculate_shaped_rewards()
 
-        # Death penalty overrides everything
-        assert abs(rewards[0] - (-100.0)) < 1e-6
+        # Reward = 100 - 100 = 0
+        assert abs(rewards[0] - 0.0) < 1e-6
 
-    def test_only_alive_agents_get_milestones(self):
-        """Dead agents don't get milestone bonuses."""
+    def test_multiple_agents_different_survival_times(self):
+        """Each agent gets reward based on their own survival time."""
         env = VectorizedHamletEnv(
             num_agents=3,
             grid_size=5,
@@ -126,23 +113,53 @@ class TestMilestoneRewards:
         )
         env.reset()
 
-        # All at step 10, but agent 1 is dead
-        env.step_counts = torch.tensor([10, 10, 10])
+        # Set baseline to 100 steps
+        env.reward_strategy.set_baseline_survival_steps(100.0)
+
+        # Agent 0: dies at 50 (below baseline)
+        # Agent 1: dies at 100 (at baseline)
+        # Agent 2: dies at 150 (above baseline)
+        env.step_counts = torch.tensor([50, 100, 150])
+        env.dones = torch.tensor([True, True, True])
+
+        rewards = env._calculate_shaped_rewards()
+
+        # Rewards = steps - baseline
+        assert abs(rewards[0] - (-50.0)) < 1e-6  # 50 - 100 = -50
+        assert abs(rewards[1] - 0.0) < 1e-6  # 100 - 100 = 0
+        assert abs(rewards[2] - 50.0) < 1e-6  # 150 - 100 = +50
+
+    def test_only_dead_agents_get_rewards(self):
+        """Alive agents get 0, dead agents get baseline-relative reward."""
+        env = VectorizedHamletEnv(
+            num_agents=3,
+            grid_size=5,
+            device=torch.device("cpu"),
+            partial_observability=False,
+            enable_temporal_mechanics=False,
+        )
+        env.reset()
+
+        # Set baseline to 100 steps
+        env.reward_strategy.set_baseline_survival_steps(100.0)
+
+        # All at step 150, but only agent 1 is dead
+        env.step_counts = torch.tensor([150, 150, 150])
         env.dones = torch.tensor([False, True, False])
 
         rewards = env._calculate_shaped_rewards()
 
-        # Alive agents get bonus
-        assert abs(rewards[0] - 0.5) < 1e-6
-        assert abs(rewards[2] - 0.5) < 1e-6
+        # Alive agents get no reward
+        assert abs(rewards[0] - 0.0) < 1e-6
+        assert abs(rewards[2] - 0.0) < 1e-6
 
-        # Dead agent gets death penalty
-        assert abs(rewards[1] - (-100.0)) < 1e-6
+        # Dead agent gets baseline-relative reward
+        assert abs(rewards[1] - 50.0) < 1e-6  # 150 - 100 = +50
 
-    def test_milestone_30_is_decade_not_century(self):
-        """Step 30 is a decade milestone, not century."""
+    def test_baseline_affects_reward_calculation(self):
+        """Different baselines produce different rewards for same survival."""
         env = VectorizedHamletEnv(
-            num_agents=1,
+            num_agents=2,
             grid_size=5,
             device=torch.device("cpu"),
             partial_observability=False,
@@ -150,32 +167,23 @@ class TestMilestoneRewards:
         )
         env.reset()
 
-        env.step_counts[0] = 30
-        env.dones[0] = False
+        # Both agents survive 100 steps
+        env.step_counts = torch.tensor([100, 100])
+        env.dones = torch.tensor([True, True])
 
-        rewards = env._calculate_shaped_rewards()
+        # Test with baseline = 50
+        env.reward_strategy.set_baseline_survival_steps(50.0)
+        rewards_low_baseline = env._calculate_shaped_rewards()
 
-        # Only decade bonus
-        assert abs(rewards[0] - 0.5) < 1e-6
+        # Test with baseline = 150
+        env.reward_strategy.set_baseline_survival_steps(150.0)
+        rewards_high_baseline = env._calculate_shaped_rewards()
 
-    def test_milestone_50_is_decade_not_century(self):
-        """Step 50 is a decade milestone, not century."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            device=torch.device("cpu"),
-            partial_observability=False,
-            enable_temporal_mechanics=False,
-        )
-        env.reset()
+        # Low baseline: 100 - 50 = +50
+        assert abs(rewards_low_baseline[0] - 50.0) < 1e-6
 
-        env.step_counts[0] = 50
-        env.dones[0] = False
-
-        rewards = env._calculate_shaped_rewards()
-
-        # Only decade bonus
-        assert abs(rewards[0] - 0.5) < 1e-6
+        # High baseline: 100 - 150 = -50
+        assert abs(rewards_high_baseline[0] - (-50.0)) < 1e-6
 
 
 class TestDeathConditions:

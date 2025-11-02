@@ -27,7 +27,7 @@ class TestSimpleQNetwork:
     def network(self):
         """Create SimpleQNetwork with standard config."""
         obs_dim = 72  # 8×8 grid + 8 meters
-        action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
+        action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
         return SimpleQNetwork(obs_dim=obs_dim, action_dim=action_dim)
 
     def test_initialization(self, network):
@@ -49,14 +49,14 @@ class TestSimpleQNetwork:
         assert network.net[2].in_features == 128
         assert network.net[2].out_features == 128
         assert network.net[4].in_features == 128
-        assert network.net[4].out_features == 5
+        assert network.net[4].out_features == 6
 
     def test_forward_pass_single_agent(self, network):
         """Forward pass should produce correct Q-value shapes."""
         obs = torch.randn(1, 72)  # Single agent
         q_values = network(obs)
 
-        assert q_values.shape == (1, 5), f"Expected (1, 5), got {q_values.shape}"
+        assert q_values.shape == (1, 6), f"Expected (1, 6), got {q_values.shape}"
         assert not torch.isnan(q_values).any(), "Q-values contain NaN"
         assert not torch.isinf(q_values).any(), "Q-values contain Inf"
 
@@ -66,7 +66,7 @@ class TestSimpleQNetwork:
         obs = torch.randn(batch_size, 72)
         q_values = network(obs)
 
-        assert q_values.shape == (batch_size, 5)
+        assert q_values.shape == (batch_size, 6)
         assert not torch.isnan(q_values).any()
 
     def test_q_value_range(self, network):
@@ -80,16 +80,16 @@ class TestSimpleQNetwork:
     def test_different_observation_dimensions(self):
         """Network should work with different observation dimensions."""
         # Full observability (8×8 + 8 meters)
-        net_full = SimpleQNetwork(obs_dim=72, action_dim=5)
+        net_full = SimpleQNetwork(obs_dim=72, action_dim=6)
         obs_full = torch.randn(4, 72)
         q_full = net_full(obs_full)
-        assert q_full.shape == (4, 5)
+        assert q_full.shape == (4, 6)
 
         # With temporal features (+ time_of_day + interaction_progress)
-        net_temporal = SimpleQNetwork(obs_dim=74, action_dim=5)
+        net_temporal = SimpleQNetwork(obs_dim=74, action_dim=6)
         obs_temporal = torch.randn(4, 74)
         q_temporal = net_temporal(obs_temporal)
-        assert q_temporal.shape == (4, 5)
+        assert q_temporal.shape == (4, 6)
 
     def test_gradient_flow(self, network):
         """Gradients should flow through network."""
@@ -113,7 +113,7 @@ class TestRecurrentSpatialQNetwork:
         # Network computes obs_dim from window_size + num_meters + affordances
         # Default num_affordance_types=15 → encoding size = 15+1 = 16
         # Observation: 25 (5×5) + 2 (position) + 8 (meters) + 16 (affordance) = 51
-        return RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
+        return RecurrentSpatialQNetwork(action_dim=6, window_size=5, num_meters=8)
 
     def test_initialization(self, network):
         """Network should initialize with correct architecture."""
@@ -143,7 +143,7 @@ class TestRecurrentSpatialQNetwork:
         obs = torch.randn(1, 51)
         q_values, hidden = network(obs)
 
-        assert q_values.shape == (1, 5)
+        assert q_values.shape == (1, 6)
         assert hidden is not None
         assert len(hidden) == 2  # (h, c)
         assert hidden[0].shape == (1, 1, 256)  # (num_layers, batch, hidden_size)
@@ -159,7 +159,7 @@ class TestRecurrentSpatialQNetwork:
         # Second forward pass with previous hidden state
         q2, hidden2 = network(obs, hidden1)
 
-        assert q2.shape == (1, 5)
+        assert q2.shape == (1, 6)
         assert not torch.equal(q1, q2), "Q-values should differ with different hidden states"
         assert not torch.equal(hidden1[0], hidden2[0]), "Hidden state should be updated"
 
@@ -187,9 +187,7 @@ class TestRecurrentSpatialQNetwork:
 
         # But stored state should still be zeros (not automatically updated)
         stored_h, stored_c = network.get_hidden_state()
-        assert torch.all(stored_h == 0), (
-            "Stored hidden state should still be zero (not auto-updated)"
-        )
+        assert torch.all(stored_h == 0), "Stored hidden state should still be zero (not auto-updated)"
         assert torch.all(stored_c == 0), "Stored cell state should still be zero (not auto-updated)"
 
         # Manually update stored state
@@ -220,7 +218,7 @@ class TestRecurrentSpatialQNetwork:
         network.reset_hidden_state(batch_size, device=torch.device("cpu"))
         q_values, hidden = network(obs)
 
-        assert q_values.shape == (batch_size, 5)
+        assert q_values.shape == (batch_size, 6)
         assert hidden[0].shape == (1, batch_size, 256)
         assert hidden[1].shape == (1, batch_size, 256)
 
@@ -234,7 +232,7 @@ class TestRecurrentSpatialQNetwork:
         obs = torch.randn(4, 51)
         q_values, _ = network(obs)
 
-        assert q_values.shape == (4, 5)
+        assert q_values.shape == (4, 6)
         assert not torch.isnan(q_values).any()
 
     def test_gradient_flow_through_lstm(self, network):
@@ -265,25 +263,23 @@ class TestRecurrentSpatialQNetwork:
 
         # Hidden states should differ across steps
         for i in range(len(hidden_states) - 1):
-            assert not torch.equal(hidden_states[i], hidden_states[i + 1]), (
-                f"Hidden state unchanged between steps {i} and {i + 1}"
-            )
+            assert not torch.equal(hidden_states[i], hidden_states[i + 1]), f"Hidden state unchanged between steps {i} and {i + 1}"
 
     def test_different_observation_dimensions(self):
         """Network should work with temporal features added (obs dimensions change)."""
         # Base POMDP: 25 (5×5) + 2 (pos) + 8 (meters) + 15 (affordance) = 50
-        net_base = RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
+        net_base = RecurrentSpatialQNetwork(action_dim=6, window_size=5, num_meters=8)
         obs_base = torch.randn(2, 51)
         q_base, _ = net_base(obs_base)
-        assert q_base.shape == (2, 5)
+        assert q_base.shape == (2, 6)
 
         # With temporal: 25 + 2 + 8 + 16 + 2 (time + progress) = 52
         # But network doesn't know about temporal - it just processes extra dims
         # So we test it handles the expected 50 dims correctly
-        net_temporal = RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
+        net_temporal = RecurrentSpatialQNetwork(action_dim=6, window_size=5, num_meters=8)
         obs_temporal = torch.randn(2, 51)
         q_temporal, _ = net_temporal(obs_temporal)
-        assert q_temporal.shape == (2, 5)
+        assert q_temporal.shape == (2, 6)
 
     def test_lstm_memory_effect(self, network):
         """LSTM should show memory effect across sequence."""
@@ -320,8 +316,8 @@ class TestNetworkComparison:
 
     def test_parameter_counts(self):
         """RecurrentSpatialQNetwork should have more parameters (LSTM)."""
-        simple_net = SimpleQNetwork(obs_dim=72, action_dim=5)
-        recurrent_net = RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
+        simple_net = SimpleQNetwork(obs_dim=72, action_dim=6)
+        recurrent_net = RecurrentSpatialQNetwork(action_dim=6, window_size=5, num_meters=8)
 
         simple_params = sum(p.numel() for p in simple_net.parameters())
         recurrent_params = sum(p.numel() for p in recurrent_net.parameters())
@@ -330,16 +326,14 @@ class TestNetworkComparison:
         print(f"   SimpleQNetwork: {simple_params:,} parameters")
         print(f"   RecurrentSpatialQNetwork: {recurrent_params:,} parameters")
 
-        assert recurrent_params > simple_params, (
-            "Recurrent network should have more parameters due to LSTM"
-        )
+        assert recurrent_params > simple_params, "Recurrent network should have more parameters due to LSTM"
 
     def test_computational_difference(self):
         """Recurrent network should take longer due to sequential LSTM."""
         import time
 
-        simple_net = SimpleQNetwork(obs_dim=72, action_dim=5)
-        recurrent_net = RecurrentSpatialQNetwork(action_dim=5, window_size=5, num_meters=8)
+        simple_net = SimpleQNetwork(obs_dim=72, action_dim=6)
+        recurrent_net = RecurrentSpatialQNetwork(action_dim=6, window_size=5, num_meters=8)
 
         batch_size = 32
         obs_simple = torch.randn(batch_size, 72)

@@ -34,6 +34,9 @@ class VectorizedHamletEnv:
         vision_range: int = 2,
         enable_temporal_mechanics: bool = False,
         enabled_affordances: list[str] | None = None,
+        move_energy_cost: float = 0.005,
+        wait_energy_cost: float = 0.001,
+        interact_energy_cost: float = 0.0,
     ):
         """
         Initialize vectorized environment.
@@ -46,6 +49,9 @@ class VectorizedHamletEnv:
             vision_range: Radius of vision window (2 = 5×5 window)
             enable_temporal_mechanics: Enable time-based mechanics and multi-tick interactions
             enabled_affordances: List of affordance names to enable (None = all affordances)
+            move_energy_cost: Energy cost per movement action (default 0.005 = 0.5%)
+            wait_energy_cost: Energy cost per WAIT action (default 0.001 = 0.1%)
+            interact_energy_cost: Energy cost per INTERACT action (default 0.0 = free)
         """
         self.num_agents = num_agents
         self.grid_size = grid_size
@@ -53,6 +59,11 @@ class VectorizedHamletEnv:
         self.partial_observability = partial_observability
         self.vision_range = vision_range
         self.enable_temporal_mechanics = enable_temporal_mechanics
+
+        # Configurable energy costs
+        self.move_energy_cost = move_energy_cost
+        self.wait_energy_cost = wait_energy_cost
+        self.interact_energy_cost = interact_energy_cost
 
         # Affordance positions (from Hamlet default layout)
         all_affordances = {
@@ -127,7 +138,7 @@ class VectorizedHamletEnv:
         affordance_config = AffordanceConfigCollection.model_validate(config_dict)
         self.affordance_engine = AffordanceEngine(affordance_config, num_agents, device)
 
-        self.action_dim = 5  # UP, DOWN, LEFT, RIGHT, INTERACT
+        self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 
         # State tensors (initialized in reset)
         self.positions: torch.Tensor | None = None  # [num_agents, 2]
@@ -195,11 +206,11 @@ class VectorizedHamletEnv:
         take them off the grid. This saves exploration budget and speeds learning.
 
         Returns:
-            action_masks: [num_agents, 5] bool tensor
+            action_masks: [num_agents, 6] bool tensor
                 True = valid action, False = invalid
-                Actions: [UP, DOWN, LEFT, RIGHT, INTERACT]
+                Actions: [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
         """
-        action_masks = torch.ones(self.num_agents, 5, dtype=torch.bool, device=self.device)
+        action_masks = torch.ones(self.num_agents, 6, dtype=torch.bool, device=self.device)
 
         # Check boundary constraints
         # positions[:, 0] = x (column), positions[:, 1] = y (row)
@@ -237,6 +248,11 @@ class VectorizedHamletEnv:
             on_affordable_affordance |= on_this_affordance & can_afford
 
         action_masks[:, 4] = on_affordable_affordance
+
+        # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
+        # This must be LAST to override all other masking
+        dead_agents = (self.meters[:, 6] <= 0.0) | (self.meters[:, 0] <= 0.0)  # health OR energy
+        action_masks[dead_agents] = False
 
         return action_masks
 
@@ -294,11 +310,11 @@ class VectorizedHamletEnv:
 
     def _execute_actions(self, actions: torch.Tensor) -> dict:
         """
-        Execute movement and interaction actions.
+        Execute movement, interaction, and wait actions.
 
         Args:
             actions: [num_agents] tensor
-                0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=INTERACT
+                0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=INTERACT, 5=WAIT
 
         Returns:
             Dictionary mapping agent indices to affordance names for successful interactions
@@ -315,6 +331,7 @@ class VectorizedHamletEnv:
                 [-1, 0],  # LEFT - decreases x, y unchanged
                 [1, 0],  # RIGHT - increases x, y unchanged
                 [0, 0],  # INTERACT (no movement)
+                [0, 0],  # WAIT (no movement)
             ],
             device=self.device,
         )
@@ -335,13 +352,13 @@ class VectorizedHamletEnv:
                     self.interaction_progress[agent_idx] = 0
                     self.last_interaction_affordance[agent_idx] = None
 
-        # Apply movement costs (matching Hamlet exactly)
-        # Movement costs: energy -0.5%, hygiene -0.3%, satiation -0.4%
-        movement_mask = actions < 4  # Actions 0-3 are movement
+        # Apply action costs (configurable)
+        # Movement (UP, DOWN, LEFT, RIGHT)
+        movement_mask = actions < 4
         if movement_mask.any():
             movement_costs = torch.tensor(
                 [
-                    0.005,  # energy: -0.5%
+                    self.move_energy_cost,  # energy (configurable, default 0.5%)
                     0.003,  # hygiene: -0.3%
                     0.004,  # satiation: -0.4%
                     0.0,  # money: no cost
@@ -353,6 +370,25 @@ class VectorizedHamletEnv:
                 device=self.device,
             )
             self.meters[movement_mask] -= movement_costs.unsqueeze(0)
+            self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
+        # WAIT action (action 5) - lighter energy cost
+        wait_mask = actions == 5
+        if wait_mask.any():
+            wait_costs = torch.tensor(
+                [
+                    self.wait_energy_cost,  # energy (configurable, default 0.1%)
+                    0.0,  # hygiene: no cost
+                    0.0,  # satiation: no cost
+                    0.0,  # money: no cost
+                    0.0,  # mood: no cost
+                    0.0,  # social: no cost
+                    0.0,  # health: no cost
+                    0.0,  # fitness: no cost
+                ],
+                device=self.device,
+            )
+            self.meters[wait_mask] -= wait_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
@@ -545,18 +581,28 @@ class VectorizedHamletEnv:
         baseline = self.calculate_baseline_survival(depletion_multiplier)
         self.reward_strategy.set_baseline_survival_steps(baseline)
 
-    def get_affordance_positions(self) -> dict[str, tuple[int, int]]:
-        """Get current affordance positions.
+    def get_affordance_positions(self) -> dict[str, tuple[int, int] | list[int]]:
+        """Get current affordance positions (P1.1 checkpointing).
 
         Returns:
-            Dictionary mapping affordance names to (x, y) positions
+            Dictionary mapping affordance names to positions (tuple or list)
         """
         positions = {}
         for name, pos_tensor in self.affordances.items():
-            # Convert tensor position to tuple
+            # Convert tensor position to list (for JSON serialization)
             pos = pos_tensor.cpu().tolist()
-            positions[name] = (int(pos[0]), int(pos[1]))
+            positions[name] = [int(pos[0]), int(pos[1])]
         return positions
+
+    def set_affordance_positions(self, positions: dict[str, list[int] | tuple[int, int]]) -> None:
+        """Set affordance positions from checkpoint (P1.1 checkpointing).
+
+        Args:
+            positions: Dictionary mapping affordance names to [x, y] positions
+        """
+        for name, pos in positions.items():
+            if name in self.affordances:
+                self.affordances[name] = torch.tensor(pos, device=self.device, dtype=torch.long)
 
     def randomize_affordance_positions(self):
         """Randomize affordance positions for generalization testing.

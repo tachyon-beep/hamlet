@@ -185,9 +185,7 @@ class AdversarialCurriculum(CurriculumManager):
         """Check if agent should advance to next stage."""
         # Bounds checking
         if not (0 <= agent_idx < self.tracker.num_agents):
-            raise ValueError(
-                f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})"
-            )
+            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
 
         if self.tracker.agent_stages[agent_idx] >= 5:
             return False  # Already at max stage
@@ -211,9 +209,7 @@ class AdversarialCurriculum(CurriculumManager):
         """Check if agent should retreat to previous stage."""
         # Bounds checking
         if not (0 <= agent_idx < self.tracker.num_agents):
-            raise ValueError(
-                f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})"
-            )
+            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
 
         if self.tracker.agent_stages[agent_idx] <= 1:
             return False  # Already at minimum stage
@@ -255,18 +251,14 @@ class AdversarialCurriculum(CurriculumManager):
                 self.tracker.agent_stages[i] -= 1
                 self.tracker.steps_at_stage[i] = 0
                 # Update baseline for retreating agent only
-                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(
-                    self.tracker.episode_steps[i], min=1.0
-                )
+                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
                 self.tracker.prev_avg_reward[i] = current_avg_i
             # Then check for advancement
             elif self._should_advance(i, entropies[i].item()):
                 self.tracker.agent_stages[i] += 1
                 self.tracker.steps_at_stage[i] = 0
                 # Update baseline for advancing agent only (not all agents)
-                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(
-                    self.tracker.episode_steps[i], min=1.0
-                )
+                current_avg_i = self.tracker.episode_rewards[i] / torch.clamp(self.tracker.episode_steps[i], min=1.0)
                 self.tracker.prev_avg_reward[i] = current_avg_i
 
             # Get current stage
@@ -356,3 +348,7 @@ class AdversarialCurriculum(CurriculumManager):
         self.tracker.episode_steps = state["episode_steps"].to(self.device)
         self.tracker.prev_avg_reward = state["prev_avg_reward"].to(self.device)
         self.tracker.steps_at_stage = state["steps_at_stage"].to(self.device)
+
+    def load_checkpoint_state(self, state: dict[str, Any]) -> None:
+        """Alias for load_state() for API consistency."""
+        self.load_state(state)

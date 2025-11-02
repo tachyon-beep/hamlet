@@ -1,6 +1,5 @@
 """Replay buffer for off-policy learning with dual rewards."""
 
-
 import torch
 
 
@@ -11,7 +10,7 @@ class ReplayBuffer:
     Samples: Random mini-batches with combined rewards
     """
 
-    def __init__(self, capacity: int = 10000, device: torch.device = torch.device('cpu')):
+    def __init__(self, capacity: int = 10000, device: torch.device = torch.device("cpu")):
         """Initialize replay buffer.
 
         Args:
@@ -33,12 +32,12 @@ class ReplayBuffer:
 
     def push(
         self,
-        observations: torch.Tensor,      # [batch, obs_dim]
-        actions: torch.Tensor,           # [batch]
-        rewards_extrinsic: torch.Tensor, # [batch]
-        rewards_intrinsic: torch.Tensor, # [batch]
-        next_observations: torch.Tensor, # [batch, obs_dim]
-        dones: torch.Tensor,             # [batch]
+        observations: torch.Tensor,  # [batch, obs_dim]
+        actions: torch.Tensor,  # [batch]
+        rewards_extrinsic: torch.Tensor,  # [batch]
+        rewards_intrinsic: torch.Tensor,  # [batch]
+        next_observations: torch.Tensor,  # [batch, obs_dim]
+        dones: torch.Tensor,  # [batch]
     ) -> None:
         """Add batch of transitions to buffer.
 
@@ -99,19 +98,83 @@ class ReplayBuffer:
             indices = torch.randint(0, self.size, (batch_size,), device=self.device)
 
         # Combine rewards
-        combined_rewards = (
-            self.rewards_extrinsic[indices] +
-            self.rewards_intrinsic[indices] * intrinsic_weight
-        )
+        combined_rewards = self.rewards_extrinsic[indices] + self.rewards_intrinsic[indices] * intrinsic_weight
 
         return {
-            'observations': self.observations[indices],
-            'actions': self.actions[indices],
-            'rewards': combined_rewards,
-            'next_observations': self.next_observations[indices],
-            'dones': self.dones[indices],
+            "observations": self.observations[indices],
+            "actions": self.actions[indices],
+            "rewards": combined_rewards,
+            "next_observations": self.next_observations[indices],
+            "dones": self.dones[indices],
         }
 
     def __len__(self) -> int:
         """Return current buffer size."""
         return self.size
+
+    def serialize(self) -> dict:
+        """
+        Serialize buffer contents for checkpointing (P1.1).
+
+        Returns:
+            Dictionary with all buffer state on CPU for saving
+        """
+        if self.observations is None:
+            # Empty buffer
+            return {
+                "size": 0,
+                "position": 0,
+                "capacity": self.capacity,
+                "observations": None,
+                "actions": None,
+                "rewards_extrinsic": None,
+                "rewards_intrinsic": None,
+                "next_observations": None,
+                "dones": None,
+            }
+
+        return {
+            "size": self.size,
+            "position": self.position,
+            "capacity": self.capacity,
+            "observations": self.observations[: self.size].cpu(),
+            "actions": self.actions[: self.size].cpu(),
+            "rewards_extrinsic": self.rewards_extrinsic[: self.size].cpu(),
+            "rewards_intrinsic": self.rewards_intrinsic[: self.size].cpu(),
+            "next_observations": self.next_observations[: self.size].cpu(),
+            "dones": self.dones[: self.size].cpu(),
+        }
+
+    def load_from_serialized(self, state: dict) -> None:
+        """
+        Restore buffer from serialized state (P1.1).
+
+        Args:
+            state: Dictionary from serialize()
+        """
+        if state["observations"] is None:
+            # Empty buffer
+            self.size = 0
+            self.position = 0
+            return
+
+        self.size = state["size"]
+        self.position = state["position"]
+
+        # Initialize storage if needed
+        obs_dim = state["observations"].shape[1]
+        if self.observations is None:
+            self.observations = torch.zeros(self.capacity, obs_dim, device=self.device)
+            self.actions = torch.zeros(self.capacity, dtype=torch.long, device=self.device)
+            self.rewards_extrinsic = torch.zeros(self.capacity, device=self.device)
+            self.rewards_intrinsic = torch.zeros(self.capacity, device=self.device)
+            self.next_observations = torch.zeros(self.capacity, obs_dim, device=self.device)
+            self.dones = torch.zeros(self.capacity, dtype=torch.bool, device=self.device)
+
+        # Restore data
+        self.observations[: self.size] = state["observations"].to(self.device)
+        self.actions[: self.size] = state["actions"].to(self.device)
+        self.rewards_extrinsic[: self.size] = state["rewards_extrinsic"].to(self.device)
+        self.rewards_intrinsic[: self.size] = state["rewards_intrinsic"].to(self.device)
+        self.next_observations[: self.size] = state["next_observations"].to(self.device)
+        self.dones[: self.size] = state["dones"].to(self.device)

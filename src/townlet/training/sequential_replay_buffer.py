@@ -66,18 +66,13 @@ class SequentialReplayBuffer:
         has_split_rewards = "rewards_extrinsic" in episode and "rewards_intrinsic" in episode
 
         if not has_rewards and not has_split_rewards:
-            raise ValueError(
-                "Episode must have 'rewards' or both 'rewards_extrinsic' and 'rewards_intrinsic'"
-            )
+            raise ValueError("Episode must have 'rewards' or both 'rewards_extrinsic' and 'rewards_intrinsic'")
 
         # Validate all tensors have same length
         seq_len = len(episode["observations"])
         for key, tensor in episode.items():
             if len(tensor) != seq_len:
-                raise ValueError(
-                    f"Episode tensor length mismatch: observations has {seq_len} steps, "
-                    f"but {key} has {len(tensor)} steps"
-                )
+                raise ValueError(f"Episode tensor length mismatch: observations has {seq_len} steps, but {key} has {len(tensor)} steps")
 
         # Move episode to correct device
         episode_on_device = {key: tensor.to(self.device) for key, tensor in episode.items()}
@@ -91,9 +86,7 @@ class SequentialReplayBuffer:
             oldest_episode = self.episodes.pop(0)
             self.num_transitions -= len(oldest_episode["observations"])
 
-    def sample_sequences(
-        self, batch_size: int, seq_len: int, intrinsic_weight: float = 1.0
-    ) -> dict[str, torch.Tensor]:
+    def sample_sequences(self, batch_size: int, seq_len: int, intrinsic_weight: float = 1.0) -> dict[str, torch.Tensor]:
         """
         Sample a batch of sequential transitions.
 
@@ -117,14 +110,10 @@ class SequentialReplayBuffer:
             raise ValueError("Cannot sample: buffer is empty (not enough data)")
 
         # Find episodes long enough for the requested sequence length
-        valid_episodes = [
-            (i, ep) for i, ep in enumerate(self.episodes) if len(ep["observations"]) >= seq_len
-        ]
+        valid_episodes = [(i, ep) for i, ep in enumerate(self.episodes) if len(ep["observations"]) >= seq_len]
 
         if len(valid_episodes) == 0:
-            raise ValueError(
-                f"Cannot sample: no episodes long enough for seq_len={seq_len} (not enough data)"
-            )
+            raise ValueError(f"Cannot sample: no episodes long enough for seq_len={seq_len} (not enough data)")
 
         # Sample batch_size sequences
         sampled_sequences = []
@@ -165,3 +154,58 @@ class SequentialReplayBuffer:
         }
 
         return batch
+
+    def serialize(self) -> dict:
+        """
+        Serialize episode buffer for checkpointing (P1.1).
+
+        Returns:
+            Dictionary with all episodes on CPU for saving
+        """
+        if len(self.episodes) == 0:
+            return {
+                "num_transitions": 0,
+                "episodes": [],
+                "capacity": self.capacity,
+            }
+
+        # Convert episodes to CPU tensors
+        serialized_episodes = []
+        for episode in self.episodes:
+            serialized_episodes.append(
+                {
+                    "observations": episode["observations"].cpu(),
+                    "actions": episode["actions"].cpu(),
+                    "rewards_extrinsic": episode["rewards_extrinsic"].cpu(),
+                    "rewards_intrinsic": episode["rewards_intrinsic"].cpu(),
+                    "dones": episode["dones"].cpu(),
+                }
+            )
+
+        return {
+            "num_transitions": self.num_transitions,
+            "episodes": serialized_episodes,
+            "capacity": self.capacity,
+        }
+
+    def load_from_serialized(self, state: dict) -> None:
+        """
+        Restore episode buffer from serialized state (P1.1).
+
+        Args:
+            state: Dictionary from serialize()
+        """
+        self.num_transitions = state["num_transitions"]
+        self.episodes = []
+
+        # Restore episodes to device
+        for ep_state in state["episodes"]:
+            self.episodes.append(
+                {
+                    "observations": ep_state["observations"].to(self.device),
+                    "actions": ep_state["actions"].to(self.device),
+                    "rewards_extrinsic": ep_state["rewards_extrinsic"].to(self.device),
+                    "rewards_intrinsic": ep_state["rewards_intrinsic"].to(self.device),
+                    "dones": ep_state["dones"].to(self.device),
+                }
+            )

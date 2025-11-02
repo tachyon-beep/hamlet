@@ -45,7 +45,7 @@ class TestActionMasking:
         """Action masks should have correct shape."""
         env.reset()  # Initialize positions and meters
         masks = env.get_action_masks()
-        assert masks.shape == (4, 5)  # num_agents × 5 actions
+        assert masks.shape == (4, 6)  # num_agents × 6 actions
         assert masks.dtype == torch.bool
 
     def test_all_actions_valid_in_center(self, env):
@@ -218,7 +218,7 @@ class TestGreedyActionSelection:
         )
 
         obs_dim = env.observation_dim
-        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=5)
+        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(epsilon=0.1)
@@ -230,7 +230,7 @@ class TestGreedyActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=5,
+            action_dim=6,
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -331,7 +331,7 @@ class TestEpsilonGreedyActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=5,
+            action_dim=6,
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -361,7 +361,7 @@ class TestEpsilonGreedyActionSelection:
         """With epsilon=1, should always select random valid action."""
         population, env = simple_setup
 
-        # Place agents in center (all 5 actions valid)
+        # Place agents in center (all 6 actions valid)
         env.positions = torch.tensor([[2, 2], [2, 2]], device=env.device)
 
         # Select with epsilon=1.0 many times
@@ -385,7 +385,8 @@ class TestEpsilonGreedyActionSelection:
             actions = population.select_epsilon_greedy_actions(env, epsilon=1.0)
 
             # Should never see UP (0) or LEFT (2)
-            assert all(a in [1, 3, 4] for a in actions.tolist())
+            # Valid actions: DOWN (1), RIGHT (3), INTERACT (4), WAIT (5)
+            assert all(a in [1, 3, 4, 5] for a in actions.tolist())
 
     def test_epsilon_greedy_mixes_exploration_exploitation(self, simple_setup):
         """With 0 < epsilon < 1, should see mix of greedy and random."""
@@ -436,7 +437,7 @@ class TestRecurrentNetworkActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=5,
+            action_dim=6,
             learning_rate=0.001,
             gamma=0.99,
             network_type="recurrent",
@@ -514,7 +515,7 @@ class TestActionSelectionEdgeCases:
             agent_ids=[0],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=5,
+            action_dim=6,
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",

@@ -164,6 +164,62 @@ class VectorizedPopulation(PopulationManager):
 
         self.current_epsilons = torch.full((self.num_agents,), epsilon, device=self.device)
 
+    def flush_episode(self, agent_idx: int, synthetic_done: bool = False) -> None:
+        """
+        Flush current episode for an agent to replay buffer.
+
+        Used when:
+        - Agent dies (real done)
+        - Episode hits max_steps (synthetic done)
+
+        This prevents memory leaks and ensures successful episodes reach the replay buffer.
+
+        Args:
+            agent_idx: Index of agent to flush
+            synthetic_done: If True, treat as done even if environment didn't signal it
+        """
+        if not self.is_recurrent:
+            # Feedforward mode: transitions already in buffer, nothing to flush
+            return
+
+        episode = self.current_episodes[agent_idx]
+        if len(episode["observations"]) == 0:
+            # Nothing to flush
+            return
+
+        # Store episode in sequential buffer (convert lists to stacked tensors)
+        self.replay_buffer.store_episode(
+            {
+                "observations": torch.stack(episode["observations"]),
+                "actions": torch.stack(episode["actions"]),
+                "rewards_extrinsic": torch.stack(episode["rewards_extrinsic"]),
+                "rewards_intrinsic": torch.stack(episode["rewards_intrinsic"]),
+                "dones": torch.stack(episode["dones"]),
+            }
+        )
+
+        # Update exploration annealing
+        survival_time = len(episode["observations"])
+        if isinstance(self.exploration, AdaptiveIntrinsicExploration):
+            self.exploration.update_on_episode_end(survival_time=survival_time)
+
+        # Clear accumulator
+        self.current_episodes[agent_idx] = {
+            "observations": [],
+            "actions": [],
+            "rewards_extrinsic": [],
+            "rewards_intrinsic": [],
+            "dones": [],
+        }
+
+        # Reset hidden state for this agent
+        if self.q_network and hasattr(self.q_network, "reset_hidden_state"):
+            h, c = self.q_network.get_hidden_state()
+            if h is not None and c is not None:
+                h[:, agent_idx, :] = 0.0
+                c[:, agent_idx, :] = 0.0
+                self.q_network.set_hidden_state((h, c))
+
     def _update_reward_baseline(self):
         """Update reward baseline when curriculum changes."""
         if self.current_curriculum_decisions:
@@ -555,3 +611,71 @@ class VectorizedPopulation(PopulationManager):
             pareto_frontier=[],
             metrics_summary={},
         )
+
+    def get_checkpoint_state(self) -> dict:
+        """
+        Get complete checkpoint state for saving (P1.1 complete checkpointing).
+
+        Returns comprehensive state dict including:
+        - Version number
+        - Q-network weights
+        - Target network weights (if recurrent)
+        - Optimizer state
+        - Training counters
+        - Replay buffer contents
+        - Exploration strategy state
+        - Curriculum state
+
+        Returns:
+            Complete checkpoint state dictionary
+        """
+        checkpoint = {
+            "version": 2,  # Checkpoint format version
+            "q_network": self.q_network.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "total_steps": self.total_steps,
+            "exploration_state": self.exploration.checkpoint_state(),
+        }
+
+        # Target network (recurrent mode only)
+        if self.target_network is not None:
+            checkpoint["target_network"] = self.target_network.state_dict()
+            checkpoint["training_step_counter"] = self.training_step_counter
+        else:
+            checkpoint["target_network"] = None
+            checkpoint["training_step_counter"] = 0
+
+        # Replay buffer
+        checkpoint["replay_buffer"] = self.replay_buffer.serialize()
+
+        return checkpoint
+
+    def load_checkpoint_state(self, checkpoint: dict) -> None:
+        """
+        Restore population state from checkpoint (P1.1 complete checkpointing).
+
+        Args:
+            checkpoint: State dictionary from get_checkpoint_state()
+        """
+        # Restore Q-network
+        self.q_network.load_state_dict(checkpoint["q_network"])
+
+        # Restore optimizer
+        self.optimizer.load_state_dict(checkpoint["optimizer"])
+
+        # Restore training counters
+        self.total_steps = checkpoint.get("total_steps", 0)
+
+        # Restore target network (if exists)
+        if "target_network" in checkpoint and checkpoint["target_network"] is not None:
+            if self.target_network is not None:
+                self.target_network.load_state_dict(checkpoint["target_network"])
+                self.training_step_counter = checkpoint.get("training_step_counter", 0)
+
+        # Restore replay buffer
+        if "replay_buffer" in checkpoint:
+            self.replay_buffer.load_from_serialized(checkpoint["replay_buffer"])
+
+        # Restore exploration state
+        if "exploration_state" in checkpoint:
+            self.exploration.load_state(checkpoint["exploration_state"])

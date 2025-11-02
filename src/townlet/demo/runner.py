@@ -294,8 +294,9 @@ class DemoRunner:
                     self.db.set_system_state("new_affordance_positions", json.dumps(new_positions))
 
                 # Reset environment and population
-                self.env.reset()
-                self.population.reset()  # No argument
+                # NOTE: Only call population.reset(), which internally calls env.reset()
+                # Calling both causes double reset which breaks affordance randomization
+                self.population.reset()
 
                 # Run episode
                 survival_time = 0
@@ -321,8 +322,8 @@ class DemoRunner:
                     # Calculate extrinsic reward tensor for curriculum (not just scalar)
                     extrinsic_reward_tensor = agent_state.rewards - (agent_state.intrinsic_rewards * intrinsic_weight)
 
-                    # Update curriculum with EXTRINSIC rewards only (prevents reward hacking via curiosity)
-                    self.population.update_curriculum_tracker(extrinsic_reward_tensor, agent_state.dones)
+                    # NOTE: Curriculum update removed from here (was per-step, now per-episode)
+                    # See curriculum update after episode ends below
 
                     # Extract scalars for logging
                     extrinsic_component = extrinsic_reward_tensor[0].item()
@@ -345,6 +346,17 @@ class DemoRunner:
                 # If episode didn't end, capture current meters
                 if final_meters is None:
                     final_meters = self.env.meters[0].cpu()
+
+                # Update curriculum ONCE per episode with pure survival signal
+                # This gives curriculum a clean, interpretable metric: steps survived
+                curriculum_survival_tensor = torch.tensor([float(survival_time)], dtype=torch.float32, device=self.env.device)
+                curriculum_done_tensor = torch.tensor([True], dtype=torch.bool, device=self.env.device)
+                self.population.update_curriculum_tracker(curriculum_survival_tensor, curriculum_done_tensor)
+
+                # P1.2: Flush episode if agent survived to max_steps (recurrent networks only)
+                # Without this, successful episodes never reach replay buffer → memory leak + data loss
+                if not agent_state.dones[0]:  # Agent survived to max_steps without dying
+                    self.population.flush_episode(agent_idx=0, synthetic_done=True)
 
                 # Log metrics to database
                 self.db.insert_episode(
