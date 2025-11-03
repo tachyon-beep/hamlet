@@ -75,13 +75,19 @@ class PerformanceTracker:
         self.episode_rewards = torch.zeros(num_agents, device=device)
         self.episode_steps = torch.zeros(num_agents, device=device)
         self.prev_avg_reward = torch.zeros(num_agents, device=device)
+        self.last_survival_rate = torch.zeros(num_agents, device=device)
 
         # Stage tracking
         self.agent_stages = torch.ones(num_agents, dtype=torch.long, device=device)
         self.steps_at_stage = torch.zeros(num_agents, device=device)
+        self.episodes_at_stage = torch.zeros(num_agents, dtype=torch.long, device=device)
 
     def update_step(self, rewards: torch.Tensor, dones: torch.Tensor):
-        """Update metrics after environment step."""
+        """Update metrics after environment step.
+
+        Note: rewards here are actually survival_steps, not rewards.
+        This is called from Population.update_curriculum_tracker which passes step counts.
+        """
         self.episode_rewards += rewards
         self.episode_steps += 1.0
         self.steps_at_stage += 1.0
@@ -90,6 +96,12 @@ class PerformanceTracker:
         # This ensures prev_avg_reward reflects the most recent episode performance
         current_avg = self.episode_rewards / torch.clamp(self.episode_steps, min=1.0)
         self.prev_avg_reward = torch.where(dones, current_avg, self.prev_avg_reward)
+
+        # Capture survival rate before reset (rewards are actually step counts)
+        self.last_survival_rate = torch.where(dones, rewards / 100.0, self.last_survival_rate)
+
+        # Increment episode counter when episodes complete
+        self.episodes_at_stage += dones.long()
 
         # Reset completed episodes
         self.episode_rewards = torch.where(dones, 0.0, self.episode_rewards)
@@ -274,6 +286,7 @@ class AdversarialCurriculum(CurriculumManager):
             if self._should_retreat(i):
                 tracker.agent_stages[i] -= 1
                 tracker.steps_at_stage[i] = 0
+                tracker.episodes_at_stage[i] = 0
                 # Update baseline for retreating agent only
                 current_avg_i = tracker.episode_rewards[i] / torch.clamp(tracker.episode_steps[i], min=1.0)
                 tracker.prev_avg_reward[i] = current_avg_i
@@ -282,6 +295,7 @@ class AdversarialCurriculum(CurriculumManager):
             elif self._should_advance(i, entropies[i].item()):
                 tracker.agent_stages[i] += 1
                 tracker.steps_at_stage[i] = 0
+                tracker.episodes_at_stage[i] = 0
                 # Update baseline for advancing agent only (not all agents)
                 current_avg_i = tracker.episode_rewards[i] / torch.clamp(tracker.episode_steps[i], min=1.0)
                 tracker.prev_avg_reward[i] = current_avg_i
@@ -416,6 +430,50 @@ class AdversarialCurriculum(CurriculumManager):
     def load_checkpoint_state(self, state: dict[str, Any]) -> None:
         """Alias for load_state() for API consistency."""
         self.load_state(state)
+
+    def get_stage_info(self, agent_idx: int = 0) -> dict:
+        """Get detailed stage information for an agent.
+
+        Useful for recording criteria that need to predict stage transitions.
+
+        Args:
+            agent_idx: Agent index to query
+
+        Returns:
+            {
+                "current_stage": int,
+                "episodes_at_stage": int,
+                "survival_rate": float (0-1),
+                "likely_transition_soon": bool,
+            }
+        """
+        if self.tracker is None:
+            raise RuntimeError("Performance tracker not initialized. Call initialize_population first.")
+
+        if not (0 <= agent_idx < self.tracker.num_agents):
+            raise ValueError(f"Invalid agent_idx: {agent_idx}, must be in range [0, {self.tracker.num_agents})")
+
+        current_stage = int(self.tracker.agent_stages[agent_idx].item())
+        episodes_at_stage = int(self.tracker.episodes_at_stage[agent_idx].item())
+
+        # Get survival rate from last completed episode
+        survival_rate = float(self.tracker.last_survival_rate[agent_idx].item())
+
+        # Predict if transition is likely soon
+        # Heuristic: high survival + enough steps at stage + not at max stage
+        steps_at_stage = float(self.tracker.steps_at_stage[agent_idx].item())
+        likely_transition = (
+            current_stage < 5  # Not at max stage
+            and steps_at_stage >= self.min_steps_at_stage  # Enough steps at this stage
+            and survival_rate >= self.survival_advance_threshold  # High survival
+        )
+
+        return {
+            "current_stage": current_stage,
+            "episodes_at_stage": episodes_at_stage,
+            "survival_rate": survival_rate,
+            "likely_transition_soon": likely_transition,
+        }
 
     def state_dict(self) -> dict[str, Any]:
         """PyTorch-style alias for checkpoint_state() for API consistency."""
