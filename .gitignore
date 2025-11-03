@@ -70,7 +70,8 @@ test_checkpoints/
 test_checkpoints_*/
 demo_checkpoints/
 logs/
-runs/
+runs/*
+!runs/.gitkeep
 runs_*/
 models/
 *.pt
