@@ -84,45 +84,33 @@ class VectorizedHamletEnv:
         if self.wait_energy_cost >= self.move_energy_cost:
             raise ValueError("wait_energy_cost must be less than move_energy_cost to preserve WAIT as a low-cost recovery action")
 
-        # Define which affordances exist (positions assigned by randomize_affordance_positions())
-        all_affordance_names = [
-            # Basic survival (tiered)
-            "Bed",  # Energy restoration tier 1
-            "LuxuryBed",  # Energy restoration tier 2
-            "Shower",
-            "HomeMeal",
-            "FastFood",
-            # Income sources
-            "Job",  # Office work
-            "Labor",  # Physical labor
-            # Fitness/Social builders (secondary meters)
-            "Gym",
-            "Bar",
-            "Park",
-            # Mood restoration (primary meter - tier 1 & 2)
-            "Recreation",
-            "Therapist",
-            # Health restoration (primary meter - tier 1 & 2)
-            "Doctor",
-            "Hospital",
-        ]
+        # Load affordance configuration to get FULL universe vocabulary
+        # This must happen before observation dimension calculation
+        config_path = self.config_pack_path / "affordances.yaml"
+        affordance_config = load_affordance_config(config_path)
 
-        # Filter affordances if enabled_affordances is specified
+        # Extract ALL affordance names from YAML (defines observation vocabulary)
+        # This is the FULL universe - what the agent can observe and reason about
+        all_affordance_names = [aff.name for aff in affordance_config.affordances]
+
+        # Filter affordances for DEPLOYMENT (which ones actually exist on the grid)
+        # enabled_affordances from training.yaml controls what the agent can interact with
         if enabled_affordances is not None:
-            affordance_names_to_use = [name for name in all_affordance_names if name in enabled_affordances]
+            affordance_names_to_deploy = [name for name in all_affordance_names if name in enabled_affordances]
         else:
-            affordance_names_to_use = all_affordance_names
+            affordance_names_to_deploy = all_affordance_names
 
-        # Initialize affordances dict with placeholder positions (randomized at episode start)
-        # Positions will be shuffled by randomize_affordance_positions() before first use
+        # DEPLOYED affordances: have positions on grid, can be interacted with
+        # Positions will be randomized by randomize_affordance_positions() before first use
         self.affordances = {
             name: torch.tensor([0, 0], device=device, dtype=torch.long)
-            for name in affordance_names_to_use
+            for name in affordance_names_to_deploy
         }
 
-        # Create ordered list of affordance names for consistent encoding
-        self.affordance_names = list(self.affordances.keys())
-        self.num_affordance_types = len(self.affordance_names)
+        # OBSERVATION VOCABULARY: Full list from YAML, used for fixed observation encoding
+        # This stays constant across all curriculum levels for transfer learning
+        self.affordance_names = all_affordance_names
+        self.num_affordance_types = len(all_affordance_names)
 
         # Observation dimensions depend on observability mode
         if partial_observability:
@@ -148,6 +136,7 @@ class VectorizedHamletEnv:
             vision_range=vision_range,
             enable_temporal_mechanics=enable_temporal_mechanics,
             num_affordance_types=self.num_affordance_types,
+            affordance_names=self.affordance_names,
         )
 
         # Initialize reward strategy (P2.1: per-agent baseline support)
@@ -162,10 +151,7 @@ class VectorizedHamletEnv:
             cascade_config_dir=self.config_pack_path,
         )
 
-        # Initialize affordance engine
-        # Path from src/townlet/environment/ → project root
-        config_path = self.config_pack_path / "affordances.yaml"
-        affordance_config = load_affordance_config(config_path)
+        # Initialize affordance engine (reuse affordance_config loaded above)
         self.affordance_engine = AffordanceEngine(affordance_config, num_agents, device)
 
         self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
@@ -213,10 +199,9 @@ class VectorizedHamletEnv:
 
         # Initial meter values (normalized to [0, 1])
         # [energy, hygiene, satiation, money, mood, social, health, fitness]
-        # NOTE: money=1.0 corresponds to $100 in range [0, 100] (no debt allowed)
-        # All meters start at 100% (healthy agent) except money starts at $50
-        self.meters = torch.ones((self.num_agents, 8), device=self.device)
-        self.meters[:, 3] = 0.5  # Money starts at $50 (0.5 normalized)
+        # Read initial values from bars.yaml config
+        initial_values = self.meter_dynamics.cascade_engine.get_initial_meter_values()
+        self.meters = initial_values.unsqueeze(0).expand(self.num_agents, -1).clone()
 
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)

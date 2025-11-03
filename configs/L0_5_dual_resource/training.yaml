@@ -25,12 +25,12 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 7  # 6×6 grid (36 cells) - bigger than L0 to fit 2 affordances
+  grid_size: 7  # 7×7 grid - room for 4 affordances with navigation space
   partial_observability: false  # Agent sees full grid
   vision_range: 7  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
 
-  # Only Bed and Hospital
+  # Bed, Hospital, HomeMeal, and Job (agent can earn money!)
   enabled_affordances: ["Bed", "Hospital","HomeMeal","Job"]
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.0049
@@ -46,11 +46,11 @@ population:
 
 # Curriculum configuration (simpler than Level 1)
 curriculum:
-  max_steps_per_episode: 1000  # Shorter episodes (5x5 world)
-  survival_advance_threshold: 0.8  # Advance if 80% survival
+  max_steps_per_episode: 500  # Shorter episodes for faster iteration (was 1000)
+  survival_advance_threshold: 0.5  # Advance if 50% survival (was 0.8 - too high for L0.5)
   survival_retreat_threshold: 0.2  # Retreat if <20% survival
-  entropy_gate: 0.3  # Lower entropy gate (simpler problem)
-  min_steps_at_stage: 100  # Fewer steps before stage change
+  entropy_gate: 0.5  # More forgiving entropy gate for early stages (was 0.3)
+  min_steps_at_stage: 50  # Fewer steps before stage change (was 100)
 
 # Exploration configuration
 exploration:
@@ -62,7 +62,7 @@ exploration:
 # Training configuration
 training:
   device: cuda  # Use GPU if available
-  max_episodes: 1000  # Should learn in <100, but allow buffer
+  max_episodes: 500  # Should converge in 200-300 episodes with fixed hyperparameters
 
   # Q-learning hyperparameters
   train_frequency: 4  # Train Q-network every N steps
@@ -73,7 +73,7 @@ training:
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
-  epsilon_decay: 0.9995  # Decay per episode
+  epsilon_decay: 0.995  # Decay per episode (was 0.9995 - too slow, reaches ε=0.1 at ~460 episodes)
   epsilon_min: 0.01  # Minimum exploration rate
 
 # Recording configuration

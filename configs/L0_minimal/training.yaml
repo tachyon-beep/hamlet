@@ -3,24 +3,29 @@
 # Ultra-simplified environment for debugging and proof-of-concept.
 #
 # Key features:
-# - Tiny 5×5 grid (25 cells total)
-# - Only ONE affordance: Bed ($1 cost)
-# - Agent only needs to learn: walk to bed, interact, repeat
+# - Tiny 3×3 grid (9 cells total)
+# - Only ONE affordance: Bed ($5 cost)
+# - Agent learns temporal credit assignment: spacing Bed uses > spamming
 # - Full observability (agent sees entire grid)
-# - Should learn in <100 episodes
+# - Should learn in ~100 episodes
+#
+# Learning objective:
+# - Spam strategy: Use Bed 5x immediately → survives 205 steps, reward 105
+# - Optimal strategy: Space Bed uses at 50% energy → survives 705 steps, reward 478
+# - 244% survival advantage teaches spacing > spamming
 #
 # Purpose:
 # - Validate training pipeline works
-# - Debug Q-value learning
+# - Teach temporal credit assignment (delayed gratification)
 # - Fast iteration for testing changes
-# - Teaching demo: "simplest possible RL problem"
+# - Pedagogical: "simplest RL problem with temporal structure"
 
 run_metadata:
   output_subdir: L0_minimal
 
 # Environment configuration
 environment:
-  grid_size: 3  # 5×5 grid world (25 cells)
+  grid_size: 3  # 3×3 grid world (9 cells)
   partial_observability: false  # Agent sees full grid
   vision_range: 3  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
@@ -55,7 +60,7 @@ exploration:
 # Training configuration
 training:
   device: cuda  # Use GPU if available
-  max_episodes: 1000  # Should learn in <100, but allow buffer
+  max_episodes: 500  # Should learn by ~100, allow 5x buffer for experimentation
 
   # Q-learning hyperparameters
   train_frequency: 4  # Train Q-network every N steps
@@ -66,5 +71,5 @@ training:
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
-  epsilon_decay: 0.998  # Decay per episode
+  epsilon_decay: 0.99  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
   epsilon_min: 0.01  # Minimum exploration rate

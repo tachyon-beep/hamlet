@@ -54,3 +54,15 @@ exploration:
 training:
   device: cuda  # Use GPU if available
   max_episodes: 5000  # Total episodes for this training run (Level 1.5 learns faster)
+
+  # Q-learning hyperparameters
+  train_frequency: 4  # Train Q-network every N steps
+  target_update_frequency: 100  # Update target network every N training steps
+  batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
+  sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
+  max_grad_norm: 10.0  # Gradient clipping threshold
+
+  # Epsilon-greedy exploration
+  epsilon_start: 1.0  # Initial exploration rate
+  epsilon_decay: 0.995  # Decay per episode (reaches ε=0.1 at ~460 episodes)
+  epsilon_min: 0.01  # Minimum exploration rate

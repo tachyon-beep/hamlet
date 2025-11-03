@@ -310,3 +310,17 @@ class CascadeEngine:
         """Return base depletion rate for the specified meter."""
         idx = self.get_bar_index(name)
         return float(self._base_depletions[idx].item())
+
+    def get_initial_meter_values(self) -> torch.Tensor:
+        """
+        Get initial meter values from bars.yaml configuration.
+
+        Returns:
+            Tensor of shape [8] with initial values for all meters by index
+        """
+        initial_values = torch.zeros(8, device=self.device)
+
+        for bar in self.config.bars.bars:
+            initial_values[bar.index] = bar.initial
+
+        return initial_values

@@ -26,6 +26,7 @@ class ObservationBuilder:
         vision_range: int,
         enable_temporal_mechanics: bool,
         num_affordance_types: int,
+        affordance_names: list[str],
     ):
         """Initialize observation builder.
 
@@ -37,6 +38,7 @@ class ObservationBuilder:
             vision_range: Radius of vision window (2 = 5×5 window)
             enable_temporal_mechanics: Add temporal features
             num_affordance_types: Number of affordance types in environment
+            affordance_names: Full list of affordance names (observation vocabulary)
         """
         self.num_agents = num_agents
         self.grid_size = grid_size
@@ -45,6 +47,7 @@ class ObservationBuilder:
         self.vision_range = vision_range
         self.enable_temporal_mechanics = enable_temporal_mechanics
         self.num_affordance_types = num_affordance_types
+        self.affordance_names = affordance_names
 
     def build_observations(
         self,
@@ -212,9 +215,13 @@ class ObservationBuilder:
     ) -> torch.Tensor:
         """Build one-hot encoding of current affordance under each agent.
 
+        This encodes against the FULL affordance vocabulary (from affordances.yaml),
+        not just deployed affordances. This ensures observation dimensions stay
+        constant across curriculum levels.
+
         Args:
             positions: Agent positions [num_agents, 2]
-            affordances: Dict of affordance_name -> position
+            affordances: Dict of DEPLOYED affordance_name -> position
 
         Returns:
             encoding: [num_agents, num_affordance_types + 1]
@@ -224,12 +231,17 @@ class ObservationBuilder:
         affordance_encoding = torch.zeros(self.num_agents, self.num_affordance_types + 1, device=self.device)
         affordance_encoding[:, -1] = 1.0  # Default to "none"
 
-        # Check each affordance
-        for affordance_idx, (affordance_name, affordance_pos) in enumerate(affordances.items()):
-            distances = torch.abs(positions - affordance_pos).sum(dim=1)
-            on_affordance = distances == 0
-            if on_affordance.any():
-                affordance_encoding[on_affordance, -1] = 0.0  # Clear "none"
-                affordance_encoding[on_affordance, affordance_idx] = 1.0
+        # Iterate over FULL affordance vocabulary (not just deployed)
+        # This ensures consistent encoding across curriculum levels
+        for affordance_idx, affordance_name in enumerate(self.affordance_names):
+            # Check if this affordance is DEPLOYED (has position on grid)
+            if affordance_name in affordances:
+                affordance_pos = affordances[affordance_name]
+                distances = torch.abs(positions - affordance_pos).sum(dim=1)
+                on_affordance = distances == 0
+                if on_affordance.any():
+                    affordance_encoding[on_affordance, -1] = 0.0  # Clear "none"
+                    affordance_encoding[on_affordance, affordance_idx] = 1.0
+            # If affordance NOT deployed, agent can never be "on" it, stays as "none"
 
         return affordance_encoding
