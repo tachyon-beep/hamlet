@@ -6,6 +6,8 @@ This document captures the **research-driven development workflow** used for HAM
 
 This is not intended for coding, which follows TDD best practices. Instead, this is for **high-level planning or design decisions** where multiple approaches exist and the right choice isn't obvious.
 
+Research Products should generally be stored under `docs/research/`, Plans under `docs/plans/`, and Reviews under `docs/reviews/` or appended to the original plan.
+
 ---
 
 ## The Three-Phase Loop
