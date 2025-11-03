@@ -191,11 +191,13 @@ src/townlet/
 
 ### Reward Structure
 
-**Sparse Rewards (NO proximity shaping)**:
-- Meter thresholds trigger rewards/penalties
-- Interaction rewards based on meter state
+**Per-Step Survival Rewards** (Current System):
+- **Alive agents**: +1.0 reward per step
+- **Dead agents**: 0.0 reward (episode ends)
 - **NO proximity shaping** (agents must explore and interact to survive)
-- Economic balance: sustainable income cycles
+- **No death penalty**: L0 is unstable by design - agents learn that interacting with bed extends survival
+- **Rationale**: Provides dense learning signal for Q-learning, functionally equivalent to accumulating survival time
+- Baseline parameter retained for API compatibility but unused in calculations
 
 **Intrinsic Rewards**:
 - RND (Random Network Distillation) for novelty

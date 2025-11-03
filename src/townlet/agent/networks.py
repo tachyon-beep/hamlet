@@ -9,14 +9,16 @@ import torch.nn as nn
 
 
 class SimpleQNetwork(nn.Module):
-    """Simple MLP Q-network."""
+    """Simple MLP Q-network with LayerNorm."""
 
     def __init__(self, obs_dim: int, action_dim: int, hidden_dim: int = 128):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, action_dim),
         )
@@ -91,6 +93,7 @@ class RecurrentSpatialQNetwork(nn.Module):
             nn.ReLU(),
             nn.Flatten(),  # 32 * window_size * window_size
             nn.Linear(32 * window_size * window_size, 128),
+            nn.LayerNorm(128),
             nn.ReLU(),
         )
 
@@ -116,8 +119,16 @@ class RecurrentSpatialQNetwork(nn.Module):
         self.lstm_input_dim = 128 + 32 + 32 + 32
         self.lstm = nn.LSTM(input_size=self.lstm_input_dim, hidden_size=hidden_dim, num_layers=1, batch_first=True)
 
+        # LayerNorm for LSTM output
+        self.lstm_norm = nn.LayerNorm(hidden_dim)
+
         # Q-Head: hidden_dim → 128 → action_dim
-        self.q_head = nn.Sequential(nn.Linear(hidden_dim, 128), nn.ReLU(), nn.Linear(128, action_dim))
+        self.q_head = nn.Sequential(
+            nn.Linear(hidden_dim, 128),
+            nn.LayerNorm(128),
+            nn.ReLU(),
+            nn.Linear(128, action_dim),
+        )
 
         # Hidden state (initialized per episode)
         self.hidden_state: tuple[torch.Tensor, torch.Tensor] | None = None
@@ -195,6 +206,9 @@ class RecurrentSpatialQNetwork(nn.Module):
         # LSTM forward
         lstm_out, new_hidden = self.lstm(combined, hidden)  # lstm_out: [batch, 1, hidden_dim]
         lstm_out = lstm_out.squeeze(1)  # [batch, hidden_dim]
+
+        # Apply LayerNorm to LSTM output
+        lstm_out = self.lstm_norm(lstm_out)  # [batch, hidden_dim]
 
         # Q-values
         q_values = self.q_head(lstm_out)  # [batch, action_dim]

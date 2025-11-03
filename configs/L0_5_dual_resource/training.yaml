@@ -1,33 +1,40 @@
-# Level 0: Minimal Training Environment
+# Level 0.5: Dual Resource Management (Bed + Hospital)
 #
-# Ultra-simplified environment for debugging and proof-of-concept.
+# Intermediate step between L0 (single resource) and L1 (full environment).
 #
 # Key features:
-# - Tiny 5×5 grid (25 cells total)
-# - Only ONE affordance: Bed ($1 cost)
-# - Agent only needs to learn: walk to bed, interact, repeat
+# - 6×6 grid (slightly larger to fit 2 affordances with space)
+# - TWO affordances: Bed (energy) + Hospital (health)
+# - Agent must learn spatial navigation + resource prioritization
 # - Full observability (agent sees entire grid)
-# - Should learn in <100 episodes
+# - Both affordances cost $3 (equal priority)
+# - More starting money ($50 instead of $20) to sustain longer episodes
 #
-# Purpose:
-# - Validate training pipeline works
-# - Debug Q-value learning
-# - Fast iteration for testing changes
-# - Teaching demo: "simplest possible RL problem"
+# Learning goals:
+# - Interoception rewards create natural prioritization:
+#   * Low energy + high health → ROI of Bed is HIGH
+#   * High energy + low health → ROI of Hospital is HIGH
+#   * Both low → Multiplicative penalty creates urgency
+# - Agent should bounce between Bed and Hospital as needed
+# - Eventually runs out of money and dies (sustainable cycles not possible without income)
+#
+# Expected convergence: ~200-300 episodes (2x longer than L0 due to exploration)
 
 run_metadata:
-  output_subdir: L0_minimal
+  output_subdir: L0_5_dual_resource
 
 # Environment configuration
 environment:
-  grid_size: 3  # 5×5 grid world (25 cells)
+  grid_size: 6  # 6×6 grid (36 cells) - bigger than L0 to fit 2 affordances
   partial_observability: false  # Agent sees full grid
-  vision_range: 3  # Full vision (not used when partial_observability=false)
+  vision_range: 6  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
-  enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
-  energy_move_depletion: 0.005
-  energy_wait_depletion: 0.004
-  energy_interact_depletion: 0.004
+
+  # Only Bed and Hospital
+  enabled_affordances: ["Bed", "Hospital"]
+  energy_move_depletion: 0.0050
+  energy_wait_depletion: 0.0045
+  energy_interact_depletion: 0.0035
 
 # Population configuration
 population:

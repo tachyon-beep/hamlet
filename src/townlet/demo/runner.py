@@ -28,7 +28,7 @@ class DemoRunner:
         config_dir: Path | str,
         db_path: Path | str,
         checkpoint_dir: Path | str,
-        max_episodes: int = 10000,
+        max_episodes: int | None = None,
         training_config_path: Path | str | None = None,
     ):
         """Initialize demo runner.
@@ -37,7 +37,7 @@ class DemoRunner:
             config_dir: Directory containing configuration pack
             db_path: Path to SQLite database
             checkpoint_dir: Directory for checkpoint files
-            max_episodes: Maximum number of episodes to run
+            max_episodes: Maximum number of episodes to run (if None, reads from config YAML)
             training_config_path: Optional explicit path to training YAML file
         """
         self.config_dir = Path(config_dir)
@@ -49,8 +49,6 @@ class DemoRunner:
             raise FileNotFoundError(f"Training config not found: {self.training_config_path}")
         self.db_path = Path(db_path)
         self.checkpoint_dir = Path(checkpoint_dir)
-        self.max_episodes = max_episodes
-        self.current_episode = 0
 
         # Create directories
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -77,6 +75,15 @@ class DemoRunner:
         # Load config
         with open(self.training_config_path) as f:
             self.config = yaml.safe_load(f)
+
+        # Set max_episodes: use provided value, otherwise read from config, otherwise default to 10000
+        if max_episodes is not None:
+            self.max_episodes = max_episodes
+        else:
+            training_cfg = self.config.get("training", {})
+            self.max_episodes = training_cfg.get("max_episodes", 10000)
+
+        self.current_episode = 0
 
         # Initialize components (will be created in run())
         self.env = None
@@ -259,6 +266,9 @@ class DemoRunner:
             device=device,
         )
 
+        # Get training parameters from config
+        training_cfg = self.config.get("training", {})
+
         # Create exploration (use auto-detected obs_dim)
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
@@ -266,6 +276,9 @@ class DemoRunner:
             initial_intrinsic_weight=exploration_cfg.get("initial_intrinsic_weight", 1.0),
             variance_threshold=exploration_cfg.get("variance_threshold", 100.0),  # Increased from 10.0
             survival_window=exploration_cfg.get("survival_window", 100),
+            epsilon_start=training_cfg.get("epsilon_start", 1.0),
+            epsilon_decay=training_cfg.get("epsilon_decay", 0.995),
+            epsilon_min=training_cfg.get("epsilon_min", 0.01),
             device=device,
         )
 
@@ -275,6 +288,13 @@ class DemoRunner:
         replay_buffer_capacity = population_cfg.get("replay_buffer_capacity", 10000)
         network_type = population_cfg.get("network_type", "simple")  # 'simple' or 'recurrent'
         vision_window_size = 2 * vision_range + 1  # 5 for vision_range=2
+
+        # Get training hyperparameters from config
+        train_frequency = training_cfg.get("train_frequency", 4)
+        target_update_frequency = training_cfg.get("target_update_frequency", 100)
+        batch_size = training_cfg.get("batch_size", None)  # None = auto-select based on network type
+        sequence_length = training_cfg.get("sequence_length", 8)
+        max_grad_norm = training_cfg.get("max_grad_norm", 10.0)
 
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
@@ -294,6 +314,11 @@ class DemoRunner:
             network_type=network_type,
             vision_window_size=vision_window_size,
             tb_logger=self.tb_logger,
+            train_frequency=train_frequency,
+            target_update_frequency=target_update_frequency,
+            batch_size=batch_size,
+            sequence_length=sequence_length,
+            max_grad_norm=max_grad_norm,
         )
 
         self.curriculum.initialize_population(num_agents)
@@ -360,7 +385,7 @@ class DemoRunner:
 
                 # Run episode
                 num_agents = self.population.num_agents
-                max_steps = 500
+                max_steps = curriculum_cfg.get("max_steps_per_episode", 500)
                 episode_reward = torch.zeros(num_agents, device=self.env.device)
                 episode_extrinsic_reward = torch.zeros(num_agents, device=self.env.device)
                 episode_intrinsic_reward = torch.zeros(num_agents, device=self.env.device)
@@ -377,15 +402,24 @@ class DemoRunner:
                             episode=self.current_episode,
                             events=list(self.curriculum.transition_events),
                         )
+                        # Log curriculum transitions to console
+                        for event in self.curriculum.transition_events:
+                            logger.info(
+                                f"🎓 Curriculum {event['type'].upper()}: Stage {event['from_stage']} → {event['to_stage']} "
+                                f"(Survival: {event['survival_rate']:.1%}, Entropy: {event['entropy']:.3f})"
+                            )
                         self.curriculum.transition_events.clear()
 
+                    # Note: agent_state.rewards contains COMBINED rewards (extrinsic + weighted intrinsic)
+                    # We need to extract pure extrinsic for separate logging
                     intrinsic_weight = self.exploration.get_intrinsic_weight() if hasattr(self.exploration, "get_intrinsic_weight") else 1.0
+                    weighted_intrinsic = agent_state.intrinsic_rewards * intrinsic_weight
+                    extrinsic_only = agent_state.rewards - weighted_intrinsic
 
-                    extrinsic_reward_tensor = agent_state.rewards - (agent_state.intrinsic_rewards * intrinsic_weight)
-
-                    episode_reward += agent_state.rewards
-                    episode_extrinsic_reward += extrinsic_reward_tensor
-                    episode_intrinsic_reward += agent_state.intrinsic_rewards
+                    # Accumulate rewards for episode totals
+                    episode_reward += agent_state.rewards  # Combined (what agent actually receives)
+                    episode_extrinsic_reward += extrinsic_only  # Pure extrinsic (for analysis)
+                    episode_intrinsic_reward += agent_state.intrinsic_rewards  # Unweighted intrinsic (for analysis)
 
                     if "successful_interactions" in agent_state.info:
                         for agent_idx, affordance_name in agent_state.info["successful_interactions"].items():
@@ -509,14 +543,49 @@ class DemoRunner:
                 if self.current_episode % 10 == 0:
                     elapsed = time.time() - episode_start
                     stage_overview = "/".join(str(int(s.item())) for s in stages_cpu)
+
+                    # Calculate reward breakdown
+                    total_reward = episode_reward_cpu[0].item()
+                    extrinsic_reward = episode_extrinsic_cpu[0].item()
+                    intrinsic_reward = episode_intrinsic_cpu[0].item()
+                    weighted_intrinsic = intrinsic_reward * intrinsic_weight_value
+
                     logger.info(
                         f"Episode {self.current_episode}/{self.max_episodes} | "
                         f"Survival: {int(step_counts_cpu[0].item())} steps | "
-                        f"Reward: {episode_reward_cpu[0].item():.2f} | "
-                        f"Intrinsic Weight: {intrinsic_weight_value:.3f} | "
-                        f"Stage(s): {stage_overview} | "
+                        f"Reward: {total_reward:.2f} (Extrinsic: {extrinsic_reward:.2f}, "
+                        f"Intrinsic: {intrinsic_reward:.2f}×{intrinsic_weight_value:.3f}={weighted_intrinsic:.2f}) | "
+                        f"ε: {epsilon_value:.3f} | "
+                        f"Stage: {stage_overview} | "
                         f"Time: {elapsed:.2f}s"
                     )
+
+                # Detailed summary every 50 episodes
+                if self.current_episode % 50 == 0:
+                    # Get training metrics
+                    training_metrics = self.population.get_training_metrics()
+
+                    # Get final meters for agent 0
+                    final_meter_values = {}
+                    if final_meters[0] is not None:
+                        meter_names = ["energy", "hygiene", "satiation", "money", "mood", "social", "health", "fitness"]
+                        final_meter_values = {name: final_meters[0][i].item() for i, name in enumerate(meter_names)}
+
+                    # Get affordance usage for agent 0
+                    affordance_summary = ", ".join(f"{name}: {count}" for name, count in affordance_visits[0].items()) if affordance_visits[0] else "None"
+
+                    logger.info("=" * 80)
+                    logger.info(f"📊 SUMMARY - Episode {self.current_episode}/{self.max_episodes}")
+                    logger.info("-" * 80)
+                    logger.info(f"Performance:    Survival: {int(step_counts_cpu[0].item())} steps | Stage: {stage_overview}")
+                    logger.info(f"Rewards:        Total: {total_reward:.2f} | Extrinsic: {extrinsic_reward:.2f} | Intrinsic: {weighted_intrinsic:.2f}")
+                    logger.info(f"Exploration:    ε: {epsilon_value:.3f} | Intrinsic Weight: {intrinsic_weight_value:.3f}")
+                    if training_metrics["training_step"] > 0:
+                        logger.info(f"Training:       Steps: {training_metrics['training_step']} | Loss: {training_metrics['loss']:.4f} | TD Error: {training_metrics['td_error']:.4f}")
+                    if final_meter_values:
+                        logger.info(f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | Health: {final_meter_values.get('health', 0):.2f} | Money: ${final_meter_values.get('money', 0)*100:.1f}")
+                    logger.info(f"Affordances:    {affordance_summary}")
+                    logger.info("=" * 80)
 
                 # Checkpoint every 100 episodes
                 if self.current_episode % 100 == 0:
@@ -562,7 +631,8 @@ if __name__ == "__main__":
     config_arg = sys.argv[1] if len(sys.argv) > 1 else "configs/test"
     db_path = sys.argv[2] if len(sys.argv) > 2 else "demo_state.db"
     checkpoint_dir = sys.argv[3] if len(sys.argv) > 3 else "checkpoints"
-    max_episodes = int(sys.argv[4]) if len(sys.argv) > 4 else 10000
+    # If max_episodes provided via CLI, use it; otherwise pass None to read from config
+    max_episodes = int(sys.argv[4]) if len(sys.argv) > 4 else None
 
     config_path = Path(config_arg)
     if config_path.is_dir():
@@ -576,7 +646,7 @@ if __name__ == "__main__":
         config_dir=config_dir,
         db_path=db_path,
         checkpoint_dir=checkpoint_dir,
-        max_episodes=max_episodes,
+        max_episodes=max_episodes,  # None = read from config
         training_config_path=training_config,
     )
     runner.run()

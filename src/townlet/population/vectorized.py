@@ -54,6 +54,11 @@ class VectorizedPopulation(PopulationManager):
         network_type: str = "simple",
         vision_window_size: int = 5,
         tb_logger=None,
+        train_frequency: int = 4,
+        target_update_frequency: int = 100,
+        batch_size: int | None = None,
+        sequence_length: int = 8,
+        max_grad_norm: float = 10.0,
     ):
         """
         Initialize vectorized population.
@@ -71,6 +76,12 @@ class VectorizedPopulation(PopulationManager):
             replay_buffer_capacity: Maximum number of transitions in replay buffer
             network_type: Network architecture ('simple' or 'recurrent')
             vision_window_size: Size of local vision window for recurrent networks (5 for 5×5)
+            tb_logger: Optional TensorBoard logger
+            train_frequency: Train Q-network every N steps (default: 4)
+            target_update_frequency: Update target network every N training steps (default: 100)
+            batch_size: Batch size for experience replay (default: 64 for feedforward, 16 for recurrent)
+            sequence_length: Length of sequences for LSTM training (default: 8, recurrent only)
+            max_grad_norm: Gradient clipping threshold (default: 10.0)
         """
         self.env = env
         self.curriculum = curriculum
@@ -122,7 +133,7 @@ class VectorizedPopulation(PopulationManager):
         # Initialize common target network state
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()  # Target network always in eval mode
-        self.target_update_frequency = 100  # Update target every N training steps
+        self.target_update_frequency = target_update_frequency
         self.training_step_counter = 0
 
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
@@ -137,10 +148,16 @@ class VectorizedPopulation(PopulationManager):
         else:
             self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity, device=device)
 
-        # Training counters
+        # Training hyperparameters (configurable)
         self.total_steps = 0
-        self.train_frequency = 4  # Train Q-network every N steps
-        self.sequence_length = 8  # Length of sequences for LSTM training
+        self.train_frequency = train_frequency
+        self.sequence_length = sequence_length
+        self.max_grad_norm = max_grad_norm
+        # Default batch_size based on network type if not specified
+        if batch_size is None:
+            self.batch_size = 16 if self.is_recurrent else 64
+        else:
+            self.batch_size = batch_size
 
         # Episode step counters (reset on done)
         self.episode_step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=device)
@@ -533,7 +550,7 @@ class VectorizedPopulation(PopulationManager):
             if self.is_recurrent:
                 # Sequential LSTM training with target network for temporal dependencies
                 batch = self.replay_buffer.sample_sequences(
-                    batch_size=16,
+                    batch_size=self.batch_size,
                     seq_len=self.sequence_length,
                     intrinsic_weight=intrinsic_weight,
                 )
@@ -599,7 +616,7 @@ class VectorizedPopulation(PopulationManager):
                 # Backprop and optimize
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
 
                 # Log network statistics to TensorBoard (every 100 training steps)
@@ -618,7 +635,7 @@ class VectorizedPopulation(PopulationManager):
                 self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
             else:
                 # Standard feedforward DQN training (unchanged)
-                batch = self.replay_buffer.sample(batch_size=64, intrinsic_weight=intrinsic_weight)
+                batch = self.replay_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
 
                 q_pred = self.q_network(batch["observations"]).gather(1, batch["actions"].unsqueeze(1)).squeeze()
 
@@ -637,7 +654,7 @@ class VectorizedPopulation(PopulationManager):
 
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
 
                 # Periodically sync target network for stability

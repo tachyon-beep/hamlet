@@ -251,7 +251,8 @@ function isMoodCritical() {
   // Check if mood is dangerously low
   if (!meters.value) return false
   const mood = meters.value.mood
-  return mood < 20
+  // Mood is already normalized to [0, 1], so 0.2 = 20%
+  return mood < 0.2
 }
 
 function getMeterTier(name) {

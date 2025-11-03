@@ -1,0 +1,88 @@
+# L0.5: Dual Resource Management - Bed + Hospital only
+#
+# Teaching goal: Interoception enables multi-resource balancing
+#
+# Key changes from L0:
+# - Added Hospital (cheap version: $3 instead of $15)
+# - Both affordances are affordable and equally important
+# - Agent must learn to prioritize based on meter state
+#
+# Expected behavior with interoception rewards:
+# - Low energy + high health → Use Bed
+# - High energy + low health → Use Hospital
+# - Both low → Must prioritize (multiplicative reward creates urgency)
+
+version: "2.0"
+description: "L0.5: Bed + Hospital for dual-resource management learning"
+status: "EXPERIMENTAL - Testing interoception on 2 resources"
+
+# Meter definitions (for reference)
+meters:
+  - { id: 0, name: "energy", range: [0.0, 1.0] }
+  - { id: 1, name: "hygiene", range: [0.0, 1.0] }
+  - { id: 2, name: "satiation", range: [0.0, 1.0] }
+  - { id: 3, name: "money", range: [0.0, 1.0] }  # $0-$100 = 0.0-1.0
+  - { id: 4, name: "mood", range: [0.0, 1.0] }
+  - { id: 5, name: "social", range: [0.0, 1.0] }
+  - { id: 6, name: "health", range: [0.0, 1.0] }
+  - { id: 7, name: "fitness", range: [0.0, 1.0] }
+
+affordances:
+  # ============================================================================
+  # ENERGY RESTORATION
+  # ============================================================================
+
+  - id: "0"
+    name: "Bed"
+    category: "energy_restoration"
+    interaction_type: "dual"  # Supports both instant and multi-tick
+
+    # INSTANT MODE (Level 0.5: enable_temporal_mechanics=False)
+    costs:
+      - { meter: "money", amount: 0.03 }  # $3 (cheaper than L0's $5)
+    effects:
+      - { meter: "energy", amount: 0.50 }  # +50% energy
+      - { meter: "health", amount: 0.02 }  # +2% health (minor bonus)
+
+    # TEMPORAL MODE (if used later)
+    required_ticks: 5
+    costs_per_tick:
+      - { meter: "money", amount: 0.006 }  # $0.60/tick
+    effects_per_tick:
+      - { meter: "energy", amount: 0.075 }  # 75% of 50% distributed
+    completion_bonus:
+      - { meter: "energy", amount: 0.125 }  # 25% of 50%
+      - { meter: "health", amount: 0.02 }
+
+    operating_hours: [0, 24]  # Always available
+
+  # ============================================================================
+  # HEALTH RESTORATION
+  # ============================================================================
+
+  - id: "6"
+    name: "Hospital"
+    category: "health"
+    interaction_type: "dual"
+
+    # INSTANT MODE (Level 0.5: enable_temporal_mechanics=False)
+    costs:
+      - { meter: "money", amount: 0.09 }  # $9 (MUCH cheaper than full game's $15)
+
+    effects:
+      - { meter: "health", amount: 0.80 }  # +80% health
+      - { meter: "energy", amount: 0.10 }  # +10% energy (minor bonus)
+
+    # TEMPORAL MODE (if used later)
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.01 }  # $1/tick
+
+    effects_per_tick:
+      - { meter: "health", amount: 0.10 }  # 0.40 * 0.75 / 3 = +10%/tick
+
+    completion_bonus:
+      - { meter: "health", amount: 0.10 }  # 0.40 * 0.25 = +10% final
+      - { meter: "energy", amount: 0.02 }  # Minor energy boost
+
+    operating_hours: [0, 24]  # Emergency - always open

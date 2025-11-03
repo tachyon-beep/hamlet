@@ -568,7 +568,7 @@ class VectorizedHamletEnv:
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """
-        Calculate rewards relative to baseline survival.
+        Calculate interoception-aware rewards.
 
         Delegates to RewardStrategy for calculation.
 
@@ -580,6 +580,7 @@ class VectorizedHamletEnv:
             step_counts=self.step_counts,
             dones=self.dones,
             baseline_steps=baseline_tensor,
+            meters=self.meters,  # Pass meters for interoception-aware rewards
         )
 
     def calculate_baseline_survival(self, depletion_multiplier: float = 1.0) -> float:

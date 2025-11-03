@@ -1,67 +1,49 @@
-# Townlet v2.0: Universe as Code
+# Townlet v2.5: Universe as Code
 
 Document Date: 3 November 2025
 Status: Approved for Implementation
 Owner: Principal Technical Advisor (AI)
 
-## 1. What this system is
+## 1. System Overview
 
-Townlet v2.0 is a configurable simulated world. We call it Universe as Code.
+Townlet’s Universe as Code layer defines the simulated world as configuration rather than imperative logic. Core mechanics—survival rules, temporal constraints, reward shaping, and terminal conditions—are declared in data files that the engine loads and enforces.
 
-Instead of hardcoding game rules, survival logic, opening hours, reward shaping, and so on directly in Python, we describe the universe in data files. The engine then loads those files and enforces them.
+Practically, this means that parameters such as hunger rates, hygiene effects, night-time safety, retirement criteria, and end-of-life scoring are formalised in YAML. Designers and instructors can adjust those configurations to explore alternative social contracts without modifying Python. Typical scenario packs range from low-pressure baselines to high-scarcity models, all implemented as data swaps.
 
-In practice that means:
+This arrangement also provides the learning system with an explicit, inspectable ruleset. The world configuration becomes the ground truth for:
 
-* How fast you get hungry
-* What a shower does to your hygiene and mood
-* What happens to you if you’re broke at 2am
-* Whether you're considered "dead" or "retired"
-* How good your life was in the end
-* All of that is declared in YAML.
+* consequence prediction (World Model / Module B)
+* social reasoning (Social Model / Module C)
+* long-horizon planning rather than single-tick survival
 
-This setup does two things.
+Universe as Code therefore functions as a specification of the society in which agents operate, not merely a set of ad hoc gameplay tweaks.
 
-First, it lets us control the simulation with dials instead of rewrites. We can create "easy mode society", "late stage capitalism mode", "cyberpunk gig economy mode" or "Scandi social democracy mode" just by swapping config packs. No code changes. No retuning hand-written if statements. Designers and students can edit knobs like hunger strength or wages and immediately see how that changes agent behaviour.
-
-Second, it gives learning systems something intelligible to learn. The agent doesn't just memorise "press button X on tile Y". The agent is sitting inside an explicit, inspectable ruleset. That ruleset becomes the ground truth for:
-
-* predicting consequences (World Model / Module B)
-* reading other agents (Social Model / Module C)
-* planning a life instead of just surviving a tick
-
-In other words: this isn't just a game; it's a specification of a society that an agent can reason about.
-
-### Where this lives in code
+### Implementation footprint
 
 Universe as Code is implemented through four cooperating subsystems:
 
-* `cascade_config` and `cascade_engine` — bar definitions, depletion, cascades, terminal conditions, ageing.
-* `affordance_config` and `affordance_engine` — what actions exist in the world, what they cost, and what they do.
-* `vectorized_env.VectorizedTownletEnv` — the actual runtime world: positions on the grid, time of day, masking which actions are legal, tracking multi-step interactions like sleeping or working a shift.
-* `reward_model` (end-of-life scoring) — how we decide if that run of your life was "good".
+* `cascade_config` and `cascade_engine` — define meters, depletion rates, cascades, terminal conditions, and ageing rules.
+* `affordance_config` and `affordance_engine` — enumerate world actions, their costs, and their effects.
+* `vectorized_env.VectorizedTownletEnv` — provides the runtime grid, time-of-day tracking, legality masks, and multi-step interaction management.
+* `reward_model` — evaluates end-of-life outcomes for episodic scoring.
 
-Together, that config output is the single source of truth for:
+These configurations constitute the single source of truth for:
 
-* the agent’s internal survival meters (energy, health, hunger, money, mood, etc)
-* passive decay and cross-meter pressure ("if you're filthy, your mood rots faster")
-* affordances like Bed, Job, Hospital, Bar, etc: opening hours, per-tick wages, side effects
-* the clock (things that close at 6pm, bars that run until 4am)
-* ageing and retirement (you don't just die; you can also age out with dignity)
-* how we score the life you managed to carve out
+* the agent’s survival meters (energy, health, hunger, money, mood, and related signals)
+* passive decay and cross-meter pressure
+* affordance definitions (e.g., Bed, Job, Hospital, Bar) including opening hours, wages, and side effects
+* temporal rules (operating hours, night-time behaviour)
+* ageing and retirement semantics
+* end-of-life scoring
 
-Everything in those runtime systems is normalised to [0.0, 1.0] so it's all vector math. Money is treated the same way: 1.0 means $100 by convention in the baseline world. That avoids mixed units and keeps policy learning sane.
+All runtime values are normalised to the [0.0, 1.0] range. Money follows the same convention (1.0 ≈ $100 in the baseline pack), which keeps the state space consistent for policy learning.
 
-There are two big design principles baked into this:
+Two design principles underpin this layer:
 
-1. Physics of the world are data.
-   The engine enforces rules, but the YAML defines the rules.
+1. **Physics are data.** The engine enforces rules; YAML specifies them.
+2. **Values are data.** Terminal scoring and moral framing are explicit and configurable, not embedded in code paths.
 
-2. Values are data.
-   We don't secretly slip "capitalist is good" or "self-care is virtuous" into the code. We spell out how we score a life at the end. You can change it.
-
-That separation turns moral philosophy into a literal config file, which is exactly the point.
-
-Words of Estimative Probability on this section matching system intent and direction: high (~90 percent).
+Words of estimative probability that this section reflects system intent: high (~90 percent).
 
 ## 2. Survival model: the meters that define a life
 
@@ -101,48 +83,32 @@ Some important notes about how these behave:
 * Meters are clamped after every update.
   Nothing goes below 0.0 or above 1.0. That means "perfect health" is literally 1.0, and we don't allow "extra health banked for later". Same for money: by default we cap at 1.0 = $100, though you can redefine that scale in config packs if you want a wealth-based sim instead of a subsistence sim.
 
-This pressure network is where the interesting behaviour comes from. Not eating doesn't just make you "hungry", it accelerates death indirectly by smashing the things that actually kill you (energy, health). Being lonely doesn't just make you "sad", it quietly compromises mood, which bleeds into energy, which gets you killed when you can't get out of bed to buy food. It's all coupled.
+This pressure network produces the emergent behaviour we expect. Hunger reduces pivotal meters indirectly by accelerating energy and health depletion. Social isolation degrades mood, which in turn erodes energy and compromises the ability to earn money and obtain food. The system is intentionally coupled.
 
-### Lifecycle: you don't just die, you can also finish
+### Lifecycle: survival versus retirement
 
-On top of those eight meters we also track a separate scalar we call `lifecycle`.
+In addition to the eight meters, the environment tracks a scalar `lifecycle` value. It begins near 0.0 and increases over time; reaching 1.0 signifies retirement rather than death.
 
-Think of `lifecycle` as "how far through your life you are". It starts near 0.0 and drifts upward over time toward 1.0. When it reaches 1.0, you don't "die". You retire. The run ends, but it ends in retirement, not collapse.
+This distinction is important:
 
-This matters for two reasons.
+1. Episodes end because the simulated life concludes, not due to a hard-coded step limit.
+2. The system can distinguish successful retirement from catastrophic failure, delivering different rewards and telemetry.
 
-1. Episodes no longer end just because a hard-coded step limit says "class dismissed".
-   The run ends because the simulated life has run its course.
+Operationally:
 
-2. We can tell the difference between "you made it to retirement in decent shape" and "you bled out behind the kebab shop at 2:17am with $3.20 and an infection".
+* `lifecycle` increases slightly each tick.
+* Adverse conditions accelerate the increase (e.g., starvation, illness, miserable mood).
+* If `lifecycle` reaches 1.0 before pivotal meters reach zero, the agent retires.
+* Retirement is treated as a separate terminal condition from death.
 
-Those are not morally equivalent outcomes. We want the agent to know that.
-
-Mechanically:
-
-* lifecycle increases a little every tick as a baseline "time passes".
-* bad conditions can make it climb faster. Starving, sick, and miserable people burn through their life faster.
-* if lifecycle hits its cap (1.0) before you hit zero energy or zero health, you're considered retired.
-* retirement is treated as a distinct terminal outcome from "death".
-
-The engine uses that distinction. At the end of a run, it computes a one-off "final life score". That score is driven by config, not compiled into the code. Typical scoring in the baseline world will look like:
-
-* you get credit for how much money you finished with
-* you get penalised if you finished in horrible physical condition
-* you get penalised if you finished in a terrible mental state
-
-That becomes part of the total reward signal the agent learns from. Which means we're literally teaching the policy: "being alive at the end, with money in the bank and decent health, is success".
-
-If you just die, you still get a score, but you get a big penalty multiplier (for example, 10 percent of what that same life would've been worth if you hadn't died early).
-
-So survival isn't the only goal. Dignified survival is the goal.
+At episode end, the `reward_model` computes a final life score based on configuration (e.g., remaining money, health, mood). Dying early yields a heavily discounted score (for example, 10 percent of the retirement value), reinforcing that dignified survival matters more than simply delaying collapse. Retirement and death therefore produce distinct outcomes for learning and audit.
 
 ### Why this design works
 
 From a training point of view, this setup does a few beautiful things.
 
 * It gives you two different end states with different semantics.
-  "Dead" and "Retired" are not just flavours of done. They have different payouts, which means the agent has a reason to plan for retirement instead of just "delay death".
+  "Dead" and "Retired" represent distinct outcomes with different payouts, giving the agent an incentive to plan for retirement rather than merely delaying failure.
 
 * It turns morality (what we reward at the end) into config.
   You can spin up a world where money matters most, or a world where mood and social bonds are weighted higher, or a world where healthcare at end-of-life is king. The RL agent will internalise whatever world view you give it. It's alignment by YAML.
@@ -161,7 +127,7 @@ Each meter (energy, hunger, money, etc) is defined here with:
 * how fast it passively erodes every tick
 * how important it is in the survival hierarchy
 
-The engine does not guess any of this. It loads bars.yaml, validates it with Pydantic, and then uses it as ground truth in the CascadeEngine and the environment. If you lie here, the world lies everywhere.
+The engine does not derive any of this implicitly. It loads `bars.yaml`, validates it with Pydantic, and uses it as ground truth in the `CascadeEngine` and the environment. Misstating values here propagates inconsistencies across the world.
 
 This file also declares terminal conditions: the rules that say "this life is now over". Death-by-exhaustion and death-by-health are defined the same way as any other rule. There’s no hardcoded secret kill switch in the engine.
 
@@ -171,7 +137,7 @@ A standard bars.yaml in the baseline world looks like this:
 
 ```yaml
 version: "1.0"
-description: "Townlet v2 meters"
+description: "Townlet v2.5 meters"
 bars:
   - name: "energy"
     index: 0
@@ -254,68 +220,56 @@ notes:
   - "All values normalised. Money: 1.0 means $100."
 ```
 
-Let’s unpack the moving parts like a designer, not like a compiler.
-
 ### Meters
 
-* `tier` is a storytelling hint and a balancing hint. Pivotal means "if this goes, game over". Secondary means "feeds into pivotal via cascades". Resource means "lets you buy your way out of trouble".
-  The engine doesn’t enforce tier names directly, but other parts of the system assume you’re using this vocabulary sanely.
+* `tier` conveys design intent. `pivotal` meters gate survival, `secondary` meters influence pivotal values via cascades, and `resource` meters provide leverage (for example, money). While the engine does not hard-code tier semantics, other systems assume consistent use of these categories.
 
-* `initial` is what you spawn with at reset. This is important for curriculum too. If you want to generate harsher starting lives, you can start the agent broke, sick, lonely, whatever. That’s legal.
+* `initial` defines spawn values at reset. Curriculum authors can tune these values to craft harsher or more forgiving starting conditions.
 
-* `base_depletion` is passive decay per step before any cascades. This is the "cost of being alive". For example, hygiene decays every tick just because existing is gross. Energy decays just because being awake is tiring.
+* `base_depletion` specifies passive decay per tick before cascade adjustments. For instance, hygiene decays continuously, representing the background cost of remaining clean. Activity-driven effects belong in `affordances.yaml`; `bars.yaml` represents ambient pressure only.
 
-  These base rates are then modulated in cascades.yaml, which we'll get to.
-
-  Important: we do not bake “being at work makes you tired” here. That’s an affordance effect, in affordances.yaml. bars.yaml is only the background radiation of life.
-
-* Ranges are locked to [0.0, 1.0]. That is enforced by validation. You cannot have a bar that goes to 2.5. You want "debt"? That goes somewhere else (like a negative money affordance outcome plus a new rule in cascades that punishes negative money by smashing mood). We keep the meter space clean and normalised because the policy networks ingest these floats directly.
+* Ranges are fixed at [0.0, 1.0] and enforced by validation. Concepts such as debt should be modelled through affordance outcomes and cascade penalties rather than extending meter bounds. Normalisation keeps the observation space stable for policy learning.
 
 ### Terminal conditions
 
-This is how we decide "this run ended by force". Each condition is a tuple:
+Terminal conditions determine when a run ends involuntarily. Each condition specifies:
 
-* which meter to check
-* what comparison to apply
-* threshold
-* human-readable reason
+* the meter to inspect
+* the comparison operator
+* the threshold
+* a human-readable explanation
 
-The CascadeEngine turns these conditions into booleans every tick and tells the environment who's done. This is also what feeds the "dead agent is masked off, cannot act further" code in VectorizedTownletEnv.
+The CascadeEngine evaluates these conditions every tick and signals the environment to mark agents as done. This drives the action masking logic in `VectorizedTownletEnv`.
 
-You can add new terminal conditions. You could absolutely write one that says:
+Additional terminal conditions are supported. Examples include:
 
-* if `money <= 0.0` and `mood <= 0.1` for long enough, you’re considered "institutionalised" and the run ends. That would simulate social collapse without physical death.
+* `money <= 0.0` and `mood <= 0.1` for a sustained interval, modelling institutionalisation without physical death
+* `lifecycle >= 1.0`, representing graceful retirement rather than failure
 
-You can also imagine a condition like:
-
-* if lifecycle >= 1.0 you are "retired".
-  That’s a graceful terminal, not a failure state. That goes into the same mechanism and gives us two distinct finishes for scoring.
-
-This is why we call it Universe as Code. "What counts as the end of your life?" is a setting.
+In Universe as Code, definitions of “the end of a life” are deliberate configuration choices.
 
 ---
 
-## 4. cascades.yaml – how the world punishes neglect
+## 4. cascades.yaml – cross-meter dynamics
 
-bars.yaml explains what exists. cascades.yaml explains how it all starts eating you alive if you ignore it.
+While `bars.yaml` defines available meters, `cascades.yaml` captures how neglect propagates through the system.
 
-There are two big systems in cascades.yaml:
+Two mechanisms are defined:
 
-1. Modulations
+1. **Modulations**
 
-   * Ongoing multipliers that say "if X is high/low, then Y decays slower/faster".
-   * Example: high fitness protects health. Low fitness lets health rot faster.
-   * This is smooth and continuous, not thresholded.
+   * Continuous multipliers that adjust depletion rates based on the state of another meter.
+   * Example: high fitness reduces health decay; low fitness accelerates it.
 
-2. Threshold cascades
+2. **Threshold cascades**
 
-   * If a source meter drops below some threshold, it starts actively damaging some other meter.
-   * The lower you go below threshold, the harder the hit.
-   * This is where hunger ruins health, bad hygiene wrecks mood, isolation wrecks mood, and so on.
+   * Conditional effects that apply once a source meter falls below a threshold.
+   * The further the meter drops below the threshold, the stronger the penalty to the target meter.
+   * This is where hunger undermines health and energy, poor hygiene undermines mood, and social isolation degrades overall stability.
 
-This is where we encode real human collapse patterns without having to handwrite 200 lines of if/elif. Hunger drains both energy and health? Good. That’s survival pressure. No social contact eventually bleeds into mood, which bleeds into energy, which stops you earning money, which stops you buying food, which tanks satiation, which kills you. This is how we get spirals.
+These constructs encode collapse patterns without bespoke logic, producing the expected survival spirals when multiple needs are ignored.
 
-Now, crucial detail: execution_order in this file is not documentation fluff. The engine actually reads that list and applies those cascade groups in that order every tick. If you move stages around, you change the physics.
+The `execution_order` field is operational. The engine applies cascade groups in the specified sequence each tick; reordering them changes the effective physics of the world.
 
 Here’s the current baseline cascades.yaml:
 
@@ -440,151 +394,100 @@ notes:
   - "Penalty = strength * ((threshold - source)/threshold) for source below threshold"
 ```
 
-Let’s decode.
-
 ### Modulations
 
-Take the first block: `fitness_modulates_health_decay`.
+Consider `fitness_modulates_health_decay`:
 
-The English version is:
+* Health has a baseline passive decay (`baseline_depletion`).
+* The decay rate is multiplied by a fitness-dependent factor.
+* When fitness is near 1.0, the multiplier is low (0.5×), reducing health loss.
+* When fitness approaches 0.0, the multiplier rises to 3.0×, accelerating health loss.
 
-* If you're fit, your health doesn't drip away as fast.
-* If you're unfit, every tick chews through your health harder.
-
-Numerically:
-
-* health has some baseline passive decay (baseline_depletion).
-* we multiply that decay by a fitness-based multiplier.
-* when fitness is high (near 1.0), the multiplier is low (0.5x).
-* when fitness is wrecked (near 0.0), the multiplier is high (0.5 + 2.5 = 3.0x).
-* so going to the gym is literally adding days to your future.
-
-This is not thresholded. It's continuous. You don't suddenly "start dying" at some cut-off. You just always decay faster if you're unfit.
-
-That’s not just biologically plausible, it's RL-friendly. The gradient is smooth. The model can learn "small fitness gain = slightly better survival".
+The relationship is continuous rather than thresholded, providing smooth gradients for learning while remaining physiologically interpretable.
 
 ### Threshold cascades
 
-Now look at `low_satiation_hits_energy`.
+For `low_satiation_hits_energy`, the penalty is calculated as:
 
-The English version:
-
-* If you're hungry (satiation < 0.2), you get tired dramatically faster than normal.
-* The hungrier you are below that line, the worse the hit.
-
-This is implemented as:
+```
 penalty = strength * ((threshold - source) / threshold)
+```
 
-Step through it:
+* Satiation ≥ threshold ⟶ no penalty.
+* Satiation at half the threshold ⟶ half-strength penalty.
+* Satiation near zero ⟶ full-strength penalty.
 
-* If satiation = 0.2, you're fine. No penalty.
-* If satiation = 0.1, you're 50 percent below threshold, so you eat 0.5 * strength that tick.
-* If satiation = 0.0, you eat full strength that tick.
+The penalty subtracts from the target meter (energy in this case), producing the gradual collapse associated with prolonged hunger.
 
-That penalty is subtracted directly from the target meter (here: energy). This is literally how hunger kills you. Not by flipping one big "dead" flag, but by smashing your pivotal bars until they empty.
+Similar cascades connect:
 
-We repeat this in a few directions:
+* hunger → energy and hunger → health
+* low mood → energy
+* low hygiene → mood, satiation, fitness
+* low social → mood
 
-* Hunger → Energy and Hunger → Health
-* Low Mood → Energy (depression fatigue)
-* Low Hygiene → Mood / Satiation / Fitness ("you feel gross, you eat worse, you stop training, you spiral")
-* Low Social → Mood ("lonely and flat")
-
-This is how we get slow death loops that feel like real poverty. One thing goes wrong, then three things go wrong, then you're too wrecked to fix any of them.
+The cumulative effect models realistic degradation patterns where multiple needs compound.
 
 ### Execution order
 
-`execution_order` is applied literally by CascadeEngine every tick in that sequence.
+`execution_order` is honoured verbatim by `CascadeEngine` each tick:
 
-In plain terms:
+1. Apply modulations (adjust depletion rates).
+2. Apply `primary_to_pivotal` cascades (high-severity effects such as hunger impacting energy and health).
+3. Apply `secondary_to_primary` cascades (tertiary needs eroding secondary meters).
+4. Apply `secondary_to_pivotal_weak` cascades (weaker direct penalties from tertiary to pivotal meters).
 
-1. We apply modulations. That mostly changes how fast certain core bars are draining.
-2. We apply "primary_to_pivotal". This is the high-severity stuff like hunger eating energy and health.
-3. We apply "secondary_to_primary". Low hygiene, low social, etc, starts eroding mood, fitness, satiation.
-4. We apply "secondary_to_pivotal_weak". This is the low-grade direct rot from tertiary straight to lethal bars.
+Reordering these stages materially changes world dynamics. For example, promoting `secondary_to_pivotal_weak` earlier in the sequence would cause hygiene to impact health sooner and more severely.
 
-Reordering those changes the feel of the world. You can make hygiene hit health immediately and brutally by moving "secondary_to_pivotal_weak" earlier and bumping the strength numbers. You have that control.
+### Difficulty as curriculum
 
-### Difficulty as curriculum, not code
+Curriculum design is achieved through alternative cascade packs, for example:
 
-One ridiculously powerful trick here is "teaching packs":
+* `cascades_weak.yaml` — reduces `strength` values, producing a forgiving world where neglect is less punishing.
+* `cascades_strong.yaml` — increases `strength` values, generating a harsher environment where missed meals rapidly become critical.
 
-* cascades_weak.yaml
-  halve all `strength` values
-  result: basically a comfy society. You can slack on hygiene for a while and not die.
+Because these packs are validated configuration files, training can progress from weak to baseline to strong physics, demonstrating whether agents learn transferable survival strategies.
 
-* cascades_strong.yaml
-  boost all `strength` values by 50 percent
-  result: a hostile world. You miss dinner, you're functionally in medical trouble by morning.
-
-Because all this is in YAML and validated, we can do structured curriculum: start the agent in weak, then promote to baseline, then to strong, and measure if it's actually learning survival strategies rather than just memorising coordinates.
-
-And yes: lifecycle plugs into this story. If your cascades are harsh, many lives won't make it to retirement. So the final score doesn't just track "did you technically survive", it tracks "what kind of civilisation did you survive in, and how beat up were you when you cashed out".
+Lifecycle metrics integrate with this approach: harsher cascades reduce the proportion of lives reaching retirement, and the final score reflects not only survival but also the quality of that survival.
 
 ---
 
-## 5. affordances.yaml – what you can actually do in the world
+## 5. affordances.yaml – available actions
 
-If bars.yaml says what you are, and cascades.yaml says how you fall apart, affordances.yaml says what you can do about it.
+If `bars.yaml` defines the state space and `cascades.yaml` defines cross-meter dynamics, `affordances.yaml` specifies the actions available to agents. Actions such as sleeping, eating, working, therapy, or calling emergency services are all declared as affordances—no hard-coded exceptions.
 
-In plain language: every meaningful action in the world (sleep, eat, work a shift, go to therapy, call an ambulance) is defined here as an affordance. The simulation doesn't special-case "work" or "sleep" or "call 000". They’re all entries in this list.
+Each affordance describes:
 
-Each affordance is basically a contract:
+* how the interaction unfolds (instant, multi-tick, continuous, dual)
+* the costs incurred
+* the benefits returned
+* operating hours
+* required commitment duration
 
-* how you interact with it (instant vs multi-tick etc)
-* what it costs you to use
-* what it gives you back
-* when it's open
-* how long you need to stay with it before it pays off
+The engine loads this file at runtime to construct the action surface. Modifying `affordances.yaml` therefore redefines the socioeconomic options present in the world.
 
-The world loads this YAML at runtime and that becomes the action surface. So if you change affordances.yaml, you're not tweaking balance. You're literally changing what kind of civilisation this is.
+### Interaction types
 
-### Interaction types (how time flows when you do it)
+The engine supports four interaction types:
 
-We currently support four interaction types:
+* `instant` — single-tick actions completed immediately (e.g., shower, eat).
+* `multi_tick` — activities requiring sustained commitment for a specified number of ticks (e.g., sleep, work, gym). Leaving early forfeits progress and completion bonuses.
+* `continuous` — actions that remain active while the agent stays in place. Few baseline affordances use this mode today, but it remains available for future designs.
+* `dual` — hybrid actions that perform an instant step followed by multi-tick continuation (e.g., hospital check-in followed by observation).
 
-* `instant`
-  One-tick action. You press INTERACT, it fires, you're done (e.g. Shower, Eat). Good for impulses and emergencies.
+The environment maintains per-agent `interaction_progress` for multi_tick and dual interactions and clears it if the agent disengages.
 
-* `multi_tick`
-  You have to commit for a number of ticks to finish the activity (e.g. Sleeping, Working a shift, Gym). If you walk off the tile early you lose progress and you don't get the completion bonus.
+### Key fields
 
-* `continuous`
-  Conceptually "stays on while you remain here", tick after tick. Think "holding down a lever." We include this mode in the schema because it's useful design space, even if most of the current baseline things are expressed as multi_tick.
+* `id` and `name` — link the affordance definition to map placement. Renaming an affordance requires corresponding map updates.
+* `interaction_type` — determines progress handling and reward timing.
+* `required_ticks` — defines commitment duration for `multi_tick` and `dual` actions.
+* `operating_hours` — specifies availability using hour pairs. `[9, 18]` denotes 09:00–18:00; `[18, 28]` denotes 18:00–04:00 the following day. The environment evaluates this every tick.
+* `costs` / `costs_per_tick` — represent expenditures (money, energy, hygiene, etc.). `costs` apply upfront; `costs_per_tick` apply during sustained interactions. Values are normalised (e.g., 0.10 money ≈ $10).
+* `effects` / `effects_per_tick` — represent benefits or penalties. `effects` apply instantly; `effects_per_tick` apply during sustained interactions.
+* `completion_bonus` — applies when the interaction completes successfully (all required ticks fulfilled).
 
-* `dual`
-  Hybrid forms that act like instant on the first tick and then sustain like multi_tick across more ticks. This gives us stuff like "check in at hospital (instant triage), then stay under observation (multi_tick)". The engine already understands this shape, even if not every world uses it yet.
-
-Under the hood, the environment tracks per-agent `interaction_progress` for multi_tick and dual actions, and clears it if you leave.
-
-If you're thinking "that's how you'd code a job shift, sleep, or physio rehab" – yes. That's exactly why it exists.
-
-### Key fields in each affordance entry
-
-* `id` and `name`
-  These link to map placement. The environment uses these names to spawn tiles and to align observation channels. If you rename "Bed" to "NapCasket" in YAML but don't update the env layout, RIP.
-
-* `interaction_type`
-  Tells the env how to advance progress and when to pay bonuses.
-
-* `required_ticks`
-  How long you need to commit before the thing counts as "done". Only valid for multi_tick and dual. Omit it for instant.
-
-* `operating_hours`
-  Opening window in hours. `[9, 18]` means 09:00–18:00 inclusive of start, exclusive of end. `[18, 28]` means 18:00–04:00 next day. Time-of-day logic lives in the env and checks this every tick.
-
-* `costs` / `costs_per_tick`
-  What you lose. This can be money, energy, hygiene, whatever. cost is upfront (instant). costs_per_tick is ongoing (multi_tick / dual). All amounts are normalised: 0.10 money means $10 in the default scaling.
-
-* `effects` / `effects_per_tick`
-  What you gain (or lose, if it's negative). Same idea: effects is instant, effects_per_tick is per tick during ongoing interactions.
-
-* `completion_bonus`
-  What you get when you fully complete the interaction (i.e. finish required_ticks without bailing). This lets us do things like "sleep four ticks, and on the last tick you get an extra bump to energy" or "finish a full shift and get paid".
-
-The environment enforces "you can only INTERACT if you're standing on the tile and it's open right now". It does not enforce affordability before letting you try. This is intentional.
-
-If you hit INTERACT on a thing you can't afford, the tick is basically wasted and you feel bad. Lesson learned: being broke is not just an integer problem. It's time loss, and time loss is survival pressure. This is training signal.
+Agents may attempt interactions even if they cannot afford them. Failing affordability consumes time without benefit, providing natural training feedback about resource constraints.
 
 ### The baseline affordance set
 
@@ -782,38 +685,32 @@ affordances:
     teaching_note: "Approximates ambulance response without movement"
 ```
 
-You can read a lot of social policy in there, by the way.
+The baseline set already encodes policy choices:
 
-For example:
+* Luxury rest requires spending (faster recovery with hygiene benefits at a monetary cost).
+* Employment provides income while reducing mood and consuming energy.
+* Mood can be purchased quickly (e.g., bar) or cultivated gradually at lower cost (e.g., recreation, park).
+* Healthcare is time- and price-gated. Emergency care is always available but expensive and fatiguing.
 
-* Being poor makes it harder to rest well (LuxuryBed costs money but restores energy faster and helps hygiene).
-* Working pays money but erodes mood, and it costs energy, so there's a grind loop.
-* Mood is not free. You can buy mood at the bar (social + mood, but expensive), or you can generate mood slowly and cheaply through Recreation or Park.
-* Health care is time-gated and price-gated. Emergency is available always, but it's ruinously expensive and leaves you tired.
-
-That’s intentional. The world is already expressing class, labour, burnout, social life, and health access through config.
+These relationships are deliberate; configuration expresses labour, class, social, and health dynamics explicitly.
 
 ### Emergency care and mobility
 
-The ambulance affordance is a design hack around a current engine limit: the engine doesn't yet directly support "this interaction teleports you somewhere else". So instead we fake ambulance like this:
+The ambulance affordance currently approximates relocation because the engine does not yet support direct teleportation. The configuration therefore:
 
-* It’s `instant`.
-* It's always open.
-* It's very expensive.
-* It spikes your health up so you don't die this tick.
-* It drains some energy to reflect shock.
+* defines the action as `instant`
+* keeps it available at all hours
+* applies a significant monetary cost
+* restores health immediately to prevent death
+* applies an energy penalty to reflect shock
 
-That buys you survival at the cost of future affordability. It is absolutely meant to teach: "if you let your health crash, you are now in debt to stay alive". This gives the agent a reason to plan for preventative care instead of constantly gambling and hitting panic buttons.
-
-WEP that this mapping is aligned with how we've actually got `call_ambulance` wired right now: high (~85 percent).
+The design intent is to keep the agent alive while imposing future costs, reinforcing preventative planning. Words of estimative probability that this description matches the implemented behaviour: high (~85 percent).
 
 ### Optional extension: physical relocation
 
-Eventually (and frankly this is inevitable), the ambulance should physically move you to the Hospital tile.
+Longer-term, the ambulance interaction should relocate the agent to the hospital tile. Minimal engine changes to support this include:
 
-Minimal engine change to support that:
-
-1. Add a richer effect type to the model:
+1. Extending the effect model:
 
 ```python
 class AffordanceEffect(BaseModel):
@@ -823,13 +720,13 @@ class AffordanceEffect(BaseModel):
     destination: str | None = None
 ```
 
-2. In `AffordanceEngine.apply_instant_interaction`, detect `type == "relocate"`. Instead of trying to change a meter, you emit a side-channel update, e.g.:
+2. In `AffordanceEngine.apply_instant_interaction`, detect `type == "relocate"` and emit a side-channel update:
 
 ```python
 info["relocations"] = [(agent_idx, destination_name)]
 ```
 
-3. In `VectorizedTownletEnv._handle_interactions_legacy`, consume that `relocations` list after applying effects, and literally set the agent’s position to the coordinates for that destination affordance.
+3. In `VectorizedTownletEnv._handle_interactions_legacy`, consume `relocations` after applying effects and set agent positions to the specified destinations.
 
 With that in place, you can write an ambulance affordance like:
 
@@ -845,37 +742,31 @@ With that in place, you can write an ambulance affordance like:
   operating_hours: [0, 24]
 ```
 
-Now it's not just "patch your health", it's "you lose autonomy and wake up in hospital". Which is honestly what we want for realism and for training. It teaches: there's a world state transition after crisis.
-
-Words of Estimative Probability that the relocation hook as described can be slotted into the current engine with low blast radius: moderate (~70 percent). It assumes we're comfortable piping side-channel info back into `VectorizedTownletEnv`, which is consistent with how we already pass other per-step metadata.
+This change would transition the agent to hospital rather than only applying health adjustments, reinforcing the state change associated with a crisis. Words of estimative probability that the relocation hook can be integrated with low risk: moderate (~70 percent), assuming side-channel updates remain acceptable in `VectorizedTownletEnv`.
 
 ---
 
 ## 6. Time of day and action masks
 
-Time is part of the physics, not just flavour.
+Temporal mechanics are part of the simulation physics.
 
-* Every affordance has `operating_hours`. That's enforced tick by tick.
+* Each affordance declares `operating_hours`, enforced every tick.
 
-  * `[open, close]` with 0 ≤ open < close ≤ 24 means it's open from that hour until just before the close hour.
-  * If close > 24 (up to 28), that means "this wraps past midnight". For example `[18, 28]` means open at 18:00 and stays open through midnight until 04:00.
+  * `[open, close]` with 0 ≤ open < close ≤ 24 means the affordance is available from `open` up to (but excluding) `close`.
+  * Values where `close > 24` (up to 28) indicate wrap-around into the next day (e.g., `[18, 28]` covers 18:00–04:00).
 
-* The environment keeps a `time_of_day` per world. If temporal mechanics are enabled in config, it increments:
-  `time_of_day = (time_of_day + 1) % 24` every tick.
+* The environment maintains `time_of_day`. When temporal mechanics are enabled, it increments each tick:
+  `time_of_day = (time_of_day + 1) % 24`.
 
-* You only get INTERACT unmasked if:
+* `INTERACT` is unmasked only when the agent stands on the relevant tile and the affordance is open at the current hour.
 
-  * you're standing on the tile,
-  * that tile's affordance is open at the current hour.
-
-Money is not part of that masking. You can still try to buy something you can’t afford. The idea there is: "poverty wastes your turns" is an experience we want the agent to discover, not something we silently protect it from.
+Affordability is not part of the mask; attempting unaffordable actions consumes time without benefit, providing natural feedback about resource scarcity.
 
 ### Action space
 
-The universal action set is:
-`[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`
+The action set is `[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`.
 
-The environment charges basic movement / idle costs automatically:
+The environment applies baseline movement and idle costs automatically:
 
 * moving:
 
@@ -892,16 +783,15 @@ The environment charges basic movement / idle costs automatically:
 
 * interacting:
 
-  * a separate `energy_interact_depletion` per press
-    default 0.0, but can be increased if you want "using things is tiring"
+  * a separate `energy_interact_depletion` per press (default 0.0, tunable to model tiring interactions)
 
-Because those are environment-level knobs, you can do whole-world difficulty variants like:
+These environment-level parameters enable world-scale difficulty variants such as:
 
-* "high commute tax": walking is brutally expensive
-* "burnout society": interaction always drains energy
-* "welfare state": waiting is cheap and not so punishing
+* **High commute tax** — walking is expensive
+* **Burnout society** — every interaction drains energy
+* **Welfare state** — waiting incurs minimal cost
 
-This is one of the main levers for making a world where a long workday is viable vs a world where just getting to work is dangerous.
+Geographical placement is a primary lever for distinguishing worlds where extended workdays are viable from those where accessing work is itself hazardous.
 
 WEP that this matches the current VectorizedTownletEnv semantics is high (~90 percent).
 
@@ -909,43 +799,34 @@ WEP that this matches the current VectorizedTownletEnv semantics is high (~90 pe
 
 ## 7. Multi-tick semantics
 
-Some things take time, and commitment is part of the mechanic.
+Multi-tick affordances model activities that require sustained commitment.
 
-For any affordance with `interaction_type: "multi_tick"` or `"dual"`:
+For affordances with `interaction_type` of `multi_tick` or `dual`:
 
-* The environment tracks `interaction_progress` on a per-agent basis.
-* Each tick you stay on that same affordance tile and keep hitting INTERACT (or auto-continue, depending on how we wire control), `interaction_progress` increments.
-* If you walk off the tile, switch to another affordance, or the place closes mid-way, progress resets. No completion bonus. Tough luck.
+* The environment tracks per-agent `interaction_progress`.
+* Remaining on the tile and continuing the interaction increments progress each tick.
+* Leaving the tile, switching affordances, or encountering closing hours resets progress and forfeits completion bonuses.
 
-At the tick where you hit `required_ticks`:
+When `interaction_progress` reaches `required_ticks`:
 
-* You apply that last tick’s `effects_per_tick`.
-* Then you apply the `completion_bonus` one-off.
-* Then progress resets.
+* The final `effects_per_tick` are applied.
+* The `completion_bonus` is granted.
+* Progress resets.
 
-Why this matters:
-
-* Sleep only pays off if you stay down.
-* Work only pays off if you stay the whole shift.
-* Gym only pays off if you finish the block.
-* The agent has to learn "sprint to bed, stay there, defend that choice against distractions" instead of just spamming micro-sleeps.
-
-That’s not just fun for gameplay. It's also curriculum-friendly. It teaches planning and follow-through.
-
-WEP: high (~95 percent). This is exactly how the code handles multi-tick.
+This structure ensures that activities such as sleep, work shifts, and training only yield benefits when completed, encouraging the agent to plan and persist. Words of estimative probability that this description reflects the implementation: high (~95 percent).
 
 ---
 
 ## 8. Positions and observation alignment
 
-The world is not abstract. It's spatial.
+The world is spatial, not abstract.
 
-`VectorizedTownletEnv` seeds a default layout by placing each named affordance at a specific grid coordinate. Observations encode both:
+`VectorizedTownletEnv` seeds a default layout by placing each named affordance at specific grid coordinates. Observations include both:
 
-* your current position, and
-* what’s at each position in the map.
+* the agent’s current position
+* the affordance present at each coordinate
 
-That means names in affordances.yaml must line up with what the env expects to place on the map. If you rename "Gym" to "FitnessCentre" in the YAML but the env layout still calls it "Gym", your agent will be standing on something that doesn't exist in config terms. The affordance won't fire. You’ll cry, and you will deserve it.
+Consequently, names in `affordances.yaml` must align with the environment layout. Renaming an affordance in YAML without updating the layout will prevent the interaction from firing.
 
 Here’s the reference layout:
 
@@ -968,17 +849,16 @@ Hospital:   [6,1]
 
 The environment also serialises and restores these positions in checkpoints. That way, training runs and eval runs agree on what "go to the Hospital" means in world coordinates, and the agent isn't punished by randomised geography unless we explicitly ask for that.
 
-This positional stability is important for two reasons:
+This positional stability matters because:
 
-1. The agent can actually learn spatial habits like "bed is north-east of start".
-2. We can tune economic geography.
-   Example: Put "Job" far from "Hospital", and you’ve just modelled a world where work is physically incompatible with health care access for low-energy agents. That is not theory. That is game law once you check it in.
+1. Agents can learn spatial habits (e.g., the bed is north-east of start).
+2. Designers can tune economic geography. Placing `Job` far from `Hospital`, for example, models a world where low-energy agents struggle to combine work with healthcare access.
 
 ---
 
-## 9. Validation rules (what the loaders will yell at you about)
+## 9. Validation rules
 
-Universe as Code is meant to be data-driven, but it is not meant to be "anything goes". The loaders enforce hard structure so we don't get weird half-worlds.
+Universe as Code is data-driven but not unconstrained. Loaders enforce structural requirements to prevent inconsistent worlds.
 
 Here’s what’s enforced when we load configs:
 
@@ -990,7 +870,7 @@ Here’s what’s enforced when we load configs:
 * Each bar’s range must be `[0.0, 1.0]`.
   We never allow a bar to run "hot" above 1.0 or dip below 0.0. The engines clamp.
 
-If you invent a ninth bar like "spiritual_alignment" and try to sneak it in, the loader will simply refuse to build the world. That’s deliberate. Bars are part of the world ABI and downstream models get very cranky if you silently reshuffle them.
+Attempting to add a ninth bar (for example, `spiritual_alignment`) causes the loader to reject the world. Bars are part of the world ABI, and downstream models assume the canonical set and ordering.
 
 ### cascades.yaml
 
@@ -1002,7 +882,7 @@ If you invent a ninth bar like "spiritual_alignment" and try to sneak it in, the
   * `secondary_to_primary`
   * `secondary_to_pivotal_weak`
     These category labels show up again in `execution_order`, which is basically "run this group of cascades in this order every tick".
-* Modulation entries must provide the specific depletion multiplier fields (`base_multiplier`, `range`, etc) in the right shape. If you leave them out or rename them, we can't compute health decay properly and the loader will complain.
+* Modulation entries must provide the required depletion multiplier fields (`base_multiplier`, `range`, etc) in the expected shape. Omissions or renamed fields prevent accurate health decay calculations and cause the loader to raise an error.
 
 This is what keeps health decay, hunger crash, hygiene rot and so on all mathematically coherent instead of random if/else logic.
 
@@ -1015,13 +895,13 @@ This is what keeps health decay, hunger crash, hygiene rot and so on all mathema
   * `continuous`
   * `dual`
 
-  If you invent `"sustained_brooding"` as an interaction_type and forget to update the engine, the loader will block you. Again: ABI stability.
+  Introducing a new literal without engine support—for example `"sustained_brooding"`—will be rejected for ABI stability.
 
 * `required_ticks`:
 
   * Must exist for `multi_tick` and `dual`.
   * Must not exist for `instant`.
-    If you put `required_ticks` on an instant affordance, the loader treats that as illegal because there is no progress counter to advance.
+    Providing `required_ticks` on an instant affordance is invalid because no progress counter exists to advance.
 
 * `operating_hours` must be a two-integer list and must make temporal sense:
 
@@ -1036,7 +916,7 @@ WEP on this section being true to the current Pydantic validations: high (~90 pe
 
 ## 10. Equivalence, tests, and teaching packs
 
-We are replacing a bunch of hardcoded behaviour with config. That’s lovely in theory, but there's a risk: you change a YAML number and quietly change the survival game without noticing.
+Replacing hardcoded behaviour with configuration introduces the risk that small YAML edits could unintentionally change survival dynamics.
 
 Two things keep us sane:
 
@@ -1068,24 +948,15 @@ Recommended packs:
 * `cascades_strong.yaml`
   Roughly +50 percent to cascade `strength`. Hunger punishes energy and health much harder. Hygiene crashes mood brutally. This is "you are fragile, plan ahead".
 
-With just those three knobs, you can already teach:
-
-* resilience,
-* fragility,
-* and how fast neglect kills you.
+These three knobs already support lessons in resilience, fragility, and the speed at which neglect becomes lethal.
 
 Affordance packs sit alongside cascade packs and give us socioeconomic regimes. Some obvious examples:
 
-* "austerity"
-  Sleep and food get cheaper (Beds are basically free and HomeMeal is low money cost), but labour income drops and health care costs more. You live, barely, but you stay broke and sick.
+* **Austerity** — sleep and food become cheaper while labour income drops and healthcare costs increase. Survival is possible but financially precarious.
+* **Boom** — wages rise while rest and hygiene become more expensive. Agents can cover immediate needs but pay heavily to maintain them.
+* **Nightlife** — social outlets operate late into the night, whereas medical services may have limited hours. Access to entertainment is easier than access to healthcare.
 
-* "boom"
-  Wages go up. Energy recovery gets pricier (LuxuryBed price per tick spikes; Shower costs more). You're rich enough to paper over your basic needs, but you're bleeding money just to exist clean and rested.
-
-* "nightlife"
-  Bars and Recreation stay open deep into wrap-around hours `[18, 28]`. Gym might open later. Doctor hours might even shrink. Health access becomes clock-gated while mood/social access is always available. The world is telling you: it is easier to drink than to heal.
-
-Because these are just config packs, designers can explore political economy by editing YAML, not Python.
+Because these are configuration packs, designers can explore political-economy scenarios by editing YAML rather than Python.
 
 WEP this describes how we actually intend people to fork worlds: very high (~95 percent).
 
@@ -1116,23 +987,21 @@ Right now, an agent in trouble has three main options:
    * Extremely expensive.
    * Immediately stabilises health and (in the forward-looking relocation version) dumps you at Hospital, removing your control of the situation.
 
-That's not just flavour. That is policy, encoded in YAML.
+These mechanics encode policy decisions directly in YAML.
 
-What that teaches the agent:
+Implications for the agent:
 
-* Preventative care is cheaper, but time-gated.
-* Emergency care will save you now, but it will wreck you financially, and possibly leave you stranded somewhere else with new constraints.
-* There is an economy to health. You can absolutely be too poor to stay alive comfortably. That will be reflected in your long-run survival reward.
+* Preventative care is cheaper but time-gated.
+* Emergency care provides immediate survival at significant financial and positional cost.
+* Health outcomes are tied to economic status; insufficient resources degrade long-term survival rewards.
 
-It also gives the model a reason to learn the clock. If health is low at 17:45, sprinting to the Doctor before they close at 18:00 is a completely rational move.
+The design also incentivises temporal awareness: seeking treatment before closing time is strategically beneficial. Words of estimative probability that the description aligns with the current ambulance design and relocation proposal: ~80 percent (the relocation behaviour remains a planned extension).
 
-WEP alignment to current ambulance design and the proposed "relocate to Hospital" hook: ~80 percent (mild extrapolation on relocation behaviour, but consistent with section 5).
+## 12. Tick execution overview
 
-## 12. How the tick actually runs under the hood
+This section summarises the sequence of operations executed each tick for every active agent.
 
-This section is mostly here so engineers don't get surprised when they're stepping through the code.
-
-On each tick for each living agent, high level order of operations is:
+High-level order:
 
 1. We process the agent's chosen action:
 
@@ -1181,7 +1050,7 @@ WEP alignment with live code: high (~90 percent). The only light abstraction her
 
 ## 13. Config packs and world folders
 
-A world, in practice, is just a folder of YAML.
+Operationally, a world is a directory of YAML files.
 
 At minimum, that folder needs:
 
@@ -1195,12 +1064,12 @@ configs/test/
 You point the environment at this directory and it boots that reality.
 
 * `bars.yaml` says which meters exist, how they deplete, and how you can literally die.
-* `cascades.yaml` says how those meters punch each other in the face over time.
-* `affordances.yaml` says what you’re allowed to do about it.
+* `cascades.yaml` describes cross-meter dynamics.
+* `affordances.yaml` defines the available actions.
 
-If you want to layer in social signalling, scripted events, NPC cues, etc, you add new files alongside those. For example, we expect to introduce `cues.yaml`, which will describe social and environmental signals the agent can perceive without directly interacting. That will feed perception/pretraining modules, not just control.
+Additional capabilities (e.g., social signalling, scripted events, NPC cues) can be layered in via supplementary files. A planned `cues.yaml`, for example, would describe observable signals, supporting perception and pretraining modules as well as control.
 
-The big idea here is: content designers, economists, narrative designers and AI researchers are now editing the same source of truth. The point of "Universe as Code" is that the world isn't hand-waved in prose, it's executable.
+The broader objective is to provide a single executable source of truth shared by content designers, economists, narrative designers, and AI researchers.
 
 ## 14. Walkthrough: one crisis tick with ambulance
 

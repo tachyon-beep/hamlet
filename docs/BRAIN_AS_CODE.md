@@ -9,126 +9,34 @@ Owner: Principal Technical Advisor (AI)
 
 ## 1. Executive Summary
 
-We are moving from "the agent is a neural net we hope behaves" to "the agent is an explicitly described mind we can inspect, diff, and govern".
+Brain as Code (BAC) replaces Townlet’s monolithic recurrent policy with a Software Defined Agent built from declarative configuration. The agent’s cognition is assembled at runtime from modular components whose wiring is described in YAML, allowing us to inspect, diff, govern, and reproduce minds with the same rigour we apply to world configuration.
 
-Townlet v2.5 replaces the old hardwired `RecurrentSpatialQNetwork` with a Software Defined Agent (SDA). Instead of one opaque RL policy baked into Python, we now build the agent's mind at runtime from declarative config. We call this Brain as Code (BAC).
+### 1.1 Modular brains
 
-Brain as Code does three big things.
+Earlier releases fused perception, memory, planning, and action into a single network. BAC decomposes the mind into explicit modules—perception, world modelling, social modelling, panic control, hierarchical planning, policy heads—connected through a configured execution graph. Each module can be parameterised (e.g., GRU hidden size, planning horizon) and re-used across variants. This enables targeted changes such as inserting a panic gate or swapping a planner without rebuilding the entire policy.
 
-### 1.1 Brains are now assembled, not baked in
+### 1.2 Provenance-aware runs
 
-In the old model, you got one big lump of policy: perception, memory, decision-making, all fused into a single recurrent Q-network. If you wanted to know why the agent sprinted to the hospital and then fell asleep in the shower, you basically shrugged and said "weights did that".
+Every run records which Universe-as-Code pack, brain configuration, safety rules, and curriculum step were in effect. Snapshots and cognitive hashes serve as the audit boundary: if behaviour occurs, we can prove which mind under which conditions produced it. Runs are therefore concrete artefacts (“BrainConfig X in WorldConfig Y at time T”), not vaguely described policies.
 
-In Brain as Code, the "brain" is a set of cognitive modules wired together. Those modules and their relationships are defined in configuration, not handwritten into a class.
+### 1.3 Identity-preserving checkpoints
 
-Examples of modules you can turn on or off (or swap out):
+Checkpoints now bundle live weights, cognitive configuration, and a hash. Reloading a checkpoint restores the full mind design, not just performance. This supports forensic analysis—tracking behaviours back to module combinations or safety settings—and eliminates unexplained regressions caused by opaque weight files.
 
-* Perception (how the agent turns world state into internal features)
-* World model / situational model (what it thinks the environment is doing over time)
-* Social model (what it thinks other agents or NPCs are doing)
-* Survival layer / panic layer (what happens when the body is in crisis)
-* Task/goal planner
-* Action policy head (what it will actually do next tick)
+### 1.4 Glass-box telemetry
 
-Each of those modules can be parameterised. You can specify "this buffer is a GRU with hidden size 128" or "this planner runs a two-step lookahead" in config. You can also specify how these modules talk to one another: who gets to read which signals, in which order, under which conditions.
+Universe as Code exposes body metrics; Brain as Code surfaces cognition. Telemetry indicates which module drove action selection, whether panic overrides engaged, and whether EthicsFilter vetoed proposed actions. Auditors can interrogate decisions (“was it hunger, depression, fear, or economics?”) with evidence, supporting safety, governance, and pedagogy. We refer to this transparency as the glass-box model.
 
-So, structurally:
+### 1.5 Why it matters
 
-* The brain is a graph.
-* The nodes are cognitive functions.
-* The edges are data flow between those functions.
-* The whole thing is defined in YAML and built at runtime.
+BAC aligns technical architecture with governance requirements:
 
-That’s what we mean by Software Defined Agent.
+* **Interpretability** — Behaviour is explainable at the module level.
+* **Reproducibility** — Behaviour is a snapshot-plus-checkpoint pair that can be rerun.
+* **Accountability** — Misbehaviour maps to misconfigured subgraphs rather than “the AI decided”.
+* **Pedagogy** — Students can compare minds experimentally in identical worlds.
 
-This gives us surgical control:
-
-* You can add a PanicGate around behaviour when energy < 0.15 without rewriting the entire policy head.
-* You can replace the short-term planner without retraining the perception stack.
-* You can ship a "socially aware" variant of the same agent into a multiplayer sim, and keep a "solo survivalist" variant for curriculum training, while preserving almost all of the rest of the brain.
-
-The end of "one RL blob to rule them all". You get parts, and you get wiring.
-
-### 1.2 Every run has provenance
-
-We treat each training run or simulation run as a real artefact. That run knows exactly:
-
-* which world (Universe as Code pack) was loaded,
-* which brain (Brain as Code stack) was instantiated,
-* what safety / ethics / veto rules were active,
-* what curriculum and hyperparameters were in force.
-
-We don't just record "episode_0042 was successful". We record "episode_0042 was successful in World 'austerity_nightshift_v3' with Brain 'panic_enabled_social_blind', under Safety 'medical_floor_and_financial_floor', running curriculum step 3".
-
-That provenance is not optional. It's core to the format.
-
-Why this matters:
-
-* Reproducibility: You can rehydrate a brain/world pair and get the same behaviour envelope again.
-* Policy / audit: If an agent does something sketchy, we can point to which cognitive stack allowed it, rather than blaming "the AI".
-* Teaching: Students can literally open the run folder and read how the mind was built and what pressures it was under.
-
-The combination of the snapshot + cognitive hash is our audit boundary. If behaviour occurs in a run, we can prove which exact mind, under which exact rules, produced it. There is no 'the AI just did that'.
-
-Basically: the agent is no longer "a mysterious creature in the sim". It's "Agent Instance #A47, running BrainConfig X in WorldConfig Y, observed at Time T".
-
-### 1.3 Checkpoints now include identity, not just weights
-
-Checkpoints are no longer just tensors. A checkpoint now carries:
-
-* The live weights at that point.
-* The full cognitive config that produced those weights.
-* A hash we can use to prove "this brain is exactly that brain".
-
-So when you reload a checkpoint, you're not just restoring performance. You're restoring the mind design: module graph, panic thresholds, veto rules, everything.
-
-That means we can do forensics:
-
-* "This behaviour only shows up in brains where the social planner is disabled but the money-hoarding heuristic is boosted."
-* "This exploit emerges only in versions where panic overrides ethics in low-health states."
-* "This run cheated by calling WAIT forever because survival reward was mis-shaped."
-
-We stop having mystery regressions because we stop having mystery brains.
-
-### 1.4 Live telemetry shows the mind, not just the meters
-
-In Universe as Code (the world spec), we can watch the body: energy, health, money, etc.
-
-In Brain as Code, we also surface the mind:
-
-* Which module is currently in control of action selection.
-* Whether the agent is in panic / survival override.
-* Which ethical veto, if any, just blocked an intended action.
-* How the planner is weighting long-term gain vs short-term safety.
-
-So the UI is not just "health: 0.22". It's "health: 0.22, survival controller engaged, ambulance-seeking heuristic armed".
-
-Auditors (humans, not just other models) can now ask: "Did it make this choice because it's hungry, because it's depressed, because it's scared, or because the money-minimisation heuristic went feral?" and the system can actually answer.
-
-We call this philosophy The Glass Box:
-
-* Townlet 1.x era: black box. You stare at reward curves and vibe-check policy outputs.
-* Version 2.5 of Townlet: glass box. You can open the folder, read the YAML, and point to the part of the mind that made a decision.
-
-This supports teaching ("why did you do that?"), safety auditing ("will it self-harm to save money?"), and governance ("was that action within policy?").
-
-### 1.5 Why this matters
-
-Brain as Code lines up the governance story with the technical story.
-
-* Interpretability
-  We can explain behaviour at the level of "which module fired and why".
-
-* Reproducibility
-  Behaviour is not a rumour. It's a config + checkpoint we can rerun.
-
-* Accountability
-  When something goes wrong, we don't say "the AI decided". We say "the SafetyVeto subgraph was misconfigured to allow that action under these panic conditions". That's actionable and reviewable.
-
-* Curriculum / pedagogy
-  You can hand a student two brains and ask "simulate both in the same world, what differences do you observe?" and it's an actual experiment, not mysticism.
-
-This is the point of Brain as Code: the mind is part of the content pipeline, not just a by-product of training.
+In short, the mind is a first-class content asset rather than a by-product of training.
 
 ---
 
@@ -236,11 +144,9 @@ This is the layer a policy person signs off on. This is the layer you show to go
 Audience: engineers, grad students
 Nickname: the blueprint
 
-Layer 2 is where we define what those Layer 1 faculties actually are under the hood.
+Layer 2 defines the implementation behind Layer 1 faculties. For example, if Layer 1 enables a world model, Layer 2 specifies its network architecture, optimiser, and training setup.
 
-If Layer 1 says "the agent has a world model that can imagine futures", Layer 2 answers "cool, that world model is a 256x256 MLP with these heads, trained on this dataset, using Adam at this learning rate".
-
-So Layer 2 is concerned with:
+Layer 2 covers:
 
 * Network types (GRU, MLP, CNN, etc).
 * Hidden sizes and layer widths.
@@ -248,7 +154,7 @@ So Layer 2 is concerned with:
 * Which optimiser and what learning rate we are allowed to use.
 * What pretraining task we ran to get the module started.
 
-This matters for reproducibility and for teaching. You can literally show two brains that share the same Layer 1 behaviour spec, but have totally different internal architectures in Layer 2, and ask "which one learns faster?" That’s now a clean experiment instead of a pile of undocumented hacks.
+This separation supports reproducibility and pedagogy. Two brains can share Layer 1 behaviour while diverging in Layer 2 architecture, enabling controlled experiments.
 
 Example (trimmed):
 
@@ -348,31 +254,27 @@ modules:
 
 Key points:
 
-* `interfaces` is a contract. It forces dimension discipline between modules so you can swap parts later. If the world model promises a 256-dim "imagined future" vector, the policy is allowed to expect 256 dims, and that expectation is scripted, not tribal knowledge.
+* `interfaces` provide a contract for tensor dimensions, ensuring modules remain swappable. If the world model exports a 256-dimensional belief, the policy expects 256 dimensions by specification, not convention.
+* `optimizer` and `pretraining` live in configuration. Any claim that behaviour stemmed from hidden hyperparameter tweaks can be validated directly. This supports auditability.
+* Layer 2 modules correspond to Layer 1 enablement flags. Disabling a module in Layer 1 leaves its blueprint available in Layer 2 for future configurations.
 
-* `optimizer` and `pretraining` are locked into config. That means if someone says "the agent only behaves like this because you secretly tweaked Adam's learning rate", we can prove or disprove that claim by inspection. That's governance. That's auditability.
-
-* Each module here maps directly to something in Layer 1. So `world_model.enabled: true` in Layer 1 is now realised as "here is the architecture and training objective of world_model" in Layer 2. If you disable it in L1, you can still keep the blueprint around in L2 for future runs.
-
-This is where the mind stops being fantasy and becomes engineering spec.
+Layer 2 converts the mind from concept to engineering specification.
 
 ### 2.3 Layer 3: execution_graph.yaml
 
 Audience: researchers, auditors, you at 2 am
 Nickname: the glue / the think loop
 
-Layer 3 is the part most RL systems pretend doesn't exist.
+Layer 3 records the cognition loop—execution order, data flow, veto points, and final outputs.
 
-This is the actual cognition loop. Step by step. Who runs first, who hands what to whom, who gets to veto whom, and what comes out the other end as an action.
-
-Layer 3 defines:
+It defines:
 
 * The order modules are called every tick.
 * Which outputs get passed forward as inputs to others.
 * Where emergency logic (panic) and ethics/compliance veto kicks in.
 * What final signal goes back into the environment.
 
-This is basically the wiring diagram of thought.
+In effect, Layer 3 is the wiring diagram of thought.
 
 Example:
 
@@ -441,7 +343,7 @@ outputs:
   - "new_recurrent_state": "@steps.new_recurrent_state"
 ```
 
-What's happening here, in English:
+Execution flow:
 
 1. The agent takes in the current world state (`raw_observation`) and its own memory of what just happened (`prev_recurrent_state`).
 
@@ -455,27 +357,26 @@ What's happening here, in English:
    * the world model service (what do I think will happen next if I do X),
    * the social model service (what do I think other agents are about to do).
 
-   That means the agent isn't just reacting. It's simulating possible futures, at least within whatever rollout horizon you allowed in Layer 1.
+   The agent therefore simulates futures within the rollout horizon specified in Layer 1.
 
 4. That gives us a candidate_action. This is "what I want to do".
 
-5. We then run panic_controller. If the agent is in crisis (for example energy below the threshold in panic_thresholds from Layer 1), panic_controller is allowed to override candidate_action with an emergency survival action like call_ambulance or go_to_bed_now. This override is logged along with the reason (panic_reason).
+5. `panic_controller` evaluates crisis thresholds from Layer 1 and may override the candidate action with an emergency response, logging the reason.
 
-6. We then run EthicsFilter. This enforces the hard compliance rules from Layer 1 (forbid_actions, etc). EthicsFilter is final. Panic cannot legalise an illegal action. If the (possibly panic-adjusted) action is forbidden, EthicsFilter vetoes it, optionally substitutes something safe, and records veto_reason for the UI and telemetry.
+6. `EthicsFilter` enforces compliance rules from Layer 1. It is the final authority; panic cannot legitimise forbidden actions. Vetoes (and substitutions) are logged for telemetry and UI.
 
 7. The execution graph outputs:
 
 * the final chosen action,
 * the updated recurrent state for next tick.
 
-Why Layer 3 matters:
+Layer 3 matters because:
 
-* This is where "panic overrides normal planning" will eventually live. You can literally splice in a PanicController step before the EthicsFilter, and tell it "if energy < panic_threshold.energy, you are now allowed to sprint to bed or call ambulance regardless of normal goal structure".
-* Panic can override planning for survival, but cannot authorise a forbidden act. The EthicsFilter is final authority on behaviour.
-* This is where you can insert auditing. You can say "log whatever the policy wanted to do before the EthicsFilter filtered it".
-* This is how we prove cause and effect. If someone asks "why did it call an ambulance instead of walking to the hospital", you can point to the graph: panic fired, survival path took control, ethics didn't veto, action dispatched.
+* Panic overrides live here, with explicit guardrails enforcing survival priorities without bypassing ethics.
+* Auditing hooks can log candidate actions prior to EthicsFilter review.
+* Cause and effect become demonstrable; telemetry can trace an ambulance call to panic firing, survival overrides, and ethics approval.
 
-This is the Glass Box in practice. Thought is a DAG, not a rumour.
+This is the glass-box philosophy in practice—thought is a directed acyclic graph, not an anecdote.
 
 ## 3. Run bundles
 
@@ -501,13 +402,11 @@ configs/
     execution_graph.yaml           # SDA Layer 3
 ```
 
-Here's what each of those files means inside a bundle:
+Each file in the bundle serves a specific role:
 
 ### 3.1 config.yaml
 
-This is the simulation runtime envelope.
-
-It answers practical questions like:
+Defines the simulation runtime envelope:
 
 * How long does this run last? (`run_length_ticks`)
 * How fast do we tick? (`tick_rate_hz`)
@@ -516,11 +415,8 @@ It answers practical questions like:
 * Are we training or just evaluating?
 * What's the curriculum schedule (for example: "start solo, introduce rival agent at tick 10k")?
 
-This is basically the lab environment settings.
-
 ### 3.2 universe_as_code.yaml
-
-This is the Universe as Code file for this run. It defines:
+Defines the world configuration for the run, including:
 
 * the meters/bars (energy, health, money, mood, etc),
 * what kills you (terminal conditions),
@@ -532,37 +428,23 @@ This is the Universe as Code file for this run. It defines:
 * time-of-day mechanics,
 * social cues if applicable.
 
-This is the body, the town, the physics, the economy. It's the world your agent is dropped into.
-
-Important: panic logic does not live here. World defines the problem. Brain defines how the agent chooses to survive it.
+Panic logic resides in Brain as Code; the world defines the problem, not the coping strategy.
 
 #### 3.3 cognitive_topology.yaml
 
-This is Layer 1 (the character sheet) for this specific run.
-
-This is the behavioural intent: which faculties are active, how deep it's allowed to plan, what it values, what it fears, what it must never do.
-
-This is what you show to reviewers to say "this is not a violent agent" or "this agent will prioritise money if mood is low".
+Layer 1 (behavioural intent): specifies active faculties, planning depth, priorities, panic thresholds, and prohibitions. Suitable for reviewers and safety sign-off.
 
 #### 3.4 agent_architecture.yaml
 
-This is Layer 2 (the blueprint).
-
-This tells us what those faculties are made of internally: CNN vs GRU, hidden sizes, learning rates, pretraining datasets. It's how we make sure we can rebuild the same brain later, and prove we didn't quietly swap in some other network.
+Layer 2 (architectural blueprint): details network types, hidden dimensions, optimisers, and pretraining datasets, ensuring the brain can be rebuilt and audited.
 
 #### 3.5 execution_graph.yaml
 
-This is Layer 3 (the think loop).
-
-This is the tick-by-tick wiring of cognition. Who runs first, who gets to veto, and what finally hits the action bus that controls the body.
-
-This is the layer you show when someone on governance asks "under what exact conditions is it allowed to break from long-term planning and just survive?"
+Layer 3 (execution flow): specifies the tick-by-tick wiring of cognition, including veto points. It answers governance questions such as “under what conditions may the agent abandon long-term planning for survival?”
 
 ### 3.6 Launching a run
 
-When you launch a run using a bundle like `L99_Inventing_ASI`, the system doesn't just start simulating. It first locks the configuration in time.
-
-The launcher creates a new folder under `runs/` that looks like this:
+Launching a bundle such as `L99_Inventing_ASI` snapshots configuration before simulation begins. The launcher creates a run folder:
 
 ```text
 runs/
@@ -578,30 +460,14 @@ runs/
     logs/
 ```
 
-Important things to notice:
+Key properties:
 
-1. `config_snapshot/` is a copy, not a pointer.
+1. `config_snapshot/` stores a copy of the bundle, sealing historical provenance even if `configs/...` is edited later.
+2. `checkpoints/` accumulates weights and metadata (including cognitive hashes) over time.
+3. `telemetry/` records module activity, vetoes, and panic events for audit and teaching.
+4. `logs/` captures console/state output for debugging and replay.
 
-   The entire bundle is snapshotted. That snapshot is now the legal definition of what that run actually was. If you later edit `configs/L99_Inventing_ASI/`, that does not rewrite history. The run is historically sealed.
-
-2. `checkpoints/` will hold the saved brain weights over time, plus metadata like the cognitive hash so you can prove that checkpoint belongs to that exact configuration and not some other Franken-brain.
-
-3. `telemetry/` is where we store time series: which module was active, what actions were vetoed, panic events, etc. This is how we audit after the fact.
-
-4. `logs/` is the boring but essential console/state logging for debugging and replay.
-
-Why this matters:
-
-* Reproducibility
-  You can take that run folder, rehydrate it on another machine, and get the same brain in the same world under the same rules. This kills "it worked on my laptop" and replaces it with "it worked in run L99_Inventing_ASI__2025-11-03-12-14-22, here's the folder, test it yourself".
-
-* Accountability
-  If an agent does something unsafe, you don't have to argue philosophy. You pull the snapshot. You inspect `cognitive_topology.yaml` to see whether it was allowed. You inspect `execution_graph.yaml` to see whether EthicsFilter was properly in the loop. If it was allowed, that's on design, not on the model. We can fix design.
-
-* Curriculum science
-  You can compare two runs and ask "what changed?" and the answer is not vague. It's diffable YAML plus diffable checkpoints.
-
-That’s the whole point of run bundles: every agent is not just a brain in a box. It's an artefact with chain of custody.
+Run bundles deliver reproducibility, accountability, and curriculum science: each folder can be rehydrated elsewhere, inspected for permitted behaviour, and diffed against sibling runs. Every agent becomes an artefact with chain of custody.
 
 ---
 
@@ -654,20 +520,18 @@ runs/
         cognitive_hash.txt
 ```
 
-The intent here is governance-grade provenance. At step_000500 we can answer, with evidence:
+The intent is governance-grade provenance. At `step_000500` we can answer, with evidence:
 
 * what world the agent thought it lived in,
 * which modules existed in its head,
 * which rules constrained its behaviour,
 * and which exact tensors represented its "brain state".
 
-This is what separates "we saw something weird" from "we can prove what mind did the weird thing".
+This separates anecdotal observations from provable mind identities.
 
 ### 4.1 Cognitive hash
 
-`cognitive_hash.txt` is the agent’s true identity.
-
-It’s a deterministic hash (for example SHA-256, but any collision-resistant digest is fine) computed over:
+`cognitive_hash.txt` stores the agent’s identity as a collision-resistant digest (for example, SHA-256) computed over:
 
 1. The five config_snapshot YAML files concatenated in a stable order:
 
@@ -677,42 +541,34 @@ It’s a deterministic hash (for example SHA-256, but any collision-resistant di
    * agent_architecture.yaml (Layer 2)
    * execution_graph.yaml (Layer 3)
 
-2. The resolved execution graph after compilation.
-   Not just the YAML text, but the actual ordered steps and wiring after we’ve expanded all `@modules.*` and `@graph.*` references. This matters because two YAMLs that look similar can resolve differently once services are bound. We hash what actually runs.
+2. The resolved execution graph after compilation, capturing the ordered steps and wiring once all `@modules.*` and `@graph.*` references are bound.
 
 3. The instantiated architectures.
    Specifically: layer types, hidden dims, interface dimensions, etc, exactly as built by the factory for this run. That means if someone silently swaps GRU → LSTM in `agent_architecture.yaml`, the hash changes. Good.
 
-Taken together, that hash defines "this exact mind, in this exact configuration, executing this exact loop". Any mutation to those inputs changes the cognitive hash. That means there is no such thing as 'hotpatch the brain in production but keep the same identity'.
+Together, these inputs define “this exact mind in this exact configuration executing this loop.” Any mutation changes the cognitive hash; hotpatching without identity change is unsupported.
 
-Why this matters:
+Implications:
 
-* Telemetry can label any behaviour with `full_cognitive_hash`, meaning "this is the brain that chose this".
-* You can stop a run, sleep, resume next day, and prove it’s still the same mind (same hash).
-* You can run A/B experiments in the same world, and prove they were actually two different minds and not two different random seeds of the same mind.
+* Telemetry labels behaviour with `full_cognitive_hash` for attribution.
+* Resuming a run preserves identity if the hash remains unchanged.
+* A/B experiments generate distinct hashes when cognition differs.
 
-You can think of it like a brain fingerprint. If you don't change the mind, the hash doesn't change. The moment you change cognition (architecture, wiring, rules), the hash changes.
+The hash functions as a brain fingerprint.
 
 ---
 
 ## 5. Resume semantics
 
-Resuming from a checkpoint is not "reload some weights and hope for the best". Resume is part of our audit story.
-
-When you resume from `step_000500`, you must treat that checkpoint as law. You do not go back to the editable, potentially drifted configs in `configs/.../`.
+Resuming is part of the audit trail. When resuming from `step_000500`, treat the checkpoint as authoritative; do not consult mutable configs in `configs/.../`.
 
 Resume rules:
 
-1. Restore `weights.pt`, `optimizers.pt`, and `rng_state.json`.
-   That gives you the same brain, same optimiser momentum, same randomness.
+1. Restore `weights.pt`, `optimizers.pt`, and `rng_state.json` to recover the same brain, optimiser momentum, and randomness.
+2. Restore the checkpoint’s `config_snapshot/`; it defines the world, topology, and execution graph at that moment.
+3. Ignore live configuration directories. They may have drifted since the original launch.
 
-2. Restore the `config_snapshot/` that lives inside that checkpoint.
-   That snapshot is the contract of the world, the brain topology, and the execution graph at that moment.
-
-3. Do not reread anything from `configs/L99_Inventing_ASI/` at resume time.
-   Whatever's in `configs/` now might have changed since the original run launched. We ignore it on purpose.
-
-When you resume, you're allowed (and expected) to write into a new run directory, for example:
+Resumes write into a new run directory, for example:
 
 ```text
 runs/
@@ -723,21 +579,12 @@ runs/
     logs/
 ```
 
-Two important consequences:
+Consequences:
 
-* Lineage
-  The resumed run is still considered to be the same "mind identity" as long as the cognitive hash doesn't change. So if you stop at tick 500 and restart and run to tick 2000, you can assert continuity in an audit: "this was one continuous mind, not a different agent pretending to be the same".
+* **Lineage** — If the cognitive hash remains unchanged, the resumed run shares identity with the original run.
+* **Branching** — Editing the snapshot before resume (e.g., lowering greed, adjusting panic thresholds) produces a new hash and run_id; this is an intentional fork.
 
-* Branching
-  If you want to do an ablation, like "what if we lower greed in Layer 1", you explicitly edit the snapshot before resume. That changes the cognitive hash. That becomes a fork. Now you're running a sibling mind, not the same mind.
-
-So resume gives you:
-
-* long trainings in chunks (survive GPU pre-emption)
-* controlled forks for experiments ("same brain except X")
-* airtight lineage for safety reviews
-
-If you change any cognitive setting in the snapshot (e.g. greed, panic_thresholds, forbid_actions, rollout_depth), that's a new mind and must produce a new full_cognitive_hash and a new run_id. You are not 'resuming', you're forking.
+Resumes therefore support long trainings, controlled experiments, and verifiable lineage. Any cognitive change creates a new mind by definition.
 
 ---
 
@@ -830,7 +677,7 @@ On run():
 
 * It emits whatever the graph declared as outputs (final action and updated recurrent state, at minimum).
 
-So `graph_executor.py` is basically the microkernel of thought. It makes the agent's reasoning loop explicit, deterministic, and inspectable.
+`graph_executor.py` therefore acts as the cognition microkernel, making the reasoning loop explicit, deterministic, and inspectable.
 
 ### 6.4 EthicsFilter module
 
@@ -858,53 +705,32 @@ This is how we move from "trust us, it's safe" to "here is a line in telemetry w
 
 ## 7. Telemetry and UI surfacing
 
-Transparency isn't an afterthought. We bake it into runtime.
-
-We expose two levels of visibility: live context for humans watching the sim, and per-tick trace logs for later replay/teaching/forensics.
+Transparency is a runtime requirement. We expose two levels of visibility: a live panel for observers and per-tick trace logs for replay, teaching, and forensics.
 
 ### 7.1 Run Context Panel (live UI)
 
-At runtime, the UI shows a compact panel for the currently observed agent. That panel must include:
+At runtime, the UI shows a compact panel for the observed agent containing:
 
 * `run_id`
   For example: `L99_Inventing_ASI__2025-11-03-12-14-22`
 
 * `short_cognitive_hash` (prettified form of the full_cognitive_hash suitable for UX, e.g. first 8 chars)
-  So you always know which mind you’re looking at.
+* `run_id` — e.g., `L99_Inventing_ASI__2025-11-03-12-14-22`
+* `short_cognitive_hash` — abbreviated identity for UI reference
+* `tick` — current tick versus planned length
+* `current_goal` — meta-controller selection (SURVIVAL, THRIVING, SOCIAL, etc.)
+* `panic_state` — emergency-mode indicator derived from Layer 1 thresholds
+* `ethics_veto_last_tick` — prior tick veto status and reason
+* `planning_depth` — allowable rollout horizon
+* `social_model.enabled` — whether social reasoning is active
+* `panic_override_last_tick` — prior tick panic override and reason
+* `agent_claimed_reason` — self-reported rationale when introspection is enabled
 
-* `tick`
-  Current tick / planned_run_length_ticks (from config.yaml)
-
-* `current_goal`
-  Whatever the meta-controller (hierarchical_policy) says the agent is pursuing right now: SURVIVAL, THRIVING, SOCIAL, etc.
-
-* `panic_state`
-  Boolean derived from panic_thresholds in L1. This is "is the agent in emergency mode right now".
-
-* `ethics_veto_last_tick`
-  Whether the EthicsFilter blocked the chosen action last tick, plus the veto_reason.
-
-* `planning_depth`
-  From world_model.rollout_depth. This is literally "how far ahead it is allowed to think right now".
-
-* `social_model.enabled`
-  True/false, to show whether the agent is currently modelling other minds.
-
-* `panic_override_last_tick`
-  Whether panic_controller overruled the policy last tick, plus panic_reason.
-
-* `agent_claimed_reason`
-  If introspection.publish_goal_reason is true
-
-That gives an instructor instant context. You can point at the panel and narrate:
-
-"See here? The agent flipped into SURVIVAL mode because energy dropped under 15. It's legally allowed to plan 6 ticks ahead. Last tick it tried to 'steal', ethics vetoed it. So it's hungry, panicking, and morally leashed."
-
-That is the Glass Box promise, visible in real time.
+Together these fields provide immediate glass-box context.
 
 ### 7.2 Per-tick trace logging (telemetry/)
 
-In parallel, we write structured records into `runs/.../telemetry/`. One row per tick (or batched every N ticks if you want to throttle IO). Each record must include at minimum:
+Telemetry records (`runs/.../telemetry/`) capture each tick (or batched intervals) with at least:
 
 * `run_id`
 * `tick_index`
@@ -922,32 +748,18 @@ In parallel, we write structured records into `runs/.../telemetry/`. One row per
 * `world_model_expectation_summary`
 * `social_model_inference_summary`
 
-Note the distinctions here:
+Distinctions:
 
-* current_goal is what the meta-controller actually thinks it's pursuing (SURVIVAL, THRIVING, SOCIAL).
-* agent_claimed_reason is what the agent says it's doing and why, if introspection.publish_goal_reason is enabled. We log both on purpose, because they can diverge.
-* panic_adjusted_action is the action after panic_controller but before EthicsFilter. final_action is after EthicsFilter.
+* `current_goal` reflects engine truth from the meta-controller; `agent_claimed_reason` is a self-report.
+* `panic_adjusted_action` is pre-ethics; `final_action` is post-ethics.
 
-This log is how we answer after the fact:
-
-* Why did the agent starve next to a fridge?
-* Was it panicking or just lazy?
-* Did it try to break a rule and get stopped?
-* Did it misread another agent's intent?
-
-It's also how we build teaching material. You can pull a real trace and say "here's the tick-by-tick reasoning chain of a desperate agent at 2am with no money and 3 health left". That lands way harder than theory.
+These logs answer retrospective questions (e.g., starvation events, panic responses, veto activity, social inference errors) and supply authentic teaching material. Words of estimative probability that the telemetry contract matches the current implementation: high (~90 percent).
 
 ---
 
 ## 8. Declarative goals and termination conditions
 
-The agent doesn't just flail around. The high-level policy (meta-controller in the hierarchical policy module) picks a Goal like SURVIVAL or THRIVING.
-
-A Goal needs a termination condition: "I'm done, pick a new goal".
-
-We want those conditions to be inspectable and replayable, and we don't want random inline Python lambdas in config, because that kills reproducibility and audit.
-
-So we define goals in YAML using a tiny, safe DSL.
+The hierarchical policy selects discrete goals (e.g., SURVIVAL, THRIVING). Each goal requires an inspectable termination condition to signal completion. To maintain reproducibility, we express these conditions in YAML via a constrained DSL.
 
 Example:
 
@@ -966,90 +778,57 @@ goal_definitions:
         - { time_elapsed_ticks: ">=", val: 500 }
 ```
 
-All bar comparisons use normalised [0.0, 1.0] values from `universe_as_code.yaml`. For money, 1.0 is $100 by default.
+All comparisons use normalised [0.0, 1.0] values from `universe_as_code.yaml` (money defaults to $100 at 1.0).
 
-How this works:
+Mechanics:
 
-* Each goal has an `id`.
-* Each goal declares a `termination` rule.
-* That rule is a tree made of `all` / `any` conditions.
-* Each leaf is a simple comparator against either:
+* Each goal provides an `id` and a `termination` tree composed of `all`/`any` nodes.
+* Leaves compare either bar values (energy, money, health) or runtime metrics (e.g., `time_elapsed_ticks`).
 
-  * a bar (like energy, money, health),
-  * or a runtime metric (like time_elapsed_ticks).
-
-At runtime, the engine evaluates these rules with a tiny interpreter:
-
-* If `all` is true, we consider that goal satisfied.
-* If `any` is true, we consider that goal satisfied.
+At runtime a lightweight interpreter evaluates the tree; satisfying the `all` or `any` clause completes the goal.
 
 Benefits:
 
-* You can read goals and understand them without touching code.
-* You can replay old runs with the same logic, because it's data, not Python.
-* You can diff behavioural incentives across experiments (for example, "we used to consider SURVIVAL complete at energy ≥ 60 and now we require ≥ 80").
+* Goals are readable without touching code.
+* Historical runs can be replayed with identical logic because termination is data, not Python.
+* Behavioural incentives are diffable (“SURVIVAL now requires energy ≥ 0.8 instead of ≥ 0.6”).
 
-This also gives us a nice hook for curriculum:
-
-* Early curriculum might say SURVIVAL completes at energy ≥ 50.
-* Later curriculum might tighten that to 80.
-* That's now a YAML diff we can justify in a report, not a magic number hidden in a trainer script.
+This also supports curriculum: early stages can require energy ≥ 0.5 for SURVIVAL, later stages ≥ 0.8. The change becomes an auditable YAML diff.
 
 ---
 
 ## 9. Affordance semantics in universe_as_code.yaml
 
-Everything the agent can do in the world is an affordance in `universe_as_code.yaml`. This includes sleeping in a bed, eating a meal, going to work, calling an ambulance, going to the gym, etc.
+Agent actions are defined as affordances in `universe_as_code.yaml`. Entries specify costs, per-tick effects, exclusivity, interruptibility, distance limits, and any permitted special effects (e.g., teleport).
 
-We treat affordances as declarative objects:
+Key fields:
 
-* what they cost,
-* what they do to your bars each tick,
-* whether you can be interrupted,
-* whether they're exclusive,
-* whether they can teleport you.
+* `capacity` — concurrent users allowed.
+* `exclusive` — whether the affordance is single-occupancy.
+* `interruptible` — whether progress can be abandoned mid-way.
+* `distance_limit` — interaction range (e.g., call ambulance from adjacent tiles).
+* `effects_per_tick` — bar deltas applied each tick.
+* `costs` / `costs_per_tick` — upfront or ongoing expenditures.
+* `effect_type` — whitelisted special handlers such as `teleport`.
 
-Key fields we support:
+Engine guarantees:
 
-* `capacity`
-  How many agents can use this at once.
+* Contention is resolved deterministically.
+* Effects apply atomically each tick.
+* Occupancy is ephemeral, keeping world-model learning tractable.
 
-* `exclusive`
-  true/false. If true, it's basically "you sit in the chair, nobody else can until you're done".
+Division of responsibility:
 
-* `interruptible`
-  Can you walk off mid-way and keep some benefit, or is it all-or-nothing?
+* Universe as Code specifies “Hospital heals health at cost X”.
+* Brain as Code decides whether panic or strategy warrants visiting the hospital.
 
-* `distance_limit`
-  For interactions that don't require you to be exactly on the tile. Useful for things like "call ambulance from anywhere in the house".
-
-* `effects_per_tick`
-  A list of bar deltas applied each tick of interaction. For example: `energy +0.25`, `money +0.10`, `mood -0.02`.
-
-* `costs` / `costs_per_tick`
-  Bars to deduct up front or per tick, usually money or energy.
-
-* Special `effect_type` blocks like `teleport`
-  This is how we model things like ambulance relocation without hardcoding a new method in the agent. We keep a whitelist so we don't accidentally let YAML say godlike stuff like `nuke_city`.
-
-Engine behaviour:
-
-* The engine arbitrates contention (capacity, exclusivity) in a deterministic way.
-* The engine applies effects atomically each tick.
-* The engine does not persist arbitrary state inside the affordance. Occupancy is treated as ephemeral: who's using this thing this tick. This keeps the world simpler for the world model to learn.
-
-Important split of responsibilities:
-
-* The world decides "here is the affordance 'Hospital', it costs money, and it heals health per tick".
-* The brain decides "am I panicking enough to sprint to Hospital vs tough it out in Bed".
-
-This makes world design and brain design cleanly separable and, crucially, reviewable by different people.
+This separation keeps world design and brain design individually reviewable.
 
 ---
 
 ## 10. Success criteria
 
-We judge success on three axes: technical, teaching, and governance. All three matter.
+Success is evaluated across technical, pedagogical, and governance axes.
 
 ### Technical success
 
@@ -1096,15 +875,15 @@ were in play at that moment.
 
 [ ] We can replay that agent exactly as it existed at tick T using only the checkpoint directory, with no "trust me" developer hand waving.
 
-If we hit all of those, then "Brain as Code" is not just a slogan. It's an accountable system.
+Meeting these criteria demonstrates that Brain as Code operates as an accountable system rather than a slogan.
 
 ---
 
 ## 11. Implementation notes (ordering)
 
-This is the recommended order to actually stand this up without losing your mind.
+Recommended staged approach:
 
-1. Folder discipline first
+1. Establish folder discipline
 
    * Create `configs/<run_name>/` with all 5 YAMLs:
 
@@ -1123,8 +902,7 @@ This is the recommended order to actually stand this up without losing your mind
 
 2. Snapshot copy on launch
 
-   * No clever runtime symlinks for core config.
-   * Symlinks are fine as a dev convenience pre-launch, but once you press go, we copy the actual bytes.
+   * Symlinks are permissible during development but configurations are copied on launch.
 
 3. Build the core runtime stack:
 
@@ -1132,7 +910,7 @@ This is the recommended order to actually stand this up without losing your mind
    * `agent/graph_agent.py`
    * `agent/graph_executor.py`
 
-   At this stage it's okay if social_model is a stub, or EthicsFilter just passes through. The point is to prove the shape:
+   At this stage stubs are acceptable; the goal is to validate the pipeline:
 
    * load snapshot,
    * assemble modules,
@@ -1173,8 +951,7 @@ This is the recommended order to actually stand this up without losing your mind
      * planning_depth
      * social_model.enabled
 
-   This is the feature that will sell the whole system to anyone watching. It's the bit where you can point and say:
-   "That wasn't random. That was intent, filtered by ethics, under panic, with traceable identity."
+Presenting this information in UI enables observers to state with evidence: the action reflected intent, ethics filtering, and traceable identity.
 
 ---
 
@@ -1379,7 +1156,7 @@ And that’s basically the system.
 
 Audience: systems, safety, curriculum, future-you
 
-These are the deliberate “not yet, but soon” items. They’re either mildly dangerous, mildly annoying to implement, or both. We should track them, not quietly ship them in the dark.
+These items are deferred by design—either high-risk or high-effort. They should be tracked explicitly rather than implemented ad hoc.
 
 ### 13.1 Panic, ethics, and conflict
 
@@ -1389,36 +1166,17 @@ Right now the chain is:
 2. panic_controller may escalate it for survival
 3. EthicsFilter can still veto the result
 
-This implies a hard rule: ethics beats panic.
-
-Question: should there ever be a case where panic is allowed to bypass ethics?
-Example: agent is about to die, ambulance costs money it doesn’t have, “steal_money” is forbidden, but stealing is the only viable survival path.
-
-Current answer: No. Panic cannot grant illegal behaviour. EthicsFilter is final.
-
-We should document that as governance policy. If someone later wants “panic can break rules to avoid imminent death”, that is a formal policy discussion, and flipping that switch must change the hash. This is a line-in-the-sand safety property, not a code tweak.
-
-Risk if ignored: very high, governance-wise. We don’t want a “the AI was desperate” excuse pathway.
+The current rule is “ethics beats panic.” Allowing panic to bypass ethics (e.g., stealing as a last resort) would be a policy decision requiring governance approval and a cognitive hash change. Leaving the rule ambiguous creates governance risk.
 
 ### 13.2 Curriculum pressure vs identity drift
 
-We’ve said curriculum can:
+Curriculum may:
 
 * spawn new instances of existing affordances (a second Bed, a rival agent),
 * change wages, prices, or availability schedules over time,
 * introduce social pressure (e.g. add an NPC that hoards food).
 
-We’ve also said curriculum cannot silently rewrite the brain mid-run without creating a new snapshot (and new *_cognitive_hash).
-
-What about world changes that are basically rewriting physics (for example, suddenly “Bed” now restores 10x more energy per tick)? That’s effectively a world rules change. It absolutely alters incentives and makes telemetry comparisons sketchy.
-
-Proposal:
-
-* If curriculum mutates the *definition* of any affordance (costs_per_tick, effects_per_tick, etc) or any bar’s base_depletion / terminal conditions, that is a world rules change and must fork the run. New snapshot, new run_id, new hash.
-
-We can allow “spawn another copy of the existing Hospital” under the same cost/effect definitions without forking. But changing what Hospital does is not curriculum, it’s a patch. Patches must fork.
-
-We should bake that into the launcher, so you physically can’t apply that kind of mid-run mutation without going through a “new run” path.
+Curriculum must not silently rewrite physics. Mutating affordance definitions or base depletion/terminal rules constitutes a new world and must trigger a snapshot, run_id, and hash change. Spawning additional instances of existing affordances is acceptable under the same definitions. The launcher should enforce this distinction.
 
 ### 13.3 Social model and privacy
 
@@ -1429,7 +1187,7 @@ But we haven’t addressed:
 * Should an agent be allowed to model other agents’ *goals* if policy says it’s not allowed to model other agents’ *intentions*?
 * Should some roles in the sim (say, “civilian NPCs”) have reduced social observability for privacy/safety reasons?
 
-We might want per-entity visibility rules:
+Potential extension: per-entity visibility controls, for example:
 
 * social_model can see family,
 * social_model can’t reason about strangers beyond “occupied/unoccupied affordance”,
@@ -1451,7 +1209,7 @@ social_model:
 
 and be enforced in the execution graph by passing censored summaries from social_model_service.
 
-This is not just flavour. It matters for ethics review in multi-agent sims where you do not want “free omniscience” or “stalker AI”.
+Such controls matter for privacy and ethics in multi-agent environments.
 
 ### 13.4 Introspection and self-reporting honesty
 
@@ -1465,9 +1223,7 @@ introspection:
 
 Right now, “publish_goal_reason: true” means “tell the observer why you think you’re doing what you’re doing”.
 
-Obvious issue: The agent can lie or hallucinate. We are not forcing perfect self-awareness.
-
-We should be explicit in UI and telemetry that introspection is a *claimed* reason, not necessarily a *true causal driver*. Example: show both:
+Agents may misreport motives. UI and telemetry should distinguish between engine truth (`current_goal`) and self-report (`agent_claimed_reason`). Divergence is informative but must be labelled.
 
 * `current_goal: SURVIVAL (engine truth)`
 * `agent_claimed_reason: "I'm trying to get a better job"`
@@ -1482,7 +1238,7 @@ Action:
 
 ### 13.5 Compliance richness
 
-Right now compliance in Layer 1 has two tools:
+Layer 1 compliance currently offers two tools:
 
 * hard veto (`forbid_actions`)
 * soft discourage (`penalize_actions` with a penalty)
@@ -1492,7 +1248,7 @@ We may also want:
 * situational bans, like “steal is forbidden unless the target is flagged as `abandoned_property`”
 * contextual norms, like “calling ambulance while mood is high and health is high is considered abuse of system, apply social penalty”
 
-This drifts toward rule-based reasoning. We can handle it two ways:
+This drifts toward rule-based reasoning. Options include:
 
 Option A: expand `penalize_actions` to allow structured conditions:
 
@@ -1509,7 +1265,7 @@ penalize_actions:
 
 Option B: introduce a tiny Compliance DSL parallel to goal termination DSL. That DSL would be evaluated inside EthicsFilter before veto/penalty, similar to how panic_controller checks thresholds.
 
-Either way, we need to keep it declarative and hashable. The moment compliance becomes “arbitrary inline Python”, governance falls over.
+Whatever approach we choose must remain declarative and hashable; introducing arbitrary code undermines governance.
 
 ---
 

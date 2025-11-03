@@ -65,8 +65,8 @@ Note:
     parser.add_argument(
         "--episodes",
         type=int,
-        default=10000,
-        help="Total number of training episodes to run (default: 10000)",
+        default=None,
+        help="Total number of training episodes to run (default: read from config YAML)",
     )
 
     # Optional arguments
@@ -124,7 +124,10 @@ def main():
     logger.info("=" * 60)
     logger.info(f"Config Pack: {config_dir}")
     logger.info(f"Training Config: {config_file}")
-    logger.info(f"Episodes: {args.episodes}")
+    if args.episodes is not None:
+        logger.info(f"Episodes: {args.episodes} (from --episodes flag)")
+    else:
+        logger.info(f"Episodes: (will read from config)")
     if args.checkpoint_dir:
         logger.info(f"Checkpoint Dir: {args.checkpoint_dir}")
     else:

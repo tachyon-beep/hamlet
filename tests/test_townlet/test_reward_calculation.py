@@ -1,8 +1,11 @@
 """
 Tests for reward calculation in VectorizedHamletEnv.
 
-Focus on baseline-relative reward system (active system).
-Reward = steps_survived - R (baseline survival)
+Interoception-aware per-step survival reward system:
+- Alive: health × energy (both normalized to [0,1])
+- Dead: 0.0
+
+This models human interoception - awareness of internal body states.
 """
 
 import torch
@@ -27,11 +30,11 @@ def _attach_registry_with_baseline(env: VectorizedHamletEnv, baseline: float | l
     return registry
 
 
-class TestBaselineRelativeRewards:
-    """Test baseline-relative reward system."""
+class TestPerStepSurvivalRewards:
+    """Test per-step survival reward system."""
 
-    def test_no_reward_while_alive(self):
-        """No reward until agent dies (terminal state)."""
+    def test_reward_while_alive(self):
+        """Alive agent gets health × energy reward per step."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -43,17 +46,19 @@ class TestBaselineRelativeRewards:
 
         _attach_registry_with_baseline(env, 100.0)
 
-        # Agent alive at step 50
+        # Agent alive at step 50 with full health/energy
         env.step_counts[0] = 50
         env.dones[0] = False
+        env.meters[0, 0] = 100.0  # energy
+        env.meters[0, 6] = 100.0  # health
 
         rewards = env._calculate_shaped_rewards()
 
-        # No reward until death
-        assert abs(rewards[0] - 0.0) < 1e-6
+        # Alive: health × energy = 1.0 × 1.0 = 1.0
+        assert abs(rewards[0] - 1.0) < 1e-6
 
     def test_reward_on_death_short_survival(self):
-        """Agent that dies early gets negative reward."""
+        """Dead agent gets 0.0 reward."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -65,17 +70,19 @@ class TestBaselineRelativeRewards:
 
         _attach_registry_with_baseline(env, 100.0)
 
-        # Agent dies at step 50 (below baseline)
+        # Agent dies at step 50
         env.step_counts[0] = 50
         env.dones[0] = True
+        env.meters[0, 0] = 0.0  # depleted energy
+        env.meters[0, 6] = 0.0  # depleted health
 
         rewards = env._calculate_shaped_rewards()
 
-        # Reward = 50 - 100 = -50
-        assert abs(rewards[0] - (-50.0)) < 1e-6
+        # Dead agent: 0.0
+        assert abs(rewards[0] - 0.0) < 1e-6
 
     def test_reward_on_death_long_survival(self):
-        """Agent that survives longer than baseline gets positive reward."""
+        """Dead agent gets 0.0 reward."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -87,17 +94,19 @@ class TestBaselineRelativeRewards:
 
         _attach_registry_with_baseline(env, 100.0)
 
-        # Agent dies at step 150 (above baseline)
+        # Agent dies at step 150
         env.step_counts[0] = 150
         env.dones[0] = True
+        env.meters[0, 0] = 0.0  # depleted energy
+        env.meters[0, 6] = 0.0  # depleted health
 
         rewards = env._calculate_shaped_rewards()
 
-        # Reward = 150 - 100 = +50
-        assert abs(rewards[0] - 50.0) < 1e-6
+        # Dead agent: 0.0
+        assert abs(rewards[0] - 0.0) < 1e-6
 
     def test_reward_at_baseline_is_zero(self):
-        """Agent that survives exactly baseline steps gets zero reward."""
+        """Dead agent gets zero reward regardless of baseline."""
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
@@ -112,14 +121,16 @@ class TestBaselineRelativeRewards:
         # Agent dies at exactly baseline
         env.step_counts[0] = 100
         env.dones[0] = True
+        env.meters[0, 0] = 0.0  # depleted energy
+        env.meters[0, 6] = 0.0  # depleted health
 
         rewards = env._calculate_shaped_rewards()
 
-        # Reward = 100 - 100 = 0
+        # Dead: 0.0
         assert abs(rewards[0] - 0.0) < 1e-6
 
     def test_multiple_agents_different_survival_times(self):
-        """Each agent gets reward based on their own survival time."""
+        """All dead agents get 0.0 reward."""
         env = VectorizedHamletEnv(
             num_agents=3,
             grid_size=5,
@@ -131,21 +142,21 @@ class TestBaselineRelativeRewards:
 
         _attach_registry_with_baseline(env, 100.0)
 
-        # Agent 0: dies at 50 (below baseline)
-        # Agent 1: dies at 100 (at baseline)
-        # Agent 2: dies at 150 (above baseline)
+        # All agents die at different steps
         env.step_counts = torch.tensor([50, 100, 150])
         env.dones = torch.tensor([True, True, True])
+        env.meters[:, 0] = 0.0  # all depleted energy
+        env.meters[:, 6] = 0.0  # all depleted health
 
         rewards = env._calculate_shaped_rewards()
 
-        # Rewards = steps - baseline
-        assert abs(rewards[0] - (-50.0)) < 1e-6  # 50 - 100 = -50
-        assert abs(rewards[1] - 0.0) < 1e-6  # 100 - 100 = 0
-        assert abs(rewards[2] - 50.0) < 1e-6  # 150 - 100 = +50
+        # All dead agents get 0.0
+        assert abs(rewards[0] - 0.0) < 1e-6
+        assert abs(rewards[1] - 0.0) < 1e-6
+        assert abs(rewards[2] - 0.0) < 1e-6
 
     def test_only_dead_agents_get_rewards(self):
-        """Alive agents get 0, dead agents get baseline-relative reward."""
+        """Alive agents get health × energy, dead agents get 0.0."""
         env = VectorizedHamletEnv(
             num_agents=3,
             grid_size=5,
@@ -161,17 +172,27 @@ class TestBaselineRelativeRewards:
         env.step_counts = torch.tensor([150, 150, 150])
         env.dones = torch.tensor([False, True, False])
 
+        # Alive agents: full energy and health
+        env.meters[0, 0] = 100.0  # energy
+        env.meters[0, 6] = 100.0  # health
+        env.meters[2, 0] = 100.0
+        env.meters[2, 6] = 100.0
+
+        # Dead agent: depleted
+        env.meters[1, 0] = 0.0
+        env.meters[1, 6] = 0.0
+
         rewards = env._calculate_shaped_rewards()
 
-        # Alive agents get no reward
-        assert abs(rewards[0] - 0.0) < 1e-6
-        assert abs(rewards[2] - 0.0) < 1e-6
+        # Alive agents get health × energy = 1.0 × 1.0 = 1.0
+        assert abs(rewards[0] - 1.0) < 1e-6
+        assert abs(rewards[2] - 1.0) < 1e-6
 
-        # Dead agent gets baseline-relative reward
-        assert abs(rewards[1] - 50.0) < 1e-6  # 150 - 100 = +50
+        # Dead agent gets 0.0
+        assert abs(rewards[1] - 0.0) < 1e-6
 
     def test_baseline_affects_reward_calculation(self):
-        """Different baselines produce different rewards for same survival."""
+        """Baseline parameter is retained for API compatibility but unused."""
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
@@ -181,9 +202,11 @@ class TestBaselineRelativeRewards:
         )
         env.reset()
 
-        # Both agents survive 100 steps
+        # Both agents survive 100 steps and die
         env.step_counts = torch.tensor([100, 100])
         env.dones = torch.tensor([True, True])
+        env.meters[:, 0] = 0.0  # depleted energy
+        env.meters[:, 6] = 0.0  # depleted health
 
         registry = _attach_registry_with_baseline(env, 50.0)
         rewards_low_baseline = env._calculate_shaped_rewards()
@@ -191,11 +214,9 @@ class TestBaselineRelativeRewards:
         registry.set_baselines(torch.full((env.num_agents,), 150.0, dtype=torch.float32, device=env.device))
         rewards_high_baseline = env._calculate_shaped_rewards()
 
-        # Low baseline: 100 - 50 = +50
-        assert abs(rewards_low_baseline[0] - 50.0) < 1e-6
-
-        # High baseline: 100 - 150 = -50
-        assert abs(rewards_high_baseline[0] - (-50.0)) < 1e-6
+        # Both dead: 0.0 regardless of baseline
+        assert abs(rewards_low_baseline[0] - 0.0) < 1e-6
+        assert abs(rewards_high_baseline[0] - 0.0) < 1e-6
 
 
 class TestDeathConditions:

@@ -129,6 +129,9 @@ class UnifiedServer:
             # Persist a snapshot of the configuration for provenance
             self._persist_config_snapshot(self.checkpoint_dir.parent)
 
+            # Add file logging to run directory
+            self._setup_file_logging(self.checkpoint_dir.parent)
+
             # Phase 2: Start training thread
             logger.info("[Training] Starting background training...")
             self.training_thread = threading.Thread(
@@ -251,6 +254,35 @@ class UnifiedServer:
         sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
         return sanitized
 
+    def _setup_file_logging(self, run_dir: Path) -> None:
+        """
+        Add file handler to save logs to run directory.
+
+        Args:
+            run_dir: Base directory for the current run (e.g., runs/L0_minimal/2025-11-03_123456)
+        """
+        log_file = run_dir / "training.log"
+
+        # Create file handler with same format as console
+        file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+
+        # Use same format as console logging
+        formatter = logging.Formatter(
+            "[%(asctime)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        file_handler.setFormatter(formatter)
+
+        # Add to root logger (captures all module logs)
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+
+        # Store handler for cleanup on shutdown
+        self._file_handler = file_handler
+
+        logger.info(f"📝 Logging to file: {log_file}")
+
     def stop(self) -> None:
         """
         Gracefully stop all components.
@@ -298,6 +330,11 @@ class UnifiedServer:
                 logger.info("[Training] Thread stopped successfully")
 
         logger.info("All components stopped successfully")
+
+        # Close file handler
+        if hasattr(self, "_file_handler") and self._file_handler:
+            self._file_handler.close()
+            logging.getLogger().removeHandler(self._file_handler)
 
     def _run_training(self) -> None:
         """

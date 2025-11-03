@@ -32,25 +32,27 @@ class TestSimpleQNetwork:
         return SimpleQNetwork(obs_dim=obs_dim, action_dim=action_dim)
 
     def test_initialization(self, network):
-        """Network should initialize with correct architecture."""
+        """Network should initialize with correct architecture including LayerNorm."""
         assert isinstance(network, nn.Module)
         assert isinstance(network.net, nn.Sequential)
 
-        # Check network is a 5-layer sequential (Linear-ReLU-Linear-ReLU-Linear)
-        assert len(network.net) == 5
+        # Check network is a 7-layer sequential (Linear-LayerNorm-ReLU-Linear-LayerNorm-ReLU-Linear)
+        assert len(network.net) == 7
         assert isinstance(network.net[0], nn.Linear)  # First linear
-        assert isinstance(network.net[1], nn.ReLU)  # ReLU
-        assert isinstance(network.net[2], nn.Linear)  # Second linear
-        assert isinstance(network.net[3], nn.ReLU)  # ReLU
-        assert isinstance(network.net[4], nn.Linear)  # Q-head
+        assert isinstance(network.net[1], nn.LayerNorm)  # LayerNorm
+        assert isinstance(network.net[2], nn.ReLU)  # ReLU
+        assert isinstance(network.net[3], nn.Linear)  # Second linear
+        assert isinstance(network.net[4], nn.LayerNorm)  # LayerNorm
+        assert isinstance(network.net[5], nn.ReLU)  # ReLU
+        assert isinstance(network.net[6], nn.Linear)  # Q-head
 
         # Check dimensions
         assert network.net[0].in_features == 72
         assert network.net[0].out_features == 128
-        assert network.net[2].in_features == 128
-        assert network.net[2].out_features == 128
-        assert network.net[4].in_features == 128
-        assert network.net[4].out_features == 6
+        assert network.net[3].in_features == 128
+        assert network.net[3].out_features == 128
+        assert network.net[6].in_features == 128
+        assert network.net[6].out_features == 6
 
     def test_forward_pass_single_agent(self, network):
         """Forward pass should produce correct Q-value shapes."""
@@ -132,11 +134,12 @@ class TestRecurrentSpatialQNetwork:
         assert network.lstm.hidden_size == 256
         assert network.lstm.num_layers == 1
 
-        # Check Q-head (Sequential with 3 layers: Linear-ReLU-Linear)
+        # Check Q-head (Sequential with 4 layers: Linear-LayerNorm-ReLU-Linear)
         assert isinstance(network.q_head, nn.Sequential)
         assert isinstance(network.q_head[0], nn.Linear)  # 256 → 128
-        assert isinstance(network.q_head[1], nn.ReLU)
-        assert isinstance(network.q_head[2], nn.Linear)  # 128 → 5
+        assert isinstance(network.q_head[1], nn.LayerNorm)  # LayerNorm
+        assert isinstance(network.q_head[2], nn.ReLU)
+        assert isinstance(network.q_head[3], nn.Linear)  # 128 → 6
 
     def test_forward_pass_without_hidden_state(self, network):
         """Forward pass should work without providing hidden state."""
