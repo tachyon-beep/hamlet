@@ -690,6 +690,9 @@ class VectorizedPopulation(PopulationManager):
         )
 
         # 10. Construct and return batched agent state
+        # Add Q-values to info for recording (clone to CPU to avoid GPU memory issues)
+        info["q_values"] = [q_values[i].cpu().tolist() for i in range(self.num_agents)]
+
         state = BatchedAgentState(
             observations=next_obs,
             actions=actions,
@@ -700,7 +703,7 @@ class VectorizedPopulation(PopulationManager):
             survival_times=info["step_counts"],
             curriculum_difficulties=torch.zeros(self.num_agents, device=self.device),
             device=self.device,
-            info=info,  # Pass environment info (includes successful_interactions)
+            info=info,  # Pass environment info (includes successful_interactions, q_values)
         )
 
         return state

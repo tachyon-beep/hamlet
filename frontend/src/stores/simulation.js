@@ -41,7 +41,7 @@ export const useSimulationStore = defineStore('simulation', () => {
 
   // Checkpoint progress (for inference mode)
   const checkpointEpisode = ref(0)
-  const checkpointTotalEpisodes = ref(1)  // Default to 1 to avoid divide-by-zero in progress bar
+  const checkpointTotalEpisodes = ref(0)  // Default to 0, component handles divide-by-zero
   const autoCheckpointMode = ref(false)  // Auto-update to latest checkpoint after each episode
 
   // Grid state
@@ -60,6 +60,10 @@ export const useSimulationStore = defineStore('simulation', () => {
   // History
   const episodeHistory = ref([])
   const maxHistoryLength = 10
+
+  // Death certificates (tracks episode deaths with meter states and affordance usage)
+  const deathCertificates = ref([])
+  let nextCertId = 0
 
   // Available models
   const availableModels = ref([])
@@ -81,6 +85,7 @@ export const useSimulationStore = defineStore('simulation', () => {
   const interactionProgress = ref(0)  // Current interaction progress (0-1)
 
   // Reward tracking (baseline-relative)
+  const stepReward = ref(1.0)  // Reward for current step (0-1 range)
   const projectedReward = ref(0)  // Current step - baseline (real-time learning signal)
   const baselineSurvival = ref(100)  // Expected survival of random-walking agent
 
@@ -391,6 +396,9 @@ export const useSimulationStore = defineStore('simulation', () => {
     }
 
     // Handle baseline-relative reward tracking
+    if (message.step_reward !== undefined) {
+      stepReward.value = message.step_reward
+    }
     if (message.projected_reward !== undefined) {
       projectedReward.value = message.projected_reward
     }
@@ -452,6 +460,60 @@ export const useSimulationStore = defineStore('simulation', () => {
     // Keep only last N episodes
     if (episodeHistory.value.length > maxHistoryLength) {
       episodeHistory.value = episodeHistory.value.slice(-maxHistoryLength)
+    }
+
+    // Create death certificate with affordance stats from episode_end message
+    createDeathCertificate(message, message.affordance_stats || [])
+  }
+
+  function createDeathCertificate(message, affordanceStatsFromMessage) {
+    console.log('Creating death certificate for episode', message.episode, 'with', message.steps, 'steps')
+
+    // Get current meter states (snapshot at death)
+    const meters = agentMeters.value
+    const criticalMeters = []
+
+    console.log('Agent meters at death:', meters)
+
+    // Find meters below thresholds
+    for (const [name, value] of Object.entries(meters)) {
+      const percentage = Math.round(value * 100)
+      if (percentage <= 10) {
+        criticalMeters.push({ name, value: percentage, severity: 'critical' })
+      } else if (percentage <= 30) {
+        criticalMeters.push({ name, value: percentage, severity: 'low' })
+      }
+    }
+
+    // Sort critical meters by severity
+    criticalMeters.sort((a, b) => a.value - b.value)
+
+    console.log('Critical meters:', criticalMeters)
+    console.log('Affordance stats from message:', affordanceStatsFromMessage)
+
+    // Get affordance usage (top 5 most used) from episode_end message
+    const topAffordances = affordanceStatsFromMessage
+      .slice(0, 5)
+      .map(aff => ({ name: aff.name, count: aff.count }))
+
+    // Create certificate
+    const certificate = {
+      id: nextCertId++,
+      episode: message.episode,
+      survivalSteps: message.steps,
+      criticalMeters,
+      topAffordances,
+      timestamp: Date.now(),
+    }
+
+    console.log('Created certificate:', certificate)
+
+    deathCertificates.value.push(certificate)
+    console.log('Total certificates now:', deathCertificates.value.length)
+
+    // Keep last 20 certificates
+    if (deathCertificates.value.length > 20) {
+      deathCertificates.value = deathCertificates.value.slice(-20)
     }
   }
 
@@ -527,6 +589,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     agentMeters,
     heatMap,
     episodeHistory,
+    deathCertificates,
     availableModels,
     averageSurvivalTime,
     rndMetrics,
@@ -537,6 +600,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     temporalEnabled,
     timeOfDay,
     interactionProgress,
+    stepReward,
     projectedReward,
     baselineSurvival,
 

@@ -42,6 +42,7 @@ class VectorizedHamletEnv:
         move_energy_cost: float = 0.005,
         wait_energy_cost: float = 0.001,
         interact_energy_cost: float = 0.0,
+        agent_lifespan: int = 1000,
         config_pack_path: Path | None = None,
     ):
         """
@@ -58,6 +59,7 @@ class VectorizedHamletEnv:
             move_energy_cost: Energy cost per movement action (default 0.005 = 0.5%)
             wait_energy_cost: Energy cost per WAIT action (default 0.001 = 0.1%)
             interact_energy_cost: Energy cost per INTERACT action (default 0.0 = free)
+            agent_lifespan: Maximum lifetime in steps (default 1000) - provides retirement incentive
         """
         project_root = Path(__file__).parent.parent.parent.parent
         default_pack = project_root / "configs" / "test"
@@ -72,6 +74,7 @@ class VectorizedHamletEnv:
         self.partial_observability = partial_observability
         self.vision_range = vision_range
         self.enable_temporal_mechanics = enable_temporal_mechanics
+        self.agent_lifespan = agent_lifespan
 
         # Configurable energy costs
         self.move_energy_cost = move_energy_cost
@@ -125,9 +128,9 @@ class VectorizedHamletEnv:
             # Grid one-hot + 8 meters + affordance type (N+1 for "none")
             self.observation_dim = grid_size * grid_size + 8 + (self.num_affordance_types + 1)
 
-        # Add temporal features to observation if enabled
-        if enable_temporal_mechanics:
-            self.observation_dim += 3  # time_sin + time_cos + interaction_progress
+        # Always add temporal features for forward compatibility (4 features)
+        # time_sin, time_cos, interaction_progress, lifetime_progress
+        self.observation_dim += 4
 
         # Initialize observation builder
         self.observation_builder = ObservationBuilder(
@@ -224,6 +227,10 @@ class VectorizedHamletEnv:
         Returns:
             observations: [num_agents, observation_dim]
         """
+        # Calculate lifetime progress: 0.0 at birth, 1.0 at retirement
+        # This allows agent to learn temporal planning based on remaining lifespan
+        lifetime_progress = (self.step_counts.float() / self.agent_lifespan).clamp(0.0, 1.0)
+
         # Delegate to observation builder
         return self.observation_builder.build_observations(
             positions=self.positions,
@@ -231,6 +238,7 @@ class VectorizedHamletEnv:
             affordances=self.affordances,
             time_of_day=self.time_of_day if self.enable_temporal_mechanics else 0,
             interaction_progress=self.interaction_progress if self.enable_temporal_mechanics else None,
+            lifetime_progress=lifetime_progress,
         )
 
     def get_action_masks(self) -> torch.Tensor:
@@ -321,15 +329,20 @@ class VectorizedHamletEnv:
         # 4. Check terminal conditions
         self.dones = self.meter_dynamics.check_terminal_conditions(self.meters, self.dones)
 
-        # 5. Calculate rewards (steps lived - baseline)
-        rewards = self._calculate_shaped_rewards()
-
-        # 5. Increment step counts
+        # 5. Increment step counts (before retirement check)
         self.step_counts += 1
 
-        # 6. Increment time of day (temporal mechanics)
-        if self.enable_temporal_mechanics:
-            self.time_of_day = (self.time_of_day + 1) % 24
+        # 5.5. Check for retirement (reached maximum lifespan)
+        # Agents that reach their lifespan retire with a bonus reward
+        retired = self.step_counts >= self.agent_lifespan
+
+        # 6. Calculate rewards (steps lived - baseline)
+        rewards = self._calculate_shaped_rewards()
+        rewards = torch.where(retired, rewards + 1.0, rewards)  # +1 retirement bonus
+        self.dones = torch.logical_or(self.dones, retired)
+
+        # 6. Increment time of day (always cycles, but only affects mechanics if enabled)
+        self.time_of_day = (self.time_of_day + 1) % 24
 
         observations = self._get_observations()
 

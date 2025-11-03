@@ -18,6 +18,7 @@
             v-if="isConnected"
             :current-step="store.currentStep"
             :baseline-survival="store.baselineSurvival"
+            :step-reward="store.stepReward"
           />
         </aside>
 
@@ -39,10 +40,11 @@
 
       <!-- ✅ Semantic HTML: region for grid visualization -->
       <div class="grid-container" role="region" aria-label="Simulation grid">
-        <!-- ✅ Time of day bar (top-left) - only when connected and temporal mechanics enabled -->
+        <!-- ✅ Time of day bar (top-left) - always shown when connected (cycles naturally) -->
         <TimeOfDayBar
-          v-if="isConnected && store.temporalEnabled"
+          v-if="isConnected"
           :time-of-day="store.timeOfDay"
+          :current-step="store.currentStep"
         />
 
         <!-- ✅ Minimal top-right controls (only when connected) -->
@@ -54,6 +56,12 @@
           @set-speed="store.setSpeed"
           @refresh-checkpoint="store.refreshCheckpoint"
           @toggle-auto-checkpoint="store.toggleAutoCheckpoint"
+        />
+
+        <!-- Death Certificates (below speed controls) -->
+        <DeathCertificates
+          v-if="isConnected"
+          :certificates="store.deathCertificates"
         />
 
         <!-- ✅ Zoom control in bottom right (only when connected) -->
@@ -171,6 +179,7 @@ import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
 import ReferencePanel from './components/ReferencePanel.vue'
 import MinimalControls from './components/MinimalControls.vue'
+import DeathCertificates from './components/DeathCertificates.vue'
 import TimeOfDayBar from './components/TimeOfDayBar.vue'
 import ProjectedRewardBar from './components/ProjectedRewardBar.vue'
 import InteractionProgressRing from './components/InteractionProgressRing.vue'

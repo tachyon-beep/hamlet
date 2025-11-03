@@ -269,7 +269,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { formatTrainingMetric, formatNumber } from '../utils/formatting'
 
 // ✅ Props First: Receive data from parent instead of importing store
@@ -328,9 +328,16 @@ const emit = defineEmits([
 ])
 
 // Mode removed - always run live inference on latest checkpoint
-const speedValue = ref(1.0)
+// Load speed from localStorage, default to 1.0
+const savedSpeed = localStorage.getItem('hamlet_speed')
+const speedValue = ref(savedSpeed ? parseFloat(savedSpeed) : 1.0)
 const selectedModel = ref(null)
 const defaultModelName = 'trained_agent.pt'
+
+// Save speed to localStorage when it changes
+watch(speedValue, (newSpeed) => {
+  localStorage.setItem('hamlet_speed', newSpeed.toString())
+})
 
 const trainingConfig = ref({
   numEpisodes: 100,

@@ -13,7 +13,8 @@ Hamlet is a GPU-accelerated DRL training environment where agents learn to survi
 - 🔄 **Adversarial Curriculum** - Adaptive difficulty from shaped to sparse rewards (5 stages)
 - 🌟 **Intrinsic Motivation** - RND-based exploration with variance-based annealing
 - 📊 **Live Visualization** - Real-time inference server + Vue.js frontend
-- 🧪 **70%+ Test Coverage** - 387 tests passing, production-ready codebase
+- 🎬 **Episode Recording & Replay** - Record episodes, replay in real-time, export to YouTube-ready MP4
+- 🧪 **70%+ Test Coverage** - 387 tests passing (72 for recording system), production-ready codebase
 
 ## Quick Start
 
@@ -361,6 +362,9 @@ See [ROADMAP.md](ROADMAP.md) for complete strategic plan.
 - **[AGENTS.md](AGENTS.md)** - Comprehensive project memory for AI assistants
 - **[ROADMAP.md](ROADMAP.md)** - Strategic development plan
 - **[docs/TRAINING_LEVELS.md](docs/TRAINING_LEVELS.md)** - Formal level specifications
+- **[docs/REPLAY_USAGE.md](docs/REPLAY_USAGE.md)** - Real-time episode replay system
+- **[docs/VIDEO_EXPORT_USAGE.md](docs/VIDEO_EXPORT_USAGE.md)** - Video export for YouTube
+- **[docs/RECORDING_SYSTEM_SUMMARY.md](docs/RECORDING_SYSTEM_SUMMARY.md)** - Complete recording system overview
 - **[docs/testing/](docs/testing/)** - Testing strategy and refactoring plans
 
 ## Contributing

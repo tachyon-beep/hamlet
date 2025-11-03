@@ -17,6 +17,8 @@ from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
+from townlet.recording.replay import ReplayManager
+from townlet.demo.database import DemoDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,8 @@ class LiveInferenceServer:
         total_episodes: int = 5000,  # Expected total episodes in training run
         config_dir: Path | str | None = None,  # Config pack directory
         training_config_path: Path | str | None = None,  # Optional training config
+        db_path: Path | str | None = None,  # Optional database path for replay
+        recordings_dir: Path | str | None = None,  # Optional recordings directory for replay
     ):
         """Initialize live inference server.
 
@@ -62,7 +66,10 @@ class LiveInferenceServer:
             port: WebSocket port
             step_delay: Delay between steps in seconds (0.2 = 5 steps/sec)
             total_episodes: Expected total episodes for training run (for progress gauge)
-            config_path: Optional path to training config YAML (for matching environment settings)
+            config_dir: Optional config pack directory
+            training_config_path: Optional path to training config YAML (for matching environment settings)
+            db_path: Optional database path for replay mode
+            recordings_dir: Optional recordings directory for replay mode
         """
         self.checkpoint_dir = Path(checkpoint_dir)
         self.port = port
@@ -91,7 +98,7 @@ class LiveInferenceServer:
         self.curriculum: AdversarialCurriculum | None = None
         self.exploration: AdaptiveIntrinsicExploration | None = None
 
-        # Episode state
+        # Episode state (live inference mode)
         self.is_running = False
         self.current_episode = 0
         self.current_step = 0
@@ -101,6 +108,21 @@ class LiveInferenceServer:
 
         # Checkpoint auto-update mode
         self.auto_checkpoint_mode = False  # If true, automatically check for new checkpoints after each episode
+
+        # Replay mode
+        self.mode: str = "inference"  # "inference" or "replay"
+        self.replay_manager: ReplayManager | None = None
+        self.replay_playing: bool = False
+
+        # Initialize replay if database provided
+        if db_path and recordings_dir:
+            try:
+                database = DemoDatabase(Path(db_path))
+                self.replay_manager = ReplayManager(database, Path(recordings_dir))
+                logger.info(f"Replay mode initialized: db={db_path}, recordings={recordings_dir}")
+            except Exception as e:
+                logger.error(f"Failed to initialize replay manager: {e}")
+                self.replay_manager = None
 
         # Open Q-value log file
         global qvalue_log_file
@@ -371,26 +393,55 @@ class LiveInferenceServer:
         """Handle incoming WebSocket commands."""
         command = data.get("command") or data.get("type")
 
-        if command == "play":
-            if not self.is_running:
-                self.is_running = True
-                asyncio.create_task(self._run_inference_loop())
-                logger.info("Started inference loop")
+        # Replay mode commands
+        if command == "load_replay":
+            await self._handle_load_replay(websocket, data)
+
+        elif command == "list_recordings":
+            await self._handle_list_recordings(websocket, data)
+
+        elif command == "replay_control":
+            await self._handle_replay_control(websocket, data)
+
+        # Live inference mode commands
+        elif command == "play":
+            if self.mode == "replay":
+                self.replay_playing = True
+                asyncio.create_task(self._run_replay_loop())
+                logger.info("Started replay playback")
+            else:
+                if not self.is_running:
+                    self.is_running = True
+                    asyncio.create_task(self._run_inference_loop())
+                    logger.info("Started inference loop")
 
         elif command == "pause":
-            self.is_running = False
-            logger.info("Paused inference loop")
+            if self.mode == "replay":
+                self.replay_playing = False
+                logger.info("Paused replay playback")
+            else:
+                self.is_running = False
+                logger.info("Paused inference loop")
 
         elif command == "step":
             # Run a single step
-            if not self.is_running:
-                asyncio.create_task(self._run_single_episode())
+            if self.mode == "replay":
+                asyncio.create_task(self._replay_single_step())
+            else:
+                if not self.is_running:
+                    asyncio.create_task(self._run_single_episode())
 
         elif command == "reset":
-            # Reset episode
-            self.current_episode = 0
-            self.current_step = 0
-            logger.info("Reset episode counter")
+            if self.mode == "replay":
+                if self.replay_manager and self.replay_manager.is_loaded():
+                    self.replay_manager.reset()
+                    await self._send_replay_step()
+                    logger.info("Reset replay to beginning")
+            else:
+                # Reset episode
+                self.current_episode = 0
+                self.current_step = 0
+                logger.info("Reset episode counter")
 
         elif command == "refresh_checkpoint":
             # Manually check for and load new checkpoint
@@ -529,11 +580,12 @@ class LiveInferenceServer:
             # Update state
             self.population.current_obs = next_obs
             done = dones[0].item()
-            cumulative_reward += rewards[0].item()
+            step_reward = rewards[0].item()  # Capture step reward before accumulating
+            cumulative_reward += step_reward
             self.current_step += 1
 
-            # Send state update with Q-values
-            await self._broadcast_state_update(cumulative_reward, actions[0].item(), q_values[0])
+            # Send state update with Q-values and step reward
+            await self._broadcast_state_update(cumulative_reward, actions[0].item(), q_values[0], step_reward)
 
             # Delay for human viewing
             if self.is_running:
@@ -547,6 +599,11 @@ class LiveInferenceServer:
         final_agent_snapshot = final_telemetry["agents"][0] if final_telemetry["agents"] else agent_snapshot
         final_stage = int(final_agent_snapshot["curriculum_stage"])
         final_epsilon = float(final_agent_snapshot["epsilon"])
+
+        # Prepare affordance stats for death certificate
+        affordance_stats = [
+            {"name": name, "count": count} for name, count in sorted(self.affordance_interactions.items(), key=lambda x: x[1], reverse=True)
+        ]
 
         await self._broadcast_to_clients(
             {
@@ -563,6 +620,7 @@ class LiveInferenceServer:
                 "performance_vs_baseline": performance_vs_baseline,
                 "curriculum_stage": final_stage,
                 "telemetry": final_telemetry,
+                "affordance_stats": affordance_stats,  # Include affordance usage for death certificate
             }
         )
 
@@ -572,7 +630,7 @@ class LiveInferenceServer:
             f"vs baseline: {performance_vs_baseline:+.1f}"
         )
 
-    async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor):
+    async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor, step_reward: float = 1.0):
         """Broadcast current state to all clients."""
         # Get agent position (unpack for frontend compatibility)
         agent_pos = self.env.positions[0].cpu().tolist()
@@ -645,6 +703,7 @@ class LiveInferenceServer:
             "type": "state_update",
             "step": self.current_step,
             "cumulative_reward": cumulative_reward,
+            "step_reward": step_reward,  # Reward for this specific step (0-1 range)
             "projected_reward": projected_reward,  # Current steps - baseline (real-time learning signal)
             "epsilon": self.current_epsilon,  # Current exploration rate
             "checkpoint_episode": self.current_checkpoint_episode,  # For training progress bar
@@ -671,13 +730,13 @@ class LiveInferenceServer:
             "telemetry": self._build_agent_telemetry(),
         }
 
-        # Add temporal mechanics data if enabled
+        # Add temporal data (always present, even if temporal mechanics disabled)
         if hasattr(self.env, "time_of_day"):
             # Normalize interaction progress to 0-1 range
-            interaction_progress_raw = self.env.interaction_progress[0].item()
+            interaction_progress_raw = self.env.interaction_progress[0].item() if hasattr(self.env, "interaction_progress") else 0
             interaction_progress_normalized = 0.0
 
-            if interaction_progress_raw > 0 and self.env.last_interaction_affordance[0] is not None:
+            if interaction_progress_raw > 0 and hasattr(self.env, "last_interaction_affordance") and self.env.last_interaction_affordance[0] is not None:
                 from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
 
                 affordance_name = self.env.last_interaction_affordance[0]
@@ -707,6 +766,206 @@ class LiveInferenceServer:
         self.clients -= dead_clients
 
 
+    async def _handle_load_replay(self, websocket: WebSocket, data: dict):
+        """Handle load_replay command."""
+        if not self.replay_manager:
+            await websocket.send_json({"type": "error", "message": "Replay not available (no database)"})
+            return
+
+        episode_id = data.get("episode_id")
+        if episode_id is None:
+            await websocket.send_json({"type": "error", "message": "Missing episode_id"})
+            return
+
+        # Stop any current playback
+        self.is_running = False
+        self.replay_playing = False
+
+        # Load episode
+        success = self.replay_manager.load_episode(episode_id)
+        if not success:
+            await websocket.send_json({"type": "error", "message": f"Failed to load episode {episode_id}"})
+            return
+
+        # Switch to replay mode
+        self.mode = "replay"
+
+        # Send confirmation
+        metadata = self.replay_manager.get_metadata()
+        await self._broadcast_to_clients({
+            "type": "replay_loaded",
+            "episode_id": episode_id,
+            "metadata": {
+                "survival_steps": metadata["survival_steps"],
+                "total_reward": metadata["total_reward"],
+                "curriculum_stage": metadata["curriculum_stage"],
+                "timestamp": metadata["timestamp"],
+            },
+            "total_steps": self.replay_manager.get_total_steps(),
+        })
+
+        # Send first step
+        await self._send_replay_step()
+        logger.info(f"Loaded replay: episode {episode_id}")
+
+    async def _handle_list_recordings(self, websocket: WebSocket, data: dict):
+        """Handle list_recordings command."""
+        if not self.replay_manager:
+            await websocket.send_json({"type": "error", "message": "Replay not available (no database)"})
+            return
+
+        # Extract filters
+        filters = data.get("filters", {})
+        stage = filters.get("stage")
+        reason = filters.get("reason")
+        min_reward = filters.get("min_reward")
+        max_reward = filters.get("max_reward")
+        limit = filters.get("limit", 100)
+
+        # Query recordings
+        recordings = self.replay_manager.list_recordings(
+            stage=stage,
+            reason=reason,
+            min_reward=min_reward,
+            max_reward=max_reward,
+            limit=limit,
+        )
+
+        # Send response
+        await websocket.send_json({
+            "type": "recordings_list",
+            "recordings": recordings,
+        })
+
+    async def _handle_replay_control(self, websocket: WebSocket, data: dict):
+        """Handle replay_control command."""
+        if not self.replay_manager or not self.replay_manager.is_loaded():
+            await websocket.send_json({"type": "error", "message": "No replay loaded"})
+            return
+
+        action = data.get("action")
+
+        if action == "play":
+            self.replay_playing = True
+            asyncio.create_task(self._run_replay_loop())
+
+        elif action == "pause":
+            self.replay_playing = False
+
+        elif action == "step":
+            asyncio.create_task(self._replay_single_step())
+
+        elif action == "seek":
+            seek_step = data.get("seek_step")
+            if seek_step is not None:
+                success = self.replay_manager.seek(seek_step)
+                if success:
+                    await self._send_replay_step()
+                else:
+                    await websocket.send_json({"type": "error", "message": f"Invalid seek step: {seek_step}"})
+
+    async def _run_replay_loop(self):
+        """Main replay loop - streams steps continuously."""
+        logger.info("Replay loop started")
+
+        while self.replay_playing and self.replay_manager and not self.replay_manager.is_at_end():
+            await self._send_replay_step()
+            self.replay_manager.next_step()
+            await asyncio.sleep(self.step_delay)
+
+        # End of replay
+        if self.replay_manager and self.replay_manager.is_at_end():
+            await self._broadcast_to_clients({
+                "type": "replay_finished",
+                "episode_id": self.replay_manager.episode_id,
+            })
+            self.replay_playing = False
+            logger.info("Replay finished")
+
+    async def _replay_single_step(self):
+        """Send a single replay step."""
+        if not self.replay_manager or not self.replay_manager.is_loaded():
+            return
+
+        await self._send_replay_step()
+        self.replay_manager.next_step()
+
+    async def _send_replay_step(self):
+        """Send current replay step to all clients."""
+        if not self.replay_manager or not self.replay_manager.is_loaded():
+            return
+
+        step_data = self.replay_manager.get_current_step()
+        if step_data is None:
+            return
+
+        metadata = self.replay_manager.get_metadata()
+        affordances = self.replay_manager.get_affordances()
+
+        # Convert step data to state update format (matching live inference)
+        position = step_data["position"]
+        meters_tuple = step_data["meters"]
+        q_values = step_data.get("q_values")
+
+        # Build grid state
+        grid_state = {
+            "width": 8,
+            "height": 8,
+            "agents": [
+                {
+                    "id": "agent_0",
+                    "x": position[0],
+                    "y": position[1],
+                    "color": "blue",
+                    "last_action": step_data["action"],
+                }
+            ],
+            "affordances": [
+                {"type": name, "x": pos[0], "y": pos[1]}
+                for name, pos in affordances.items()
+            ],
+        }
+
+        # Build meter state
+        meter_names = ["energy", "hygiene", "satiation", "money", "health", "fitness", "mood", "social"]
+        agent_meters = {
+            "agent_0": {
+                "meters": {name: val for name, val in zip(meter_names, meters_tuple)}
+            }
+        }
+
+        # Build state update
+        state_update = {
+            "type": "state_update",
+            "mode": "replay",
+            "episode_id": metadata["episode_id"],
+            "step": step_data["step"],
+            "cumulative_reward": step_data["reward"] * step_data["step"],  # Approximation
+            "grid": grid_state,
+            "agent_meters": agent_meters,
+            "replay_metadata": {
+                "total_steps": self.replay_manager.get_total_steps(),
+                "current_step": self.replay_manager.get_current_step_index(),
+                "survival_steps": metadata["survival_steps"],
+                "total_reward": metadata["total_reward"],
+                "curriculum_stage": metadata["curriculum_stage"],
+            },
+        }
+
+        # Add Q-values if present
+        if q_values:
+            state_update["q_values"] = q_values
+
+        # Add temporal mechanics if present
+        if step_data.get("time_of_day") is not None:
+            state_update["time_of_day"] = step_data["time_of_day"]
+        if step_data.get("interaction_progress") is not None:
+            state_update["interaction_progress"] = step_data["interaction_progress"]
+
+        # Broadcast to all clients
+        await self._broadcast_to_clients(state_update)
+
+
 def run_server(
     checkpoint_dir: str = "checkpoints",
     port: int = 8766,
@@ -714,8 +973,21 @@ def run_server(
     total_episodes: int = 5000,
     config_dir: str | None = None,
     training_config_path: str | None = None,
+    db_path: str | None = None,
+    recordings_dir: str | None = None,
 ):
-    """Run live inference server."""
+    """Run live inference server with optional replay support.
+
+    Args:
+        checkpoint_dir: Directory containing training checkpoints
+        port: WebSocket port
+        step_delay: Delay between steps in seconds
+        total_episodes: Expected total training episodes
+        config_dir: Optional config directory
+        training_config_path: Optional training config YAML
+        db_path: Optional database path for replay mode
+        recordings_dir: Optional recordings directory for replay mode
+    """
     import uvicorn
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
@@ -727,6 +999,8 @@ def run_server(
         total_episodes,
         config_dir=config_dir,
         training_config_path=training_config_path,
+        db_path=db_path,
+        recordings_dir=recordings_dir,
     )
 
     logger.info(f"Starting live inference server on port {port}")

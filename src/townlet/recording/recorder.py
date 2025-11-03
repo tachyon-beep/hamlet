@@ -74,6 +74,8 @@ class EpisodeRecorder:
         intrinsic_reward: float,
         done: bool,
         q_values: torch.Tensor | None = None,
+        epsilon: float | None = None,
+        action_masks: torch.Tensor | None = None,
         time_of_day: int | None = None,
         interaction_progress: float | None = None,
     ):
@@ -90,10 +92,30 @@ class EpisodeRecorder:
             intrinsic_reward: RND novelty reward
             done: Terminal state flag
             q_values: Optional [6] Q-values for all actions
+            epsilon: Optional exploration rate (epsilon-greedy)
+            action_masks: Optional [6] valid action flags (True=valid)
             time_of_day: Optional time of day (temporal mechanics)
             interaction_progress: Optional interaction progress (temporal mechanics)
         """
         # Convert tensors to Python types (cheap, avoids GPU blocking)
+        # Handle q_values: could be tensor or list (if already converted by population)
+        if q_values is not None:
+            if hasattr(q_values, 'tolist'):
+                q_values_tuple = tuple(q_values.tolist())
+            else:
+                q_values_tuple = tuple(q_values)
+        else:
+            q_values_tuple = None
+
+        # Handle action_masks: convert tensor to tuple of bools
+        if action_masks is not None:
+            if hasattr(action_masks, 'tolist'):
+                action_masks_tuple = tuple(action_masks.tolist())
+            else:
+                action_masks_tuple = tuple(action_masks)
+        else:
+            action_masks_tuple = None
+
         recorded_step = RecordedStep(
             step=step,
             position=(positions[0].item(), positions[1].item()),
@@ -102,7 +124,9 @@ class EpisodeRecorder:
             reward=reward,
             intrinsic_reward=intrinsic_reward,
             done=done,
-            q_values=tuple(q_values.tolist()) if q_values is not None else None,
+            q_values=q_values_tuple,
+            epsilon=epsilon,
+            action_masks=action_masks_tuple,
             time_of_day=time_of_day,
             interaction_progress=interaction_progress,
         )

@@ -15,30 +15,31 @@
         <!-- Shimmer effect -->
         <div class="shimmer"></div>
 
-        <!-- Progress indicator with glow -->
+        <!-- Progress indicator (no glow, clean appearance) -->
         <div
           class="time-progress"
-          :style="{
-            width: `${progressPercent}%`,
-            background: progressGlowColor
-          }"
+          :style="{ width: `${progressPercent}%` }"
         >
           <!-- Marker dot at current time -->
           <div class="time-marker" :style="{ background: markerColor }"></div>
         </div>
+
+        <!-- Bright green clock bar sliding across -->
+        <div
+          class="clock-bar"
+          :style="{ left: `${progressPercent}%` }"
+        ></div>
       </div>
 
-      <!-- Time label with animated icon -->
+      <!-- Time label with animated icon and day counter -->
       <div class="time-label">
         <span class="time-icon" aria-hidden="true">
           <transition name="icon-fade" mode="out-in">
             <span :key="timeIcon">{{ timeIcon }}</span>
           </transition>
         </span>
-        <div class="time-text-container">
-          <span class="time-text-main">{{ formattedTime }}</span>
-          <span class="time-text-24h">{{ formattedTime24h }}</span>
-        </div>
+        <span class="time-text-main">{{ formattedTime }}</span>
+        <span class="day-counter">Day {{ currentDay }}</span>
       </div>
     </div>
   </div>
@@ -52,6 +53,10 @@ const props = defineProps({
     type: Number,
     default: 0,
     validator: (value) => value >= 0 && value < 24
+  },
+  currentStep: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -69,30 +74,12 @@ const formattedTime = computed(() => {
   return `${hour - 12} PM`
 })
 
-// Format time as 24-hour
-const formattedTime24h = computed(() => {
-  return `${String(props.timeOfDay).padStart(2, '0')}:00`
+// Calculate current day (step / 24, since one step = one hour)
+const currentDay = computed(() => {
+  return Math.floor(props.currentStep / 24) + 1  // +1 so days start at 1, not 0
 })
 
-// Dynamic progress glow color based on time of day
-const progressGlowColor = computed(() => {
-  const hour = props.timeOfDay
-
-  // Dawn (4-7am): Cool to warm
-  if (hour >= 4 && hour < 7) {
-    return 'radial-gradient(ellipse at right, rgba(255, 200, 100, 0.6), rgba(255, 140, 60, 0.3))'
-  }
-  // Day (7am-5pm): Bright warm glow
-  if (hour >= 7 && hour < 17) {
-    return 'radial-gradient(ellipse at right, rgba(255, 235, 59, 0.7), rgba(255, 200, 50, 0.4))'
-  }
-  // Dusk (5-7pm): Warm to cool
-  if (hour >= 17 && hour < 19) {
-    return 'radial-gradient(ellipse at right, rgba(255, 100, 150, 0.6), rgba(100, 50, 150, 0.3))'
-  }
-  // Night (7pm-4am): Cool blue glow
-  return 'radial-gradient(ellipse at right, rgba(100, 150, 255, 0.5), rgba(50, 100, 200, 0.3))'
-})
+// No longer using dynamic glow color - removed for cleaner appearance
 
 // Marker color matches time of day
 const markerColor = computed(() => {
@@ -242,29 +229,49 @@ const timeIcon = computed(() => {
   z-index: 1;
 }
 
-/* Progress indicator with glow */
+/* Bright green clock bar sliding across */
+.clock-bar {
+  position: absolute;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: #00ff00;
+  box-shadow:
+    0 0 8px #00ff00,
+    0 0 16px #00ff00,
+    0 0 24px rgba(0, 255, 0, 0.8);
+  pointer-events: none;
+  z-index: 3;
+  transform: translateX(-50%);
+  transition: left 0.3s ease-out;
+  animation: pulse-clock 2s ease-in-out infinite;
+}
+
+@keyframes pulse-clock {
+  0%, 100% {
+    opacity: 1;
+    box-shadow:
+      0 0 8px #00ff00,
+      0 0 16px #00ff00,
+      0 0 24px rgba(0, 255, 0, 0.8);
+  }
+  50% {
+    opacity: 0.85;
+    box-shadow:
+      0 0 12px #00ff00,
+      0 0 20px #00ff00,
+      0 0 32px rgba(0, 255, 0, 1.0);
+  }
+}
+
+/* Progress indicator (clean, no glow) */
 .time-progress {
   position: absolute;
   left: 0;
   top: 0;
   height: 100%;
-  background: rgba(255, 255, 255, 0.3);
-  backdrop-filter: brightness(1.2);
-  border-right: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.15);
   transition: width 0.3s ease-out;
-  box-shadow:
-    2px 0 8px rgba(255, 255, 255, 0.6),
-    0 0 12px rgba(255, 255, 255, 0.4);
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    opacity: 0.9;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 /* Time marker dot */
@@ -293,10 +300,11 @@ const timeIcon = computed(() => {
   }
 }
 
-/* Time label with icon */
+/* Time label with icon and day counter */
 .time-label {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-sm);
 }
 
@@ -304,6 +312,7 @@ const timeIcon = computed(() => {
   font-size: var(--font-size-xl);
   line-height: 1;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  flex-shrink: 0;
 }
 
 /* Icon fade transition */
@@ -322,29 +331,28 @@ const timeIcon = computed(() => {
   transform: scale(0.8) rotate(10deg);
 }
 
-/* Time text container */
-.time-text-container {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
+/* Time text - same size as emoji */
 .time-text-main {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   font-family: 'Monaco', 'Courier New', monospace;
   line-height: 1;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  flex-grow: 1;
+  text-align: center;
 }
 
-.time-text-24h {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-normal);
+/* Day counter */
+.day-counter {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-secondary);
   font-family: 'Monaco', 'Courier New', monospace;
-  opacity: 0.8;
   line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.9;
+  flex-shrink: 0;
 }
 
 /* Responsive adjustments */
@@ -368,11 +376,11 @@ const timeIcon = computed(() => {
   }
 
   .time-text-main {
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-lg);
   }
 
-  .time-text-24h {
-    font-size: 9px;
+  .day-counter {
+    font-size: var(--font-size-sm);
   }
 
   .time-marker {

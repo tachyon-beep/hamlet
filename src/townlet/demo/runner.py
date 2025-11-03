@@ -146,9 +146,9 @@ class DemoRunner:
         if self.population:
             checkpoint["agent_ids"] = self.population.agent_ids
 
-        # Add epsilon for inference server display (legacy compatibility)
-        if self.exploration and hasattr(self.exploration, "rnd") and hasattr(self.exploration.rnd, "epsilon"):
-            checkpoint["epsilon"] = self.exploration.rnd.epsilon
+        # Add epsilon for inference server display (use population's epsilon getter for all exploration types)
+        if self.population:
+            checkpoint["epsilon"] = self.population._get_current_epsilon_value()
 
         # Persist the training configuration for provenance
         checkpoint["training_config"] = self.config
@@ -456,6 +456,9 @@ class DemoRunner:
                         time_of_day = agent_state.info.get("time_of_day", [None] * num_agents)[0]
                         interaction_progress = agent_state.info.get("interaction_progress", [None] * num_agents)[0]
 
+                        # Get action masks for debugging (which actions were valid)
+                        action_masks = self.env.get_action_masks()[0]  # Agent 0 action masks
+
                         self.recorder.record_step(
                             step=step,
                             positions=self.env.positions[0],  # Agent 0 position
@@ -465,6 +468,8 @@ class DemoRunner:
                             intrinsic_reward=float(agent_state.intrinsic_rewards[0].item()),
                             done=bool(agent_state.dones[0].item()),
                             q_values=agent_state.info.get("q_values", [None] * num_agents)[0],
+                            epsilon=float(agent_state.epsilons[0].item()),
+                            action_masks=action_masks,
                             time_of_day=time_of_day,
                             interaction_progress=interaction_progress,
                         )
@@ -533,7 +538,7 @@ class DemoRunner:
                         epsilon=epsilon_value,
                         intrinsic_weight=intrinsic_weight_value,
                         timestamp=episode_timestamp,
-                        affordance_layout={name: tuple(pos) for name, pos in self.env.get_affordance_positions().items()},
+                        affordance_layout=self.env.get_affordance_positions(),
                         affordance_visits={k: v for k, v in affordance_visits[0].items()},  # Agent 0 visits
                     )
                     self.recorder.finish_episode(metadata)

@@ -66,6 +66,8 @@ class RecordedStep:
     intrinsic_reward: float  # RND novelty reward
     done: bool  # Terminal state
     q_values: tuple[float, ...] | None  # Optional Q-values for all actions
+    epsilon: float | None = None  # Exploration rate (epsilon-greedy)
+    action_masks: tuple[bool, ...] | None = None  # Valid actions (6 bools)
 
     # Optional temporal mechanics (Level 2.5+)
     time_of_day: int | None = None

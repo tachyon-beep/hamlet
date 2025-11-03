@@ -53,6 +53,7 @@ class ObservationBuilder:
         affordances: dict[str, torch.Tensor],
         time_of_day: int = 0,
         interaction_progress: torch.Tensor | None = None,
+        lifetime_progress: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Build observations for all agents.
 
@@ -62,6 +63,7 @@ class ObservationBuilder:
             affordances: Dict of affordance_name -> position tensor
             time_of_day: Current time (0-23) if temporal mechanics enabled
             interaction_progress: Ticks completed [num_agents] if temporal mechanics enabled
+            lifetime_progress: Lifetime progress [num_agents] from 0.0 (birth) to 1.0 (retirement)
 
         Returns:
             observations: [num_agents, observation_dim]
@@ -71,21 +73,28 @@ class ObservationBuilder:
         else:
             obs = self._build_full_observations(positions, meters, affordances)
 
-        # Add temporal features if enabled
-        if self.enable_temporal_mechanics:
-            if interaction_progress is None:
-                interaction_progress = torch.zeros(self.num_agents, device=self.device)
+        # Always add temporal features for forward compatibility
+        # Even when temporal mechanics are disabled, time cycles naturally
+        # This allows networks trained at L0/L0.5 to work at L2.5 without architecture changes
+        # Agent learns to use or ignore these features based on whether they're meaningful
+        if interaction_progress is None:
+            interaction_progress = torch.zeros(self.num_agents, device=self.device)
 
-            # Encode time_of_day as [sin, cos] for cyclical representation
-            # This allows the network to understand that 23:00 and 00:00 are close
-            import math
+        if lifetime_progress is None:
+            lifetime_progress = torch.zeros(self.num_agents, device=self.device)
 
-            angle = (time_of_day / 24.0) * 2 * math.pi
-            time_sin = torch.full((self.num_agents, 1), math.sin(angle), device=self.device)
-            time_cos = torch.full((self.num_agents, 1), math.cos(angle), device=self.device)
+        # Encode time_of_day as [sin, cos] for cyclical representation
+        # This allows the network to understand that 23:00 and 00:00 are close
+        import math
 
-            normalized_progress = interaction_progress.unsqueeze(1) / 10.0
-            obs = torch.cat([obs, time_sin, time_cos, normalized_progress], dim=1)
+        angle = (time_of_day / 24.0) * 2 * math.pi
+        time_sin = torch.full((self.num_agents, 1), math.sin(angle), device=self.device)
+        time_cos = torch.full((self.num_agents, 1), math.cos(angle), device=self.device)
+
+        normalized_progress = interaction_progress.unsqueeze(1) / 10.0
+        lifetime = lifetime_progress.unsqueeze(1).clamp(0.0, 1.0)  # Clamp to [0, 1]
+
+        obs = torch.cat([obs, time_sin, time_cos, normalized_progress, lifetime], dim=1)
 
         return obs
 
@@ -103,17 +112,32 @@ class ObservationBuilder:
             affordances: Dict of affordance_name -> position
 
         Returns:
-            observations: [num_agents, grid_size² + 8 + num_affordance_types + 1]
+            observations: [num_agents, grid_size² + 8 + num_affordance_types + 1 + 3]
+                - grid_size²: Agent position AND affordance positions (0=empty, 1=agent/affordance, 2=both)
+                - 8: Agent meter values
+                - num_affordance_types + 1: Current affordance (one-hot)
+                - 3: Temporal features (time_sin, time_cos, interaction_progress) - always included
         """
-        # Grid encoding: one-hot position
+        # Grid encoding: mark BOTH agent position AND affordance positions
+        # This gives the agent "full observability" - it can see everything
+        # Grid values: 0 = empty, 1 = agent OR affordance, 2 = agent ON affordance
         grid_encoding = torch.zeros(self.num_agents, self.grid_size * self.grid_size, device=self.device)
+
+        # Mark affordance positions (value = 1.0) for all agents
+        # All agents see the same affordance layout (broadcast to all agents)
+        for affordance_pos in affordances.values():
+            affordance_flat_idx = affordance_pos[1] * self.grid_size + affordance_pos[0]
+            grid_encoding[:, affordance_flat_idx] = 1.0
+
+        # Mark agent position (add 1.0, so if on affordance it becomes 2.0)
         flat_indices = positions[:, 1] * self.grid_size + positions[:, 0]
-        grid_encoding.scatter_(1, flat_indices.unsqueeze(1), 1.0)
+        grid_encoding.scatter_add_(1, flat_indices.unsqueeze(1), torch.ones(self.num_agents, 1, device=self.device))
 
         # Get affordance encoding
         affordance_encoding = self._build_affordance_encoding(positions, affordances)
 
         # Concatenate: grid + meters + affordance
+        # Grid shows: where affordances are AND where agent is
         observations = torch.cat([grid_encoding, meters, affordance_encoding], dim=1)
 
         return observations

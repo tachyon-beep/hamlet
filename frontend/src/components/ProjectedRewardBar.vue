@@ -33,7 +33,10 @@
         <div class="reward-text-container">
           <div class="reward-row">
             <span class="reward-text-main" :class="rewardStatusClass">{{ formattedReward }}</span>
-            <span class="reward-percent" :class="rewardStatusClass">{{ cumulativePercent }}%</span>
+            <!-- Color-coded step reward indicator (0 = dark red, 1 = bright green) -->
+            <div class="step-reward-indicator" :style="{ background: stepRewardColor }">
+              <div class="step-reward-pulse" :style="{ background: stepRewardColor }"></div>
+            </div>
           </div>
           <span class="reward-text-sub">{{ statusText }}</span>
         </div>
@@ -53,6 +56,10 @@ const props = defineProps({
   baselineSurvival: {
     type: Number,
     default: 100
+  },
+  stepReward: {
+    type: Number,
+    default: 1.0
   }
 })
 
@@ -158,6 +165,20 @@ const backgroundColor = computed(() => {
   if (tier === 1) return 'rgba(244, 67, 54, 0.3)'    // Red - painting over red with yellow
   if (tier === 2) return 'rgba(255, 235, 59, 0.3)'   // Yellow - painting over yellow with green
   return 'rgba(76, 175, 80, 0.3)'                    // Green - painting over green with blue
+})
+
+// Step reward color (0 = dark red, 1 = bright green)
+// Maps actual step reward [0, 1] to color gradient
+const stepRewardColor = computed(() => {
+  const reward = props.stepReward
+
+  // Interpolate between dark red (0) and bright green (1)
+  // Dark red: rgb(139, 0, 0)
+  // Bright green: rgb(0, 255, 0)
+  const red = Math.round(139 * (1 - reward))
+  const green = Math.round(255 * reward)
+
+  return `rgba(${red}, ${green}, 0, 1.0)`
 })
 </script>
 
@@ -314,5 +335,42 @@ const backgroundColor = computed(() => {
   color: rgba(255, 255, 255, 0.7);
   letter-spacing: 0.5px;
   text-transform: uppercase;
+}
+
+/* Step reward indicator - color-coded orb (0=dark red, 1=bright green) */
+.step-reward-indicator {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 8px currentColor,
+    0 0 16px currentColor,
+    0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: background 0.1s ease;
+  flex-shrink: 0;
+}
+
+/* Pulsing animation for visibility at high speeds */
+.step-reward-pulse {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: pulse-reward 1s ease-in-out infinite;
+}
+
+@keyframes pulse-reward {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
 }
 </style>
