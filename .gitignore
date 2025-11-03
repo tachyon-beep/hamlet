@@ -103,3 +103,9 @@ site/
 .db-wal
 
 test_migration_checkpoints/*
+
+# DO NOT
+*.backup
+*.orig
+*.rej
+*.broken

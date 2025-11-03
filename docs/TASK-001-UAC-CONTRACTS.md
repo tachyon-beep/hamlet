@@ -14,6 +14,24 @@ Think of it as:
 
 Just like you wouldn't run Python code with syntax errors, you shouldn't run training with schema-invalid configs.
 
+### The No-Defaults Principle: Full Operator Accountability
+
+**Critical Design Rule**: Pydantic DTOs must **require ALL behavioral parameters**. No implicit defaults allowed.
+
+**Rationale**:
+- **Accountability**: Operator must explicitly specify every parameter that affects universe behavior
+- **Transparency**: Universe behavior fully determined by visible config files (no hidden state)
+- **Reproducibility**: Config is complete specification - no need to read source code
+- **Prevents Drift**: Changing code defaults doesn't silently change existing universes
+- **Better Mental Model**: Operator must understand each parameter to set it
+
+**Allowed Defaults** (rare exceptions):
+1. **Truly optional features**: `cues: CuesConfig | None = None` (visualization is optional for headless training)
+2. **Metadata only**: `description: str | None = None` (doesn't affect simulation)
+3. **Computed values**: `observation_dim: int` (calculated at compile time)
+
+**Rule of thumb**: If omitting the field changes simulation behavior, it's REQUIRED.
+
 ## Problem: Schema Drift in UNIVERSE_AS_CODE System
 
 ### Current State
@@ -65,38 +83,66 @@ from typing import Literal
 import math
 
 class TrainingConfig(BaseModel):
-    """Training hyperparameters configuration."""
+    """
+    Training hyperparameters configuration.
 
-    device: Literal["cpu", "cuda"] = "cuda"
+    ALL FIELDS REQUIRED (no defaults) - enforces operator accountability.
+    Operator must explicitly specify all parameters that affect training.
+    """
+
+    # Compute device (REQUIRED)
+    device: Literal["cpu", "cuda"]
+
+    # Training duration (REQUIRED)
     max_episodes: int = Field(gt=0)
 
-    # Q-learning
-    train_frequency: int = Field(default=4, gt=0)
-    target_update_frequency: int = Field(default=100, gt=0)
-    batch_size: int = Field(default=64, gt=0)
-    max_grad_norm: float = Field(default=10.0, gt=0)
+    # Q-learning hyperparameters (ALL REQUIRED)
+    train_frequency: int = Field(gt=0)  # No default!
+    target_update_frequency: int = Field(gt=0)  # No default!
+    batch_size: int = Field(gt=0)  # No default!
+    max_grad_norm: float = Field(gt=0)  # No default!
 
-    # Epsilon-greedy exploration
-    epsilon_start: float = Field(default=1.0, ge=0.0, le=1.0)
-    epsilon_decay: float = Field(default=0.995, gt=0.0, lt=1.0)
-    epsilon_min: float = Field(default=0.01, ge=0.0, le=1.0)
+    # Epsilon-greedy exploration (ALL REQUIRED)
+    epsilon_start: float = Field(ge=0.0, le=1.0)  # No default!
+    epsilon_decay: float = Field(gt=0.0, lt=1.0)  # No default!
+    epsilon_min: float = Field(ge=0.0, le=1.0)  # No default!
 
     @model_validator(mode="after")
     def validate_epsilon_decay(self) -> "TrainingConfig":
-        """Ensure epsilon decay is reasonable."""
+        """
+        Warn (not error) if epsilon decay seems unreasonable.
+
+        NOTE: This is a HINT, not enforcement. Operator may intentionally
+        set slow decay for their experiment. We validate structure, not semantics.
+        """
+        episodes_to_01 = math.log(0.1) / math.log(self.epsilon_decay)
         if self.epsilon_decay > 0.999:
-            raise ValueError(
-                f"epsilon_decay={self.epsilon_decay} is too slow. "
-                f"Will take {math.log(0.1)/math.log(self.epsilon_decay):.0f} episodes to reach ε=0.1. "
-                f"Consider 0.99 (L0), 0.995 (L0.5/L1), or 0.998 (L2)."
+            logger.warning(
+                f"epsilon_decay={self.epsilon_decay} is very slow. "
+                f"Will take {episodes_to_01:.0f} episodes to reach ε=0.1. "
+                f"Typical values: 0.99 (L0), 0.995 (L0.5/L1), 0.998 (L2)."
             )
         return self
 
 def load_training_config(config_path: Path) -> TrainingConfig:
-    """Load and validate training configuration."""
+    """
+    Load and validate training configuration.
+
+    Raises:
+        ValidationError: If required fields missing or invalid values
+    """
     with open(config_path) as f:
         data = yaml.safe_load(f)
-    return TrainingConfig(**data["training"])
+
+    try:
+        return TrainingConfig(**data["training"])
+    except ValidationError as e:
+        # Re-raise with helpful context
+        raise ValueError(
+            f"training.yaml validation failed:\n{e}\n\n"
+            f"All training parameters must be explicitly specified.\n"
+            f"See configs/templates/training.yaml.template for reference."
+        ) from e
 ```
 
 **Update `runner.py` to use DTOs:**
@@ -174,6 +220,10 @@ epsilon_min = training_config.epsilon_min
 - [ ] IDE autocomplete works for config field access
 - [ ] Adding new parameter requires updating DTO (forces documentation)
 - [ ] CI can validate all configs in repo without running training
+- [ ] **No-Defaults Enforcement**: All behavioral parameters marked as required (no default values)
+- [ ] **Explicit Configs**: All existing config files specify all required parameters explicitly
+- [ ] **Config Templates**: Reference templates created showing all required fields with documentation
+- [ ] **Clear Error Messages**: Missing required fields produce helpful error messages with examples
 
 ### Estimated Effort
 
@@ -367,6 +417,125 @@ Zero affordances seems "broken" but might be testing pure navigation, or studyin
 - **Strict syntax**: `energy_cost: "orange"` → compilation error
 - **Permissive semantics**: `energy_cost: -0.5` → allowed (operator's experiment)
 - **Operator responsibility**: Understanding that negative costs = restoration mechanics
+
+### No-Defaults Enforcement: Explicit Over Implicit
+
+**Core Principle**: All behavioral parameters must be **explicitly specified** in config files. No implicit defaults allowed.
+
+#### Why No Defaults?
+
+**Problem with defaults**:
+```python
+# ❌ BAD: Pydantic model with defaults
+class TrainingConfig(BaseModel):
+    epsilon_start: float = 1.0      # Default hidden in code
+    epsilon_decay: float = 0.995    # Operator may not know this exists
+    epsilon_min: float = 0.01       # Configs incomplete without reading source
+```
+
+**Consequences**:
+1. **Hidden State**: Operator doesn't know what values are actually being used
+2. **Drift Risk**: Code defaults change, old configs behave differently
+3. **Non-Reproducible**: Two configs that look different may behave identically
+4. **Incomplete Mental Model**: Can't reason about universe without reading source code
+5. **Silent Breaking Changes**: Default changes break existing configs invisibly
+
+#### The Fix: Required Fields
+
+```python
+# ✅ GOOD: All parameters required
+class TrainingConfig(BaseModel):
+    """
+    ALL FIELDS REQUIRED - enforces operator accountability.
+    No hidden defaults. Config file is complete specification.
+    """
+    epsilon_start: float = Field(ge=0.0, le=1.0)  # No default!
+    epsilon_decay: float = Field(gt=0.0, lt=1.0)  # No default!
+    epsilon_min: float = Field(ge=0.0, le=1.0)     # No default!
+```
+
+**If operator omits a field**:
+```
+❌ UNIVERSE COMPILATION FAILED
+training.yaml missing required field: 'epsilon_decay'
+
+All training parameters must be explicitly specified.
+This ensures you understand and control universe behavior.
+
+Add to training.yaml:
+  epsilon_decay: 0.995  # Or your preferred value (0.99 for fast, 0.995 for moderate)
+
+Tip: See configs/templates/training.yaml.template for reference.
+```
+
+#### Exemptions: When Defaults Are Allowed
+
+Only three categories can have defaults:
+
+**1. Truly Optional Features** (doesn't affect core simulation):
+```python
+cues: CuesConfig | None = None  # ✅ Visualization optional for headless training
+description: str | None = None   # ✅ Metadata only
+```
+
+**2. Computed Values** (calculated from other configs):
+```python
+class UniverseMetadata(BaseModel):
+    observation_dim: int  # ✅ Computed from grid_size + affordances + meters
+    action_dim: int       # ✅ Computed from len(actions)
+```
+
+**3. Deprecated Fields** (temporary backwards compatibility):
+```python
+@deprecated("Use 'energy_cost' instead")
+energy_depletion: float | None = None  # ✅ With loud warning
+```
+
+**Rule of thumb**: If omitting the field changes simulation behavior, it's REQUIRED.
+
+#### Config Templates
+
+Provide annotated templates showing all required fields:
+
+```yaml
+# configs/templates/training.yaml.template
+# ALL parameters REQUIRED - copy and customize for your universe
+
+training:
+  # Compute device
+  device: cuda  # 'cuda' for GPU, 'cpu' for CPU-only
+
+  # Training duration
+  max_episodes: 5000  # Total episodes to train
+
+  # Q-learning hyperparameters
+  train_frequency: 4             # Train Q-network every N steps
+  target_update_frequency: 100   # Update target network every N training steps
+  batch_size: 64                 # Experience replay batch size
+  max_grad_norm: 10.0            # Gradient clipping (prevents exploding gradients)
+
+  # Epsilon-greedy exploration
+  epsilon_start: 1.0   # Initial exploration rate (1.0 = 100% random)
+  epsilon_decay: 0.995 # Decay per episode (0.995 → ε=0.1 at ep 460)
+  epsilon_min: 0.01    # Minimum exploration (1% random floor)
+
+# Decay formula: ε(n) = max(epsilon_start * epsilon_decay^n, epsilon_min)
+# Fast learning (L0):     epsilon_decay: 0.99  (reaches ε=0.1 at ep 229)
+# Moderate (L0.5/L1):     epsilon_decay: 0.995 (reaches ε=0.1 at ep 460)
+# Slow (L2 POMDP):        epsilon_decay: 0.998 (reaches ε=0.1 at ep 1150)
+```
+
+#### Benefits of No-Defaults
+
+1. **Full Accountability**: Operator explicitly chooses every parameter
+2. **Transparency**: Universe fully specified by visible config files (no hidden state)
+3. **Reproducibility**: Config is complete specification (no need to read source code)
+4. **Better Mental Model**: Operator must understand parameters to set them
+5. **Prevents Drift**: Code changes don't silently alter existing universes
+6. **Self-Documenting**: Config files show all available parameters
+7. **Debugging Aid**: "What's my epsilon_decay?" → Just look at config file
+
+**Slogan**: "If it affects the universe, it's in the config. No exceptions."
 
 ## Appendix: Real Examples of Schema Drift Found
 
