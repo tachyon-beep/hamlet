@@ -18,6 +18,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+import shutil
 
 import yaml
 
@@ -81,6 +82,30 @@ class UnifiedServer:
             f"episodes={total_episodes}, port={inference_port}"
         )
 
+    def _persist_config_snapshot(self, run_root: Path) -> None:
+        """
+        Copy the active config pack into the run directory for provenance.
+
+        Args:
+            run_root: Base directory for the current run (parent of checkpoints)
+        """
+        snapshot_dir = run_root / "config_snapshot"
+        try:
+            if snapshot_dir.exists():
+                logger.debug("Config snapshot already exists at %s", snapshot_dir)
+                return
+
+            logger.info("Saving config snapshot to %s", snapshot_dir)
+            shutil.copytree(self.config_dir, snapshot_dir)
+
+            # Record the training config path used (for legacy single-file configs)
+            if self.training_config_path and self.training_config_path.exists():
+                training_copy = snapshot_dir / "training.yaml"
+                if not training_copy.exists():
+                    shutil.copy2(self.training_config_path, training_copy)
+        except Exception as exc:
+            logger.warning("Failed to persist config snapshot: %s", exc, exc_info=logger.isEnabledFor(logging.DEBUG))
+
     def start(self) -> None:
         """
         Start all components and block until shutdown.
@@ -101,6 +126,8 @@ class UnifiedServer:
 
             # Ensure checkpoint directory exists
             self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            # Persist a snapshot of the configuration for provenance
+            self._persist_config_snapshot(self.checkpoint_dir.parent)
 
             # Phase 2: Start training thread
             logger.info("[Training] Starting background training...")

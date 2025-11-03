@@ -564,11 +564,3 @@ WEP: **very likely (~85%)** these prevent drift from design.
 * [ ] Add CI check: `affordances` must only reference bar-changes or official `effect_type` tokens.
 * [ ] Add unit tests: reservation, atomic application, interrupt, teleport resolution.
 * [ ] Log reservations and outcome to trace for Module B/C training.
-
-WEP: **very likely (~85%)** this will keep the system pure and training-ready.
-
----
-
-## Final thought (short & cheeky)
-
-Your approach keeps the world small, clean and maximally useful for DRL. Low glitter, high emergent drama — much better for meaningful agent decisions. If you keep the engine semantics deterministic and the special effects small+whitelisted, you’ll get the emergent complexity you want without needing an explosion of bespoke event code.

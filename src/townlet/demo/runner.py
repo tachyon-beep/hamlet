@@ -142,6 +142,10 @@ class DemoRunner:
         if self.exploration and hasattr(self.exploration, "rnd") and hasattr(self.exploration.rnd, "epsilon"):
             checkpoint["epsilon"] = self.exploration.rnd.epsilon
 
+        # Persist the training configuration for provenance
+        checkpoint["training_config"] = self.config
+        checkpoint["config_dir"] = str(self.config_dir)
+
         torch.save(checkpoint, checkpoint_path)
         logger.info(f"Checkpoint saved: {checkpoint_path}")
 
