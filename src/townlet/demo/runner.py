@@ -90,6 +90,7 @@ class DemoRunner:
         self.population = None
         self.curriculum = None
         self.exploration = None
+        self.recorder = None  # Episode recorder (initialized if recording enabled)
 
         # Shutdown flag
         self.should_shutdown = False
@@ -323,6 +324,25 @@ class DemoRunner:
 
         self.curriculum.initialize_population(num_agents)
 
+        # Initialize episode recorder if enabled
+        recording_cfg = self.config.get("recording", {})
+        if recording_cfg.get("enabled", False):
+            from townlet.recording.recorder import EpisodeRecorder
+
+            # Create recording output directory
+            recording_output_dir = self.checkpoint_dir / recording_cfg.get("output_dir", "recordings")
+            recording_output_dir.mkdir(parents=True, exist_ok=True)
+
+            self.recorder = EpisodeRecorder(
+                config=recording_cfg,
+                output_dir=recording_output_dir,
+                database=self.db,
+                curriculum=self.curriculum,
+            )
+            logger.info(f"Episode recording enabled: {recording_output_dir}")
+        else:
+            logger.info("Episode recording disabled")
+
         # Try to resume from checkpoint
         loaded_episode = self.load_checkpoint()
         if loaded_episode is not None:
@@ -430,6 +450,25 @@ class DemoRunner:
                         if agent_state.dones[idx] and final_meters[idx] is None:
                             final_meters[idx] = self.env.meters[idx].detach().cpu()
 
+                    # Record step if recording enabled (only agent 0 for now)
+                    if self.recorder is not None:
+                        # Get temporal mechanics fields if available
+                        time_of_day = agent_state.info.get("time_of_day", [None] * num_agents)[0]
+                        interaction_progress = agent_state.info.get("interaction_progress", [None] * num_agents)[0]
+
+                        self.recorder.record_step(
+                            step=step,
+                            positions=self.env.positions[0],  # Agent 0 position
+                            meters=self.env.meters[0],  # Agent 0 meters
+                            action=agent_state.actions[0].item() if hasattr(agent_state.actions[0], "item") else int(agent_state.actions[0]),
+                            reward=float(extrinsic_only[0].item()),
+                            intrinsic_reward=float(agent_state.intrinsic_rewards[0].item()),
+                            done=bool(agent_state.dones[0].item()),
+                            q_values=agent_state.info.get("q_values", [None] * num_agents)[0],
+                            time_of_day=time_of_day,
+                            interaction_progress=interaction_progress,
+                        )
+
                     if torch.all(agent_state.dones).item():
                         break
 
@@ -467,9 +506,10 @@ class DemoRunner:
                 stages_cpu = self.curriculum.tracker.agent_stages.detach().cpu()
 
                 # Log metrics to database
+                episode_timestamp = time.time()
                 self.db.insert_episode(
                     episode_id=self.current_episode,
-                    timestamp=time.time(),
+                    timestamp=episode_timestamp,
                     survival_time=int(step_counts_cpu[0].item()),
                     total_reward=float(episode_reward_cpu[0].item()),
                     extrinsic_reward=float(episode_extrinsic_cpu[0].item()),
@@ -478,6 +518,25 @@ class DemoRunner:
                     curriculum_stage=int(stages_cpu[0].item()),
                     epsilon=epsilon_value,
                 )
+
+                # Finish episode recording if enabled
+                if self.recorder is not None:
+                    from townlet.recording.data_structures import EpisodeMetadata
+
+                    metadata = EpisodeMetadata(
+                        episode_id=self.current_episode,
+                        survival_steps=int(step_counts_cpu[0].item()),
+                        total_reward=float(episode_reward_cpu[0].item()),
+                        extrinsic_reward=float(episode_extrinsic_cpu[0].item()),
+                        intrinsic_reward=float(episode_intrinsic_cpu[0].item()),
+                        curriculum_stage=int(stages_cpu[0].item()),
+                        epsilon=epsilon_value,
+                        intrinsic_weight=intrinsic_weight_value,
+                        timestamp=episode_timestamp,
+                        affordance_layout={name: tuple(pos) for name, pos in self.env.get_affordance_positions().items()},
+                        affordance_visits={k: v for k, v in affordance_visits[0].items()},  # Agent 0 visits
+                    )
+                    self.recorder.finish_episode(metadata)
 
                 agent_metrics = []
                 for idx, agent_id in enumerate(self.population.agent_ids):
@@ -613,6 +672,12 @@ class DemoRunner:
                     self.tb_logger.log_hyperparameters(hparams=self.hparams, metrics=final_metrics)
 
             self.db.set_system_state("training_status", "completed")
+
+            # Shutdown recorder if enabled
+            if self.recorder is not None:
+                logger.info("Shutting down episode recorder...")
+                self.recorder.shutdown()
+
             self.db.close()
 
             # Close TensorBoard logger
