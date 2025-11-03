@@ -71,6 +71,25 @@ class DemoDatabase:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS episode_recordings (
+                episode_id INTEGER PRIMARY KEY,
+                file_path TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                survival_steps INTEGER NOT NULL,
+                total_reward REAL NOT NULL,
+                extrinsic_reward REAL NOT NULL,
+                intrinsic_reward REAL NOT NULL,
+                curriculum_stage INTEGER NOT NULL,
+                epsilon REAL NOT NULL,
+                intrinsic_weight REAL NOT NULL,
+                recording_reason TEXT NOT NULL,
+                file_size_bytes INTEGER,
+                compressed_size_bytes INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_recordings_stage ON episode_recordings(curriculum_stage);
+            CREATE INDEX IF NOT EXISTS idx_recordings_reason ON episode_recordings(recording_reason);
+            CREATE INDEX IF NOT EXISTS idx_recordings_reward ON episode_recordings(total_reward);
         """
         )
         self.conn.commit()
@@ -194,6 +213,110 @@ class DemoDatabase:
         TODO: Implement in Task 5 for visualization
         """
         raise NotImplementedError("Position heatmap retrieval will be implemented in Task 5.")
+
+    def insert_recording(
+        self,
+        episode_id: int,
+        file_path: str,
+        metadata,  # EpisodeMetadata type hint would require import
+        reason: str,
+        file_size: int,
+        compressed_size: int,
+    ):
+        """Insert recording metadata into database.
+
+        Args:
+            episode_id: Episode number
+            file_path: Path to recording file
+            metadata: EpisodeMetadata instance
+            reason: Recording reason (e.g., 'periodic', 'stage_transition')
+            file_size: Uncompressed file size in bytes
+            compressed_size: Compressed file size in bytes
+        """
+        self.conn.execute(
+            """INSERT OR REPLACE INTO episode_recordings
+               (episode_id, file_path, timestamp, survival_steps, total_reward,
+                extrinsic_reward, intrinsic_reward, curriculum_stage, epsilon,
+                intrinsic_weight, recording_reason, file_size_bytes, compressed_size_bytes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                episode_id,
+                file_path,
+                metadata.timestamp,
+                metadata.survival_steps,
+                metadata.total_reward,
+                metadata.extrinsic_reward,
+                metadata.intrinsic_reward,
+                metadata.curriculum_stage,
+                metadata.epsilon,
+                metadata.intrinsic_weight,
+                reason,
+                file_size,
+                compressed_size,
+            ),
+        )
+        self.conn.commit()
+
+    def get_recording(self, episode_id: int) -> dict[str, Any] | None:
+        """Get recording metadata by episode_id.
+
+        Args:
+            episode_id: Episode number
+
+        Returns:
+            Recording metadata dict or None if not found
+        """
+        cursor = self.conn.execute(
+            "SELECT * FROM episode_recordings WHERE episode_id = ?",
+            (episode_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def list_recordings(
+        self,
+        stage: int | None = None,
+        reason: str | None = None,
+        min_reward: float | None = None,
+        max_reward: float | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """List recordings with optional filters.
+
+        Args:
+            stage: Filter by curriculum stage
+            reason: Filter by recording reason
+            min_reward: Filter by minimum total reward
+            max_reward: Filter by maximum total reward
+            limit: Maximum number of recordings to return
+
+        Returns:
+            List of recording metadata dicts, ordered by episode_id DESC
+        """
+        query = "SELECT * FROM episode_recordings WHERE 1=1"
+        params = []
+
+        if stage is not None:
+            query += " AND curriculum_stage = ?"
+            params.append(stage)
+
+        if reason is not None:
+            query += " AND recording_reason = ?"
+            params.append(reason)
+
+        if min_reward is not None:
+            query += " AND total_reward >= ?"
+            params.append(min_reward)
+
+        if max_reward is not None:
+            query += " AND total_reward <= ?"
+            params.append(max_reward)
+
+        query += " ORDER BY episode_id DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = self.conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
         """Close database connection."""
