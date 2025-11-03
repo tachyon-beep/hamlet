@@ -86,3 +86,34 @@ affordances:
       - { meter: "energy", amount: 0.02 }  # Minor energy boost
 
     operating_hours: [0, 24]  # Emergency - always open
+
+  # ============================================================================
+  # SATIATION (FOOD)
+  # ============================================================================
+  
+  - id: "3"
+    name: "HomeMeal"
+    category: "food"
+    interaction_type: "dual"
+    
+    # Instant mode (Level 1)
+    costs:
+      - { meter: "money", amount: 0.03 }  # $3
+    
+    effects:
+      - { meter: "satiation", amount: 0.45 }  # +45%
+      - { meter: "health", amount: 0.03 }     # +3%
+    
+    # Temporal mode (Level 2) - 3 ticks for cooking and eating
+    required_ticks: 3
+    costs_per_tick:
+      - { meter: "money", amount: 0.01 }  # $1/tick
+    
+    effects_per_tick:
+      - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.75 / 3 = +11.25%/tick
+    
+    completion_bonus:
+      - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.25 = +11.25% final
+      - { meter: "health", amount: 0.03 }  # +3% final
+    
+    operating_hours: [0, 24]

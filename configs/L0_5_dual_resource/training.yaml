@@ -31,10 +31,10 @@ environment:
   enable_temporal_mechanics: false  # No time-of-day complexity
 
   # Only Bed and Hospital
-  enabled_affordances: ["Bed", "Hospital"]
-  energy_move_depletion: 0.0050
-  energy_wait_depletion: 0.0045
-  energy_interact_depletion: 0.0035
+  enabled_affordances: ["Bed", "Hospital","HomeMeal"]
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.0049
+  energy_interact_depletion: 0.0029
 
 # Population configuration
 population:
@@ -55,7 +55,7 @@ curriculum:
 # Exploration configuration
 exploration:
   embed_dim: 64  # Smaller embedding (simpler observations)
-  initial_intrinsic_weight: 0.2  # Lower intrinsic weight (extrinsic is clearer)
+  initial_intrinsic_weight: 0.1  # Lower intrinsic weight (extrinsic is clearer)
   variance_threshold: 50.0  # Lower threshold for faster annealing
   survival_window: 50  # Smaller window
 

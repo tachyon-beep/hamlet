@@ -38,6 +38,13 @@ dev = [
     "mypy>=1.4.0",
     "types-PyYAML>=6.0.12.12",
 ]
+recording = [
+    "msgpack>=1.0.0",       # Serialization
+    "lz4>=4.0.0",           # Compression
+    "ffmpeg-python>=0.2.0", # Video export
+    "pillow>=10.0.0",       # Image manipulation
+    "matplotlib>=3.7.0",    # Frame rendering
+]
 
 [build-system]
 requires = ["hatchling"]
