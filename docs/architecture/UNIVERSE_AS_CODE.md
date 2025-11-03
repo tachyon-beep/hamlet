@@ -793,8 +793,6 @@ These environment-level parameters enable world-scale difficulty variants such a
 
 Geographical placement is a primary lever for distinguishing worlds where extended workdays are viable from those where accessing work is itself hazardous.
 
-WEP that this matches the current VectorizedTownletEnv semantics is high (~90 percent).
-
 ---
 
 ## 7. Multi-tick semantics
@@ -912,8 +910,6 @@ This is what keeps health decay, hunger crash, hygiene rot and so on all mathema
 
 This validation layer gives us confidence that if a world loads, it's at least internally legal. It also means you can ship variant packs ("austerity", "boom", custom dystopia) without having to ship new Python with them.
 
-WEP on this section being true to the current Pydantic validations: high (~90 percent).
-
 ## 10. Equivalence, tests, and teaching packs
 
 Replacing hardcoded behaviour with configuration introduces the risk that small YAML edits could unintentionally change survival dynamics.
@@ -957,8 +953,6 @@ Affordance packs sit alongside cascade packs and give us socioeconomic regimes. 
 * **Nightlife** — social outlets operate late into the night, whereas medical services may have limited hours. Access to entertainment is easier than access to healthcare.
 
 Because these are configuration packs, designers can explore political-economy scenarios by editing YAML rather than Python.
-
-WEP this describes how we actually intend people to fork worlds: very high (~95 percent).
 
 ## 11. Emergency care path (Doctor, Hospital, Ambulance) as an intentional gameplay loop
 
@@ -1045,8 +1039,6 @@ High-level order:
    * Dead/retired agents are then masked: they no longer get valid actions. From that point, they're effectively frozen in time for that episode, and the RL loop can treat that as end-of-life reward accounting.
 
 So from an RL perspective, "I stayed alive another tick" is literally "the engine didn't mask me out". Longevity reward is clean to compute.
-
-WEP alignment with live code: high (~90 percent). The only light abstraction here is that I grouped steps conceptually.
 
 ## 13. Config packs and world folders
 
@@ -1138,5 +1130,3 @@ RL read:
 * Long-term policy should learn to manage health proactively, keep money in reserve, and respect clinic hours.
 
 That is exactly the behaviour we want to see emerge.
-
-WEP that this walkthrough matches actual engine step order and affordance semantics: high (~90 percent).
