@@ -25,13 +25,13 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 6  # 6×6 grid (36 cells) - bigger than L0 to fit 2 affordances
+  grid_size: 7  # 6×6 grid (36 cells) - bigger than L0 to fit 2 affordances
   partial_observability: false  # Agent sees full grid
-  vision_range: 6  # Full vision (not used when partial_observability=false)
+  vision_range: 7  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
 
   # Only Bed and Hospital
-  enabled_affordances: ["Bed", "Hospital","HomeMeal"]
+  enabled_affordances: ["Bed", "Hospital","HomeMeal","Job"]
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.0049
   energy_interact_depletion: 0.0029
@@ -73,7 +73,7 @@ training:
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
-  epsilon_decay: 0.998  # Decay per episode
+  epsilon_decay: 0.9995  # Decay per episode
   epsilon_min: 0.01  # Minimum exploration rate
 
 # Recording configuration

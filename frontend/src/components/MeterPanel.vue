@@ -5,25 +5,6 @@
       <h3 id="meter-heading">Agent Meters</h3>
     </div>
 
-    <!-- ✅ Critical state alert banner (always visible) -->
-    <div
-      v-if="meters"
-      class="critical-alert"
-      :class="{ 'all-healthy': criticalMetersCount === 0 }"
-      :data-urgency="alertUrgency"
-      :role="criticalMetersCount > 0 ? 'alert' : 'status'"
-    >
-      <span class="alert-icon">{{ criticalMetersCount > 0 ? '⚠️' : '✅' }}</span>
-      <span class="alert-text">
-        <template v-if="criticalMetersCount > 0">
-          {{ criticalMetersCount }} critical meter{{ criticalMetersCount > 1 ? 's' : '' }}
-        </template>
-        <template v-else>
-          All meters healthy
-        </template>
-      </span>
-    </div>
-
     <!-- ✅ Grouped meter tiers showing cascading relationships -->
     <div v-if="meters" class="meters" role="list">
       <!-- Tier 1: Primary (Survival-Critical) -->
@@ -65,6 +46,29 @@
             </div>
           </div>
           </template>
+
+          <!-- Age meter (progress to retirement) -->
+          <div class="meter" role="listitem" data-meter="age">
+            <div class="meter-header">
+              <span class="meter-name">Age</span>
+              <span class="meter-value" aria-live="polite" aria-atomic="true" role="status">
+                {{ (props.agentAge / 24).toFixed(1) }} days
+              </span>
+            </div>
+            <div class="meter-bar-container">
+              <div
+                class="meter-bar age-bar"
+                role="progressbar"
+                :aria-valuenow="Math.round(props.lifetimeProgress * 100)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :style="{
+                  width: (props.lifetimeProgress * 100) + '%',
+                  background: getAgeColor(props.lifetimeProgress)
+                }"
+              ></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -189,6 +193,14 @@ const props = defineProps({
   agentMeters: {
     type: Object,
     default: () => ({})
+  },
+  lifetimeProgress: {
+    type: Number,
+    default: 0
+  },
+  agentAge: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -211,23 +223,6 @@ const meterRelationships = {
 const meters = computed(() => {
   const agent = props.agentMeters['agent_0']
   return agent ? agent.meters : null
-})
-
-// Count critical meters for alert banner
-const criticalMetersCount = computed(() => {
-  if (!meters.value) return 0
-  return Object.entries(meters.value).filter(([name, value]) =>
-    isCritical(name, value)
-  ).length
-})
-
-// Calculate alert urgency level
-const alertUrgency = computed(() => {
-  const count = criticalMetersCount.value
-  if (count === 0) return 'none'
-  if (count <= 2) return 'low'
-  if (count <= 4) return 'medium'
-  return 'high'
 })
 
 // ✅ Use imported formatting utilities
@@ -338,6 +333,14 @@ function getRelationshipText(name) {
 
   // Capitalize and join with "+"
   return affects.map(m => capitalize(m)).join(' + ')
+}
+
+// Get color for age/retirement progress bar
+function getAgeColor(progress) {
+  // Green -> Yellow -> Red as agent ages
+  if (progress < 0.5) return '#10b981' // Green - young
+  if (progress < 0.75) return 'var(--color-warning)' // Yellow - middle age
+  return 'var(--color-error)' // Red - near retirement/death
 }
 </script>
 
@@ -571,88 +574,6 @@ function getRelationshipText(name) {
   height: 100%;
   border-radius: var(--border-radius-full);
   transition: width var(--transition-base), background var(--transition-base);
-}
-
-/* ✅ Critical alert banner (always visible) */
-.critical-alert {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--color-error);
-  color: white;
-  border-radius: var(--border-radius-md);
-  margin-bottom: var(--spacing-md);
-  font-weight: var(--font-weight-semibold);
-  animation: alert-pulse 1s ease-in-out infinite;
-  transition: background var(--transition-base), color var(--transition-base);
-  will-change: transform, opacity;
-  transform: translateZ(0);
-}
-
-/* Green state when all meters are healthy */
-.critical-alert.all-healthy {
-  background: var(--color-success);
-  animation: none;
-}
-
-/* Escalating urgency levels */
-.critical-alert[data-urgency="low"] {
-  animation: alert-pulse-gentle 2s ease-in-out infinite;
-  background: var(--color-warning);
-}
-
-.critical-alert[data-urgency="medium"] {
-  animation: alert-pulse-moderate 1.5s ease-in-out infinite;
-  background: linear-gradient(135deg, var(--color-warning), var(--color-error));
-}
-
-.critical-alert[data-urgency="high"] {
-  animation: alert-pulse-urgent 1s ease-in-out infinite;
-  background: var(--color-error);
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
-}
-
-@keyframes alert-pulse-gentle {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.01); opacity: 0.95; }
-}
-
-@keyframes alert-pulse-moderate {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.015); }
-}
-
-@keyframes alert-pulse-urgent {
-  0%, 100% { transform: scale(1); }
-  25% { transform: scale(1.02) rotate(-0.5deg); }
-  75% { transform: scale(1.02) rotate(0.5deg); }
-}
-
-@keyframes alert-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-}
-
-.alert-icon {
-  font-size: var(--font-size-xl);
-  animation: shake 0.5s ease-in-out infinite;
-}
-
-/* Don't shake when healthy */
-.critical-alert.all-healthy .alert-icon {
-  animation: none;
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-4px); }
-  75% { transform: translateX(4px); }
-}
-
-.alert-text {
-  flex: 1;
-  font-size: var(--font-size-sm);
 }
 
 /* Panel explanation */

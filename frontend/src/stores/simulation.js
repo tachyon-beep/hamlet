@@ -83,6 +83,8 @@ export const useSimulationStore = defineStore('simulation', () => {
   const temporalEnabled = ref(false)  // Whether temporal mechanics is enabled
   const timeOfDay = ref(0)  // Current time of day (0-23)
   const interactionProgress = ref(0)  // Current interaction progress (0-1)
+  const agentAge = ref(0)  // Agent age in steps
+  const lifetimeProgress = ref(0)  // Progress to retirement (0-1)
 
   // Reward tracking (baseline-relative)
   const stepReward = ref(1.0)  // Reward for current step (0-1 range)
@@ -160,6 +162,10 @@ export const useSimulationStore = defineStore('simulation', () => {
       isConnected.value = true
       isConnecting.value = false  // ✅ Stop loading state
       reconnectAttempts.value = 0
+
+      // Clear ephemeral UI data on new connection
+      deathCertificates.value = []
+      nextCertId = 0
 
       // Auto-start simulation (no manual play button needed)
       // Wait for next tick to ensure WebSocket is fully ready
@@ -258,6 +264,7 @@ export const useSimulationStore = defineStore('simulation', () => {
         break
 
       case 'episode_start':
+        console.log(`[EPISODE_START] Episode ${message.episode} starting`)
         currentEpisode.value = message.episode
         currentStep.value = 0
         cumulativeReward.value = 0
@@ -393,6 +400,12 @@ export const useSimulationStore = defineStore('simulation', () => {
       temporalEnabled.value = true
       timeOfDay.value = message.temporal.time_of_day
       interactionProgress.value = message.temporal.interaction_progress
+      if (message.temporal.agent_age !== undefined) {
+        agentAge.value = message.temporal.agent_age
+      }
+      if (message.temporal.lifetime_progress !== undefined) {
+        lifetimeProgress.value = message.temporal.lifetime_progress
+      }
     }
 
     // Handle baseline-relative reward tracking
@@ -447,7 +460,8 @@ export const useSimulationStore = defineStore('simulation', () => {
   }
 
   function handleEpisodeEnd(message) {
-    console.log(`Episode ${message.episode} ended: ${message.steps} steps, reward: ${message.total_reward}`)
+    console.log(`[EPISODE_END] Episode ${message.episode} ended: ${message.steps} steps, reward: ${message.total_reward}`)
+    console.log(`[EPISODE_END] Current stored episode number: ${currentEpisode.value}`)
 
     // Add to history
     episodeHistory.value.push({
@@ -469,11 +483,14 @@ export const useSimulationStore = defineStore('simulation', () => {
   function createDeathCertificate(message, affordanceStatsFromMessage) {
     console.log('Creating death certificate for episode', message.episode, 'with', message.steps, 'steps')
 
-    // Get current meter states (snapshot at death)
-    const meters = agentMeters.value
+    // Get meter states from episode_end message (direct from backend)
+    // Create deep copy to prevent reactivity leakage
+    const metersSource = message.final_meters || agentMeters.value
+    const meters = JSON.parse(JSON.stringify(metersSource))
+
     const criticalMeters = []
 
-    console.log('Agent meters at death:', meters)
+    console.log('Agent meters at death (from message.final_meters):', meters)
 
     // Find meters below thresholds
     for (const [name, value] of Object.entries(meters)) {
@@ -492,17 +509,19 @@ export const useSimulationStore = defineStore('simulation', () => {
     console.log('Affordance stats from message:', affordanceStatsFromMessage)
 
     // Get affordance usage (top 5 most used) from episode_end message
+    // Deep copy to prevent reactivity
     const topAffordances = affordanceStatsFromMessage
       .slice(0, 5)
-      .map(aff => ({ name: aff.name, count: aff.count }))
+      .map(aff => ({ name: String(aff.name), count: Number(aff.count) }))
 
-    // Create certificate
+    // Create certificate with primitive values only (no reactive references)
     const certificate = {
       id: nextCertId++,
-      episode: message.episode,
-      survivalSteps: message.steps,
-      criticalMeters,
-      topAffordances,
+      episode: Number(message.episode),
+      survivalSteps: Number(message.steps),
+      totalReward: Number(message.total_reward),
+      criticalMeters: JSON.parse(JSON.stringify(criticalMeters)),
+      topAffordances: JSON.parse(JSON.stringify(topAffordances)),
       timestamp: Date.now(),
     }
 
@@ -600,6 +619,8 @@ export const useSimulationStore = defineStore('simulation', () => {
     temporalEnabled,
     timeOfDay,
     interactionProgress,
+    agentAge,
+    lifetimeProgress,
     stepReward,
     projectedReward,
     baselineSurvival,

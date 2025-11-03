@@ -118,6 +118,22 @@ def main():
             sys.exit(1)
         config_dir = config_file.parent
 
+    # Read total_episodes from config if not provided via CLI
+    total_episodes = args.episodes
+    if total_episodes is None:
+        try:
+            import yaml
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+                total_episodes = config.get('training', {}).get('max_episodes', None)
+                if total_episodes is None:
+                    logger.error("No total_episodes provided and training.max_episodes not found in config")
+                    sys.exit(1)
+                logger.debug(f"Read max_episodes={total_episodes} from config")
+        except Exception as e:
+            logger.error(f"Failed to read max_episodes from config: {e}")
+            sys.exit(1)
+
     # Print startup banner
     logger.info("=" * 60)
     logger.info("Unified Demo Server Starting")
@@ -125,9 +141,9 @@ def main():
     logger.info(f"Config Pack: {config_dir}")
     logger.info(f"Training Config: {config_file}")
     if args.episodes is not None:
-        logger.info(f"Episodes: {args.episodes} (from --episodes flag)")
+        logger.info(f"Episodes: {total_episodes} (from --episodes flag)")
     else:
-        logger.info(f"Episodes: (will read from config)")
+        logger.info(f"Episodes: {total_episodes} (from training config)")
     if args.checkpoint_dir:
         logger.info(f"Checkpoint Dir: {args.checkpoint_dir}")
     else:
@@ -141,7 +157,7 @@ def main():
         server = UnifiedServer(
             config_dir=str(config_dir),
             training_config_path=str(config_file),
-            total_episodes=args.episodes,
+            total_episodes=total_episodes,
             checkpoint_dir=args.checkpoint_dir,
             inference_port=args.inference_port,
         )

@@ -200,24 +200,25 @@ const stepRewardColor = computed(() => {
 }
 
 .reward-label-header {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);  /* 16px - increased from 14px for streaming */
   font-weight: var(--font-weight-bold);
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 3px;
+  letter-spacing: 0.08em;  /* Slightly more tracking for legibility */
+  color: rgba(255, 255, 255, 0.9);  /* Increased from 0.7 - better contrast */
+  margin-bottom: 6px;  /* More breathing room */
   text-align: left;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;  /* Larger gap for visual separation */
 }
 
 .reward-bar-background {
   position: relative;
-  height: 24px;
+  height: 32px;  /* Increased from 24px - 33% larger for streaming visibility */
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 12px;  /* Proportional increase */
   overflow: visible;
-  margin-bottom: 3px;
+  margin-bottom: 6px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);  /* Depth perception */
 }
 
 .baseline-marker {
@@ -246,14 +247,14 @@ const stepRewardColor = computed(() => {
 
 .reward-marker {
   position: absolute;
-  right: -6px;
+  right: -8px;  /* Adjusted for larger size */
   top: 50%;
   transform: translateY(-50%);
-  width: 12px;
-  height: 12px;
+  width: 16px;  /* Increased from 12px */
+  height: 16px;
   border-radius: 50%;
-  border: 2px solid rgba(0, 0, 0, 0.3);
-  box-shadow: 0 0 8px currentColor, 0 2px 4px rgba(0, 0, 0, 0.3);
+  border: 3px solid rgba(0, 0, 0, 0.5);  /* Thicker border for definition */
+  box-shadow: 0 0 12px currentColor, 0 3px 6px rgba(0, 0, 0, 0.4);  /* Stronger glow */
   transition: background 0.5s ease;
 }
 
@@ -291,14 +292,14 @@ const stepRewardColor = computed(() => {
 .reward-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 
 .reward-text-main {
-  font-size: 24px;
+  font-size: 28px;  /* Increased from 24px - dominant focus for streaming */
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   transition: color 0.3s ease;
 }
 
@@ -311,30 +312,39 @@ const stepRewardColor = computed(() => {
 
 .reward-tier-0 {
   color: #f44336;  /* Red - Struggling */
-  text-shadow: 0 0 8px rgba(244, 67, 54, 0.5);
+  text-shadow:
+    0 0 12px rgba(244, 67, 54, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.6);  /* Dual shadow: glow + depth */
 }
 
 .reward-tier-1 {
   color: #ffeb3b;  /* Yellow - Learning */
-  text-shadow: 0 0 8px rgba(255, 235, 59, 0.5);
+  text-shadow:
+    0 0 12px rgba(255, 235, 59, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 .reward-tier-2 {
   color: #4caf50;  /* Green - Thriving */
-  text-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+  text-shadow:
+    0 0 12px rgba(76, 175, 80, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 .reward-tier-3 {
   color: #2196f3;  /* Blue - Mastered */
-  text-shadow: 0 0 8px rgba(33, 150, 243, 0.5);
+  text-shadow:
+    0 0 12px rgba(33, 150, 243, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 .reward-text-sub {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 0.5px;
+  font-size: 14px;  /* Increased from 12px for streaming legibility */
+  font-weight: 700;  /* Bolder for better definition */
+  color: rgba(255, 255, 255, 0.85);  /* Higher contrast */
+  letter-spacing: 0.8px;  /* More tracking for uppercase legibility */
   text-transform: uppercase;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);  /* Stronger shadow for "pop" */
 }
 
 /* Step reward indicator - color-coded orb (0=dark red, 1=bright green) */
@@ -349,6 +359,7 @@ const stepRewardColor = computed(() => {
     0 2px 4px rgba(0, 0, 0, 0.3);
   transition: background 0.1s ease;
   flex-shrink: 0;
+  margin-top: 20px;
 }
 
 /* Pulsing animation for visibility at high speeds */

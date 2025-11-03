@@ -13,7 +13,7 @@ class TestObservationConstruction:
     """Characterization tests for observation construction methods."""
 
     def test_full_observability_dimensions(self):
-        """Full observations: grid + meters + affordance encoding."""
+        """Full observations: grid + meters + affordance encoding + temporal."""
         env = VectorizedHamletEnv(
             num_agents=4,
             grid_size=8,
@@ -24,7 +24,8 @@ class TestObservationConstruction:
         env.reset()
         obs = env._get_observations()
         assert env.num_affordance_types == 14
-        expected_dim = 64 + 8 + 15
+        # 64 (grid) + 8 (meters) + 15 (affordance one-hot) + 4 (temporal: time_sin, time_cos, interaction_progress, lifetime_progress)
+        expected_dim = 64 + 8 + 15 + 4
         assert obs.shape == (4, expected_dim)
         assert obs.dtype == torch.float32
 

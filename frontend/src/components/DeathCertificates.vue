@@ -2,15 +2,10 @@
   <div class="death-certificates">
     <div class="log-header">
       <h4>💀 Death Certificates</h4>
-      <InfoTooltip
-        title="What are death certificates?"
-        text="Records of agent deaths showing final meter states and interaction patterns. Top 3 longest survival times plus most recent death."
-        position="left"
-      />
     </div>
 
     <!-- No deaths yet state -->
-    <div v-if="certificates.length === 0" class="no-deaths-state">
+    <div v-if="displayedCertificates.length === 0" class="no-deaths-state">
       <div class="no-deaths-icon">🌱</div>
       <div class="no-deaths-content">
         <div class="no-deaths-title">No Deaths Yet</div>
@@ -25,9 +20,9 @@
       <TransitionGroup name="cert-slide">
         <div
           v-for="cert in displayedCertificates"
-          :key="cert.id"
+          :key="cert.displayKey"
           class="certificate-item"
-          :class="{ 'is-recent': cert.isRecent, 'is-best': cert.isBest }"
+          :class="{ 'is-recent': cert.isRecent && !cert.isBest, 'is-best': cert.isBest }"
         >
           <!-- Header: Episode and survival time -->
           <div class="cert-header">
@@ -36,9 +31,15 @@
               <span v-if="cert.isRecent" class="badge-icon">⚡</span>
               <span class="cert-episode">Ep {{ cert.episode }}</span>
             </div>
-            <div class="cert-survival">
-              <span class="survival-steps">{{ cert.survivalSteps }}</span>
-              <span class="survival-label">steps</span>
+            <div class="cert-stats">
+              <div class="cert-survival">
+                <span class="survival-steps">{{ cert.survivalSteps }}</span>
+                <span class="survival-label">steps</span>
+              </div>
+              <div class="cert-reward">
+                <span class="reward-value">{{ cert.totalReward?.toFixed(1) || '0.0' }}</span>
+                <span class="reward-label">reward</span>
+              </div>
             </div>
           </div>
 
@@ -79,8 +80,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import InfoTooltip from './InfoTooltip.vue'
+import { computed, shallowRef, watch } from 'vue'
 
 const props = defineProps({
   certificates: {
@@ -89,31 +89,48 @@ const props = defineProps({
   }
 })
 
-// Display most recent at top, then best 3 underneath
-const displayedCertificates = computed(() => {
-  if (props.certificates.length === 0) return []
+// Use shallowRef to store computed certificates to avoid unnecessary deep reactivity
+const displayedCertificates = shallowRef([])
 
-  // Get most recent death
-  const mostRecent = { ...props.certificates[props.certificates.length - 1], isRecent: true, isBest: false }
+// Watch certificates and update only when actually needed
+watch(
+  () => props.certificates,
+  (newCerts) => {
+    if (newCerts.length === 0) {
+      displayedCertificates.value = []
+      return
+    }
 
-  // Sort by survival time (descending) for best 3
-  const sorted = [...props.certificates].sort((a, b) => b.survivalSteps - a.survivalSteps)
-  const top3 = sorted.slice(0, 3).map(cert => ({ ...cert, isBest: true, isRecent: false }))
+    // Find the best (longest survival) by iterating once
+    let best = newCerts[0]
+    let bestIndex = 0
+    for (let i = 1; i < newCerts.length; i++) {
+      if (newCerts[i].survivalSteps > best.survivalSteps) {
+        best = newCerts[i]
+        bestIndex = i
+      }
+    }
 
-  // Check if most recent is in top 3
-  const recentInTop3 = top3.some(cert => cert.id === mostRecent.id)
+    // For "recent", show the second-most-recent death (if it exists)
+    const recentIndex = newCerts.length >= 2 ? newCerts.length - 2 : newCerts.length - 1
+    const recent = newCerts[recentIndex]
 
-  if (recentInTop3) {
-    // Most recent is in top 3 - mark it as both
-    return [
-      { ...mostRecent, isBest: true, isRecent: true },
-      ...top3.filter(cert => cert.id !== mostRecent.id)
-    ]
-  } else {
-    // Most recent is not in top 3 - show it first, then top 3
-    return [mostRecent, ...top3]
-  }
-})
+    // Check if we only have one certificate, or if recent is also the best
+    if (newCerts.length === 1 || recent.id === best.id) {
+      // Show only the best certificate
+      displayedCertificates.value = [
+        { ...best, isRecent: false, isBest: true, displayKey: 'best' }
+      ]
+    } else {
+      // Show best first (stable at top), then recent second-to-last
+      displayedCertificates.value = [
+        { ...best, isBest: true, isRecent: false, displayKey: 'best' },
+        { ...recent, isRecent: true, isBest: false, displayKey: 'recent' }
+      ]
+    }
+  },
+  { immediate: true, deep: true }
+)
 </script>
 
 <style scoped>
@@ -121,8 +138,8 @@ const displayedCertificates = computed(() => {
   position: absolute;
   top: 80px; /* Below MinimalControls */
   right: var(--spacing-md);
+  bottom: 70px; /* Stop above zoom slider (16px bottom + ~50px slider height + gap) */
   width: 320px;
-  height: 620px; /* Fixed height - fits header + 4 certificates nicely */
   background: var(--color-bg-secondary);
   border: 2px solid var(--color-border);
   border-radius: var(--border-radius-md);
@@ -146,9 +163,10 @@ const displayedCertificates = computed(() => {
 
 .log-header h4 {
   margin: 0;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);  /* 20px - increased from 16px for streaming */
+  font-weight: var(--font-weight-bold);  /* Bolder */
   color: var(--color-text-primary);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* No deaths state */
@@ -193,8 +211,9 @@ const displayedCertificates = computed(() => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);  /* 16px - increased from 8px for better scannability */
   padding-right: var(--spacing-xs);
+  position: relative;  /* For absolute positioning during transitions */
 }
 
 /* Custom scrollbar */
@@ -220,27 +239,37 @@ const displayedCertificates = computed(() => {
 .certificate-item {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm);
+  gap: var(--spacing-sm);  /* 8px - increased from 4px */
+  padding: var(--spacing-md);  /* 16px - increased from 8px */
   background: var(--color-bg-primary);
   border-radius: var(--border-radius-sm);
-  border-left: 3px solid var(--color-text-tertiary);
-  transition: all var(--transition-base);
+  border-left: 5px solid var(--color-text-tertiary);  /* Thicker border for streaming */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);  /* Added shadow for depth */
+
+  /* GPU acceleration for smooth rendering */
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+
+  /* Smooth color transitions when promoted from recent to best */
+  transition:
+    border-left-color 1.5s ease-in-out,
+    border-left-width 1.5s ease-in-out,
+    background 1.5s ease-in-out,
+    transform 0.3s ease,
+    opacity 0.3s ease;
 }
 
 .certificate-item.is-best {
   border-left-color: #fbbf24; /* Gold */
-  background: rgba(251, 191, 36, 0.05);
+  border-left-width: 6px;  /* Even thicker for best */
+  background: rgba(251, 191, 36, 0.08);  /* Slightly stronger tint */
 }
 
 .certificate-item.is-recent {
-  border-left-color: #c0c0c0; /* Silver */
-  background: rgba(192, 192, 192, 0.05);
-}
-
-.certificate-item.is-best.is-recent {
-  border-left-color: #fbbf24; /* Gold (best trumps recent) */
-  background: rgba(251, 191, 36, 0.05);
+  border-left-color: #00d9ff; /* Neon blue (electricity) */
+  border-left-width: 6px;  /* Match best thickness */
+  background: rgba(0, 217, 255, 0.08);
 }
 
 /* Certificate header */
@@ -257,15 +286,24 @@ const displayedCertificates = computed(() => {
 }
 
 .badge-icon {
-  font-size: 1rem;
+  font-size: 1.25rem;  /* 20px - increased from 16px for streaming */
   line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));  /* Added depth */
 }
 
 .cert-episode {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);  /* 16px - increased from 14px */
+  font-weight: var(--font-weight-bold);  /* Bolder */
   color: var(--color-text-primary);
   font-family: 'Monaco', 'Courier New', monospace;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.cert-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
 }
 
 .cert-survival {
@@ -275,13 +313,33 @@ const displayedCertificates = computed(() => {
 }
 
 .survival-steps {
-  font-size: var(--font-size-lg);
+  font-size: 22px;  /* Increased from 18px - most important metric for streaming */
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   font-family: 'Monaco', 'Courier New', monospace;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 .survival-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.cert-reward {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.reward-value {
+  font-size: 18px;  /* Slightly smaller than steps */
+  font-weight: var(--font-weight-semibold);
+  color: #4caf50;  /* Green to indicate efficiency/reward */
+  font-family: 'Monaco', 'Courier New', monospace;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.reward-label {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
 }
@@ -294,11 +352,13 @@ const displayedCertificates = computed(() => {
 }
 
 .meters-label {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
+  font-size: 13px;  /* Increased from 12px for streaming legibility */
+  font-weight: var(--font-weight-bold);  /* Bolder */
+  color: var(--color-text-primary);  /* Changed from secondary - more contrast */
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  margin-bottom: 2px;  /* Add spacing below label */
 }
 
 .meter-chips {
@@ -310,12 +370,13 @@ const displayedCertificates = computed(() => {
 .meter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
+  gap: 6px;  /* Larger gap */
+  padding: 4px 8px;  /* More padding for visibility */
+  border-radius: 6px;
+  font-size: 13px;  /* Increased from 12px for streaming */
+  font-weight: var(--font-weight-semibold);  /* Bolder */
   font-family: 'Monaco', 'Courier New', monospace;
+  border: 1px solid currentColor;  /* Added border for definition */
 }
 
 .meter-chip.meter-critical {
@@ -346,11 +407,13 @@ const displayedCertificates = computed(() => {
 }
 
 .affordances-label {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
+  font-size: 13px;  /* Increased from 12px for streaming legibility */
+  font-weight: var(--font-weight-bold);  /* Bolder */
+  color: var(--color-text-primary);  /* Changed from secondary - more contrast */
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  margin-bottom: 2px;  /* Add spacing below label */
 }
 
 .affordance-list {
@@ -363,40 +426,49 @@ const displayedCertificates = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: var(--font-size-xs);
+  font-size: 13px;  /* Increased from 12px for streaming */
+  padding: 2px 0;  /* Added vertical padding for spacing */
 }
 
 .aff-name {
   color: var(--color-text-secondary);
   text-transform: capitalize;
+  font-weight: var(--font-weight-medium);  /* Added weight */
 }
 
 .aff-count {
   font-family: 'Monaco', 'Courier New', monospace;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);  /* Changed from semibold */
   color: var(--color-text-primary);
+  font-size: 14px;  /* Slightly larger than label for hierarchy */
 }
 
-/* Transition animations */
+/* Transition animations - GPU-accelerated with transform only */
+.cert-slide-enter-active,
+.cert-slide-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
 .cert-slide-enter-active {
-  transition: all 0.3s ease;
+  transition: all 1.5s ease-out;
 }
 
 .cert-slide-leave-active {
-  transition: all 0.2s ease;
+  transition: all 1s ease-in;
 }
 
 .cert-slide-enter-from {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translate3d(0, 30px, 0);
 }
 
 .cert-slide-leave-to {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translate3d(0, -30px, 0);
 }
 
 .cert-slide-move {
-  transition: transform 0.3s ease;
+  transition: transform 1.5s ease-in-out;
 }
 </style>

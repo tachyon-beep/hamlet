@@ -84,34 +84,41 @@ class VectorizedHamletEnv:
         if self.wait_energy_cost >= self.move_energy_cost:
             raise ValueError("wait_energy_cost must be less than move_energy_cost to preserve WAIT as a low-cost recovery action")
 
-        # Affordance positions (from Hamlet default layout)
-        all_affordances = {
+        # Define which affordances exist (positions assigned by randomize_affordance_positions())
+        all_affordance_names = [
             # Basic survival (tiered)
-            "Bed": torch.tensor([1, 1], device=device),  # Energy restoration tier 1
-            "LuxuryBed": torch.tensor([2, 1], device=device),  # Energy restoration tier 2
-            "Shower": torch.tensor([2, 2], device=device),
-            "HomeMeal": torch.tensor([1, 3], device=device),
-            "FastFood": torch.tensor([5, 6], device=device),
+            "Bed",  # Energy restoration tier 1
+            "LuxuryBed",  # Energy restoration tier 2
+            "Shower",
+            "HomeMeal",
+            "FastFood",
             # Income sources
-            "Job": torch.tensor([6, 6], device=device),  # Office work
-            "Labor": torch.tensor([7, 6], device=device),  # Physical labor
+            "Job",  # Office work
+            "Labor",  # Physical labor
             # Fitness/Social builders (secondary meters)
-            "Gym": torch.tensor([7, 3], device=device),
-            "Bar": torch.tensor([7, 0], device=device),
-            "Park": torch.tensor([0, 4], device=device),
+            "Gym",
+            "Bar",
+            "Park",
             # Mood restoration (primary meter - tier 1 & 2)
-            "Recreation": torch.tensor([0, 7], device=device),
-            "Therapist": torch.tensor([1, 7], device=device),
+            "Recreation",
+            "Therapist",
             # Health restoration (primary meter - tier 1 & 2)
-            "Doctor": torch.tensor([5, 1], device=device),
-            "Hospital": torch.tensor([6, 1], device=device),
-        }
+            "Doctor",
+            "Hospital",
+        ]
 
         # Filter affordances if enabled_affordances is specified
         if enabled_affordances is not None:
-            self.affordances = {name: pos for name, pos in all_affordances.items() if name in enabled_affordances}
+            affordance_names_to_use = [name for name in all_affordance_names if name in enabled_affordances]
         else:
-            self.affordances = all_affordances
+            affordance_names_to_use = all_affordance_names
+
+        # Initialize affordances dict with placeholder positions (randomized at episode start)
+        # Positions will be shuffled by randomize_affordance_positions() before first use
+        self.affordances = {
+            name: torch.tensor([0, 0], device=device, dtype=torch.long)
+            for name in affordance_names_to_use
+        }
 
         # Create ordered list of affordance names for consistent encoding
         self.affordance_names = list(self.affordances.keys())
@@ -178,6 +185,9 @@ class VectorizedHamletEnv:
         if not self.enable_temporal_mechanics:
             # When temporal mechanics are disabled, interaction progress is unused but kept for typing consistency.
             self.interaction_progress.zero_()
+
+        # Randomize affordance positions on initialization (will be re-randomized each episode)
+        self.randomize_affordance_positions()
 
     def attach_runtime_registry(self, registry: "AgentRuntimeRegistry") -> None:
         """Attach runtime registry for telemetry-aware reward baselines."""
@@ -715,6 +725,15 @@ class VectorizedHamletEnv:
         Ensures no two affordances occupy the same position.
         """
         import random
+
+        # Validate that grid has enough cells for all affordances (need +1 for agent)
+        num_affordances = len(self.affordances)
+        total_cells = self.grid_size * self.grid_size
+        if num_affordances >= total_cells:
+            raise ValueError(
+                f"Grid has {total_cells} cells but {num_affordances} affordances + 1 agent need space. "
+                f"Reduce affordances or increase grid_size to at least {int((num_affordances + 1) ** 0.5) + 1}."
+            )
 
         # Generate list of all grid positions
         all_positions = [(x, y) for x in range(self.grid_size) for y in range(self.grid_size)]

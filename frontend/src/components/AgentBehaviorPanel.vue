@@ -277,7 +277,15 @@ const epsilonPercent = computed(() => (1 - props.epsilon) * 100)
 
 // Training progress
 const progressPercent = computed(() => {
+  console.log('Training progress:', {
+    checkpointEpisode: props.checkpointEpisode,
+    totalEpisodes: props.totalEpisodes,
+    percent: (props.checkpointEpisode / props.totalEpisodes) * 100
+  })
+
   if (props.totalEpisodes === 0) return 0
+  // Prevent showing progress > 100% if checkpoint > total (data error)
+  if (props.checkpointEpisode > props.totalEpisodes) return 100
   return Math.min((props.checkpointEpisode / props.totalEpisodes) * 100, 100)
 })
 

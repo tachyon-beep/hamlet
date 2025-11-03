@@ -117,3 +117,36 @@ affordances:
       - { meter: "health", amount: 0.03 }  # +3% final
     
     operating_hours: [0, 24]
+
+  # ============================================================================
+  # INCOME GENERATION
+  # ============================================================================
+  
+  - id: "10"
+    name: "Job"
+    category: "income"
+    interaction_type: "dual"
+    
+    # Instant mode (Level 1)
+    costs: []  # FREE (you get paid!)
+    
+    effects:
+      - { meter: "money", amount: 0.225 }   # +$22.50
+      - { meter: "energy", amount: -0.15 }  # -15%
+      - { meter: "social", amount: 0.02 }   # +2%
+      - { meter: "health", amount: -0.03 }  # -3%
+    
+    # Temporal mode (Level 2) - 4 ticks for a full shift
+    required_ticks: 4
+    costs_per_tick: []  # FREE
+    
+    effects_per_tick:
+      - { meter: "money", amount: 0.05625 }  # 0.225 * 0.75 / 4 = +$5.625/tick
+    
+    completion_bonus:
+      - { meter: "money", amount: 0.05625 }  # 0.225 * 0.25 = +$5.625 final (total = $28.125)
+      - { meter: "energy", amount: -0.15 }  # -15% at end of shift
+      - { meter: "social", amount: 0.02 }   # +2% at end
+      - { meter: "health", amount: -0.03 }  # -3% at end
+    
+    operating_hours: [8, 18]  # Business hours

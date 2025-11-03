@@ -129,19 +129,19 @@ const timeIcon = computed(() => {
 
 /* Small header label */
 .time-label-header {
-  font-size: 10px;
+  font-size: 12px;  /* Increased from 10px - minimum readable size for streaming */
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.85);  /* Increased from secondary + 0.7 opacity */
   letter-spacing: 1.5px;
-  opacity: 0.7;
   text-align: center;
   font-family: 'Monaco', 'Courier New', monospace;
+  margin-bottom: 4px;
 }
 
 /* Gradient bar showing day/night cycle */
 .time-bar-background {
   width: 100%;
-  height: 18px;
+  height: 24px;  /* Increased from 18px - 33% larger for streaming visibility */
   border-radius: var(--border-radius-sm);
   background: linear-gradient(
     to right,
@@ -171,7 +171,8 @@ const timeIcon = computed(() => {
   /* Inner glow effect */
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.3),
-    inset 0 -1px 2px rgba(255, 255, 255, 0.1);
+    inset 0 -1px 2px rgba(255, 255, 255, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.3);  /* Added outer shadow for depth */
 }
 
 /* Top shine effect for glassy look */
@@ -233,13 +234,13 @@ const timeIcon = computed(() => {
 .clock-bar {
   position: absolute;
   top: 0;
-  width: 3px;
+  width: 4px;  /* Increased from 3px - more prominent for streaming */
   height: 100%;
   background: #00ff00;
   box-shadow:
-    0 0 8px #00ff00,
-    0 0 16px #00ff00,
-    0 0 24px rgba(0, 255, 0, 0.8);
+    0 0 12px #00ff00,
+    0 0 24px #00ff00,
+    0 0 36px rgba(0, 255, 0, 0.8);  /* Stronger glow */
   pointer-events: none;
   z-index: 3;
   transform: translateX(-50%);
@@ -251,16 +252,16 @@ const timeIcon = computed(() => {
   0%, 100% {
     opacity: 1;
     box-shadow:
-      0 0 8px #00ff00,
-      0 0 16px #00ff00,
-      0 0 24px rgba(0, 255, 0, 0.8);
+      0 0 12px #00ff00,
+      0 0 24px #00ff00,
+      0 0 36px rgba(0, 255, 0, 0.8);
   }
   50% {
     opacity: 0.85;
     box-shadow:
-      0 0 12px #00ff00,
-      0 0 20px #00ff00,
-      0 0 32px rgba(0, 255, 0, 1.0);
+      0 0 16px #00ff00,
+      0 0 32px #00ff00,
+      0 0 48px rgba(0, 255, 0, 1.0);
   }
 }
 
@@ -309,9 +310,9 @@ const timeIcon = computed(() => {
 }
 
 .time-icon {
-  font-size: var(--font-size-xl);
+  font-size: 28px;  /* Increased from 20px - prominent visual anchor for streaming */
   line-height: 1;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
   flex-shrink: 0;
 }
 
@@ -333,26 +334,31 @@ const timeIcon = computed(() => {
 
 /* Time text - same size as emoji */
 .time-text-main {
-  font-size: var(--font-size-xl);
+  font-size: 24px;  /* Increased from 20px - primary information for streaming */
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   font-family: 'Monaco', 'Courier New', monospace;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(255, 255, 255, 0.3);  /* Dual shadow for pop against gradient */
   flex-grow: 1;
   text-align: center;
 }
 
 /* Day counter */
 .day-counter {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-lg);  /* 18px - increased from 16px */
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);  /* Changed from secondary - more prominent */
   font-family: 'Monaco', 'Courier New', monospace;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  opacity: 0.9;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  opacity: 1;  /* Full opacity */
   flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.3);  /* Background pill for contrast */
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 
 /* Responsive adjustments */

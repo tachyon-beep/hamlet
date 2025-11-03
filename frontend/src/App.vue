@@ -11,7 +11,11 @@
       <div class="top-row">
         <!-- ✅ Semantic HTML: aside for meters panel (left) -->
         <aside class="meters-panel" aria-label="Agent status panels">
-          <MeterPanel :agent-meters="store.agentMeters" />
+          <MeterPanel
+            :agent-meters="store.agentMeters"
+            :lifetime-progress="store.lifetimeProgress"
+            :agent-age="store.agentAge"
+          />
           
           <!-- ✅ Projected reward bar (below meters) - always shown when connected -->
           <ProjectedRewardBar
@@ -165,9 +169,6 @@
           />
         </aside>
       </div>
-
-      <!-- ✅ Bottom row: toggleable reference panel -->
-      <ReferencePanel />
     </main>
   </div>
 </template>
@@ -177,7 +178,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useSimulationStore } from './stores/simulation'
 import Grid from './components/Grid.vue'
 import MeterPanel from './components/MeterPanel.vue'
-import ReferencePanel from './components/ReferencePanel.vue'
 import MinimalControls from './components/MinimalControls.vue'
 import DeathCertificates from './components/DeathCertificates.vue'
 import TimeOfDayBar from './components/TimeOfDayBar.vue'
@@ -418,8 +418,8 @@ function handleConnect(mode = 'inference') {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow-y: auto;
-  align-self: flex-start;
+  height: 100%;
+  min-height: 0; /* Allow flex children to shrink */
 }
 
 /* Behaviour panel (centre-left) */
@@ -428,8 +428,8 @@ function handleConnect(mode = 'inference') {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  overflow-y: auto;
   height: 100%;
+  min-height: 0; /* Allow flex children to shrink */
 }
 
 .grid-container {
@@ -441,7 +441,8 @@ function handleConnect(mode = 'inference') {
   border-radius: var(--border-radius-md);
   padding: var(--spacing-md);
   min-width: 0;
-  min-height: 300px;
+  height: 100%;
+  min-height: 0; /* Allow flex children to shrink */
   position: relative; /* For absolute positioning of MinimalControls */
 }
 
@@ -464,8 +465,8 @@ function handleConnect(mode = 'inference') {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  overflow: hidden;
   height: 100%;
+  min-height: 0; /* Allow flex children to shrink */
 }
 
 /* ✅ Tablet breakpoint: side-by-side panels */

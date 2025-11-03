@@ -75,6 +75,7 @@ class LiveInferenceServer:
         self.port = port
         self.step_delay = step_delay
         self.total_episodes = total_episodes
+        print(f"[LiveInferenceServer] Initialized with total_episodes={total_episodes}")
         self.config_dir = Path(config_dir) if config_dir else None
         if training_config_path:
             self.config_path = Path(training_config_path)
@@ -594,7 +595,8 @@ class LiveInferenceServer:
         # Episode complete - calculate performance vs baseline
         performance_vs_baseline = float(self.current_step) - baseline_survival
 
-        final_reward = float(self.env.step_counts[0].item()) - baseline_survival
+        # Use actual cumulative reward earned during episode (not baseline-relative)
+        final_cumulative_reward = cumulative_reward
         final_telemetry = self._build_agent_telemetry()
         final_agent_snapshot = final_telemetry["agents"][0] if final_telemetry["agents"] else agent_snapshot
         final_stage = int(final_agent_snapshot["curriculum_stage"])
@@ -605,12 +607,31 @@ class LiveInferenceServer:
             {"name": name, "count": count} for name, count in sorted(self.affordance_interactions.items(), key=lambda x: x[1], reverse=True)
         ]
 
+        # Get final meter states for death certificate
+        meter_indices = {
+            "energy": 0,
+            "hygiene": 1,
+            "satiation": 2,
+            "money": 3,
+            "health": 6,
+            "mood": 4,
+            "social": 5,
+            "fitness": 7,
+        }
+        final_meters = {}
+        for meter_name, idx in meter_indices.items():
+            final_meters[meter_name] = float(self.env.meters[0, idx].item())
+
+        # Get agent age and lifetime progress for death certificate
+        agent_age = int(self.env.step_counts[0].item())
+        lifetime_progress = float(agent_age / self.env.agent_lifespan)
+
         await self._broadcast_to_clients(
             {
                 "type": "episode_end",
                 "episode": self.current_episode,
                 "steps": self.current_step,
-                "total_reward": final_reward,  # Use baseline-relative reward
+                "total_reward": final_cumulative_reward,  # Actual cumulative reward earned
                 "reason": "done" if done else "max_steps",
                 "checkpoint": f"checkpoint_ep{self.current_checkpoint_episode:05d}",
                 "checkpoint_episode": self.current_checkpoint_episode,
@@ -621,12 +642,15 @@ class LiveInferenceServer:
                 "curriculum_stage": final_stage,
                 "telemetry": final_telemetry,
                 "affordance_stats": affordance_stats,  # Include affordance usage for death certificate
+                "final_meters": final_meters,  # Meter states at death for death certificate
+                "agent_age": agent_age,  # Total steps lived (resets with checkpoint)
+                "lifetime_progress": lifetime_progress,  # 0.0-1.0 progress toward retirement
             }
         )
 
         logger.info(
             f"Episode {self.current_episode} complete: {self.current_step} steps, "
-            f"reward: {final_reward:.2f}, baseline: {baseline_survival:.1f}, "
+            f"reward: {final_cumulative_reward:.2f}, baseline: {baseline_survival:.1f}, "
             f"vs baseline: {performance_vs_baseline:+.1f}"
         )
 
@@ -708,6 +732,8 @@ class LiveInferenceServer:
             "epsilon": self.current_epsilon,  # Current exploration rate
             "checkpoint_episode": self.current_checkpoint_episode,  # For training progress bar
             "total_episodes": self.total_episodes,  # For training progress bar
+            # DEBUG
+            "_debug_total_episodes": self.total_episodes,
             "grid": {
                 "width": self.env.grid_size,
                 "height": self.env.grid_size,
@@ -745,9 +771,15 @@ class LiveInferenceServer:
                     required_ticks = config["required_ticks"]
                     interaction_progress_normalized = interaction_progress_raw / required_ticks
 
+            # Get agent age and lifetime progress
+            agent_age = int(self.env.step_counts[0].item())
+            lifetime_progress = float(agent_age / self.env.agent_lifespan)
+
             update["temporal"] = {
                 "time_of_day": self.env.time_of_day,
                 "interaction_progress": interaction_progress_normalized,
+                "agent_age": agent_age,  # Total steps lived (resets with checkpoint)
+                "lifetime_progress": lifetime_progress,  # 0.0-1.0 progress toward retirement
             }
 
         await self._broadcast_to_clients(update)
@@ -755,7 +787,8 @@ class LiveInferenceServer:
     async def _broadcast_to_clients(self, message: dict):
         """Broadcast message to all connected clients."""
         dead_clients = set()
-        for client in self.clients:
+        # Iterate over a copy to avoid "Set changed size during iteration" error
+        for client in list(self.clients):
             try:
                 await client.send_json(message)
             except Exception as e:
