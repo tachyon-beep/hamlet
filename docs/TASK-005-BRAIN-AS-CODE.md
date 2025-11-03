@@ -1051,3 +1051,73 @@ Fix: Either remove expected_obs_dim (auto-compute) or update to:
 - Type mismatches caught by Pydantic
 
 **Mental Model**: "The brain is compiled, not interpreted."
+
+---
+
+## Optional Future Extension: RND Architecture Configuration
+
+**Added**: 2025-11-04 (from research findings - Gap 3)
+**Status**: DEFERRED (Low Priority)
+**Related Research**: `docs/research/RESEARCH-ENVIRONMENT-CONSTANTS-EXPOSURE.md` (Gap 3)
+**Effort**: +1-2 hours if implemented
+
+### Problem
+
+Current RND (Random Network Distillation) exploration architecture is hardcoded:
+
+```python
+# src/townlet/exploration/rnd.py (current)
+class RNDExploration:
+    def __init__(self, obs_dim: int, embed_dim: int = 128):
+        # ❌ Architecture hardcoded
+        self.target_network = nn.Sequential(
+            nn.Linear(obs_dim, 256),  # Hidden size hardcoded
+            nn.ReLU(),
+            nn.Linear(256, embed_dim)
+        )
+        self.predictor_network = nn.Sequential(
+            nn.Linear(obs_dim, 256),  # Same hardcoded size
+            nn.ReLU(),
+            nn.Linear(256, embed_dim)
+        )
+```
+
+**Limitation**: Cannot experiment with different RND architectures without code changes.
+
+### Solution (if requested)
+
+Add optional `rnd` section to `brain.yaml`:
+
+```yaml
+# brain.yaml (optional RND architecture)
+exploration:
+  type: "rnd"  # or "epsilon_greedy", "ucb", etc.
+
+  rnd:
+    hidden_dims: [256, 256]  # Configurable hidden layers
+    activation: "relu"        # or "gelu", "silu", "tanh"
+    embed_dim: 128           # Latent embedding dimension
+    learning_rate: 0.0001    # RND predictor learning rate
+```
+
+**Benefits**:
+- Researchers can experiment with different RND architectures
+- Test impact of RND capacity on exploration
+- A/B test RND vs UCB vs epsilon-greedy via config change
+
+**Priority Justification: Why DEFERRED?**
+
+RND architecture is an **implementation detail**, not a **learning concept**:
+- Students learn "intrinsic motivation" concept, not "how many hidden layers RND should have"
+- Hardcoded RND works fine for pedagogical purposes
+- Low pedagogical value compared to other UAC features
+
+**Recommendation**: Implement only if researchers specifically request RND architecture experimentation. Otherwise, keep hardcoded RND as "good enough" default.
+
+**Implementation Notes** (if needed):
+1. Add `RNDConfig` Pydantic DTO to `brain_config.py`
+2. Update `RNDExploration.__init__()` to accept config
+3. Validate `embed_dim` matches network architecture expectations
+4. Add example to `brain.yaml` templates
+
+**Estimated Effort**: 1-2 hours (low complexity, but low priority)

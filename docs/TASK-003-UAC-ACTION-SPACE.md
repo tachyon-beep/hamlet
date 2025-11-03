@@ -70,42 +70,57 @@ description: "Action space definition for HAMLET village simulation"
 # Action space defines what the agent can DO in this universe
 actions:
   # MOVEMENT ACTIONS
+  # Note: Multi-meter costs pattern (matches affordances.yaml effects)
   - id: 0
     name: "UP"
     type: "movement"
     delta: [0, -1]  # (dx, dy) on grid
-    energy_cost: 0.005  # 0.5% per step
+    costs:
+      - {meter: energy, amount: 0.005}    # 0.5% energy per step
+      - {meter: hygiene, amount: 0.003}   # Movement dirties agent
+      - {meter: satiation, amount: 0.004} # Movement burns calories
 
   - id: 1
     name: "DOWN"
     type: "movement"
     delta: [0, 1]
-    energy_cost: 0.005
+    costs:
+      - {meter: energy, amount: 0.005}
+      - {meter: hygiene, amount: 0.003}
+      - {meter: satiation, amount: 0.004}
 
   - id: 2
     name: "LEFT"
     type: "movement"
     delta: [-1, 0]
-    energy_cost: 0.005
+    costs:
+      - {meter: energy, amount: 0.005}
+      - {meter: hygiene, amount: 0.003}
+      - {meter: satiation, amount: 0.004}
 
   - id: 3
     name: "RIGHT"
     type: "movement"
     delta: [1, 0]
-    energy_cost: 0.005
+    costs:
+      - {meter: energy, amount: 0.005}
+      - {meter: hygiene, amount: 0.003}
+      - {meter: satiation, amount: 0.004}
 
   # INTERACTION ACTION
   - id: 4
     name: "INTERACT"
     type: "interaction"
-    energy_cost: 0.003
+    costs:
+      - {meter: energy, amount: 0.003}  # Minimal interaction cost
     description: "Interact with affordance at current position"
 
   # PASSIVE ACTION
   - id: 5
     name: "WAIT"
     type: "passive"
-    energy_cost: 0.004
+    costs:
+      - {meter: energy, amount: 0.004}  # Idle metabolic cost
     description: "Wait in place (low energy recovery)"
 
 # Metadata
@@ -205,9 +220,15 @@ actions:
   - { id: 6, name: "DOWN_LEFT", type: "movement", delta: [-1, 1], energy_cost: 0.007 }
   - { id: 7, name: "DOWN_RIGHT", type: "movement", delta: [1, 1], energy_cost: 0.007 }
 
-  - { id: 8, name: "INTERACT", type: "interaction", energy_cost: 0.003 }
-  - { id: 9, name: "WAIT", type: "passive", energy_cost: 0.004 }
-  - { id: 10, name: "REST", type: "passive", energy_cost: -0.002 }  # Restores energy!
+  - { id: 8, name: "INTERACT", type: "interaction", costs: [{meter: energy, amount: 0.003}] }
+  - { id: 9, name: "WAIT", type: "passive", costs: [{meter: energy, amount: 0.004}] }
+  - id: 10
+    name: "REST"
+    type: "passive"
+    costs:
+      - {meter: energy, amount: -0.002}  # RESTORES energy (negative cost)
+      - {meter: mood, amount: -0.01}     # RESTORES mood
+    description: "Rest in place (slow recovery without affordances)"
 
 topology: "grid2d"
 boundary: "clamp"
@@ -228,6 +249,11 @@ class ActionEffect(BaseModel):
     meter: str
     amount: float
 
+class ActionCost(BaseModel):
+    """Cost applied to a meter when action is taken."""
+    meter: str
+    amount: float  # Can be negative (restoration)
+
 class ActionConfig(BaseModel):
     """Single action definition."""
     id: int = Field(ge=0)
@@ -237,14 +263,31 @@ class ActionConfig(BaseModel):
     # Movement-specific
     delta: list[int] | None = None  # [dx, dy] for grid movement
 
-    # Energy cost (can be negative for restoration)
-    energy_cost: float
+    # Multi-meter costs (replaces single energy_cost)
+    # Pattern consistency: matches affordances.yaml effects structure
+    costs: list[ActionCost] = Field(default_factory=list)
 
-    # Additional effects
+    # DEPRECATED: Single-meter energy cost (auto-migrated to costs)
+    # Kept for backward compatibility with existing configs
+    energy_cost: float | None = None
+
+    # Additional effects (e.g., side effects beyond costs)
     effects: list[ActionEffect] = Field(default_factory=list)
 
     # Metadata
     description: str | None = None
+
+    @model_validator(mode="after")
+    def migrate_energy_cost(self) -> "ActionConfig":
+        """Auto-migrate legacy energy_cost to costs list."""
+        if self.energy_cost is not None and not self.costs:
+            logger.warning(
+                f"Action '{self.name}': energy_cost field deprecated. "
+                f"Use 'costs: [{{'meter': 'energy', 'amount': {self.energy_cost}}}]' instead."
+            )
+            # Auto-migrate
+            self.costs = [ActionCost(meter="energy", amount=self.energy_cost)]
+        return self
 
 class ActionSpaceConfig(BaseModel):
     """Complete action space definition."""
@@ -335,8 +378,10 @@ for agent_idx in range(self.num_agents):
         # Passive action (wait/rest)
         pass
 
-    # Apply energy cost from config
-    self.meters[agent_idx, 0] -= action_config.energy_cost  # Energy meter
+    # Apply action costs (multi-meter)
+    for cost in action_config.costs:
+        meter_idx = self.meter_name_to_idx[cost.meter]
+        self.meters[agent_idx, meter_idx] -= cost.amount  # Note: negative amounts = restoration
 ```
 
 #### Phase 3: Migrate Existing Configs
@@ -392,11 +437,19 @@ This allows gradual migration without breaking existing configs.
 
 ### Estimated Effort
 
+**Core Action Space (Original Scope)**:
 - **Phase 1** (schema): 2-3 hours
 - **Phase 2** (env integration): 4-6 hours
 - **Phase 3** (migrate configs): 1-2 hours
 - **Phase 4** (cleanup): 1-2 hours
-- **Total**: 8-13 hours
+- **Subtotal (Original)**: 8-13 hours
+
+**Multi-Meter Costs Extension** (from research findings):
+- **Schema update** (ActionCost DTO, costs field): +1 hour
+- **Environment refactor** (apply multi-meter costs): +2-3 hours
+- **Subtotal (Extension)**: +3-4 hours
+
+**Total**: 11-17 hours (+38-31% from original estimate)
 
 ### Risks
 
@@ -406,6 +459,63 @@ This allows gradual migration without breaking existing configs.
   - Mitigation: Backwards compatibility layer during migration
 - **Performance**: Config dispatch might be slower than hardcoded if/elif
   - Mitigation: Pre-build action lookup tables, benchmark before/after
+
+### Pattern Consistency: Actions vs Affordances
+
+**Added**: 2025-11-04 (from research findings)
+
+Actions and affordances share similar cost/effect patterns to maintain consistency:
+
+**Actions (TASK-003)**:
+- **Categorization**: Single `type` field (movement, interaction, passive, transaction)
+- **Costs**: `costs: [{meter, amount}]` (multi-meter pattern)
+- **Trigger**: Agent chooses action each timestep
+- **Examples**: UP, DOWN, INTERACT, WAIT, REST
+
+**Affordances (TASK-002)**:
+- **Categorization**: Multiple composable `capabilities` (multi_tick, cooldown, meter_gated, etc.)
+- **Effects**: Multi-stage `effect_pipeline` (on_start, per_tick, on_completion, etc.)
+- **Trigger**: Agent must be at affordance position and choose INTERACT
+- **Examples**: Bed, Hospital, Job, Bar
+
+**Why Different?**
+- Actions are **primitive** (one type = clear semantics: movement vs interaction vs passive)
+- Affordances are **compound** (multiple capabilities = rich behaviors: multi-tick + cooldown + meter-gated)
+- Actions are **always available** (can always move/wait)
+- Affordances are **conditionally available** (operating hours, resource gates)
+
+**Pattern Alignment**:
+Both use `{meter, amount}` structure for costs/effects:
+```yaml
+# Action cost (depletes meters)
+costs:
+  - {meter: energy, amount: 0.005}
+  - {meter: hygiene, amount: 0.003}
+
+# Affordance effect (restores meters)
+effect_pipeline:
+  on_completion:
+    - {meter: energy, amount: 0.2}
+    - {meter: hygiene, amount: 0.15}
+```
+
+This consistency enables:
+- Shared validation logic (TASK-004 validates meter references identically)
+- Easier mental model (operators learn pattern once, apply twice)
+- Future unification (actions could gain effect_pipeline if needed)
+
+**Permissive Semantics Example** (REST action):
+```yaml
+# REST action with negative costs = restoration
+- id: 10
+  name: "REST"
+  type: "passive"
+  costs:
+    - {meter: energy, amount: -0.002}  # RESTORES energy
+    - {meter: mood, amount: -0.01}     # RESTORES mood
+```
+
+Negative costs are structurally valid (float type) even if semantically unusual. The compiler validates structure, not "reasonableness" (see TASK-002 Design Philosophy).
 
 ### Design Principles (from TASK-001)
 

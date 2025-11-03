@@ -2,7 +2,7 @@
 
 **Status**: Planned
 **Priority**: HIGH (Foundational for UAC system integrity)
-**Estimated Effort**: 40-58 hours (5-7 days)
+**Estimated Effort**: 46-66 hours (6-8 days) - UPDATED from 40-58h (+6-8h for capability system validation)
 **Dependencies**: TASK-005 (Variable-Size Meter System - recommended but not required)
 **Enables**: All future UAC work (robust compilation is foundation)
 
@@ -410,6 +410,59 @@ def _stage_3_resolve_references(
                 f"References non-existent affordance '{aff_id}'. "
                 f"Valid affordances: {symbol_table.affordance_ids}"
             )
+
+    # Resolve action cost meter references (NEW - from research Gap 2)
+    for action in raw_configs.actions.actions:
+        for cost in action.costs:
+            try:
+                symbol_table.resolve_meter_reference(
+                    cost.meter,
+                    location=f"actions.yaml:{action.name}:cost"
+                )
+            except ReferenceError as e:
+                errors.add_error(str(e))
+
+    # Resolve capability meter references (NEW - from research Finding 1)
+    for aff in raw_configs.affordances.affordances:
+        if aff.capabilities:
+            for capability in aff.capabilities:
+                if capability.type == "meter_gated":
+                    try:
+                        symbol_table.resolve_meter_reference(
+                            capability.meter,
+                            location=f"affordances.yaml:{aff.id}:meter_gated capability"
+                        )
+                    except ReferenceError as e:
+                        errors.add_error(str(e))
+
+        # Resolve effect pipeline meter references
+        if aff.effect_pipeline:
+            for stage_name, effects in [
+                ("on_start", aff.effect_pipeline.on_start),
+                ("per_tick", aff.effect_pipeline.per_tick),
+                ("on_completion", aff.effect_pipeline.on_completion),
+                ("on_early_exit", aff.effect_pipeline.on_early_exit),
+                ("on_failure", aff.effect_pipeline.on_failure),
+            ]:
+                for effect in effects:
+                    try:
+                        symbol_table.resolve_meter_reference(
+                            effect.meter,
+                            location=f"affordances.yaml:{aff.id}:effect_pipeline.{stage_name}"
+                        )
+                    except ReferenceError as e:
+                        errors.add_error(str(e))
+
+        # Resolve availability constraint meter references (NEW - from research Gap 1)
+        if aff.availability:
+            for constraint in aff.availability:
+                try:
+                    symbol_table.resolve_meter_reference(
+                        constraint.meter,
+                        location=f"affordances.yaml:{aff.id}:availability"
+                    )
+                except ReferenceError as e:
+                    errors.add_error(str(e))
 ```
 
 **Success Criteria**:
@@ -499,9 +552,9 @@ class CompilationErrorCollector:
 
 ---
 
-### Phase 4: Cross-Validation (21-28 hours) ← UPDATED: was 4-6h
+### Phase 4: Cross-Validation (10-14 hours) ← UPDATED: was 4-6h
 
-**⚠️ UPDATED AFTER RESEARCH**: Added substrate-action compatibility validation (+17h)
+**⚠️ UPDATED AFTER RESEARCH**: Added capability system validation (+6-8h)
 
 **Goal**: Validate constraints that span multiple config files.
 
@@ -559,19 +612,84 @@ def _stage_4_cross_validate(
                 f"This will cause infinite cascade loops."
             )
 
-    # 4. Temporal conflicts
+    # 4. Temporal conflicts (operating hours)
     for aff in raw_configs.affordances.affordances:
-        open_hour, close_hour = aff.operating_hours
+        # Validate operating hours in modes
+        if aff.modes:
+            for mode_name, mode_config in aff.modes.items():
+                if mode_config.hours:
+                    open_hour, close_hour = mode_config.hours
+                    if open_hour < 0 or open_hour > 23:
+                        errors.add_error(
+                            f"affordances.yaml:{aff.id}:modes:{mode_name}: "
+                            f"open_hour must be 0-23, got {open_hour}"
+                        )
+                    if close_hour < 1 or close_hour > 28:
+                        errors.add_error(
+                            f"affordances.yaml:{aff.id}:modes:{mode_name}: "
+                            f"close_hour must be 1-28, got {close_hour}"
+                        )
 
-        if open_hour < 0 or open_hour > 23:
+        # Validate availability constraints (NEW - from research Gap 1)
+        if aff.availability:
+            for constraint in aff.availability:
+                if constraint.min is not None and constraint.max is not None:
+                    if constraint.min >= constraint.max:
+                        errors.add_error(
+                            f"affordances.yaml:{aff.id}:availability: "
+                            f"min ({constraint.min}) must be < max ({constraint.max})"
+                        )
+
+    # 5. Capability conflicts (NEW - from research Finding 1)
+    for aff in raw_configs.affordances.affordances:
+        if not aff.capabilities:
+            continue
+
+        capability_types = {cap.type for cap in aff.capabilities}
+
+        # Mutually exclusive capabilities
+        if "instant" in capability_types and "multi_tick" in capability_types:
             errors.add_error(
-                f"affordances.yaml:{aff.id}: open_hour must be 0-23, got {open_hour}"
+                f"affordances.yaml:{aff.id}: "
+                f"Cannot have both 'instant' and 'multi_tick' capabilities (mutually exclusive)"
             )
 
-        if close_hour < 1 or close_hour > 28:
-            errors.add_error(
-                f"affordances.yaml:{aff.id}: close_hour must be 1-28, got {close_hour}"
+        # Dependent capabilities
+        for cap in aff.capabilities:
+            if cap.type == "multi_tick" and cap.resumable:
+                # Check that multi_tick capability exists
+                if "multi_tick" not in capability_types:
+                    errors.add_error(
+                        f"affordances.yaml:{aff.id}: "
+                        f"'resumable' flag requires 'multi_tick' capability"
+                    )
+
+        # Effect pipeline consistency (NEW - from research Finding 1)
+        if aff.effect_pipeline:
+            has_multi_tick = "multi_tick" in capability_types
+            has_multi_tick_effects = (
+                bool(aff.effect_pipeline.per_tick) or
+                bool(aff.effect_pipeline.on_completion)
             )
+
+            if has_multi_tick and not has_multi_tick_effects:
+                errors.add_error(
+                    f"affordances.yaml:{aff.id}: "
+                    f"'multi_tick' capability requires per_tick or on_completion effects"
+                )
+
+            # Warn if using early_exit effects without early_exit_allowed
+            if aff.effect_pipeline.on_early_exit:
+                has_early_exit_allowed = any(
+                    cap.type == "multi_tick" and cap.early_exit_allowed
+                    for cap in aff.capabilities
+                )
+                if not has_early_exit_allowed:
+                    errors.add_warning(
+                        f"affordances.yaml:{aff.id}: "
+                        f"on_early_exit effects defined but early_exit_allowed=False "
+                        f"(effects will never trigger)"
+                    )
 
     # 5. Substrate-Action Compatibility (NEW - from research)
     # See: docs/research/RESEARCH-ACTION-COMPATIBILITY-VALIDATION.md
@@ -1380,16 +1498,27 @@ All future UAC work depends on robust compilation:
 
 ### Breakdown
 
+**Core Implementation (Original Scope)**:
 - **Phase 1** (Core Compiler): 11-16 hours
 - **Phase 2** (Symbol Table): 4-6 hours
 - **Phase 3** (Error Collection): 4-6 hours
-- **Phase 4** (Cross-Validation): 4-6 hours
+- **Phase 4** (Cross-Validation - original): 4-6 hours
 - **Phase 5** (Metadata): 3-4 hours
 - **Phase 6** (Optimization & CompiledUniverse): 4-6 hours
 - **Phase 7** (Caching): 4-6 hours
 - **Phase 8** (Environment Refactor): 3-4 hours
+- **Subtotal (Original)**: 37-54 hours
 
-### Total: 54-71 hours (7-9 days) ← UPDATED: was 37-54h (+17h for substrate-action validation)
+**Research Integration Extensions**:
+- **Phase 4 Extension** (Capability system validation): +6-8 hours
+  - Affordance availability validation (Gap 1)
+  - Action cost meter references (Gap 2)
+  - Capability conflict detection (Finding 1)
+  - Effect pipeline consistency (Finding 1)
+
+**Total**: 43-62 hours → rounded to **46-66 hours** (6-8 days)
+
+**Note**: +6-8h represents +16-15% increase from original estimate due to capability system complexity.
 
 **Updated from research estimate (40-58 hours) based on detailed breakdown**
 

@@ -1,6 +1,13 @@
+---
+**STATUS**: ✅ INTEGRATED (2025-11-04)
+**Integration Document**: [docs/PHASE-2-INTEGRATION-COMPLETE.md](/home/john/hamlet/docs/PHASE-2-INTEGRATION-COMPLETE.md)
+**Review Report**: [docs/PHASE-3-REVIEW-REPORT.md](/home/john/hamlet/docs/PHASE-3-REVIEW-REPORT.md)
+**All findings have been integrated into task documents. This research paper is archived.**
+---
+
 # Research: Environment Configuration Gaps - True Gap Analysis
 
-**Status**: Draft
+**Status**: ARCHIVED (Integrated 2025-11-04)
 **Created**: 2025-11-04
 **Last Updated**: 2025-11-04
 **Effort Estimate**: 10-14 hours
@@ -12,6 +19,7 @@ This document identifies **configuration gaps** - features that should be expres
 **Finding**: 2 high-priority gaps + 1 low-priority gap identified.
 
 **Corrected Understanding**:
+
 - ❌ Agent lifecycle is NOT a gap (bars with base_depletion handle this)
 - ❌ Meter bounds is NOT a gap (TASK-001 adds range: [min, max])
 - ❌ Temporal constants is NOT a gap (time is just a bar)
@@ -45,6 +53,7 @@ Before identifying gaps, here's what existing UAC systems handle:
 **Problem**: Cannot conditionally enable/disable affordances based on bar state without code changes.
 
 **Use Cases**:
+
 1. **Operating hours**: Job open only when time ∈ [0.375, 0.708] (9am-5pm in 24h cycle)
 2. **Mode switching**: Location is "Coffee Shop" when time ∈ [0.25, 0.75], "Bar" otherwise
 3. **Stamina gates**: Gym only usable when fitness > 0.3
@@ -80,18 +89,21 @@ affordances:
 ```
 
 **Implementation Approach**:
+
 1. Add `availability` field to AffordanceConfig (list of bar constraints)
 2. Add `modes` field for state-dependent behavior
 3. AffordanceEngine evaluates constraints before allowing interaction
 4. Observation encoding includes "available affordances" mask
 
 **Effort**: 6-8 hours
+
 - Schema updates: 1h
 - AffordanceEngine logic: 3-4h
 - Observation encoding: 1-2h
 - Testing: 1-2h
 
 **Pedagogical Value**: HIGH
+
 - Teaches temporal planning (agents learn when to visit Job)
 - Demonstrates emergent scheduling behavior
 - Enables realistic operating hours without hardcoding
@@ -103,6 +115,7 @@ affordances:
 **Problem**: Actions can only cost energy (via `energy_cost`), but should support multi-meter costs/effects like affordances do.
 
 **Current State** (TASK-003 lines 226-244):
+
 ```yaml
 # actions.yaml (current schema)
 actions:
@@ -115,16 +128,19 @@ actions:
 ```
 
 **Pattern Mismatch**:
+
 - **Affordances**: `costs: [{meter, amount}, ...]` + `effects: [{meter, amount}, ...]`
 - **Actions**: `energy_cost: float` (singular) + `effects: [{meter, amount}, ...]`
 
 **Use Cases**:
+
 1. **Movement costs hygiene**: Walking makes you sweaty
 2. **Movement costs satiation**: Physical activity burns calories
 3. **Wait action restores mood**: Resting is mentally restorative
 4. **Interact action costs social**: Interacting with strangers is draining
 
 **Proposed Solution**:
+
 ```yaml
 # actions.yaml (NEW pattern - matches affordances)
 actions:
@@ -148,18 +164,21 @@ actions:
 ```
 
 **Implementation Approach**:
+
 1. Add `ActionCost` schema (same pattern as `AffordanceCost`)
 2. Replace `energy_cost: float` with `costs: list[ActionCost]` in ActionConfig
 3. Update VectorizedHamletEnv.step() to apply multi-meter costs
 4. Backward compatibility: Support legacy `energy_cost` field (convert to costs list)
 
 **Effort**: 4-6 hours
+
 - Schema updates: 1h
 - VectorizedHamletEnv.step() refactor: 2-3h
 - Backward compatibility: 1h
 - Testing: 1h
 
 **Pedagogical Value**: HIGH
+
 - Teaches opportunity costs (movement isn't free)
 - Demonstrates resource tradeoffs
 - More realistic simulation (activity affects multiple systems)
@@ -173,6 +192,7 @@ actions:
 **Problem**: RND (Random Network Distillation) network architecture is hardcoded, preventing experimentation.
 
 **Current State**:
+
 ```python
 # src/townlet/exploration/rnd.py:25,28
 self.predictor = nn.Sequential(
@@ -185,6 +205,7 @@ self.predictor = nn.Sequential(
 ```
 
 **Proposed Solution**:
+
 ```yaml
 # training.yaml
 exploration:
@@ -196,6 +217,7 @@ exploration:
 **Effort**: 1-2 hours
 
 **Pedagogical Value**: LOW
+
 - Limited teaching value (students don't need to tune RND)
 - More relevant for researchers than students
 
@@ -279,6 +301,7 @@ bars:
 **Why Not**: Substrate type determines position encoding.
 
 From TASK-000 (substrate.yaml), position encoding is substrate-specific:
+
 - 2D grid → coordinate encoding `[x_norm, y_norm]`
 - 3D grid → coordinate encoding `[x_norm, y_norm, z_norm]`
 - Graph → one-hot node encoding
@@ -366,42 +389,8 @@ for action in actions:
 
 ## 7. Backward Compatibility
 
-### Affordance Masking
-
-**New Field** (`availability` is optional):
-```yaml
-# Old configs (still work)
-affordances:
-  - id: "Job"
-    # No availability field → always available
-
-# New configs (with masking)
-affordances:
-  - id: "Job"
-    availability:
-      - {meter: "time_of_day", min: 0.375, max: 0.708}
-```
-
-### Multi-Meter Actions
-
-**Backward Compatible** (support both formats):
-```yaml
-# Old format (legacy)
-actions:
-  - id: 0
-    name: "UP"
-    energy_cost: 0.005  # Converted to costs: [{meter: energy, amount: 0.005}]
-
-# New format (preferred)
-actions:
-  - id: 0
-    name: "UP"
-    costs:
-      - {meter: "energy", amount: 0.005}
-      - {meter: "hygiene", amount: 0.003}
-```
-
-**Migration Strategy**: Schema accepts both `energy_cost` (deprecated) and `costs` (preferred). If both present, `costs` takes precedence.
+No backward compatibility - Fail forward only.
+Upcoming work will make all fields mandatory (i.e. no hidden defaults) so that operators must explicitly define behavior.
 
 ---
 
@@ -412,11 +401,13 @@ actions:
 **Test**: "Can operators experiment with operating hours without code changes?"
 
 **Current Answer**: NO
+
 - Operating hours hardcoded in vectorized_env.py (lines 465-485)
 - Adding new time-based mechanics requires Python changes
 - Mode switching not possible without code
 
 **Future Answer** (with Gap 1 fixed): YES
+
 - Operating hours defined in affordances.yaml
 - Mode switching via `modes` field
 - Experimentation enabled
@@ -430,11 +421,13 @@ actions:
 **Test**: "Can operators make movement cost hygiene without code changes?"
 
 **Current Answer**: NO
+
 - Actions only support `energy_cost` (singular)
 - Adding hygiene cost requires Python changes
 - Pattern asymmetry: affordances support multi-meter costs, actions don't
 
 **Future Answer** (with Gap 2 fixed): YES
+
 - Actions support `costs: list[{meter, amount}]` like affordances
 - Pattern consistency: costs/effects work the same everywhere
 - Experimentation enabled
@@ -448,11 +441,13 @@ actions:
 **Test**: "Do students need to configure RND network architecture?"
 
 **Current Answer**: NO
+
 - RND is an exploration implementation detail
 - Students learn RL concepts, not RND tuning
 - Low pedagogical value
 
 **Future Answer** (with Gap 3 fixed): MAYBE
+
 - Researchers might want to experiment
 - But not critical for teaching
 
@@ -467,6 +462,7 @@ actions:
 **True Gaps**: 2 configuration features + 1 low-priority feature
 
 **Not Gaps** (covered by existing UAC):
+
 - Agent lifespan → bars with positive base_depletion
 - Meter bounds → TASK-001 (range field)
 - Time constants → time is a bar
@@ -476,6 +472,7 @@ actions:
 - Observation normalization → TASK-000 (substrate.yaml)
 
 **True Gaps** (need new config features):
+
 1. Affordance masking based on bar values (operating hours, mode switching)
 2. Multi-meter action costs (like affordances)
 3. RND network architecture (low priority)
@@ -485,6 +482,7 @@ actions:
 ## 10. Example: Operating Hours Implementation
 
 **Before** (hardcoded in Python):
+
 ```python
 # src/townlet/environment/vectorized_env.py:465-485
 if affordance.name == "Job":
@@ -495,6 +493,7 @@ if affordance.name == "Job":
 ```
 
 **After** (config-driven):
+
 ```yaml
 # configs/L3_temporal_mechanics/affordances.yaml
 affordances:
@@ -509,6 +508,7 @@ affordances:
 ```
 
 **Benefits**:
+
 - Operators can change hours via YAML
 - No Python code changes needed
 - Multiple affordances with different hours
@@ -519,6 +519,7 @@ affordances:
 ## 11. Example: Multi-Meter Action Costs
 
 **Before** (energy only):
+
 ```yaml
 # configs/L1_full_observability/actions.yaml (current)
 actions:
@@ -530,6 +531,7 @@ actions:
 ```
 
 **After** (multi-meter costs):
+
 ```yaml
 # configs/L1_full_observability/actions.yaml (NEW)
 actions:
@@ -544,6 +546,7 @@ actions:
 ```
 
 **Benefits**:
+
 - Realistic resource tradeoffs
 - Same pattern as affordances (consistency)
 - Operators can experiment with costs
@@ -557,6 +560,7 @@ actions:
 **Corrected Gap Analysis**: 2 high-priority configuration features + 1 low-priority feature
 
 **Impact**:
+
 - Affordance masking enables temporal planning and operating hours
 - Multi-meter actions enables realistic resource tradeoffs
 - Both are natural extensions of existing UAC patterns

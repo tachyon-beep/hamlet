@@ -227,11 +227,26 @@ epsilon_min = training_config.epsilon_min
 
 ### Estimated Effort
 
+**Core DTOs (Original Scope)**:
 - **Phase 1** (training config): 2-4 hours
 - **Phase 2** (environment config): 2-3 hours
 - **Phase 3** (curriculum/population): 2-3 hours
 - **Phase 4** (master config): 1-2 hours
-- **Total**: 7-12 hours
+- **Subtotal (Core)**: 7-12 hours
+
+**Extended Schema (Capability System Integration)**:
+- **Phase 5** (affordance masking + capability DTOs): 4-6 hours
+- **Phase 6** (effect pipeline DTOs): 2-3 hours
+- **Phase 7** (validation rules): 2-3 hours
+- **Subtotal (Extensions)**: 8-12 hours
+
+**Total**: 15-24 hours
+
+**Note**: Due to significant scope expansion (+8-12h, +114-200% increase), consider splitting into:
+- **TASK-002A** (Core UAC Contracts): 7-12h - Core DTOs for training, environment, curriculum
+- **TASK-002B** (Capability System): 8-12h - Affordance masking, capabilities, effect pipeline
+
+This allows incremental progress and clearer milestones.
 
 ### Risks
 
@@ -745,6 +760,359 @@ affordances:
 2. ✅ **Backward compatible**: `position: null` (or omit field) = randomize
 3. ✅ **Type-safe**: Pydantic validates format at compile time
 4. ✅ **Clear errors**: Invalid formats caught before training starts
+
+---
+
+## Extension: Affordance Masking and Capability System
+
+**Added**: 2025-11-04 (from research findings)
+**Related Research**: `docs/research/RESEARCH-ENVIRONMENT-CONSTANTS-EXPOSURE.md`, `docs/research/RESEARCH-INTERACTION-TYPE-REGISTRY.md`
+
+The core DTO structure must be extended to support:
+1. **Affordance masking** based on meter values (operating hours, resource gates)
+2. **Capability composition** for rich interaction patterns (multi-tick, cooldown, etc.)
+3. **Effect pipelines** with lifecycle stages (on_start, per_tick, on_completion, etc.)
+
+### Quick Navigation (This Section)
+
+- [Affordance Masking Schema](#affordance-masking-schema) - Operating hours, resource gates (lines 776-855)
+- [Capability Composition System](#capability-composition-system) - Multi-tick, cooldown, skill scaling (lines 856-919)
+- [Effect Pipeline](#effect-pipeline) - Lifecycle stages and multi-stage effects (lines 920-1065)
+- [Backward Compatibility](#backward-compatibility) - Migration from legacy configs (lines 1065-1092)
+
+### Quick Reference: Core Capabilities
+
+| Capability | Key Parameters | Use Case Example |
+|------------|----------------|------------------|
+| `multi_tick` | `duration_ticks`, `early_exit_allowed`, `resumable` | Job (10 ticks), University (20 ticks) |
+| `cooldown` | `cooldown_ticks`, `scope` | Prevent spamming (Job cooldown 50 ticks) |
+| `meter_gated` | `meter`, `min`, `max` | Gym requires energy >0.2, Hospital if health <0.5 |
+| `skill_scaling` | `skill`, `base_multiplier`, `max_multiplier` | Gym effectiveness scales with fitness |
+| `probabilistic` | `success_probability` | Gambling (30% success), Dating (50% success) |
+| `prerequisite` | `required_affordances` | University Sophomore requires Freshman completion |
+
+### Affordance Masking Schema
+
+**Gap Identified**: Current affordances are always available. No support for:
+- Operating hours (Job 9am-5pm, Bar 6pm-2am)
+- Resource gates (Gym requires energy > 0.3)
+- Mode switching (Coffee Shop vs Bar, same location)
+
+**Solution**: Add `availability` and `modes` fields to AffordanceConfig.
+
+```python
+from pydantic import BaseModel, Field, model_validator
+
+class BarConstraint(BaseModel):
+    """Meter-based availability constraint."""
+    meter: str
+    min: float | None = None
+    max: float | None = None
+
+    @model_validator(mode="after")
+    def validate_min_less_than_max(self) -> "BarConstraint":
+        if self.min is not None and self.max is not None:
+            if self.min >= self.max:
+                raise ValueError(f"min ({self.min}) must be < max ({self.max})")
+        return self
+
+class ModeConfig(BaseModel):
+    """Mode-specific configuration (e.g., operating hours)."""
+    hours: tuple[int, int] | None = None  # (start_hour, end_hour), e.g., (9, 17) for 9am-5pm
+    effects: dict[str, float] | None = None  # Mode-specific effect overrides
+
+class AffordanceConfig(BaseModel):
+    """Affordance configuration with availability masking and capabilities."""
+    id: str
+    name: str
+    type: str
+    effects: dict[str, float]
+
+    # NEW: Availability conditions
+    availability: list[BarConstraint] | None = None
+
+    # NEW: Mode switching
+    modes: dict[str, ModeConfig] | None = None
+
+    # ... existing fields ...
+```
+
+**Example Config (Operating Hours)**:
+```yaml
+# Job affordance with operating hours
+affordances:
+  - id: "Job"
+    name: "Office Job"
+    effects: {money: 22.5}
+
+    # ONLY available 9am-5pm
+    modes:
+      office_hours:
+        hours: [9, 17]  # 9am-5pm
+
+# Bar with resource gate + operating hours
+affordances:
+  - id: "Bar"
+    name: "Night Bar"
+    effects: {mood: 0.2, money: -10.0}
+
+    # Requires mood > 0.2 (can't drink while depressed)
+    availability:
+      - {meter: mood, min: 0.2}
+
+    # ONLY available 6pm-2am
+    modes:
+      night_hours:
+        hours: [18, 2]  # 6pm-2am (wraps midnight)
+```
+
+**Validation Rules** (implemented in TASK-004):
+- Meter references in `availability` must exist
+- `min < max` enforced
+- Hour ranges validated (0-23, wrapping allowed)
+
+### Capability Composition System
+
+**Gap Identified**: Interaction patterns are hardcoded (instant, multi-tick, cooldown). Cannot combine patterns (e.g., multi-tick + cooldown + meter-gated).
+
+**Solution**: Replace single `type` field with composable `capabilities` list.
+
+```python
+from typing import Literal
+
+class MultiTickCapability(BaseModel):
+    """Multi-tick interaction (takes N ticks to complete)."""
+    type: Literal["multi_tick"]
+    duration_ticks: int = Field(gt=0)
+    early_exit_allowed: bool = False
+    resumable: bool = False
+
+class CooldownCapability(BaseModel):
+    """Cooldown period after interaction."""
+    type: Literal["cooldown"]
+    cooldown_ticks: int = Field(gt=0)
+    scope: Literal["agent", "global"] = "agent"
+
+class MeterGatedCapability(BaseModel):
+    """Requires meter within range to interact."""
+    type: Literal["meter_gated"]
+    meter: str
+    min: float | None = None
+    max: float | None = None
+
+class SkillScalingCapability(BaseModel):
+    """Effect scales with skill level."""
+    type: Literal["skill_scaling"]
+    skill: str
+    base_multiplier: float = 1.0
+    max_multiplier: float = 2.0
+
+class ProbabilisticCapability(BaseModel):
+    """Probabilistic success/failure."""
+    type: Literal["probabilistic"]
+    success_probability: float = Field(ge=0.0, le=1.0)
+
+class PrerequisiteCapability(BaseModel):
+    """Requires prior interaction completion."""
+    type: Literal["prerequisite"]
+    required_affordances: list[str]
+
+CapabilityConfig = (
+    MultiTickCapability |
+    CooldownCapability |
+    MeterGatedCapability |
+    SkillScalingCapability |
+    ProbabilisticCapability |
+    PrerequisiteCapability
+)
+
+class AffordanceConfig(BaseModel):
+    """Affordance with capability composition."""
+    id: str
+    name: str
+
+    # NEW: Capability composition (replaces single 'type' field)
+    capabilities: list[CapabilityConfig] | None = None
+
+    # ... other fields ...
+```
+
+**Example Config (Capability Composition)**:
+```yaml
+# Job: Multi-tick + Cooldown + Meter-gated
+affordances:
+  - id: "Job"
+    name: "Office Job"
+
+    capabilities:
+      # Takes 10 ticks to complete
+      - type: multi_tick
+        duration_ticks: 10
+        early_exit_allowed: true
+
+      # 50-tick cooldown (can't work again immediately)
+      - type: cooldown
+        cooldown_ticks: 50
+        scope: agent
+
+      # Requires energy > 0.3 to start
+      - type: meter_gated
+        meter: energy
+        min: 0.3
+
+    # Effects defined in effect pipeline (see next section)
+```
+
+**Validation Rules** (implemented in TASK-004):
+- **Capability conflicts**: `instant` and `multi_tick` are mutually exclusive
+- **Dependent capabilities**: `resumable` requires `multi_tick`
+- **Meter references**: `meter_gated` meters must exist
+- **Prerequisite references**: `prerequisite` affordances must exist
+
+### Effect Pipeline System
+
+**Gap Identified**: Current affordances have simple `effects` dict. Cannot model:
+- On-start costs (Job entry fee)
+- Per-tick incremental rewards (Job pays per hour)
+- Completion bonuses (Job completion bonus)
+- Early-exit penalties (quit Job early → mood penalty)
+- Failure effects (probabilistic failure → different outcome)
+
+**Solution**: Replace `effects` dict with multi-stage `effect_pipeline`.
+
+```python
+class AffordanceEffect(BaseModel):
+    """Single effect on a meter."""
+    meter: str
+    amount: float
+
+class EffectPipeline(BaseModel):
+    """Multi-stage effect application."""
+    on_start: list[AffordanceEffect] = Field(default_factory=list)
+    per_tick: list[AffordanceEffect] = Field(default_factory=list)
+    on_completion: list[AffordanceEffect] = Field(default_factory=list)
+    on_early_exit: list[AffordanceEffect] = Field(default_factory=list)
+    on_failure: list[AffordanceEffect] = Field(default_factory=list)
+
+class AffordanceConfig(BaseModel):
+    """Affordance with effect pipeline."""
+    id: str
+    name: str
+    capabilities: list[CapabilityConfig] | None = None
+
+    # NEW: Effect pipeline (replaces simple 'effects' dict)
+    effect_pipeline: EffectPipeline | None = None
+
+    # DEPRECATED: Keep for backward compatibility (emit warning if used)
+    effects: dict[str, float] | None = None
+
+    @model_validator(mode="after")
+    def migrate_effects_to_pipeline(self) -> "AffordanceConfig":
+        """Migrate legacy 'effects' to 'effect_pipeline.on_completion'."""
+        if self.effects and not self.effect_pipeline:
+            logger.warning(
+                f"Affordance {self.id}: 'effects' field deprecated. "
+                f"Use 'effect_pipeline.on_completion' instead."
+            )
+            # Auto-migrate for backward compatibility
+            self.effect_pipeline = EffectPipeline(
+                on_completion=[
+                    AffordanceEffect(meter=meter, amount=amount)
+                    for meter, amount in self.effects.items()
+                ]
+            )
+        return self
+```
+
+**Example Config (Complete Job with Effect Pipeline)**:
+```yaml
+affordances:
+  - id: "Job"
+    name: "Office Job"
+
+    capabilities:
+      - type: multi_tick
+        duration_ticks: 10
+        early_exit_allowed: true
+
+      - type: cooldown
+        cooldown_ticks: 50
+        scope: agent
+
+      - type: meter_gated
+        meter: energy
+        min: 0.3
+
+    effect_pipeline:
+      # On interaction start (immediate costs)
+      on_start:
+        - {meter: energy, amount: -0.05}  # Entry energy cost
+
+      # Every tick during interaction (linear rewards)
+      per_tick:
+        - {meter: money, amount: 2.25}  # $2.25/tick × 10 ticks = $22.50
+        - {meter: energy, amount: -0.01}  # Fatigue per tick
+
+      # On successful completion (bonuses)
+      on_completion:
+        - {meter: money, amount: 5.0}   # Completion bonus
+        - {meter: social, amount: 0.02}  # Coworker interaction
+
+      # On early exit (penalties)
+      on_early_exit:
+        - {meter: mood, amount: -0.05}  # Quitting early feels bad
+```
+
+**Validation Rules** (implemented in TASK-004):
+- **Pipeline consistency**: `multi_tick` capability requires `per_tick` or `on_completion` effects
+- **Meter references**: All effect meters must exist
+- **Mutual exclusivity**: If using `effect_pipeline`, `effects` field should be empty (or auto-migrated)
+
+### Backward Compatibility Strategy
+
+To avoid breaking existing configs:
+
+```python
+class AffordanceConfig(BaseModel):
+    # ... fields ...
+
+    @model_validator(mode="after")
+    def ensure_backward_compatibility(self) -> "AffordanceConfig":
+        """Auto-migrate legacy configs to new schema."""
+
+        # Migrate 'effects' → 'effect_pipeline.on_completion'
+        if self.effects and not self.effect_pipeline:
+            self.effect_pipeline = EffectPipeline(
+                on_completion=[
+                    AffordanceEffect(meter=m, amount=a)
+                    for m, a in self.effects.items()
+                ]
+            )
+            logger.warning(f"{self.id}: Auto-migrated 'effects' to 'effect_pipeline.on_completion'")
+
+        # Migrate 'type' → 'capabilities' (if type field existed)
+        # (Not needed - current system doesn't have 'type' field)
+
+        return self
+```
+
+### Schema Validation Summary
+
+**TASK-002 Deliverables** (DTOs):
+- [x] `BarConstraint` DTO (meter-based availability)
+- [x] `ModeConfig` DTO (operating hours, mode switching)
+- [x] `MultiTickCapability`, `CooldownCapability`, etc. (6 capability DTOs)
+- [x] `EffectPipeline` DTO (multi-stage effects)
+- [x] Extended `AffordanceConfig` with `availability`, `modes`, `capabilities`, `effect_pipeline`
+
+**TASK-004 Deliverables** (Validation):
+- [ ] Validate `availability` meter references (Stage 4)
+- [ ] Validate capability conflicts (Stage 4)
+- [ ] Validate capability meter references (Stage 3)
+- [ ] Validate effect pipeline consistency (Stage 4)
+- [ ] Validate prerequisite affordance references (Stage 3)
+
+**Total Effort**: +8-12 hours for TASK-002 schema extensions
 
 ---
 
