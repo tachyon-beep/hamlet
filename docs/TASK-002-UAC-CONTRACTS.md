@@ -537,6 +537,217 @@ training:
 
 **Slogan**: "If it affects the universe, it's in the config. No exceptions."
 
+---
+
+## Extension: Validation Schemas for TASK-000 (Spatial Substrates)
+
+**Added**: 2025-11-04 (from research findings)
+**Related Research**: `docs/research/RESEARCH-TASK-000-UNSOLVED-PROBLEMS-CONSOLIDATED.md`
+
+TASK-000 introduces new configuration files that require DTO validation:
+
+### substrate.yaml Validation Schema
+
+**File to create**: `src/townlet/environment/substrate_config.py`
+
+```python
+from pydantic import BaseModel, field_validator
+from typing import Literal
+
+class GridConfig(BaseModel):
+    """Grid substrate configuration."""
+    topology: Literal["square", "cubic", "hexagonal"]  # Required
+    dimensions: list[int]  # Required: [width, height] or [width, height, depth]
+    boundary: Literal["clamp", "wrap", "bounce"]  # Required
+    distance_metric: Literal["manhattan", "euclidean", "chebyshev"]  # Required
+    position_encoding: Literal["auto", "onehot", "coords", "fourier"] = "auto"  # Optional (default: auto)
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, v: list[int]) -> list[int]:
+        if len(v) not in [2, 3]:
+            raise ValueError(f"Grid dimensions must be 2D or 3D, got {len(v)}D")
+
+        if any(dim < 1 for dim in v):
+            raise ValueError(f"All dimensions must be >= 1, got {v}")
+
+        if any(dim > 64 for dim in v):
+            raise ValueError(f"Dimensions too large (max 64), got {v}")
+
+        return v
+
+    @field_validator("position_encoding")
+    @classmethod
+    def validate_encoding_for_3d(cls, v: str, info) -> str:
+        """Forbid one-hot encoding for 3D grids (would be 512+ dimensions)."""
+        dimensions = info.data.get("dimensions", [])
+        if len(dimensions) == 3 and v == "onehot":
+            raise ValueError(
+                "One-hot encoding not supported for 3D grids (512+ dimensions). "
+                "Use 'coords' or 'fourier' instead."
+            )
+        return v
+
+class SubstrateConfig(BaseModel):
+    """Spatial substrate configuration."""
+    type: Literal["grid", "graph", "continuous", "aspatial"]  # Required
+    grid: GridConfig | None = None  # Required if type="grid"
+
+    @field_validator("grid")
+    @classmethod
+    def validate_grid_required(cls, v, info):
+        substrate_type = info.data.get("type")
+        if substrate_type == "grid" and v is None:
+            raise ValueError("substrate.grid is required when type='grid'")
+        if substrate_type != "grid" and v is not None:
+            raise ValueError(f"substrate.grid not allowed for type='{substrate_type}'")
+        return v
+```
+
+**Example valid config**:
+```yaml
+# configs/L1_full_observability/substrate.yaml
+substrate:
+  type: "grid"
+  grid:
+    topology: "square"
+    dimensions: [8, 8]
+    boundary: "clamp"
+    distance_metric: "manhattan"
+    position_encoding: "auto"  # Optional - defaults to "auto"
+```
+
+**Example invalid config (caught at compile time)**:
+```yaml
+# configs/my_3d_house/substrate.yaml
+substrate:
+  type: "grid"
+  grid:
+    topology: "cubic"
+    dimensions: [8, 8, 3]
+    boundary: "clamp"
+    distance_metric: "manhattan"
+    position_encoding: "onehot"  # ❌ ERROR: One-hot not supported for 3D
+```
+
+**Error message**:
+```
+❌ SUBSTRATE COMPILATION FAILED
+ValidationError: substrate.grid.position_encoding
+  One-hot encoding not supported for 3D grids (512+ dimensions).
+  Use 'coords' or 'fourier' instead.
+
+  Fix:
+  position_encoding: "coords"  # 512 dims → 3 dims
+```
+
+---
+
+### affordances.yaml Position Field Validation
+
+**File to extend**: `src/townlet/environment/affordance_config.py`
+
+```python
+from pydantic import BaseModel, field_validator
+from typing import Literal, Any
+
+class AffordanceConfig(BaseModel):
+    """Affordance configuration with optional positioning."""
+    id: str
+    name: str
+    type: str
+    effects: dict[str, float]
+
+    # Position field - format depends on substrate type
+    position: list[int] | dict[str, int] | int | None = None  # Optional
+
+    # ... other fields ...
+
+    @field_validator("position")
+    @classmethod
+    def validate_position_format(cls, v):
+        """Validate position format.
+
+        Valid formats:
+        - list[int]: [x, y] for 2D, [x, y, z] for 3D
+        - dict: {q: 3, r: 4} for hexagonal grids (axial coordinates)
+        - int: node_id for graph substrates
+        - None: randomize position (default)
+        """
+        if v is None:
+            return v  # Randomize (default)
+
+        if isinstance(v, list):
+            if not all(isinstance(x, int) for x in v):
+                raise ValueError(f"List position must contain only integers, got {v}")
+            if len(v) not in [2, 3]:
+                raise ValueError(f"List position must be 2D or 3D, got {len(v)}D: {v}")
+            return v
+
+        if isinstance(v, dict):
+            # Hexagonal axial coordinates
+            if set(v.keys()) != {"q", "r"}:
+                raise ValueError(f"Dict position must have 'q' and 'r' keys, got {list(v.keys())}")
+            if not all(isinstance(val, int) for val in v.values()):
+                raise ValueError(f"Dict position values must be integers, got {v}")
+            return v
+
+        if isinstance(v, int):
+            # Graph node ID
+            if v < 0:
+                raise ValueError(f"Graph node ID must be >= 0, got {v}")
+            return v
+
+        raise ValueError(f"Invalid position format: {type(v)}. Expected list, dict, int, or None.")
+```
+
+**Example configs**:
+```yaml
+# 2D square grid
+affordances:
+  - id: "Bed"
+    position: [2, 5]  # Explicit 2D position
+    effects: {energy: 0.2}
+
+  - id: "Hospital"
+    position: null  # Randomize (default)
+    effects: {health: 0.2}
+
+# 3D cubic grid
+affordances:
+  - id: "Bed"
+    position: [2, 5, 0]  # Floor 0
+    effects: {energy: 0.2}
+
+  - id: "Job"
+    position: [3, 1, 1]  # Floor 1
+    effects: {money: 22.5}
+
+# Hexagonal grid
+affordances:
+  - id: "Bed"
+    position: {q: 3, r: 4}  # Axial coordinates
+    effects: {energy: 0.2}
+
+# Graph substrate
+affordances:
+  - id: "Bed"
+    position: 0  # Node 0
+    effects: {energy: 0.2}
+
+  - id: "Hospital"
+    position: 7  # Node 7
+    effects: {health: 0.2}
+```
+
+**Benefits**:
+1. ✅ **Flexible positioning**: Supports all substrate types (2D, 3D, hex, graph)
+2. ✅ **Backward compatible**: `position: null` (or omit field) = randomize
+3. ✅ **Type-safe**: Pydantic validates format at compile time
+4. ✅ **Clear errors**: Invalid formats caught before training starts
+
+---
+
 ## Appendix: Real Examples of Schema Drift Found
 
 ### Example 1: Missing Epsilon Config (L1)

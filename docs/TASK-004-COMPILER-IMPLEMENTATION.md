@@ -499,7 +499,9 @@ class CompilationErrorCollector:
 
 ---
 
-### Phase 4: Cross-Validation (4-6 hours)
+### Phase 4: Cross-Validation (21-28 hours) ← UPDATED: was 4-6h
+
+**⚠️ UPDATED AFTER RESEARCH**: Added substrate-action compatibility validation (+17h)
 
 **Goal**: Validate constraints that span multiple config files.
 
@@ -520,6 +522,7 @@ def _stage_4_cross_validate(
     - Economic balance (income >= costs)
     - Cascade circularity (no infinite loops)
     - Temporal conflicts (valid operating hours)
+    - **Substrate-action compatibility** (NEW - from research)
     """
     # 1. Spatial feasibility
     grid_size = raw_configs.training.grid_size
@@ -570,6 +573,37 @@ def _stage_4_cross_validate(
                 f"affordances.yaml:{aff.id}: close_hour must be 1-28, got {close_hour}"
             )
 
+    # 5. Substrate-Action Compatibility (NEW - from research)
+    # See: docs/research/RESEARCH-ACTION-COMPATIBILITY-VALIDATION.md
+    from townlet.environment.substrate_action_validator import SubstrateActionValidator
+
+    validator = SubstrateActionValidator(raw_configs.substrate, raw_configs.actions)
+    result = validator.validate()
+
+    if not result.valid:
+        errors.add_error(
+            f"Substrate-Action Compatibility Failed:\n" +
+            f"  Substrate: {raw_configs.substrate.type} " +
+            f"({raw_configs.substrate.grid.topology if raw_configs.substrate.type == 'grid' else 'N/A'})\n" +
+            "\n".join(f"  • {err}" for err in result.errors)
+        )
+
+    # Add warnings (non-fatal)
+    for warning in result.warnings:
+        errors.add_warning(f"Substrate-Action Warning: {warning}")
+
+    # 6. Affordance Position Bounds Validation (NEW - from research)
+    # See: docs/research/RESEARCH-TASK-000-UNSOLVED-PROBLEMS-CONSOLIDATED.md
+    for aff in raw_configs.affordances.affordances:
+        if aff.position is not None:
+            # Validate position is within substrate bounds
+            if not raw_configs.substrate.is_position_in_bounds(aff.position):
+                errors.add_error(
+                    f"affordances.yaml:{aff.id}: Position out of bounds: {aff.position}\n" +
+                    f"  Substrate bounds: {raw_configs.substrate.get_bounds_description()}\n" +
+                    f"  Valid positions must be within substrate dimensions."
+                )
+
 
 def _build_cascade_graph(self, cascades: CascadesConfig) -> dict[str, list[str]]:
     """Build directed graph of cascade dependencies."""
@@ -615,6 +649,18 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
 - [ ] Economic validation warns on poverty traps
 - [ ] Circularity detection catches cascade cycles
 - [ ] Temporal validation catches invalid operating hours
+- [ ] **Substrate-action validation catches incompatible action spaces** (NEW)
+  - [ ] Square grid requires 4-way movement
+  - [ ] Cubic grid requires 6-way movement
+  - [ ] Hexagonal grid requires 6 hex directions
+  - [ ] Aspatial forbids movement actions
+  - [ ] Missing INTERACT action detected
+- [ ] **Affordance position bounds validation** (NEW)
+  - [ ] Catches affordances positioned outside substrate bounds
+  - [ ] Works for 2D grid: position [x, y] within [0, width) × [0, height)
+  - [ ] Works for 3D grid: position [x, y, z] within bounds
+  - [ ] Works for hex grid: position {q, r} within axial bounds
+  - [ ] Works for graph: node_id < num_nodes
 
 ---
 
@@ -1343,7 +1389,7 @@ All future UAC work depends on robust compilation:
 - **Phase 7** (Caching): 4-6 hours
 - **Phase 8** (Environment Refactor): 3-4 hours
 
-### Total: 37-54 hours (5-7 days)
+### Total: 54-71 hours (7-9 days) ← UPDATED: was 37-54h (+17h for substrate-action validation)
 
 **Updated from research estimate (40-58 hours) based on detailed breakdown**
 

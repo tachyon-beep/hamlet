@@ -1024,6 +1024,23 @@ cascades:
 
 No more "can't add meters because of hardcoded 8 constraint" limitations.
 
+### 6. Synergy with Coordinate Encoding (TASK-000)
+
+**From Research** (`docs/research/RESEARCH-OBSERVATION-ENCODING-STRATEGY.md`):
+
+Coordinate encoding (from TASK-000) enables **transfer learning across BOTH**:
+- ✅ **Different meter counts**: 4 meters → 8 meters → 12 meters (same network architecture)
+- ✅ **Different grid sizes**: 8×8 → 16×16 → 32×32 (same network architecture)
+
+**Combined Impact**:
+- Train agent on **L0 (4 meters, 3×3 grid)**: obs_dim = 29 (2 position + 4 meters + 15 affordances + 4 temporal + 4 extra)
+- Transfer to **L1 (8 meters, 8×8 grid)**: obs_dim = 33 (2 position + 8 meters + 15 affordances + 4 temporal + 4 extra)
+- Transfer to **L2 (12 meters, 16×16 grid)**: obs_dim = 37 (2 position + 12 meters + 15 affordances + 4 temporal + 4 extra)
+
+**Same network throughout curriculum!** Only the observation dimension changes predictably: `obs_dim = 2 + num_meters + 15 + 4 + 4`.
+
+**Pedagogical Value**: Students see **true curriculum progression** - agent learns resource management on simple task, transfers to complex task without retraining from scratch.
+
 ---
 
 ## Dependencies

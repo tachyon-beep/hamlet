@@ -605,6 +605,7 @@ substrate:
 
 ## Success Criteria
 
+### Core Substrate Implementation
 - [ ] `SpatialSubstrate` abstract interface defined
 - [ ] `substrate.yaml` schema defined with Pydantic DTOs
 - [ ] `SquareGridSubstrate` implemented (replicates current behavior)
@@ -613,26 +614,144 @@ substrate:
 - [ ] `AspatialSubstrate` implemented (no positioning)
 - [ ] All existing configs have `substrate.yaml`
 - [ ] Can switch between 2D/3D by editing substrate.yaml (no code changes)
+
+### Problem 1: obs_dim Variability
+- [ ] Substrate has `position_encoding_dim` property
+- [ ] Environment aggregates `substrate.position_encoding_dim` into total `observation_dim`
+- [ ] Different substrates produce correct obs_dim (2D=91, 3D=539, aspatial=27)
+
+### Problem 5: Distance Semantics
+- [ ] Substrate has `is_adjacent(pos1, pos2) → bool` method
+- [ ] Substrate has `compute_distance(pos1, pos2) → float` method
+- [ ] Interactions use `is_adjacent()` check (not raw distance)
+- [ ] Aspatial substrate returns `True` for `is_adjacent()` (everything accessible)
+
+### Problem 6: Observation Encoding (CRITICAL)
+- [ ] **Coordinate encoding works for 3D cubic grids** (512 dims → 3 dims)
+- [ ] Substrate has `encode_position(positions) → torch.Tensor` method
+- [ ] Auto-selection: small grids use one-hot, large/3D use coordinates
+- [ ] **Transfer learning: network trained on 8×8 works on 16×16** (same obs_dim)
+- [ ] L1 backward compatibility: one-hot encoding still works for ≤8×8
+
+### Problem 3: Visualization
+- [ ] Text visualization renders all substrate types for debugging
+- [ ] 2D square grid ASCII rendering
+- [ ] 3D cubic floor-by-floor projection
+- [ ] Aspatial meters-only dashboard
+
+### Problem 4: Affordance Placement
+- [ ] `randomize_affordance_positions()` works for 2D grids
+- [ ] `randomize_affordance_positions()` works for 3D cubic grids
+- [ ] `randomize_affordance_positions()` works for aspatial (returns empty tensor)
+
+### Validation & Testing
 - [ ] Substrate compilation errors caught at load time
 - [ ] All tests pass with new substrate system
+- [ ] **3D feasibility proof**: 8×8×3 grid runs without memory issues
+- [ ] **Transfer learning test**: same network works on different grid sizes
 
 ## Estimated Effort
 
-- **Phase 1** (abstraction layer): 6-8 hours
-- **Phase 2** (config schema): 2-3 hours
-- **Phase 3** (env integration): 4-6 hours
-- **Phase 4** (migrate configs): 1-2 hours
-- **Phase 5** (example alternatives): 2-3 hours
-- **Total**: 15-22 hours
+**⚠️ REVISED AFTER RESEARCH (2025-11-04)**: Original estimate 15-22h → **51-65h** (+140-195%)
+
+Research into 6 unsolved problems revealed critical additions needed for 3D substrate support and proper abstraction.
+See: `docs/research/RESEARCH-TASK-000-UNSOLVED-PROBLEMS-CONSOLIDATED.md`
+
+### Detailed Phase Breakdown
+
+- **Phase 1** (substrate abstraction layer): **18-25 hours** (was 6-8h)
+  - Create `SpatialSubstrate` interface: 2h
+  - Implement `SquareGridSubstrate`: 2h
+  - Implement `CubicGridSubstrate`: 2h
+  - Implement `AspatialSubstrate`: 1h
+  - **Add `position_encoding_dim` property** (Problem 1): 3h
+  - **Add `is_adjacent()` + `compute_distance()`** (Problem 5): 4-6h
+  - **Implement coordinate encoding** (Problem 6 - CRITICAL): 5h
+  - Tests for abstraction layer: 2-3h
+
+- **Phase 2** (config schema): **2-3 hours**
+  - Pydantic DTOs for `substrate.yaml`: 2-3h
+
+- **Phase 3** (environment integration): **12-16 hours** (was 4-6h)
+  - Update `VectorizedHamletEnv` to use substrate: 4-6h
+  - Use `substrate.position_encoding_dim` for obs_dim: 2h
+  - Use `substrate.is_adjacent()` for interactions: 2-3h
+  - Use `substrate.encode_position()` for observations: 3-4h
+  - **Extend `randomize_affordance_positions()`** (Problem 4): 1h
+
+- **Phase 4** (text visualization + config migration): **7-10 hours** (was 3-5h)
+  - **Text renderer for debugging** (Problem 3): 4-6h
+  - Create `substrate.yaml` for L0, L0.5, L1, L2, L3: 3-4h
+
+- **Phase 5** (testing & validation): **12-11 hours** (NEW)
+  - Test all substrate types: 4h
+  - **Test coordinate encoding** (Problem 6): 3h
+  - **Test transfer learning** (same network, different grid sizes): 3h
+  - **Prove 3D feasibility** (512 dims → 3 dims): 2h
+
+- **Total**: **51-65 hours**
+
+### Critical Path Items
+
+🔴 **Must implement** for 3D substrate support:
+1. Coordinate encoding (Problem 6): 20h total
+2. Distance semantics (Problem 5): 8-12h total
+3. obs_dim property (Problem 1): 8-11h total
+
+✅ **Deferred** to later tasks:
+- Action validation → TASK-004 (Compiler): 17h saved
+- GUI visualization → TASK-006 (separate project): 24-64h saved
+- Explicit affordance positioning → Phase 2: 6h saved
 
 ## Risks
 
+### 🚨 CRITICAL RISK: One-Hot Encoding Prevents 3D Substrates
+
+**Problem**: Current one-hot position encoding **explodes for large/3D grids**:
+
+| Substrate | One-Hot Dims | Feasible? |
+|-----------|--------------|-----------|
+| 2D (8×8) | 64 | ✅ Yes |
+| 2D (16×16) | 256 | ⚠️ Marginal |
+| **3D (8×8×3)** | **512** | ❌ **NO** |
+| **3D (16×16×4)** | **1024** | ❌ **NO** |
+
+**Impact**: Without mitigation, 3D cubic substrates cannot be implemented (512+ dimensions infeasible for input layer).
+
+**Mitigation**: **Implement coordinate encoding** (normalized floats instead of one-hot)
+- 3D (8×8×3): 512 dims → 3 dims (170× reduction!)
+- 2D (16×16): 256 dims → 2 dims (128× reduction!)
+- Enables transfer learning (same network works on any grid size)
+
+**Evidence**: L2 POMDP already uses coordinate encoding successfully (`observation_builder.py:201`). Proven approach!
+
+**Effort**: +20 hours (critical path, included in Phase 1/3/5)
+
+**Status**: Research complete (Problem 6), implementation required for Phase 2
+
+---
+
+### Other Risks
+
 - **Network Architecture**: Observation dim depends on substrate (2D vs 3D vs aspatial)
-  - Mitigation: Substrate computes observation_dim, passed to network creation
+  - **Mitigation**: Substrate computes `position_encoding_dim` property, env aggregates into total `observation_dim`
+  - **Status**: Research complete (Problem 1), implementation straightforward
+
 - **Action Space Compatibility**: 3D needs 6 actions, hex needs 6, aspatial needs 0
-  - Mitigation: actions.yaml must be compatible with substrate.yaml (TASK-002 validates this)
+  - **Mitigation**: Compile-time validation in TASK-004 (Universe Compiler Stage 4)
+  - **Status**: Research complete (Problem 2), deferred to TASK-004 (17h)
+
 - **Visualization**: Frontend assumes 2D square grid
-  - Mitigation: Phase 1 uses text-based viz, 3D viz comes later
+  - **Mitigation**: Phase 1 uses text-based viz (4-6h), GUI deferred to TASK-006 (24-64h)
+  - **Status**: Research complete (Problem 3), text viz sufficient for experimentation
+
+- **Affordance Placement**: Different substrates need different position formats
+  - **Mitigation**: Phase 1 extends random placement to all substrates (2h), explicit positioning deferred to Phase 2 (6h)
+  - **Status**: Research complete (Problem 4), current approach works perfectly
+
+- **Distance Semantics**: Pure distance metric fails for graph/aspatial substrates
+  - **Mitigation**: Hybrid approach with `is_adjacent()` (primary) + `compute_distance()` (optional)
+  - **Status**: Research complete (Problem 5), implementation required for Phase 1 (8-12h)
 
 ## Relationship to Other Tasks
 

@@ -934,10 +934,99 @@ compiled_brain = brain_compiler.compile()
 
 ## Dependencies
 
+- **TASK-000**: Spatial substrates (provides substrate metadata for obs_dim computation)
 - **TASK-001**: DTO schemas (provides Pydantic patterns)
 - **TASK-002**: Universe compiler (provides obs_dim, action_dim)
 
 **Recommended order**: TASK-000 → TASK-001 → TASK-002 → **TASK-004**
+
+### Critical Dependency: Substrate Metadata from TASK-000
+
+**From Research** (`docs/research/RESEARCH-TASK-000-UNSOLVED-PROBLEMS-CONSOLIDATED.md`):
+
+The brain compilation process needs substrate metadata to compute `obs_dim` correctly:
+
+**Required substrate properties**:
+1. `position_encoding_dim` - How many dimensions for position encoding?
+   - 2D one-hot (8×8): 64 dims
+   - 2D coordinates: 2 dims
+   - 3D coordinates (8×8×3): 3 dims
+   - Aspatial: 0 dims
+
+2. `position_encoding` strategy - Which encoding method?
+   - `"onehot"` - One-hot grid encoding (small 2D grids only)
+   - `"coords"` - Normalized coordinate encoding (3D, large grids)
+   - `"fourier"` - Sinusoidal position encoding (continuous spaces)
+   - `"none"` - No position (aspatial substrates)
+
+**obs_dim computation**:
+```python
+# Brain compiler must query substrate config
+obs_dim = (
+    substrate.position_encoding_dim +  # Variable by substrate type
+    num_meters +                       # Variable by bars.yaml
+    num_affordance_types + 1 +         # Fixed vocabulary + "none"
+    4                                  # Temporal extras (fixed)
+)
+```
+
+**Example obs_dim variations**:
+| Substrate | Position Enc | Meters | Affordances | Temporal | **Total** |
+|-----------|--------------|--------|-------------|----------|-----------|
+| 2D (8×8, onehot) | 64 | 8 | 15 | 4 | **91** |
+| 2D (8×8, coords) | 2 | 8 | 15 | 4 | **29** |
+| 3D (8×8×3, coords) | 3 | 8 | 15 | 4 | **30** |
+| Aspatial | 0 | 8 | 15 | 4 | **27** |
+
+**Implication for brain.yaml**:
+
+Brain config CANNOT hardcode `obs_dim` - it must be computed from universe config at compile time.
+
+**Option 1: Auto-compute (recommended)**:
+```yaml
+# brain.yaml
+network:
+  architecture: "simple_q"
+  encoding_aware: true  # Network handles coordinate OR one-hot position encoding
+  # obs_dim: COMPUTED from substrate + meters + affordances
+  # action_dim: COMPUTED from actions.yaml
+  hidden_dims: [256, 128]
+  activation: "relu"
+```
+
+**Option 2: Validate (strict mode)**:
+```yaml
+# brain.yaml
+network:
+  architecture: "simple_q"
+  expected_obs_dim: 91  # Validated against computed obs_dim
+  action_dim: 5
+  hidden_dims: [256, 128]
+```
+
+**Compilation error if mismatch**:
+```
+❌ BRAIN COMPILATION FAILED
+Expected obs_dim=91 but computed obs_dim=29 from universe config.
+
+Universe configuration:
+  - Substrate: 2D (8×8) with coordinate encoding (2 dims)
+  - Meters: 8
+  - Affordances: 15
+  - Temporal: 4
+  - Computed obs_dim: 2 + 8 + 15 + 4 = 29
+
+Your brain.yaml specifies expected_obs_dim=91, which assumes one-hot encoding (64 dims).
+
+Fix: Either remove expected_obs_dim (auto-compute) or update to:
+  expected_obs_dim: 29
+```
+
+**Benefits**:
+1. ✅ **Position encoding agnostic**: Network doesn't care if position is one-hot or coordinates
+2. ✅ **Substrate agnostic**: Same brain.yaml works for 2D, 3D, hex, aspatial
+3. ✅ **Meter count agnostic**: Same brain.yaml works for 4-meter or 12-meter universes
+4. ✅ **Clear compilation errors**: Mismatch caught at load time, not runtime
 
 ## Design Principles
 
