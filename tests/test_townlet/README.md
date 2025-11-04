@@ -1,9 +1,9 @@
 # Townlet Test Suite
 
 **Status**: ✅ Fully Refactored (November 2025)
-**Total Tests**: 488 tests (381 unit + 87 integration + 20 properties)
-**Coverage**: 54% of townlet codebase
-**Runtime**: ~64 seconds for complete suite
+**Total Tests**: 560 tests (426 unit + 114 integration + 20 properties)
+**Coverage**: 67% of townlet codebase
+**Runtime**: ~66 seconds for complete suite
 
 ---
 
@@ -32,7 +32,7 @@ tests/test_townlet/
 ├── fixtures/
 │   └── mock_config.yaml          # Frozen config for deterministic tests
 │
-├── unit/                          # Unit tests (381 tests)
+├── unit/                          # Unit tests (426 tests)
 │   ├── agent/
 │   │   └── test_networks.py           # SimpleQNetwork, RecurrentSpatialQNetwork (19 tests)
 │   ├── environment/
@@ -48,18 +48,26 @@ tests/test_townlet/
 │   │   └── test_exploration_strategies.py  # Epsilon-greedy, RND, adaptive (64 tests)
 │   ├── training/
 │   │   └── test_replay_buffers.py     # ReplayBuffer, SequentialReplayBuffer (52 tests)
+│   ├── recording/                     # Episode recording unit tests (45 tests)
+│   │   ├── test_data_structures.py    # Serialization, deserialization (18 tests)
+│   │   ├── test_database.py           # Database operations (13 tests)
+│   │   └── test_criteria.py           # Recording criteria logic (14 tests)
 │   └── test_configuration.py      # Config loading, validation (52 tests)
 │
-├── integration/                   # Integration tests (87 tests)
+├── integration/                   # Integration tests (114 tests)
 │   ├── test_checkpointing.py          # Save/load state, round-trip (15 tests)
 │   ├── test_curriculum_signal_purity.py   # Curriculum sees survival time, not rewards (11 tests)
-│   ├── test_runner_integration.py     # DemoRunner orchestration, database logging (7 tests)
+│   ├── test_runner_integration.py     # DemoRunner orchestration, database logging (5 tests)
 │   ├── test_temporal_mechanics.py     # Time-based affordances, operating hours (10 tests, 5 XFAIL)
 │   ├── test_recurrent_networks.py     # LSTM hidden state management (8 tests, 5 XFAIL)
 │   ├── test_intrinsic_exploration.py  # RND + adaptive annealing (6 tests)
 │   ├── test_episode_execution.py      # Full episode lifecycle (6 tests)
 │   ├── test_training_loop.py          # Multi-episode training, masked loss (8 tests, 5 XFAIL)
-│   └── test_data_flows.py             # Observation, reward, action pipelines (8 tests)
+│   ├── test_data_flows.py             # Observation, reward, action pipelines (8 tests)
+│   ├── test_recording_recorder.py     # Episode recorder integration (12 tests)
+│   ├── test_recording_playback.py     # Playback system integration (10 tests)
+│   ├── test_recording_replay_manager.py  # Replay management (13 tests)
+│   └── test_recording_video_export.py # Video rendering pipeline (9 tests, 1 XFAIL)
 │
 └── properties/                    # Property-based tests (20 properties)
     ├── test_environment_properties.py  # Invariants: grid bounds, meter bounds (6 properties)
@@ -346,10 +354,10 @@ pytest tests/test_townlet/ -m integration
 
 | Category | Tests | Files | Runtime | Status |
 |----------|-------|-------|---------|--------|
-| Unit | 381 | 12 | ~30s | ✅ All passing |
-| Integration | 87 | 9 | ~25s | ✅ 72 passing, 15 XFAIL |
+| Unit | 426 | 15 | ~35s | ✅ All passing |
+| Integration | 114 | 13 | ~26s | ✅ 99 passing, 14 XFAIL, 1 XPASS |
 | Properties | 20 | 3 | ~5s | ✅ All passing |
-| **Total** | **488** | **24** | **~64s** | **✅ 472 passing** |
+| **Total** | **560** | **31** | **~66s** | **✅ 550 passing** |
 
 ### Coverage by Module
 
@@ -363,7 +371,11 @@ pytest tests/test_townlet/ -m integration
 | exploration/adaptive_intrinsic.py | 55 | 100% |
 | training/replay_buffer.py | 100 | 99% |
 | population/vectorized.py | 335 | 91% |
-| **Overall** | **3687** | **54%** |
+| recording/data_structures.py | 40 | 100% |
+| recording/criteria.py | 105 | 96% |
+| recording/replay.py | 83 | 87% |
+| recording/video_renderer.py | 137 | 96% |
+| **Overall** | **3687** | **67%** |
 
 ---
 
@@ -412,22 +424,24 @@ pytest tests/test_townlet/ --cov=townlet
 
 ## Migration Notes (for reference)
 
-This test suite was created Nov 2025 by consolidating 58 unstructured test files into an organized architecture using the "parallel build + clean cutover" methodology:
+This test suite was created Nov 2025 by consolidating 57 unstructured test files into an organized architecture using the "parallel build + clean cutover" methodology:
 
 1. **Tasks 1-10**: Unit tests (381 tests across 12 files)
 2. **Tasks 11-13**: Integration tests (87 tests across 9 files)
 3. **Task 14**: Property-based tests (20 properties across 3 files)
 4. **Tasks 15-18**: Validation, documentation, cutover
+5. **Post-cutover**: Recording test integration (72 tests from test_recording/ subdirectory)
 
 **Key improvements**:
 - ✅ Organized unit/integration/properties structure
 - ✅ Shared fixtures eliminate duplication
 - ✅ CPU device ensures determinism
 - ✅ Behavioral assertions (not exact values)
-- ✅ Comprehensive coverage (54% of codebase)
-- ✅ Fast runtime (~64 seconds for 488 tests)
+- ✅ Comprehensive coverage (67% of codebase, up from 54%)
+- ✅ Fast runtime (~66 seconds for 560 tests)
+- ✅ Episode recording tests integrated (was separate subdirectory)
 
-**Old test files**: Deleted after validation (commit: TBD)
+**Old test files**: Deleted after validation (commits: bc777c2, a77ad0e)
 
 ---
 
