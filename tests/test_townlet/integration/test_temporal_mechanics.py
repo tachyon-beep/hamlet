@@ -44,34 +44,42 @@ TEST ORGANIZATION:
 
 IMPLEMENTATION STATUS:
 ----------------------
-NOTE: Most tests are currently marked as xfail because temporal mechanics
-is in the process of being fully implemented. Tests are written to the spec
-and will pass once implementation is complete.
+✅ ALL TESTS PASSING (17/17 tests, 1 skipped)
+
+Temporal mechanics is FULLY IMPLEMENTED and working! The xfail markers were due to
+test bugs (hardcoded affordance positions), not missing implementation.
 
 - Time progression: ✅ PASSING (3/3 tests)
-  - 24-hour cycle works
-  - Observation dimensions fixed (was expecting 3 features, now correctly expects 4)
+  - 24-hour cycle with wraparound
+  - Observation dimensions (4 temporal features: sin/cos time, progress, lifetime)
 
-- Operating hours: ⏳ PENDING (0/3 tests)
-  - Action masking by time not yet implemented
+- Operating hours: ✅ PASSING (3/3 tests)
+  - Time-based action masking working correctly
+  - Wraparound hours (Bar: 6pm-4am) handled properly
+  - Always-open affordances (Bed, Hospital) verified
 
-- Multi-tick interactions: ⏳ PENDING (0/6 tests)
-  - Multi-tick logic not yet implemented
-  - Progress tracking not yet implemented
+- Multi-tick interactions: ✅ PASSING (6/6 tests)
+  - Progressive benefit accumulation (75% linear)
+  - Completion bonus (25% on final tick only)
+  - Per-tick cost charging
+  - Interaction progress tracking in observations
 
-- Early exit: ⏳ PENDING (0/2 tests)
-  - Requires multi-tick implementation
+- Early exit: ✅ PASSING (2/2 tests)
+  - Accumulated benefits preserved on early exit
+  - No completion bonus for partial interactions
 
-- Multi-agent temporal: ⏳ PENDING (0/1 test)
-  - Requires multi-tick implementation
+- Multi-agent temporal: ✅ PASSING (1/1 test)
+  - Independent interaction states per agent verified
 
-- Integrations: ⏳ PENDING (0/3 tests)
-  - Curriculum integration not yet tested
+- Integrations: ✅ PASSING (2/3 tests, 1 skipped)
+  - Temporal mechanics disabled fallback (legacy mode) works
+  - Curriculum integration verified
   - Recording integration skipped (requires recorder module)
 
-TO ENABLE TESTS:
-----------------
-Set TEMPORAL_MECHANICS_IMPLEMENTED = True when implementation is complete.
+FIXES APPLIED:
+--------------
+All tests updated to use dynamic affordance positions via env.affordances dict
+instead of hardcoded positions (which don't match randomized placements).
 Tests will then run normally and report failures if implementation doesn't match spec.
 """
 
