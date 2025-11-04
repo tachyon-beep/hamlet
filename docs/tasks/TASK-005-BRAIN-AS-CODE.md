@@ -84,7 +84,7 @@ Define agent architecture and learning configuration in YAML, separate from univ
 
 ```yaml
 version: "1.0"
-description: "Agent brain configuration for L0_minimal"
+description: "Agent brain configuration for L0_0_minimal"
 
 # Network architecture selection
 architecture:
@@ -211,7 +211,7 @@ initialization:
 **Example 1: L0 Minimal (Simple MLP)**
 
 ```yaml
-# configs/L0_minimal/brain.yaml
+# configs/L0_0_minimal/brain.yaml
 version: "1.0"
 description: "Simple feedforward Q-network for L0 temporal credit assignment"
 
@@ -877,11 +877,11 @@ Brain compilation happens **after** universe compilation:
 
 ```python
 # Stage 1: Compile Universe (TASK-003)
-universe_compiler = UniverseCompiler("configs/L0_minimal")
+universe_compiler = UniverseCompiler("configs/L0_0_minimal")
 universe = universe_compiler.compile()
 
 # Stage 2: Compile Brain (TASK-005)
-brain_config_path = Path("configs/L0_minimal/brain.yaml")
+brain_config_path = Path("configs/L0_0_minimal/brain.yaml")
 brain_config = load_brain_config(brain_config_path)
 
 # Observation dim comes from compiled universe

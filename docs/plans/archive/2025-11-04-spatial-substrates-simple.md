@@ -693,7 +693,7 @@ Expected: Training starts successfully (timeout after 30s is OK)
 Test config without substrate.yaml:
 
 ```bash
-timeout 30 uv run python -m townlet.demo.runner --config configs/L0_minimal --max_episodes 10
+timeout 30 uv run python -m townlet.demo.runner --config configs/L0_0_minimal --max_episodes 10
 ```
 
 Expected: Falls back to legacy Grid2D, runs successfully

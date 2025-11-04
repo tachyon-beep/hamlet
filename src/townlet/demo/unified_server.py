@@ -219,7 +219,7 @@ class UnifiedServer:
         if output_subdir:
             level_name = self._sanitize_folder_name(str(output_subdir))
             if not level_name:
-                logger.warning("Config run_metadata.output_subdir is empty after sanitisation; " "falling back to legacy level detection.")
+                logger.warning("Config run_metadata.output_subdir is empty after sanitisation; falling back to legacy level detection.")
                 level_name = self._infer_level_name()
         else:
             level_name = self._infer_level_name()
@@ -241,7 +241,7 @@ class UnifiedServer:
         if "level_4" in config_stem or "multi_agent" in config_stem:
             return "L4_multi_agent"
         if "level_0" in config_stem or "minimal" in config_stem:
-            return "L0_minimal"
+            return "L0_0_minimal"
         return "training"
 
     @staticmethod
@@ -259,7 +259,7 @@ class UnifiedServer:
         Add file handler to save logs to run directory.
 
         Args:
-            run_dir: Base directory for the current run (e.g., runs/L0_minimal/2025-11-03_123456)
+            run_dir: Base directory for the current run (e.g., runs/L0_0_minimal/2025-11-03_123456)
         """
         log_file = run_dir / "training.log"
 

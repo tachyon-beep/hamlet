@@ -535,7 +535,7 @@ ORDER BY from_affordance, to_affordance;
 
 ```bash
 # Run L0 minimal config for 100 episodes
-uv run scripts/run_demo.py --config configs/L0_minimal
+uv run scripts/run_demo.py --config configs/L0_0_minimal
 
 # Check database for transitions
 sqlite3 demo_level0.db "SELECT * FROM affordance_visits LIMIT 20;"

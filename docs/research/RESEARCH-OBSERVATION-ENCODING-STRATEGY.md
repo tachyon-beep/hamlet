@@ -31,7 +31,7 @@ normalized_positions = positions.float() / (self.grid_size - 1)
 
 **Current observation dimensions:**
 
-- **L0_minimal (3×3)**: 36 dims (9 grid + 8 meters + 15 affordances + 4 temporal)
+- **L0_0_minimal (3×3)**: 36 dims (9 grid + 8 meters + 15 affordances + 4 temporal)
 - **L0_5_dual_resource (7×7)**: 76 dims (49 grid + 8 meters + 15 affordances + 4 temporal)
 - **L1_full_observability (8×8)**: 91 dims (64 grid + 8 meters + 15 affordances + 4 temporal)
 - **L2_partial_observability (5×5 window)**: 54 dims (25 local grid + 2 position + 8 meters + 15 affordances + 4 temporal)

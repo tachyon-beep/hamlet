@@ -536,7 +536,7 @@ new_positions = self.substrate.apply_movement(self.positions, movement_deltas)
 
 Create `substrate.yaml` for all existing config packs, replicating current behavior:
 
-**configs/L0_minimal/substrate.yaml**:
+**configs/L0_0_minimal/substrate.yaml**:
 
 ```yaml
 version: "1.0"

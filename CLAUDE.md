@@ -40,7 +40,7 @@ export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 # python -m townlet.demo.runner --config <config_pack_dir>
 
 # L0: Learn temporal credit assignment (single affordance)
-uv run scripts/run_demo.py --config configs/L0_minimal
+uv run scripts/run_demo.py --config configs/L0_0_minimal
 
 # L0.5: Multiple resource management (4 affordances)
 uv run scripts/run_demo.py --config configs/L0_5_dual_resource
@@ -208,7 +208,7 @@ src/townlet/
 
 **Observation dimensions by level**:
 
-- **L0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
+- **L0_0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
 - **L0_5_dual_resource**: 76 dims (7×7 grid=49 + 8 meters + 15 affordances + 4 extras)
 - **L1_full_observability**: 91 dims (8×8 grid=64 + 8 meters + 15 affordances + 4 extras)
 
@@ -261,7 +261,7 @@ Training is controlled via YAML configs in `configs/`. Each config pack is a dir
 
 ### Active Config Packs (Curriculum Levels)
 
-**L0_minimal** - Pedagogical: Learn temporal credit assignment
+**L0_0_minimal** - Pedagogical: Learn temporal credit assignment
 
 - Single affordance (Bed) on 3×3 grid
 - Teaches spacing behavior (don't spam bed, space out usage)
@@ -296,7 +296,7 @@ Training is controlled via YAML configs in `configs/`. Each config pack is a dir
 Each config pack directory contains:
 
 ```
-configs/L0_minimal/
+configs/L0_0_minimal/
 ├── bars.yaml         # Meter definitions (energy, health, money, etc.)
 ├── cascades.yaml     # Meter relationships (low satiation → drains energy)
 ├── affordances.yaml  # Interaction definitions (Bed, Hospital, Job, etc.)
@@ -355,7 +355,7 @@ training:
 
 The curriculum progresses from simple pedagogical tasks to complex POMDP challenges:
 
-**L0_minimal** (✅ Implemented): **Temporal Credit Assignment**
+**L0_0_minimal** (✅ Implemented): **Temporal Credit Assignment**
 
 - 3×3 grid, 1 affordance (Bed only)
 - Teaches spacing behavior (don't spam, space out usage)

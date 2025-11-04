@@ -1197,7 +1197,7 @@ import warnings
 with warnings.catch_warnings(record=True) as w:
     warnings.simplefilter('always')
     env = VectorizedHamletEnv(
-        config_pack_path=Path('configs/L0_minimal'),
+        config_pack_path=Path('configs/L0_0_minimal'),
         num_agents=1,
         device='cpu',
     )
@@ -2022,11 +2022,11 @@ Part of TASK-002 (UAC Action Space)."
 
 ## Phase 3: Config Migration
 
-### Task 3.1: Create actions.yaml for L0_minimal
+### Task 3.1: Create actions.yaml for L0_0_minimal
 
 **Files:**
 
-- Create: `configs/L0_minimal/actions.yaml`
+- Create: `configs/L0_0_minimal/actions.yaml`
 
 **Step 1: Write test for L0 actions.yaml**
 
@@ -2035,9 +2035,9 @@ Modify: `tests/test_townlet/unit/test_action_config.py`
 Add to end of file:
 
 ```python
-def test_load_l0_minimal_actions_config():
-    """L0_minimal should have valid actions.yaml."""
-    config_path = Path("configs/L0_minimal/actions.yaml")
+def test_load_L0_0_minimal_actions_config():
+    """L0_0_minimal should have valid actions.yaml."""
+    config_path = Path("configs/L0_0_minimal/actions.yaml")
 
     config = load_action_config(config_path)
 
@@ -2053,14 +2053,14 @@ def test_load_l0_minimal_actions_config():
 **Step 2: Run test to verify it fails**
 
 ```bash
-uv run pytest tests/test_townlet/unit/test_action_config.py::test_load_l0_minimal_actions_config -v
+uv run pytest tests/test_townlet/unit/test_action_config.py::test_load_L0_0_minimal_actions_config -v
 ```
 
 Expected output: FAIL (file does not exist)
 
-**Step 3: Create L0_minimal actions.yaml**
+**Step 3: Create L0_0_minimal actions.yaml**
 
-Create: `configs/L0_minimal/actions.yaml`
+Create: `configs/L0_0_minimal/actions.yaml`
 
 ```yaml
 version: "1.0"
@@ -2133,7 +2133,7 @@ boundary: "clamp"
 **Step 4: Run test to verify it passes**
 
 ```bash
-uv run pytest tests/test_townlet/unit/test_action_config.py::test_load_l0_minimal_actions_config -v
+uv run pytest tests/test_townlet/unit/test_action_config.py::test_load_L0_0_minimal_actions_config -v
 ```
 
 Expected output: PASS
@@ -2147,7 +2147,7 @@ from pathlib import Path
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 env = VectorizedHamletEnv(
-    config_pack_path=Path('configs/L0_minimal'),
+    config_pack_path=Path('configs/L0_0_minimal'),
     num_agents=1,
     device='cpu'
 )
@@ -2162,8 +2162,8 @@ Expected output: Environment loads successfully
 **Step 6: Commit**
 
 ```bash
-git add configs/L0_minimal/actions.yaml tests/test_townlet/unit/test_action_config.py
-git commit -m "feat: add actions.yaml for L0_minimal
+git add configs/L0_0_minimal/actions.yaml tests/test_townlet/unit/test_action_config.py
+git commit -m "feat: add actions.yaml for L0_0_minimal
 
 Created L0 actions.yaml with pedagogical energy costs:
 - Movement: energy=0.005
@@ -2704,7 +2704,7 @@ Part of TASK-002 (UAC Action Space)."
 
 **Files:**
 
-- Modify: `configs/L0_minimal/training.yaml`
+- Modify: `configs/L0_0_minimal/training.yaml`
 - Modify: `configs/L0_5_dual_resource/training.yaml`
 - Modify: `configs/L1_full_observability/training.yaml`
 - Modify: `configs/L2_partial_observability/training.yaml`
@@ -2772,7 +2772,7 @@ Expected output: Environment loads successfully
 
 **Step 4: Remove from all other configs**
 
-Repeat for L0_minimal, L0_5_dual_resource, L2, L3, templates.
+Repeat for L0_0_minimal, L0_5_dual_resource, L2, L3, templates.
 
 **Step 5: Commit**
 
@@ -2859,7 +2859,7 @@ Add to config pack structure (around line 350):
 Each config pack directory contains:
 ```
 
-configs/L0_minimal/
+configs/L0_0_minimal/
 ├── bars.yaml         # Meter definitions
 ├── cascades.yaml     # Meter relationships
 ├── affordances.yaml  # Interaction definitions
@@ -3023,7 +3023,7 @@ actions:
 
 **Config Files (6 packs):**
 
-- `configs/L0_minimal/actions.yaml` (NEW)
+- `configs/L0_0_minimal/actions.yaml` (NEW)
 - `configs/L0_5_dual_resource/actions.yaml` (NEW)
 - `configs/L1_full_observability/actions.yaml` (NEW)
 - `configs/L2_partial_observability/actions.yaml` (NEW)
@@ -3180,7 +3180,7 @@ Expected output: All tests PASS, coverage report shows high coverage
 **Step 2: Run training smoke test for each config**
 
 ```bash
-for config in L0_minimal L0_5_dual_resource L1_full_observability; do
+for config in L0_0_minimal L0_5_dual_resource L1_full_observability; do
     echo "=== Testing $config ==="
     timeout 60 uv run python -m townlet.demo.runner --config configs/$config --max_episodes 10
     if [ $? -eq 0 ] || [ $? -eq 124 ]; then
