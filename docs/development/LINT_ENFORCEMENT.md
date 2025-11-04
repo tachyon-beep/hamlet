@@ -22,14 +22,14 @@ uv run pre-commit install
 - ✓ Ruff (linting with auto-fix)
 - ✓ Ruff formatter (formatting)
 - ✓ Black (formatting)
-- ✓ Mypy (type checking on `src/townlet/`)
 - ✓ Trailing whitespace
 - ✓ End-of-file fixer
 - ✓ YAML syntax
 - ✓ Large files check
 - ✓ Merge conflict markers
 - ✓ Line ending fixes
-- ✓ Markdownlint (with auto-fix)
+
+**Note**: Mypy type checking runs in CI only (not in pre-commit hooks) to avoid slow dependency installation.
 
 **Bypassing pre-commit** (NOT recommended):
 
@@ -47,7 +47,6 @@ The `Lint` workflow runs on every push and pull request. **All checks must pass*
 2. **Black (format)** - All code must be formatted
 3. **Mypy (type check)** - Zero type errors enforced
 4. **No-defaults linter** - No unauthorized defaults
-5. **Markdownlint** - All markdown must follow style guide
 
 **Location**: `.github/workflows/lint.yml`
 
