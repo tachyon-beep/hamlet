@@ -11,6 +11,7 @@ Usage:
         assert basic_env.grid_size == 8
 """
 
+import copy
 import shutil
 from pathlib import Path
 from typing import Any
@@ -401,6 +402,163 @@ def vectorized_population(
         replay_buffer_capacity=1000,
         batch_size=32,
         device=device,
+    )
+
+
+# =============================================================================
+# TASK-001: VARIABLE METER CONFIG FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
+    """Create temporary 4-meter config pack for TASK-001 testing.
+
+    Meters: energy, health, money, mood
+    Use ONLY for: TASK-001 variable meter tests
+    Do NOT use for: L0 curriculum (use separate curriculum fixtures)
+
+    Args:
+        tmp_path: pytest's temporary directory
+        test_config_pack_path: Path to source config pack
+
+    Returns:
+        Path to temporary 4-meter config pack directory
+    """
+    config_4m = tmp_path / "config_4m"
+    shutil.copytree(test_config_pack_path, config_4m)
+
+    # Create 4-meter bars.yaml
+    bars_config = {
+        "version": "2.0",
+        "description": "4-meter test universe",
+        "bars": [
+            {"name": "energy", "index": 0, "tier": "pivotal",
+             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.005},
+            {"name": "health", "index": 1, "tier": "pivotal",
+             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.0},
+            {"name": "money", "index": 2, "tier": "resource",
+             "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.0},
+            {"name": "mood", "index": 3, "tier": "secondary",
+             "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001},
+        ],
+        "terminal_conditions": [
+            {"meter": "energy", "operator": "<=", "value": 0.0},
+            {"meter": "health", "operator": "<=", "value": 0.0},
+        ],
+    }
+
+    with open(config_4m / "bars.yaml", 'w') as f:
+        yaml.safe_dump(bars_config, f)
+
+    # Simplify cascades.yaml
+    cascades_config = {
+        "version": "2.0",
+        "modulations": [],
+        "cascades": [
+            {"name": "low_mood_hits_energy", "category": "secondary_to_pivotal",
+             "source": "mood", "source_index": 3, "target": "energy",
+             "target_index": 0, "threshold": 0.2, "strength": 0.01}
+        ],
+        "execution_order": ["secondary_to_pivotal"],
+    }
+
+    with open(config_4m / "cascades.yaml", 'w') as f:
+        yaml.safe_dump(cascades_config, f)
+
+    return config_4m
+
+
+@pytest.fixture
+def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
+    """Create temporary 12-meter config pack for TASK-001 testing.
+
+    Meters: 8 standard + reputation, skill, spirituality, community_trust
+    Use ONLY for: TASK-001 variable meter scaling tests
+    Do NOT use for: L2 curriculum (use separate curriculum fixtures)
+
+    Args:
+        tmp_path: pytest's temporary directory
+        test_config_pack_path: Path to source config pack
+
+    Returns:
+        Path to temporary 12-meter config pack directory
+    """
+    config_12m = tmp_path / "config_12m"
+    shutil.copytree(test_config_pack_path, config_12m)
+
+    # Load existing 8-meter bars
+    with open(test_config_pack_path / "bars.yaml", 'r') as f:
+        bars_8m = yaml.safe_load(f)
+
+    # Add 4 new meters
+    extra_meters = [
+        {"name": "reputation", "index": 8, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.002},
+        {"name": "skill", "index": 9, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.3, "base_depletion": 0.001},
+        {"name": "spirituality", "index": 10, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.6, "base_depletion": 0.002},
+        {"name": "community_trust", "index": 11, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001},
+    ]
+
+    bars_12m = copy.deepcopy(bars_8m)  # Deep copy to avoid modifying original
+    bars_12m["bars"].extend(extra_meters)
+
+    with open(config_12m / "bars.yaml", 'w') as f:
+        yaml.safe_dump(bars_12m, f)
+
+    return config_12m
+
+
+@pytest.fixture
+def task001_env_4meter(cpu_device: torch.device, task001_config_4meter: Path) -> VectorizedHamletEnv:
+    """4-meter environment for TASK-001 testing.
+
+    Args:
+        cpu_device: CPU device for deterministic behavior
+        task001_config_4meter: Path to 4-meter config pack
+
+    Returns:
+        VectorizedHamletEnv instance with 4 meters
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=8,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        config_pack_path=task001_config_4meter,
+        device=cpu_device,
+    )
+
+
+@pytest.fixture
+def task001_env_12meter(cpu_device: torch.device, task001_config_12meter: Path) -> VectorizedHamletEnv:
+    """12-meter environment for TASK-001 testing.
+
+    Args:
+        cpu_device: CPU device for deterministic behavior
+        task001_config_12meter: Path to 12-meter config pack
+
+    Returns:
+        VectorizedHamletEnv instance with 12 meters
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=8,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        config_pack_path=task001_config_12meter,
+        device=cpu_device,
     )
 
 
