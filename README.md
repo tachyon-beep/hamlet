@@ -4,7 +4,7 @@
 
 ## Overview
 
-Hamlet is a GPU-accelerated DRL training environment where agents learn to survive by managing 8 interconnected physiological and economic meters through strategic interaction with 15 affordances. Progressive complexity levels introduce partial observability (POMDP), temporal mechanics, and intrinsic motivation.
+Hamlet is a GPU-accelerated DRL training environment where agents learn to survive by managing 8 interconnected physiological and economic meters through strategic interaction with 14 affordances. Progressive complexity levels introduce partial observability (POMDP), temporal mechanics, and intrinsic motivation.
 
 ### Key Features
 
@@ -14,7 +14,7 @@ Hamlet is a GPU-accelerated DRL training environment where agents learn to survi
 - 🌟 **Intrinsic Motivation** - RND-based exploration with variance-based annealing
 - 📊 **Live Visualization** - Real-time inference server + Vue.js frontend
 - 🎬 **Episode Recording & Replay** - Record episodes, replay in real-time, export to YouTube-ready MP4
-- 🧪 **70%+ Test Coverage** - 387 tests passing (72 for recording system), production-ready codebase
+- 🧪 **70% Test Coverage** - 644+ tests passing (73 for recording system), production-ready codebase
 
 ## Quick Start
 
@@ -35,26 +35,11 @@ cd hamlet
 # Install dependencies using uv
 uv sync
 
-# Run tests (387 tests, 70%+ coverage)
+# Run tests (644+ tests, 70% coverage)
 uv run pytest tests/ --cov=src/townlet --cov-report=term-missing -v
 ```
 
 ## Development Workflow
-
-### Pre-commit hooks
-
-We ship a `.pre-commit-config.yaml` that runs Ruff and Black before every commit. Once per clone:
-
-```bash
-uv tool install pre-commit  # optional, or pipx install pre-commit
-pre-commit install
-```
-
-You can lint the entire repo manually with:
-
-```bash
-uv run pre-commit run --all-files
-```
 
 ### Continuous Integration
 
@@ -75,7 +60,7 @@ All workflows use `uv` to create the environment and install `.[dev]`, so local 
 ```bash
 # Terminal 1: Training + Inference Server
 source .venv/bin/activate
-python run_demo.py --config configs/L1_full_observability --episodes 10000
+python scripts/run_demo.py --config configs/L1_full_observability --episodes 10000
 
 # Terminal 2: Frontend (once checkpoints exist)
 cd frontend && npm run dev
@@ -89,7 +74,7 @@ cd frontend && npm run dev
 - Inference server watches for new checkpoints and broadcasts state to frontend
 - WebSocket server on port 8766
 
-See [UNIFIED_SERVER_USAGE.md](UNIFIED_SERVER_USAGE.md) for complete guide.
+See [docs/manual/UNIFIED_SERVER_USAGE.md](docs/manual/UNIFIED_SERVER_USAGE.md) for complete guide.
 
 ## Training Levels (Progressive Complexity)
 
@@ -98,7 +83,7 @@ See [UNIFIED_SERVER_USAGE.md](UNIFIED_SERVER_USAGE.md) for complete guide.
 **Config:** `configs/L1_full_observability`
 
 ```bash
-python run_demo.py --config configs/L1_full_observability --episodes 10000
+python scripts/run_demo.py --config configs/L1_full_observability --episodes 10000
 ```
 
 **Features:**
@@ -115,7 +100,7 @@ python run_demo.py --config configs/L1_full_observability --episodes 10000
 **Config:** `configs/L2_partial_observability`
 
 ```bash
-python run_demo.py --config configs/L2_partial_observability --episodes 10000
+python scripts/run_demo.py --config configs/L2_partial_observability --episodes 10000
 ```
 
 **Features:**
@@ -132,7 +117,7 @@ python run_demo.py --config configs/L2_partial_observability --episodes 10000
 **Config:** `configs/L3_temporal_mechanics`
 
 ```bash
-python run_demo.py --config configs/L3_temporal_mechanics --episodes 10000
+python scripts/run_demo.py --config configs/L3_temporal_mechanics --episodes 10000
 ```
 
 **Features:**
@@ -145,7 +130,7 @@ python run_demo.py --config configs/L3_temporal_mechanics --episodes 10000
 
 **Why:** Teaches temporal planning, opportunity cost, and delayed gratification.
 
-See [docs/TRAINING_LEVELS.md](docs/TRAINING_LEVELS.md) for complete formal specification.
+See [docs/architecture/TRAINING_LEVELS.md](docs/architecture/TRAINING_LEVELS.md) for complete formal specification.
 
 ## The Environment
 
@@ -171,7 +156,7 @@ See [docs/TRAINING_LEVELS.md](docs/TRAINING_LEVELS.md) for complete formal speci
 
 - `money` - Enables affordances ($0-$100 normalized)
 
-### 15 Affordances
+### 14 Affordances
 
 Agents interact with affordances to restore meters and earn money:
 
@@ -194,7 +179,6 @@ Agents interact with affordances to restore meters and earn money:
 
 **Dynamic (Time-Dependent):**
 
-- `CoffeeShop` - Energy + mood + social (8am-6pm)
 - `Bar` - Social (BEST: +50%) + mood (6pm-4am)
 - `Park` - FREE fitness + social + mood (6am-10pm)
 
@@ -212,27 +196,86 @@ social < 30%   → satiation -0.4%/tick, fitness -0.4%/tick, mood -0.4%/tick
 
 **Teaching Value:** Students experiment with cascade strengths by editing `configs/cascades.yaml`
 
+### Observation Space
+
+The observation space is **standardized across all curriculum levels** to enable transfer learning and observation stability.
+
+#### Fixed Affordance Vocabulary
+
+All levels observe the **same 14 affordances** in their state representation, even if not all are deployed in that level:
+- `Bed`, `LuxuryBed`, `Shower`, `HomeMeal`, `FastFood`, `Doctor`, `Hospital`, `Therapist`, `Recreation`, `Bar`, `Job`, `Labor`, `Gym`, `Park`
+
+**Key Insight**: A model trained on L0 (minimal) can be promoted to L1 (full) without architecture changes because the affordance encoding dimension is constant.
+
+#### Full Observability (L1)
+
+**Observation components**:
+- **Grid encoding**: `grid_size × grid_size` one-hot (e.g., 64 dims for 8×8 grid)
+- **Meters**: 8 normalized values [0.0-1.0] (energy, health, satiation, money, mood, social, fitness, hygiene)
+- **Affordance at position**: 15 one-hot (14 affordances + "none")
+- **Temporal extras**: 4 values (time_of_day, retirement_age, interaction_progress, interaction_ticks)
+
+**Dimensions by level**:
+- **L0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
+- **L0_5_dual_resource**: 76 dims (7×7 grid=49 + 8 meters + 15 affordances + 4 extras)
+- **L1_full_observability**: 91 dims (8×8 grid=64 + 8 meters + 15 affordances + 4 extras)
+
+**Network**: Standard MLP Q-Network (~26K-70K params depending on grid size)
+
+#### Partial Observability (L2 POMDP)
+
+**Observation components**:
+- **Local grid**: 5×5 window (25 dims) - agent sees only nearby region
+- **Position**: Normalized (x, y) (2 dims) - "where am I on the grid?"
+- **Meters**: 8 normalized values (8 dims)
+- **Affordance at position**: 15 one-hot (15 dims)
+- **Temporal extras**: 4 values (4 dims)
+
+**Total**: 54 dimensions (fixed regardless of full grid size)
+
+**Network**: RecurrentSpatialQNetwork with LSTM (~600K params) for spatial memory
+
+**Challenge**: Agent must build mental map through exploration under uncertainty.
+
+#### Action Space
+
+**5 discrete actions** (currently hardcoded, will move to YAML per TASK-003):
+- `UP` = 0
+- `DOWN` = 1
+- `LEFT` = 2
+- `RIGHT` = 3
+- `INTERACT` = 4
+
+**Note**: Action space will become configurable to support diagonal movement, rest actions, and alternative universes.
+
+#### Key Design Principles
+
+1. **Observation stability**: Same affordance vocabulary across all levels
+2. **Transfer learning**: Models trained on smaller grids work on larger grids
+3. **Temporal awareness**: All levels include time-based features for L3 temporal mechanics
+4. **POMDP support**: Partial observability uses fixed 5×5 window regardless of full grid size
+
 ## Project Structure
 
 ```text
 hamlet/
-├── src/townlet/              # Active codebase (⚠️ src/hamlet/ is legacy)
+├── src/townlet/              # Active codebase
 │   ├── agent/                # Neural networks (Simple, Recurrent)
 │   ├── curriculum/           # Adversarial difficulty adjustment
 │   ├── demo/                 # Training runner + inference server
 │   ├── environment/          # Vectorized grid world + meter dynamics
 │   ├── exploration/          # RND + adaptive intrinsic motivation
 │   ├── population/           # Training loop coordinator
+│   ├── recording/            # Episode recording and replay system
 │   └── training/             # Replay buffer + state management
-├── tests/test_townlet/       # 387 tests, 70%+ coverage
+├── tests/test_townlet/       # 644+ tests, 70% coverage
 ├── configs/                  # YAML configurations (L1-L3)
 ├── frontend/                 # Vue 3 + Vite visualization
-├── docs/                     # Documentation
-│   ├── TRAINING_LEVELS.md   # Formal level specifications
-│   ├── testing/             # Test strategy and refactoring plans
-│   └── ...
-├── run_demo.py              # Unified server entry point
-└── UNIFIED_SERVER_USAGE.md  # Complete usage guide
+├── scripts/                  # Utility scripts
+│   └── run_demo.py           # Unified server entry point
+└── docs/                     # Documentation
+    ├── architecture/         # System design and roadmap
+    └── manual/               # User guides
 ```
 
 ## Visualization
@@ -292,7 +335,7 @@ uv run mypy src/
 
 ## Current Status
 
-**Phase 3 Complete (November 2025):**
+**Phase 3 Complete (2025-11-04):**
 
 - ✅ Vectorized GPU training environment
 - ✅ Level 1-3 progressive complexity working
@@ -300,7 +343,8 @@ uv run mypy src/
 - ✅ RND-based intrinsic motivation with adaptive annealing
 - ✅ Unified training + inference server
 - ✅ Vue 3 frontend with live visualization
-- ✅ 70%+ test coverage (387 tests passing)
+- ✅ Episode recording and replay system
+- ✅ 70% test coverage (644+ tests passing)
 - ✅ TensorBoard integration
 - ✅ SQLite metrics storage
 
@@ -343,7 +387,7 @@ uv run mypy src/
 - Emergent social dynamics and territoriality
 - Nash equilibria emerging naturally
 
-See [ROADMAP.md](ROADMAP.md) for complete strategic plan.
+See [docs/architecture/ROADMAP.md](docs/architecture/ROADMAP.md) for complete strategic plan.
 
 ## Technologies
 
@@ -352,20 +396,18 @@ See [ROADMAP.md](ROADMAP.md) for complete strategic plan.
 - **FastAPI + uvicorn** - Async inference server
 - **Vue 3 + Vite** - Reactive frontend visualization
 - **uv** - Fast Python package manager
-- **pytest** - Testing framework (387 tests, 70%+ coverage)
+- **pytest** - Testing framework (644+ tests, 70% coverage)
 - **TensorBoard** - Training metrics visualization
 - **SQLite** - Episode metrics storage
 
 ## Documentation
 
-- **[UNIFIED_SERVER_USAGE.md](UNIFIED_SERVER_USAGE.md)** - Complete usage guide
-- **[AGENTS.md](AGENTS.md)** - Comprehensive project memory for AI assistants
-- **[ROADMAP.md](ROADMAP.md)** - Strategic development plan
-- **[docs/TRAINING_LEVELS.md](docs/TRAINING_LEVELS.md)** - Formal level specifications
-- **[docs/REPLAY_USAGE.md](docs/REPLAY_USAGE.md)** - Real-time episode replay system
-- **[docs/VIDEO_EXPORT_USAGE.md](docs/VIDEO_EXPORT_USAGE.md)** - Video export for YouTube
-- **[docs/RECORDING_SYSTEM_SUMMARY.md](docs/RECORDING_SYSTEM_SUMMARY.md)** - Complete recording system overview
-- **[docs/testing/](docs/testing/)** - Testing strategy and refactoring plans
+- **[docs/manual/UNIFIED_SERVER_USAGE.md](docs/manual/UNIFIED_SERVER_USAGE.md)** - Complete usage guide
+- **[docs/architecture/ROADMAP.md](docs/architecture/ROADMAP.md)** - Strategic development plan
+- **[docs/architecture/TRAINING_LEVELS.md](docs/architecture/TRAINING_LEVELS.md)** - Formal level specifications
+- **[docs/manual/REPLAY_USAGE.md](docs/manual/REPLAY_USAGE.md)** - Real-time episode replay system
+- **[docs/manual/VIDEO_EXPORT_USAGE.md](docs/manual/VIDEO_EXPORT_USAGE.md)** - Video export for YouTube
+- **[docs/manual/RECORDING_SYSTEM_SUMMARY.md](docs/manual/RECORDING_SYSTEM_SUMMARY.md)** - Complete recording system overview
 
 ## Contributing
 
@@ -380,7 +422,7 @@ Feel free to experiment, extend, and learn!
 
 ## License
 
-MIT License (see LICENSE file)
+MIT License
 
 ## Citation
 
