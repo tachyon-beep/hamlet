@@ -7,9 +7,10 @@ This directory contains task specifications, templates, and archived completed w
 ```
 docs/tasks/
 ├── README.md              # This file
-├── QUICK-TEMPLATE.md      # Template for quick one-shot tasks (0.5-4 hours)
-├── TASK-TEMPLATE.md       # Template for major programming tasks (multi-day)
-├── BUG-TEMPLATE.md        # Template for bug reports and fixes
+├── templates/             # Task templates
+│   ├── QUICK-TEMPLATE.md  # Template for quick one-shot tasks (0.5-4 hours)
+│   ├── TASK-TEMPLATE.md   # Template for major programming tasks (multi-day)
+│   └── BUG-TEMPLATE.md    # Template for bug reports and fixes
 ├── archive/               # Completed tasks (moved here when done)
 │   └── QUICK-001-*.md
 └── [Active tasks live here at root level]
@@ -241,7 +242,7 @@ Document Prevention Strategy
 1. Copy appropriate template:
 
    ```bash
-   cp docs/tasks/QUICK-TEMPLATE.md docs/tasks/QUICK-042-MY-TASK.md
+   cp docs/tasks/templates/QUICK-TEMPLATE.md docs/tasks/QUICK-042-MY-TASK.md
    ```
 
 2. Fill in front matter (especially AI summary)
@@ -408,14 +409,14 @@ Document Prevention Strategy
 
 ## Task Templates Explained
 
-### QUICK-TEMPLATE.md
+### templates/QUICK-TEMPLATE.md
 
 - Lightweight structure
 - Focus on implementation steps
 - TDD checklist included
 - Example: QUICK-001
 
-### TASK-TEMPLATE.md
+### templates/TASK-TEMPLATE.md
 
 - Comprehensive structure
 - Multiple phases
@@ -423,7 +424,7 @@ Document Prevention Strategy
 - Migration guide
 - Example: TASK-001, TASK-002A
 
-### BUG-TEMPLATE.md
+### templates/BUG-TEMPLATE.md
 
 - Reproduction steps
 - Root cause analysis
