@@ -2,14 +2,20 @@
 
 ## Summary
 
-**Total Remaining**: 44 errors across 3 files
-**Completed**: 16 errors fixed (27% done)
+**Total Remaining**: 30 errors across 2 files
+**Completed**: 31 errors fixed (51% done - HALFWAY THERE!)
 
 ## Files Fixed ✅
 - `database.py` (3 errors) - SQL parameter typing
 - `replay.py` (4 errors) - Import stubs, database typing
 - `recorder.py` (4 errors) - Import stubs, position tuple casting
 - `video_export.py` (5 errors) - None checks, method name
+- `vectorized.py` (15 errors) - Union types, Tensor typing, return annotations
+  - Fixed replay buffer Union narrowing with isinstance()
+  - Fixed RecurrentSpatialQNetwork casting for method calls
+  - Fixed Tensor vs float type annotations
+  - Fixed return type annotations
+  - Renamed RND loss variable to avoid shadowing
 
 ## Remaining Errors by File
 
@@ -59,7 +65,7 @@ q_network = self.population.q_network
 positions = self.env.positions
 ```
 
-### 3. `unified_server.py` (6 errors) - PRIORITY: LOW
+### 2. `unified_server.py` (9 errors) - PRIORITY: MEDIUM (server code)
 
 **None Checks Needed** (4 errors):
 - Lines 350, 392, 479: `Path | None` accessed without check
@@ -77,32 +83,23 @@ if self.checkpoint_dir is None:
 # Use correct attribute name (likely `self._frontend_port` or similar)
 ```
 
-### 4. `runner.py` (1 error) - PRIORITY: LOW
-
-Line 417: Function body not checked (add `--check-untyped-defs` or add types)
-
 ## Recommended Fix Order
 
-1. **vectorized.py** (Core training code - HIGH priority)
-   - Fix Union types first (replay buffer conditional logic)
-   - Fix Tensor/float type annotations
-   - Estimated time: 30-45 mins
+1. **✅ DONE: vectorized.py** (Core training code - HIGH priority)
+   - ✅ Fixed all 15 errors
+   - Time taken: ~25 mins
 
-2. **live_inference.py** (Demo/visualization - MEDIUM priority)
+2. **live_inference.py** (Demo/visualization - NOW HIGHEST priority)
    - Add initialization checks at start of methods
    - Add None guards throughout
    - Estimated time: 20-30 mins
 
-3. **unified_server.py** (Server code - LOW priority)
+3. **unified_server.py** (Server code - MEDIUM priority)
    - Fix attribute names
    - Add path checks
    - Estimated time: 10-15 mins
 
-4. **runner.py** (Entry point - LOW priority)
-   - Add type annotations to untyped function
-   - Estimated time: 5 mins
-
-## Total Estimated Time: 1.5-2 hours
+## Total Estimated Time Remaining: ~45 mins
 
 ## Commands
 
