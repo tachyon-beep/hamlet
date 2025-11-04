@@ -18,8 +18,10 @@ Total: 38 tests → 15 comprehensive integration tests
 """
 
 import tempfile
+import warnings
 from pathlib import Path
 
+import pytest
 import torch
 import yaml
 
@@ -1118,8 +1120,6 @@ class TestVariableMeterCheckpoints:
         )
 
         # Loading should raise ValueError
-        import pytest
-
         with pytest.raises(ValueError, match="meter count mismatch"):
             pop_8meter.load_checkpoint_state(checkpoint_4meter)
 
@@ -1170,8 +1170,6 @@ class TestVariableMeterCheckpoints:
 
     def test_legacy_checkpoint_loads_with_default_assumption(self, cpu_device, basic_env):
         """Legacy checkpoints (no metadata) should load with warning."""
-        import warnings
-
         # Create a real checkpoint first to get proper network state
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
         curriculum.initialize_population(1)

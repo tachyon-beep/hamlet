@@ -9,7 +9,6 @@ configurations. Tests cover:
 - Meter dynamics with variable meter counts
 """
 
-
 import pytest
 import torch
 
