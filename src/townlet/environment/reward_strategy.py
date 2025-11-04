@@ -96,19 +96,3 @@ class RewardStrategy:
         )
 
         return rewards
-
-    def _prepare_baseline_tensor(self, baseline_steps: torch.Tensor | float | list[float]) -> torch.Tensor:
-        """Normalise baseline input to [num_agents] float tensor on device."""
-        if isinstance(baseline_steps, torch.Tensor):
-            tensor = baseline_steps.to(self.device, dtype=torch.float32)
-        elif isinstance(baseline_steps, (float, int)):
-            tensor = torch.full((self.num_agents,), float(baseline_steps), dtype=torch.float32, device=self.device)
-        elif isinstance(baseline_steps, list):
-            tensor = torch.tensor(baseline_steps, dtype=torch.float32, device=self.device)
-        else:
-            raise TypeError(f"Unsupported baseline type: {type(baseline_steps)!r}")
-
-        if tensor.shape != (self.num_agents,):
-            raise ValueError(f"baseline tensor shape {tensor.shape} does not match num_agents={self.num_agents}")
-
-        return tensor
