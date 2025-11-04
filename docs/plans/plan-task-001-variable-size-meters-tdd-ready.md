@@ -2,10 +2,10 @@
 
 **Task**: TASK-001 Variable-Size Meter System
 **Priority**: CRITICAL
-**Effort**: 15-21 hours (updated for test infrastructure integration)
+**Effort**: 17-24 hours (revised after review - includes audit and boundary tests)
 **Status**: Ready for TDD Implementation
 **Created**: 2025-11-04
-**Updated**: 2025-11-04 (integrated with new test infrastructure)
+**Updated**: 2025-11-04 (addressed review critical issues)
 **Method**: Research → Plan → Review Loop (see `docs/methods/RESEARCH-PLAN-REVIEW-LOOP.md`)
 
 ---
@@ -18,9 +18,39 @@ This plan details the TDD implementation approach for removing the hardcoded 8-m
 - 16-meter research experiments
 - Domain-specific universes (factory sims, trading bots, ecosystems)
 
-**Key Insight**: Meter count is **metadata**, not a fixed constant. The fix unblocks entire design space for 13-19 hours of effort.
+**Key Insight**: Meter count is **metadata**, not a fixed constant. The fix unblocks entire design space for 17-24 hours of effort (revised after review).
 
 **Implementation Strategy**: Test-Driven Development (TDD) with RED-GREEN-REFACTOR cycle applied to each phase.
+
+---
+
+## Review-Driven Updates (2025-11-04)
+
+This plan was reviewed by a research agent and updated to address 3 critical issues:
+
+### ✅ Issue 1: Task Numbering RESOLVED
+- **Problem**: Spec file header incorrectly said "TASK-005"
+- **Fix**: Updated spec file to correctly say "TASK-001" (per TASK_IMPLEMENTATION_PLAN.md line 100)
+
+### ✅ Issue 2: Test File Organization RESOLVED
+- **Problem**: Plan proposed creating `test_variable_meter_config.py` but tests are consolidated in `test_configuration.py`
+- **Fix**: Create `unit/environment/test_variable_meters.py` (follows pattern of existing `test_meters.py`)
+- **Rationale**: Avoids bloating `test_configuration.py` to 300+ lines, isolates variable meter tests cleanly
+
+### ✅ Issue 3: Comprehensive Audit ADDED
+- **Problem**: Plan identified some hardcoded-8 locations but no comprehensive verification
+- **Fix**: Added **Phase 0.5** with grep audit commands and checklist template
+- **Time**: +1-2 hours to ensure ALL instances found
+
+### Additional Improvements
+
+- ✅ **Boundary tests added**: 1-meter and 32-meter validation tests in Phase 1
+- ✅ **Fixture naming updated**: Prefixed with `task001_` to avoid conflicts with curriculum fixtures
+- ✅ **Effort estimate revised**: 15-21h → 17-24h (includes audit + boundary tests)
+
+**Review Score**: 7.5/10 → 9.0/10 after revisions (High confidence)
+
+**See**: `docs/reviews/REVIEW-TASK-001-TDD-PLAN.md` for full review details
 
 ---
 
@@ -161,15 +191,21 @@ assert late_survival.mean() == 123.45, "Must be exactly 123.45"
 
 ### Test File Organization for TASK-001
 
-| Phase | Test File | Type |
-|-------|-----------|------|
-| **Phase 1** | `unit/environment/test_variable_meter_config.py` | Unit (NEW) |
-| **Phase 2** | `unit/environment/test_variable_meter_engine.py` | Unit (NEW) |
-| **Phase 3** | `unit/agent/test_variable_meter_networks.py` | Unit (NEW) |
-| **Phase 4** | `integration/test_checkpointing.py` | Integration (EXTEND) |
-| **Phase 5** | `integration/test_variable_meter_integration.py` | Integration (NEW) |
+**IMPORTANT**: The test suite has been refactored. Configuration tests are now consolidated in `unit/test_configuration.py` (100+ lines). To avoid creating a 300+ line file, we'll create a dedicated file for variable meter tests.
 
-**Rationale**: Mirrors existing structure - unit tests in component directories (`environment/`, `agent/`), integration tests in `integration/`.
+| Phase | Test File | Type | Rationale |
+|-------|-----------|------|-----------|
+| **Phase 1** | `unit/environment/test_variable_meters.py` | Unit (NEW) | Meter logic is environment-specific; follows pattern of existing `test_meters.py` |
+| **Phase 2** | `unit/environment/test_variable_meters.py` | Unit (EXTEND) | Add engine tests to same file |
+| **Phase 3** | `unit/agent/test_networks.py` | Unit (EXTEND) | Add test class to existing network tests |
+| **Phase 4** | `integration/test_checkpointing.py` | Integration (EXTEND) | Add test class for variable meter checkpoints |
+| **Phase 5** | `integration/test_variable_meter_integration.py` | Integration (NEW) | Full end-to-end integration tests |
+
+**Decision**: Create `tests/test_townlet/unit/environment/test_variable_meters.py` (NEW)
+- **Pro**: Clean isolation of variable meter tests
+- **Pro**: Follows existing pattern (`unit/environment/test_meters.py`)
+- **Pro**: Avoids bloating `test_configuration.py` to 300+ lines
+- **Con**: Adds one new test file (acceptable for 32 tests)
 
 ### Required Conftest.py Fixtures
 
@@ -185,11 +221,12 @@ Before starting Phase 1, add these fixtures to `tests/test_townlet/conftest.py`:
 # import yaml
 
 @pytest.fixture
-def config_4meter(tmp_path, test_config_pack_path):
-    """Create temporary 4-meter config pack for testing.
+def task001_config_4meter(tmp_path, test_config_pack_path):
+    """Create temporary 4-meter config pack for TASK-001 testing.
 
     Meters: energy, health, money, mood
-    Use for: TASK-001 variable meter config/engine tests
+    Use ONLY for: TASK-001 variable meter tests
+    Do NOT use for: L0 curriculum (use separate curriculum fixtures)
     """
     config_4m = tmp_path / "config_4m"
     shutil.copytree(test_config_pack_path, config_4m)
@@ -236,11 +273,12 @@ def config_4meter(tmp_path, test_config_pack_path):
 
 
 @pytest.fixture
-def config_12meter(tmp_path, test_config_pack_path):
-    """Create temporary 12-meter config pack for testing.
+def task001_config_12meter(tmp_path, test_config_pack_path):
+    """Create temporary 12-meter config pack for TASK-001 testing.
 
     Meters: 8 standard + reputation, skill, spirituality, community_trust
-    Use for: TASK-001 variable meter scaling tests
+    Use ONLY for: TASK-001 variable meter scaling tests
+    Do NOT use for: L2 curriculum (use separate curriculum fixtures)
     """
     config_12m = tmp_path / "config_12m"
     shutil.copytree(test_config_pack_path, config_12m)
@@ -271,20 +309,20 @@ def config_12meter(tmp_path, test_config_pack_path):
 
 
 @pytest.fixture
-def env_4meter(cpu_device, config_4meter):
+def task001_env_4meter(cpu_device, task001_config_4meter):
     """4-meter environment for TASK-001 testing."""
     return VectorizedHamletEnv(
         num_agents=1, grid_size=8, partial_observability=False,
-        device=cpu_device, config_pack_path=config_4meter,
+        device=cpu_device, config_pack_path=task001_config_4meter,
     )
 
 
 @pytest.fixture
-def env_12meter(cpu_device, config_12meter):
+def task001_env_12meter(cpu_device, task001_config_12meter):
     """12-meter environment for TASK-001 testing."""
     return VectorizedHamletEnv(
         num_agents=1, grid_size=8, partial_observability=False,
-        device=cpu_device, config_pack_path=config_12meter,
+        device=cpu_device, config_pack_path=task001_config_12meter,
     )
 ```
 
@@ -301,11 +339,11 @@ def test_4_meter_env():
     )
 
 # NEW (using fixtures)
-def test_4_meter_env(cpu_device, config_4meter):
+def test_4_meter_env(cpu_device, task001_config_4meter):
     env = VectorizedHamletEnv(
         num_agents=2,
         device=cpu_device,  # ✅ CPU for determinism
-        config_pack_path=config_4meter,  # ✅ Fixture
+        config_pack_path=task001_config_4meter,  # ✅ Fixture with task prefix
     )
 ```
 
@@ -370,10 +408,10 @@ If 4-meter or 12-meter config packs don't exist yet, the fixtures will create th
 
 ### Phase 0 Success Criteria
 - [ ] conftest.py has copy, shutil, yaml imports
-- [ ] config_4meter fixture added
-- [ ] config_12meter fixture added
-- [ ] env_4meter fixture added
-- [ ] env_12meter fixture added
+- [ ] task001_config_4meter fixture added
+- [ ] task001_config_12meter fixture added
+- [ ] task001_env_4meter fixture added
+- [ ] task001_env_12meter fixture added
 - [ ] `pytest --collect-only` runs without import errors
 - [ ] Fixtures compose correctly (tmp_path → config → env)
 
@@ -381,14 +419,91 @@ If 4-meter or 12-meter config packs don't exist yet, the fixtures will create th
 
 ---
 
-## Phase 1: Config Schema Refactor (3-4 hours)
+## Phase 0.5: Comprehensive Hardcoded-8 Audit (1-2 hours)
+
+### Goal
+Identify ALL locations with hardcoded 8-meter assumptions before starting implementation.
+
+### 0.5.1: Run Comprehensive Grep Audit
+
+**Location**: Project root
+
+Execute the following grep commands to find all hardcoded-8 references:
+
+```bash
+# Find validation constraints
+grep -rn "le=7\|!= 8\|== 8" src/townlet/environment/*.py
+
+# Find hardcoded tensor sizes
+grep -rn "torch.zeros.*8\)" src/townlet/environment/*.py
+grep -rn "torch.zeros(8" src/townlet/environment/*.py
+grep -rn "\[num_agents, 8\]" src/townlet/environment/*.py
+
+# Find range syntax [0-7] or {0,1,2,3,4,5,6,7}
+grep -rn "\[0.*7\]\|{0.*7}" src/townlet/environment/*.py
+
+# Find hardcoded indices in comments
+grep -rn "\[8\]\|8 meters\|8-meter" src/townlet/environment/*.py
+
+# Find affordance config hardcoded meter indices
+grep -rn "METER_NAME_TO_IDX" src/townlet/environment/*.py
+```
+
+### 0.5.2: Document All Findings
+
+Create a checklist of ALL files and line numbers that need modification:
+
+```
+[ ] cascade_config.py:27 - BarConfig.index le=7 constraint
+[ ] cascade_config.py:70 - BarsConfig validator len(v) != 8
+[ ] cascade_config.py:75 - BarsConfig validator indices != {0..7}
+[ ] cascade_config.py:117 - CascadeConfig.source_index le=7
+[ ] cascade_config.py:119 - CascadeConfig.target_index le=7
+[ ] vectorized_env.py:119 - obs_dim calculation + 8
+[ ] vectorized_env.py:161 - torch.zeros((num_agents, 8))
+[ ] vectorized_env.py:290 - Hardcoded index [0] for energy
+[ ] vectorized_env.py:470 - Hardcoded index [3] for money
+[ ] vectorized_env.py:550 - Hardcoded index [6] for health
+[ ] vectorized_env.py:400-410 - 8-element cost arrays
+[ ] affordance_config.py:27-36 - METER_NAME_TO_IDX hardcoded dict
+[ ] cascade_engine.py:72 - torch.zeros(8, ...)
+[ ] cascade_engine.py:321 - torch.zeros(8, device)
+[ ] (Add any additional findings from grep)
+```
+
+### 0.5.3: Verify No Instances Missed
+
+Run additional searches for edge cases:
+
+```bash
+# Find numeric literals that might be meter count
+grep -rn "^\s*8\s*$\|= 8$\|=8$" src/townlet/environment/*.py | grep -v "# grid_size"
+
+# Find hardcoded meter names in arrays
+grep -rn "energy.*hygiene.*satiation.*money.*mood.*social.*health.*fitness" src/townlet/environment/*.py
+```
+
+### Phase 0.5 Success Criteria
+- [ ] All grep commands executed and results documented
+- [ ] Checklist created with every file:line_number that needs changes
+- [ ] No false positives (grid_size=8, max_steps=8, etc.) included in checklist
+- [ ] Audit results saved to `docs/reviews/TASK-001-AUDIT-RESULTS.md`
+- [ ] Estimated 15-20 locations identified across 3-5 files
+
+**Estimated Time**: 1-2 hours
+
+**Deliverable**: Complete audit checklist documenting all hardcoded-8 locations
+
+---
+
+## Phase 1: Config Schema Refactor (4-5 hours)
 
 ### Goal
 Make `BarsConfig` accept variable-size meter lists (1-32 meters).
 
 ### 1.1: Write Tests for Variable Meter Count Validation (RED)
 
-**Test File**: `tests/test_townlet/unit/test_configuration.py` (EXTEND existing file)
+**Test File**: `tests/test_townlet/unit/environment/test_variable_meters.py` (NEW)
 
 ```python
 """Unit tests for variable-size meter configuration (TASK-001 Phase 1).
@@ -411,6 +526,21 @@ from townlet.environment.cascade_config import (
 
 class TestVariableMeterConfigValidation:
     """Test that BarsConfig accepts variable meter counts."""
+
+    def test_1_meter_config_validates(self, tmp_path):
+        """Minimum valid: 1-meter config should validate successfully."""
+        config = BarsConfig(
+            version="2.0",
+            description="1-meter minimal",
+            bars=[
+                BarConfig(name="energy", index=0, tier="pivotal",
+                         range=[0.0, 1.0], initial=1.0, base_depletion=0.005),
+            ],
+            terminal_conditions=[]
+        )
+
+        assert config.meter_count == 1
+        assert config.meter_names == ["energy"]
 
     def test_4_meter_config_validates(self, tmp_path):
         """4-meter config should validate successfully."""
@@ -451,6 +581,24 @@ class TestVariableMeterConfigValidation:
 
         assert config.meter_count == 12
         assert len(config.meter_names) == 12
+
+    def test_32_meter_config_validates(self, tmp_path):
+        """Maximum valid: 32-meter config should validate successfully."""
+        bars = [
+            BarConfig(name=f"meter_{i}", index=i, tier="secondary",
+                     range=[0.0, 1.0], initial=0.5, base_depletion=0.001)
+            for i in range(32)
+        ]
+
+        config = BarsConfig(
+            version="2.0",
+            description="32-meter maximum",
+            bars=bars,
+            terminal_conditions=[]
+        )
+
+        assert config.meter_count == 32
+        assert len(config.meter_names) == 32
 
     def test_existing_8_meter_config_still_validates(self, test_config_pack_path):
         """Backward compatibility: 8-meter configs still work."""
@@ -1896,12 +2044,13 @@ training:
 | Phase | Description | TDD Time | Implementation Time | Total |
 |-------|-------------|----------|---------------------|-------|
 | **Phase 0** | Setup test fixtures | 0h | 1h | 1h |
-| **Phase 1** | Config schema refactor | 1-1.5h | 2-2.5h | 3-4h |
+| **Phase 0.5** | Comprehensive hardcoded-8 audit | 0h | 1-2h | 1-2h |
+| **Phase 1** | Config schema refactor (+ boundary tests) | 1.5-2h | 2.5-3h | 4-5h |
 | **Phase 2** | Engine layer refactor | 1.5-2h | 2.5-4h | 4-6h |
 | **Phase 3** | Network layer updates | 0.5-1h | 1.5-2h | 2-3h |
 | **Phase 4** | Checkpoint compatibility | 1-1.5h | 1-1.5h | 2-3h |
 | **Phase 5** | Integration testing | 1-1.5h | 1-1.5h | 2-3h |
-| **Total** | | **4.5-7.5h** (TDD) | **9.5-12.5h** (Impl) | **15-21h** |
+| **Total** | | **6-9h** (TDD) | **11-15h** (Impl) | **17-24h** |
 
 **TDD Overhead**: ~40% of time spent writing tests first (RED phase)
 **Value**: Prevents regressions, documents expected behavior, enables confident refactoring
@@ -2073,11 +2222,11 @@ This TDD-ready plan provides a systematic approach to removing the 8-meter const
 2. **Write minimal code to pass** (simplest solution)
 3. **Refactor while keeping tests green** (clean code)
 
-**Total effort**: 13-19 hours (1-2 days)
-**Risk**: Low (straightforward refactoring with test coverage)
+**Total effort**: 17-24 hours (2-3 days) - revised after review
+**Risk**: Medium (reduced to low with comprehensive audit and TDD)
 **Priority**: CRITICAL (highest-leverage infrastructure change)
 **Impact**: Unblocks entire design space (4-32 meters)
 
-**Next Step**: Begin Phase 1 - Config Schema Refactor (3-4 hours)
+**Next Step**: Begin Phase 0.5 - Comprehensive Audit (1-2 hours), then Phase 1 - Config Schema Refactor (4-5 hours)
 
 **Slogan**: "From 'exactly 8 bars' to 'as many bars as your universe needs.'"

@@ -1,10 +1,10 @@
-# TASK-005: Variable-Size Meter System
+# TASK-001: Variable-Size Meter System
 
 **Status**: Planned
 **Priority**: CRITICAL (Unblocks entire design space)
-**Estimated Effort**: 12-16 hours
+**Estimated Effort**: 13-19 hours
 **Dependencies**: None (is foundational)
-**Enables**: TASK-001, TASK-003 (schema validation and compilation)
+**Enables**: TASK-002, TASK-003, TASK-004 (schema validation and compilation)
 
 ---
 
