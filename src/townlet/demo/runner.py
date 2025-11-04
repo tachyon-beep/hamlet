@@ -108,6 +108,52 @@ class DemoRunner:
         logger.info(f"Received signal {signum}, initiating graceful shutdown...")
         self.should_shutdown = True
 
+    def _cleanup(self):
+        """Internal cleanup method for resources.
+
+        Safe to call multiple times (idempotent).
+        Handles partial initialization gracefully.
+        """
+        # Shutdown recorder if enabled
+        if hasattr(self, "recorder") and self.recorder is not None:
+            logger.info("Shutting down episode recorder...")
+            try:
+                self.recorder.shutdown()
+            except Exception as e:
+                logger.warning(f"Error shutting down recorder: {e}")
+
+        # Close database connection
+        if hasattr(self, "db"):
+            try:
+                self.db.close()
+            except Exception as e:
+                logger.warning(f"Error closing database: {e}")
+
+        # Close TensorBoard logger
+        if hasattr(self, "tb_logger"):
+            try:
+                self.tb_logger.close()
+            except Exception as e:
+                logger.warning(f"Error closing TensorBoard logger: {e}")
+
+    def __enter__(self):
+        """Enter context manager - return self for 'with' statement."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager - cleanup resources.
+
+        Args:
+            exc_type: Exception type if exception occurred
+            exc_val: Exception value if exception occurred
+            exc_tb: Exception traceback if exception occurred
+
+        Returns:
+            False to propagate exceptions (don't suppress)
+        """
+        self._cleanup()
+        return False  # Don't suppress exceptions
+
     def flush_all_agents(self):
         """Flush all agents' episodes to replay buffer before checkpoint."""
         if not self.population:
@@ -711,15 +757,8 @@ class DemoRunner:
 
             self.db.set_system_state("training_status", "completed")
 
-            # Shutdown recorder if enabled
-            if self.recorder is not None:
-                logger.info("Shutting down episode recorder...")
-                self.recorder.shutdown()
-
-            self.db.close()
-
-            # Close TensorBoard logger
-            self.tb_logger.close()
+            # Use extracted cleanup method
+            self._cleanup()
 
 
 if __name__ == "__main__":
