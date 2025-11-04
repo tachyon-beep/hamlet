@@ -346,6 +346,9 @@ class UnifiedServer:
             # Import here to avoid circular dependencies
             from townlet.demo.runner import DemoRunner
 
+            # Type narrowing: checkpoint_dir is guaranteed to be set by start()
+            assert self.checkpoint_dir is not None, "checkpoint_dir must be set by start() before calling _run_training()"
+
             # Create database path (sibling to checkpoints)
             db_path = self.checkpoint_dir.parent / "metrics.db"
 
@@ -386,6 +389,9 @@ class UnifiedServer:
 
         try:
             logger.info("[Inference] Initializing LiveInferenceServer...")
+
+            # Type narrowing: checkpoint_dir is guaranteed to be set by start()
+            assert self.checkpoint_dir is not None, "checkpoint_dir must be set by start() before calling _run_inference()"
 
             # Use the same checkpoint directory as training
             self.inference_server = LiveInferenceServer(
@@ -467,8 +473,9 @@ class UnifiedServer:
 
             # Wait for server to be ready (look for "Local:" in output)
             ready = False
-            timeout_counter = 0
+            timeout_counter = 0.0  # Use float to match time.sleep increment
             max_timeout = 30  # 30 seconds
+            detected_port: int | None = None  # Extract port from npm output
 
             while not ready and timeout_counter < max_timeout:
                 if self.frontend_process.poll() is not None:
@@ -476,24 +483,30 @@ class UnifiedServer:
                     return
 
                 # Read output line by line (non-blocking-ish)
+                # Type check: stdout is guaranteed to be IO[str] by Popen text=True
+                if self.frontend_process.stdout is None:
+                    logger.error("[Frontend] stdout is None, cannot read output")
+                    return
+
                 line = self.frontend_process.stdout.readline()
                 if line:
                     logger.debug(f"[Frontend] {line.strip()}")
-                    if "Local:" in line or f":{self.frontend_port}" in line:
-                        ready = True
-                        break
+                    # Extract port from output like "Local:   http://localhost:5173/"
+                    if "Local:" in line and "localhost:" in line:
+                        import re
+                        port_match = re.search(r"localhost:(\d+)", line)
+                        if port_match:
+                            detected_port = int(port_match.group(1))
+                            ready = True
+                            break
 
                 time.sleep(0.1)
                 timeout_counter += 0.1
 
-            if ready:
-                logger.info(f"[Frontend] Dev server ready at http://localhost:{self.frontend_port}")
-
-                # Open browser if requested
-                if self.open_browser:
-                    time.sleep(1)  # Give server a moment to fully stabilize
-                    logger.info(f"[Frontend] Opening browser to http://localhost:{self.frontend_port}")
-                    webbrowser.open(f"http://localhost:{self.frontend_port}")
+            if ready and detected_port:
+                logger.info(f"[Frontend] Dev server ready at http://localhost:{detected_port}")
+                # Note: Browser auto-open removed - user can manually navigate to URL
+                # Future: Add --open-browser CLI flag if needed
             else:
                 logger.warning("[Frontend] Server did not become ready within timeout")
 
