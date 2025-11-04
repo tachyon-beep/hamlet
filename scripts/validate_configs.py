@@ -15,7 +15,7 @@ from pathlib import Path
 
 def load_yaml(filepath: Path) -> dict:
     """Load YAML file and return parsed dict."""
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         return yaml.safe_load(f)
 
 
@@ -205,14 +205,14 @@ def main():
     # Load YAML files
     try:
         bars_config = load_yaml(bars_path)
-        print(f"✅ bars.yaml loaded successfully")
+        print("✅ bars.yaml loaded successfully")
     except Exception as e:
         print(f"❌ ERROR loading bars.yaml: {e}")
         return 1
 
     try:
         cascades_config = load_yaml(cascades_path)
-        print(f"✅ cascades.yaml loaded successfully")
+        print("✅ cascades.yaml loaded successfully")
     except Exception as e:
         print(f"❌ ERROR loading cascades.yaml: {e}")
         return 1

@@ -123,7 +123,7 @@ def main():
     if total_episodes is None:
         try:
             import yaml
-            with open(config_file, 'r') as f:
+            with open(config_file) as f:
                 config = yaml.safe_load(f)
                 total_episodes = config.get('training', {}).get('max_episodes', None)
                 if total_episodes is None:
