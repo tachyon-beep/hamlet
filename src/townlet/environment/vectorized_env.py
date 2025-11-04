@@ -143,8 +143,15 @@ class VectorizedHamletEnv:
             affordance_names=self.affordance_names,
         )
 
-        # Initialize reward strategy (P2.1: per-agent baseline support)
-        self.reward_strategy = RewardStrategy(device=device, num_agents=num_agents)
+        # Initialize reward strategy (P2.1: per-agent baseline support, TASK-001: variable meters)
+        # Get energy and health indices from bars_config
+        meter_name_to_index = bars_config.meter_name_to_index
+        energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
+        health_idx = meter_name_to_index.get("health", min(6, meter_count - 1))  # Default to 6 or last meter
+
+        self.reward_strategy = RewardStrategy(
+            device=device, num_agents=num_agents, meter_count=meter_count, energy_idx=energy_idx, health_idx=health_idx
+        )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
         self._cached_baseline_tensor = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
 
