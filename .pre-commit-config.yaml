@@ -1,0 +1,66 @@
+# Pre-commit hooks for code quality enforcement
+# Install with: pip install pre-commit && pre-commit install
+
+repos:
+  # Ruff - Fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Run ruff linter
+      - id: ruff
+        args: [--fix]
+        name: Ruff Linter (auto-fix)
+        description: Run ruff linter with auto-fix on staged files
+
+      # Run ruff formatter
+      - id: ruff-format
+        name: Ruff Formatter
+        description: Format code with ruff
+
+  # Black - Python code formatter
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        name: Black Formatter
+        language_version: python3.13
+
+  # Type checking with mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: MyPy Type Checker
+        args: [--config-file=pyproject.toml]
+        additional_dependencies: [types-pyyaml, types-requests]
+        files: ^src/townlet/
+        pass_filenames: true
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim Trailing Whitespace
+      - id: end-of-file-fixer
+        name: Fix End of Files
+      - id: check-yaml
+        name: Check YAML Syntax
+        args: [--unsafe]  # Allow custom YAML tags
+      - id: check-added-large-files
+        name: Check for Large Files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+        name: Check for Merge Conflicts
+      - id: mixed-line-ending
+        name: Fix Mixed Line Endings
+        args: [--fix=lf]
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
+    hooks:
+      - id: markdownlint
+        name: Markdownlint
+        args: [--config=.markdownlint.yaml, --fix]
+        exclude: ^(node_modules|\.venv|frontend/node_modules)/
