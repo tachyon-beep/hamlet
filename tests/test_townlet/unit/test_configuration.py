@@ -97,6 +97,7 @@ class TestConfigPackLoading:
             move_energy_cost=env_cfg_update["energy_move_depletion"],
             wait_energy_cost=env_cfg_update["energy_wait_depletion"],
             interact_energy_cost=env_cfg_update["energy_interact_depletion"],
+            agent_lifespan=1000,
             config_pack_path=temp_config_pack,
         )
 
@@ -135,6 +136,7 @@ class TestConfigPackLoading:
             move_energy_cost=env_cfg_update["energy_move_depletion"],
             wait_energy_cost=env_cfg_update["energy_wait_depletion"],
             interact_energy_cost=env_cfg_update["energy_interact_depletion"],
+            agent_lifespan=1000,
             config_pack_path=temp_config_pack,
         )
 
@@ -993,9 +995,16 @@ class TestTrainingHyperparameters:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
+            partial_observability=False,
             device=cpu_device,
             enabled_affordances=["Bed"],
             config_pack_path=test_config_pack_path,
+            vision_range=5,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
 
         curriculum = AdversarialCurriculum(

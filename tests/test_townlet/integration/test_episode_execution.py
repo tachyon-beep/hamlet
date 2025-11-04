@@ -55,6 +55,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with feedforward network
@@ -140,6 +141,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with recurrent network
@@ -223,6 +225,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -294,6 +297,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -369,6 +373,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -445,6 +450,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population

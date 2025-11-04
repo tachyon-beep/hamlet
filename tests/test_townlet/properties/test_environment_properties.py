@@ -42,6 +42,13 @@ class TestEnvironmentBoundaryProperties:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=grid_size,
+            partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             device=torch.device("cpu"),
             config_pack_path=config_pack,
         )
@@ -82,6 +89,13 @@ class TestEnvironmentBoundaryProperties:
         env = VectorizedHamletEnv(
             num_agents=num_agents,
             grid_size=8,
+            partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             device=torch.device("cpu"),
             config_pack_path=config_pack,
         )
@@ -121,9 +135,14 @@ class TestEnvironmentBoundaryProperties:
         env = VectorizedHamletEnv(
             num_agents=num_agents,
             grid_size=grid_size,
-            device=torch.device("cpu"),
             partial_observability=partial_observability,
             vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            device=torch.device("cpu"),
             config_pack_path=config_pack,
         )
 

@@ -56,8 +56,14 @@ class TestBaseDepletion:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -123,8 +129,14 @@ class TestBaseDepletion:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -162,8 +174,14 @@ class TestModulation:
         env = VectorizedHamletEnv(
             num_agents=3,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -246,8 +264,14 @@ class TestCascadeEffects:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -278,8 +302,14 @@ class TestCascadeEffects:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -304,8 +334,14 @@ class TestCascadeEffects:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -328,8 +364,14 @@ class TestCascadeEffects:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -352,8 +394,14 @@ class TestCascadeEffects:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -379,8 +427,14 @@ class TestCascadeEffects:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -410,8 +464,14 @@ class TestCascadeEffects:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -519,8 +579,14 @@ class TestTerminalConditions:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -537,8 +603,14 @@ class TestTerminalConditions:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -555,8 +627,14 @@ class TestTerminalConditions:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -607,8 +685,14 @@ class TestMeterClamping:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -627,8 +711,14 @@ class TestMeterClamping:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -662,8 +752,14 @@ class TestMultiAgentMeters:
         env = VectorizedHamletEnv(
             num_agents=3,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 
@@ -726,8 +822,14 @@ class TestCascadeIntegration:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=False,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
         env.reset()
 

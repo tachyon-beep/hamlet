@@ -42,6 +42,7 @@ class TestRNDLossTracking:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with AdaptiveIntrinsicExploration (includes RND)
@@ -113,6 +114,7 @@ class TestRNDLossTracking:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with RND

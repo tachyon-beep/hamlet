@@ -29,7 +29,12 @@ def env(cpu_device, test_config_pack_path):
         grid_size=5,
         device=cpu_device,
         partial_observability=False,
+        vision_range=5,
         enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
         config_pack_path=test_config_pack_path,
     )
 
@@ -256,6 +261,12 @@ class TestCurriculumSignalInterpretability:
             grid_size=5,
             device=cpu_device,
             partial_observability=False,
+            vision_range=5,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -339,6 +350,12 @@ class TestCurriculumSignalInterpretability:
             grid_size=5,
             device=cpu_device,
             partial_observability=False,
+            vision_range=5,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 

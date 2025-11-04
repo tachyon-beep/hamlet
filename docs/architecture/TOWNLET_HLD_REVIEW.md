@@ -36,8 +36,6 @@ Townlet provides three coordinated layers:
 
 The platform ships with an 8-level curriculum (L0–L8) that progressively removes scaffolding: from god-mode survival (full observability) to emergent family communication (coordinated signaling without pre-shared semantics).
 
-**Words of estimative probability (WEP)** that this summary reflects system intent: very high (~95%).
-
 ---
 
 ### 0.2 The Core Innovation: No Cheating
@@ -133,8 +131,6 @@ predicted_state = social_model(observation['other_agents']['public_cues'])
 ```
 
 **Human equivalent**: You learn "droopy eyes + slow movement = tired" by asking people once, then predicting without asking. That's not cheating, that's learning.
-
-**WEP** that this architecture avoids runtime telepathy: very high (~95%).
 
 ---
 
@@ -374,8 +370,6 @@ predicted_mood = social_model(observation['public_cues'])
 
 **Human equivalent**: You ask people "are you tired?" once to learn the correlation, then predict from facial expressions without asking. That's learning, not cheating.
 
-**WEP** that this exception is philosophically sound: high (~90%). The alternative (unsupervised clustering of cues) would be slower but equally valid.
-
 ---
 
 ### 1.2 The No Dense Shaping Principle
@@ -511,8 +505,6 @@ Sparse rewards produce policies that:
 - Learn world dynamics (cascades, affordances, temporal patterns)
 - Transfer better (understand causality, not arbitrary scores)
 - Exhibit genuine emergent behavior (the "aha!" moments are real)
-
-**WEP** that sparse rewards are essential for genuine learning: very high (~95%).
 
 ---
 
@@ -706,8 +698,6 @@ def step(self, action):
 - Diff shows exactly what changed between runs
 - Non-programmers can tweak parameters
 
-**WEP** that config-driven design is essential for research velocity: very high (~95%).
-
 ---
 
 ### 1.4 The Provenance By Design Principle
@@ -875,8 +865,6 @@ Conclusion:
 
 **This level of auditability** is why Townlet can be deployed in defense/policy contexts, not just research labs.
 
-**WEP** that provenance architecture enables governance deployment: high (~90%).
-
 ---
 
 ### 1.5 Design Principle Summary Table
@@ -978,8 +966,6 @@ r = min(energy, health)  # "weakest link"
 ```
 
 This also captures the danger of imbalance, but it's discontinuous (derivatives are undefined at energy=health), which can cause training instability. Multiplication gives smooth gradients.
-
-**WEP** that multiplicative is optimal for this use case: high (~85%). Minimum would work but is harder to train through.
 
 #### What This Doesn't Tell Agents
 
@@ -1148,8 +1134,6 @@ if action == "eat":
 - Transfers better when world physics change
 - Exhibits real emergent behavior (discovery moments)
 
-**WEP** that this credit assignment difficulty is a feature, not a bug: very high (~95%).
-
 ---
 
 ### 2.2 Terminal Reward: Retirement Scoring
@@ -1307,8 +1291,6 @@ wealth_curve: "linear"  # every dollar matters equally
 wealth_curve: "log"     # even more aggressive diminishing returns
 wealth_curve: "sqrt"    # balanced (default)
 ```
-
-**WEP** that sqrt is the right default: high (~80%). Linear encourages pathological hoarding, log may undervalue savings too much.
 
 #### Retirement vs Early Death (The 10× Multiplier)
 
@@ -1471,8 +1453,6 @@ retirement:
 - ✅ Can a human plan for retirement? YES (they know it's coming)
 - ❌ Does time suddenly stop for no reason? NO (age is in-world physics)
 
-**WEP** that visible age bar is superior to hidden episode limits: very high (~95%).
-
 ---
 
 ### 2.4 Value Systems as Configuration
@@ -1581,8 +1561,6 @@ townlet analyze --runs runs/capitalist_* runs/balanced_* runs/hedonist_*
 - Time allocation (work vs leisure hours)
 
 **Expected finding**: Agents learn different personalities/strategies under different scoring systems, even with identical initial conditions.
-
-**WEP** that value systems meaningfully affect learned behavior: high (~85%).
 
 ---
 
@@ -1811,8 +1789,6 @@ Agents internalize these values through RL. Change the weights, and agents learn
 
 **Research question**: Do agents trained under different value systems generalize their values to new situations? Or do they just memorize "maximize terminal score" without understanding the underlying values?
 
-**WEP** that this reward architecture enables genuine scientific discoveries: very high (~90%).
-
 ---
 
 **End of Section 2**
@@ -1909,8 +1885,6 @@ observation = {
 **Why it's L0**: Teaches the bare minimum — "affordances affect bars, bars affect reward."
 
 **Human observer exception**: Full observability is scaffolding. A human learning a new town would be given a map. This is pedagogically honest.
-
-**WEP** that agents learn affordance semantics by episode 20: very high (~95%).
 
 ---
 
@@ -2550,8 +2524,6 @@ actions = [
 - Do protocols transfer when families churn?
 - Do different families develop different "dialects"?
 - Can we decode learned semantics via causal interventions?
-
-**WEP** that true emergent communication will emerge by episode 20000: moderate (~60%). This is genuinely hard.
 
 ---
 
@@ -3924,8 +3896,6 @@ for i, cues in enumerate(observation['other_agents_in_window']['public_cues']):
 - The learned model generalizes from labels to real-time prediction
 - This is standard supervised learning, not runtime telepathy
 
-**WEP** that CTDE is the correct approach for social reasoning: very high (~95%).
-
 ---
 
 ### 5.6 Curriculum Staging via Cue Richness
@@ -4175,8 +4145,6 @@ def validate_cues_config(cues_yaml):
 - `cue_engine.py` — runtime emission
 - Module C in `agent_architecture.yaml` — prediction
 
-**WEP** that cues system is correct architectural choice: very high (~95%).
-
 ---
 
 **End of Section 5**
@@ -4417,8 +4385,6 @@ After fixing, you should be able to answer audit questions:
 **Q**: "Could training change this?"
 **A**: "No. EthicsFilter has no learnable parameters. See `weights.pt` contents: EthicsFilter is not included. Only the policy, world model, and perception are trained."
 
-**WEP** that deterministic EthicsFilter is the correct choice: very high (~98%).
-
 ---
 
 ### 6.2 BLOCKER 2: World Model Training vs Curriculum Changes (CORRECTNESS)
@@ -4655,8 +4621,6 @@ modules:
       - candidate_action
       - world_config_hash  # ← NEW
 ```
-
-**WEP** that fork approach is correct: high (~85%). The retraining approach might work but adds complexity.
 
 ---
 
@@ -5008,8 +4972,6 @@ Checkpoints include HMAC signatures for tamper detection:
 - [ ] Update docs
 ```
 
-**WEP** that HMAC signatures are sufficient for security: high (~90%). For high-security deployments, consider adding timestamping or blockchain anchoring.
-
 ---
 
 ### 6.4 Blocker Summary & Recommended Fix Order
@@ -5069,8 +5031,6 @@ After these fixes, you can credibly claim:
 - ✅ "Ethics are provably enforced" (Blocker 1)
 - ✅ "Checkpoints are tamper-proof" (Blocker 3)
 - ✅ "World model adapts to curriculum" (Blocker 2)
-
-**WEP** that these three blockers are the only critical issues: high (~85%). There may be other bugs, but these three block any serious deployment or publication.
 
 ---
 
@@ -5250,8 +5210,6 @@ rank_key = lambda agent_id: (arrival_tick[agent_id], agent_id)
 - Requires tracking arrival history (more state)
 - "Camping" strategy dominates (arrive early, wait)
 - Doesn't reward spatial planning as much
-
-**WEP** that distance-first is optimal: high (~80%). First-come might be equally valid but distance feels more intuitive.
 
 #### Documentation Updates Required
 
@@ -5735,8 +5693,6 @@ population_genetics:
     cull_policy: "worst_performers"  # replace deaths by removing worst agents
 ```
 
-**WEP** that this state machine is complete: high (~85%). May need minor adjustments for edge cases.
-
 ---
 
 ### 7.3 Child Initialization
@@ -6091,8 +6047,6 @@ See: `population_genetics.yaml`
 - Enables both genetic and behavioral evolution
 ```
 
-**WEP** that crossover + finetune is best default: moderate (~70%). Could argue for pretrained for faster experiments.
-
 ---
 
 ### 7.4 Missing Specifications Summary & Where They Belong
@@ -6209,8 +6163,6 @@ After Week 2, you can credibly claim:
 - "Multi-agent interactions are fully specified"
 - "Family dynamics are completely defined"
 - "Population genetics are configurable and reproducible"
-
-**WEP** that these specs are sufficient for L6-L8 experiments: high (~85%).
 
 ---
 
@@ -6332,8 +6284,6 @@ family.state = SINGLE_PARENT
 - Creates competition (agents must perform to pass on genes)
 - Reflects real-world success → reproduction correlation
 
-**WEP** that meritocratic mode is stable: high (~85%). May need tuning of performance_threshold.
-
 ---
 
 ### 8.2 The Complete Family Lifecycle (Reference)
@@ -6432,8 +6382,6 @@ child.money += parent_a.money  # inherits wealth
 
 **Hypothesis**: Dynasty mode produces more coordinated families but higher inequality.
 
-**WEP** that dynasties will emerge and persist: moderate (~65%). Depends on whether wealth inheritance provides enough advantage.
-
 ---
 
 #### Mode 2: Polygamy (Multiple Simultaneous Families)
@@ -6488,8 +6436,6 @@ agent_a.family_comm_channels = {
 4. **Cognitive load**: Does managing multiple families hurt individual performance?
 
 **Hypothesis**: Polygamy increases coordination complexity; performance depends on Module C capacity.
-
-**WEP** that polygamy is implementable: high (~85%). Trainable: moderate (~60%, depends on architecture).
 
 ---
 
@@ -6569,8 +6515,6 @@ def compute_dna_distance(dna_a, dna_b):
 4. **Optimal diversity level**: Is there a sweet spot (too much diversity = poor coordination)?
 
 **Hypothesis**: Arranged marriage maintains exploration, prevents premature convergence.
-
-**WEP** that arranged marriage increases diversity: very high (~90%). That it improves performance: moderate (~60%).
 
 ---
 
@@ -7210,8 +7154,6 @@ affordances:
 - ✅ "Can they control interest rates?" YES (policy lever)
 - ✅ "Do actions have delayed effects?" YES (cascades model this)
 
-**WEP** that RL can learn basic monetary policy: moderate (~60%). Complex enough to be interesting, simple enough to be tractable.
-
 ---
 
 ### 9.3 Example Application 2: Ecosystem Simulation
@@ -7367,8 +7309,6 @@ affordances:
 - ✅ "Can a predator know its own energy?" YES (internal state)
 - ✅ "Can it see prey nearby?" YES (partial observability)
 - ✅ "Does hunting affect global prey population?" YES (affordance effects)
-
-**WEP** that Lotka-Volterra cycles emerge: moderate (~55%). Requires careful tuning of cascade strengths.
 
 ---
 
@@ -7540,8 +7480,6 @@ affordances:
 - ✅ "Can someone know their anxiety/depression level?" YES (self-awareness)
 - ✅ "Can they choose therapy or medication?" YES (treatment decisions)
 - ✅ "Do symptoms interact?" YES (cascades model this)
-
-**WEP** that RL can model treatment strategies: moderate (~50%). Controversial topic, requires careful validation.
 
 ---
 
@@ -7951,8 +7889,6 @@ affordances:
 > "Can a domain expert with zero Python knowledge create a Townlet world and run meaningful experiments?"
 
 If yes, we've built a truly general platform.
-
-**WEP** that Townlet becomes widely adopted: moderate (~50%). Depends on documentation quality, community support, and killer applications.
 
 ---
 

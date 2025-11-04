@@ -95,6 +95,12 @@ class TestVectorizedEnvDynamicSizing:
             device=cpu_device,
             partial_observability=False,  # Full observability
             enabled_affordances=["Bed", "Hospital", "HomeMeal", "Job"],
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
 
         assert env.observation_dim == 87, f"Expected obs_dim=87 for 4-meter full obs (64+4+15+4), " f"got {env.observation_dim}"
@@ -108,7 +114,14 @@ class TestVectorizedEnvDynamicSizing:
             num_agents=1,
             device=cpu_device,
             partial_observability=False,  # Full observability
-            enabled_affordances=["Bed"],  # Minimal for testing
+            enabled_affordances=["Bed"],
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            # Minimal for testing
         )
 
         assert env.observation_dim == 95, f"Expected obs_dim=95 for 12-meter full obs (64+12+15+4), " f"got {env.observation_dim}"
@@ -123,6 +136,11 @@ class TestVectorizedEnvDynamicSizing:
             partial_observability=True,  # POMDP
             vision_range=2,  # 5×5 window
             enabled_affordances=["Bed", "Hospital", "HomeMeal", "Job"],
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
 
         assert env.observation_dim == 50, f"Expected obs_dim=50 for 4-meter POMDP (25+2+4+15+4), " f"got {env.observation_dim}"
@@ -136,7 +154,13 @@ class TestVectorizedEnvDynamicSizing:
             device=cpu_device,
             partial_observability=True,  # POMDP
             vision_range=2,  # 5×5 window
-            enabled_affordances=["Bed"],  # Minimal for testing
+            enabled_affordances=["Bed"],
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            # Minimal for testing
         )
 
         assert env.observation_dim == 58, f"Expected obs_dim=58 for 12-meter POMDP (25+2+12+15+4), " f"got {env.observation_dim}"

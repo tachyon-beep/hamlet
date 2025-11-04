@@ -191,8 +191,14 @@ class TestEpisodeRecorder:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
+            partial_observability=False,
             device=cpu_device,
             enable_temporal_mechanics=True,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -55,6 +55,12 @@ class TestEnvironmentCheckpointing:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -77,6 +83,12 @@ class TestEnvironmentCheckpointing:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
         env2.set_affordance_positions(checkpoint_data)
@@ -98,6 +110,12 @@ class TestEnvironmentCheckpointing:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -125,6 +143,12 @@ class TestEnvironmentCheckpointing:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
         env2.reset()
@@ -146,6 +170,12 @@ class TestEnvironmentCheckpointing:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -234,6 +264,12 @@ class TestPopulationCheckpointing:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -308,6 +344,12 @@ class TestPopulationCheckpointing:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -595,6 +637,12 @@ class TestRunnerCheckpointing:
                     grid_size=8,
                     device=cpu_device,
                     partial_observability=False,
+                    vision_range=8,
+                    enable_temporal_mechanics=False,
+                    move_energy_cost=0.005,
+                    wait_energy_cost=0.001,
+                    interact_energy_cost=0.0,
+                    agent_lifespan=1000,
                 )
 
                 runner.curriculum = AdversarialCurriculum(
@@ -665,7 +713,18 @@ class TestRunnerCheckpointing:
                 max_episodes=1,
                 training_config_path=config_path,
             ) as runner1:
-                runner1.env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=cpu_device, partial_observability=False)
+                runner1.env = VectorizedHamletEnv(
+                    num_agents=1,
+                    grid_size=8,
+                    device=cpu_device,
+                    partial_observability=False,
+                    vision_range=8,
+                    enable_temporal_mechanics=False,
+                    move_energy_cost=0.005,
+                    wait_energy_cost=0.001,
+                    interact_energy_cost=0.0,
+                    agent_lifespan=1000,
+                )
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner1.curriculum.initialize_population(1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
@@ -692,7 +751,18 @@ class TestRunnerCheckpointing:
                 max_episodes=1,
                 training_config_path=config_path,
             ) as runner2:
-                runner2.env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=cpu_device, partial_observability=False)
+                runner2.env = VectorizedHamletEnv(
+                    num_agents=1,
+                    grid_size=8,
+                    device=cpu_device,
+                    partial_observability=False,
+                    vision_range=8,
+                    enable_temporal_mechanics=False,
+                    move_energy_cost=0.005,
+                    wait_energy_cost=0.001,
+                    interact_energy_cost=0.0,
+                    agent_lifespan=1000,
+                )
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner2.curriculum.initialize_population(1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
@@ -738,7 +808,18 @@ class TestRunnerCheckpointing:
                 max_episodes=1,
                 training_config_path=config_path,
             ) as runner1:
-                runner1.env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=cpu_device, partial_observability=False)
+                runner1.env = VectorizedHamletEnv(
+                    num_agents=1,
+                    grid_size=8,
+                    device=cpu_device,
+                    partial_observability=False,
+                    vision_range=8,
+                    enable_temporal_mechanics=False,
+                    move_energy_cost=0.005,
+                    wait_energy_cost=0.001,
+                    interact_energy_cost=0.0,
+                    agent_lifespan=1000,
+                )
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner1.curriculum.initialize_population(1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
@@ -778,7 +859,18 @@ class TestRunnerCheckpointing:
                 max_episodes=1,
                 training_config_path=config_path,
             ) as runner2:
-                runner2.env = VectorizedHamletEnv(num_agents=1, grid_size=8, device=cpu_device, partial_observability=False)
+                runner2.env = VectorizedHamletEnv(
+                    num_agents=1,
+                    grid_size=8,
+                    device=cpu_device,
+                    partial_observability=False,
+                    vision_range=8,
+                    enable_temporal_mechanics=False,
+                    move_energy_cost=0.005,
+                    wait_energy_cost=0.001,
+                    interact_energy_cost=0.0,
+                    agent_lifespan=1000,
+                )
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner2.curriculum.initialize_population(1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
@@ -839,6 +931,12 @@ class TestCheckpointRoundTrip:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -926,6 +1024,12 @@ class TestCheckpointRoundTrip:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
 
@@ -973,6 +1077,12 @@ class TestCheckpointRoundTrip:
             grid_size=8,
             device=cpu_device,
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
         )
         env2.reset()  # Initialize environment

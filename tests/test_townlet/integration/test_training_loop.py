@@ -56,6 +56,7 @@ class TestMaskedLossIntegration:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with recurrent network
@@ -138,6 +139,7 @@ class TestMaskedLossIntegration:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -205,6 +207,7 @@ class TestMaskedLossIntegration:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with random exploration to test boundaries
@@ -287,6 +290,7 @@ class TestMultiEpisodeTraining:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with epsilon decay
@@ -375,6 +379,7 @@ class TestMultiEpisodeTraining:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create exploration with known decay parameters
@@ -454,6 +459,7 @@ class TestMultiEpisodeTraining:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -522,6 +528,7 @@ class TestMultiEpisodeTraining:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with short target update frequency
@@ -596,6 +603,7 @@ class TestMultiEpisodeTraining:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
