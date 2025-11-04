@@ -28,6 +28,8 @@ class DemoDatabase:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.row_factory = sqlite3.Row
 
+        self._closed = False  # Track closed state for idempotency
+
         self._create_schema()
 
     def _create_schema(self):
@@ -337,5 +339,12 @@ class DemoDatabase:
         return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
-        """Close database connection."""
+        """Close database connection.
+
+        Safe to call multiple times (idempotent).
+        """
+        if self._closed:
+            return  # Already closed, safe to call again
+
         self.conn.close()
+        self._closed = True

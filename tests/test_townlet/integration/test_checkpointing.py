@@ -1331,3 +1331,28 @@ class TestDemoRunnerResourceManagement:
                 ) as runner:
                     assert runner is not None  # Runner created successfully
                     raise ValueError("test exception")
+
+    def test_database_close_is_idempotent(self, cpu_device):
+        """DemoDatabase.close() should be safe to call multiple times and track closed state."""
+        import tempfile
+        from pathlib import Path
+
+        from townlet.demo.database import DemoDatabase
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "test.db"
+
+            # Create database
+            db = DemoDatabase(db_path)
+            assert not db._closed, "Database should start as not closed"
+
+            # Close multiple times - should not raise and should track state
+            db.close()
+            assert db._closed, "Database should be marked as closed after first close()"
+
+            db.close()  # Second call should be safe
+            assert db._closed, "Database should remain closed after second close()"
+
+            db.close()  # Third call should be safe
+            assert db._closed, "Database should remain closed after third close()"

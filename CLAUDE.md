@@ -117,6 +117,45 @@ uv run ruff check src/townlet
 uv run mypy src/townlet
 ```
 
+### Using DemoRunner for Checkpoint Operations
+
+When creating `DemoRunner` for checkpoint operations **without running full training**, use the context manager pattern for automatic resource cleanup:
+
+```python
+# ✅ GOOD: Guaranteed cleanup with context manager
+from townlet.demo.runner import DemoRunner
+
+with DemoRunner(
+    config_dir=config_path,
+    db_path=db_path,
+    checkpoint_dir=checkpoint_dir,
+    max_episodes=1,
+    training_config_path=config_yaml_path,
+) as runner:
+    # Load checkpoint for analysis
+    runner.load_checkpoint()
+
+    # Access checkpoint state
+    network_weights = runner.population.q_network.state_dict()
+
+    # Resources automatically cleaned up on exit
+
+# ❌ BAD: Resources leak if run() not called
+runner = DemoRunner(...)
+runner.load_checkpoint()
+# Database connection and TensorBoard logger stay open indefinitely!
+```
+
+**Why this matters:**
+- `DemoRunner.__init__()` opens database connections and TensorBoard writers
+- These resources are **only** closed in `run()`'s finally block
+- If you never call `run()`, resources leak until garbage collection
+- Context manager ensures cleanup happens deterministically
+
+**When to use each pattern:**
+- **Context manager** (`with`): Checkpoint loading, analysis, testing
+- **Direct run()**: Full training sessions
+
 ## Architecture
 
 ### Townlet System (ACTIVE)

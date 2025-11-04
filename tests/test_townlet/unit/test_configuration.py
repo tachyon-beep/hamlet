@@ -1224,15 +1224,20 @@ class TestMaxEpisodesConfiguration:
 
         assert runner.max_episodes == 500
 
-    def test_defaults_to_10000_when_not_in_config(self, tmp_path: Path):
-        """When max_episodes is not in config, should default to 10000."""
+    def test_raises_error_when_max_episodes_missing(self, tmp_path: Path):
+        """PDR-002: When max_episodes is missing, should raise clear error (no-defaults principle)."""
         config_dir = tmp_path / "config"
         config_dir.mkdir()
 
         training_config = {
             "environment": {
                 "grid_size": 5,
+                "partial_observability": False,
+                "vision_range": 5,
                 "enabled_affordances": ["Bed"],
+                "energy_move_depletion": 0.005,
+                "energy_wait_depletion": 0.003,
+                "energy_interact_depletion": 0.0029,
             },
             "population": {
                 "num_agents": 1,
@@ -1256,7 +1261,13 @@ class TestMaxEpisodesConfiguration:
             },
             "training": {
                 "device": "cpu",
-                # No max_episodes specified
+                "train_frequency": 4,
+                "target_update_frequency": 100,
+                "max_grad_norm": 10.0,
+                "epsilon_start": 1.0,
+                "epsilon_decay": 0.99,
+                "epsilon_min": 0.01,
+                # No max_episodes specified - should raise error
             },
         }
 
@@ -1269,14 +1280,14 @@ class TestMaxEpisodesConfiguration:
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
-        runner = DemoRunner(
-            config_dir=config_dir,
-            db_path=tmp_path / "test.db",
-            checkpoint_dir=tmp_path / "checkpoints",
-            max_episodes=None,
-        )
-
-        assert runner.max_episodes == 10000
+        # Verify PDR-002 fail-fast behavior
+        with pytest.raises(ValueError, match="Missing required parameter 'max_episodes'"):
+            DemoRunner(
+                config_dir=config_dir,
+                db_path=tmp_path / "test.db",
+                checkpoint_dir=tmp_path / "checkpoints",
+                max_episodes=None,
+            )
 
     def test_stable_test_config_reads_200_episodes(self):
         """Integration test: configs/test should read 200 episodes (stable test config)."""
