@@ -12,16 +12,16 @@ Hamlet v2.5 replaces the old hardcoded `RecurrentSpatialQNetwork` with a Softwar
 
 In parallel, every training / sim "run" is now a first-class object with clear provenance, so that every behaviour we record can be tied back to:
 
-* which world it lived in
-* which brain it was running
-* which safety constraints were in force
-* which hyperparameters and curriculum settings applied
+- which world it lived in
+- which brain it was running
+- which safety constraints were in force
+- which hyperparameters and curriculum settings applied
 
 The goals:
 
-* Interpretability (for teaching and debugging)
-* Reproducibility (for research)
-* Accountability / governance (for policy)
+- Interpretability (for teaching and debugging)
+- Reproducibility (for research)
+- Accountability / governance (for policy)
 
 We achieve this through:
 
@@ -39,10 +39,10 @@ v1.0: The brain is a black box Python class. You ask "why did it do that?" and t
 
 v2.5: The brain is a graph defined in YAML. You can literally open the run folder and read:
 
-* which faculties are turned on (perception, world model, social model, hierarchical policy)
-* how those faculties are internally built (GRU vs LSTM etc)
-* how they talk to each other (execution graph steps)
-* what panic rules and ethics vetoes exist
+- which faculties are turned on (perception, world model, social model, hierarchical policy)
+- how those faculties are internally built (GRU vs LSTM etc)
+- how they talk to each other (execution graph steps)
+- what panic rules and ethics vetoes exist
 
 Students, auditors, reviewers, everyone can see the mind and the rules that govern it.
 
@@ -58,11 +58,11 @@ Audience: student / policy / non-expert
 
 Controls:
 
-* Which faculties are on or off (perception, world model, social model, hierarchical policy)
-* Planning depth, social reasoning on/off, panic thresholds
-* Personality knobs (greed, curiosity, etc)
-* Compliance / ethics (forbid_actions etc)
-* Introspection + UI hints
+- Which faculties are on or off (perception, world model, social model, hierarchical policy)
+- Planning depth, social reasoning on/off, panic thresholds
+- Personality knobs (greed, curiosity, etc)
+- Compliance / ethics (forbid_actions etc)
+- Introspection + UI hints
 
 Example:
 
@@ -116,8 +116,8 @@ introspection:
 
 Notes:
 
-* This file is what you show in class.
-* This is also what an ethics reviewer will look at to confirm the "rules of engagement".
+- This file is what you show in class.
+- This is also what an ethics reviewer will look at to confirm the "rules of engagement".
 
 3.2 Layer 2: agent_architecture.yaml
 Audience: grad student / engineer
@@ -125,9 +125,9 @@ Audience: grad student / engineer
 
 Controls:
 
-* What each module actually is architecturally (CNN/MLP/GRU, hidden size, optimiser)
-* What each module predicts / outputs (the heads)
-* The shared interfaces, so they wire together cleanly
+- What each module actually is architecturally (CNN/MLP/GRU, hidden size, optimiser)
+- What each module predicts / outputs (the heads)
+- The shared interfaces, so they wire together cleanly
 
 It also encodes pretraining tasks (curriculum) for each module.
 
@@ -229,8 +229,8 @@ modules:
 
 Notes:
 
-* This is where we decide GRU vs LSTM vs Transformer.
-* This is also where we declare optimiser LR, so training is traceable.
+- This is where we decide GRU vs LSTM vs Transformer.
+- This is also where we declare optimiser LR, so training is traceable.
 
 3.3 Layer 3: execution_graph.yaml
 Audience: researcher / you
@@ -238,11 +238,11 @@ Audience: researcher / you
 
 Controls:
 
-* The actual cognitive dataflow per tick
-* The order modules run
-* What inputs are passed to them
-* Where compliance/ethics gates happen
-* What gets returned to the environment
+- The actual cognitive dataflow per tick
+- The order modules run
+- What inputs are passed to them
+- Where compliance/ethics gates happen
+- What gets returned to the environment
 
 Example:
 
@@ -304,9 +304,9 @@ outputs:
 
 Notes:
 
-* `ethics_filter` is where L1's `forbid_actions` is actually enforced.
-* You can insert new nodes here without touching model code: e.g. add `Module E: Ethics`, or bypass the world model entirely for ablation.
-* This file is the "wiring harness" of cognition.
+- `ethics_filter` is where L1's `forbid_actions` is actually enforced.
+- You can insert new nodes here without touching model code: e.g. add `Module E: Ethics`, or bypass the world model entirely for ablation.
+- This file is the "wiring harness" of cognition.
 
 4. Run Bundles
 
@@ -326,35 +326,35 @@ configs/
 
 4.1 Meaning of each file in a run bundle
 
-* config.yaml
+- config.yaml
   Simulation/runtime knobs. Examples:
 
-  * run_length_ticks
-  * tick_rate_hz
-  * max_population
-  * random_seed
-  * logging_frequency
-  * curriculum flags (e.g. "start with 1 agent, add 2nd rival at tick 10k")
-  * training mode vs eval mode
+  - run_length_ticks
+  - tick_rate_hz
+  - max_population
+  - random_seed
+  - logging_frequency
+  - curriculum flags (e.g. "start with 1 agent, add 2nd rival at tick 10k")
+  - training mode vs eval mode
 
-* software_defined_world.yaml
+- software_defined_world.yaml
   The Software Defined World (SDW): bars/meters, affordances, map layout, cues, time-of-day availability, etc.
   All affordances are declarative:
 
-  * capacity
-  * exclusive / interruptible
-  * per-tick bar deltas
-  * cost (money, hygiene, etc)
-  * optional whitelisted effect_type like teleport
-  * panic semantics not here, that's cognitive
+  - capacity
+  - exclusive / interruptible
+  - per-tick bar deltas
+  - cost (money, hygiene, etc)
+  - optional whitelisted effect_type like teleport
+  - panic semantics not here, that's cognitive
 
-* cognitive_topology.yaml
+- cognitive_topology.yaml
   The L1 character sheet for this run's agent.
 
-* agent_architecture.yaml
+- agent_architecture.yaml
   The L2 module internals.
 
-* execution_graph.yaml
+- execution_graph.yaml
   The L3 dataflow.
 
 4.2 Launching a run
@@ -390,11 +390,11 @@ WEP: very likely (~90 percent) this layout is robust and minimal.
 
 Every checkpoint in a run MUST include:
 
-* module weights (all nn.Modules in SDA, plus optimiser/GRU states etc)
-* optimiser states
-* RNG state(s)
-* a copy of the config snapshot at that moment
-* a cognitive hash
+- module weights (all nn.Modules in SDA, plus optimiser/GRU states etc)
+- optimiser states
+- RNG state(s)
+- a copy of the config snapshot at that moment
+- a cognitive hash
 
 Example layout:
 
@@ -427,9 +427,9 @@ That hash is the ID of "this exact mind".
 
 Why we care:
 
-* Telemetry can say "this behaviour happened under hash X".
-* You can resume training later and prove you resumed the same mind, not a slightly different brain.
-* You can evaluate two different policies in the exact same world and have evidence they really were different minds, not just unlucky RNG.
+- Telemetry can say "this behaviour happened under hash X".
+- You can resume training later and prove you resumed the same mind, not a slightly different brain.
+- You can evaluate two different policies in the exact same world and have evidence they really were different minds, not just unlucky RNG.
 
 6. Resume Semantics
 
@@ -449,9 +449,9 @@ but that resumed run is still considered to be running the same "mind identity" 
 
 This gives you:
 
-* Continuity for long trainings
-* Branching for ablations ("same brain, tweak greed only, now it's a fork")
-* Defensible lineage for reporting / teaching
+- Continuity for long trainings
+- Branching for ablations ("same brain, tweak greed only, now it's a fork")
+- Defensible lineage for reporting / teaching
 
 7. Runtime Engine Components
 
@@ -459,49 +459,49 @@ We replace the old monolithic agent code with general factories and an execution
 
 7.1 agent/factory.py
 
-* Input: the run's config_snapshot (cognitive_topology.yaml, agent_architecture.yaml, execution_graph.yaml, plus software_defined_world.yaml and config.yaml)
-* Responsibilities:
+- Input: the run's config_snapshot (cognitive_topology.yaml, agent_architecture.yaml, execution_graph.yaml, plus software_defined_world.yaml and config.yaml)
+- Responsibilities:
 
-  * Build each nn.Module described in agent_architecture.yaml.
-  * Validate that interface dims line up.
-  * Return a `GraphAgent`.
+  - Build each nn.Module described in agent_architecture.yaml.
+  - Validate that interface dims line up.
+  - Return a `GraphAgent`.
 
 7.2 agent/graph_agent.py
 
-* A generic nn.Module replacing `RecurrentSpatialQNetwork`.
-* Holds:
+- A generic nn.Module replacing `RecurrentSpatialQNetwork`.
+- Holds:
 
-  * Module registry (perception_encoder, world_model, social_model, hierarchical_policy, ethics_filter, etc) in an nn.ModuleDict.
-  * A `GraphExecutor` which knows how to run the execution graph.
-  * The current recurrent state(s).
-* Exposes:
+  - Module registry (perception_encoder, world_model, social_model, hierarchical_policy, ethics_filter, etc) in an nn.ModuleDict.
+  - A `GraphExecutor` which knows how to run the execution graph.
+  - The current recurrent state(s).
+- Exposes:
 
-  * `think(raw_observation, prev_recurrent_state) -> { final_action, new_recurrent_state }`
+  - `think(raw_observation, prev_recurrent_state) -> { final_action, new_recurrent_state }`
 
 Critically:
 `GraphAgent` is instantiated against the frozen snapshot, not against mutable on-disk configs. This enforces provenance.
 
 7.3 agent/graph_executor.py
 
-* Input: execution_graph.yaml and the module registry
-* On init:
+- Input: execution_graph.yaml and the module registry
+- On init:
 
-  * Parses and "compiles" the execution_graph into an ordered step list with resolved inputs/outputs and service bindings.
-  * This compiled form is part of the cognitive hash.
-* On run():
+  - Parses and "compiles" the execution_graph into an ordered step list with resolved inputs/outputs and service bindings.
+  - This compiled form is part of the cognitive hash.
+- On run():
 
-  * Maintains a data_cache for intermediate tensors.
-  * Executes each step in order (perception, unpack, policy, ethics filter, etc).
-  * Returns the declared outputs.
+  - Maintains a data_cache for intermediate tensors.
+  - Executes each step in order (perception, unpack, policy, ethics filter, etc).
+  - Returns the declared outputs.
 
 7.4 ethics_filter module
 
-* A small module that enforces the `forbid_actions` and `penalize_actions` rules declared in L1 cognitive_topology.yaml.
-* Outputs:
+- A small module that enforces the `forbid_actions` and `penalize_actions` rules declared in L1 cognitive_topology.yaml.
+- Outputs:
 
-  * possibly vetoed action
-  * veto_reason (string or code)
-* This makes "the agent wanted to do X, but we blocked it" first-class telemetry.
+  - possibly vetoed action
+  - veto_reason (string or code)
+- This makes "the agent wanted to do X, but we blocked it" first-class telemetry.
 
 8. Telemetry and UI Surfacing
 
@@ -511,14 +511,14 @@ We want two layers of visibility.
 
 At runtime the UI must surface:
 
-* run_id (e.g. `L99_Inventing_ASI__2025-11-03-12-14-22`)
-* cognitive_hash (short form, like first 8 chars)
-* tick: current_tick / planned_run_length_ticks
-* current_goal (from hierarchical_policy.meta_controller)
-* panic_state (true/false derived from panic_thresholds in L1)
-* ethics_veto_last_tick (bool + veto_reason if any)
-* planning_depth (world_model.rollout_depth)
-* social_model.enabled (true/false)
+- run_id (e.g. `L99_Inventing_ASI__2025-11-03-12-14-22`)
+- cognitive_hash (short form, like first 8 chars)
+- tick: current_tick / planned_run_length_ticks
+- current_goal (from hierarchical_policy.meta_controller)
+- panic_state (true/false derived from panic_thresholds in L1)
+- ethics_veto_last_tick (bool + veto_reason if any)
+- planning_depth (world_model.rollout_depth)
+- social_model.enabled (true/false)
 
 This is the "at a glance" view for instructors and demos:
 "See here? The agent is currently in SURVIVAL mode because energy < 15, it's allowed to plan 6 steps ahead, and last tick its chosen action got vetoed because it tried to 'steal'."
@@ -529,22 +529,22 @@ We also persist a structured event log (one row per tick or per n ticks) into `r
 
 Each record contains at minimum:
 
-* run_id
-* tick_index
-* cognitive_hash
-* chosen_goal (Goal struct ID, e.g. THRIVING, SURVIVAL, SOCIAL)
-* candidate_action (pre-ethics)
-* final_action (post-ethics)
-* veto_reason (if any)
-* summary of belief_uncertainty (e.g. "energy bar confidence 0.42")
-* summary of world_model expectation (e.g. predicted_reward_next_step)
-* summary of social_model inference (e.g. "Agent_2 intent: use_fridge")
+- run_id
+- tick_index
+- cognitive_hash
+- chosen_goal (Goal struct ID, e.g. THRIVING, SURVIVAL, SOCIAL)
+- candidate_action (pre-ethics)
+- final_action (post-ethics)
+- veto_reason (if any)
+- summary of belief_uncertainty (e.g. "energy bar confidence 0.42")
+- summary of world_model expectation (e.g. predicted_reward_next_step)
+- summary of social_model inference (e.g. "Agent_2 intent: use_fridge")
 
 This lets us:
 
-* Reconstruct interesting decisions later
-* Build curriculum labs: "Explain why the agent starved while standing at the fridge"
-* Publish introspection traces without needing to rerun live sim
+- Reconstruct interesting decisions later
+- Build curriculum labs: "Explain why the agent starved while standing at the fridge"
+- Publish introspection traces without needing to rerun live sim
 
 9. Declarative Goals / Termination Conditions
 
@@ -571,25 +571,25 @@ The engine will ship simple evaluators for `all` / `any` sets of {metric, op, va
 
 This gives us:
 
-* Interpretable stopping logic
-* No inline Python
-* Stable replay semantics
+- Interpretable stopping logic
+- No inline Python
+- Stable replay semantics
 
 10. Affordance Semantics in software_defined_world.yaml
 
 All affordances and world interactions live in software_defined_world.yaml. Rules:
 
-* All effects are expressed as bar deltas per tick, or via whitelisted special effect types (`teleport`, etc).
-* Affordance fields include:
+- All effects are expressed as bar deltas per tick, or via whitelisted special effect types (`teleport`, etc).
+- Affordance fields include:
 
-  * `capacity`
-  * `exclusive`
-  * `interruptible`
-  * `distance_limit`
-  * `effects_per_tick` (list of bar deltas)
-  * `costs` (bars to deduct up front)
-  * optional `effect_type` blocks for engine-handled specials like teleport
-* Reservation / contention / interrupt semantics are handled deterministically by the engine (reservation token, tie-break on stable rule, atomic application of bar deltas per tick).
+  - `capacity`
+  - `exclusive`
+  - `interruptible`
+  - `distance_limit`
+  - `effects_per_tick` (list of bar deltas)
+  - `costs` (bars to deduct up front)
+  - optional `effect_type` blocks for engine-handled specials like teleport
+- Reservation / contention / interrupt semantics are handled deterministically by the engine (reservation token, tie-break on stable rule, atomic application of bar deltas per tick).
 
 We do NOT persist ownership state in the object itself. Occupancy is ephemeral per tick. This keeps the world simple and learnable for the world_model.
 
@@ -619,23 +619,23 @@ Recommended build order once you start L1 → L4 runs and get a dev breather:
 
 1. Folder discipline:
 
-   * configs/<run_name>/ with all 5 YAMLs
-   * runs/<run_name>__<timestamp>/config_snapshot/ created on launch
+   - configs/<run_name>/ with all 5 YAMLs
+   - runs/<run_name>__<timestamp>/config_snapshot/ created on launch
 
 2. Snapshot copy on launch (no symlink tricks at runtime; symlinks okay for developer comfort pre-launch)
 
 3. agent/factory.py + agent/graph_agent.py + agent/graph_executor.py minimal viable path
 
-   * Can be stubby first, doesn't need full social model yet
-   * Just prove we can load from snapshot and tick
+   - Can be stubby first, doesn't need full social model yet
+   - Just prove we can load from snapshot and tick
 
 4. Checkpoint writer that saves:
 
-   * model state dicts
-   * optimiser
-   * rng
-   * config_snapshot/
-   * cognitive_hash.txt
+   - model state dicts
+   - optimiser
+   - rng
+   - config_snapshot/
+   - cognitive_hash.txt
 
 5. Resume path that trusts checkpoint first, configs never
 
@@ -643,9 +643,9 @@ Recommended build order once you start L1 → L4 runs and get a dev breather:
 
 7. UI Run Context panel surfacing:
 
-   * run_id
-   * cognitive_hash (short)
-   * tick / run_length
-   * current_goal
-   * panic state
-   * veto info
+   - run_id
+   - cognitive_hash (short)
+   - tick / run_length
+   - current_goal
+   - panic state
+   - veto info

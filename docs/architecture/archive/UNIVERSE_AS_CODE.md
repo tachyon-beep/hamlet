@@ -8,17 +8,17 @@ Owner: Principal Technical Advisor (AI)
 
 This spec defines the configuration contract for the Software Defined World. It is written to match the current code paths:
 
-* `townlet.environment.cascade_config` for bars and cascades
-* `townlet.environment.cascade_engine.CascadeEngine`
-* `townlet.environment.affordance_config` and `affordance_engine.AffordanceEngine`
-* `townlet.environment.vectorized_env.VectorizedTownletEnv` temporal mechanics, action masks and interaction flow
+- `townlet.environment.cascade_config` for bars and cascades
+- `townlet.environment.cascade_engine.CascadeEngine`
+- `townlet.environment.affordance_config` and `affordance_engine.AffordanceEngine`
+- `townlet.environment.vectorized_env.VectorizedTownletEnv` temporal mechanics, action masks and interaction flow
 
 The SDW is the single source of truth for:
 
-* meter definitions and terminal conditions
-* depletion, modulations, and threshold cascades
-* affordance catalogue, costs, effects, and opening hours
-* time-of-day behaviour and multi-tick interactions
+- meter definitions and terminal conditions
+- depletion, modulations, and threshold cascades
+- affordance catalogue, costs, effects, and opening hours
+- time-of-day behaviour and multi-tick interactions
 
 All meters are normalised to [0.0, 1.0]. Money uses 1.0 to represent 100 dollars by default, which keeps code simple and avoids mixed units.
 
@@ -40,9 +40,9 @@ fitness:  7
 
 Notes
 
-* energy and health are pivotal. Hitting zero on either is terminal.
-* money is a resource gate. Affordability checks are performed by the AffordanceEngine or at interaction time in the env.
-* meters are clamped to [0, 1] after each operation inside the engines.
+- energy and health are pivotal. Hitting zero on either is terminal.
+- money is a resource gate. Affordability checks are performed by the AffordanceEngine or at interaction time in the env.
+- meters are clamped to [0, 1] after each operation inside the engines.
 
 ## 3. bars.yaml (code-accurate schema)
 
@@ -129,8 +129,8 @@ notes:
 
 The engine supports:
 
-* Modulations which are depletion multipliers parameterised by a source meter. Example: fitness modifies how quickly health decays.
-* Threshold cascades which apply penalties to a target when a source is below a threshold. The penalty strength scales with the deficit.
+- Modulations which are depletion multipliers parameterised by a source meter. Example: fitness modifies how quickly health decays.
+- Threshold cascades which apply penalties to a target when a source is below a threshold. The penalty strength scales with the deficit.
 
 Execution order comes from YAML and is applied in order each step. The code uses gradient penalty maths for cascades and your modulation field names.
 
@@ -257,21 +257,21 @@ notes:
 
 `AffordanceConfigCollection` and `AffordanceConfig` are enforced by Pydantic. Interaction types supported by code:
 
-* instant
-* multi_tick
-* continuous
-* dual
+- instant
+- multi_tick
+- continuous
+- dual
 
 Fields:
 
-* `required_ticks` must be set for `multi_tick` and `dual`. Omit it otherwise.
-* `operating_hours` is a two element list. Example `[8, 18]` means 8 to 18. Wrap past midnight by using a close hour up to 28. Example `[18, 28]` means 18 to 4.
-* amounts in costs and effects are normalised to [0.0, 1.0]. For money, 0.1 is 10 dollars by default.
+- `required_ticks` must be set for `multi_tick` and `dual`. Omit it otherwise.
+- `operating_hours` is a two element list. Example `[8, 18]` means 8 to 18. Wrap past midnight by using a close hour up to 28. Example `[18, 28]` means 18 to 4.
+- amounts in costs and effects are normalised to [0.0, 1.0]. For money, 0.1 is 10 dollars by default.
 
 Important flow from the code:
 
-* The env computes action masks for INTERACT based on location and hours. It does not mask on affordability. If you cannot afford the instant cost, the affordance handler simply does nothing productive that tick, which is a teaching feature.
-* Multi-tick progress is tracked per agent. Moving off the tile resets progress.
+- The env computes action masks for INTERACT based on location and hours. It does not mask on affordability. If you cannot afford the instant cost, the affordance handler simply does nothing productive that tick, which is a teaching feature.
+- Multi-tick progress is tracked per agent. Moving off the tile resets progress.
 
 Example configuration with the standard world objects placed in `VectorizedTownletEnv`:
 
@@ -469,8 +469,8 @@ affordances:
 
 Why model ambulance like this
 
-* Today the engines do not implement a position-changing effect. Your code applies meter deltas and handles open hours, affordability, and tick progression, but it does not move the agent.
-* This version uses an instant health increase and cost to capture the decision trade-off. It teaches that an expensive emergency option exists even if you are nowhere near the Doctor or Hospital tiles.
+- Today the engines do not implement a position-changing effect. Your code applies meter deltas and handles open hours, affordability, and tick progression, but it does not move the agent.
+- This version uses an instant health increase and cost to capture the decision trade-off. It teaches that an expensive emergency option exists even if you are nowhere near the Doctor or Hospital tiles.
 
 Optional extension for literal relocation
 
@@ -507,23 +507,23 @@ This preserves data-driven control and keeps the engines clean.
 
 ## 6. Time of day and action masks
 
-* `operating_hours` follow the rule:
+- `operating_hours` follow the rule:
 
-  * normal: `[open, close]` with 0 ≤ open < close ≤ 24 and open ≤ time < close
-  * wrap-around: allow close up to 28. Env computes `close % 24` and treats it as open if `time ≥ open or time < close%24`
-* The env increments `time_of_day = (time_of_day + 1) % 24` per step when temporal mechanics are enabled.
-* Action space is `[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`. Movement, wait, and interact energy costs are applied by the env; defaults live in code but can be overridden per pack via `environment.energy_move_depletion`, `environment.energy_wait_depletion`, and `environment.energy_interact_depletion`.
+  - normal: `[open, close]` with 0 ≤ open < close ≤ 24 and open ≤ time < close
+  - wrap-around: allow close up to 28. Env computes `close % 24` and treats it as open if `time ≥ open or time < close%24`
+- The env increments `time_of_day = (time_of_day + 1) % 24` per step when temporal mechanics are enabled.
+- Action space is `[UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]`. Movement, wait, and interact energy costs are applied by the env; defaults live in code but can be overridden per pack via `environment.energy_move_depletion`, `environment.energy_wait_depletion`, and `environment.energy_interact_depletion`.
 
-  * default move costs applied by the env include energy 0.005 (configurable via `energy_move_depletion`), hygiene 0.003, satiation 0.004
-  * wait uses a lighter energy cost (default 0.001, configurable via `energy_wait_depletion`), no other passives
-  * interact deducts `energy_interact_depletion` each time it is invoked (default 0.0)
-* INTERACT is valid if the agent is exactly on an affordance tile and it is open. Affordability is not part of action masking. Failing to afford is a wasted turn and a learning signal.
+  - default move costs applied by the env include energy 0.005 (configurable via `energy_move_depletion`), hygiene 0.003, satiation 0.004
+  - wait uses a lighter energy cost (default 0.001, configurable via `energy_wait_depletion`), no other passives
+  - interact deducts `energy_interact_depletion` each time it is invoked (default 0.0)
+- INTERACT is valid if the agent is exactly on an affordance tile and it is open. Affordability is not part of action masking. Failing to afford is a wasted turn and a learning signal.
 
 ## 7. Multi-tick semantics
 
-* For `multi_tick` and `dual`, the env tracks `interaction_progress` per agent.
-* Movement off the tile or switching affordances resets progress.
-* On the last tick of a completed interaction, `completion_bonus` is added after per-tick effects. All amounts are clamped after application.
+- For `multi_tick` and `dual`, the env tracks `interaction_progress` per agent.
+- Movement off the tile or switching affordances resets progress.
+- On the last tick of a completed interaction, `completion_bonus` is added after per-tick effects. All amounts are clamped after application.
 
 ## 8. Positions and observation alignment
 
@@ -552,33 +552,33 @@ The env exports and restores these via checkpoint to keep the observation encodi
 
 ## 9. Validation rules you actually get from the loaders
 
-* bars.yaml
+- bars.yaml
 
-  * exactly 8 bars, indices 0..7, unique names and indices
-  * range must be [0.0, 1.0]
-* cascades.yaml
+  - exactly 8 bars, indices 0..7, unique names and indices
+  - range must be [0.0, 1.0]
+- cascades.yaml
 
-  * unique cascade names, categories are free-form strings used to group execution order
-  * modulations expect the depletion multiplier fields as defined
-* affordances.yaml
+  - unique cascade names, categories are free-form strings used to group execution order
+  - modulations expect the depletion multiplier fields as defined
+- affordances.yaml
 
-  * `interaction_type` must be one of the literal values
-  * `required_ticks` is required for multi_tick and dual, invalid otherwise
-  * `operating_hours` must be two integers, 0 ≤ open ≤ 23, 1 ≤ close ≤ 28
+  - `interaction_type` must be one of the literal values
+  - `required_ticks` is required for multi_tick and dual, invalid otherwise
+  - `operating_hours` must be two integers, 0 ≤ open ≤ 23, 1 ≤ close ≤ 28
 
 ## 10. Equivalence, tests, and teaching packs
 
-* Keep your hardcoded legacy tests around and assert equivalence to the config-driven engines with tight tolerances.
-* Maintain three packs for pedagogy:
+- Keep your hardcoded legacy tests around and assert equivalence to the config-driven engines with tight tolerances.
+- Maintain three packs for pedagogy:
 
-  * `cascades_weak.yaml` halve the strength fields
-  * `cascades.yaml` baseline
-  * `cascades_strong.yaml` increase strength by 50 percent
-* Affordance packs can teach economic regimes:
+  - `cascades_weak.yaml` halve the strength fields
+  - `cascades.yaml` baseline
+  - `cascades_strong.yaml` increase strength by 50 percent
+- Affordance packs can teach economic regimes:
 
-  * “austerity”: cheaper food and sleep, lower income
-  * “boom”: higher wages, higher rents (modelled as higher costs on beds or shower)
-  * “nightlife”: more things open with wrap-around hours
+  - “austerity”: cheaper food and sleep, lower income
+  - “boom”: higher wages, higher rents (modelled as higher costs on beds or shower)
+  - “nightlife”: more things open with wrap-around hours
 
 ## 11. Ambulance pathway design, end-to-end
 
@@ -590,24 +590,24 @@ What the player can do under this spec
 
 This yields a clear tactical set:
 
-* short-term stabilisation at cost
-* predictable, clock-aware clinic care
-* always-on emergency care that is pricier
+- short-term stabilisation at cost
+- predictable, clock-aware clinic care
+- always-on emergency care that is pricier
 
 It also gives the World Model a nice spread of options to learn, and a reason to track the clock.
 
 ## 12. Implementation notes that match the code
 
-* Movement and wait costs are part of `VectorizedTownletEnv._execute_actions` and are not configured in YAML.
-* Base depletions happen in `CascadeEngine.apply_base_depletions` with an optional curriculum multiplier you can change at runtime.
-* The main cascade sequence used by the env is:
+- Movement and wait costs are part of `VectorizedTownletEnv._execute_actions` and are not configured in YAML.
+- Base depletions happen in `CascadeEngine.apply_base_depletions` with an optional curriculum multiplier you can change at runtime.
+- The main cascade sequence used by the env is:
 
-  * depletions
-  * primary_to_pivotal
-  * secondary_to_primary
-  * secondary_to_pivotal_weak
+  - depletions
+  - primary_to_pivotal
+  - secondary_to_primary
+  - secondary_to_pivotal_weak
     which matches the methods `apply_secondary_to_primary_effects`, etc. The exact order is pulled from YAML `execution_order`.
-* Terminal conditions are checked after cascades and set all actions invalid in masks for dead agents.
+- Terminal conditions are checked after cascades and set all actions invalid in masks for dead agents.
 
 ## 13. Minimal “config pack” folder content
 
@@ -629,9 +629,9 @@ If you later add social cues, introduce `cues.yaml` in the same pack. Module C c
 3. Env verifies the tile has that affordance, checks hours open, does not block on affordability in the mask
 4. AffordanceEngine applies instant costs and effects:
 
-   * money becomes 0.10
-   * health becomes 0.48
-   * energy becomes 0.35
+   - money becomes 0.10
+   - health becomes 0.48
+   - energy becomes 0.35
 5. Base depletions and cascades then run as usual
 6. If you implement relocate, the env also sets position to Hospital before or after cascade, depending on your insertion point
 
