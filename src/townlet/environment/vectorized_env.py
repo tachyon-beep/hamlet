@@ -89,7 +89,8 @@ class VectorizedHamletEnv:
         from townlet.environment.cascade_config import load_bars_config
         bars_config_path = self.config_pack_path / "bars.yaml"
         bars_config = load_bars_config(bars_config_path)
-        meter_count = bars_config.meter_count
+        self.meter_count = bars_config.meter_count
+        meter_count = self.meter_count  # Keep local variable for backward compatibility in this method
 
         # Load affordance configuration to get FULL universe vocabulary
         # This must also happen before observation dimension calculation
@@ -144,10 +145,13 @@ class VectorizedHamletEnv:
         )
 
         # Initialize reward strategy (P2.1: per-agent baseline support, TASK-001: variable meters)
-        # Get energy and health indices from bars_config
+        # Get meter indices from bars_config for dynamic action costs and death detection
         meter_name_to_index = bars_config.meter_name_to_index
         self.energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
         self.health_idx = meter_name_to_index.get("health", min(6, meter_count - 1))  # Default to 6 or last meter
+        self.hygiene_idx = meter_name_to_index.get("hygiene", None)  # Optional meter
+        self.satiation_idx = meter_name_to_index.get("satiation", None)  # Optional meter
+        self.money_idx = meter_name_to_index.get("money", None)  # Optional meter
 
         self.reward_strategy = RewardStrategy(
             device=device, num_agents=num_agents, meter_count=meter_count, energy_idx=self.energy_idx, health_idx=self.health_idx
@@ -409,38 +413,24 @@ class VectorizedHamletEnv:
         # Movement (UP, DOWN, LEFT, RIGHT)
         movement_mask = actions < 4
         if movement_mask.any():
-            movement_costs = torch.tensor(
-                [
-                    self.move_energy_cost,  # energy (configurable, default 0.5%)
-                    0.003,  # hygiene: -0.3%
-                    0.004,  # satiation: -0.4%
-                    0.0,  # money: no cost
-                    0.0,  # mood: no cost
-                    0.0,  # social: no cost
-                    0.0,  # health: no cost
-                    0.0,  # fitness: no cost
-                ],
-                device=self.device,
-            )
+            # TASK-001: Create dynamic cost tensor based on meter_count
+            movement_costs = torch.zeros(self.meter_count, device=self.device)
+            movement_costs[self.energy_idx] = self.move_energy_cost  # Energy (configurable, default 0.5%)
+            if self.hygiene_idx is not None:
+                movement_costs[self.hygiene_idx] = 0.003  # Hygiene: -0.3%
+            if self.satiation_idx is not None:
+                movement_costs[self.satiation_idx] = 0.004  # Satiation: -0.4%
+
             self.meters[movement_mask] -= movement_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # WAIT action (action 5) - lighter energy cost
         wait_mask = actions == 5
         if wait_mask.any():
-            wait_costs = torch.tensor(
-                [
-                    self.wait_energy_cost,  # energy (configurable, default 0.1%)
-                    0.0,  # hygiene: no cost
-                    0.0,  # satiation: no cost
-                    0.0,  # money: no cost
-                    0.0,  # mood: no cost
-                    0.0,  # social: no cost
-                    0.0,  # health: no cost
-                    0.0,  # fitness: no cost
-                ],
-                device=self.device,
-            )
+            # TASK-001: Create dynamic cost tensor based on meter_count
+            wait_costs = torch.zeros(self.meter_count, device=self.device)
+            wait_costs[self.energy_idx] = self.wait_energy_cost  # Energy (configurable, default 0.1%)
+
             self.meters[wait_mask] -= wait_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
@@ -479,8 +469,11 @@ class VectorizedHamletEnv:
 
             # Check affordability using AffordanceEngine
             cost_per_tick = self.affordance_engine.get_affordance_cost(affordance_name, cost_mode="per_tick")
-            can_afford = self.meters[:, 3] >= cost_per_tick
-            at_affordance = at_affordance & can_afford
+            # TASK-001: Use dynamic money index (if money meter exists)
+            if self.money_idx is not None:
+                can_afford = self.meters[:, self.money_idx] >= cost_per_tick
+                at_affordance = at_affordance & can_afford
+            # else: no money meter, affordability always passes
 
             if not at_affordance.any():
                 continue
@@ -559,8 +552,11 @@ class VectorizedHamletEnv:
             # Check affordability using AffordanceEngine
             cost_normalized = self.affordance_engine.get_affordance_cost(affordance_name, cost_mode="instant")
             if cost_normalized > 0:
-                can_afford = self.meters[:, 3] >= cost_normalized
-                at_affordance = at_affordance & can_afford
+                # TASK-001: Use dynamic money index (if money meter exists)
+                if self.money_idx is not None:
+                    can_afford = self.meters[:, self.money_idx] >= cost_normalized
+                    at_affordance = at_affordance & can_afford
+                # else: no money meter, affordability always passes
 
                 if not at_affordance.any():
                     # No one at this affordance can afford it, skip

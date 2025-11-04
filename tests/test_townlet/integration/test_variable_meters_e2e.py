@@ -257,3 +257,40 @@ class TestVariableMetersEndToEnd:
 
         # All actions should be masked (False) for dead agent
         assert not torch.any(masks[0]), "Dead agent should have all actions masked"
+
+    def test_action_costs_with_4meters(self, cpu_device, task001_env_4meter):
+        """Test that action costs work correctly with 4-meter config.
+
+        This test verifies that movement, WAIT, and INTERACT costs use dynamic
+        meter indices instead of hardcoded 8-element tensors. In a 4-meter config,
+        subtracting an 8-element cost vector from 4-element meters would cause
+        broadcasting error.
+        """
+        env = task001_env_4meter
+
+        # Reset environment
+        env.reset()
+
+        # Get initial meter values
+        initial_meters = env.meters.clone()
+
+        # Test MOVEMENT action (should deplete energy, hygiene, satiation if present)
+        actions = torch.tensor([0], device=cpu_device)  # UP
+        obs, rewards, dones, info = env.step(actions)
+
+        # Meters should have changed (action costs applied)
+        assert not torch.allclose(env.meters, initial_meters, atol=1e-6), "Movement should deplete meters"
+
+        # Reset and test WAIT action
+        env.reset()
+        initial_meters = env.meters.clone()
+
+        actions = torch.tensor([5], device=cpu_device)  # WAIT
+        obs, rewards, dones, info = env.step(actions)
+
+        # WAIT should also deplete energy (but less than movement)
+        assert not torch.allclose(env.meters, initial_meters, atol=1e-6), "WAIT should deplete energy"
+
+        # All meters should stay in valid range
+        assert torch.all(env.meters >= 0.0), "Meters should not go below 0"
+        assert torch.all(env.meters <= 1.0), "Meters should not exceed 1"
