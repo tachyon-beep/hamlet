@@ -3,7 +3,7 @@
 **Status**: Planned
 **Priority**: MEDIUM (enables external model usage)
 **Estimated Effort**: 36 hours (includes ONNX export)
-**Dependencies**: TASK-004 (BRAIN_AS_CODE, for checkpoint format design)
+**Dependencies**: None (fallback format implemented for BRAIN_AS_CODE)
 **Enables**: External model usage, transfer learning, model serving
 **Created**: 2025-11-05
 **Completed**: TBD
@@ -188,6 +188,16 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
   ```python
   """Standalone model for HAMLET inference."""
 
+  import torch
+  import torch.nn as nn
+  from pathlib import Path
+  from torch import Tensor
+  import logging
+
+  from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+
+  logger = logging.getLogger(__name__)
+
   class HamletModel:
       """Self-contained inference model."""
 
@@ -277,13 +287,23 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
   ```python
   """Inference checkpoint format (v1)."""
 
+  import torch
+  import torch.nn as nn
+  from pathlib import Path
+  import time
+  import hashlib
+  import json
+  import logging
+
+  logger = logging.getLogger(__name__)
+
   INFERENCE_CHECKPOINT_VERSION = "inference_v1"
 
   def save_inference_checkpoint(
       model: HamletModel,
       path: Path,
       metadata: dict,
-      brain_spec: dict,
+      brain_spec: dict | None = None,
   ):
       """Save inference checkpoint.
 
@@ -291,14 +311,10 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
           model: HamletModel to save
           path: Output path
           metadata: Training metadata (episode, epsilon, etc.)
-          brain_spec: brain.yaml content (from BRAIN_AS_CODE)
+          brain_spec: brain.yaml content (from BRAIN_AS_CODE) or None for fallback
       """
       checkpoint = {
           "format_version": INFERENCE_CHECKPOINT_VERSION,
-
-          # BRAIN_AS_CODE integration (embedded spec)
-          "brain_spec": brain_spec,
-          "brain_spec_hash": _compute_hash(brain_spec),
 
           # Model weights
           "state_dict": model.network.state_dict(),
@@ -308,13 +324,22 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
           "created_at": time.time(),
       }
 
+      # BRAIN_AS_CODE integration (optional, preferred)
+      if brain_spec is not None:
+          checkpoint["brain_spec"] = brain_spec
+          checkpoint["brain_spec_hash"] = _compute_hash(brain_spec)
+      else:
+          # Fallback: Embed minimal network params (no BRAIN_AS_CODE)
+          checkpoint["network_params"] = _extract_network_params(model.network)
+
       torch.save(checkpoint, path)
 
-  def load_inference_checkpoint(path: Path, device: str | torch.device) -> tuple[dict, dict]:
+  def load_inference_checkpoint(path: Path, device: str | torch.device) -> tuple[dict | None, dict]:
       """Load inference checkpoint.
 
       Returns:
-          (brain_spec, checkpoint_dict)
+          (brain_spec_or_None, checkpoint_dict)
+          - brain_spec is None if checkpoint uses fallback format
       """
       checkpoint = torch.load(path, weights_only=False, map_location=device)
 
@@ -322,22 +347,68 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
       if checkpoint.get("format_version") != INFERENCE_CHECKPOINT_VERSION:
           raise ValueError(f"Unsupported checkpoint version: {checkpoint.get('format_version')}")
 
-      # Verify brain spec hash (optional, warns if mismatch)
-      expected_hash = checkpoint.get("brain_spec_hash")
-      actual_hash = _compute_hash(checkpoint["brain_spec"])
-      if expected_hash != actual_hash:
-          logger.warning(f"Brain spec hash mismatch (expected {expected_hash}, got {actual_hash})")
+      # Extract brain spec (if available)
+      brain_spec = checkpoint.get("brain_spec")
+      if brain_spec is not None:
+          # Verify brain spec hash (optional, warns if mismatch)
+          expected_hash = checkpoint.get("brain_spec_hash")
+          actual_hash = _compute_hash(brain_spec)
+          if expected_hash != actual_hash:
+              logger.warning(f"Brain spec hash mismatch (expected {expected_hash}, got {actual_hash})")
 
-      return checkpoint["brain_spec"], checkpoint
+      return brain_spec, checkpoint
+
+  def _extract_network_params(network: nn.Module) -> dict:
+      """Extract minimal network params for fallback checkpoint format.
+
+      Returns:
+          {
+              "network_type": "simple" | "recurrent",
+              "obs_dim": int,
+              "action_dim": int,
+              "window_size": int (recurrent only),
+          }
+      """
+      from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+
+      if isinstance(network, SimpleQNetwork):
+          # Infer from state_dict
+          state_dict = network.state_dict()
+          obs_dim = state_dict["net.0.weight"].shape[1]
+          action_dim = state_dict["net.6.weight"].shape[0]
+          return {
+              "network_type": "simple",
+              "obs_dim": obs_dim,
+              "action_dim": action_dim,
+          }
+      elif isinstance(network, RecurrentSpatialQNetwork):
+          # Infer from state_dict
+          state_dict = network.state_dict()
+          action_dim = state_dict["q_head.2.weight"].shape[0]
+          window_size = int(state_dict["vision_encoder.0.weight"].shape[2])  # Conv2d kernel size
+          return {
+              "network_type": "recurrent",
+              "action_dim": action_dim,
+              "window_size": window_size,
+          }
+      else:
+          raise ValueError(f"Unknown network type: {type(network)}")
+
+  def _compute_hash(obj: dict) -> str:
+      """Compute SHA-256 hash of dictionary."""
+      import hashlib
+      import json
+      content = json.dumps(obj, sort_keys=True)
+      return f"sha256:{hashlib.sha256(content.encode()).hexdigest()[:16]}"
   ```
 
-**Format**:
+**Format (with BRAIN_AS_CODE - preferred)**:
 
 ```python
 {
     "format_version": "inference_v1",
 
-    # BRAIN_AS_CODE integration
+    # BRAIN_AS_CODE integration (preferred)
     "brain_spec": {
         "network": {
             "type": "recurrent_spatial",
@@ -350,6 +421,33 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
         }
     },
     "brain_spec_hash": "sha256:abc123...",
+
+    # Model weights (~10MB for RecurrentSpatialQNetwork)
+    "state_dict": {...},
+
+    # Metadata
+    "metadata": {
+        "training_episode": 10000,
+        "training_config_path": "configs/L2_partial_observability",
+        "epsilon": 0.05,
+        "curriculum_stage": 5,
+    },
+    "created_at": 1699123456.78,
+}
+```
+
+**Format (fallback without BRAIN_AS_CODE)**:
+
+```python
+{
+    "format_version": "inference_v1",
+
+    # Fallback: Minimal network params (when BRAIN_AS_CODE unavailable)
+    "network_params": {
+        "network_type": "recurrent",
+        "action_dim": 5,
+        "window_size": 5,
+    },
 
     # Model weights (~10MB for RecurrentSpatialQNetwork)
     "state_dict": {...},
@@ -384,10 +482,8 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
 - File: `src/townlet/inference/model.py`
   - Implement `load_from_checkpoint()` (v1 inference format)
   - Implement `load_from_training_checkpoint()` (v2 training format, backward compat)
-  - Use BRAIN_AS_CODE compiler to build network from spec:
+  - Handle both BRAIN_AS_CODE and fallback formats:
     ```python
-    from townlet.compiler import compile_brain
-
     @classmethod
     def load_from_checkpoint(cls, path: Path, device: str | torch.device = "cpu") -> "HamletModel":
         """Load from inference checkpoint (v1)."""
@@ -395,8 +491,21 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
 
         brain_spec, checkpoint = load_inference_checkpoint(path, device)
 
-        # Compile network from brain.yaml spec (BRAIN_AS_CODE)
-        network = compile_brain(brain_spec)
+        # Try BRAIN_AS_CODE first (preferred)
+        if brain_spec is not None:
+            try:
+                from townlet.compiler import compile_brain
+                network = compile_brain(brain_spec)
+            except ImportError:
+                # BRAIN_AS_CODE not available, fall through to fallback
+                logger.warning("BRAIN_AS_CODE compiler not available, using fallback")
+                brain_spec = None
+
+        # Fallback: Build network from minimal params
+        if brain_spec is None:
+            network_params = checkpoint["network_params"]
+            network = _build_network_from_params(network_params)
+
         network.load_state_dict(checkpoint["state_dict"])
         network.eval()
         network.to(device)
@@ -418,16 +527,17 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
 
         if network_type == "simple":
             from townlet.agent.networks import SimpleQNetwork
-            # Infer obs_dim from checkpoint
+            # Infer obs_dim and action_dim from checkpoint state_dict
             state_dict = checkpoint["population_state"]["q_network"]
             obs_dim = state_dict["net.0.weight"].shape[1]
-            action_dim = state_dict["net.6.weight"].shape[0]
+            action_dim = _infer_action_dim(state_dict, network_type="simple")
             network = SimpleQNetwork(obs_dim=obs_dim, action_dim=action_dim)
         elif network_type == "recurrent":
             from townlet.agent.networks import RecurrentSpatialQNetwork
             vision_range = env_config.get("vision_range", 2)
             window_size = 2 * vision_range + 1
-            action_dim = 5  # Hardcoded for now (will come from BRAIN_AS_CODE)
+            state_dict = checkpoint["population_state"]["q_network"]
+            action_dim = _infer_action_dim(state_dict, network_type="recurrent")
             network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=window_size,
@@ -438,6 +548,55 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
         network.to(device)
 
         return cls(network=network)
+
+    # Helper functions (module-level, not class methods)
+
+    def _build_network_from_params(params: dict) -> nn.Module:
+        """Build network from minimal params (fallback format).
+
+        Args:
+            params: {
+                "network_type": "simple" | "recurrent",
+                "obs_dim": int (simple only),
+                "action_dim": int,
+                "window_size": int (recurrent only),
+            }
+
+        Returns:
+            Initialized network (weights to be loaded separately)
+        """
+        from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+
+        network_type = params["network_type"]
+        action_dim = params["action_dim"]
+
+        if network_type == "simple":
+            obs_dim = params["obs_dim"]
+            return SimpleQNetwork(obs_dim=obs_dim, action_dim=action_dim)
+        elif network_type == "recurrent":
+            window_size = params["window_size"]
+            return RecurrentSpatialQNetwork(action_dim=action_dim, window_size=window_size)
+        else:
+            raise ValueError(f"Unknown network type: {network_type}")
+
+    def _infer_action_dim(state_dict: dict, network_type: str) -> int:
+        """Infer action dimension from checkpoint state_dict.
+
+        Args:
+            state_dict: Network state dict
+            network_type: "simple" | "recurrent"
+
+        Returns:
+            action_dim (e.g., 5 for HAMLET)
+        """
+        if network_type == "simple":
+            # SimpleQNetwork: net.6 is final layer (Linear(128, action_dim))
+            return state_dict["net.6.weight"].shape[0]
+        elif network_type == "recurrent":
+            # RecurrentSpatialQNetwork: q_head.2 is final layer
+            return state_dict["q_head.2.weight"].shape[0]
+        else:
+            raise ValueError(f"Unknown network type: {network_type}")
     ```
 
 **Tests**:
@@ -458,6 +617,44 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
 **Changes**:
 
 - File: `src/townlet/demo/runner.py`
+  - Add helper method to load brain spec (with fallback):
+    ```python
+    def _load_brain_spec(self) -> dict | None:
+        """Load brain.yaml spec from config directory.
+
+        Returns:
+            brain_spec dict if BRAIN_AS_CODE available, None for fallback
+        """
+        brain_path = self.config_dir / "brain.yaml"
+
+        # Try to load brain.yaml if it exists
+        if brain_path.exists():
+            try:
+                import yaml
+                with open(brain_path) as f:
+                    brain_spec = yaml.safe_load(f)
+                logger.info(f"Loaded brain spec from {brain_path}")
+                return brain_spec
+            except Exception as e:
+                logger.warning(f"Failed to load brain.yaml: {e}, using fallback")
+                return None
+        else:
+            # BRAIN_AS_CODE not yet implemented, use fallback
+            logger.debug("brain.yaml not found, using fallback checkpoint format")
+            return None
+    ```
+
+  - Add helper methods to access current training state:
+    ```python
+    def _get_current_epsilon(self) -> float:
+        """Get current exploration epsilon from exploration strategy."""
+        return self.exploration.epsilon
+
+    def _get_current_stage(self) -> int:
+        """Get current curriculum stage."""
+        return self.curriculum.current_stage
+    ```
+
   - In `save_checkpoint()`: After saving training checkpoint, save inference checkpoint
     ```python
     def save_checkpoint(self):
@@ -476,21 +673,22 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
         # Wrap network in HamletModel
         model = HamletModel(network=self.population.q_network)
 
-        # Load brain spec from training config
-        brain_spec = self._load_brain_spec()  # From TASK-004
+        # Try to load brain spec (preferred, but optional)
+        brain_spec = self._load_brain_spec()
 
         # Metadata
         metadata = {
             "training_episode": episode,
             "training_config_path": str(self.config_dir),
-            "epsilon": self._get_current_epsilon(),
-            "curriculum_stage": self._get_current_stage(),
+            "epsilon": self._get_current_epsilon(),  # Extract from self.exploration.epsilon
+            "curriculum_stage": self._get_current_stage(),  # Extract from self.curriculum.current_stage
         }
 
-        # Save inference checkpoint
+        # Save inference checkpoint (with or without brain_spec)
         inference_path = self.checkpoint_dir / f"model_ep{episode:05d}.pt"
         save_inference_checkpoint(model, inference_path, metadata, brain_spec)
-        logger.info(f"Saved inference checkpoint: {inference_path.name}")
+        logger.info(f"Saved inference checkpoint: {inference_path.name} "
+                   f"(format: {'BRAIN_AS_CODE' if brain_spec else 'fallback'})")
     ```
 
 **Tests**:
@@ -572,7 +770,44 @@ self.population = VectorizedPopulation(env, curriculum, exploration, ...)  # Jus
   """ONNX export utilities for HamletModel."""
 
   import torch
+  import torch.nn as nn
   import torch.onnx
+  import numpy as np
+  import logging
+  from pathlib import Path
+
+  from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+
+  logger = logging.getLogger(__name__)
+
+  def _infer_obs_dim(network: nn.Module) -> int:
+      """Infer observation dimension from network state_dict.
+
+      Args:
+          network: SimpleQNetwork or RecurrentSpatialQNetwork
+
+      Returns:
+          obs_dim for creating example inputs
+      """
+      from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
+
+      if isinstance(network, SimpleQNetwork):
+          # SimpleQNetwork: net.0 is first layer (Linear(obs_dim, 256))
+          return network.state_dict()["net.0.weight"].shape[1]
+      elif isinstance(network, RecurrentSpatialQNetwork):
+          # RecurrentSpatialQNetwork: observation is decomposed
+          # Local grid: window_size * window_size (e.g., 5×5 = 25)
+          # Position: 2
+          # Meters: 8
+          # Affordance at position: 15
+          # Temporal extras: 4
+          # Total: 25 + 2 + 8 + 15 + 4 = 54 for window_size=5
+          state_dict = network.state_dict()
+          window_size = int(state_dict["vision_encoder.0.weight"].shape[2])  # Conv2d kernel size
+          obs_dim = window_size * window_size + 2 + 8 + 15 + 4
+          return obs_dim
+      else:
+          raise ValueError(f"Unknown network type: {type(network)}")
 
   def export_to_onnx(
       model: HamletModel,
@@ -1020,9 +1255,10 @@ q_values, new_h, new_c = outputs
 
 **Risk 1: BRAIN_AS_CODE integration incomplete**
 
-- **Severity**: HIGH (blocks checkpoint format)
-- **Mitigation**: Coordinate with TASK-004, use simplified spec if needed
-- **Contingency**: Embed network params dict instead of brain.yaml (simpler format)
+- **Severity**: LOW (was HIGH, now MITIGATED)
+- **Mitigation**: ✅ Implemented fallback checkpoint format that doesn't require BRAIN_AS_CODE
+- **Details**: Checkpoint format supports both brain_spec (preferred) and network_params (fallback)
+- **Fallback**: System automatically uses minimal network_params if brain.yaml unavailable
 
 **Risk 2: ONNX export issues with LSTM**
 
@@ -1044,9 +1280,10 @@ q_values, new_h, new_c = outputs
 
 ### Blocking Dependencies
 
-- ⚠️ **PARTIAL**: TASK-004 (BRAIN_AS_CODE) for checkpoint format design
-  - Can implement without BRAIN_AS_CODE (use simpler format)
-  - Prefer to wait for TASK-004 for proper integration
+- ✅ **NONE**: Originally depended on TASK-004 (BRAIN_AS_CODE), now mitigated with fallback format
+  - If TASK-004 complete: Uses brain_spec (preferred, self-describing checkpoints)
+  - If TASK-004 incomplete: Uses network_params (fallback, minimal but functional)
+  - Both formats coexist, system auto-detects which to use
 
 ### Impact Radius
 

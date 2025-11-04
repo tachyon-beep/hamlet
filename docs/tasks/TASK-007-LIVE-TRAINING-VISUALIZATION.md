@@ -178,6 +178,7 @@ async def _check_and_load_checkpoint(self) -> bool:
 **Changes**:
 
 - File: `src/townlet/recording/recorder.py`
+  - Note: Standard imports (logging, time, etc.) already present in file
   - Add `live_stream_callback` parameter to `__init__`
   - In `finish_episode()`: call callback with episode data dict
   - Handle callback exceptions gracefully (log, don't crash)
@@ -299,6 +300,13 @@ async def _check_and_load_checkpoint(self) -> bool:
         """Broadcast training episode to all clients.
 
         Replays episode step-by-step at human-watchable speed.
+
+        Note: Uses existing _broadcast_to_clients() helper method from
+        LiveInferenceServer (live_inference.py:~600), which sends
+        WebSocket messages to all connected clients.
+
+        Note: self.step_delay is initialized in __init__() from
+        LiveInferenceServer constructor (already exists at line ~240).
         """
         metadata = episode_data["metadata"]
         steps = episode_data["steps"]
