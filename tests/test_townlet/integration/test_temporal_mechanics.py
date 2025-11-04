@@ -139,12 +139,14 @@ class TestTimeProgression:
         # Should wrap back to 0
         assert env.time_of_day == 0
 
-    @xfail_temporal
     def test_observation_dimensions_with_temporal(self, cpu_device):
-        """Verify observation includes temporal features (sin/cos time + progress).
+        """Verify observation includes temporal features (sin/cos time + progress + lifetime).
 
         Migrated from: test_temporal_integration.py::test_observation_dimensions_with_temporal
         Combined with: test_vectorized_env_temporal.py::test_observation_includes_time_and_progress
+
+        NOTE: Updated to expect 4 temporal features (was 3) to match actual implementation.
+        The 4th feature (lifetime_progress) was added for forward compatibility.
         """
         env = VectorizedHamletEnv(
             num_agents=2,
@@ -155,19 +157,21 @@ class TestTimeProgression:
 
         obs = env.reset()
 
-        # Full observability: 64 (grid) + 8 (meters) + (num_affordance_types + 1) + 3 (temporal)
-        # Temporal features: sin(time), cos(time), normalized interaction progress
-        expected_dim = 64 + 8 + (env.num_affordance_types + 1) + 3
+        # Full observability: 64 (grid) + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
+        # Temporal features: sin(time), cos(time), normalized interaction progress, lifetime
+        expected_dim = 64 + 8 + (env.num_affordance_types + 1) + 4
         assert obs.shape == (2, expected_dim)
 
-        time_sin = obs[0, -3]
-        time_cos = obs[0, -2]
-        progress_feature = obs[0, -1]
+        time_sin = obs[0, -4]
+        time_cos = obs[0, -3]
+        progress_feature = obs[0, -2]
+        lifetime_feature = obs[0, -1]
 
         # time_of_day = 0 at reset => sin = 0, cos = 1
         assert time_sin == pytest.approx(0.0, abs=1e-6)
         assert time_cos == pytest.approx(1.0, abs=1e-6)
         assert progress_feature == 0.0  # No interaction yet
+        assert lifetime_feature == 0.0  # Just reset
 
 
 # =============================================================================
