@@ -50,9 +50,9 @@ DEFAULT_KEYWORDS = {"default", "default_factory"}
 class ASTContext:
     """Track AST context (class, function, variable) for structural matching."""
     module: str  # filepath
-    class_name: Optional[str] = None
-    function_name: Optional[str] = None
-    variable_name: Optional[str] = None
+    class_name: str | None = None
+    function_name: str | None = None
+    variable_name: str | None = None
 
     def to_path(self) -> str:
         """Convert to structural path: module::class::function::variable"""
@@ -70,16 +70,16 @@ class ASTContext:
 class WhitelistPattern:
     """Represents a whitelist pattern (structural or line-based)."""
     pattern: str  # Original pattern string
-    rule_id: Optional[str] = None  # None means all rules
+    rule_id: str | None = None  # None means all rules
 
     # For structural patterns
-    filepath_pattern: Optional[str] = None
-    class_pattern: Optional[str] = None
-    function_pattern: Optional[str] = None
-    variable_pattern: Optional[str] = None
+    filepath_pattern: str | None = None
+    class_pattern: str | None = None
+    function_pattern: str | None = None
+    variable_pattern: str | None = None
 
     # For line-based patterns
-    lineno: Optional[int] = None
+    lineno: int | None = None
 
     def is_structural(self) -> bool:
         """Check if this is a structural pattern (not line-based)."""
@@ -151,7 +151,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
         self.class_stack: list[str] = []
         self.function_stack: list[str] = []
 
-    def _current_context(self, variable_name: Optional[str] = None) -> ASTContext:
+    def _current_context(self, variable_name: str | None = None) -> ASTContext:
         """Get current AST context."""
         return ASTContext(
             module=self.filename,
@@ -160,13 +160,13 @@ class NoDefaultsVisitor(ast.NodeVisitor):
             variable_name=variable_name,
         )
 
-    def _report(self, node: ast.AST, rule_id: str, msg: str, variable_name: Optional[str] = None):
+    def _report(self, node: ast.AST, rule_id: str, msg: str, variable_name: str | None = None):
         lineno = getattr(node, "lineno", 1)
         col = getattr(node, "col_offset", 0)
         context = self._current_context(variable_name)
         self.violations.append(((rule_id, lineno, col, msg), context))
 
-    def _has_default_kwargs(self, keywords: list[ast.keyword]) -> Optional[str]:
+    def _has_default_kwargs(self, keywords: list[ast.keyword]) -> str | None:
         for kw in keywords:
             if kw.arg in DEFAULT_KEYWORDS:
                 return kw.arg
@@ -225,7 +225,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
             self._check_assignment_value(node.value, var_name)
         self.generic_visit(node)
 
-    def _extract_target_name(self, target: ast.AST) -> Optional[str]:
+    def _extract_target_name(self, target: ast.AST) -> str | None:
         """Extract variable name from assignment target."""
         if isinstance(target, ast.Name):
             return target.id
@@ -233,7 +233,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
             return target.attr
         return None
 
-    def _check_assignment_value(self, value: ast.AST, var_name: Optional[str] = None):
+    def _check_assignment_value(self, value: ast.AST, var_name: str | None = None):
         if isinstance(value, ast.BoolOp) and isinstance(value.op, ast.Or):
             self._report(value, "ASG001", "Logical OR used as a default (x = a or b)", var_name)
         if isinstance(value, ast.IfExp):
@@ -267,7 +267,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def parse_whitelist_pattern(line: str) -> Optional[WhitelistPattern]:
+def parse_whitelist_pattern(line: str) -> WhitelistPattern | None:
     """
     Parse whitelist pattern (structural or line-based).
 
