@@ -13,6 +13,13 @@ from pathlib import Path
 
 from townlet.recording.video_export import batch_export_videos, export_episode_video
 
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",  # Simple format for CLI output
+)
+logger = logging.getLogger(__name__)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -135,10 +142,10 @@ def main():
         )
 
         if success:
-            print(f"✓ Exported episode {args.episode_id} to {args.output}")
+            logger.info(f"✓ Exported episode {args.episode_id} to {args.output}")
             return 0
         else:
-            print(f"✗ Failed to export episode {args.episode_id}", file=sys.stderr)
+            logger.error(f"✗ Failed to export episode {args.episode_id}")
             return 1
 
     elif args.command == "batch":
@@ -158,7 +165,7 @@ def main():
             style=args.style,
         )
 
-        print(f"✓ Exported {count} videos to {args.output_dir}")
+        logger.info(f"✓ Exported {count} videos to {args.output_dir}")
         return 0
 
     else:

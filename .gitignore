@@ -1,5 +1,5 @@
 # Python
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -89,7 +89,15 @@ data/
 *.json
 *.pkl
 *.pickle
+
+# Database files (SQLite)
 *.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs
 *.log
 
 # Frontend
@@ -101,8 +109,6 @@ frontend/.vite/
 docs/_build/
 site/
 .worktrees/
-.db-shm
-.db-wal
 
 test_migration_checkpoints/*
 

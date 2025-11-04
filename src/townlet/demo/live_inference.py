@@ -75,7 +75,7 @@ class LiveInferenceServer:
         self.port = port
         self.step_delay = step_delay
         self.total_episodes = total_episodes
-        print(f"[LiveInferenceServer] Initialized with total_episodes={total_episodes}")
+        logger.info(f"LiveInferenceServer initialized with total_episodes={total_episodes}")
         self.config_dir = Path(config_dir) if config_dir else None
         if training_config_path:
             self.config_path = Path(training_config_path)

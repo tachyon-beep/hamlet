@@ -422,7 +422,7 @@ Feel free to experiment, extend, and learn!
 
 ## License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) file for details
 
 ## Citation
 
