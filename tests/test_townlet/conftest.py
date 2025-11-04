@@ -434,17 +434,23 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
         "description": "4-meter test universe",
         "bars": [
             {"name": "energy", "index": 0, "tier": "pivotal",
-             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.005},
+             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.005,
+             "description": "Energy level"},
             {"name": "health", "index": 1, "tier": "pivotal",
-             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.0},
+             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.0,
+             "description": "Health status"},
             {"name": "money", "index": 2, "tier": "resource",
-             "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.0},
+             "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.0,
+             "description": "Financial resources"},
             {"name": "mood", "index": 3, "tier": "secondary",
-             "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001},
+             "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001,
+             "description": "Mood state"},
         ],
         "terminal_conditions": [
-            {"meter": "energy", "operator": "<=", "value": 0.0},
-            {"meter": "health", "operator": "<=", "value": 0.0},
+            {"meter": "energy", "operator": "<=", "value": 0.0,
+             "description": "Death by energy depletion"},
+            {"meter": "health", "operator": "<=", "value": 0.0,
+             "description": "Death by health failure"},
         ],
     }
 
@@ -454,9 +460,12 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
     # Simplify cascades.yaml
     cascades_config = {
         "version": "2.0",
+        "description": "Simplified cascades for 4-meter testing",
+        "math_type": "gradient_penalty",
         "modulations": [],
         "cascades": [
             {"name": "low_mood_hits_energy", "category": "secondary_to_pivotal",
+             "description": "Low mood drains energy",
              "source": "mood", "source_index": 3, "target": "energy",
              "target_index": 0, "threshold": 0.2, "strength": 0.01}
         ],
@@ -494,13 +503,17 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
     # Add 4 new meters
     extra_meters = [
         {"name": "reputation", "index": 8, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.002},
+         "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.002,
+         "description": "Social reputation"},
         {"name": "skill", "index": 9, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.3, "base_depletion": 0.001},
+         "range": [0.0, 1.0], "initial": 0.3, "base_depletion": 0.001,
+         "description": "Professional skills"},
         {"name": "spirituality", "index": 10, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.6, "base_depletion": 0.002},
+         "range": [0.0, 1.0], "initial": 0.6, "base_depletion": 0.002,
+         "description": "Spiritual wellbeing"},
         {"name": "community_trust", "index": 11, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001},
+         "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001,
+         "description": "Community trust level"},
     ]
 
     bars_12m = copy.deepcopy(bars_8m)  # Deep copy to avoid modifying original
