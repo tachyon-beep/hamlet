@@ -124,6 +124,9 @@ class TestEpisodeLifecycle:
 
         Critical integration point: VectorizedHamletEnv + VectorizedPopulation
         with recurrent network managing hidden state across episode steps.
+
+        Note: Uses minimal energy costs to prevent agent death during test,
+        since death resets hidden state to zeros (see test_hidden_state_resets_on_death).
         """
         # Create POMDP environment
         env = VectorizedHamletEnv(
@@ -132,8 +135,8 @@ class TestEpisodeLifecycle:
             partial_observability=True,
             vision_range=2,  # 5×5 vision window
             enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
+            move_energy_cost=0.0001,  # Minimal cost to prevent death during test
+            wait_energy_cost=0.00005,  # Must be less than move_energy_cost
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
