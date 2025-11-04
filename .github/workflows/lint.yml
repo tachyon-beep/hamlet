@@ -35,6 +35,9 @@ jobs:
       - name: Mypy (type check)
         run: uv run mypy src/townlet
 
+      - name: No-Defaults Linter (check for unauthorized defaults)
+        run: python scripts/no_defaults_lint.py src/townlet/ --whitelist .defaults-whitelist.txt
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:

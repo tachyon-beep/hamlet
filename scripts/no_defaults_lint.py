@@ -48,6 +48,7 @@ DEFAULT_KEYWORDS = {"default", "default_factory"}
 @dataclass
 class ASTContext:
     """Track AST context (class, function, variable) for structural matching."""
+
     module: str  # filepath
     class_name: str | None = None
     function_name: str | None = None
@@ -68,6 +69,7 @@ class ASTContext:
 @dataclass
 class WhitelistPattern:
     """Represents a whitelist pattern (structural or line-based)."""
+
     pattern: str  # Original pattern string
     rule_id: str | None = None  # None means all rules
 
@@ -154,7 +156,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
         """Get current AST context."""
         return ASTContext(
             module=self.filename,
-            class_name=self.class_stack[-1] if self.class_stack else None,
+            class_name="::".join(self.class_stack) if self.class_stack else None,
             function_name=self.function_stack[-1] if self.function_stack else None,
             variable_name=variable_name,
         )
@@ -198,16 +200,16 @@ class NoDefaultsVisitor(ast.NodeVisitor):
 
     def visit_Lambda(self, node: ast.Lambda):
         args = node.args
-        if (args.defaults and any(d is not None for d in args.defaults)) or \
-           (args.kw_defaults and any(d is not None for d in args.kw_defaults)):
+        if (args.defaults and any(d is not None for d in args.defaults)) or (
+            args.kw_defaults and any(d is not None for d in args.kw_defaults)
+        ):
             self._report(node, "DEF002", "Lambda has parameter default(s)")
         self.generic_visit(node)
 
     def _check_args_defaults(self, node, rule_id: str):
         args = node.args
-        has_pos_kw_defaults = (
-            (args.defaults and any(d is not None for d in args.defaults)) or
-            (args.kw_defaults and any(d is not None for d in args.kw_defaults))
+        has_pos_kw_defaults = (args.defaults and any(d is not None for d in args.defaults)) or (
+            args.kw_defaults and any(d is not None for d in args.kw_defaults)
         )
         if has_pos_kw_defaults:
             self._report(node, rule_id, f"Function '{node.name}' has parameter default(s)")
@@ -230,6 +232,17 @@ class NoDefaultsVisitor(ast.NodeVisitor):
             return target.id
         elif isinstance(target, ast.Attribute):
             return target.attr
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            # Handle tuple/list unpacking: a, b = foo()
+            names = []
+            for elt in target.elts:
+                name = self._extract_target_name(elt)
+                if name:
+                    names.append(name)
+            return ",".join(names) if names else None
+        elif isinstance(target, ast.Subscript):
+            # Handle subscript assignment: x[0] = foo()
+            return self._extract_target_name(target.value)
         return None
 
     def _check_assignment_value(self, value: ast.AST, var_name: str | None = None):
@@ -242,8 +255,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
         # dict.get(key, default) / dict.setdefault(key, default)
         if isinstance(node.func, ast.Attribute) and node.func.attr in {"get", "setdefault"}:
             if len(node.args) >= 2:
-                self._report(node, "CALL001",
-                             f"'{node.func.attr}(..., default)' provides a default")
+                self._report(node, "CALL001", f"'{node.func.attr}(..., default)' provides a default")
 
         # os.getenv(NAME, default)
         if self._is_os_getenv(node) and len(node.args) >= 2:
@@ -357,15 +369,38 @@ def scan_file(path: pathlib.Path) -> list[tuple[Rule, ASTContext]]:
     return v.violations
 
 
-def iter_py_files(root: pathlib.Path):
+def iter_py_files(root: pathlib.Path, exclude_patterns: list[str] | None = None):
+    """Iterate over Python files, optionally excluding patterns."""
+    exclude_patterns = exclude_patterns or []
+
+    def is_excluded(path: pathlib.Path) -> bool:
+        """Check if path matches any exclude pattern."""
+        path_str = str(path)
+        for pattern in exclude_patterns:
+            # Support both glob-style and path-based patterns
+            if fnmatch.fnmatch(path_str, pattern):
+                return True
+            if fnmatch.fnmatch(path_str, f"*/{pattern}"):
+                return True
+            if fnmatch.fnmatch(path_str, f"**/{pattern}"):
+                return True
+        return False
+
     if root.is_file() and root.suffix == ".py":
-        yield root
+        if not is_excluded(root):
+            yield root
         return
+
     for p in root.rglob("*.py"):
         # Skip common vendor dirs
         parts = {part.lower() for part in p.parts}
         if {"venv", ".venv", ".tox", "site-packages"} & parts:
             continue
+
+        # Skip excluded patterns
+        if is_excluded(p):
+            continue
+
         yield p
 
 
@@ -426,24 +461,14 @@ Rule IDs:
   CALL003 - Call with default= or default_factory=
   ARGP001 - argparse add_argument(default=...)
   CLICK001- click.option(default=...)
-        """
+        """,
     )
     parser.add_argument("paths", nargs="+", help="Python files or directories to scan")
-    parser.add_argument(
-        "--whitelist",
-        type=pathlib.Path,
-        help="Path to whitelist file"
-    )
-    parser.add_argument(
-        "--show-whitelisted",
-        action="store_true",
-        help="Show whitelisted violations (for debugging)"
-    )
-    parser.add_argument(
-        "--show-context",
-        action="store_true",
-        help="Show AST context (class/function) for violations"
-    )
+    parser.add_argument("--whitelist", type=pathlib.Path, help="Path to whitelist file")
+    parser.add_argument("--show-whitelisted", action="store_true", help="Show whitelisted violations (for debugging)")
+    parser.add_argument("--show-context", action="store_true", help="Show AST context (class/function) for violations")
+    parser.add_argument("--quiet", action="store_true", help="Suppress progress output")
+    parser.add_argument("--exclude", action="append", help="Exclude files matching pattern (can be used multiple times)")
 
     args = parser.parse_args(argv[1:])
 
@@ -464,22 +489,38 @@ Rule IDs:
     all_violations: list[tuple[str, str, int, int, str, ASTContext]] = []
     whitelisted_violations: list[tuple[str, str, int, int, str, ASTContext]] = []
 
+    # Collect all files first to show progress
+    all_files = []
+    exclude_patterns = args.exclude or []
     for path_arg in args.paths:
         root = pathlib.Path(path_arg)
         if not root.exists():
             print(f"Not found: {root}", file=sys.stderr)
             return 2
+        all_files.extend(iter_py_files(root, exclude_patterns))
 
-        for file in iter_py_files(root):
-            for (rule_id, lineno, col, msg), context in scan_file(file):
-                filepath = str(file)
-                violation = (filepath, rule_id, lineno, col, msg, context)
+    total_files = len(all_files)
+    if not args.quiet and total_files > 0:
+        print(f"Scanning {total_files} Python file(s)...", file=sys.stderr)
 
-                # Check if whitelisted
-                if is_whitelisted(filepath, lineno, rule_id, context, patterns):
-                    whitelisted_violations.append(violation)
-                else:
-                    all_violations.append(violation)
+    for idx, file in enumerate(all_files, start=1):
+        if not args.quiet and total_files > 10:
+            # Show progress for large scans
+            if idx == 1 or idx % 10 == 0 or idx == total_files:
+                print(f"Progress: {idx}/{total_files} files scanned", file=sys.stderr, end="\r")
+
+        for (rule_id, lineno, col, msg), context in scan_file(file):
+            filepath = str(file)
+            violation = (filepath, rule_id, lineno, col, msg, context)
+
+            # Check if whitelisted
+            if is_whitelisted(filepath, lineno, rule_id, context, patterns):
+                whitelisted_violations.append(violation)
+            else:
+                all_violations.append(violation)
+
+    if not args.quiet and total_files > 10:
+        print(file=sys.stderr)  # New line after progress
 
     # Report results
     if args.show_whitelisted and whitelisted_violations:
