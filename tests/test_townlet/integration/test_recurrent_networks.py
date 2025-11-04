@@ -11,7 +11,7 @@ Test Organization:
 """
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as functional
 
 from townlet.agent.networks import RecurrentSpatialQNetwork
 from townlet.curriculum.static import StaticCurriculum
@@ -467,7 +467,7 @@ class TestLSTMBatchTraining:
             q_target_all = torch.stack(q_target_list, dim=1)
 
             # Apply mask to prevent post-terminal gradients
-            losses_raw = F.mse_loss(q_pred_all, q_target_all, reduction="none")
+            losses_raw = functional.mse_loss(q_pred_all, q_target_all, reduction="none")
             mask = batch["mask"].float()
             loss = (losses_raw * mask).sum() / mask.sum().clamp_min(1)
 

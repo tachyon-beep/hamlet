@@ -162,7 +162,7 @@ def _encode_video_ffmpeg(frames_dir: Path, output_path: Path, fps: int = 30, spe
     ]
 
     try:
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        subprocess.run(cmd, capture_output=True, check=True, text=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"ffmpeg encoding failed: {e.stderr}")
