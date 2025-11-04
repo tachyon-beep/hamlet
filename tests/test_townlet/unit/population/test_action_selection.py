@@ -52,7 +52,7 @@ class TestGreedyActionSelection:
         )
 
         obs_dim = env.observation_dim
-        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6)
+        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6, hidden_dim=128)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(epsilon=0.1)
