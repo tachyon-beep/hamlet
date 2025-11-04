@@ -4,10 +4,12 @@ Tests for video export functionality.
 Tests rendering frames and exporting to MP4.
 """
 
+import subprocess
 import tempfile
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 class TestVideoRenderer:
@@ -160,9 +162,24 @@ class TestVideoRenderer:
             assert frame.shape == first_shape
 
 
+def _ffmpeg_available() -> bool:
+    """Check if ffmpeg is available."""
+    try:
+        subprocess.run(
+            ["ffmpeg", "-version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
 class TestVideoExport:
     """Test video export to MP4."""
 
+    @pytest.mark.skipif(not _ffmpeg_available(), reason="ffmpeg not installed")
     def test_export_episode_to_mp4(self):
         """Should export episode to MP4 file."""
         import time
