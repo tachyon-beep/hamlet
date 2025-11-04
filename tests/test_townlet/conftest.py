@@ -266,7 +266,7 @@ def recurrent_qnetwork(pomdp_env: VectorizedHamletEnv, device: torch.device) -> 
     return RecurrentSpatialQNetwork(
         grid_size=5,  # 5×5 local vision
         num_affordance_types=14,
-        num_meters=8,
+        num_meters=pomdp_env.meter_count,  # Dynamic meter count (TASK-001)
         action_dim=5,
         hidden_dim=256,
     ).to(device)
@@ -503,6 +503,76 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
 
     with open(config_4m / "cascades.yaml", "w") as f:
         yaml.safe_dump(cascades_config, f)
+
+    # Create affordances.yaml with FULL 14-affordance vocabulary but only using 4 meters
+    # This maintains observation vocabulary consistency while validating meter references
+    # Note: Only enabled_affordances (Bed, Hospital, HomeMeal=FastFood, Job) will be deployed
+    affordances_config = {
+        "version": "2.0",
+        "description": "4-meter test affordances (full vocabulary, 4-meter compatible)",
+        "status": "TEST",
+        "affordances": [
+            {"id": "0", "name": "Bed", "category": "energy", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.05}],
+             "effects": [{"meter": "energy", "amount": 0.50}, {"meter": "health", "amount": 0.02}],
+             "operating_hours": [0, 24]},
+            {"id": "1", "name": "LuxuryBed", "category": "energy", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.11}],
+             "effects": [{"meter": "energy", "amount": 0.75}, {"meter": "health", "amount": 0.05}],
+             "operating_hours": [0, 24]},
+            {"id": "2", "name": "Shower", "category": "hygiene", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.03}],
+             "effects": [{"meter": "mood", "amount": 0.20}],  # Use mood instead of hygiene
+             "operating_hours": [0, 24]},
+            {"id": "3", "name": "HomeMeal", "category": "food", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.04}],
+             "effects": [{"meter": "energy", "amount": 0.20}, {"meter": "mood", "amount": 0.10}],
+             "operating_hours": [0, 24]},
+            {"id": "4", "name": "FastFood", "category": "food", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.06}],
+             "effects": [{"meter": "energy", "amount": 0.30}],
+             "operating_hours": [0, 24]},
+            {"id": "5", "name": "Restaurant", "category": "food", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.12}],
+             "effects": [{"meter": "energy", "amount": 0.40}, {"meter": "mood", "amount": 0.15}],
+             "operating_hours": [11, 22]},
+            {"id": "6", "name": "Gym", "category": "fitness", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.08}, {"meter": "energy", "amount": 0.10}],
+             "effects": [{"meter": "health", "amount": 0.15}, {"meter": "mood", "amount": 0.05}],
+             "operating_hours": [6, 22]},
+            {"id": "7", "name": "Hospital", "category": "health", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.15}],
+             "effects": [{"meter": "health", "amount": 0.60}],
+             "operating_hours": [0, 24]},
+            {"id": "8", "name": "Job", "category": "income", "interaction_type": "instant",
+             "costs": [{"meter": "energy", "amount": 0.15}],
+             "effects": [{"meter": "money", "amount": 0.225}, {"meter": "mood", "amount": -0.05}],
+             "operating_hours": [8, 18]},
+            {"id": "9", "name": "Park", "category": "leisure", "interaction_type": "instant",
+             "costs": [],
+             "effects": [{"meter": "mood", "amount": 0.20}],
+             "operating_hours": [6, 20]},
+            {"id": "10", "name": "Library", "category": "leisure", "interaction_type": "instant",
+             "costs": [],
+             "effects": [{"meter": "mood", "amount": 0.15}],
+             "operating_hours": [8, 20]},
+            {"id": "11", "name": "Bar", "category": "social", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.15}],
+             "effects": [{"meter": "mood", "amount": 0.25}],
+             "operating_hours": [18, 28]},
+            {"id": "12", "name": "Recreation", "category": "leisure", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.10}],
+             "effects": [{"meter": "mood", "amount": 0.30}],
+             "operating_hours": [12, 24]},
+            {"id": "13", "name": "SocialEvent", "category": "social", "interaction_type": "instant",
+             "costs": [{"meter": "money", "amount": 0.08}],
+             "effects": [{"meter": "mood", "amount": 0.20}],
+             "operating_hours": [18, 23]},
+        ],
+    }
+
+    with open(config_4m / "affordances.yaml", "w") as f:
+        yaml.safe_dump(affordances_config, f)
 
     return config_4m
 

@@ -792,7 +792,7 @@ class VectorizedPopulation(PopulationManager):
             "meter_names": bars_config.meter_names,
             "version": bars_config.version,
             "obs_dim": self.env.observation_dim,
-            "action_dim": 5,  # Hardcoded for now (will be moved to actions.yaml in TASK-000)
+            "action_dim": 5,  # Hardcoded for now (will be moved to actions.yaml in TASK-002B)
         }
 
         # Target network (recurrent mode only)

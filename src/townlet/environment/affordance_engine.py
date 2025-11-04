@@ -24,7 +24,6 @@ from pathlib import Path
 import torch
 
 from townlet.environment.affordance_config import (
-    METER_NAME_TO_IDX,
     AffordanceConfigCollection,
     load_affordance_config,
 )
@@ -43,6 +42,7 @@ class AffordanceEngine:
         affordance_config: AffordanceConfigCollection,
         num_agents: int,
         device: torch.device,
+        meter_name_to_idx: dict[str, int],
     ):
         """
         Initialize AffordanceEngine.
@@ -51,10 +51,12 @@ class AffordanceEngine:
             affordance_config: Loaded affordance configuration
             num_agents: Number of agents in parallel
             device: torch.device for GPU/CPU
+            meter_name_to_idx: Mapping of meter names to indices (from bars_config)
         """
         self.num_agents = num_agents
         self.device = device
         self.affordances = affordance_config.affordances
+        self.meter_name_to_idx = meter_name_to_idx
 
         # Build lookup maps
         self._build_lookup_maps()
@@ -148,12 +150,12 @@ class AffordanceEngine:
 
         # Apply costs
         for cost in affordance.costs:
-            meter_idx = METER_NAME_TO_IDX[cost.meter]
+            meter_idx = self.meter_name_to_idx[cost.meter]
             updated_meters[agent_mask, meter_idx] -= cost.amount
 
         # Apply effects
         for effect in affordance.effects:
-            meter_idx = METER_NAME_TO_IDX[effect.meter]
+            meter_idx = self.meter_name_to_idx[effect.meter]
             updated_meters[agent_mask, meter_idx] += effect.amount
 
         # Clamp meters to [0, 1]
@@ -202,12 +204,12 @@ class AffordanceEngine:
 
         # Apply per-tick costs
         for cost in affordance.costs_per_tick:
-            meter_idx = METER_NAME_TO_IDX[cost.meter]
+            meter_idx = self.meter_name_to_idx[cost.meter]
             updated_meters[agent_mask, meter_idx] -= cost.amount
 
         # Apply per-tick effects
         for effect in affordance.effects_per_tick:
-            meter_idx = METER_NAME_TO_IDX[effect.meter]
+            meter_idx = self.meter_name_to_idx[effect.meter]
             updated_meters[agent_mask, meter_idx] += effect.amount
 
         required_ticks = affordance.required_ticks or 1
@@ -216,7 +218,7 @@ class AffordanceEngine:
         is_final_tick = current_tick == (required_ticks - 1)
         if is_final_tick and len(affordance.completion_bonus) > 0:
             for effect in affordance.completion_bonus:
-                meter_idx = METER_NAME_TO_IDX[effect.meter]
+                meter_idx = self.meter_name_to_idx[effect.meter]
                 updated_meters[agent_mask, meter_idx] += effect.amount
 
         # Clamp meters to [0, 1]
@@ -239,7 +241,7 @@ class AffordanceEngine:
         can_afford = torch.ones(batch_size, dtype=torch.bool, device=self.device)
 
         for cost in costs:
-            meter_idx = METER_NAME_TO_IDX[cost.meter]
+            meter_idx = self.meter_name_to_idx[cost.meter]
             can_afford = can_afford & (meters[:, meter_idx] >= cost.amount)
 
         return can_afford
@@ -396,7 +398,7 @@ class AffordanceEngine:
 
         # Apply effects (all affordances in corrected config are instant)
         for effect in affordance.effects:
-            meter_idx = METER_NAME_TO_IDX[effect.meter]
+            meter_idx = self.meter_name_to_idx[effect.meter]
             result_meters[agent_mask, meter_idx] = torch.clamp(
                 result_meters[agent_mask, meter_idx] + effect.amount,
                 0.0,
@@ -405,30 +407,39 @@ class AffordanceEngine:
 
         # Apply costs
         for cost in affordance.costs:
-            meter_idx = METER_NAME_TO_IDX[cost.meter]
+            meter_idx = self.meter_name_to_idx[cost.meter]
             result_meters[agent_mask, meter_idx] -= cost.amount
 
         return result_meters
 
 
 def create_affordance_engine(
-    config_path: Path | None = None,
+    config_pack_path: Path | None = None,
     num_agents: int = 1,
     device: torch.device = torch.device("cpu"),
 ) -> AffordanceEngine:
     """
-    Convenience function to create AffordanceEngine from config file.
+    Convenience function to create AffordanceEngine from config pack.
 
     Args:
-        config_path: Path to affordances.yaml (default: configs/test/affordances.yaml)
+        config_pack_path: Path to config directory containing bars.yaml and affordances.yaml
+                         (default: configs/test/)
         num_agents: Number of agents
         device: torch device
 
     Returns:
         Initialized AffordanceEngine
     """
-    if config_path is None:
-        config_path = Path("configs/test/affordances.yaml")
+    from townlet.environment.cascade_config import load_bars_config
 
-    affordance_config = load_affordance_config(config_path)
-    return AffordanceEngine(affordance_config, num_agents, device)
+    if config_pack_path is None:
+        config_pack_path = Path("configs/test")
+
+    bars_config = load_bars_config(config_pack_path / "bars.yaml")
+    affordance_config = load_affordance_config(config_pack_path / "affordances.yaml", bars_config)
+    return AffordanceEngine(
+        affordance_config,
+        num_agents,
+        device,
+        bars_config.meter_name_to_index,
+    )

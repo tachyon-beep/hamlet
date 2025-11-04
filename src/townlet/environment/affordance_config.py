@@ -23,17 +23,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-# Meter name to index mapping (same as in vectorized_env.py)
-METER_NAME_TO_IDX: dict[str, int] = {
-    "energy": 0,
-    "hygiene": 1,
-    "satiation": 2,
-    "money": 3,
-    "mood": 4,
-    "social": 5,
-    "health": 6,
-    "fitness": 7,
-}
+from townlet.environment.cascade_config import BarsConfig
 
 
 class AffordanceEffect(BaseModel):
@@ -43,12 +33,8 @@ class AffordanceEffect(BaseModel):
     amount: float  # Change amount (normalized, positive or negative)
     type: str | None = None  # "linear" for distributed effects, None for instant
 
-    @model_validator(mode="after")
-    def validate_meter_name(self) -> "AffordanceEffect":
-        """Ensure meter name is valid."""
-        if self.meter not in METER_NAME_TO_IDX:
-            raise ValueError(f"Invalid meter name: {self.meter}. Valid names: {list(METER_NAME_TO_IDX.keys())}")
-        return self
+    # Note: Meter name validation happens at collection level in load_affordance_config()
+    # to support variable-size meter systems (TASK-001)
 
 
 class AffordanceCost(BaseModel):
@@ -57,12 +43,8 @@ class AffordanceCost(BaseModel):
     meter: str  # Meter name (usually "money" or "energy")
     amount: float = Field(ge=0.0)  # Cost amount (must be non-negative)
 
-    @model_validator(mode="after")
-    def validate_meter_name(self) -> "AffordanceCost":
-        """Ensure meter name is valid."""
-        if self.meter not in METER_NAME_TO_IDX:
-            raise ValueError(f"Invalid meter name: {self.meter}. Valid names: {list(METER_NAME_TO_IDX.keys())}")
-        return self
+    # Note: Meter name validation happens at collection level in load_affordance_config()
+    # to support variable-size meter systems (TASK-001)
 
 
 class AffordanceConfig(BaseModel):
@@ -157,19 +139,20 @@ class AffordanceConfigCollection(BaseModel):
         return [aff for aff in self.affordances if aff.interaction_type == interaction_type]
 
 
-def load_affordance_config(config_path: Path) -> AffordanceConfigCollection:
+def load_affordance_config(config_path: Path, bars_config: BarsConfig) -> AffordanceConfigCollection:
     """
     Load and validate affordance configuration from YAML.
 
     Args:
         config_path: Path to affordances.yaml file
+        bars_config: BarsConfig to validate meter references against
 
     Returns:
         Validated AffordanceConfigCollection
 
     Raises:
         FileNotFoundError: If config file doesn't exist
-        ValidationError: If config format is invalid
+        ValidationError: If config format is invalid or meter references are invalid
         yaml.YAMLError: If YAML parsing fails
     """
     if not config_path.exists():
@@ -181,30 +164,44 @@ def load_affordance_config(config_path: Path) -> AffordanceConfigCollection:
     # Pydantic will validate the structure
     collection = AffordanceConfigCollection(**raw_data)
 
+    # Validate all meter references against bars_config (TASK-001 variable meter support)
+    valid_meters = set(bars_config.meter_name_to_index.keys())
+
+    for affordance in collection.affordances:
+        # Check all effects
+        for effect in affordance.effects + affordance.effects_per_tick + affordance.completion_bonus:
+            if effect.meter not in valid_meters:
+                raise ValueError(
+                    f"Affordance '{affordance.id}' effect references invalid meter '{effect.meter}'. "
+                    f"Valid meters: {sorted(valid_meters)}"
+                )
+
+        # Check all costs
+        for cost in affordance.costs + affordance.costs_per_tick:
+            if cost.meter not in valid_meters:
+                raise ValueError(
+                    f"Affordance '{affordance.id}' cost references invalid meter '{cost.meter}'. "
+                    f"Valid meters: {sorted(valid_meters)}"
+                )
+
     return collection
 
 
 # Convenience function for common use case
 def load_default_affordances() -> AffordanceConfigCollection:
-    """Load the default affordances.yaml from the test config pack."""
-    config_path = Path("configs/test/affordances.yaml")
-    return load_affordance_config(config_path)
+    """
+    Load the default affordances.yaml from the test config pack.
+
+    Note: This requires bars.yaml to exist in the same directory for validation.
+    """
+    from townlet.environment.cascade_config import load_bars_config
+
+    config_dir = Path("configs/test")
+    bars_config = load_bars_config(config_dir / "bars.yaml")
+    return load_affordance_config(config_dir / "affordances.yaml", bars_config)
 
 
 # ============================================================================
-
-
-# Meter name to index mapping
-METER_NAME_TO_IDX = {
-    "energy": 0,
-    "hygiene": 1,
-    "satiation": 2,
-    "money": 3,
-    "mood": 4,
-    "social": 5,
-    "health": 6,
-    "fitness": 7,
-}
 
 
 def is_affordance_open(time_of_day: int, operating_hours: tuple[int, int]) -> bool:

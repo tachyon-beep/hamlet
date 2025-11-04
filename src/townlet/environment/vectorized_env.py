@@ -90,13 +90,15 @@ class VectorizedHamletEnv:
 
         bars_config_path = self.config_pack_path / "bars.yaml"
         bars_config = load_bars_config(bars_config_path)
+        self.bars_config = bars_config  # Store for use in affordance validation (TASK-001)
         self.meter_count = bars_config.meter_count
         meter_count = self.meter_count  # Keep local variable for backward compatibility in this method
 
         # Load affordance configuration to get FULL universe vocabulary
         # This must also happen before observation dimension calculation
+        # Pass bars_config for meter reference validation (TASK-001)
         config_path = self.config_pack_path / "affordances.yaml"
-        affordance_config = load_affordance_config(config_path)
+        affordance_config = load_affordance_config(config_path, bars_config)
 
         # Extract ALL affordance names from YAML (defines observation vocabulary)
         # This is the FULL universe - what the agent can observe and reason about
@@ -168,7 +170,13 @@ class VectorizedHamletEnv:
         )
 
         # Initialize affordance engine (reuse affordance_config loaded above)
-        self.affordance_engine = AffordanceEngine(affordance_config, num_agents, device)
+        # Pass meter_name_to_index for dynamic meter lookups (TASK-001)
+        self.affordance_engine = AffordanceEngine(
+            affordance_config,
+            num_agents,
+            device,
+            bars_config.meter_name_to_index,
+        )
 
         self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 

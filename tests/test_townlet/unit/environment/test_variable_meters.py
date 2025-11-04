@@ -4,10 +4,8 @@ Tests that BarsConfig accepts variable meter counts (1-32) instead of
 hardcoded 8 meters.
 """
 
-from pathlib import Path
 
 import pytest
-import yaml
 
 from townlet.environment.cascade_config import (
     BarConfig,
