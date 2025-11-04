@@ -8,6 +8,8 @@ This is not intended for coding, which follows TDD best practices. Instead, this
 
 Research Products should generally be stored under `docs/research/`, Plans under `docs/plans/`, and Reviews under `docs/reviews/` or appended to the original plan.
 
+IMPORTANT: This process is context intensive and you should generally use subagents and relevant skills for this process unless you have a compelling reason not to.
+
 ---
 
 ## The Three-Phase Loop
