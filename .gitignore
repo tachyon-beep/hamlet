@@ -48,6 +48,7 @@ uv.lock
 htmlcov/
 .tox/
 .nox/
+.hypothesis/
 
 # Type checking
 .mypy_cache/
@@ -110,3 +111,4 @@ test_migration_checkpoints/*
 *.orig
 *.rej
 *.broken
+docs/TASK_IMPLEMENTATION_PLAN.md
