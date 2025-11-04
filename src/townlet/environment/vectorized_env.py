@@ -84,8 +84,15 @@ class VectorizedHamletEnv:
         if self.wait_energy_cost >= self.move_energy_cost:
             raise ValueError("wait_energy_cost must be less than move_energy_cost to preserve WAIT as a low-cost recovery action")
 
-        # Load affordance configuration to get FULL universe vocabulary
+        # Load bars configuration to get meter_count for observation dimensions
         # This must happen before observation dimension calculation
+        from townlet.environment.cascade_config import load_bars_config
+        bars_config_path = self.config_pack_path / "bars.yaml"
+        bars_config = load_bars_config(bars_config_path)
+        meter_count = bars_config.meter_count
+
+        # Load affordance configuration to get FULL universe vocabulary
+        # This must also happen before observation dimension calculation
         config_path = self.config_pack_path / "affordances.yaml"
         affordance_config = load_affordance_config(config_path)
 
@@ -113,12 +120,12 @@ class VectorizedHamletEnv:
         if partial_observability:
             # Level 2 POMDP: local window + position + meters + current affordance type
             window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
-            # Grid + position + 8 meters + affordance type one-hot (N+1 for "none")
-            self.observation_dim = window_size * window_size + 2 + 8 + (self.num_affordance_types + 1)
+            # Grid + position + meter_count meters + affordance type one-hot (N+1 for "none")
+            self.observation_dim = window_size * window_size + 2 + meter_count + (self.num_affordance_types + 1)
         else:
             # Level 1: full grid one-hot + meters + current affordance type
-            # Grid one-hot + 8 meters + affordance type (N+1 for "none")
-            self.observation_dim = grid_size * grid_size + 8 + (self.num_affordance_types + 1)
+            # Grid one-hot + meter_count meters + affordance type (N+1 for "none")
+            self.observation_dim = grid_size * grid_size + meter_count + (self.num_affordance_types + 1)
 
         # Always add temporal features for forward compatibility (4 features)
         # time_sin, time_cos, interaction_progress, lifetime_progress
@@ -155,7 +162,7 @@ class VectorizedHamletEnv:
 
         # State tensors (initialized in reset)
         self.positions = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
-        self.meters = torch.zeros((self.num_agents, 8), dtype=torch.float32, device=self.device)
+        self.meters = torch.zeros((self.num_agents, meter_count), dtype=torch.float32, device=self.device)
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
 

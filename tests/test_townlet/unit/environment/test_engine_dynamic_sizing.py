@@ -101,18 +101,18 @@ class TestVectorizedEnvDynamicSizing:
         """VectorizedHamletEnv should compute correct obs_dim for 4-meter full obs config."""
         config = load_environment_config(task001_config_4meter)
 
-        # 4-meter config has 7×7 grid
-        # Full obs: grid_onehot(49) + meters(4) + affordance_onehot(15) + temporal(4) = 72
+        # 4-meter config uses 8×8 grid (copied from test config pack)
+        # Full obs: grid_onehot(64) + meters(4) + affordance_onehot(15) + temporal(4) = 87
         env = VectorizedHamletEnv(
-            config_dir=task001_config_4meter,
+            config_pack_path=task001_config_4meter,
             num_agents=1,
             device=cpu_device,
             partial_observability=False,  # Full observability
             enabled_affordances=["Bed", "Hospital", "HomeMeal", "Job"],
         )
 
-        assert env.observation_dim == 72, (
-            f"Expected obs_dim=72 for 4-meter full obs (49+4+15+4), "
+        assert env.observation_dim == 87, (
+            f"Expected obs_dim=87 for 4-meter full obs (64+4+15+4), "
             f"got {env.observation_dim}"
         )
 
@@ -123,7 +123,7 @@ class TestVectorizedEnvDynamicSizing:
         # 12-meter config has 8×8 grid
         # Full obs: grid_onehot(64) + meters(12) + affordance_onehot(15) + temporal(4) = 95
         env = VectorizedHamletEnv(
-            config_dir=task001_config_12meter,
+            config_pack_path=task001_config_12meter,
             num_agents=1,
             device=cpu_device,
             partial_observability=False,  # Full observability
@@ -141,7 +141,7 @@ class TestVectorizedEnvDynamicSizing:
 
         # POMDP: local_grid(25) + position(2) + meters(4) + affordance_onehot(15) + temporal(4) = 50
         env = VectorizedHamletEnv(
-            config_dir=task001_config_4meter,
+            config_pack_path=task001_config_4meter,
             num_agents=1,
             device=cpu_device,
             partial_observability=True,  # POMDP
@@ -160,7 +160,7 @@ class TestVectorizedEnvDynamicSizing:
 
         # POMDP: local_grid(25) + position(2) + meters(12) + affordance_onehot(15) + temporal(4) = 58
         env = VectorizedHamletEnv(
-            config_dir=task001_config_12meter,
+            config_pack_path=task001_config_12meter,
             num_agents=1,
             device=cpu_device,
             partial_observability=True,  # POMDP
