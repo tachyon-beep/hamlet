@@ -23,6 +23,7 @@ This document describes the design of an **Episode Replay Recording System** for
 **Problem**: Training runs 200× faster than visualization (1,000 steps/sec vs 5 steps/sec). While watching one episode, the model trains for 200 episodes and evolves significantly. This makes live streaming from training impractical - viewers would be watching obsolete model behavior.
 
 **Solution**: Record actual training episodes to disk, then replay them at human-watchable speeds. This enables:
+
 - Watching exact episodes that shaped the agent's learning
 - Creating YouTube videos from recorded episodes
 - Debugging training issues by replaying problematic episodes
@@ -130,17 +131,20 @@ while running:
 ### Design Rationale
 
 **Why async queue approach?**
+
 - Training loop does cheap clones (no I/O blocking)
 - Background thread handles expensive work (compression, disk writes)
 - Bounded queue prevents memory explosion if writer can't keep up
 - Graceful degradation: drops oldest frames under extreme load
 
 **Why not synchronous writes?**
+
 - Disk I/O blocks training (5-10% overhead → ~10-20% in practice)
 - NFS or slow disks would cause significant slowdown
 - Harder to add features like cloud upload or streaming later
 
 **Why not in-memory circular buffer?**
+
 - Requires ~200 MB RAM for 1,000 episodes
 - Data loss on crash (episodes not yet flushed)
 - More complex lifecycle management
@@ -203,6 +207,7 @@ class EpisodeEndMarker:
 ### Memory Footprint
 
 Per-step data (worst case):
+
 - Position: 16 bytes (2× int64)
 - Meters: 64 bytes (8× float64)
 - Action: 8 bytes (int64)
@@ -489,6 +494,7 @@ CREATE INDEX idx_recordings_timestamp ON episode_recordings(timestamp);
 ### Storage Estimates
 
 **10,000 episodes, 10% recorded (1,000 episodes):**
+
 - Average episode: 450 steps
 - Average compressed size: 20 KB
 - **Total episode data**: 1,000 × 20 KB = **20 MB**
@@ -965,11 +971,13 @@ class DemoDatabase:
 **Minimal changes needed** - existing visualization already handles state updates!
 
 **Add:**
+
 1. Replay controls (play/pause/seek buttons)
 2. Recordings browser (dropdown or list)
 3. Mode indicator ("REPLAY" badge)
 
 **Reuse:**
+
 - Grid visualization ✅
 - Meter displays ✅
 - Q-value display ✅
@@ -1223,6 +1231,7 @@ recording = [
 ```
 
 **System dependency:**
+
 - `ffmpeg` binary (install via `apt install ffmpeg` or `brew install ffmpeg`)
 
 ---
@@ -1232,61 +1241,74 @@ recording = [
 ### Phase 1: Core Recording Infrastructure
 
 **Files to create:**
+
 - `src/townlet/recording/__init__.py`
 - `src/townlet/recording/recorder.py` - `EpisodeRecorder`, `RecordingWriter`
 - `src/townlet/recording/data_structures.py` - `RecordedStep`, `EpisodeMetadata`, `EpisodeEndMarker`
 
 **Files to modify:**
+
 - `src/townlet/demo/runner.py` - Integrate recorder
 - `src/townlet/demo/database.py` - Add recording schema and methods
 
 **Tests to write:**
+
 - `tests/test_townlet/test_recording/test_recorder.py` - Core recording logic
 - `tests/test_townlet/test_recording/test_data_structures.py` - Serialization roundtrips
 
 ### Phase 2: Recording Criteria
 
 **Files to create:**
+
 - `src/townlet/recording/criteria.py` - `RecordingCriteria`
 
 **Files to modify:**
+
 - `src/townlet/curriculum/adversarial.py` - Add `get_stage_info()` method
 - `src/townlet/curriculum/adversarial.py` - Update `PerformanceTracker`
 
 **Tests to write:**
+
 - `tests/test_townlet/test_recording/test_criteria.py` - Each criterion independently
 - `tests/test_townlet/test_curriculum/test_stage_info.py` - Curriculum API
 
 ### Phase 3: Playback System
 
 **Files to modify:**
+
 - `src/townlet/demo/live_inference.py` - Add replay mode
 - `src/townlet/demo/database.py` - Add `get_recording()`, `list_recordings()`
 
 **Tests to write:**
+
 - `tests/test_townlet/test_recording/test_playback.py` - Replay loading and stepping
 
 ### Phase 4: Video Export
 
 **Files to create:**
+
 - `src/townlet/recording/video_renderer.py` - `EpisodeVideoRenderer`
 - `src/townlet/recording/export_video.py` - CLI tool
 
 **Scripts to create:**
+
 - `scripts/export_recordings.sh` - Batch export script
 
 **Tests to write:**
+
 - `tests/test_townlet/test_recording/test_video_renderer.py` - Frame rendering
 - Manual tests: Export a video and verify it matches web UI
 
 ### Phase 5: Integration & Documentation
 
 **Files to modify:**
+
 - `configs/L0_minimal/training.yaml` - Add recording config
 - `CLAUDE.md` - Document recording system
 - `README.md` - Add usage examples
 
 **Tests to write:**
+
 - `tests/test_townlet/test_recording/test_integration.py` - End-to-end test
 
 ---
@@ -1296,22 +1318,26 @@ recording = [
 ### Unit Tests
 
 **Core recording:**
+
 - Test queue overflow behavior (graceful degradation)
 - Test serialization/deserialization roundtrips
 - Test compression/decompression
 - Mock database writes
 
 **Criteria:**
+
 - Test each criterion independently with edge cases
 - Test OR logic (multiple criteria)
 - Test stage transition detection
 
 **Curriculum API:**
+
 - Test `get_stage_info()` with various survival rates
 - Test "likely_transition_soon" heuristic
 - Test episode counting
 
 **Video renderer:**
+
 - Test frame generation without ffmpeg
 - Test color schemes (dark/light)
 - Verify frame dimensions match figsize × dpi
@@ -1319,6 +1345,7 @@ recording = [
 ### Integration Tests
 
 **End-to-end recording:**
+
 1. Run mini training loop (10 episodes)
 2. Configure periodic recording (every 5 episodes)
 3. Verify 2 recordings saved
@@ -1326,6 +1353,7 @@ recording = [
 5. Verify all steps present
 
 **Video export:**
+
 1. Create synthetic episode data
 2. Export to video
 3. Verify file exists and has correct duration
@@ -1334,6 +1362,7 @@ recording = [
 ### Performance Tests
 
 **Recording overhead:**
+
 1. Benchmark training loop with/without recording
 2. Verify <5% slowdown
 3. Test queue overflow scenario (slow disk writes)
@@ -1345,6 +1374,7 @@ recording = [
 ### 1. Frontend Replay UI Design
 
 **Decision needed**: Should replay controls be:
+
 - **Option A**: Separate tab/page in the frontend
 - **Option B**: Integrated into main view with mode toggle
 - **Option C**: Dedicated replay viewer (separate port)
@@ -1354,6 +1384,7 @@ recording = [
 ### 2. Video Renderer Style Matching
 
 **Decision needed**: How closely should video frames match the web UI?
+
 - **Option A**: Pixel-perfect match (requires extracting Vue component styles)
 - **Option B**: Close approximation (colors/layout similar, details differ)
 - **Option C**: Separate "publication" style (optimized for papers/presentations)
@@ -1365,6 +1396,7 @@ recording = [
 **Trade-off**: Including Q-values increases file size by ~30-50%.
 
 **Options**:
+
 - Always include (max detail, larger files)
 - Configurable (default on)
 - Never include (minimal storage)
@@ -1376,6 +1408,7 @@ recording = [
 **Future consideration**: Should recordings support cloud upload (S3, GCS)?
 
 **Not in scope for initial implementation**, but architecture supports it:
+
 - Writer thread could push to cloud after disk write
 - Database stores both local and cloud paths
 

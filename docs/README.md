@@ -5,6 +5,7 @@ This directory contains comprehensive documentation for the HAMLET Deep Reinforc
 ## Overview
 
 HAMLET follows a **research-driven development methodology** with strong emphasis on:
+
 - **Reproducibility** - UNIVERSE_AS_CODE and BRAIN_AS_CODE principles
 - **Pedagogy** - Capturing "interesting failures" as teaching moments
 - **Design exploration** - Research before implementation for complex decisions
@@ -40,21 +41,25 @@ docs/
 ### By Role
 
 **👨‍💻 For Developers**
+
 - Start: [`architecture/TOWNLET_HLD.md`](architecture/TOWNLET_HLD.md) - System design
 - Roadmap: [`architecture/ROADMAP.md`](architecture/ROADMAP.md) - Development phases
 - Philosophy: [`architecture/UNIVERSE_AS_CODE.md`](architecture/UNIVERSE_AS_CODE.md) - Configuration principles
 
 **🔬 For Researchers**
+
 - Current work: [`research/`](research/) - Active design exploration
 - Open problems: [`research/RESEARCH-TASK-000-UNSOLVED-PROBLEMS-CONSOLIDATED.md`](research/RESEARCH-TASK-000-UNSOLVED-PROBLEMS-CONSOLIDATED.md)
 - Methodology: [`methods/RESEARCH-PLAN-REVIEW-LOOP.md`](methods/RESEARCH-PLAN-REVIEW-LOOP.md)
 
 **👤 For Users/Operators**
+
 - Training: [`manual/TRAINING_SYSTEM.md`](manual/TRAINING_SYSTEM.md) - How to train agents
 - Visualization: [`manual/UNIFIED_SERVER_USAGE.md`](manual/UNIFIED_SERVER_USAGE.md) - Live inference
 - Recording: [`manual/REPLAY_USAGE.md`](manual/REPLAY_USAGE.md) - Episode replay
 
 **🎓 For Instructors/Students**
+
 - Philosophy: [`teachable_moments/trick_students_pedagogy.md`](teachable_moments/trick_students_pedagogy.md)
 - Examples: [`teachable_moments/`](teachable_moments/) - Reward hacking, emergent behavior
 - Curriculum: [`architecture/TRAINING_LEVELS.md`](architecture/TRAINING_LEVELS.md) - L0→L3 progression
@@ -92,6 +97,7 @@ Formal specification documents following UNIVERSE_AS_CODE philosophy:
 Strategic system design and high-level documentation:
 
 **Key Documents**:
+
 - [`TOWNLET_HLD.md`](architecture/TOWNLET_HLD.md) - High-level design (v2.5, current system)
 - [`ROADMAP.md`](architecture/ROADMAP.md) - Development roadmap (Phase 3 complete)
 - [`TRAINING_LEVELS.md`](architecture/TRAINING_LEVELS.md) - Progressive complexity (L0→L3)
@@ -131,6 +137,7 @@ User-facing documentation for running experiments and visualizing results:
 Deep design exploration before implementation:
 
 **Active Research**:
+
 - Spatial substrates design space
 - Code generation vs soft lookups
 - Distance semantics for non-euclidean spaces
@@ -156,11 +163,13 @@ Deep design exploration before implementation:
 Dated implementation plans capturing design decisions:
 
 **Active Plans**:
+
 - `2025-11-04-spatial-substrates.md` - Spatial substrate exploration
 - `2025-11-04-uac-action-space.md` - Action space configuration
 - `plan-task-001-variable-size-meters-tdd-ready.md` - TDD-ready meter plan
 
 **Archived Plans** (Completed implementations):
+
 - Temporal mechanics design/implementation (Level 3)
 - Multi-day demo design
 - Phase 0-3 implementation plans
@@ -209,6 +218,7 @@ Development workflows and processes:
 Capturing "interesting failures" and emergent behaviors as teaching materials:
 
 **Key Documents**:
+
 - [`README.md`](teachable_moments/README.md) - Index of all insights
 - [`trick_students_pedagogy.md`](teachable_moments/trick_students_pedagogy.md) - Core pedagogy
 - [`three_stages_of_learning.md`](teachable_moments/three_stages_of_learning.md) - Learning framework
@@ -244,6 +254,7 @@ Lightweight task tracking for smaller work items:
 All game mechanics (meters, affordances, cascades, actions, cues) defined in YAML configuration files, not hardcoded in Python.
 
 **Benefits**:
+
 - Domain-agnostic (could model villages, factories, trading bots)
 - Experimentable (test new mechanics without code changes)
 - Pedagogical (students learn by editing configs)
@@ -257,6 +268,7 @@ All game mechanics (meters, affordances, cascades, actions, cues) defined in YAM
 Network architecture, policy, exploration strategy, training schedule all defined in YAML.
 
 **Benefits**:
+
 - Experiment with architectures without code changes
 - A/B test exploration strategies
 - Reproduce exact agent configurations
@@ -289,24 +301,28 @@ Network architecture, policy, exploration strategy, training schedule all define
 ## Naming Conventions
 
 ### Task Specifications
+
 - **Format**: `TASK-NNN-DESCRIPTIVE-NAME.md`
 - **Example**: `TASK-002-UAC-CONTRACTS.md`
 - **Location**: Root `docs/` directory
 - **Purpose**: Formal requirements
 
 ### Research Documents
+
 - **Format**: `RESEARCH-TOPIC-NAME.md`
 - **Example**: `RESEARCH-SPATIAL-SUBSTRATES.md`
 - **Location**: `research/` directory
 - **Purpose**: Design exploration
 
 ### Implementation Plans
+
 - **Format**: `YYYY-MM-DD-descriptive-name.md`
 - **Example**: `2025-11-04-spatial-substrates.md`
 - **Location**: `plans/` directory
 - **Purpose**: Dated implementation roadmap
 
 ### Review Documents
+
 - **Format**: `REVIEW-TASK-NNN-TYPE.md`
 - **Example**: `REVIEW-TASK-001-SUMMARY.md`
 - **Location**: `reviews/` directory
@@ -331,6 +347,7 @@ Documents move to `archive/` subdirectories when:
 ## Contributing Documentation
 
 ### Adding Research
+
 1. Create `research/RESEARCH-YOUR-TOPIC.md`
 2. Explore design space, identify tradeoffs
 3. Document open problems
@@ -338,18 +355,21 @@ Documents move to `archive/` subdirectories when:
 5. Move to `archive/` when concluded
 
 ### Adding Plans
+
 1. Create `plans/YYYY-MM-DD-your-feature.md`
 2. Include: Goals, approach, milestones, acceptance criteria
 3. Link to relevant research and tasks
 4. Move to `archive/` when implemented
 
 ### Adding Teachable Moments
+
 1. Create `teachable_moments/your_discovery.md`
 2. Document: What happened, why it's interesting, pedagogical value
 3. Add entry to `teachable_moments/README.md`
 4. Link from `teachable_moments/DISCOVERED_INSIGHTS.md`
 
 ### Adding User Guides
+
 1. Create `manual/YOUR-GUIDE.md`
 2. Focus on: How to use feature, examples, troubleshooting
 3. Update main `README.md` to link to guide
@@ -378,17 +398,20 @@ Documents move to `archive/` subdirectories when:
 ## Getting Started
 
 **New to HAMLET?**
+
 1. Read [`../README.md`](../README.md) - Quick start
 2. Read [`architecture/TOWNLET_HLD.md`](architecture/TOWNLET_HLD.md) - System overview
 3. Read [`manual/TRAINING_SYSTEM.md`](manual/TRAINING_SYSTEM.md) - Run your first experiment
 
 **Adding a feature?**
+
 1. Check [`research/`](research/) for related research
 2. Check [`TASK-*.md`](.) for formal specifications
 3. Create implementation plan in [`plans/`](plans/)
 4. Follow methodology in [`methods/RESEARCH-PLAN-REVIEW-LOOP.md`](methods/RESEARCH-PLAN-REVIEW-LOOP.md)
 
 **Teaching with HAMLET?**
+
 1. Start with [`teachable_moments/trick_students_pedagogy.md`](teachable_moments/trick_students_pedagogy.md)
 2. Review [`teachable_moments/DISCOVERED_INSIGHTS.md`](teachable_moments/DISCOVERED_INSIGHTS.md)
 3. Use [`architecture/TRAINING_LEVELS.md`](architecture/TRAINING_LEVELS.md) for curriculum

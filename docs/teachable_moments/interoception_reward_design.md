@@ -24,6 +24,7 @@ reward = 1.0 if alive else 0.0
 ```
 
 **What the agent learns:**
+
 ```
 Episode Early On (before convergence):
 Step 1-50:   Energy 100% → 95%  [reward = 1.0 per step = 50.0 total]
@@ -45,6 +46,7 @@ Agent DOESN'T learn: "Only sleep when ACTUALLY TIRED!"
 Both scenarios produce identical reward streams:
 
 **Wasteful Sleep (energy 95% → 100%):**
+
 ```python
 before_sleep = [1.0, 1.0, 1.0, ...]  # 50 steps
 after_sleep  = [1.0, 1.0, 1.0, ...]  # 50 steps
@@ -54,6 +56,7 @@ ROI: Negative!
 ```
 
 **Optimal Sleep (energy 10% → 100%):**
+
 ```python
 before_sleep = [1.0, 1.0, 1.0, ...]  # 50 steps (but would die soon!)
 after_sleep  = [1.0, 1.0, 1.0, ...]  # 50 steps (life saved!)
@@ -76,6 +79,7 @@ reward = 1.0 * (health / 100.0) * (energy / 100.0) if alive else 0.0
 ### Why This Works: Immediate ROI Signal
 
 **Wasteful Sleep (energy 95%):**
+
 ```python
 # Before sleep:
 reward = 1.0 * 1.0 * 0.95 = 0.95 per step  # "Feeling pretty good!"
@@ -89,6 +93,7 @@ Q-network learns: "Not worth it at 95% energy"
 ```
 
 **Optimal Sleep (energy 10%):**
+
 ```python
 # Before sleep:
 reward = 1.0 * 1.0 * 0.10 = 0.10 per step  # "EXHAUSTED!"
@@ -140,6 +145,7 @@ Step 201: Energy 100%, reward = 1.00  ✅ "Refreshed!"
 ### What is Interoception?
 
 **Interoception**: The sense of the internal state of one's body. Humans are constantly aware of:
+
 - Fatigue (energy depletion)
 - Pain/sickness (health depletion)
 - Hunger (satiation depletion)
@@ -183,6 +189,7 @@ Agents *should* have access to meter state in their reward function - it models 
 **Question**: "Isn't this reward shaping?"
 
 **Answer**: It depends on your definition:
+
 - ❌ **Arbitrary shaping**: Adding proximity bonuses, path bonuses, etc.
 - ✅ **Modeling capabilities**: Giving agent access to information *humans have*
 
@@ -193,6 +200,7 @@ Humans know their energy level. Agents should too!
 **Problem**: Q-learning struggles when rewards are delayed.
 
 **Example**:
+
 ```python
 # Sparse reward (episode-level):
 rewards = [0, 0, 0, 0, 0, 0, 0, 0, 0, 100]  # Only at end!
@@ -303,6 +311,7 @@ class RewardStrategy:
 ### Expected Behavior Changes
 
 **Before (flat reward):**
+
 ```
 Episode 1: 15 sleeps (many wasteful), survives 300 steps
 Episode 10: 12 sleeps (some wasteful), survives 350 steps
@@ -310,6 +319,7 @@ Episode 50: 8 sleeps (few wasteful), survives 400 steps
 ```
 
 **After (interoception reward):**
+
 ```
 Episode 1: 15 sleeps (many wasteful), survives 250 steps (lower reward/step)
 Episode 10: 8 sleeps (fewer wasteful), survives 350 steps
@@ -403,6 +413,7 @@ def test_fewer_wasted_sleeps():
 ### Concern 2: "Will this make learning harder?"
 
 **Response**: No - it provides *more information*, not less. The reward signal is:
+
 - Still continuous (dense feedback)
 - Still differentiable (smooth gradient)
 - Now has richer structure (timing information)
@@ -460,6 +471,7 @@ Start simple, iterate based on results!
 **Interoception-based rewards solve a real problem** (temporal credit assignment) **by modeling a real capability** (internal state awareness).
 
 This is not arbitrary reward shaping - it's giving agents the same sensory feedback humans use to survive. The result is:
+
 - Faster learning
 - More efficient resource usage
 - Better pedagogical value (shows importance of modeling biological reality)

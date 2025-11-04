@@ -11,6 +11,7 @@
 ## Problem Statement
 
 Current affordance system is rigid:
+
 - All interactions are instant (no multi-tick mechanics)
 - No operating hours (Job always available, not just 9am-5pm)
 - No cooldowns (can spam same affordance)
@@ -56,6 +57,7 @@ Current affordance system is rigid:
 ## Extension 1: Affordance Masking Schema
 
 **Gap Identified**: Current affordances are always available. No support for:
+
 - Operating hours (Job 9am-5pm, Bar 6pm-2am)
 - Resource gates (Gym requires energy > 0.3)
 - Mode switching (Coffee Shop vs Bar, same location)
@@ -164,6 +166,7 @@ affordances:
 ```
 
 **Validation Rules** (implemented in TASK-004A compiler):
+
 - Meter references in `availability` must exist in bars.yaml
 - `min < max` enforced (already done in DTO)
 - Hour ranges validated (0-23, wrapping allowed)
@@ -352,6 +355,7 @@ affordances:
 ```
 
 **Validation Rules** (implemented in TASK-004A compiler):
+
 - **Capability conflicts**: Certain capabilities are mutually exclusive (e.g., instant + multi_tick)
 - **Dependent capabilities**: `resumable` requires `multi_tick`
 - **Meter references**: All meter names must exist in bars.yaml
@@ -362,6 +366,7 @@ affordances:
 ## Extension 3: Effect Pipeline System
 
 **Gap Identified**: Current affordances have simple `effects` dict. Cannot model:
+
 - On-start costs (Job entry fee)
 - Per-tick incremental rewards (Job pays per hour)
 - Completion bonuses (Job completion bonus)
@@ -392,6 +397,7 @@ class EffectPipeline(BaseModel):
 ### Extended AffordanceConfig Schema
 
 **Base Schema (from TASK-003)**:
+
 ```python
 class AffordanceConfig(BaseModel):
     id: str
@@ -400,6 +406,7 @@ class AffordanceConfig(BaseModel):
 ```
 
 **Extended Schema (TASK-004B)**:
+
 ```python
 class AffordanceConfig(BaseModel):
     # Base fields (from TASK-003)
@@ -555,6 +562,7 @@ affordances:
 ```
 
 **Validation Rules** (implemented in TASK-004A compiler):
+
 - **Pipeline consistency**: `multi_tick` capability should have `per_tick` or `on_completion` effects
 - **Meter references**: All effect meters must exist in bars.yaml
 - **Mutual exclusivity**: If using `effect_pipeline`, `effects` field should be empty (or auto-migrated)
@@ -591,6 +599,7 @@ class AffordanceConfig(BaseModel):
 ```
 
 **Example auto-migration**:
+
 ```yaml
 # Old config (still works)
 affordances:
@@ -613,12 +622,14 @@ affordances:
 **Deliverable**: `src/townlet/config/capability_config.py`
 
 **Tasks**:
+
 1. Define 6 capability DTOs (MultiTickCapability, CooldownCapability, etc.)
 2. Add Pydantic validation for each (ranges, required fields, constraints)
 3. Create CapabilityConfig union type
 4. Write unit tests for each capability DTO
 
 **Example Test**:
+
 ```python
 def test_multi_tick_capability_validation():
     # Valid
@@ -646,12 +657,14 @@ def test_multi_tick_capability_validation():
 **Deliverable**: `src/townlet/config/effect_pipeline.py`
 
 **Tasks**:
+
 1. Define AffordanceEffect DTO (meter, amount)
 2. Define EffectPipeline DTO (5 lifecycle stages)
 3. Add validation for meter references (deferred to TASK-004A)
 4. Write unit tests for effect pipeline construction
 
 **Example Test**:
+
 ```python
 def test_effect_pipeline_construction():
     pipeline = EffectPipeline(
@@ -673,12 +686,14 @@ def test_effect_pipeline_construction():
 **Deliverable**: `src/townlet/config/affordance_masking.py`
 
 **Tasks**:
+
 1. Define BarConstraint DTO (meter, min, max)
 2. Define ModeConfig DTO (hours, effects)
 3. Add validation for hour ranges (0-23, wrapping allowed)
 4. Write unit tests for availability masking
 
 **Example Test**:
+
 ```python
 def test_bar_constraint_validation():
     # Valid: min only
@@ -719,12 +734,14 @@ def test_mode_config_hour_wrapping():
 **Deliverable**: Update `src/townlet/config/affordance_config.py`
 
 **Tasks**:
+
 1. Extend AffordanceConfig from TASK-003 with new fields
 2. Add auto-migration from `effects` dict to `effect_pipeline`
 3. Update all L0-L3 configs to use extended schema
 4. Write integration tests loading full configs
 
 **Example Test**:
+
 ```python
 def test_affordance_config_auto_migration():
     # Old-style config
@@ -767,12 +784,14 @@ def test_affordance_config_full_capabilities():
 **NOTE**: Structural validation (field types, ranges) happens in DTOs (this task). Cross-file validation (meter references, capability conflicts) happens in TASK-004A (Compiler).
 
 **TASK-004B Validation Scope**:
+
 - ✅ Field types correct (duration_ticks is int, not string)
 - ✅ Numeric bounds (duration_ticks > 0, probability ∈ [0,1])
 - ✅ Required fields present
 - ✅ Constraint validation (min < max, at least one bound)
 
 **TASK-004A Validation Scope**:
+
 - Meter references valid (meter exists in bars.yaml)
 - Capability conflicts (can't have instant + multi_tick)
 - Effect pipeline consistency (multi_tick should have per_tick or on_completion)
@@ -783,6 +802,7 @@ def test_affordance_config_full_capabilities():
 ## Schema Validation Summary
 
 **TASK-004B Deliverables** (DTOs):
+
 - [x] `BarConstraint` DTO (meter-based availability)
 - [x] `ModeConfig` DTO (operating hours, mode switching)
 - [x] `MultiTickCapability`, `CooldownCapability`, `MeterGatedCapability`, `SkillScalingCapability`, `ProbabilisticCapability`, `PrerequisiteCapability` (6 capability DTOs)
@@ -791,6 +811,7 @@ def test_affordance_config_full_capabilities():
 - [x] Auto-migration from legacy `effects` dict
 
 **TASK-004A Deliverables** (Validation):
+
 - [ ] Validate `availability` meter references (Stage 4)
 - [ ] Validate capability conflicts (Stage 4)
 - [ ] Validate capability meter references (Stage 3)
@@ -817,6 +838,7 @@ def test_affordance_config_full_capabilities():
 ## Estimated Effort: 8-12 hours
 
 **Breakdown**:
+
 - Phase 1 (Capability DTOs): 3-4h
 - Phase 2 (Effect Pipeline): 2-3h
 - Phase 3 (Availability/Modes): 2-3h
@@ -829,9 +851,11 @@ def test_affordance_config_full_capabilities():
 ## Dependencies
 
 **Depends on**:
+
 - TASK-003 (Core DTOs) - Extends AffordanceConfig from TASK-003
 
 **Enables**:
+
 - Advanced curriculum levels (L4-L6)
 - TASK-004A (Compiler) - Optional capability validation (cross-file checks)
 
@@ -879,6 +903,7 @@ affordances:
 ```
 
 **Benefits**:
+
 - Multi-stage rewards (entry cost, per-tick pay, completion bonus)
 - Can quit early (with mood penalty, but keep earned money)
 - Can't spam (50-tick cooldown)
@@ -915,6 +940,7 @@ affordances:
 ```
 
 **Benefits**:
+
 - Beginner gains (fitness=0.1): 0.05 × 1.0 = 0.05
 - Intermediate gains (fitness=0.5): 0.05 × 1.5 = 0.075
 - Expert gains (fitness=0.9): 0.05 × 1.9 = 0.095
@@ -946,6 +972,7 @@ affordances:
 ```
 
 **Benefits**:
+
 - Same location, different effects by time of day
 - Breakfast: cheaper, energy boost
 - Dinner: more filling, mood boost, more expensive
@@ -1000,6 +1027,7 @@ affordances:
 ```
 
 **Benefits**:
+
 - Enforces progression: must complete Year 1 before Year 2
 - Prevents skipping (can't do Senior without Junior)
 - Tracks completion state per agent
@@ -1011,6 +1039,7 @@ affordances:
 Implement TASK-004B **after** TASK-003 and **after** core UAC system is stable (L0-L3 working with basic DTOs). Capability system enables advanced curriculum levels (L4+) but is not required for basic operation.
 
 **Incremental Rollout**:
+
 1. Implement DTOs (Phase 1-4)
 2. Test with simple examples (Job with multi_tick only)
 3. Add complexity gradually (multi_tick + cooldown, then + meter_gated)

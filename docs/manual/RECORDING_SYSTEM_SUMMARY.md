@@ -71,6 +71,7 @@ The Hamlet episode recording system captures, stores, and replays training episo
 ### 1. Data Structures (`src/townlet/recording/data_structures.py`)
 
 **RecordedStep**:
+
 ```python
 @dataclass
 class RecordedStep:
@@ -87,6 +88,7 @@ class RecordedStep:
 ```
 
 **EpisodeMetadata**:
+
 ```python
 @dataclass
 class EpisodeMetadata:
@@ -106,11 +108,13 @@ class EpisodeMetadata:
 ### 2. Recording (`src/townlet/recording/recorder.py`)
 
 **EpisodeRecorder**:
+
 - Async queue (maxsize 1000) for non-blocking recording
 - Clones tensors to CPU to avoid GPU memory issues
 - Records per-step data from environment
 
 **RecordingWriter**:
+
 - Background thread writes to disk
 - Buffers episodes in memory until `EpisodeEndMarker`
 - Serializes with MessagePack + LZ4 compression
@@ -119,11 +123,13 @@ class EpisodeMetadata:
 ### 3. Criteria (`src/townlet/recording/criteria.py`)
 
 **PeriodicCriterion**: Record every N episodes
+
 ```python
 periodic = PeriodicCriterion(interval=100)
 ```
 
 **StageTransitionCriterion**: Record before/after stage changes
+
 ```python
 stage_transition = StageTransitionCriterion(
     lookback=5,  # Record last 5 episodes before transition
@@ -132,6 +138,7 @@ stage_transition = StageTransitionCriterion(
 ```
 
 **PerformanceCriterion**: Record top/bottom performers
+
 ```python
 performance = PerformanceCriterion(
     top_percentile=10.0,     # Top 10%
@@ -141,6 +148,7 @@ performance = PerformanceCriterion(
 ```
 
 **StageBoundariesCriterion**: Record first/last N at each stage
+
 ```python
 stage_boundaries = StageBoundariesCriterion(
     record_first_n=5,
@@ -151,6 +159,7 @@ stage_boundaries = StageBoundariesCriterion(
 ### 4. Database (`src/townlet/demo/database.py`)
 
 **Schema**:
+
 ```sql
 CREATE TABLE recordings (
     episode_id INTEGER PRIMARY KEY,
@@ -166,6 +175,7 @@ CREATE TABLE recordings (
 ```
 
 **Query API**:
+
 ```python
 db.query_recordings(
     stage=2,
@@ -179,6 +189,7 @@ db.query_recordings(
 ### 5. Replay (`src/townlet/recording/replay.py`)
 
 **ReplayManager**:
+
 ```python
 replay = ReplayManager(database, recordings_base_dir)
 replay.load_episode(episode_id)
@@ -199,6 +210,7 @@ affordances = replay.get_affordances()
 ### 6. WebSocket Integration (`src/townlet/demo/live_inference.py`)
 
 **Commands**:
+
 - `list_recordings` - Query database with filters
 - `load_replay` - Load episode by ID
 - `play` / `pause` / `step` / `reset` - Playback controls
@@ -206,6 +218,7 @@ affordances = replay.get_affordances()
 - `replay_control` with `action: "seek"` - Jump to step
 
 **State Updates**:
+
 ```json
 {
   "type": "state_update",
@@ -229,6 +242,7 @@ affordances = replay.get_affordances()
 ### 7. Video Export (`src/townlet/recording/video_export.py`)
 
 **EpisodeVideoRenderer**:
+
 - 16:9 aspect ratio for YouTube
 - Matplotlib-based high-quality rendering
 - Dark theme by default
@@ -239,6 +253,7 @@ affordances = replay.get_affordances()
   - Q-values bar chart
 
 **export_episode_video()**:
+
 ```python
 export_episode_video(
     episode_id=500,
@@ -252,6 +267,7 @@ export_episode_video(
 ```
 
 **batch_export_videos()**:
+
 ```python
 batch_export_videos(
     database_path="demo.db",
@@ -268,6 +284,7 @@ batch_export_videos(
 ### 8. CLI Tool (`src/townlet/recording/__main__.py`)
 
 **Single export**:
+
 ```bash
 python -m townlet.recording export 500 \
   --database demo.db \
@@ -278,6 +295,7 @@ python -m townlet.recording export 500 \
 ```
 
 **Batch export**:
+
 ```bash
 python -m townlet.recording batch \
   --database demo.db \
@@ -296,6 +314,7 @@ python -m townlet.recording batch \
 **Filename**: `episode_XXXXXX.msgpack.lz4`
 
 **Structure**:
+
 ```python
 {
     "version": 1,
@@ -325,6 +344,7 @@ python -m townlet.recording batch \
 ```
 
 **Compression**:
+
 - Serialized with MessagePack (binary JSON)
 - Compressed with LZ4 (fast compression)
 - Typical size: 15-30 KB per episode
@@ -336,26 +356,30 @@ python -m townlet.recording batch \
 **Quality**: CRF 18 (high quality)
 **Preset**: slow (better compression)
 **Resolution**: Configurable via DPI
-  - DPI 80: 1280×720 (HD)
-  - DPI 100: 1600×900 (HD+)
-  - DPI 120: 1920×1080 (Full HD)
-  - DPI 150: 2400×1350 (2K)
+
+- DPI 80: 1280×720 (HD)
+- DPI 100: 1600×900 (HD+)
+- DPI 120: 1920×1080 (Full HD)
+- DPI 150: 2400×1350 (2K)
 
 ## Performance
 
 ### Recording Overhead
+
 - **Queue operations**: <0.1ms per step
 - **Tensor cloning**: ~0.2ms per step
 - **Background writing**: Async, no blocking
 - **Total overhead**: <5% of training time
 
 ### Replay Performance
+
 - **Episode loading**: <10ms (decompression + deserialization)
 - **Step access**: <0.1ms (in-memory list)
 - **Streaming rate**: 5-50 steps/sec (configurable)
 - **Memory**: ~1-2 MB per loaded episode
 
 ### Video Export Performance
+
 - **Frame rendering**: ~0.1-0.2 seconds per frame
 - **Video encoding**: ~1-2 seconds per 100 frames at 1080p
 - **Total time**: ~30-60 seconds for 100-step episode
@@ -444,6 +468,7 @@ python -m townlet.recording batch \
 ## Testing
 
 ### Test Coverage
+
 - **Total tests**: 72 passing
 - **Coverage**: 25% (recording modules: >90%)
 - **Test types**:
@@ -473,6 +498,7 @@ uv run pytest tests/test_townlet/test_recording/ --cov=townlet.recording
 ## Future Enhancements
 
 ### Planned (Not Yet Implemented)
+
 1. **Differential recording**: Only record changed state
 2. **Thumbnail generation**: Preview frames for episode browser
 3. **Timeline scrubbing**: Visual timeline in frontend
@@ -482,6 +508,7 @@ uv run pytest tests/test_townlet/test_recording/ --cov=townlet.recording
 7. **Comparison mode**: Side-by-side replay of two episodes
 
 ### Possible Extensions
+
 - **Cloud storage**: Upload recordings to S3/GCS
 - **Annotation system**: Mark interesting moments
 - **Statistics overlay**: Add charts/graphs to video
@@ -530,10 +557,12 @@ if self.recorder:
 ### Recording Issues
 
 **Queue full warning**:
+
 - Increase queue size: `EpisodeRecorder(queue_maxsize=2000)`
 - Or reduce recording frequency
 
 **Missing recordings**:
+
 - Check config: `recording.enabled = true`
 - Check criteria: At least one criterion should match
 - Check disk space
@@ -541,17 +570,20 @@ if self.recorder:
 ### Replay Issues
 
 **"Recording not found"**:
+
 - Episode wasn't recorded (check criteria)
 - Database is stale (restart server)
 - File was deleted (check recordings directory)
 
 **Choppy playback**:
+
 - Adjust speed: `set_speed` command
 - Increase step delay on server
 
 ### Video Export Issues
 
 **"ffmpeg not found"**:
+
 ```bash
 # Install ffmpeg
 sudo apt-get install ffmpeg  # Ubuntu/Debian
@@ -559,10 +591,12 @@ brew install ffmpeg          # macOS
 ```
 
 **Poor video quality**:
+
 - Increase DPI: `--dpi 150`
 - Lower CRF: Edit `video_export.py` line 138
 
 **File sizes too large**:
+
 - Reduce DPI: `--dpi 80`
 - Increase CRF: Edit `video_export.py` line 138
 - Reduce FPS: `--fps 24`

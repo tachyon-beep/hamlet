@@ -13,6 +13,7 @@ Agent spawned directly on the Hospital tile and immediately used INTERACT, bankr
 This incident perfectly demonstrates multiple RL learning challenges:
 
 ### 1. **Credit Assignment Problem**
+
 - Agent knows: "I'm standing on something" (affordance_type = Hospital)
 - Agent knows: "INTERACT does... something"
 - Agent doesn't know: "This specific affordance costs $15 and is a trap when healthy"
@@ -20,14 +21,18 @@ This incident perfectly demonstrates multiple RL learning challenges:
 The agent has learned the **surface pattern** (INTERACT on affordances) but not the **deep strategy** (economic constraints and conditional value).
 
 ### 2. **Exploration vs. Exploitation Trade-off**
+
 At episode 1, with epsilon ≈ 1.0 (full exploration), the agent is rightfully exploring all possible actions. This bankruptcy is not a bug—it's **necessary exploration** to learn:
+
 - Some affordances cost money
 - Money is finite
 - Hospital is expensive relative to alternatives
 - Health status matters for affordance value
 
 ### 3. **State-Dependent Value Functions**
+
 Hospital has different values depending on state:
+
 - **Health = 0.2**: Hospital is critical (value = +preventing death)
 - **Health = 1.0**: Hospital is wasteful (value = -$15 for nothing)
 
@@ -36,6 +41,7 @@ The agent must learn this conditional relationship through experience, which req
 ## Expected Learning Progression
 
 ### Episode 1-50: "Everything is a Button"
+
 - Spawn on Hospital → INTERACT → bankrupt
 - Spawn on Bar → INTERACT → drain energy/hygiene
 - Spawn on Job → INTERACT → "oh, money goes up!"
@@ -43,12 +49,14 @@ The agent must learn this conditional relationship through experience, which req
 **Learning**: Affordances do different things
 
 ### Episode 50-200: "Some Buttons are Bad"
+
 - Standing on Hospital with full health → move away (avoiding waste)
 - Standing on Hospital with low health → INTERACT (emergency response)
 
 **Learning**: Context matters, economic constraints exist
 
 ### Episode 200-500: "Strategic Resource Management"
+
 - Proactive Job visits to maintain money buffer
 - Cheap affordances (Bed $5, Shower $3) preferred over expensive ones
 - Hospital reserved for true emergencies
@@ -58,7 +66,9 @@ The agent must learn this conditional relationship through experience, which req
 ## Related Failure Modes
 
 ### The "Interact Spam" Variant
+
 If action masking wasn't properly implemented, agents would:
+
 1. Bankrupt themselves on Hospital
 2. Stand on Hospital forever
 3. Spam INTERACT with $0 (no-op)
@@ -67,7 +77,9 @@ If action masking wasn't properly implemented, agents would:
 **Fix Applied**: Action masking now checks affordability—INTERACT is invalid when agent can't afford the affordance.
 
 ### The "Random Spawn Advantage"
+
 Random spawn positions (already implemented) force agents to:
+
 - Learn ALL affordance locations, not just one local cluster
 - Discover Job exists (critical for economic sustainability)
 - Experience diverse starting conditions
@@ -76,13 +88,15 @@ Without random spawns, agent might never discover Job if it spawns far from it.
 
 ## Teaching Value
 
-### For Students Learning RL:
+### For Students Learning RL
+
 1. **Exploration is expensive** - Bad outcomes are necessary for learning
 2. **Credit assignment is hard** - Agent must connect action → outcome → long-term consequence
 3. **State-dependent rewards** - Same action has different values in different states
 4. **Economic constraints** - Real-world problems have resource limitations
 
-### For Students Learning AI Alignment:
+### For Students Learning AI Alignment
+
 1. **Specification gaming** - Agent optimizes what you measure, not what you mean
 2. **Robustness to initial conditions** - Random spawns prevent overfitting to single scenario
 3. **Reward shaping challenges** - How do you reward "use Hospital only when sick"?
@@ -108,6 +122,7 @@ Without random spawns, agent might never discover Job if it spawns far from it.
 ## Implementation Details
 
 ### Before Fix (Action Masking Bug)
+
 ```python
 # INTERACT valid if on affordance, regardless of affordability
 action_masks[:, 4] = on_affordance
@@ -116,6 +131,7 @@ action_masks[:, 4] = on_affordance
 **Result**: Agent spams INTERACT on unaffordable affordances (no-op)
 
 ### After Fix (Affordability Check)
+
 ```python
 # INTERACT valid only if on affordance AND can afford it
 cost_normalized = cost_dollars / 100.0
@@ -149,6 +165,7 @@ Track these metrics to see if agent learns from the Hospital bankruptcy:
 ## Success Criteria
 
 Agent has "learned the lesson" when:
+
 - Hospital usage < 5% of interactions
 - Hospital usage strongly correlated with health < 0.3
 - Money buffer maintained > $20 on average

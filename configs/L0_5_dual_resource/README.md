@@ -34,6 +34,7 @@ Both meters deplete independently → agent must manage both!
 With `reward = health × energy`, the agent should learn natural prioritization:
 
 ### High Energy (80%), Low Health (20%)
+
 ```
 Current reward: 0.8 × 0.2 = 0.16  ❌ "Feeling sick!"
 
@@ -47,6 +48,7 @@ ROI: HIGH ✅ → Agent should choose Hospital
 ```
 
 ### Low Energy (20%), High Health (80%)
+
 ```
 Current reward: 0.2 × 0.8 = 0.16  ❌ "Exhausted!"
 
@@ -60,6 +62,7 @@ ROI: LOW
 ```
 
 ### Both Low (20% each)
+
 ```
 Current reward: 0.2 × 0.2 = 0.04  🔴 "Critical!"
 
@@ -73,16 +76,19 @@ Multiplicative penalty creates urgency for action!
 ## Expected Behavior
 
 ### Early Episodes (Random Exploration)
+
 - Agent discovers Bed → "This helps!"
 - Agent discovers Hospital → "This helps too!"
 - Wasteful usage: uses both even when not needed
 
 ### Mid Episodes (Learning Prioritization)
+
 - Agent starts using Bed when energy is low
 - Agent starts using Hospital when health is low
 - Still some wasteful usage
 
 ### Late Episodes (Optimal Strategy)
+
 - Agent waits until energy ~20-30% before using Bed
 - Agent waits until health ~20-30% before using Hospital
 - Bounces between resources as needed
@@ -122,6 +128,7 @@ python scripts/run_demo.py --config configs/L0_5_dual_resource/
 **L0.5 demonstrates that interoception rewards scale to multi-resource problems WITHOUT hand-crafted priorities.**
 
 The multiplicative reward structure (`health × energy`) naturally creates:
+
 - ✅ Resource-specific gradients (low energy → high ROI for Bed)
 - ✅ Urgency signals (both low → huge penalty)
 - ✅ Optimal timing (wait until resource is critical before spending money)

@@ -31,3 +31,14 @@ jobs:
 
       - name: Mypy (type check)
         run: uv run mypy src/townlet
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install markdownlint-cli2
+        run: npm install -g markdownlint-cli2
+
+      - name: Markdownlint (markdown check)
+        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules"

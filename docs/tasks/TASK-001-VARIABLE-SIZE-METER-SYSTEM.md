@@ -34,6 +34,7 @@ From UNIVERSE_AS_CODE.md:
 **Test**: "If removed, would the system be more expressive or more fragile?"
 
 **Answer**: **More expressive**
+
 - ✅ Enables 4-meter tutorial universes (L0: just energy + health)
 - ✅ Enables 12-meter complex universes (add reputation, skill, spirituality)
 - ✅ Enables 16-meter sociological simulations (family bonds, community trust)
@@ -44,12 +45,14 @@ From UNIVERSE_AS_CODE.md:
 ### Impact of Current Constraint
 
 **Cannot Create**:
+
 - **Simplified tutorials**: 4-meter universes (energy, health, money, mood) for L0 pedagogy
 - **Domain-specific universes**: Factory sim needs "raw_materials", "finished_goods", not "hygiene"
 - **Complex simulations**: Sociological sims need "reputation", "skill", "community_trust"
 - **Research experiments**: Cannot test "what if we add a spirituality meter?"
 
 **Pedagogical Cost**:
+
 - Students cannot experiment with meter system design
 - Cannot demonstrate that meter count is a design choice
 - Cannot show how observation space scales with state complexity
@@ -327,6 +330,7 @@ notes:
 ```
 
 **Success Criteria**:
+
 - [ ] BarsConfig accepts any list size (1-32 meters)
 - [ ] Validation checks indices are contiguous from 0
 - [ ] meter_count property returns correct count
@@ -388,6 +392,7 @@ def _build_base_depletion_tensor(self) -> torch.Tensor:
 ```
 
 **Similar changes needed in**:
+
 - `apply_base_depletions()` - no hardcoded tensor sizes
 - `apply_modulations()` - validate indices against meter_count
 - `apply_threshold_cascades_by_category()` - validate indices
@@ -475,6 +480,7 @@ class AffordanceEngine:
 ```
 
 **Success Criteria**:
+
 - [ ] VectorizedHamletEnv uses `meter_count` from config
 - [ ] CascadeEngine builds tensors of size `[meter_count]`, not `[8]`
 - [ ] ObservationBuilder computes `obs_dim` dynamically
@@ -534,6 +540,7 @@ logger.info(f"Meter names: {env.bars_config.meter_names}")
 ```
 
 **Success Criteria**:
+
 - [ ] Network creation uses dynamically computed obs_dim
 - [ ] obs_dim correctly reflects meter_count (4-meter universe has smaller obs_dim)
 - [ ] Network training works with variable meter counts
@@ -656,6 +663,7 @@ def load_checkpoint_with_fallback(path, current_env):
 ```
 
 **Success Criteria**:
+
 - [ ] Checkpoints include `universe_metadata` with meter_count
 - [ ] Loading validates meter_count matches current environment
 - [ ] Loading fails clearly if meter counts don't match
@@ -859,6 +867,7 @@ def test_full_training_run_12_meters():
 ```
 
 **Success Criteria**:
+
 - [ ] All unit tests pass
 - [ ] Integration tests run successfully
 - [ ] 4-meter, 8-meter, and 12-meter configs all work
@@ -914,6 +923,7 @@ execution_order:
 ```
 
 **Pedagogical Value**:
+
 - Students learn basic meter management
 - Simpler state space (4 vs 8 meters)
 - Faster learning (smaller obs_dim)
@@ -988,6 +998,7 @@ cascades:
 ```
 
 **Research Value**:
+
 - Model complex social dynamics
 - Test emergent behaviors with more state dimensions
 - Explore reputation/skill/community mechanics
@@ -1004,6 +1015,7 @@ cascades:
 ### 2. Enables Pedagogical Progression
 
 **Curriculum Progression**:
+
 - L0 (4 meters): energy, health, money, mood - Basic resource management
 - L1 (8 meters): Standard curriculum - Balanced complexity
 - L2 (12 meters): Advanced - Sociological modeling
@@ -1016,6 +1028,7 @@ cascades:
 ### 4. Enables Domain-Specific Universes
 
 **Examples**:
+
 - **Factory sim**: raw_materials, finished_goods, machine_health, worker_morale
 - **Trading bot**: portfolio_value, market_sentiment, risk_exposure, cash_reserves
 - **Ecosystem sim**: biomass, water, temperature, biodiversity
@@ -1029,10 +1042,12 @@ No more "can't add meters because of hardcoded 8 constraint" limitations.
 **From Research** (`docs/research/RESEARCH-OBSERVATION-ENCODING-STRATEGY.md`):
 
 Coordinate encoding (from TASK-002A) enables **transfer learning across BOTH**:
+
 - ✅ **Different meter counts**: 4 meters → 8 meters → 12 meters (same network architecture)
 - ✅ **Different grid sizes**: 8×8 → 16×16 → 32×32 (same network architecture)
 
 **Combined Impact**:
+
 - Train agent on **L0 (4 meters, 3×3 grid)**: obs_dim = 29 (2 position + 4 meters + 15 affordances + 4 temporal + 4 extra)
 - Transfer to **L1 (8 meters, 8×8 grid)**: obs_dim = 33 (2 position + 8 meters + 15 affordances + 4 temporal + 4 extra)
 - Transfer to **L2 (12 meters, 16×16 grid)**: obs_dim = 37 (2 position + 12 meters + 15 affordances + 4 temporal + 4 extra)
@@ -1054,6 +1069,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 - **TASK-004B** (BRAIN_AS_CODE): Network architecture must handle variable obs_dim
 
 **Recommended Implementation Order**:
+
 1. **TASK-001 (this)** - Variable-size meters (foundation)
 2. TASK-002A - Spatial substrates
 3. TASK-003 - Schema validation
@@ -1066,6 +1082,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 ## Success Criteria
 
 ### Config Layer
+
 - [ ] BarsConfig accepts any meter count (1-32)
 - [ ] Validation checks indices are contiguous from 0
 - [ ] `meter_count` property returns correct value
@@ -1075,6 +1092,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 - [ ] Existing 8-meter configs still validate (backward compatible)
 
 ### Engine Layer
+
 - [ ] VectorizedHamletEnv creates tensors of size `[num_agents, meter_count]`
 - [ ] CascadeEngine builds base depletion tensor of size `[meter_count]`
 - [ ] All cascade operations use dynamic meter_count
@@ -1083,18 +1101,21 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 - [ ] No remaining hardcoded `8` in meter-related code
 
 ### Network Layer
+
 - [ ] Networks receive correct obs_dim based on meter_count
 - [ ] 4-meter universe has smaller obs_dim than 8-meter
 - [ ] 12-meter universe has larger obs_dim than 8-meter
 - [ ] Training works with all meter counts
 
 ### Checkpoint Layer
+
 - [ ] Checkpoints include `universe_metadata` with meter_count
 - [ ] Loading validates meter_count matches current environment
 - [ ] Loading fails clearly if meter counts don't match
 - [ ] Legacy 8-meter checkpoints can still load (with warning)
 
 ### Testing
+
 - [ ] All unit tests pass
 - [ ] Integration tests run successfully for 4, 8, and 12 meters
 - [ ] Full training run completes with 4-meter universe
@@ -1106,6 +1127,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 ## Effort Estimate
 
 ### Breakdown
+
 - **Phase 1** (Config schema): 3-4 hours
 - **Phase 2** (Engine layer): 4-6 hours
 - **Phase 3** (Network layer): 2-3 hours
@@ -1127,6 +1149,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 **Risk**: Old checkpoints won't have meter_count metadata.
 
 **Mitigation**:
+
 - Implement fallback loader for legacy checkpoints
 - Assume 8 meters if metadata missing
 - Log warning when loading legacy checkpoints
@@ -1141,6 +1164,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 **Risk**: Dynamic tensor sizing might be slower than hardcoded.
 
 **Mitigation**:
+
 - Pre-allocate tensors at initialization (already done)
 - No per-step size lookups (meter_count cached)
 - GPU operations scale well with tensor size
@@ -1155,6 +1179,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 **Risk**: 16-meter universe has large obs_dim, network training slow.
 
 **Mitigation**:
+
 - This is expected behavior (more state = larger network)
 - Operators can choose meter count based on compute budget
 - Not a bug, just a tradeoff
@@ -1169,6 +1194,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 **Risk**: Cascades with 12+ meters become hard to tune.
 
 **Mitigation**:
+
 - This is a content problem, not an architecture problem
 - Start with simple cascades for extended meters
 - Pedagogical value in exploring complexity
@@ -1181,6 +1207,7 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 ## Testing Strategy
 
 ### Unit Tests
+
 - Config validation (meter count ranges, index contiguity)
 - Tensor sizing (correct shapes for different meter counts)
 - Observation dimension computation
@@ -1188,12 +1215,14 @@ This task is **foundational** - it doesn't depend on other tasks. In fact, other
 - Checkpoint metadata validation
 
 ### Integration Tests
+
 - Full training run with 4-meter universe
 - Full training run with 8-meter universe (backward compat)
 - Full training run with 12-meter universe
 - Checkpoint save/load across different meter counts
 
 ### Manual Testing
+
 - Create custom meter configs
 - Verify error messages are clear
 - Check logging shows meter count
@@ -1256,6 +1285,7 @@ After completing this task:
 **Variable-size meter system is the highest-leverage infrastructure change for UAC.**
 
 **Impact**:
+
 - Unblocks entire design space (4 to 32 meters)
 - Enables pedagogical progression (simple → complex)
 - Demonstrates meters are designable (not fixed)

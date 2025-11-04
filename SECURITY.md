@@ -18,7 +18,8 @@ We take security seriously. If you discover a security vulnerability in HAMLET, 
 **Please DO NOT create a public GitHub issue for security vulnerabilities.**
 
 Instead, report security issues by email to:
-- **Email**: john@foundryside.dev
+
+- **Email**: <john@foundryside.dev>
 - **Subject**: [SECURITY] Brief description of vulnerability
 
 ### What to Include
@@ -130,6 +131,7 @@ If extending HAMLET to allow user-defined affordances or game mechanics, validat
 ## Security Updates
 
 Security updates will be announced via:
+
 1. GitHub Security Advisories
 2. CHANGELOG.md with [SECURITY] prefix
 3. Release notes
@@ -147,11 +149,12 @@ The following are explicitly out of scope for security reports:
 ## Questions?
 
 For non-security questions about HAMLET, please:
+
 - Open a GitHub Discussion
 - Create a public GitHub Issue
 - Read the documentation in `docs/`
 
-For security-related questions (not vulnerabilities), you can email john@foundryside.dev with subject line "[SECURITY QUESTION]".
+For security-related questions (not vulnerabilities), you can email <john@foundryside.dev> with subject line "[SECURITY QUESTION]".
 
 ---
 

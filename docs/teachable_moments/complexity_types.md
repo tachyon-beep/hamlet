@@ -7,12 +7,14 @@
 ## The Deceptive Simplicity of Hamlet
 
 **First impression:**
+
 - 8×8 grid (64 states)
 - 5 discrete actions
 - Simple movement + interaction
 - "This is a toy problem"
 
 **Reality:**
+
 - 64 locations × 14 affordance types = **896 distinct interaction rules**
 - Coupled cascading meter dynamics
 - State-dependent non-stationary physics
@@ -25,6 +27,7 @@
 ### Flight Sim: Continuous but Stationary
 
 **State space:**
+
 ```python
 state = [
     x, y, z,                    # Position (3 floats)
@@ -38,6 +41,7 @@ state = [
 ```
 
 **Dynamics:**
+
 ```python
 # Physics is CONSTANT everywhere
 F = ma
@@ -50,6 +54,7 @@ lift = 0.5 * rho * v^2 * Cl * A
 ```
 
 **Key properties:**
+
 - ✅ Smooth, differentiable
 - ✅ Stationary (rules constant everywhere)
 - ✅ Continuous gradients
@@ -60,6 +65,7 @@ lift = 0.5 * rho * v^2 * Cl * A
 ### Hamlet: Discrete but Non-Stationary
 
 **State space:**
+
 ```python
 state = [
     position: (x, y),           # Grid location (2 ints, 64 discrete values)
@@ -70,6 +76,7 @@ state = [
 ```
 
 **Dynamics:**
+
 ```python
 # Physics CHANGES based on grid position!
 if position == (2, 3) and affordance == Hospital:
@@ -89,6 +96,7 @@ elif position == (1, 1) and affordance == Job:
 ```
 
 **Key properties:**
+
 - ✅ Discrete, non-smooth
 - ❌ Non-stationary (rules change by location)
 - ❌ Context-dependent outcomes
@@ -101,6 +109,7 @@ elif position == (1, 1) and affordance == Job:
 ### 1. **Cannot Interpolate**
 
 **Flight Sim (Easy):**
+
 ```python
 # If throttle=0.5 → velocity increases by 10 m/s
 # Then throttle=0.6 → velocity increases by ~12 m/s
@@ -108,6 +117,7 @@ elif position == (1, 1) and affordance == Job:
 ```
 
 **Hamlet (Hard):**
+
 ```python
 # INTERACT at Hospital: health +0.4, money -15
 # INTERACT at Bed: energy +0.5, money -5
@@ -118,11 +128,13 @@ elif position == (1, 1) and affordance == Job:
 ### 2. **Exploration is Expensive**
 
 **Flight Sim:**
+
 - Try throttle=0.5 → observe outcome
 - Try throttle=0.6 → smoothly different
 - Gradient descent works well
 
 **Hamlet:**
+
 - Try INTERACT at (2,3) → Hospital effect
 - Try INTERACT at (2,4) → Maybe empty, maybe Job, COMPLETELY different!
 - Must visit ALL 64 × 14 = 896 state-action pairs to learn
@@ -130,6 +142,7 @@ elif position == (1, 1) and affordance == Job:
 ### 3. **Credit Assignment Across Contexts**
 
 **Flight Sim:**
+
 ```python
 # "Increasing throttle led to altitude gain"
 # This is TRUE everywhere in the state space
@@ -137,6 +150,7 @@ elif position == (1, 1) and affordance == Job:
 ```
 
 **Hamlet:**
+
 ```python
 # "Using INTERACT at this location led to reward"
 # But was it the Hospital? The Bed? The Job?
@@ -179,6 +193,7 @@ energy_change += mood_factor * 0.12
 ```
 
 **Result:**
+
 - Flight sim: Learn 18 mostly-independent dimensions
 - Hamlet: Learn 8 coupled dimensions + 64 location-specific rules + 14 affordance effects
 - Total unique state-action-outcome mappings: **MASSIVE**
@@ -188,11 +203,13 @@ energy_change += mood_factor * 0.12
 ## The Economic Constraint Layer
 
 **Flight sim:**
+
 - No resource constraints (fuel is assumed infinite in training)
 - All actions always available
 - Physics is the only constraint
 
 **Hamlet:**
+
 - Money is a HARD CONSTRAINT
 - Cannot use Hospital if money < $15
 - Cannot use Bed if money < $5
@@ -200,6 +217,7 @@ energy_change += mood_factor * 0.12
 - **Economic strategy layer** on top of spatial strategy
 
 This adds a **planning horizon** requirement:
+
 - "Should I go to Job now or use Bed first?"
 - "Can I afford Hospital or should I just die and reset?"
 - Multi-step planning with resource constraints
@@ -211,12 +229,14 @@ This adds a **planning horizon** requirement:
 ### Visual Complexity Bias
 
 **Flight Sim:**
+
 - 3D visualization, realistic graphics
 - Continuous smooth motion
 - "Looks like real robotics"
 - Students think: "This must be hard!"
 
 **Hamlet:**
+
 - 2D grid, simple sprites
 - Discrete jumpy movement
 - "Looks like Pac-Man"
@@ -225,11 +245,13 @@ This adds a **planning horizon** requirement:
 ### Dimensionality ≠ Complexity
 
 **High dimensions, low complexity:**
+
 - Flight sim: 18 dimensions, but smooth and stationary
 - Can use gradient descent effectively
 - Function approximation works well
 
 **Low dimensions, high complexity:**
+
 - Hamlet: 87 dimensions, but discrete and non-stationary
 - Must memorize context-specific rules
 - Generalization is difficult
@@ -239,22 +261,27 @@ This adds a **planning horizon** requirement:
 ## The Pedagogical Twist
 
 ### Act 1: Show Flight Sim
+
 - Complex 3D physics
 - 18 continuous inputs
 - Students: "Wow, that's advanced!"
 
 ### Act 2: Show Hamlet
+
 - Simple 8×8 grid
 - 5 discrete actions
 - Students: "That's much easier!"
 
 ### Act 3: The Reveal
+
 **Flight Sim:**
+
 - Stationary dynamics (physics constant everywhere)
 - Smooth gradients (continuous optimization)
 - Action-outcome relationships are consistent
 
 **Hamlet:**
+
 - Non-stationary dynamics (rules change by location)
 - Discrete jumps (no interpolation)
 - 896 distinct context-dependent rules to learn
@@ -262,6 +289,7 @@ This adds a **planning horizon** requirement:
 **Students:** "Wait... Hamlet might actually be HARDER?!"
 
 ### Act 4: The Lesson
+>
 > "Complexity isn't about dimensions or visual fidelity.
 > It's about **context-dependence** and **non-stationarity**.
 > A simple-looking grid with location-dependent rules
@@ -275,6 +303,7 @@ This adds a **planning horizon** requirement:
 ### Learning Curves
 
 **Flight Sim (Expected):**
+
 ```
 Episode 0-100: Random exploration, gradual improvement
 Episode 100-500: Smooth learning curve (gradient descent working)
@@ -282,6 +311,7 @@ Episode 500+: Asymptotic convergence
 ```
 
 **Hamlet (Actual):**
+
 ```
 Episode 0-200: Random exploration, HIGH VARIANCE
 Episode 200-500: Sudden jumps (discovering affordance rules)
@@ -292,11 +322,13 @@ Episode 1000+: Still improving (memorizing all 896 rules)
 ### Generalization Failure
 
 **Flight Sim:**
+
 - Train on altitude 1000-5000m
 - Agent generalizes to 6000m reasonably well
 - Physics is the same
 
 **Hamlet:**
+
 - Train on Bed + Hospital + Job
 - Add new affordance: Gym
 - Agent has NO IDEA what to do
@@ -306,7 +338,8 @@ Episode 1000+: Still improving (memorizing all 896 rules)
 
 ## Design Implications
 
-### For Teaching:
+### For Teaching
+
 1. **Don't judge complexity by appearance**
    - Grid ≠ simple
    - Continuous ≠ complex
@@ -319,7 +352,8 @@ Episode 1000+: Still improving (memorizing all 896 rules)
    - Continuous: gradient descent, interpolation
    - Discrete: exhaustive exploration, memorization
 
-### For Research:
+### For Research
+
 1. **Sample efficiency matters more in non-stationary environments**
    - Flight sim: 1000 samples → reasonable policy
    - Hamlet: 10,000 samples → still discovering rules
@@ -337,11 +371,13 @@ Episode 1000+: Still improving (memorizing all 896 rules)
 ## The Beautiful Irony
 
 **What looks simple:**
+
 - 8×8 grid
 - 5 actions
 - "Toy problem"
 
 **What is actually happening:**
+
 - 64 spatial contexts
 - 14 affordance types
 - 8 coupled cascading meters
@@ -349,11 +385,13 @@ Episode 1000+: Still improving (memorizing all 896 rules)
 - = Combinatorial explosion of state-action-outcome mappings
 
 **What looks complex:**
+
 - 18-D continuous space
 - Realistic physics
 - "Advanced robotics"
 
 **What is actually happening:**
+
 - Smooth differentiable dynamics
 - Stationary physics (consistent rules)
 - Gradient descent just works
@@ -364,6 +402,7 @@ Episode 1000+: Still improving (memorizing all 896 rules)
 ## Classroom Exercise
 
 **Challenge students:**
+
 1. "Estimate sample complexity for flight sim" (they'll guess high)
 2. "Estimate sample complexity for Hamlet" (they'll guess low)
 3. Show actual training curves
@@ -371,6 +410,7 @@ Episode 1000+: Still improving (memorizing all 896 rules)
 5. Discuss: Why?
 
 **Answer:**
+
 - Flight sim: Interpolate across continuous space
 - Hamlet: Must visit each discrete context
 - Context-dependence > dimensionality for sample complexity
@@ -379,12 +419,14 @@ Episode 1000+: Still improving (memorizing all 896 rules)
 
 ## Connection to Real-World RL
 
-### Stationary Environments (Easier):
+### Stationary Environments (Easier)
+
 - Robotic manipulation (physics is consistent)
 - Game playing (rules don't change)
 - Continuous control (smooth gradients)
 
-### Non-Stationary Environments (Harder):
+### Non-Stationary Environments (Harder)
+
 - Multi-task RL (different tasks = different "physics")
 - Contextual bandits (reward depends on context)
 - Real-world deployment (environment changes over time)

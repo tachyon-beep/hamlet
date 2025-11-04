@@ -12,6 +12,7 @@
 ### What Happened
 
 We kept making our simulation more realistic:
+
 1. Added stress management
 2. Added social needs
 3. Made job payment depend on how tired you are
@@ -31,11 +32,13 @@ Think of each change as climbing a ladder. Each rung makes the problem harder fo
 ### Rung 1: Starting Simple (4 Meters, 4 Affordances)
 
 **Environment**:
+
 - 4 meters: Energy, Hygiene, Satiation, Money
 - 4 affordances: Bed, Shower, Fridge, Job
 - One simple rule: "If meter low, use affordance"
 
 **AI's Job**:
+
 - "Tired? Go to bed."
 - "Hungry? Go to fridge."
 - "Need money? Go to job."
@@ -49,14 +52,17 @@ Think of each change as climbing a ladder. Each rung makes the problem harder fo
 ### Rung 2: Adding Stress + Recreation (5 Meters, 5 Affordances)
 
 **New Addition**:
+
 - Stress meter (HIGH is bad - inverted!)
 - Recreation affordance (costs money, reduces stress)
 
 **AI's New Job**:
+
 - "Wait... high stress is BAD? But high energy is GOOD?"
 - "Do I use Recreation or save money?"
 
 **Complexity Increase**:
+
 - **Inverted logic**: First meter where HIGH = bad instead of LOW = bad
 - **Economic trade-off**: Recreation costs money - is it worth it?
 
@@ -69,10 +75,12 @@ Think of each change as climbing a ladder. Each rung makes the problem harder fo
 ### Rung 3: Adding Social + Bar (6 Meters, 6 Affordances)
 
 **New Addition**:
+
 - Social meter (depletes over time)
 - Bar affordance (ONLY source of social, costs EVERYTHING)
 
 **Bar Effects**:
+
 ```
 Money:   -$15  (most expensive)
 Energy:  -20   (exhausting)
@@ -83,12 +91,14 @@ Stress:  -25   (socializing reduces stress)
 ```
 
 **AI's New Job**:
+
 - "I MUST go to Bar (only social source)"
 - "But Bar makes me tired, dirty, and broke"
 - "So I need to plan: Bar → Bed → Shower → Work"
 - "And I need $15 + $5 + $3 = $23 total!"
 
 **Complexity Increase**:
+
 - **Mandatory sink**: Can't ignore social (forces engagement)
 - **Multi-cost**: Bar affects 6 different things!
 - **Cascade planning**: Bar creates follow-up needs (Bed, Shower)
@@ -103,6 +113,7 @@ Stress:  -25   (socializing reduces stress)
 ### Rung 4: Job Payment Penalty (Indirect Relationship #1)
 
 **New Rule**:
+
 ```
 Job payment:
   - If energy > 40% AND hygiene > 40%: $30 (full pay)
@@ -110,11 +121,13 @@ Job payment:
 ```
 
 **AI's New Job**:
+
 - "Wait... sometimes Job gives $30, sometimes $15?"
 - "What's the pattern?"
 - "Oh! It depends on TWO OTHER meters (energy + hygiene)!"
 
 **Complexity Increase**:
+
 - **Hidden variable**: Job payment is NOT fixed
 - **Cross-meter dependency**: Energy + Hygiene → Money
 - **Indirect causality**: Low energy → low income → can't afford services → death
@@ -128,17 +141,20 @@ Job payment:
 ### Rung 5: Dual Food Sources (Spatial Context #1)
 
 **New Addition**:
+
 - Split Fridge into HomeMeal and FastFood
 - HomeMeal: $3, +35 energy, at home (1,3)
 - FastFood: $10, +15 energy, at work (5,6)
 
 **AI's New Job**:
+
 - "Which food do I choose?"
 - "HomeMeal is cheaper AND healthier!"
 - "But if I'm at work (6,6), HomeMeal is 9 steps away..."
 - "Is it worth traveling home to save $7?"
 
 **Complexity Increase**:
+
 - **Location-dependent decisions**: SAME need (hunger), DIFFERENT optimal solution based on WHERE you are
 - **Distance trade-off**: 9 steps = 4.5 energy cost in movement
 - **Context-aware reasoning**: Not "if hungry, eat" but "if hungry AND at work AND low money, go home first"
@@ -152,6 +168,7 @@ Job payment:
 ### Rung 6: Spatial Clustering (Zones)
 
 **New Layout**:
+
 ```
 HOME ZONE (top-left):     Bed, Shower, HomeMeal
 SOCIAL ZONE (center):     Recreation, Bar
@@ -159,12 +176,14 @@ WORK ZONE (bottom-right): FastFood, Job
 ```
 
 **AI's New Job**:
+
 - "Should I batch activities in a zone?"
 - "If I'm home, do Bed + Shower + HomeMeal before leaving"
 - "If I'm at work, do Job + Job + FastFood"
 - "Plan routes: Home → Work → Social → Home"
 
 **Complexity Increase**:
+
 - **Zone batching**: Do multiple things per trip (efficiency)
 - **Route planning**: Don't zigzag unnecessarily
 - **Opportunity cost**: "While I'm here, what else do I need?"
@@ -180,6 +199,7 @@ WORK ZONE (bottom-right): FastFood, Job
 ### What Is a "Potato" Neural Network?
 
 Imagine a student who can only memorize flashcards:
+
 - Flashcard 1: "Energy low? → Go to Bed"
 - Flashcard 2: "Hygiene low? → Go to Shower"
 - Flashcard 3: "Money low? → Go to Job"
@@ -193,6 +213,7 @@ The flashcard says: "Money low? → Go to Job"
 But the REAL answer is: "No! Work when tired gives half the pay. Go to Bed first, THEN work."
 
 **The potato (basic neural network) can't figure this out** because it treats every input separately. It doesn't know that:
+
 - Energy affects job payment
 - Position affects food choice
 - Money affects Bar timing
@@ -212,6 +233,7 @@ Input (all mixed together) → Math → Math → Output (action)
 **Problem 1: Everything Gets Mixed Up**
 
 Imagine putting these in a blender:
+
 - Your position (2 numbers)
 - Your 6 meters (6 numbers)
 - The whole grid map (64 numbers)
@@ -219,6 +241,7 @@ Imagine putting these in a blender:
 Total: 72 numbers thrown into a blender!
 
 The potato CAN'T tell:
+
 - Which numbers are positions vs meters?
 - Which meters matter for which decisions?
 - How far things are from each other?
@@ -226,6 +249,7 @@ The potato CAN'T tell:
 **Problem 2: Can't See Relationships**
 
 The job payment penalty requires:
+
 ```
 IF (energy > 40%) AND (hygiene > 40%)
   THEN expect $30
@@ -244,6 +268,7 @@ It's like trying to understand: "You need BOTH a key AND a password to unlock th
 The potato treats position like any other number.
 
 It doesn't know:
+
 - (1,3) is CLOSE to (1,1) - only 2 steps
 - (6,6) is FAR from (1,3) - 9 steps!
 
@@ -254,11 +279,13 @@ So it can't reason: "I'm at work (6,6), HomeMeal is far (1,3), FastFood is close
 ### Real-World Analogy: GPS Navigation
 
 **Potato Approach**:
+
 - Input: Your location, destination
 - Output: "Turn left"
 - Problem: Doesn't know about traffic, road types, time of day
 
 **Smart Approach** (like our new network):
+
 - Look at your location (position)
 - Look at traffic patterns (context)
 - Look at your preferences (meters - gas, time, tolls)
@@ -273,6 +300,7 @@ Our new network does the same thing! It looks at different parts of the problem 
 ### What Is an "Attention" Network?
 
 Imagine a student who can:
+
 1. **Look at each piece of information separately**
 2. **Ask: "Which pieces matter for THIS question?"**
 3. **Focus on the relevant pieces**
@@ -281,6 +309,7 @@ Imagine a student who can:
 **Example: Should I Work Now?**
 
 Student thinks:
+
 1. "This question is about working..."
 2. "Let me check which meters matter for work..."
 3. "Energy matters a lot! (affects payment)"
@@ -339,14 +368,17 @@ Ignore the rest.
 ### Why This Is Better
 
 **Potato Network**:
+
 ```
 All 72 numbers → Blend → Math → Math → Answer
 ```
+
 - Can't tell what matters
 - Can't see relationships
 - Treats everything equally
 
 **Attention Network**:
+
 ```
 Position → Process separately → Combine
 Meters   → Process separately → Ask "who matters?" → Focus → Combine
@@ -372,12 +404,14 @@ Grid     → Process separately (CNN) → Combine
 **Action Space**: A = {0,1,2,3,4} (up, down, left, right, interact)
 
 **Reward Function**: R(s,a,s') with shaped components:
+
 - Gradient rewards (continuous feedback on meter health)
 - Need-based interaction rewards (reward strategic affordance use)
 - Proximity shaping (guide toward needed resources)
 - Death penalty (-100 for any biological meter reaching 0)
 
 **Complexity Metrics**:
+
 1. State dimensionality: 72-D continuous space
 2. Effective branching factor: ~5 actions per state
 3. Planning horizon: 3-5 steps for optimal strategy
@@ -397,12 +431,14 @@ Grid     → Process separately (CNN) → Combine
 Job payment function: `f(energy, hygiene) = 30 if (e > 0.4 ∧ h > 0.4) else 15`
 
 For an MLP to learn this:
+
 - Must experience enough (e, h, payment) tuples
 - Sample complexity: O(n²) where n = discretization granularity
 - Requires ~10,000 experiences to discover the threshold
 - No inductive bias for "conjunction" (AND operation)
 
 **Attention Mechanism**: Explicit pairwise interactions
+
 - Sample complexity: O(n) - learns attention weights directly
 - Discovers conjunction pattern in ~3,000 experiences
 - Inductive bias: "some variables interact"
@@ -414,16 +450,19 @@ For an MLP to learn this:
 MLP treats input as unstructured vector: x ∈ ℝ⁷²
 
 Reality has structure:
+
 - x[0:2] = position (spatial coordinates)
 - x[2:8] = meters (state variables with dependencies)
 - x[8:72] = grid (2D spatial array)
 
 **MLP Approach**: Learn `f: ℝ⁷² → ℝ⁵` from scratch
+
 - No knowledge that x[0:2] are coordinates
 - No knowledge that x[8:72] has 2D structure
 - Must discover all structure empirically
 
 **Structured Approach**:
+
 - CNN for x[8:72]: Inductive bias for 2D spatial patterns
 - Attention for x[2:8]: Inductive bias for variable interactions
 - Position embedding for x[0:2]: Inductive bias for distance
@@ -462,6 +501,7 @@ Where W_Q^i, W_K^i, W_V^i ∈ ℝᵈˣ⁽ᵈ/ʰ⁾
 **Why This Works for Job Payment Discovery**:
 
 Suppose Head 1 specializes in "work performance":
+
 ```
 Q_work = "Deciding whether to work"
 K_energy = "Energy level"
@@ -475,6 +515,7 @@ If α_energy,work ≈ 0.45 and α_hygiene,work ≈ 0.35:
 ```
 
 **Gradient Flow**: Backprop can adjust attention weights directly
+
 ```
 ∂L/∂W_Q = ∂L/∂α · ∂α/∂(QK^T) · ∂(QK^T)/∂Q · ∂Q/∂W_Q
 ```
@@ -491,11 +532,13 @@ Let n = number of distinct state components (6 meters)
 Let m = number of cross-variable relationships (3 major: job, food, Bar)
 
 **MLP Complexity**:
+
 - Must learn all O(n²) pairwise interactions implicitly
 - Sample complexity: Ω(n²) to discover all relationships
 - No sharing: Each relationship learned independently
 
 **Attention Complexity**:
+
 - Explicit O(n²) attention matrix (but shared across contexts)
 - Sample complexity: O(n log n) due to shared attention weights
 - Transfer learning: Attention learned for one decision helps others
@@ -514,12 +557,14 @@ Let m = number of cross-variable relationships (3 major: job, food, Bar)
 ### Inductive Bias and the No Free Lunch Theorem
 
 **No Free Lunch Theorem** (Wolpert & Macready, 1997):
+
 - No algorithm is universally better across all possible problems
 - BUT: For structured problems, biased algorithms dominate
 
 **Our Situation**:
 
 Problem has structure:
+
 1. **Compositional**: Job payment = f(energy, hygiene)
 2. **Spatial**: Distance matters (food choice)
 3. **Hierarchical**: Zone-level strategies (batching)
@@ -528,6 +573,7 @@ Problem has structure:
 **Attention**: Compositional bias → exploits problem structure
 
 **Analogy**: Sorting algorithms
+
 - Quicksort assumes comparisons (structure)
 - Random search assumes nothing
 - Quicksort wins on sortable data (O(n log n) vs O(n!))
@@ -583,15 +629,18 @@ attention_weights[head=2] → learns money × social (for Bar)
 **Total**: ~240K FLOPs per forward pass
 
 **Comparison**:
+
 - QNetwork: ~50K FLOPs
 - Attention: ~240K FLOPs
 - **Overhead**: 4.8× slower
 
 **BUT**: Attention reduces sample complexity by 2-3×
+
 - Fewer episodes needed
 - Total wall-clock time: Actually FASTER to convergence!
 
 **Trade-off**: Compute per step vs steps to convergence
+
 - Attention: More compute, fewer steps → net win
 
 ---
@@ -601,6 +650,7 @@ attention_weights[head=2] → learns money × social (for Bar)
 **Why Attention Trains Well**:
 
 Standard MLP depth = 3 layers:
+
 ```
 Input → Layer1 → Layer2 → Layer3 → Output
 ```
@@ -610,6 +660,7 @@ Gradient flow: ∂L/∂Layer1 = ∂L/∂Layer3 · ∂Layer3/∂Layer2 · ∂Laye
 **Problem**: Vanishing gradients (product of derivatives < 1)
 
 **Attention with Residual Connections**:
+
 ```
 x → Attention → Add(x, Attention(x)) → LayerNorm → FFN → Add → Output
     ↓_____↑        ↓____________↑                      ↓___↑
@@ -617,6 +668,7 @@ x → Attention → Add(x, Attention(x)) → LayerNorm → FFN → Add → Outpu
 ```
 
 Gradient has "highway": ∂L/∂x includes direct path
+
 - Avoids vanishing gradient problem
 - Allows deeper networks
 - Stable training even with 10+ layers
@@ -630,10 +682,12 @@ Gradient has "highway": ∂L/∂x includes direct path
 ### Junior High Level
 
 **Lesson**: Match your tool to your problem
+
 - Simple problem (4 meters, direct relationships) → Simple network (potato)
 - Complex problem (6 meters, indirect relationships, spatial context) → Smart network (attention)
 
 **Real-World Analogy**:
+
 - Building a doghouse → Hammer and nails
 - Building a skyscraper → Cranes and engineering
 - Trying to build a skyscraper with hammer → disaster!
@@ -645,11 +699,13 @@ Gradient has "highway": ∂L/∂x includes direct path
 ### Year 12 / University Level
 
 **Lesson**: Inductive bias determines sample efficiency
+
 - Universal approximation ≠ efficient learning
 - Problem structure suggests algorithmic structure
 - Attention provides compositional inductive bias
 
 **Mathematical Insight**:
+
 - MLP: O(n²) sample complexity for n-variable interactions
 - Attention: O(n log n) sample complexity (shared attention weights)
 - Factor of 2-3× speedup empirically observed
@@ -685,6 +741,7 @@ Gradient has "highway": ∂L/∂x includes direct path
 **Pattern**: Whenever you have MULTIPLE INPUTS that INTERACT, attention helps.
 
 Hamlet teaches this principle in a small, understandable domain:
+
 - 6 meters (vs 100,000 vocabulary in GPT)
 - 4 attention heads (vs 96 heads in GPT-4)
 - Same core idea, scaled down to pedagogical size
@@ -711,10 +768,12 @@ Hamlet teaches this principle in a small, understandable domain:
 ## Further Reading
 
 **Junior High**:
+
 - "But How Do Neural Networks Actually Work?" (3Blue1Brown YouTube series)
 - "The Illustrated Transformer" (Jay Alammar blog)
 
 **University**:
+
 - "Attention Is All You Need" (Vaswani et al., 2017) - Original Transformer paper
 - "Relational Inductive Biases" (Battaglia et al., 2018) - Graph networks and structure
 - "The Lottery Ticket Hypothesis" (Frankle & Carbin, 2019) - Network capacity and learning
@@ -724,6 +783,7 @@ Hamlet teaches this principle in a small, understandable domain:
 ## Conclusion
 
 We added complexity:
+
 1. ⭐ → ⭐⭐ (Stress + inverted logic)
 2. ⭐⭐ → ⭐⭐⭐ (Social + multi-cost Bar)
 3. ⭐⭐⭐ → ⭐⭐⭐⭐ (Job penalty + cross-meter dependency)
@@ -742,6 +802,7 @@ But ⭐⭐⭐⭐⭐? It was overwhelmed.
 ---
 
 **Files Modified**:
+
 - `src/hamlet/agent/networks.py`: Added RelationalQNetwork
 - `src/hamlet/agent/drl_agent.py`: Registered relational network type
 - `demo_training.py`: Updated to use state_dim=72 and network_type="relational"

@@ -7,6 +7,7 @@
 **Answer**: **NO, not worth it for HAMLET.**
 
 **Rationale**:
+
 1. **GPU-Bound, Not CPU-Bound**: Cascade/affordance logic is already GPU-parallelized. Bottleneck is GPU memory bandwidth, not Python dict lookups.
 2. **Premature Optimization**: Current system isn't slow. Would add complexity for unmeasured gains.
 3. **Debuggability Loss**: Generated code is harder to debug than config-driven code.
@@ -21,6 +22,7 @@
 ### Soft Lookups (Current Approach)
 
 **Runtime config interpretation**:
+
 ```python
 # Cascade engine reads config at runtime
 def apply_cascade(self, meters, cascade_config):
@@ -35,11 +37,13 @@ def apply_cascade(self, meters, cascade_config):
 ```
 
 **Pros**:
+
 - ✅ Simple, readable, debuggable
 - ✅ Config changes don't require recompilation
 - ✅ Easy to inspect state at runtime
 
 **Cons**:
+
 - ❌ Dict lookups have overhead (~50-100ns per lookup)
 - ❌ Dynamic dispatch (can't be optimized by compiler)
 - ❌ String keys take memory
@@ -78,11 +82,13 @@ for cascade_fn in COMPILED_CASCADES:
 ```
 
 **Pros**:
+
 - ✅ No dict lookups (values are literals in bytecode)
 - ✅ Compiler can optimize (constant folding, inlining)
 - ✅ Smaller memory footprint (no config dicts at runtime)
 
 **Cons**:
+
 - ❌ Complex implementation (code generation, templates, AST manipulation)
 - ❌ Harder to debug (generated code, stack traces point to generated files)
 - ❌ Config changes require regeneration (can't hot-reload)
@@ -116,11 +122,13 @@ exec(generated_code)
 ```
 
 **Pros**:
+
 - ✅ Simple string manipulation
 - ✅ Human-readable templates
 - ✅ Standard tools (Jinja2 widely used)
 
 **Cons**:
+
 - ❌ String-based (typos, syntax errors not caught until runtime)
 - ❌ Security risks (`exec()` is dangerous)
 - ❌ Hard to type-check generated code
@@ -197,11 +205,13 @@ def generate_cascade_function(cascade_config):
 ```
 
 **Pros**:
+
 - ✅ Type-safe (AST nodes are Python objects)
 - ✅ Can be validated before compilation
 - ✅ Standard library (no dependencies)
 
 **Cons**:
+
 - ❌ Verbose (lots of AST node construction)
 - ❌ Hard to read/maintain (AST is low-level)
 - ❌ Still uses `exec()` (security risk)
@@ -243,12 +253,14 @@ meters = apply_cascades(meters, cascade_data)
 ```
 
 **Pros**:
+
 - ✅ Real machine code (no Python interpreter overhead)
 - ✅ Simple annotation (`@jit`)
 - ✅ Works with existing code (minimal refactoring)
 - ✅ No code generation complexity
 
 **Cons**:
+
 - ❌ Requires Numba dependency
 - ❌ Only works with NumPy arrays (not PyTorch tensors)
 - ❌ Limited Python feature support (no dicts, no strings)
@@ -262,6 +274,7 @@ meters = apply_cascades(meters, cascade_data)
 ### Where Is HAMLET Bottlenecked?
 
 **Current System Architecture**:
+
 ```
 Training Loop
     ↓
@@ -294,6 +307,7 @@ VectorizedHamletEnv.step() [GPU]
 **Reality Check**:
 
 1. **Config Lookups Happen Once** (at initialization):
+
    ```python
    # This happens ONCE when CascadeEngine is initialized
    for cascade in config.cascades.cascades:
@@ -312,6 +326,7 @@ VectorizedHamletEnv.step() [GPU]
    - **GPU op is 10-100x slower than dict lookup!**
 
 3. **Vectorization Already Optimized**:
+
    ```python
    # Current approach (vectorized)
    for agent in range(num_agents):  # Python loop (slow)
@@ -320,6 +335,7 @@ VectorizedHamletEnv.step() [GPU]
    # Could optimize to:
    meters[:, target] -= strength * delta  # Single GPU op (faster)
    ```
+
    **But**: This is **vectorization**, not codegen. Doesn't require generating Python code.
 
 ---
@@ -327,6 +343,7 @@ VectorizedHamletEnv.step() [GPU]
 ### Profiling Data (Hypothetical)
 
 **Typical Training Step** (~10ms total):
+
 - Tensor operations (GPU): ~8ms (80%)
 - Data transfer (CPU↔GPU): ~1ms (10%)
 - Python overhead: ~0.5ms (5%)
@@ -342,6 +359,7 @@ VectorizedHamletEnv.step() [GPU]
 **Scenario 1: CPU-Bound Cascade Logic**
 
 If cascades were CPU-executed (not GPU), codegen could help:
+
 ```python
 # Soft lookup (CPU): ~50ns per lookup × 11 cascades × 16 agents = ~9 microseconds
 for agent in range(16):
@@ -363,6 +381,7 @@ for agent in range(16):
 **Scenario 2: Interpreted Python Overhead**
 
 If Python interpreter overhead dominates (tight loops, no GPU):
+
 ```python
 # Soft lookup: Interpreter overhead + dict lookups
 for i in range(1000000):
@@ -380,6 +399,7 @@ for i in range(1000000):
 **Scenario 3: Large Config Dicts**
 
 If configs are huge and lookup overhead is measurable:
+
 ```python
 # 10,000 affordances, 10,000 lookups per step
 for aff_id in enabled_affordances:
@@ -395,6 +415,7 @@ for aff_id in enabled_affordances:
 ### Soft Lookups (Current)
 
 **Pros**:
+
 - ✅ **Simple**: No code generation complexity
 - ✅ **Debuggable**: Stack traces point to actual code
 - ✅ **Flexible**: Config changes don't require recompilation
@@ -402,6 +423,7 @@ for aff_id in enabled_affordances:
 - ✅ **Safe**: No `exec()`, no generated code security risks
 
 **Cons**:
+
 - ❌ **Dict lookup overhead**: ~50-100ns per lookup
 - ❌ **Dynamic dispatch**: Harder for compiler to optimize
 - ❌ **Memory usage**: Config dicts live in memory
@@ -413,11 +435,13 @@ for aff_id in enabled_affordances:
 ### Code Generation
 
 **Pros**:
+
 - ✅ **Fast lookups**: Values are literals (no dict overhead)
 - ✅ **Compiler optimization**: Can inline, constant fold
 - ✅ **Memory efficient**: No config dicts at runtime
 
 **Cons**:
+
 - ❌ **Complex implementation**: Templates, AST, edge cases
 - ❌ **Hard to debug**: Generated code, obscure stack traces
 - ❌ **Brittle**: Template bugs, codegen edge cases
@@ -432,11 +456,13 @@ for aff_id in enabled_affordances:
 ### JIT Compilation (Numba)
 
 **Pros**:
+
 - ✅ **Real speedup**: Machine code, not Python bytecode
 - ✅ **Simple annotation**: `@jit` decorator
 - ✅ **No codegen complexity**: Just annotate existing code
 
 **Cons**:
+
 - ❌ **NumPy only**: Doesn't work with PyTorch tensors (HAMLET uses PyTorch)
 - ❌ **Limited features**: No dicts, no strings, no dynamic dispatch
 - ❌ **Dependency**: Requires Numba (heavyweight)
@@ -450,12 +476,14 @@ for aff_id in enabled_affordances:
 ### Alternative 1: Better Vectorization
 
 **Current**: Some operations iterate per agent (Python loop)
+
 ```python
 for agent in range(num_agents):
     meters[agent, target] -= strength * delta
 ```
 
 **Optimized**: Vectorize to single GPU op
+
 ```python
 # Apply cascade to ALL agents at once (no Python loop)
 mask = meters[:, source_idx] < threshold
@@ -471,6 +499,7 @@ meters[mask, target_idx] -= strength * (threshold - meters[mask, source_idx])
 ### Alternative 2: Pre-Compute More Aggressively
 
 **Current**: Some lookups happen per step
+
 ```python
 def apply_cascade(self, meters):
     for cascade in self.cascade_data:
@@ -479,6 +508,7 @@ def apply_cascade(self, meters):
 ```
 
 **Optimized**: Pre-build tensors at initialization
+
 ```python
 # At initialization (ONCE)
 self.cascade_source_indices = torch.tensor([c["source_idx"] for c in cascade_data])
@@ -499,6 +529,7 @@ meters[:, self.cascade_target_indices] -= ...
 ### Alternative 3: Profile-Guided Optimization
 
 **Approach**:
+
 1. Profile actual training runs (`cProfile`, `py-spy`)
 2. Identify true bottlenecks (likely GPU memory transfer, not dict lookups)
 3. Optimize bottlenecks (better batching, reduce transfers)
@@ -664,6 +695,7 @@ class CascadeEngine:
 **Don't do code generation for HAMLET.**
 
 **Reasons**:
+
 1. ✅ **GPU-bound, not CPU-bound** - Bottleneck is tensor ops, not dict lookups
 2. ✅ **Dict lookups are 0.1-2% of total time** - Marginal speedup (1.5%)
 3. ✅ **Better alternatives exist** - Vectorization (10-100x), pre-computation (2-5x)
@@ -672,6 +704,7 @@ class CascadeEngine:
 6. ✅ **Pedagogical value** - Debuggability matters more than 1.5% speedup
 
 **If performance becomes an issue**:
+
 1. **Profile first** - Find actual bottlenecks (likely GPU memory, not CPU)
 2. **Vectorize better** - Eliminate Python loops, use batched tensor ops (10-100x)
 3. **Pre-compute more** - Build lookup tensors at initialization (2-5x)

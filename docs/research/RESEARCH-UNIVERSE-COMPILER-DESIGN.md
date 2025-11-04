@@ -33,6 +33,7 @@ This research examines **how to build a best-practice universe compiler** for HA
 **Concept**: Break compilation into distinct phases, each with clear responsibility.
 
 **Classic Compiler Passes**:
+
 ```
 Source Code
     ↓
@@ -48,6 +49,7 @@ PASS 5: Code Generation (emit target code)
 ```
 
 **Applied to UAC**:
+
 ```
 YAML Files
     ↓
@@ -67,6 +69,7 @@ STAGE 7: Emit CompiledUniverse (immutable artifact)
 ```
 
 **Why Multi-Pass?**
+
 - ✅ **Separation of concerns**: Each pass has single responsibility
 - ✅ **Better error messages**: Can pinpoint which stage failed
 - ✅ **Easier testing**: Test each pass independently
@@ -74,6 +77,7 @@ STAGE 7: Emit CompiledUniverse (immutable artifact)
 - ✅ **Optimization opportunities**: Can reorder passes or skip unnecessary ones
 
 **Why NOT Single-Pass?**
+
 - ❌ **Forward references**: Can't resolve cascade meter names until bars are loaded
 - ❌ **Cross-file dependencies**: Actions depend on substrate, affordances depend on bars
 - ❌ **Error quality**: Single-pass must fail fast, can't collect multiple errors
@@ -87,6 +91,7 @@ STAGE 7: Emit CompiledUniverse (immutable artifact)
 **Problem**: Configs reference entities by name (meter names, affordance IDs, action names), but these are defined across multiple files.
 
 **Example References**:
+
 ```yaml
 # cascades.yaml
 cascades:
@@ -100,10 +105,12 @@ affordances:
 ```
 
 **Without Symbol Table**:
+
 - Validate each file independently → miss dangling references
 - Or embed validation in each loader → tight coupling, code duplication
 
 **With Symbol Table**:
+
 ```python
 class UniverseSymbolTable:
     """Central registry of all named entities in universe."""
@@ -131,6 +138,7 @@ class UniverseSymbolTable:
 ```
 
 **Usage in Compiler**:
+
 ```python
 # STAGE 1: Load bars, populate symbol table
 bars_config = load_bars_config(config_dir / "bars.yaml")
@@ -150,6 +158,7 @@ for cascade in cascades_config.cascades:
 ```
 
 **Benefits**:
+
 - ✅ **Clear error messages**: "cascades.yaml:low_mood_hits_energy: References non-existent meter 'moodiness'. Valid meters: [energy, health, mood, ...]"
 - ✅ **Centralized resolution**: All reference resolution logic in one place
 - ✅ **Extensible**: Easy to add new entity types (actions, stages, etc.)
@@ -163,6 +172,7 @@ for cascade in cascades_config.cascades:
 **Two Approaches**:
 
 **1. Fail-Fast** (current Pydantic behavior):
+
 ```python
 # PROBLEM: Stops at first error
 config = BarsConfig(**data)  # ValidationError: "index must be 0-7"
@@ -174,6 +184,7 @@ config = BarsConfig(**data)  # ValidationError: "index must be 0-7"
 ```
 
 **2. Error Collection**:
+
 ```python
 errors = []
 
@@ -202,10 +213,12 @@ if errors:
 | **Error Collection** | Better UX (see all errors at once), faster iteration | More complex implementation, must track all errors |
 
 **Best Practice**: **Use hybrid approach**:
+
 - Fail-fast for **critical errors** (file not found, YAML parse error)
 - Collect errors for **validation** (index out of range, dangling reference)
 
 **Implementation**:
+
 ```python
 class CompilationErrorCollector:
     """Collect multiple validation errors before failing."""
@@ -250,6 +263,7 @@ errors.check_and_raise("Stage 3: Reference Resolution")
 **Two Strategies**:
 
 **1. Eager Compilation** (compile entire universe upfront):
+
 ```python
 # Load all YAMLs, validate everything, emit compiled artifact
 universe = UniverseCompiler.compile("configs/L1_full_observability")
@@ -259,6 +273,7 @@ env = VectorizedHamletEnv(compiled_universe=universe)
 ```
 
 **2. Lazy Compilation** (load configs on-demand):
+
 ```python
 # Load only what's needed
 bars = load_bars_config("configs/L1_full_observability/bars.yaml")
@@ -275,12 +290,14 @@ bars = load_bars_config("configs/L1_full_observability/bars.yaml")
 **Analysis for UAC**:
 
 ✅ **Eager compilation fits UAC better**:
+
 - Training runs are long (thousands of episodes) → startup cost negligible
 - Want to catch config errors before training starts (fail fast)
 - Can cache compiled universe for 10-50x faster subsequent loads
 - Universe is small (~5 YAML files) → compilation is fast anyway (<100ms)
 
 ❌ **Lazy compilation doesn't help**:
+
 - Delayed error discovery (find cascade error 10 minutes into training)
 - Can't pre-compute tensors (need full universe)
 - Complexity of dependency tracking not worth the savings
@@ -288,6 +305,7 @@ bars = load_bars_config("configs/L1_full_observability/bars.yaml")
 **Recommendation**: **Eager compilation with caching**
 
 **Compilation Cache Implementation**:
+
 ```python
 class UniverseCompiler:
     def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
@@ -316,6 +334,7 @@ class UniverseCompiler:
 ```
 
 **Benefits**:
+
 - First run: ~50-100ms compilation
 - Cached runs: ~1-5ms load (50-100x speedup)
 - Cache invalidation: automatic via mtime comparison
@@ -329,6 +348,7 @@ class UniverseCompiler:
 **Problem**: Mutable configs allow accidental modification during training.
 
 **Example of Danger**:
+
 ```python
 # Load config
 bars_config = load_bars_config("configs/L1/bars.yaml")
@@ -377,6 +397,7 @@ universe.bars.bars[0].initial = 0.5  # AttributeError: cannot assign to field
 ```
 
 **Benefits**:
+
 - ✅ **No accidental mutation** - Python enforces immutability at runtime
 - ✅ **Safe to share** - Can pass same universe to multiple environments
 - ✅ **Cacheable** - Immutable objects can be safely serialized
@@ -384,6 +405,7 @@ universe.bars.bars[0].initial = 0.5  # AttributeError: cannot assign to field
 - ✅ **Thread-safe** - No locks needed (immutable = safe)
 
 **Metadata Examples**:
+
 ```python
 @dataclass(frozen=True)
 class UniverseMetadata:
@@ -430,6 +452,7 @@ class UniverseMetadata:
 ### Current Architecture (Problems)
 
 **Current Loading Pattern**:
+
 ```python
 # In VectorizedHamletEnv.__init__()
 
@@ -480,6 +503,7 @@ self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 ### Target Architecture (Solution)
 
 **New Loading Pattern**:
+
 ```python
 # STEP 1: Compile universe (can happen offline, cached)
 compiler = UniverseCompiler()
@@ -499,22 +523,27 @@ meter_count = universe.metadata.meter_count
 **Benefits**:
 
 ✅ **Separation of Concerns**:
+
 - `UniverseCompiler`: Load, validate, optimize configs
 - `VectorizedHamletEnv`: Execute universe, no config logic
 
 ✅ **Fail-Fast**:
+
 - All config errors caught during compilation
 - Training never starts with invalid universe
 
 ✅ **Cacheable**:
+
 - Compiled universe saved to disk
 - Subsequent runs: ~50x faster startup
 
 ✅ **Testable**:
+
 - Can test compiler without environment
 - Can test environment with mock universes
 
 ✅ **Flexible**:
+
 - Can compile offline: `python -m townlet.compiler compile configs/L1`
 - Can inspect compiled universe: `python -m townlet.compiler inspect .compiled/universe.msgpack`
 
@@ -547,6 +576,7 @@ class UniverseCompiler:
 ```
 
 **Tests**:
+
 - Can compile valid universe
 - Compilation fails on invalid universe
 - Error messages are clear
@@ -577,6 +607,7 @@ for cascade in cascades.cascades:
 ```
 
 **Tests**:
+
 - Symbol table registers entities
 - Symbol table resolves valid references
 - Symbol table raises error on dangling references
@@ -600,6 +631,7 @@ errors.check_and_raise("Stage 4: Cross-Validation")
 ```
 
 **Tests**:
+
 - Spatial validation catches too many affordances
 - Economic validation warns on poverty traps
 - Cascade validation catches circular dependencies
@@ -630,6 +662,7 @@ def _compute_observation_dim(self, substrate, bars, affordances) -> int:
 ```
 
 **Tests**:
+
 - Observation dim correct for 4-meter universe
 - Observation dim correct for 8-meter universe
 - Observation dim correct for 12-meter universe
@@ -652,6 +685,7 @@ optimization_data = OptimizationData(
 ```
 
 **Tests**:
+
 - Base depletion tensor has correct shape [meter_count]
 - Cascade lookup contains all cascades by category
 - Action mask table has shape [24, num_affordances]
@@ -679,6 +713,7 @@ return universe
 ```
 
 **Tests**:
+
 - Compiled universe is frozen (can't modify)
 - Compiled universe contains all components
 - Compiled universe metadata is correct
@@ -717,6 +752,7 @@ class VectorizedHamletEnv:
 ```
 
 **Tests**:
+
 - Environment accepts compiled universe
 - Environment reads metadata correctly
 - Environment behavior unchanged (integration test)
@@ -730,6 +766,7 @@ class VectorizedHamletEnv:
 **Goal**: Load YAMLs, validate basic syntax and schema.
 
 **Operations**:
+
 ```python
 def stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
     """Parse and validate individual YAML files."""
@@ -757,11 +794,13 @@ def stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
 ```
 
 **Error Examples**:
+
 - `FileNotFoundError`: "bars.yaml not found in configs/L1_full_observability"
 - `yaml.YAMLError`: "bars.yaml line 15: unexpected indent"
 - `ValidationError`: "bars.yaml: bar 'energy' has index=-1 (must be >= 0)"
 
 **Tests**:
+
 - Valid configs parse successfully
 - Missing files raise clear error
 - Malformed YAML raises parse error
@@ -774,6 +813,7 @@ def stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
 **Goal**: Register all named entities for reference resolution.
 
 **Operations**:
+
 ```python
 def stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbolTable:
     """Build symbol tables from raw configs."""
@@ -796,10 +836,12 @@ def stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbol
 ```
 
 **Error Examples**:
+
 - `DuplicateSymbolError`: "Duplicate meter name 'energy' found in bars.yaml"
 - `DuplicateSymbolError`: "Duplicate affordance ID 'Bed' found in affordances.yaml"
 
 **Tests**:
+
 - Symbol table registers all entities
 - Symbol table detects duplicates
 - Symbol table provides lookup by name
@@ -811,6 +853,7 @@ def stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbol
 **Goal**: Validate all cross-file references.
 
 **Operations**:
+
 ```python
 def stage_3_resolve_references(
     self,
@@ -858,10 +901,12 @@ def stage_3_resolve_references(
 ```
 
 **Error Examples**:
+
 - `ReferenceError`: "cascades.yaml:low_mood_hits_energy: source meter 'moodiness' not found. Valid meters: [energy, health, mood, money, satiation, hygiene, social, fitness]"
 - `ReferenceError`: "affordances.yaml:Bed: effect meter 'stamina' not found"
 
 **Tests**:
+
 - Valid references resolve successfully
 - Invalid meter references caught
 - Invalid affordance references caught
@@ -874,6 +919,7 @@ def stage_3_resolve_references(
 **Goal**: Validate constraints that span multiple configs.
 
 **Operations**:
+
 ```python
 def stage_4_cross_validate(
     self,
@@ -948,6 +994,7 @@ def stage_4_cross_validate(
 ```
 
 **Error Examples**:
+
 - `SpatialError`: "Spatial impossibility: Grid has 9 cells but need 11 (10 affordances + 1 agent)"
 - `EconomicWarning`: "Economic imbalance: Total income (20.0) < total costs (30.0). Universe may be poverty trap."
 - `CircularityError`: "Cascade circularity detected: mood → energy → health → mood"
@@ -955,6 +1002,7 @@ def stage_4_cross_validate(
 - `CompatibilityError`: "Action-substrate incompatibility: Aspatial substrate cannot have movement actions. Found: [move_up, move_down]"
 
 **Tests**:
+
 - Spatial validation catches over-crowded grids
 - Economic validation warns on imbalances
 - Circularity detection catches cycles
@@ -968,6 +1016,7 @@ def stage_4_cross_validate(
 **Goal**: Calculate derived properties (obs_dim, action_dim, etc.)
 
 **Operations**:
+
 ```python
 def stage_5_compute_metadata(
     self,
@@ -1044,6 +1093,7 @@ def stage_5_compute_metadata(
 ```
 
 **Tests**:
+
 - Metadata has correct meter_count for variable-size configs
 - Observation dim scales with meter_count
 - Observation dim correct for partial observability
@@ -1056,6 +1106,7 @@ def stage_5_compute_metadata(
 **Goal**: Build lookup tables and tensors for fast runtime execution.
 
 **Operations**:
+
 ```python
 def stage_6_optimize(
     self,
@@ -1121,6 +1172,7 @@ def stage_6_optimize(
 ```
 
 **Tests**:
+
 - Base depletion tensor has correct shape
 - Cascade data sorted by target index
 - Action mask table correct for 24-hour cycle
@@ -1133,6 +1185,7 @@ def stage_6_optimize(
 **Goal**: Create immutable artifact with all components.
 
 **Operations**:
+
 ```python
 def stage_7_emit_compiled_universe(
     self,
@@ -1161,6 +1214,7 @@ def stage_7_emit_compiled_universe(
 ```
 
 **Tests**:
+
 - Compiled universe contains all components
 - Compiled universe is frozen (immutable)
 - Compiled universe metadata is correct
@@ -1184,6 +1238,7 @@ def stage_7_emit_compiled_universe(
 **Recommendation**: **MessagePack** for compiled universe cache
 
 **Rationale**:
+
 - ✅ Fast deserialization (~10x faster than JSON)
 - ✅ Compact (50-70% smaller than JSON)
 - ✅ Safe (no arbitrary code execution like Pickle)
@@ -1191,6 +1246,7 @@ def stage_7_emit_compiled_universe(
 - ✅ Cross-language (future Python→Rust migration)
 
 **Implementation**:
+
 ```python
 import msgpack
 
@@ -1298,6 +1354,7 @@ class UniverseCompiler:
 ```
 
 **Benefits**:
+
 - ✅ Automatic invalidation (no manual cache clearing)
 - ✅ Fast (just stat calls, no file reading)
 - ✅ Reliable (any YAML change triggers recompilation)
@@ -1330,6 +1387,7 @@ class UniverseCompiler:
 ### Error Message Quality
 
 **Bad Error**:
+
 ```
 ValidationError: 1 validation error for BarsConfig
 bars
@@ -1337,6 +1395,7 @@ bars
 ```
 
 **Good Error**:
+
 ```
 Universe Compilation Failed (Stage 1: Parse Individual Files)
 
@@ -1351,6 +1410,7 @@ bars.yaml validation failed:
 ```
 
 **Principles**:
+
 1. **Context**: What stage failed? What file?
 2. **Specificity**: What was expected vs what was found?
 3. **Actionability**: How to fix it?
@@ -1434,6 +1494,7 @@ if errors.has_errors():
 **Layer 1: Fixture-Based Tests** (Foundation)
 
 Create test config packs:
+
 - `fixtures/valid_universe/` - Should compile successfully
 - `fixtures/invalid_dangling_ref/` - Should fail at Stage 3 (reference resolution)
 - `fixtures/invalid_spatial/` - Should fail at Stage 4 (spatial impossibility)
@@ -1442,6 +1503,7 @@ Create test config packs:
 **Layer 2: Unit Tests** (Stage Isolation)
 
 Test each compilation stage independently:
+
 ```python
 def test_stage_1_parse_valid_bars():
     """Stage 1 should parse valid bars.yaml."""
@@ -1471,6 +1533,7 @@ def test_stage_3_detect_dangling_reference():
 **Layer 3: Integration Tests** (End-to-End)
 
 Test full compilation pipeline:
+
 ```python
 def test_compile_valid_universe():
     """Should compile valid universe successfully."""
@@ -1548,6 +1611,7 @@ class VectorizedHamletEnv:
 ```
 
 **Timeline**:
+
 - v1.0: Introduce new API, keep old API with deprecation warning
 - v1.5: Log error if old API used
 - v2.0: Remove old API completely
@@ -1643,6 +1707,7 @@ def test_compilation_performance():
 ```
 
 **Performance Budget**:
+
 - Stage 1 (Parse): < 30ms
 - Stage 2 (Symbols): < 5ms
 - Stage 3 (Resolve): < 10ms
@@ -1659,6 +1724,7 @@ def test_compilation_performance():
 ### HIGH PRIORITY (Must Have)
 
 **1. Multi-Pass Compiler** (11-16 hours)
+
 - Implement 7-stage compilation pipeline
 - Stage 1: Parse individual files
 - Stage 2: Build symbol tables
@@ -1669,16 +1735,19 @@ def test_compilation_performance():
 - Stage 7: Emit CompiledUniverse
 
 **2. Symbol Table** (4-6 hours)
+
 - Implement UniverseSymbolTable
 - Register meters, affordances, actions
 - Resolve references with clear error messages
 
 **3. Error Collection** (4-6 hours)
+
 - Implement CompilationErrorCollector
 - Collect all errors before failing
 - Provide actionable error messages with hints
 
 **4. CompiledUniverse Artifact** (3-4 hours)
+
 - Immutable dataclass with frozen=True
 - Contains all configs + metadata + optimization data
 - Validates consistency at construction
@@ -1690,11 +1759,13 @@ def test_compilation_performance():
 ### MEDIUM PRIORITY (Should Have)
 
 **5. Compilation Cache** (4-6 hours)
+
 - MessagePack serialization
 - mtime-based invalidation
 - Graceful degradation on cache corruption
 
 **6. Cross-Validation** (4-6 hours)
+
 - Spatial feasibility check
 - Economic balance check
 - Cascade circularity detection
@@ -1702,6 +1773,7 @@ def test_compilation_performance():
 - Action-substrate compatibility
 
 **7. Metadata Computation** (3-4 hours)
+
 - Dynamic observation_dim calculation
 - Dynamic action_dim calculation
 - Economic metadata
@@ -1714,16 +1786,19 @@ def test_compilation_performance():
 ### LOW PRIORITY (Nice to Have)
 
 **8. CLI Tool** (2-3 hours)
+
 - `python -m townlet.compiler compile configs/L1`
 - `python -m townlet.compiler inspect .compiled/universe.msgpack`
 - `python -m townlet.compiler validate configs/L1`
 
 **9. Optimization Pre-Compute** (3-4 hours)
+
 - Action mask table [24, num_affordances]
 - Cascade pre-sorting by target index
 - Base depletion tensor
 
 **10. Performance Benchmarking** (2-3 hours)
+
 - Per-stage timing
 - Performance budget enforcement
 - Cache speedup measurement
@@ -1737,6 +1812,7 @@ def test_compilation_performance():
 **Universe compiler is the "bones" of UAC** - it must be robust before we worry about reward models or economic tuning.
 
 **Key Architectural Decisions**:
+
 1. ✅ **Multi-pass compilation** (7 stages: parse → resolve → validate → optimize → emit)
 2. ✅ **Symbol tables for reference resolution** (meters, affordances, actions)
 3. ✅ **Error collection, not fail-fast** (show all errors at once)
@@ -1746,6 +1822,7 @@ def test_compilation_performance():
 7. ✅ **Graceful degradation** (cache corruption → recompile, not crash)
 
 **Critical Refactoring**:
+
 - Move config loading from `VectorizedHamletEnv` to `UniverseCompiler`
 - Replace hardcoded observation_dim with dynamic calculation
 - Replace hardcoded action_dim with metadata lookup
@@ -1754,6 +1831,7 @@ def test_compilation_performance():
 **Estimated Total Effort**: 26-38 hours (3-5 days)
 
 **Priority Order**:
+
 1. HIGH: Multi-pass compiler (11-16h)
 2. HIGH: Symbol table (4-6h)
 3. HIGH: Error collection (4-6h)

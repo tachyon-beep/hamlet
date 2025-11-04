@@ -13,6 +13,7 @@
 ## Executive Summary
 
 This plan details the TDD implementation approach for removing the hardcoded 8-meter constraint from HAMLET/Townlet. The system currently validates that all universes have exactly 8 meters with indices [0-7]. This artificial constraint blocks:
+
 - 4-meter pedagogical tutorials (L0: energy, health, money, mood)
 - 12-meter complex simulations (add reputation, skill, spirituality, community_trust)
 - 16-meter research experiments
@@ -29,15 +30,18 @@ This plan details the TDD implementation approach for removing the hardcoded 8-m
 This plan was reviewed by a research agent and updated to address 3 critical issues:
 
 ### ✅ Issue 1: Task Numbering RESOLVED
+
 - **Problem**: Spec file header incorrectly said "TASK-005"
 - **Fix**: Updated spec file to correctly say "TASK-001" (per TASK_IMPLEMENTATION_PLAN.md line 100)
 
 ### ✅ Issue 2: Test File Organization RESOLVED
+
 - **Problem**: Plan proposed creating `test_variable_meter_config.py` but tests are consolidated in `test_configuration.py`
 - **Fix**: Create `unit/environment/test_variable_meters.py` (follows pattern of existing `test_meters.py`)
 - **Rationale**: Avoids bloating `test_configuration.py` to 300+ lines, isolates variable meter tests cleanly
 
 ### ✅ Issue 3: Comprehensive Audit ADDED
+
 - **Problem**: Plan identified some hardcoded-8 locations but no comprehensive verification
 - **Fix**: Added **Phase 0.5** with grep audit commands and checklist template
 - **Time**: +1-2 hours to ensure ALL instances found
@@ -79,6 +83,7 @@ def validate_bars(cls, v: list[BarConfig]) -> list[BarConfig]:
 **Test**: "If removed, would the system be more expressive or more fragile?"
 
 **Answer**: **More expressive**
+
 - ✅ Enables 4-meter tutorials (L0: just energy + health)
 - ✅ Enables 12-meter complex universes (add reputation, skill, spirituality)
 - ✅ Enables domain-specific universes (factory, trading bot, ecosystem)
@@ -118,21 +123,25 @@ def validate_bars(cls, v: list[BarConfig]) -> list[BarConfig]:
 ### Architecture Changes
 
 **Layer 1: Config (bars.yaml)**
+
 - Remove validation requiring exactly 8 meters
 - Add `meter_count` property to BarsConfig
 - Add `meter_name_to_index` property for name lookups
 - Validate indices are contiguous from 0
 
 **Layer 2: Engine (VectorizedHamletEnv, CascadeEngine)**
+
 - Size all tensors dynamically: `torch.zeros((num_agents, meter_count))`
 - Replace hardcoded indices with name lookups
 - Build cost arrays dynamically from config
 
 **Layer 3: Network (SimpleQNetwork, RecurrentSpatialQNetwork)**
+
 - Compute `obs_dim` dynamically from meter_count
 - Networks already take `obs_dim` as parameter (no changes needed)
 
 **Layer 4: Checkpoint**
+
 - Store `universe_metadata` with meter_count
 - Validate meter_count matches on load
 - Handle legacy checkpoints (assume 8 meters)
@@ -144,6 +153,7 @@ def validate_bars(cls, v: list[BarConfig]) -> list[BarConfig]:
 ### Overview of New Test Infrastructure (November 2025)
 
 HAMLET/Townlet has a comprehensive test infrastructure with **560 tests** (67% coverage):
+
 - **Unit tests** (`tests/test_townlet/unit/`) - Isolated component testing (426 tests)
 - **Integration tests** (`tests/test_townlet/integration/`) - Cross-component interactions (114 tests)
 - **Property tests** (`tests/test_townlet/properties/`) - Hypothesis-based fuzzing (20 tests)
@@ -154,6 +164,7 @@ HAMLET/Townlet has a comprehensive test infrastructure with **560 tests** (67% c
 ### Key Test Infrastructure Patterns
 
 #### 1. Always Use `cpu_device` Fixture
+
 ```python
 def test_my_feature(cpu_device):
     """Always use CPU for deterministic tests."""
@@ -163,6 +174,7 @@ def test_my_feature(cpu_device):
 **Why**: Prevents GPU randomness, ensures reproducible results.
 
 #### 2. Fixture Composition Pattern
+
 ```python
 # conftest.py provides composed fixtures
 @pytest.fixture
@@ -179,6 +191,7 @@ def env_4meter(cpu_device, config_4meter):
 **Why**: Reusable, composable, eliminates duplication.
 
 #### 3. Behavioral Assertions (Not Exact Values)
+
 ```python
 # ✅ Good: Behavioral
 assert late_survival.mean() > early_survival.mean(), "Agents should improve"
@@ -202,6 +215,7 @@ assert late_survival.mean() == 123.45, "Must be exactly 123.45"
 | **Phase 5** | `integration/test_variable_meter_integration.py` | Integration (NEW) | Full end-to-end integration tests |
 
 **Decision**: Create `tests/test_townlet/unit/environment/test_variable_meters.py` (NEW)
+
 - **Pro**: Clean isolation of variable meter tests
 - **Pro**: Follows existing pattern (`unit/environment/test_meters.py`)
 - **Pro**: Avoids bloating `test_configuration.py` to 300+ lines
@@ -366,6 +380,7 @@ Each phase follows strict TDD:
 ## Phase 0: Setup Test Fixtures (1 hour)
 
 ### Goal
+
 Prepare test infrastructure with fixtures for 4-meter and 12-meter config packs before starting TDD.
 
 ### 0.1: Add Fixtures to Conftest.py
@@ -375,6 +390,7 @@ Prepare test infrastructure with fixtures for 4-meter and 12-meter config packs 
 Add the fixtures documented in the "Test Infrastructure Integration" section (lines 176-289) to conftest.py.
 
 **Required imports** (add to top of conftest.py if not present):
+
 ```python
 import copy
 import shutil
@@ -382,6 +398,7 @@ import yaml
 ```
 
 **Fixtures to add**:
+
 - `config_4meter`: Creates temporary 4-meter config pack
 - `config_12meter`: Creates temporary 12-meter config pack
 - `env_4meter`: 4-meter environment fixture
@@ -407,6 +424,7 @@ pytest tests/test_townlet/unit/test_configuration.py -k "test_4_meter" --collect
 If 4-meter or 12-meter config packs don't exist yet, the fixtures will create them dynamically using `tmp_path`. No manual config creation needed.
 
 ### Phase 0 Success Criteria
+
 - [ ] conftest.py has copy, shutil, yaml imports
 - [ ] task001_config_4meter fixture added
 - [ ] task001_config_12meter fixture added
@@ -422,6 +440,7 @@ If 4-meter or 12-meter config packs don't exist yet, the fixtures will create th
 ## Phase 0.5: Comprehensive Hardcoded-8 Audit (1-2 hours)
 
 ### Goal
+
 Identify ALL locations with hardcoded 8-meter assumptions before starting implementation.
 
 ### 0.5.1: Run Comprehensive Grep Audit
@@ -484,6 +503,7 @@ grep -rn "energy.*hygiene.*satiation.*money.*mood.*social.*health.*fitness" src/
 ```
 
 ### Phase 0.5 Success Criteria
+
 - [ ] All grep commands executed and results documented
 - [ ] Checklist created with every file:line_number that needs changes
 - [ ] No false positives (grid_size=8, max_steps=8, etc.) included in checklist
@@ -499,6 +519,7 @@ grep -rn "energy.*hygiene.*satiation.*money.*mood.*social.*health.*fitness" src/
 ## Phase 1: Config Schema Refactor (4-5 hours)
 
 ### Goal
+
 Make `BarsConfig` accept variable-size meter lists (1-32 meters).
 
 ### 1.1: Write Tests for Variable Meter Count Validation (RED)
@@ -680,6 +701,7 @@ class TestVariableMeterConfigValidation:
 **Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -v`
 
 **Expected**: 🔴 **ALL TESTS FAIL** (RED phase)
+
 - Current code validates len(v) == 8
 - Current code has `le=7` in Field validators
 - meter_count property doesn't exist
@@ -886,6 +908,7 @@ def test_4_meter_tutorial_config_loads():
 ```
 
 ### Phase 1 Success Criteria
+
 - [ ] All validation tests pass
 - [ ] BarsConfig accepts 1-32 meters
 - [ ] meter_count, meter_names, meter_name_to_index properties work
@@ -899,6 +922,7 @@ def test_4_meter_tutorial_config_loads():
 ## Phase 2: Engine Layer Refactor (4-6 hours)
 
 ### Goal
+
 Make all tensor operations use dynamic meter count, not hardcoded 8.
 
 ### 2.1: Write Tests for Dynamic Tensor Sizing (RED)
@@ -1046,6 +1070,7 @@ class TestVariableMeterEngineDynamics:
 **Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters -v`
 
 **Expected**: 🔴 **ALL TESTS FAIL** (RED phase)
+
 - Current code hardcodes `torch.zeros((num_agents, 8))`
 - Current code hardcodes obs_dim calculation with `+ 8`
 
@@ -1186,6 +1211,7 @@ class CascadeEngine:
 **Expected**: 🟢 **STILL PASS**
 
 ### Phase 2 Success Criteria
+
 - [ ] VectorizedHamletEnv creates tensors sized `[num_agents, meter_count]`
 - [ ] CascadeEngine builds tensors sized `[meter_count]`
 - [ ] obs_dim computed dynamically from meter_count
@@ -1199,6 +1225,7 @@ class CascadeEngine:
 ## Phase 3: Network Layer Updates (2-3 hours)
 
 ### Goal
+
 Networks receive correct observation dimension based on meter count.
 
 ### 3.1: Write Tests for Network obs_dim (RED)
@@ -1294,6 +1321,7 @@ class TestVariableMeterNetworkCompatibility:
 **Run Tests**: `pytest tests/test_townlet/unit/agent/test_variable_meter_networks.py -v`
 
 **Expected**: 🔴 **MAY FAIL** if obs_dim not computed correctly in Phase 2
+
 - If Phase 2 done correctly, these should pass immediately
 - Networks already take obs_dim as parameter, so no changes needed
 
@@ -1361,6 +1389,7 @@ def main():
 ```
 
 ### Phase 3 Success Criteria
+
 - [ ] Network creation uses dynamically computed obs_dim
 - [ ] Networks work with 4, 8, and 12-meter universes
 - [ ] Forward pass works for all meter counts
@@ -1373,6 +1402,7 @@ def main():
 ## Phase 4: Checkpoint Compatibility (2-3 hours)
 
 ### Goal
+
 Store meter_count in checkpoint metadata; validate on load.
 
 ### 4.1: Write Tests for Checkpoint Metadata (RED)
@@ -1523,6 +1553,7 @@ class TestVariableMeterCheckpoints:
 **Run Tests**: `pytest tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints -v`
 
 **Expected**: 🔴 **ALL TESTS FAIL** (RED phase)
+
 - `universe_metadata` doesn't exist in current checkpoint format
 - Validation on load doesn't exist
 
@@ -1685,6 +1716,7 @@ def inspect_checkpoint_metadata(path: Path) -> dict:
 ```
 
 ### Phase 4 Success Criteria
+
 - [ ] Checkpoints include universe_metadata with meter_count
 - [ ] Loading validates meter_count matches current environment
 - [ ] Loading fails clearly if meter counts don't match
@@ -1698,6 +1730,7 @@ def inspect_checkpoint_metadata(path: Path) -> dict:
 ## Phase 5: Integration Testing (2-3 hours)
 
 ### Goal
+
 Ensure end-to-end training works with variable meters.
 
 ### 5.1: Write Integration Tests (RED)
@@ -1864,11 +1897,13 @@ class TestVariableMeterIntegration:
 **Run Tests**: `pytest tests/test_townlet/integration/test_variable_meter_integration.py -v`
 
 **Expected**: 🔴 **MAY FAIL** if Phases 1-4 incomplete
+
 - If all previous phases passed, integration tests should pass
 
 ### 5.2: Fix Any Integration Issues (GREEN)
 
 Debug and fix any issues revealed by integration tests:
+
 - Missing meter references in configs
 - Cascade configuration issues
 - Population/training loop issues
@@ -1905,6 +1940,7 @@ def test_performance_comparison_meter_counts(benchmark):
 ```
 
 ### Phase 5 Success Criteria
+
 - [ ] Full training episode completes with 4, 8, and 12 meters
 - [ ] Checkpoint save/load works across meter counts
 - [ ] Cascade effects apply correctly with variable meters
@@ -1924,6 +1960,7 @@ def test_performance_comparison_meter_counts(benchmark):
 **bars.yaml**: (Already shown in Phase 1)
 
 **cascades.yaml**:
+
 ```yaml
 version: "2.0"
 description: "Simplified cascades for 4-meter universe"
@@ -1947,6 +1984,7 @@ execution_order:
 **affordances.yaml**: (Simplified with 4-meter effects)
 
 **training.yaml**:
+
 ```yaml
 environment:
   grid_size: 3  # Tiny grid for simple tutorial
@@ -1972,6 +2010,7 @@ training:
 **bars.yaml**: (Extended with reputation, skill, spirituality, community_trust)
 
 **Pedagogical Value**:
+
 - **4-meter**: Simplest resource management (energy, health, money, mood)
 - **8-meter**: Standard curriculum (existing complexity)
 - **12-meter**: Research-level sociological modeling
@@ -1981,6 +2020,7 @@ training:
 ## Success Criteria (Overall)
 
 ### Config Layer
+
 - [ ] BarsConfig accepts 1-32 meters
 - [ ] Validation checks contiguous indices from 0
 - [ ] meter_count, meter_names, meter_name_to_index properties work
@@ -1988,6 +2028,7 @@ training:
 - [ ] Existing 8-meter configs still work (backward compatible)
 
 ### Engine Layer
+
 - [ ] VectorizedHamletEnv creates tensors `[num_agents, meter_count]`
 - [ ] CascadeEngine builds tensors `[meter_count]`
 - [ ] obs_dim computed dynamically from meter_count
@@ -1995,17 +2036,20 @@ training:
 - [ ] No remaining hardcoded `8` in meter code
 
 ### Network Layer
+
 - [ ] Networks receive correct obs_dim for meter_count
 - [ ] Forward pass works for 4, 8, 12 meters
 - [ ] Training works with variable meter counts
 
 ### Checkpoint Layer
+
 - [ ] Checkpoints include universe_metadata
 - [ ] Loading validates meter_count matches
 - [ ] Loading fails clearly if mismatch
 - [ ] Legacy checkpoints load with warning
 
 ### Integration
+
 - [ ] Full training episodes complete for 4, 8, 12 meters
 - [ ] Checkpoint save/load works
 - [ ] Cascade effects apply correctly
@@ -2016,23 +2060,28 @@ training:
 ## Risks & Mitigations
 
 ### Risk 1: Breaking Existing Checkpoints
+
 **Likelihood**: High (expected)
 **Impact**: Low (handled gracefully)
 **Mitigation**: Fallback loader assumes 8 meters for legacy checkpoints
 
 ### Risk 2: Performance Degradation
+
 **Likelihood**: Very low
 **Impact**: Negligible
 **Mitigation**: GPU tensor ops scale linearly; pre-allocation prevents per-step overhead
 
 ### Risk 3: Missing Meter References in Configs
+
 **Likelihood**: Medium (for new configs)
 **Impact**: Medium (crashes at runtime)
 **Mitigation**:
+
 - TASK-004 (Universe Compiler) will catch these at compile time
 - For now, add validation in AffordanceEngine
 
 ### Risk 4: Test Data Dependency
+
 **Likelihood**: Medium (tests need 12-meter config)
 **Impact**: Low (can create minimal test configs)
 **Mitigation**: Create minimal 12-meter config just for testing if full config doesn't exist
@@ -2101,11 +2150,13 @@ pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigVal
 ### Run Tests By Phase
 
 **Phase 1: Config Schema**
+
 ```bash
 pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -v
 ```
 
 **Phase 2: Engine Layer**
+
 ```bash
 pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine \
        tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters \
@@ -2113,16 +2164,19 @@ pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine \
 ```
 
 **Phase 3: Network Layer**
+
 ```bash
 pytest tests/test_townlet/unit/agent/test_networks.py::TestVariableMeterNetworks -v
 ```
 
 **Phase 4: Checkpoint Compatibility**
+
 ```bash
 pytest tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints -v
 ```
 
 **Phase 5: Integration**
+
 ```bash
 pytest tests/test_townlet/integration/test_variable_meter_integration.py -v
 ```

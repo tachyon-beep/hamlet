@@ -21,6 +21,7 @@ TASK-000 introduces multiple spatial substrate types beyond the current 2D squar
 - **Continuous spaces**: Smooth movement with float coordinates
 
 **Current frontend assumes hardcoded 2D square grid**:
+
 - `Grid.vue`: Renders 8×8 SVG grid with square cells
 - Agent positions: `(x, y)` integer coordinates
 - Affordances: Placed at `(x, y)` grid cells
@@ -35,6 +36,7 @@ TASK-000 introduces multiple spatial substrate types beyond the current 2D squar
 ### Option A: Substrate-Specific Vue Components
 
 **Architecture**:
+
 ```
 frontend/src/components/
   ├── Grid2D.vue          # Current square grid renderer
@@ -45,6 +47,7 @@ frontend/src/components/
 ```
 
 **Substrate detection**:
+
 ```javascript
 // App.vue
 const substrateType = computed(() => store.substrateConfig?.type || 'grid')
@@ -59,16 +62,19 @@ const gridTopology = computed(() => store.substrateConfig?.grid?.topology || 'sq
 ```
 
 **Pros**:
+
 - Clean separation of concerns (each renderer is self-contained)
 - Easy to implement incrementally (add components as needed)
 - No shared rendering complexity
 
 **Cons**:
+
 - Code duplication (agent markers, affordance icons, meters)
 - 5+ separate components to maintain
 - Higher total implementation effort
 
-**Effort**: 
+**Effort**:
+
 - Grid3D: 12-16 hours (floor selector, camera controls, occlusion)
 - GridHex: 8-12 hours (axial coordinate mapping, hex tile SVG)
 - GraphViz: 10-14 hours (force-directed layout, edge rendering)
@@ -80,6 +86,7 @@ const gridTopology = computed(() => store.substrateConfig?.grid?.topology || 'sq
 ### Option B: Unified Component with Substrate Renderers
 
 **Architecture**:
+
 ```javascript
 // SubstrateVisualization.vue
 <template>
@@ -102,11 +109,13 @@ const rendererComponent = computed(() => {
 ```
 
 **Pros**:
+
 - Single entry point (easier to reason about)
 - Shared props/state management
 - Easier to add new substrates (just add renderer)
 
 **Cons**:
+
 - More complex abstraction layer
 - Still requires separate renderer implementations
 - Similar total effort to Option A
@@ -118,6 +127,7 @@ const rendererComponent = computed(() => {
 ### Option C: Text-Based Visualization (ASCII/Terminal)
 
 **Architecture**:
+
 ```python
 # src/townlet/demo/text_viz.py
 
@@ -158,6 +168,7 @@ def render_substrate_text(env):
 ```
 
 **Pros**:
+
 - **ZERO frontend work required**
 - Works immediately with all substrates
 - Easy to implement (Python string formatting)
@@ -165,6 +176,7 @@ def render_substrate_text(env):
 - Students can experiment with 3D/hex/graph substrates NOW
 
 **Cons**:
+
 - Not as visually appealing as GUI
 - Limited interactivity
 - No real-time visualization (print on step or episode end)
@@ -178,6 +190,7 @@ def render_substrate_text(env):
 ### Option D: WebGL/Three.js for 3D, SVG for 2D/Hex
 
 **Architecture**:
+
 - **3D cubic grid**: Three.js with camera controls, floor transparency, agent meshes
 - **2D square grid**: Current SVG implementation (no changes)
 - **Hexagonal grid**: SVG with hex tile paths
@@ -185,6 +198,7 @@ def render_substrate_text(env):
 - **Aspatial**: Meters dashboard (no spatial rendering)
 
 **Example 3D rendering**:
+
 ```javascript
 // Grid3D.vue (Three.js)
 import * as THREE from 'three'
@@ -213,17 +227,20 @@ const agentMesh = new THREE.Mesh(agentGeometry, agentMaterial)
 ```
 
 **Pros**:
+
 - High-quality 3D visualization
 - Professional appearance
 - Interactive camera controls
 
 **Cons**:
+
 - **Very high implementation effort** (20+ hours for 3D alone)
 - Complex state management (Three.js scene updates)
 - Performance concerns (many objects in scene)
 - Requires learning Three.js/WebGL
 
 **Effort**:
+
 - 3D cubic (Three.js): 20-30 hours
 - Hexagonal (SVG): 8-12 hours
 - Graph (D3.js): 10-14 hours
@@ -253,6 +270,7 @@ const agentMesh = new THREE.Mesh(agentGeometry, agentMaterial)
 **Deliverable**: `src/townlet/demo/text_viz.py`
 
 **Example usage**:
+
 ```bash
 # Train on 3D cubic grid with text visualization
 python -m townlet.demo.runner --config configs/L1_3D_house --viz text
@@ -268,6 +286,7 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 ```
 
 **Benefits**:
+
 - ✅ Unblocks TASK-000 implementation (no frontend dependency)
 - ✅ Works with ALL substrates (2D, 3D, hex, graph, aspatial)
 - ✅ Sufficient for validating substrate mechanics
@@ -275,11 +294,13 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 - ✅ Minimal effort (4-6 hours)
 
 **Limitations**:
+
 - ❌ No real-time GUI visualization
 - ❌ No interactivity (can't click/zoom)
 - ❌ Less pedagogically engaging than GUI
 
 **Acceptance Criteria**:
+
 - Student can train agents on 3D cubic grid and see floor-by-floor ASCII output
 - Student can train on hexagonal grid and see axial coordinate ASCII output
 - Student can train on graph substrate and see node-based ASCII output
@@ -294,6 +315,7 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 **Priority**: **MEDIUM** (nice-to-have, not critical)
 
 **Why defer?**:
+
 - Hexagonal grids are **less common** in pedagogical scenarios than 3D
 - SVG hex tile rendering is **non-trivial** (axial coordinate mapping)
 - Students can use text viz to experiment with hex substrates in the meantime
@@ -309,6 +331,7 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 **Priority**: **LOW** (significant effort, marginal pedagogical value over text viz)
 
 **Why defer?**:
+
 - **Very high implementation cost** (20-30 hours)
 - **Maintenance burden** (Three.js scene management, camera controls, occlusion)
 - Students can use text viz or 2D floor projections in the meantime
@@ -317,6 +340,7 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 **Deliverable**: `frontend/src/components/Grid3D.vue`
 
 **Example floor selector**:
+
 ```
 ┌─────────────────────────┐
 │ Floor: [0] [1] [2]      │ ← Radio buttons to select floor
@@ -331,6 +355,7 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 ```
 
 **Simpler alternative**: 2D floor projection (no Three.js needed!)
+
 - Render each floor as separate 2D grid
 - Stack floors vertically in UI
 - Agent appears on correct floor
@@ -340,7 +365,8 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 
 ### Phase 4: Graph/Aspatial Visualization (On Demand)
 
-**Implement**: 
+**Implement**:
+
 - D3.js force-directed graph layout
 - Meters-only dashboard (aspatial)
 
@@ -348,6 +374,7 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 **Priority**: **VERY LOW** (implement only if student specifically requests)
 
 **Why defer?**:
+
 - Graph substrates are **rare in pedagogical scenarios** (advanced topic)
 - Force-directed layout is **complex** and **slow** for large graphs
 - Text viz shows node IDs and edges clearly enough for validation
@@ -360,12 +387,14 @@ python -m townlet.demo.runner --config configs/L1_3D_house --viz text
 ### Q1: Is text-based visualization acceptable for Phase 1?
 
 **Answer**: **YES** - Text visualization is sufficient for:
+
 - ✅ Validating substrate mechanics (does 3D movement work?)
 - ✅ Training agents (does the agent learn?)
 - ✅ Debugging config errors (are affordances placed correctly?)
 - ✅ Student experimentation ("What if my world was a cube?")
 
 Text viz is **NOT** sufficient for:
+
 - ❌ Real-time interactive demos (need GUI)
 - ❌ Recording videos for presentations (need GUI)
 - ❌ Public showcases (text looks "unfinished")
@@ -384,12 +413,14 @@ Text viz is **NOT** sufficient for:
 **TASK-000 already acknowledges this tradeoff**. The primary value is **backend flexibility**, not frontend rendering.
 
 **Effort comparison**:
+
 - TASK-000 core implementation: 15-22 hours
 - Substrate-agnostic GUI rendering: 32-56 hours
 
 **GUI rendering would cost MORE than the entire substrate system!**
 
 **Priority ordering**:
+
 1. **TASK-000**: Implement substrate abstraction (15-22h)
 2. **TASK-001**: Schema validation with DTOs (8-12h)
 3. **TASK-002**: Action space configuration (10-15h)
@@ -406,17 +437,20 @@ Text viz is **NOT** sufficient for:
 **Answer**: **YES, initially** - Here's the workflow:
 
 **Development Phase** (TASK-000 implementation):
+
 - Use text viz for validation ("does 3D movement work?")
 - Use pytest for automated testing
 - Use post-training analysis (episode logs, checkpoints)
 
 **Student Experimentation Phase**:
+
 - Students edit `substrate.yaml` to try 3D/hex/graph
 - Students see text output during training
 - Students analyze training metrics (survival steps, reward)
 - Students learn substrate concepts WITHOUT needing GUI
 
 **Demo/Presentation Phase** (later):
+
 - Implement GUI rendering as separate project
 - Record videos with GUI for showcases
 - Use GUI for interactive demonstrations
@@ -482,6 +516,7 @@ def render_2d_square_grid(env):
 ```
 
 **Output**:
+
 ```
 ┌─┬─┬─┬─┬─┬─┬─┬─┐
 │ │ │B│ │ │ │ │ │
@@ -530,6 +565,7 @@ def render_3d_cubic_grid(env):
 ```
 
 **Output**:
+
 ```
 Floor 0:
 ┌─┬─┬─┐
@@ -587,6 +623,7 @@ def render_hex_grid(env):
 ```
 
 **Output**:
+
 ```
 [B] [ ] [ ] [ ]
   [ ] [A] [ ] [ ]
@@ -626,6 +663,7 @@ def render_graph_substrate(env):
 ```
 
 **Output**:
+
 ```
 Nodes:
   0: [Bed] (Agent: agent_0)
@@ -670,6 +708,7 @@ def render_aspatial_state(env):
 ```
 
 **Output**:
+
 ```
 === ASPATIAL UNIVERSE ===
 (No spatial positioning)
@@ -696,12 +735,14 @@ Available affordances:
 **Answer**: **NO** - Text visualization is sufficient.
 
 **Evidence**:
+
 1. **TASK-000 goals**: "Enable config-driven spatial substrates" ← Backend flexibility
 2. **Not a goal**: "Real-time GUI visualization of all substrates" ← Frontend polish
 3. **Success criteria**: "Can switch between 2D/3D by editing substrate.yaml" ← Config-driven, no GUI mention
 4. **Risk mitigation**: "Phase 1 uses text-based viz, 3D viz comes later" ← Already acknowledged
 
 **Pedagogical Value Comparison**:
+
 - ✅ **High value**: Training agents on 3D/hex/graph substrates (teaches spatial reasoning, exploration, action space design)
 - ✅ **Medium value**: Analyzing training results (survival steps, reward, learned policy)
 - ✅ **Low value**: Real-time GUI visualization (nice-to-have, not critical for learning)
@@ -715,12 +756,14 @@ Available affordances:
 **Answer**: **YES** - Create `TASK-005: Substrate Visualization Suite` as separate project.
 
 **Rationale**:
+
 1. **Dependency**: Visualization depends on TASK-000 being complete (substrate system exists)
 2. **Effort**: 32-56 hours (larger than most individual TASKs)
 3. **Priority**: Lower than core UAC infrastructure (TASK-001 through TASK-004)
 4. **Scope**: Self-contained (doesn't block other work)
 
 **Proposed TASK-005**:
+
 ```markdown
 # TASK-005: Substrate Visualization Suite
 
@@ -784,12 +827,14 @@ Implement substrate-specific Vue components for each substrate type.
 ### Summary
 
 **Substrate-agnostic visualization is NOT critical for TASK-000 implementation.** Text-based visualization is sufficient for:
+
 - Validating substrate mechanics
 - Training agents on alternative substrates
 - Student experimentation with 3D/hex/graph topologies
 - Debugging config errors
 
 **Recommendation**:
+
 1. ✅ **Implement text visualization in TASK-000** (4-6 hours, unblocks immediately)
 2. ✅ **Defer GUI rendering to TASK-005** (24-64 hours, implement when needed for demos)
 3. ✅ **Use 2D floor projections instead of full 3D** (6-8h vs 20-30h, simpler and sufficient)

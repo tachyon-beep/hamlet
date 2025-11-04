@@ -15,6 +15,7 @@
 **Mental Model**: Configuration files are not just data - they are **programs that define the universe**. Before running a training session, we must **compile the universe** and validate it against the universe's laws (the schema). This is not testing *values* (whether epsilon=0.99 is "good"), but testing **structural compliance** ("does this config speak the universe's language?").
 
 Think of it as:
+
 1. **Write universe program** (edit YAML configs)
 2. **Compile universe** (load into Pydantic DTOs)
 3. **Compilation errors** = schema violations, invalid references, constraint violations
@@ -29,6 +30,7 @@ Just like you wouldn't run Python code with syntax errors, you shouldn't run tra
 **Critical Design Rule**: Pydantic DTOs must **require ALL behavioral parameters**. No implicit defaults allowed.
 
 **Rationale**:
+
 - **Accountability**: Operator must explicitly specify every parameter that affects universe behavior
 - **Transparency**: Universe behavior fully determined by visible config files (no hidden state)
 - **Reproducibility**: Config is complete specification - no need to read source code
@@ -36,6 +38,7 @@ Just like you wouldn't run Python code with syntax errors, you shouldn't run tra
 - **Better Mental Model**: Operator must understand each parameter to set it
 
 **Allowed Defaults** (rare exceptions):
+
 1. **Truly optional features**: `cues: CuesConfig | None = None` (visualization is optional for headless training)
 2. **Metadata only**: `description: str | None = None` (doesn't affect simulation)
 3. **Computed values**: `observation_dim: int` (calculated at compile time)
@@ -452,6 +455,7 @@ class SubstrateConfig(BaseModel):
 ```
 
 **Example valid config**:
+
 ```yaml
 # configs/L1_full_observability/substrate.yaml
 substrate:
@@ -465,6 +469,7 @@ substrate:
 ```
 
 **Example invalid config (caught at compile time)**:
+
 ```yaml
 # configs/my_3d_house/substrate.yaml
 substrate:
@@ -478,6 +483,7 @@ substrate:
 ```
 
 **Error message**:
+
 ```
 ❌ SUBSTRATE COMPILATION FAILED
 ValidationError: substrate.grid.position_encoding
@@ -549,6 +555,7 @@ class AffordanceConfig(BaseModel):
 ```
 
 **Example configs**:
+
 ```yaml
 # 2D square grid
 affordances:
@@ -588,6 +595,7 @@ affordances:
 ```
 
 **Benefits**:
+
 1. ✅ **Flexible positioning**: Supports all substrate types (2D, 3D, hex, graph)
 2. ✅ **Backward compatible**: `position: null` (or omit field) = randomize
 3. ✅ **Type-safe**: Pydantic validates format at compile time
@@ -600,11 +608,13 @@ affordances:
 The universe compiler follows this principle: **Enforce structure mercilessly, but remain conceptually agnostic about semantics.**
 
 **❌ REJECT (syntax/structure violations)**:
+
 ```yaml
 energy_move_depletion: "orange"  # Type error: expected float, got string
 ```
 
 **✅ ALLOW (semantically unusual but structurally valid)**:
+
 ```yaml
 # Current action energy costs (typical):
 energy_move_depletion: 0.005   # Move costs 0.5% energy
@@ -627,6 +637,7 @@ An overzealous compiler might reject `energy_rest_depletion: -0.002` with "energ
 **The concept of "resting" is not something the engine should have an opinion on.** Everything comes from UNIVERSE_AS_CODE. The compiler validates the type (float), not the concept (whether rest makes sense).
 
 **The boundary**:
+
 - Compiler enforces: "`energy_rest_depletion` must be a float"
 - Operator decides: "I set it to -0.002 (restoration) for my experiment"
 - Compiler allows: Structurally valid float, regardless of sign
@@ -635,6 +646,7 @@ An overzealous compiler might reject `energy_rest_depletion: -0.002` with "energ
 **Conceptual Agnosticism Principle**: The universe compiler should not encode assumptions about what makes a "reasonable" universe. It validates that the universe is **well-formed** (correct types, valid references), not **well-behaved** (sensible game design).
 
 **Generalization Beyond HAMLET**: The universe compiler should be domain-agnostic. Today it models agents in a village (move, wait, interact with affordances). Tomorrow it might model:
+
 - A sentient box jumping between conveyor belts in a factory (actions: `jump_left`, `jump_right`, `process_item`)
 - A trading bot in financial markets (actions: `buy`, `sell`, `hold`)
 - A cellular automaton (actions: `split`, `merge`, `signal`)
@@ -659,6 +671,7 @@ class UniverseCompiler:
 ```
 
 For a sentient box factory simulation, the operator might define:
+
 ```yaml
 actions:
   - name: "jump_left"
@@ -681,6 +694,7 @@ affordances:  # Now "conveyor belts" instead of "beds"
 ```
 
 The universe compiler validates this identically to HAMLET configs:
+
 - ✅ Are action costs floats?
 - ✅ Do meter references exist?
 - ✅ Are affordance effects well-formed?
@@ -712,6 +726,7 @@ grid_size: 100               # ✅ Allowed (might be testing large spaces)
 The line is: **Enforce what makes the universe mathematically/structurally coherent, not what makes it pedagogically sensible.**
 
 **Another example**:
+
 ```yaml
 # REJECT: Structure violation
 enabled_affordances: ["Bed", "Zorblax"]  # ❌ "Zorblax" not in affordances.yaml
@@ -723,6 +738,7 @@ enabled_affordances: []  # ✅ Zero affordances (agent can only wait/move)
 Zero affordances seems "broken" but might be testing pure navigation, or studying death from starvation with no recourse. The compiler validates the reference is structurally sound (list of strings), not whether it's a "sensible" experiment.
 
 **Summary**:
+
 - **Strict syntax**: `energy_cost: "orange"` → compilation error
 - **Permissive semantics**: `energy_cost: -0.5` → allowed (operator's experiment)
 - **Operator responsibility**: Understanding that negative costs = restoration mechanics
@@ -736,6 +752,7 @@ Zero affordances seems "broken" but might be testing pure navigation, or studyin
 ### Why No Defaults?
 
 **Problem with defaults**:
+
 ```python
 # ❌ BAD: Pydantic model with defaults
 class TrainingConfig(BaseModel):
@@ -745,6 +762,7 @@ class TrainingConfig(BaseModel):
 ```
 
 **Consequences**:
+
 1. **Hidden State**: Operator doesn't know what values are actually being used
 2. **Drift Risk**: Code defaults change, old configs behave differently
 3. **Non-Reproducible**: Two configs that look different may behave identically
@@ -766,6 +784,7 @@ class TrainingConfig(BaseModel):
 ```
 
 **If operator omits a field**:
+
 ```
 ❌ UNIVERSE COMPILATION FAILED
 training.yaml missing required field: 'epsilon_decay'
@@ -784,12 +803,14 @@ Tip: See configs/templates/training.yaml.template for reference.
 Only three categories can have defaults:
 
 **1. Truly Optional Features** (doesn't affect core simulation):
+
 ```python
 cues: CuesConfig | None = None  # ✅ Visualization optional for headless training
 description: str | None = None   # ✅ Metadata only
 ```
 
 **2. Computed Values** (calculated from other configs):
+
 ```python
 class UniverseMetadata(BaseModel):
     observation_dim: int  # ✅ Computed from grid_size + affordances + meters
@@ -797,6 +818,7 @@ class UniverseMetadata(BaseModel):
 ```
 
 **3. Deprecated Fields** (temporary backwards compatibility):
+
 ```python
 @deprecated("Use 'energy_cost' instead")
 energy_depletion: float | None = None  # ✅ With loud warning
@@ -873,6 +895,7 @@ trainer = DemoRunner(universe.training)
 ```
 
 **Compilation checks**:
+
 - ✅ Structural: All required fields present
 - ✅ Type safety: `epsilon_decay` is float, not string
 - ✅ Range constraints: `epsilon_decay ∈ (0.0, 1.0)`
@@ -881,6 +904,7 @@ trainer = DemoRunner(universe.training)
 - ✅ Performance warnings: `epsilon_decay > 0.999` (too slow)
 
 **Not compilation checks** (those are runtime/empirical):
+
 - ❌ Whether epsilon=0.99 converges faster than 0.995 (empirical)
 - ❌ Whether 128 hidden units is "enough" (depends on task)
 - ❌ Whether agent learns optimal policy (that's the experiment!)
@@ -944,6 +968,7 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 ## Estimated Effort: 7-12 hours
 
 **Breakdown**:
+
 - Phase 1 (TrainingConfig): 2-4h
 - Phase 2 (EnvironmentConfig): 2-3h
 - Phase 3 (Curriculum/Population): 2-3h
@@ -961,6 +986,7 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 **None** - This is a foundational task.
 
 **Enables**:
+
 - TASK-002A (Spatial Substrates) - Needs SubstrateConfig
 - TASK-002B (Action Space) - Needs ActionConfig
 - TASK-004A (Compiler) - Needs core schemas
@@ -992,6 +1018,7 @@ Start with Phase 1 (TrainingConfig) - it's where schema drift is most painful (e
 **File**: `configs/L1_full_observability/training.yaml`
 
 **Problem**: Entire epsilon-greedy section missing, fell back to hardcoded defaults in `runner.py`:
+
 ```python
 epsilon_start = training_cfg.get("epsilon_start", 1.0)  # Silent default!
 epsilon_decay = training_cfg.get("epsilon_decay", 0.995)
@@ -1000,6 +1027,7 @@ epsilon_decay = training_cfg.get("epsilon_decay", 0.995)
 **Impact**: L1 used 0.995 decay by luck, but no way to know from config file what values were actually used.
 
 **With DTO**: Would have either:
+
 - Rejected config: "Missing required field 'epsilon_decay'"
 - Or been explicit: "Using default epsilon_decay=0.995"
 
@@ -1008,6 +1036,7 @@ epsilon_decay = training_cfg.get("epsilon_decay", 0.995)
 **File**: `configs/L0_minimal/training.yaml`
 
 **Problem**:
+
 ```yaml
 # Key features:
 # - Tiny 5×5 grid (25 cells total)
@@ -1024,6 +1053,7 @@ environment:
 **File**: `configs/L0_minimal/training.yaml`
 
 **Problem**:
+
 ```yaml
 epsilon_decay: 0.998  # Decay per episode
 ```
@@ -1033,6 +1063,7 @@ At episode 100 (target learning point), ε still 0.82 (82% exploration!). Agent 
 **Impact**: Agent takes 1150 episodes to reach ε=0.1, way beyond "should learn in <100 episodes" comment.
 
 **With DTO**: Custom validator catches this:
+
 ```python
 @model_validator(mode="after")
 def validate_epsilon_decay(self) -> "TrainingConfig":

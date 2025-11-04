@@ -416,6 +416,7 @@ Defines the simulation runtime envelope:
 * What's the curriculum schedule (for example: "start solo, introduce rival agent at tick 10k")?
 
 ### 3.2 universe_as_code.yaml
+
 Defines the world configuration for the run, including:
 
 * the meters/bars (energy, health, money, mood, etc),

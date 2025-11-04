@@ -13,6 +13,7 @@
 ### Current Architecture (Problems)
 
 **Ad-Hoc Config Loading**:
+
 ```python
 # In VectorizedHamletEnv.__init__()
 
@@ -80,6 +81,7 @@ self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 **"Compile Once, Execute Many Times"**
 
 Build a **multi-pass compiler** that:
+
 1. Loads all configs
 2. Validates individual files
 3. Resolves cross-file references
@@ -91,6 +93,7 @@ Build a **multi-pass compiler** that:
 ### Architecture Changes
 
 **Before** (current):
+
 ```
 VectorizedHamletEnv.__init__()
     ↓
@@ -102,6 +105,7 @@ Start training (discover errors during execution)
 ```
 
 **After** (target):
+
 ```
 UniverseCompiler.compile()
     ↓
@@ -247,6 +251,7 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
 ```
 
 **Success Criteria**:
+
 - [ ] Compiler loads all YAML files
 - [ ] File not found raises clear error
 - [ ] Malformed YAML raises parse error
@@ -466,6 +471,7 @@ def _stage_3_resolve_references(
 ```
 
 **Success Criteria**:
+
 - [ ] Symbol table registers all meters and affordances
 - [ ] Duplicate names detected and reported
 - [ ] Dangling references caught with clear error messages
@@ -546,6 +552,7 @@ class CompilationErrorCollector:
 ```
 
 **Success Criteria**:
+
 - [ ] Error collector accumulates multiple errors
 - [ ] check_and_raise formats errors clearly
 - [ ] Error messages include stage, error list, and hints
@@ -763,6 +770,7 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
 ```
 
 **Success Criteria**:
+
 - [ ] Spatial validation catches over-crowded grids
 - [ ] Economic validation warns on poverty traps
 - [ ] Circularity detection catches cascade cycles
@@ -929,6 +937,7 @@ def _stage_5_compute_metadata(
 ```
 
 **Success Criteria**:
+
 - [ ] Metadata has correct meter_count for variable-size configs
 - [ ] Observation dim scales with meter_count
 - [ ] Observation dim correct for partial observability
@@ -1126,6 +1135,7 @@ def _stage_7_emit_compiled_universe(
 ```
 
 **Success Criteria**:
+
 - [ ] Base depletion tensor has correct shape [meter_count]
 - [ ] Cascade data sorted by target index
 - [ ] Action mask table has correct shape [24, num_affordances]
@@ -1253,6 +1263,7 @@ class UniverseCompiler:
 ```
 
 **Success Criteria**:
+
 - [ ] First compile saves cache
 - [ ] Second compile loads from cache (10-100x faster)
 - [ ] Cache invalidated when YAML modified
@@ -1340,6 +1351,7 @@ env = VectorizedHamletEnv(
 ```
 
 **Success Criteria**:
+
 - [ ] Environment accepts compiled universe
 - [ ] Environment reads metadata correctly
 - [ ] Environment behavior unchanged (integration test)
@@ -1352,12 +1364,14 @@ env = VectorizedHamletEnv(
 ### 1. Fail-Fast Error Detection
 
 **Before**: Errors discovered during training (10 minutes in)
+
 ```
 Training episode 1234...
 Traceback: KeyError: 'moodiness' not found in meters
 ```
 
 **After**: Errors caught at compilation (before training starts)
+
 ```
 Universe Compilation Failed (Stage 3: Reference Resolution)
 
@@ -1373,6 +1387,7 @@ Hints:
 ### 2. Clear Error Messages
 
 All errors collected and reported with:
+
 - **Context**: Which stage failed? Which file? Which line?
 - **Specificity**: What was expected vs what was found?
 - **Actionability**: How to fix it? What are valid alternatives?
@@ -1400,6 +1415,7 @@ All errors collected and reported with:
 ### 5. Metadata Available
 
 Environment no longer computes obs_dim, action_dim:
+
 ```python
 # Before (hardcoded)
 obs_dim = grid_size * grid_size + 8 + affordances + extras
@@ -1420,6 +1436,7 @@ obs_dim = universe.metadata.observation_dim
 ### 7. Cross-File Validation
 
 Catches errors across multiple files:
+
 - Dangling meter references
 - Spatial impossibility (too many affordances)
 - Economic imbalance (costs > income)
@@ -1437,17 +1454,20 @@ Catches errors across multiple files:
 ### Recommended (for full benefit)
 
 **TASK-003 (UAC Core DTOs)**:
+
 - Provides core configuration DTOs (TrainingConfig, EnvironmentConfig, etc.)
 - Compiler uses these DTOs for type-safe config loading
 - Without it, compiler loads raw YAML dicts (less safe)
 - With it, configs are validated at load time
 
 **TASK-004B (UAC Capabilities)** (optional):
+
 - Provides capability system DTOs (multi_tick, cooldown, etc.)
 - Compiler validates capability composition rules
 - Optional - compiler works without it for basic configs
 
 **TASK-005 (Variable-Size Meter System)**:
+
 - Enables dynamic meter_count in metadata
 - Without it, meter_count is always 8 (but compiler still works)
 - With it, observation_dim scales correctly for 4-meter, 12-meter universes
@@ -1455,6 +1475,7 @@ Catches errors across multiple files:
 ### Enables
 
 All future UAC work depends on robust compilation:
+
 - **TASK-002A** (Spatial Substrates): Compiler validates substrate configs
 - **TASK-002A** (Action Space): Compiler validates action-substrate compatibility
 - **TASK-005** (BRAIN_AS_CODE): Compiler provides obs_dim, action_dim metadata
@@ -1509,6 +1530,7 @@ All future UAC work depends on robust compilation:
 ### Breakdown
 
 **Core Implementation (Original Scope)**:
+
 - **Phase 1** (Core Compiler): 11-16 hours
 - **Phase 2** (Symbol Table): 4-6 hours
 - **Phase 3** (Error Collection): 4-6 hours
@@ -1520,6 +1542,7 @@ All future UAC work depends on robust compilation:
 - **Subtotal (Original)**: 37-54 hours
 
 **Research Integration Extensions**:
+
 - **Phase 4 Extension** (Capability system validation): +6-8 hours
   - Affordance availability validation (Gap 1)
   - Action cost meter references (Gap 2)
@@ -1543,6 +1566,7 @@ All future UAC work depends on robust compilation:
 **Risk**: Refactoring VectorizedHamletEnv breaks existing training scripts.
 
 **Mitigation**: Dual API (temporary)
+
 ```python
 class VectorizedHamletEnv:
     def __init__(
@@ -1560,6 +1584,7 @@ class VectorizedHamletEnv:
 ```
 
 **Timeline**:
+
 - v1.0: Both APIs work (new recommended, old deprecated)
 - v1.5: Old API logs error
 - v2.0: Old API removed
@@ -1571,6 +1596,7 @@ class VectorizedHamletEnv:
 **Risk**: Corrupted cache file causes crashes.
 
 **Mitigation**: Graceful degradation
+
 ```python
 try:
     return CompiledUniverse.load_from_cache(cache_path)
@@ -1589,6 +1615,7 @@ except Exception as e:
 **Risk**: Compilation overhead slows down training startup.
 
 **Mitigation**:
+
 - Benchmarking + performance budget (<100ms without cache)
 - Caching (1-5ms with cache)
 - Can compile offline: `python -m townlet.compiler compile configs/L1`
@@ -1603,6 +1630,7 @@ except Exception as e:
 **Risk**: Missing some validation rules, errors slip through.
 
 **Mitigation**:
+
 - Start with high-value validations (Stage 3-4)
 - Add more validations incrementally
 - Collect production errors, add validation rules
@@ -1635,11 +1663,13 @@ except Exception as e:
 Create test config packs in `tests/test_townlet/fixtures/`:
 
 **Valid Configs**:
+
 - `valid_8meter/` - Standard 8-meter universe (should compile)
 - `valid_4meter/` - 4-meter tutorial universe (should compile)
 - `valid_12meter/` - 12-meter complex universe (should compile)
 
 **Invalid Configs**:
+
 - `invalid_dangling_ref/` - Cascade references non-existent meter (should fail Stage 3)
 - `invalid_spatial/` - Too many affordances for grid size (should fail Stage 4)
 - `invalid_circular/` - Circular cascade dependency (should fail Stage 4)
@@ -1648,6 +1678,7 @@ Create test config packs in `tests/test_townlet/fixtures/`:
 - `invalid_malformed/` - Malformed YAML (should fail Stage 1)
 
 **Tests**:
+
 ```python
 def test_compile_valid_8meter():
     compiler = UniverseCompiler()
@@ -1794,6 +1825,7 @@ After implementation, update:
 ### 1. UNIVERSE_AS_CODE.md
 
 Add section on compilation:
+
 ```markdown
 ## Universe Compilation
 
@@ -1823,9 +1855,11 @@ env = VectorizedHamletEnv(universe=universe, num_agents=4)
 ### Caching
 
 Compilation is cached for fast subsequent loads:
+
 - First compile: ~50-100ms
 - Cached compile: ~1-5ms (10-100x speedup)
 - Cache invalidated automatically when YAML files modified
+
 ```
 
 ### 2. CLAUDE.md
@@ -1850,6 +1884,7 @@ compiler = UniverseCompiler()
 universe = compiler.compile("configs/L1_full_observability")
 env = VectorizedHamletEnv(universe=universe, num_agents=4)
 ```
+
 ```
 
 ### 3. Create New Documentation
@@ -1897,6 +1932,7 @@ python -m townlet.compiler validate configs/L1
 ### 4. Performance Optimization
 
 If compilation is slow (>100ms):
+
 - Profile each stage
 - Optimize bottlenecks
 - Consider parallel YAML loading
@@ -1914,6 +1950,7 @@ If compilation is slow (>100ms):
 **Universe compiler is the "bones" of UAC** - it must be robust before we worry about reward models or economic tuning.
 
 **Impact**:
+
 - ✅ Fail-fast error detection (catch errors before training)
 - ✅ Clear error messages (context, specificity, actionability, hints)
 - ✅ Fast startup (10-100x with cache)

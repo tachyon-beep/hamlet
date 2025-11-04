@@ -41,6 +41,7 @@ What alternative solutions or features have you considered? Why is your proposed
 **How does this help students learn RL?**
 
 Since HAMLET is a pedagogical project, explain how this feature contributes to the learning experience:
+
 - Does it create interesting failure modes?
 - Does it demonstrate RL concepts more clearly?
 - Does it enable new curriculum levels?
@@ -48,6 +49,7 @@ Since HAMLET is a pedagogical project, explain how this feature contributes to t
 ## Implementation Details (optional)
 
 If you have ideas about implementation:
+
 - Which files/modules would be affected?
 - Are there any dependencies or prerequisites?
 - Would this be a breaking change?

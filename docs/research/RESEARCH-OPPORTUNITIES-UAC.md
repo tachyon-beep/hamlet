@@ -5,6 +5,7 @@
 After analyzing UNIVERSE_AS_CODE.md, I've identified **4 high-priority research topics** that would benefit from deep investigation before implementation, rather than "yolo with TDD". These areas involve complex design decisions with multiple viable approaches, unclear best practices, or pedagogically critical tradeoffs.
 
 **HIGH PRIORITY** (research now):
+
 1. **End-of-Life Reward Model Design** - How to score a simulated life (alignment in miniature)
 2. **Economic Balance & Tuning Methodology** - Systematic approach to creating pedagogically valuable "teaching packs"
 
@@ -33,6 +34,7 @@ From the document:
 **Why This Needs Research**
 
 This is **alignment in miniature**. The reward function determines what agents learn to value. Getting this wrong means:
+
 - Agents might learn to maximize survival steps while miserable and broke (survival hacking)
 - Agents might learn to die early if retirement is "too hard" to reach
 - Different worlds (austerity, boom) may need different reward weightings
@@ -129,6 +131,7 @@ reward_model:
 **Expected Output**
 
 A research document `RESEARCH-REWARD-MODEL-DESIGN.md` containing:
+
 1. Literature review summary (utility functions, QoL metrics, RL reward shaping)
 2. Design space taxonomy (additive, multiplicative, threshold, hierarchical)
 3. Candidate reward functions (5-10 options with mathematical properties)
@@ -151,13 +154,15 @@ UNIVERSE_AS_CODE mentions creating "teaching packs" for different economic condi
 
 From the document:
 > "Some obvious examples:
-> * **Austerity** — sleep and food become cheaper while labour income drops and healthcare costs increase. Survival is possible but financially precarious.
-> * **Boom** — wages rise while rest and hygiene become more expensive. Agents can cover immediate needs but pay heavily to maintain them.
-> * **Nightlife** — social outlets operate late into the night, whereas medical services may have limited hours."
+>
+> - **Austerity** — sleep and food become cheaper while labour income drops and healthcare costs increase. Survival is possible but financially precarious.
+> - **Boom** — wages rise while rest and hygiene become more expensive. Agents can cover immediate needs but pay heavily to maintain them.
+> - **Nightlife** — social outlets operate late into the night, whereas medical services may have limited hours."
 
 **Why This Needs Research**
 
 Creating balanced, pedagogically valuable world variants is currently **ad hoc guesswork**. Without a systematic approach:
+
 - "Austerity" might be unwinnable or trivial
 - "Boom" might feel the same as baseline
 - Students don't learn meaningful lessons about economic systems
@@ -274,6 +279,7 @@ economic_profile:
 **Expected Output**
 
 A research document `RESEARCH-ECONOMIC-BALANCE-METHODOLOGY.md` containing:
+
 1. Economic modeling fundamentals (break-even analysis, lifecycle budgets)
 2. Sensitivity analysis (parameter impact on survival metrics)
 3. Balance metrics taxonomy (survival rate, wealth accumulation, meter stability)
@@ -300,6 +306,7 @@ From the document:
 > "`lifecycle` increases slightly each tick. Adverse conditions accelerate the increase (e.g., starvation, illness, miserable mood). If `lifecycle` reaches 1.0 before pivotal meters reach zero, the agent retires."
 
 **Missing Details**:
+
 - What's the base increase rate per tick?
 - Which "adverse conditions" accelerate it and by how much?
 - Does positive fitness slow aging? Does good mood slow aging?
@@ -309,6 +316,7 @@ From the document:
 **Why This Needs Research**
 
 Lifecycle mechanics affect:
+
 - Episode length (how long training episodes last)
 - Survival vs quality-of-life tradeoffs (rushing to retirement vs living well)
 - Emergency response incentives (high lifecycle = less time to recover from crises)
@@ -356,6 +364,7 @@ Lifecycle mechanics affect:
 **Expected Output**
 
 A brief research note `RESEARCH-LIFECYCLE-MECHANICS.md` containing:
+
 1. Mortality risk model review (actuarial + biological)
 2. Candidate lifecycle formulas (3-5 options)
 3. Expected retirement age under each formula
@@ -380,6 +389,7 @@ From the document:
 **Why This Needs Research**
 
 Cascades are the "physics" of the universe. They determine:
+
 - How quickly neglect becomes dangerous
 - Which survival strategies are viable
 - Whether death spirals are escapable or inevitable
@@ -429,6 +439,7 @@ Cascades are the "physics" of the universe. They determine:
 **Expected Output**
 
 A research note `RESEARCH-CASCADE-DESIGN-PATTERNS.md` containing:
+
 1. Cascade pattern taxonomy (linear, threshold, exponential, dampened)
 2. Feedback loop analysis (positive, negative, coupled)
 3. Design principles (when to use which pattern)
@@ -472,6 +483,7 @@ A research note `RESEARCH-CASCADE-DESIGN-PATTERNS.md` containing:
 ## Recommended Research Priority
 
 **Phase 1** (Do now - highest pedagogical impact):
+
 1. **End-of-Life Reward Model Design** (8-12 hours)
 2. **Economic Balance & Tuning Methodology** (10-15 hours)
 
@@ -494,6 +506,7 @@ A research note `RESEARCH-CASCADE-DESIGN-PATTERNS.md` containing:
 ## Success Criteria
 
 For each research topic, success means:
+
 1. **Clear design space mapping** - Understand the options and tradeoffs
 2. **Recommended defaults** - Concrete values/formulas to implement
 3. **Configuration schema** - YAML structure for operators to tune

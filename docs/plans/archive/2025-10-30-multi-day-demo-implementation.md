@@ -11,6 +11,7 @@
 **Estimated Duration:** 2-3 days implementation
 
 **Exit Criteria:**
+
 - [ ] demo_runner.py runs 10K episodes with checkpointing
 - [ ] SQLite database captures all metrics
 - [ ] viz_server.py streams to browsers
@@ -24,17 +25,20 @@
 ## Task 1: SQLite Schema and Database Helper
 
 **Files:**
+
 - Create: `src/hamlet/demo/database.py`
 - Create: `tests/test_demo/test_database.py`
 
 **Step 1: Write the failing test**
 
 Create `tests/test_demo/__init__.py`:
+
 ```python
 """Tests for multi-day demo infrastructure."""
 ```
 
 Create `tests/test_demo/test_database.py`:
+
 ```python
 """Tests for demo database operations."""
 
@@ -118,11 +122,13 @@ Expected: FAIL with "No module named 'hamlet.demo.database'"
 **Step 3: Write minimal implementation**
 
 Create `src/hamlet/demo/__init__.py`:
+
 ```python
 """Multi-day demonstration infrastructure."""
 ```
 
 Create `src/hamlet/demo/database.py`:
+
 ```python
 """SQLite database for multi-day demo state management."""
 
@@ -294,6 +300,7 @@ git commit -m "feat(demo): add SQLite database schema and helper"
 ## Task 2: Demo Runner with Checkpointing
 
 **Files:**
+
 - Create: `src/hamlet/demo/runner.py`
 - Create: `tests/test_demo/test_runner.py`
 - Modify: `configs/townlet/sparse_adaptive.yaml` (add demo-specific params)
@@ -301,6 +308,7 @@ git commit -m "feat(demo): add SQLite database schema and helper"
 **Step 1: Write the failing test**
 
 Create `tests/test_demo/test_runner.py`:
+
 ```python
 """Tests for demo runner."""
 
@@ -373,6 +381,7 @@ Expected: FAIL with "No module named 'hamlet.demo.runner'"
 **Step 3: Write minimal implementation**
 
 Create `src/hamlet/demo/runner.py`:
+
 ```python
 """Demo runner for multi-day training."""
 
@@ -658,6 +667,7 @@ git commit -m "feat(demo): add demo runner with checkpointing"
 ## Task 3: Generalization Test (Affordance Randomization)
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py` (add randomize_affordance_positions method)
 - Modify: `src/hamlet/demo/runner.py` (add generalization test at episode 5000)
 - Create: `tests/test_environment/test_affordance_randomization.py`
@@ -665,6 +675,7 @@ git commit -m "feat(demo): add demo runner with checkpointing"
 **Step 1: Write the failing test**
 
 Create `tests/test_environment/test_affordance_randomization.py`:
+
 ```python
 """Tests for affordance randomization (generalization test)."""
 
@@ -815,6 +826,7 @@ git commit -m "feat(demo): add affordance randomization for generalization test"
 ## Task 4: Systemd Service Configuration
 
 **Files:**
+
 - Create: `deploy/hamlet-demo.service`
 - Create: `deploy/install-service.sh`
 - Create: `docs/DEPLOYMENT.md`
@@ -822,6 +834,7 @@ git commit -m "feat(demo): add affordance randomization for generalization test"
 **Step 1: Create systemd service file**
 
 Create `deploy/hamlet-demo.service`:
+
 ```ini
 [Unit]
 Description=Hamlet Multi-Day Demo Training
@@ -849,6 +862,7 @@ WantedBy=multi-user.target
 **Step 2: Create installation script**
 
 Create `deploy/install-service.sh`:
+
 ```bash
 #!/bin/bash
 set -e
@@ -903,6 +917,7 @@ echo "  sudo systemctl enable hamlet-demo"
 **Step 3: Create deployment documentation**
 
 Create `docs/DEPLOYMENT.md`:
+
 ```markdown
 # Multi-Day Demo Deployment Guide
 
@@ -1010,6 +1025,7 @@ git commit -m "feat(deploy): add systemd service and deployment docs"
 ## Task 5: Visualization Server (Streaming from SQLite)
 
 **Files:**
+
 - Create: `src/hamlet/demo/viz_server.py`
 - Modify: `src/hamlet/web/websocket.py` (extend for demo)
 - Create: `tests/test_demo/test_viz_server.py`
@@ -1019,6 +1035,7 @@ git commit -m "feat(deploy): add systemd service and deployment docs"
 **Step 1: Create viz server**
 
 Create `src/hamlet/demo/viz_server.py`:
+
 ```python
 """Visualization server for multi-day demo."""
 
@@ -1175,6 +1192,7 @@ git commit -m "feat(demo): add visualization server streaming from SQLite"
 ## Task 6: Snapshot Daemon (Screenshots, GIFs, CSVs)
 
 **Files:**
+
 - Create: `src/hamlet/demo/snapshot_daemon.py`
 
 **Note:** This is primarily integration code, light on TDD.
@@ -1182,6 +1200,7 @@ git commit -m "feat(demo): add visualization server streaming from SQLite"
 **Step 1: Create snapshot daemon**
 
 Create `src/hamlet/demo/snapshot_daemon.py`:
+
 ```python
 """Snapshot daemon for capturing demo visualizations."""
 
@@ -1368,12 +1387,14 @@ git commit -m "feat(demo): add snapshot daemon for screenshots/GIFs/CSVs"
 ## Task 7: Frontend AffordanceGraph Component
 
 **Files:**
+
 - Create: `frontend/src/components/AffordanceGraph.vue`
 - Modify: `frontend/src/App.vue` (integrate component)
 
 **Step 1: Create AffordanceGraph component**
 
 Create `frontend/src/components/AffordanceGraph.vue`:
+
 ```vue
 <template>
   <div class="affordance-graph">
@@ -1589,11 +1610,13 @@ git commit -m "feat(viz): add affordance transition graph component"
 ## Task 8: End-to-End Integration Test
 
 **Files:**
+
 - Create: `tests/test_demo/test_integration.py`
 
 **Step 1: Write integration test**
 
 Create `tests/test_demo/test_integration.py`:
+
 ```python
 """End-to-end integration test for multi-day demo."""
 
@@ -1703,6 +1726,7 @@ rm -rf demo_test.db checkpoints_test/
 ```
 
 **Exit Criteria Checklist:**
+
 - [ ] All unit tests pass (database, runner, affordance randomization)
 - [ ] Integration test completes 100 episodes successfully
 - [ ] Checkpoints save and load correctly
@@ -1721,11 +1745,13 @@ Plan saved to: `docs/plans/2025-10-30-multi-day-demo-implementation.md`
 **Two execution options:**
 
 **1. Subagent-Driven (this session)**
+
 - I dispatch fresh subagent per task
 - Code review after each task
 - Fast iteration, same session
 
 **2. Parallel Session (separate)**
+
 - Open new session with executing-plans
 - Batch execution with checkpoints
 - Good for long-running implementation

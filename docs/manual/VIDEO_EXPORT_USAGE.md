@@ -46,6 +46,7 @@ python -m townlet.recording export <episode_id> \
 ```
 
 **Arguments**:
+
 - `episode_id`: Episode ID to export (required)
 - `--database`: Path to demo database (required)
 - `--recordings`: Base directory for recordings (required)
@@ -75,6 +76,7 @@ python -m townlet.recording batch \
 ```
 
 **Filter Arguments**:
+
 - `--stage`: Filter by curriculum stage (e.g., 2)
 - `--reason`: Filter by recording reason (e.g., "periodic_100")
 - `--min-reward`: Minimum reward threshold
@@ -82,6 +84,7 @@ python -m townlet.recording batch \
 - `--limit`: Maximum number of videos to export (default: 100)
 
 **Other Arguments**: Same as single export, plus:
+
 - `--verbose` / `-v`: Enable verbose logging
 
 ## YouTube Optimization
@@ -89,6 +92,7 @@ python -m townlet.recording batch \
 ### Recommended Settings
 
 **For 1080p uploads (HD)**:
+
 ```bash
 python -m townlet.recording export 500 \
   --database demo.db \
@@ -97,11 +101,13 @@ python -m townlet.recording export 500 \
   --dpi 120 \
   --fps 60
 ```
+
 - Resolution: 1920×1080
 - File size: ~10-30 MB per 100 steps
 - Quality: Excellent for YouTube
 
 **For 1440p uploads (2K)**:
+
 ```bash
 python -m townlet.recording export 500 \
   --database demo.db \
@@ -110,11 +116,13 @@ python -m townlet.recording export 500 \
   --dpi 150 \
   --fps 60
 ```
+
 - Resolution: 2400×1350
 - File size: ~20-50 MB per 100 steps
 - Quality: Premium YouTube quality
 
 **For fast prototyping**:
+
 ```bash
 python -m townlet.recording export 500 \
   --database demo.db \
@@ -123,6 +131,7 @@ python -m townlet.recording export 500 \
   --dpi 80 \
   --fps 30
 ```
+
 - Resolution: 1280×720
 - File size: ~5-15 MB per 100 steps
 - Quality: Good for quick review
@@ -130,22 +139,28 @@ python -m townlet.recording export 500 \
 ### Speed Control
 
 **Slow motion (0.5x)**:
+
 ```bash
 --speed 0.5 --fps 30
 ```
+
 - Effective playback: 15 FPS
 - Good for detailed analysis
 
 **Normal speed (1.0x)**:
+
 ```bash
 --speed 1.0 --fps 30
 ```
+
 - Standard playback
 
 **Fast forward (2.0x)**:
+
 ```bash
 --speed 2.0 --fps 30
 ```
+
 - Effective playback: 60 FPS
 - Good for long episodes
 
@@ -210,12 +225,14 @@ python -m townlet.recording batch \
 The exported videos include:
 
 ### Grid View (Left Panel)
+
 - 8×8 environment grid
 - Color-coded affordances (Bed, Job, Gym, etc.)
 - Agent position with action arrows
 - Movement visualization
 
 ### Meters Panel (Top Right)
+
 - 8 agent meters with color-coded bars:
   - Energy (yellow)
   - Hygiene (blue)
@@ -228,6 +245,7 @@ The exported videos include:
 - Percentage values
 
 ### Info Panel (Top Right)
+
 - Episode ID
 - Curriculum stage
 - Current step / survival steps
@@ -239,6 +257,7 @@ The exported videos include:
   - Interaction progress
 
 ### Q-Values Panel (Bottom Right)
+
 - Bar chart of action Q-values
 - Chosen action highlighted in green
 - Value labels on bars
@@ -246,6 +265,7 @@ The exported videos include:
 ## Technical Details
 
 ### Video Format
+
 - **Codec**: H.264 (libx264)
 - **Pixel format**: yuv420p (YouTube-compatible)
 - **CRF**: 18 (high quality, 0=lossless, 23=default, 51=worst)
@@ -253,18 +273,22 @@ The exported videos include:
 - **Container**: MP4
 
 ### Frame Generation
+
 - **Backend**: matplotlib with Agg (non-interactive)
 - **Aspect ratio**: 16:9 (YouTube standard)
 - **Color scheme**: Dark theme by default
 - **Font**: System default with bold for emphasis
 
 ### Performance
+
 - **Rendering**: ~0.1-0.2 seconds per frame
 - **Encoding**: ~1-2 seconds per 100 frames (depends on settings)
 - **Total time**: ~30-60 seconds for 100-step episode at 1080p
 
 ### Requirements
+
 - **ffmpeg**: Must be installed on system
+
   ```bash
   # Ubuntu/Debian
   sudo apt-get install ffmpeg
@@ -272,6 +296,7 @@ The exported videos include:
   # macOS
   brew install ffmpeg
   ```
+
 - **Python packages**: Automatically installed with townlet
   - matplotlib
   - numpy
@@ -282,6 +307,7 @@ The exported videos include:
 ### "ffmpeg not found"
 
 Install ffmpeg on your system:
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get install ffmpeg
@@ -296,6 +322,7 @@ ffmpeg -version
 ### "Recording not found"
 
 Episode wasn't recorded. List available recordings:
+
 ```bash
 # Start inference server with replay support
 python -m townlet.demo.live_inference \
@@ -309,11 +336,13 @@ Then check available episodes in frontend or query database directly.
 ### Video quality is poor
 
 Increase DPI:
+
 ```bash
 --dpi 150  # 2400×1350 resolution
 ```
 
 Or increase CRF quality (edit video_export.py line 138):
+
 ```python
 "-crf", "15",  # Higher quality (lower CRF = better quality)
 ```
@@ -321,11 +350,13 @@ Or increase CRF quality (edit video_export.py line 138):
 ### Export is too slow
 
 Reduce DPI for faster rendering:
+
 ```bash
 --dpi 80  # 1280×720 resolution
 ```
 
 Or use faster ffmpeg preset (edit video_export.py line 142):
+
 ```python
 "-preset", "faster",  # Faster encoding
 ```
@@ -333,11 +364,13 @@ Or use faster ffmpeg preset (edit video_export.py line 142):
 ### File sizes too large
 
 Increase CRF (lower quality, smaller files):
+
 ```python
 "-crf", "23",  # Default quality (smaller files)
 ```
 
 Or reduce FPS:
+
 ```bash
 --fps 24  # Cinematic frame rate (smaller files)
 ```
@@ -347,6 +380,7 @@ Or reduce FPS:
 ### 1. Record Episodes During Training
 
 Make sure recording is enabled in your config:
+
 ```yaml
 recording:
   enabled: true
@@ -386,6 +420,7 @@ python -m townlet.recording batch \
 ### 4. Create Compilation Videos
 
 Combine multiple episodes using ffmpeg:
+
 ```bash
 # Create file list
 for f in videos/stream_content/*.mp4; do

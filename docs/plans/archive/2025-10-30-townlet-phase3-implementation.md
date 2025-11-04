@@ -11,6 +11,7 @@
 **Estimated Duration:** 5-7 days
 
 **Exit Criteria:**
+
 - [ ] ReplayBuffer stores and samples dual rewards correctly
 - [ ] RND networks compute novelty signal (high for new, low for familiar states)
 - [ ] Adaptive annealing reduces intrinsic weight based on variance
@@ -24,6 +25,7 @@
 ## Task 1: ReplayBuffer with Dual Rewards
 
 **Files:**
+
 - Create: `src/townlet/training/replay_buffer.py`
 - Create: `tests/test_townlet/test_training/test_replay_buffer.py`
 
@@ -262,6 +264,7 @@ git commit -m "feat(training): add ReplayBuffer with dual reward storage"
 ## Task 2: RNDNetwork Architecture
 
 **Files:**
+
 - Create: `src/townlet/exploration/rnd.py` (partial)
 - Create: `tests/test_townlet/test_exploration/test_rnd.py`
 
@@ -541,6 +544,7 @@ git commit -m "feat(exploration): add RNDNetwork architecture and RNDExploration
 ## Task 3: RND Predictor Training & Novelty Decrease Test
 
 **Files:**
+
 - Modify: `src/townlet/exploration/rnd.py` (already complete from Task 2)
 - Modify: `tests/test_townlet/test_exploration/test_rnd.py`
 
@@ -629,6 +633,7 @@ git commit -m "test(exploration): add RND novelty decrease and training tests"
 ## Task 4: AdaptiveIntrinsicExploration with Annealing
 
 **Files:**
+
 - Create: `src/townlet/exploration/adaptive_intrinsic.py`
 - Create: `tests/test_townlet/test_exploration/test_adaptive_intrinsic.py`
 
@@ -923,6 +928,7 @@ git commit -m "feat(exploration): add AdaptiveIntrinsicExploration with variance
 ## Task 5: VectorizedPopulation Integration (ReplayBuffer + RND)
 
 **Files:**
+
 - Modify: `src/townlet/population/vectorized.py`
 - Modify: `tests/test_townlet/test_integration.py`
 
@@ -1167,6 +1173,7 @@ git commit -m "feat(population): integrate ReplayBuffer and RND training in Vect
 ## Task 6: Visualization Components (Frontend)
 
 **Files:**
+
 - Create: `frontend/src/components/NoveltyHeatmap.vue`
 - Create: `frontend/src/components/IntrinsicRewardChart.vue`
 - Create: `frontend/src/components/CurriculumTracker.vue`
@@ -1681,6 +1688,7 @@ git commit -m "feat(viz): add RND visualization components (novelty heatmap, rew
 ## Task 7: End-to-End Sparse Learning Test
 
 **Files:**
+
 - Create: `tests/test_townlet/test_sparse_learning.py`
 - Create: `configs/townlet/sparse_adaptive.yaml`
 
@@ -1965,6 +1973,7 @@ git commit -m "test(phase3): add end-to-end sparse learning tests and config"
 ## Task 8: Final Integration & Documentation Update
 
 **Files:**
+
 - Modify: `docs/townlet/PHASE3_VERIFICATION.md` (create new)
 - Modify: `README.md` or similar (update with Phase 3 info)
 
@@ -2017,11 +2026,13 @@ Total: 13 unit tests PASSED
 ```
 
 **Integration Tests:** ✅ PASS
+
 ```bash
 tests/test_townlet/test_integration.py::test_integration_with_adaptive_intrinsic_and_replay PASSED
 ```
 
 **End-to-End Tests:** ✅ PASS (slow tests)
+
 ```bash
 tests/test_townlet/test_sparse_learning.py::test_sparse_learning_baseline_comparison PASSED
 tests/test_townlet/test_sparse_learning.py::test_sparse_learning_with_intrinsic PASSED (10K episodes)
@@ -2030,17 +2041,20 @@ tests/test_townlet/test_sparse_learning.py::test_sparse_learning_with_intrinsic 
 ### Performance Metrics
 
 **Sparse Learning Results:**
+
 - Baseline (epsilon-greedy): ~50 steps avg survival
 - Adaptive intrinsic: ~120 steps avg survival
 - **Improvement: 2.4x better** ✅
 
 **Intrinsic Weight Annealing:**
+
 - Start: 1.0
 - After 5000 episodes: ~0.3
 - After 10000 episodes: ~0.05
 - **Successful transition to sparse rewards** ✅
 
 **Visualization:**
+
 - Novelty heatmap transitions red → blue over episodes ✅
 - Intrinsic reward line decreases while extrinsic improves ✅
 - Curriculum tracker shows stage progression ✅
@@ -2051,18 +2065,21 @@ tests/test_townlet/test_sparse_learning.py::test_sparse_learning_with_intrinsic 
 ## Components Delivered
 
 ### Core Implementation
+
 - ✅ `src/townlet/training/replay_buffer.py` - Dual reward storage
 - ✅ `src/townlet/exploration/rnd.py` - RND novelty detection
 - ✅ `src/townlet/exploration/adaptive_intrinsic.py` - Variance-based annealing
 - ✅ `src/townlet/population/vectorized.py` - Integrated training loop
 
 ### Visualization
+
 - ✅ `frontend/src/components/NoveltyHeatmap.vue` - Real-time novelty overlay
 - ✅ `frontend/src/components/IntrinsicRewardChart.vue` - Dual reward streams
 - ✅ `frontend/src/components/CurriculumTracker.vue` - Stage progression
 - ✅ `frontend/src/components/SurvivalTrendChart.vue` - Long-term trends
 
 ### Configuration & Testing
+
 - ✅ `configs/townlet/sparse_adaptive.yaml` - Full config
 - ✅ `tests/test_townlet/test_sparse_learning.py` - End-to-end validation
 
@@ -2071,11 +2088,13 @@ tests/test_townlet/test_sparse_learning.py::test_sparse_learning_with_intrinsic 
 ## Known Limitations & Future Work
 
 **Current Limitations:**
+
 - Q-network training is simplified (no target network, no double DQN)
 - RND predictor trains on CPU observations (could optimize for GPU)
 - Visualization requires manual WebSocket message updates
 
 **Phase 4 (Next):**
+
 - Scale testing (n=1 → 10 agents)
 - Target network for Q-learning stability
 - Advanced DQN variants (Double DQN, Dueling, Rainbow)
@@ -2086,21 +2105,25 @@ tests/test_townlet/test_sparse_learning.py::test_sparse_learning_with_intrinsic 
 ## Commands
 
 **Run all Phase 3 tests:**
+
 ```bash
 uv run pytest tests/test_townlet/test_training/ tests/test_townlet/test_exploration/ -v
 ```
 
 **Run integration tests:**
+
 ```bash
 uv run pytest tests/test_townlet/test_integration.py::test_integration_with_adaptive_intrinsic_and_replay -xvs
 ```
 
 **Run end-to-end (slow):**
+
 ```bash
 uv run pytest tests/test_townlet/test_sparse_learning.py -m slow -xvs
 ```
 
 **Start visualization demo:**
+
 ```bash
 # Terminal 1: Backend
 uv run python demo_visualization.py --config configs/townlet/sparse_adaptive.yaml
@@ -2108,6 +2131,7 @@ uv run python demo_visualization.py --config configs/townlet/sparse_adaptive.yam
 # Terminal 2: Frontend
 cd frontend && npm run dev
 ```
+
 ```
 
 **Step 2: Update main documentation**

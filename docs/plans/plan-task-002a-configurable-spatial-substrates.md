@@ -9,6 +9,7 @@
 **Tech Stack:** Python 3.11+, Pydantic 2.x, PyTorch, YAML, Abstract Base Classes
 
 **Research Findings Summary:**
+
 - Spatial substrate hardcoded in ~15 core files
 - Position tensors always `[num_agents, 2]` shape
 - Manhattan distance used in 4 locations
@@ -25,6 +26,7 @@
 ### Task 0.1: Verify Research Findings
 
 **Files:**
+
 - Read: `docs/research/2025-11-04-spatial-substrates-research.md`
 - Verify: Key files from research report
 
@@ -40,6 +42,7 @@ Expected: Research report exists with comprehensive findings
 **Step 2: Spot-check critical findings**
 
 Verify position shape hardcoding:
+
 ```bash
 grep -n "torch.zeros((self.num_agents, 2)" src/townlet/environment/vectorized_env.py
 ```
@@ -73,6 +76,7 @@ Create checklist of validated findings vs research claims.
 ### Task 1.1: Create Substrate Module Structure
 
 **Files:**
+
 - Create: `src/townlet/substrate/__init__.py`
 - Create: `src/townlet/substrate/base.py`
 
@@ -332,6 +336,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 ### Task 1.2: Implement Grid2DSubstrate (Current Behavior)
 
 **Files:**
+
 - Create: `src/townlet/substrate/grid2d.py`
 - Modify: `src/townlet/substrate/__init__.py`
 
@@ -340,6 +345,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 Modify: `tests/test_townlet/unit/test_substrate_base.py`
 
 Add to end of file:
+
 ```python
 from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -610,7 +616,7 @@ class Grid2DSubstrate(SpatialSubstrate):
         return distances == 0
 ```
 
-**Step 4: Update __init__.py**
+**Step 4: Update **init**.py**
 
 Modify: `src/townlet/substrate/__init__.py`
 
@@ -654,6 +660,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 ### Task 1.3: Implement AspatialSubstrate (State Machine)
 
 **Files:**
+
 - Create: `src/townlet/substrate/aspatial.py`
 - Modify: `src/townlet/substrate/__init__.py`
 
@@ -662,6 +669,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 Modify: `tests/test_townlet/unit/test_substrate_base.py`
 
 Add to end of file:
+
 ```python
 from townlet.substrate.aspatial import AspatialSubstrate
 
@@ -813,7 +821,7 @@ class AspatialSubstrate(SpatialSubstrate):
         return torch.ones(num_agents, dtype=torch.bool, device=agent_positions.device)
 ```
 
-**Step 4: Update __init__.py**
+**Step 4: Update **init**.py**
 
 Modify: `src/townlet/substrate/__init__.py`
 
@@ -861,6 +869,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 ### Task 2.1: Create Substrate Config Pydantic Schema
 
 **Files:**
+
 - Create: `src/townlet/substrate/config.py`
 
 **Step 1: Write test for substrate config schema**
@@ -1127,6 +1136,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 ### Task 2.2: Create Substrate Factory
 
 **Files:**
+
 - Create: `src/townlet/substrate/factory.py`
 - Modify: `src/townlet/substrate/__init__.py`
 
@@ -1135,6 +1145,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 Modify: `tests/test_townlet/unit/test_substrate_config.py`
 
 Add to end of file:
+
 ```python
 from townlet.substrate.factory import SubstrateFactory
 from townlet.substrate.grid2d import Grid2DSubstrate
@@ -1247,7 +1258,7 @@ class SubstrateFactory:
             raise ValueError(f"Unknown substrate type: {config.type}")
 ```
 
-**Step 4: Update __init__.py**
+**Step 4: Update **init**.py**
 
 Modify: `src/townlet/substrate/__init__.py`
 
@@ -1301,6 +1312,7 @@ Part of TASK-000 (Configurable Spatial Substrates)."
 ### Task 3.1: Add Substrate to VectorizedEnv (Load Only)
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 
 **Step 1: Write test for environment substrate loading**
@@ -1357,7 +1369,7 @@ uv run pytest tests/test_townlet/unit/test_env_substrate_loading.py::test_env_lo
 
 Expected: PASS (legacy behavior)
 
-**Step 3: Add substrate loading to VectorizedEnv.__init__**
+**Step 3: Add substrate loading to VectorizedEnv.**init****
 
 Modify: `src/townlet/environment/vectorized_env.py`
 
@@ -1446,18 +1458,21 @@ Due to the immense scope of this task (15-22 hours estimated, ~15 files to chang
 The complete plan would include:
 
 **Phase 4: Position Management Refactoring** (6 tasks)
+
 - Replace hardcoded `[num_agents, 2]` with `substrate.initialize_positions()`
 - Update movement logic to use `substrate.apply_movement()`
 - Replace distance calculations with `substrate.compute_distance()`
 - Update position serialization for checkpoints
 
 **Phase 5: Observation Builder Integration** (4 tasks)
+
 - Replace `grid_size * grid_size` with `substrate.get_observation_dim()`
 - Update full observability encoding
 - Update partial observability (POMDP) encoding
 - Handle aspatial observations (zero-dimensional)
 
 **Phase 6: Config Migration** (7 tasks)
+
 - Create substrate.yaml for L0_minimal (3×3 grid)
 - Create substrate.yaml for L0_5 through L3
 - Create substrate.yaml for templates
@@ -1466,6 +1481,7 @@ The complete plan would include:
 - Update training.yaml to reference substrate
 
 **Phase 7: Frontend Visualization** (5 tasks)
+
 - Create renderer interface
 - Implement Grid2DRenderer (current SVG logic)
 - Implement AspatialRenderer (text-based)
@@ -1473,6 +1489,7 @@ The complete plan would include:
 - Send substrate metadata via WebSocket
 
 **Phase 8: Testing & Verification** (10 tasks)
+
 - Parameterized tests for multiple substrates
 - Integration tests (training runs)
 - Checkpoint migration tool
@@ -1482,6 +1499,7 @@ The complete plan would include:
 **Total: ~40 tasks, 200+ steps, 15-22 hours**
 
 Would you like me to:
+
 1. **Continue writing the full plan** (will be very long, ~5000+ lines)
 2. **Save this partial plan and iterate** based on review feedback
 3. **Proceed with the saved partial plan** to the review phase

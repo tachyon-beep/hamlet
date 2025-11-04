@@ -11,6 +11,7 @@
 Successfully executed a staged planning process for TASK-002A using three specialized subagents with one iteration cycle:
 
 ### 1. Research Subagent (COMPLETED ✅)
+
 - **Task:** Comprehensive investigation of spatial substrate hardcoding
 - **Findings:**
   - Position tensors always `[num_agents, 2]` hardcoded
@@ -22,6 +23,7 @@ Successfully executed a staged planning process for TASK-002A using three specia
 - **Output:** `docs/research/2025-11-04-spatial-substrates-research.md`
 
 ### 2. Planning Subagent (COMPLETED ✅)
+
 - **Task:** Develop detailed, bite-sized implementation plan
 - **First Attempt:** Created comprehensive plan with 8 phases, 40+ tasks (15-22 hours)
   - **USER FEEDBACK:** "You've expanded the scope - there are already planned tasks for DTOs and schemas"
@@ -37,6 +39,7 @@ Successfully executed a staged planning process for TASK-002A using three specia
   - **Estimated Effort:** 6-8 hours (down from 15-22)
 
 ### 3. Review Subagent (COMPLETED ✅)
+
 - **Task:** Identify inconsistencies, gaps, and technical concerns
 - **Findings:** Plan is **production-ready** with minor revisions needed
 - **Scope Compliance:** Grade A - ZERO Pydantic mentions, proper deferrals
@@ -49,6 +52,7 @@ Successfully executed a staged planning process for TASK-002A using three specia
 - **Recommendation:** APPROVE WITH MINOR REVISIONS
 
 ### 4. Revision Cycle (COMPLETED ✅)
+
 - **Task:** Address 3 high-priority issues from review
 - **Changes Made:**
   1. ✅ Verified encode_positions() matches current ObservationBuilder (lines 127-137)
@@ -68,6 +72,7 @@ Successfully executed a staged planning process for TASK-002A using three specia
 ## Current Plan Status
 
 ### Strengths ✅
+
 - **Excellent scope discipline:** ZERO Pydantic/schema validation (correctly deferred to TASK-001)
 - **Clear phase structure:** 4 phases with 10 bite-sized tasks
 - **Proper backward compatibility:** Legacy fallback when no substrate.yaml
@@ -77,6 +82,7 @@ Successfully executed a staged planning process for TASK-002A using three specia
 - **Reduced effort:** 6-8 hours (down from 15-22 in first attempt)
 
 ### Known Limitations 🔍
+
 1. **LSTM networks not substrate-aware** - AspatialSubstrate only works with SimpleQNetwork
 2. **POMDP not substrate-aware** - Partial observability only works with Grid2D
 3. **Checkpoints not updated** - Affordance serialization still `[x, y]`
@@ -84,6 +90,7 @@ Successfully executed a staged planning process for TASK-002A using three specia
 These limitations are **acceptable** for TASK-002A - documented for future work.
 
 ### No Critical Gaps 🎯
+
 Review found **ZERO blockers**. All high-priority issues have been addressed.
 
 ---
@@ -91,6 +98,7 @@ Review found **ZERO blockers**. All high-priority issues have been addressed.
 ## Scope Boundaries
 
 ### ✅ IN SCOPE (TASK-002A)
+
 - Abstract SpatialSubstrate interface (7 methods)
 - Grid2DSubstrate implementation (replicates current behavior)
 - AspatialSubstrate implementation (demonstrates concept)
@@ -100,6 +108,7 @@ Review found **ZERO blockers**. All high-priority issues have been addressed.
 - One example config (L1)
 
 ### ❌ OUT OF SCOPE (Deferred to Later Tasks)
+
 - **TASK-001:** Full Pydantic schema validation, DTOs, no-defaults principle
 - **TASK-002B:** Action space compatibility, movement deltas from YAML
 - **TASK-003:** Universe compilation pipeline, cross-file validation
@@ -140,6 +149,7 @@ Review found **ZERO blockers**. All high-priority issues have been addressed.
 **Verdict:** The planning process has successfully produced a **production-ready** implementation plan with proper scope discipline.
 
 **Key Achievements:**
+
 1. ✅ Comprehensive research identifying all hardcoded spatial references
 2. ✅ Simplified plan focusing on "exposing the actual system" (user requirement)
 3. ✅ Proper scope boundaries - ZERO schema validation (deferred to TASK-001)
@@ -149,20 +159,26 @@ Review found **ZERO blockers**. All high-priority issues have been addressed.
 **Suggested Next Steps:**
 
 ### Option 1: Execute Plan (Recommended)
+
 Use `superpowers:subagent-driven-development` to implement task-by-task:
+
 - Dispatch fresh subagent per task
 - Code review between tasks (use `superpowers:code-reviewer`)
 - Fast iteration with quality gates
 - Stays in this session
 
 ### Option 2: Execute in Separate Session
+
 Use `superpowers:executing-plans` in clean worktree:
+
 - Batch execution with checkpoints
 - Less oversight but faster throughput
 - Requires separate git worktree
 
 ### Option 3: Manual Implementation
+
 Follow the plan manually:
+
 - 10 bite-sized tasks across 4 phases
 - Each task has clear steps and commit messages
 - 6-8 hours estimated effort
@@ -172,6 +188,7 @@ Follow the plan manually:
 ## Lessons Learned
 
 ### ✅ What Worked Well
+
 1. **Staged research → plan → review process** - Caught scope creep before implementation
 2. **User feedback during planning** - Corrected course early (Pydantic scope issue)
 3. **Review subagent validation** - Identified 3 high-priority issues that would have caused bugs
@@ -179,6 +196,7 @@ Follow the plan manually:
 5. **Clear scope boundaries** - Explicit deferrals to TASK-001, TASK-002B, TASK-003
 
 ### 📝 What Could Be Improved
+
 1. **Initial scope understanding** - First plan included schemas (should have been obvious from TASK-001 name)
 2. **Research completeness** - Review found affordance spawn position gap (minor, but catchable)
 

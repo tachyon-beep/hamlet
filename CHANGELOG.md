@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - **Repository Cleanup (Phase 1-3)**:
   - LICENSE file (MIT) with proper copyright notice
   - CHANGELOG.md (this file) following Keep a Changelog format
@@ -25,25 +26,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All missing dependencies added to pyproject.toml
 
 ### Changed
+
 - Replaced print() statements with proper logging in:
   - src/townlet/demo/live_inference.py
-  - src/townlet/recording/__main__.py
+  - src/townlet/recording/**main**.py
 - Updated pyproject.toml with all top-level dependencies
 
 ### Fixed
+
 - README affordance count (14, not 15) - CoffeeShop commented out
 - README test count (644+, not 387) with correct recording test count (73)
 - README entry point paths now correctly point to scripts/run_demo.py
 - Documentation paths now correctly point to docs/manual/ and docs/architecture/
 - .gitignore patterns:
-  - Changed __pycache__/ to **/__pycache__/ for recursive matching
-  - Consolidated database patterns (*.db, *.db-shm, *.db-wal, *.sqlite, *.sqlite3)
+  - Changed **pycache**/ to **/**pycache**/ for recursive matching
+  - Consolidated database patterns (*.db,*.db-shm, *.db-wal,*.sqlite, *.sqlite3)
   - Removed duplicate patterns
 - CI workflow now includes mypy type checking
 
 ## [0.1.0] - 2025-11-04
 
 ### Added
+
 - **Phase 3 Complete**: Vectorized GPU training environment
 - **Level 1-3 Training**: Progressive complexity (L0→L1→L2→L3)
   - L0: Temporal credit assignment (single affordance)
@@ -61,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SQLite Metrics**: Episode tracking and analysis
 
 ### Architecture
+
 - **Vectorized Environment**: GPU-native batched training
 - **Two Network Types**:
   - SimpleQNetwork (~26K-70K params) for full observability
@@ -69,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **UNIVERSE_AS_CODE**: All game mechanics defined in YAML configs
 
 ### Documentation
+
 - 90+ markdown files across 9 categories
 - Comprehensive architecture documentation (TOWNLET_HLD.md, ROADMAP.md)
 - User guides for training, replay, visualization
@@ -76,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Research-driven development methodology documented
 
 ### Known Issues
+
 - CoffeeShop affordance commented out in configs (14 active, not 15)
 - Legacy src/hamlet/ code fully migrated to src/townlet/
 - Entry point temporarily in demo/ (will move to training/)
@@ -85,19 +92,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Release Notes Format
 
 ### Added
+
 - New features or functionality
 
 ### Changed
+
 - Changes to existing functionality
 
 ### Deprecated
+
 - Features that will be removed in future releases
 
 ### Removed
+
 - Features removed in this release
 
 ### Fixed
+
 - Bug fixes
 
 ### Security
+
 - Security-related changes

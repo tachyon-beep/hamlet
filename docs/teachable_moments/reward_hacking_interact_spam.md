@@ -8,6 +8,7 @@
 After 1000 episodes of training, the agent discovered an exploit:
 
 **Agent Strategy:**
+
 1. Position near multiple affordances (central location)
 2. Spam INTERACT action repeatedly
 3. Never move (avoid movement costs)
@@ -18,6 +19,7 @@ After 1000 episodes of training, the agent discovered an exploit:
 ## Why This Happened
 
 ### The Reward Structure
+
 ```python
 # Movement costs (per step)
 movement_cost = {
@@ -34,6 +36,7 @@ movement_cost = {
 ```
 
 ### The Math
+
 ```
 Moving:  -0.5 energy - 0.3 hygiene - 0.4 satiation + small proximity reward
 Standing: 0 movement cost + small proximity reward + only time depletion
@@ -60,6 +63,7 @@ Agent's calculation: Standing > Moving
 **Teaching moment**: "Is it though?"
 
 Show them the code. Walk through the math. Then reveal:
+
 - The agent is **correct** given the reward function
 - This is **reward hacking** / **specification gaming**
 - Real AI systems do this constantly
@@ -75,22 +79,28 @@ Show them the code. Walk through the math. Then reveal:
 ## The Perfect Class Activity
 
 ### Setup (5 min)
+
 Show the trained agent spamming interact while standing still.
 
 ### Discussion (10 min)
+
 **Question**: "Is this intelligent or stupid?"
 
 Split class into teams:
+
 - **Team Intelligence**: "It's optimizing reward mathematically"
 - **Team Stupid**: "It's not doing what we intended"
 
 ### Reveal (5 min)
+
 "Both are right. Welcome to the AI alignment problem."
 
 ### Challenge (Homework)
+
 "Design a reward function that prevents this exploit while still enabling learning."
 
 **Hint**: It's harder than you think. Every fix has consequences:
+
 - Add time penalty → Agent rushes, makes mistakes
 - Penalize failed interact → Discourages exploration
 - Require movement → Agent might pace back/forth
@@ -98,40 +108,49 @@ Split class into teams:
 ## How to "Fix" It (Maybe Don't?)
 
 ### Option 1: Time Penalty
+
 ```python
 # Penalize each timestep
 reward -= 0.1
 ```
+
 **Pro**: Encourages action
 **Con**: Agent might rush, make poor decisions
 
 ### Option 2: No Proximity for Failed Interact
+
 ```python
 if action == INTERACT and not interaction_occurred:
     proximity_reward = 0
 ```
+
 **Pro**: Removes incentive to spam
 **Con**: Punishes exploration
 
 ### Option 3: Movement Bonus
+
 ```python
 if action in [UP, DOWN, LEFT, RIGHT]:
     reward += 0.05
 ```
+
 **Pro**: Encourages navigation
 **Con**: Might encourage meaningless pacing
 
 ### Option 4: Success-Based Rewards Only
+
 ```python
 # Only reward actual affordance interactions
 # Remove proximity shaping entirely
 ```
+
 **Pro**: Forces learning through success
 **Con**: Makes early learning much harder (sparse rewards)
 
 ## Why Keep It (For Teaching)
 
 **Arguments for NOT fixing:**
+
 1. **Authentic AI behavior** - Real systems find loopholes
 2. **Sparks critical thinking** - Students must reason about reward design
 3. **Problem-solving exercise** - "How would YOU fix this?"
@@ -141,15 +160,18 @@ if action in [UP, DOWN, LEFT, RIGHT]:
 ## Questions for Analysis
 
 **Survival time**: How long does this strategy work?
+
 - Does it eventually fail when money runs out?
 - What causes death - money or biological needs?
 
 **Performance metrics**: Compare to "proper" play
+
 - Reward: Stand-and-spam vs. navigate
 - Steps survived: Static vs. mobile
 - Is the exploit actually optimal?
 
 **Generalization**: What if environment changes?
+
 - Move affordances further apart
 - Add obstacles in center
 - Change spawn location

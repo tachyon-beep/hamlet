@@ -6,6 +6,7 @@
 ## The Observation
 
 When watching an untrained agent (episode 1), we observed a telltale pattern:
+
 - Agent repeatedly moves LEFT
 - Hits the western wall (x = 0)
 - Can no longer move LEFT despite LEFT having the highest Q-value
@@ -18,6 +19,7 @@ This is **perfect positive evidence that action masking is working correctly**.
 ### What's Happening Under the Hood
 
 1. **Network initialization**: Q-values start near zero with tiny random variations
+
    ```
    Q-values: [UP: 0.0, DOWN: 0.0, LEFT: 0.1, RIGHT: 0.0, INTERACT: 0.0]
    ```
@@ -27,6 +29,7 @@ This is **perfect positive evidence that action masking is working correctly**.
 3. **Physical constraint**: Agent reaches wall at x=0
 
 4. **Action masking kicks in**:
+
    ```python
    at_left = (self.positions[:, 0] == 0)
    action_masks[at_left, 2] = False  # Mask LEFT action
@@ -37,6 +40,7 @@ This is **perfect positive evidence that action masking is working correctly**.
 ### Without Action Masking
 
 Without masking, one of two bad things would happen:
+
 - Agent spams LEFT action forever at the wall (wasted exploration)
 - Environment throws errors for invalid actions
 
@@ -62,11 +66,13 @@ The Q-network doesn't need to learn "don't walk through walls" - we can just enc
 ### Real-World Applications
 
 In robotics:
+
 - Mask "pick up object 10 meters away"
 - Mask "move joint beyond physical limits"
 - Mask "navigate through wall"
 
 In games:
+
 - Mask illegal chess moves
 - Mask card plays that violate rules
 - Mask actions when character is stunned
@@ -76,6 +82,7 @@ In games:
 In HAMLET, we mask two types of invalid actions:
 
 1. **Boundary violations** (movement off grid):
+
    ```python
    action_masks[at_top, 0] = False    # Can't go UP at top edge
    action_masks[at_bottom, 1] = False # Can't go DOWN at bottom edge
@@ -84,6 +91,7 @@ In HAMLET, we mask two types of invalid actions:
    ```
 
 2. **Impossible interactions** (not on affordance):
+
    ```python
    # INTERACT only valid when standing on an affordance
    on_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
@@ -104,6 +112,7 @@ The second masking prevents "interact spam" - you can't drink at the bar when yo
 ## Testing Action Masking
 
 To verify action masking is working:
+
 1. Watch episode 1 with untrained agent
 2. Look for wall-hitting behavior (agent tries same direction repeatedly)
 3. Observe that agent switches actions when hitting wall

@@ -19,6 +19,7 @@ python -m townlet.demo.live_inference \
 ```
 
 **Arguments**:
+
 1. `checkpoints_level2_5` - Checkpoint directory (for live inference mode)
 2. `8766` - WebSocket port
 3. `0.2` - Step delay (5 steps/sec)
@@ -268,6 +269,7 @@ ws.send(JSON.stringify({
 ### Database Schema
 
 Recordings are indexed in SQLite with:
+
 - episode_id (primary key)
 - survival_steps
 - total_reward
@@ -339,6 +341,7 @@ ws.send(JSON.stringify({
 ### Query by Recording Reason
 
 Recording reasons include:
+
 - `periodic_100` - Every 100th episode
 - `stage_2_pre_transition` - Before stage transition
 - `top_10.0pct` - Top 10% reward
@@ -358,6 +361,7 @@ ws.send(JSON.stringify({
 ## Frontend Integration
 
 The existing Vue frontend automatically handles replay mode:
+
 - Grid visualization shows agent position and affordances
 - Meters display agent state
 - Q-values shown if recorded
@@ -376,12 +380,14 @@ The existing Vue frontend automatically handles replay mode:
 ## Video Export
 
 Want to export episodes to MP4 for YouTube or offline viewing? See **VIDEO_EXPORT_USAGE.md** for:
+
 - Command-line video export tool
 - Batch export multiple episodes
 - YouTube-optimized rendering (1080p/1440p)
 - Filtering by stage, reward, reason
 
 **Quick example**:
+
 ```bash
 # Export single episode
 python -m townlet.recording export 500 \

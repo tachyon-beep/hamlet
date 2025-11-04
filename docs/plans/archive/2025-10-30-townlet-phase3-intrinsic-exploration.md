@@ -32,6 +32,7 @@ With pure sparse rewards (terminal feedback only), agents struggle to explore ef
 ### 2.1 Component Structure
 
 **Core Components:**
+
 1. **ReplayBuffer** - Experience storage with separate extrinsic/intrinsic rewards
 2. **RNDExploration** - Random Network Distillation for novelty detection
 3. **AdaptiveIntrinsicExploration** - Wraps RND with variance-based annealing
@@ -83,6 +84,7 @@ With pure sparse rewards (terminal feedback only), agents struggle to explore ef
 **Purpose**: Store experience tuples with separate extrinsic/intrinsic rewards for off-policy Q-learning.
 
 **Interface**:
+
 ```python
 class ReplayBuffer:
     def __init__(self, capacity: int = 10000, device: torch.device = torch.device('cpu')):
@@ -117,11 +119,13 @@ class ReplayBuffer:
 ```
 
 **Storage**:
+
 - Circular buffer (FIFO when full)
 - Capacity: 10,000 transitions (configurable)
 - All tensors stored on device (GPU-compatible)
 
 **Sampling**:
+
 - Random uniform sampling (no prioritization)
 - Returns combined rewards: `extrinsic + intrinsic * weight`
 - Intrinsic weight passed at sample time (allows dynamic adjustment)
@@ -135,6 +139,7 @@ class ReplayBuffer:
 **Purpose**: Compute intrinsic rewards via Random Network Distillation (novelty detection).
 
 **Interface**:
+
 ```python
 class RNDExploration(ExplorationStrategy):
     def __init__(
@@ -186,6 +191,7 @@ class RNDExploration(ExplorationStrategy):
 **Architecture**:
 
 **RNDNetwork** (both fixed and predictor):
+
 ```python
 class RNDNetwork(nn.Module):
     """3-layer MLP matching Q-network architecture."""
@@ -205,11 +211,13 @@ class RNDNetwork(nn.Module):
 ```
 
 **Initialization**:
+
 - `fixed_network`: Random init, **freeze all parameters** (never trained)
 - `predictor_network`: Random init, trained to match fixed network
 - Adam optimizer with lr=1e-4 for predictor
 
 **Intrinsic Reward Computation**:
+
 ```python
 def compute_intrinsic_rewards(self, observations: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
@@ -224,8 +232,10 @@ def compute_intrinsic_rewards(self, observations: torch.Tensor) -> torch.Tensor:
 ```
 
 **Training Loop**:
+
 - Accumulate observations in buffer (size: training_batch_size=128)
 - When buffer full, train predictor:
+
   ```python
   target = self.fixed_network(obs_batch).detach()
   predicted = self.predictor_network(obs_batch)
@@ -235,9 +245,11 @@ def compute_intrinsic_rewards(self, observations: torch.Tensor) -> torch.Tensor:
   loss.backward()
   optimizer.step()
   ```
+
 - Single gradient step per batch (prevents overfitting, keeps predictor slightly "behind")
 
 **Novelty Map** (for visualization):
+
 - Generate observations for all grid positions: `[grid_size², obs_dim]`
 - Compute intrinsic rewards for each position
 - Reshape to `[grid_size, grid_size]` heatmap
@@ -252,6 +264,7 @@ def compute_intrinsic_rewards(self, observations: torch.Tensor) -> torch.Tensor:
 **Purpose**: Wrap RND with variance-based annealing to automatically transition from exploration to exploitation.
 
 **Interface**:
+
 ```python
 class AdaptiveIntrinsicExploration(ExplorationStrategy):
     def __init__(
@@ -303,6 +316,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
 ```
 
 **Composition**:
+
 - Contains `RNDExploration` instance for novelty computation
 - Delegates intrinsic reward computation to RND, then scales by weight
 - Manages annealing logic independently
@@ -310,6 +324,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
 **Annealing Strategy**:
 
 **Trigger Condition** (survival time variance):
+
 ```python
 def should_anneal(self) -> bool:
     if len(self.survival_history) < self.survival_window:
@@ -322,11 +337,13 @@ def should_anneal(self) -> bool:
 ```
 
 **When variance < 10.0:**
+
 - Agent performance is consistent (not random)
 - Indicates competence at current difficulty
 - Trigger annealing
 
 **Annealing Schedule** (exponential decay):
+
 ```python
 def anneal_weight(self) -> None:
     new_weight = self.current_intrinsic_weight * self.decay_rate
@@ -334,6 +351,7 @@ def anneal_weight(self) -> None:
 ```
 
 **Weight Progression Example**:
+
 - Start: 1.0 (equal extrinsic and intrinsic)
 - After 50 triggers: 1.0 * (0.99^50) ≈ 0.605
 - After 100 triggers: 1.0 * (0.99^100) ≈ 0.366
@@ -341,6 +359,7 @@ def anneal_weight(self) -> None:
 - After 500 triggers: 1.0 * (0.99^500) ≈ 0.007 (effectively zero)
 
 **Parameters**:
+
 - `variance_threshold=10.0`: Conservative, requires high consistency
 - `survival_window=100`: Long-term performance (not short-term luck)
 - `decay_rate=0.99`: Smooth, gradual transition
@@ -355,11 +374,13 @@ def anneal_weight(self) -> None:
 **Changes Required**:
 
 1. **Add ReplayBuffer instance**:
+
    ```python
    self.replay_buffer = ReplayBuffer(capacity=10000, device=device)
    ```
 
 2. **Store transitions in buffer** (after each step):
+
    ```python
    # In step_population()
    intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs)
@@ -375,6 +396,7 @@ def anneal_weight(self) -> None:
    ```
 
 3. **Train Q-network from replay buffer**:
+
    ```python
    # Every N steps (e.g., 4)
    if len(self.replay_buffer) >= batch_size:
@@ -389,6 +411,7 @@ def anneal_weight(self) -> None:
    ```
 
 4. **Update RND predictor**:
+
    ```python
    # Every 128 steps
    if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
@@ -396,6 +419,7 @@ def anneal_weight(self) -> None:
    ```
 
 5. **Trigger annealing** (end of episode):
+
    ```python
    if isinstance(self.exploration, AdaptiveIntrinsicExploration):
        self.exploration.update_on_episode_end(episode_steps)
@@ -408,6 +432,7 @@ def anneal_weight(self) -> None:
 ### 4.1 WebSocket Protocol Extension
 
 **Extend `state_update` message** with RND metrics:
+
 ```json
 {
   "type": "state_update",
@@ -426,6 +451,7 @@ def anneal_weight(self) -> None:
 ### 4.2 Frontend Components
 
 **Existing Components (preserved)**:
+
 - `Grid.vue` - 8×8 grid with agent + affordances
 - `MeterPanel.vue` - 6 meter status bars
 - `StatsPanel.vue` - Episode statistics
@@ -434,30 +460,35 @@ def anneal_weight(self) -> None:
 **New Components**:
 
 **1. NoveltyHeatmap.vue**
+
 - Transparent overlay on Grid.vue
 - Color gradient: red (novel) → yellow → blue (familiar)
 - Updates every step as RND prediction improves
 - Shows agent's "mental map" solidifying over time
 
 **2. IntrinsicRewardChart.vue**
+
 - Dual line chart: extrinsic (blue) vs intrinsic (orange)
 - X-axis: last 100 steps
 - Y-axis: reward magnitude
 - Shows intrinsic rewards decreasing as agent learns
 
 **3. CurriculumTracker.vue**
+
 - Stage indicator: "Stage 2/5: Add Hunger"
 - Progress bar: steps at current stage
 - Next stage criteria display
 - Can be integrated into StatsPanel or separate
 
 **4. SurvivalTrendChart.vue**
+
 - Long-term chart: avg survival over time
 - Time buckets: hourly or daily (configurable)
 - Shows macro-level learning over multi-day demo
 - Key engagement metric for viewers
 
 **Layout**:
+
 ```
 ┌─────────────────────────────────────┐
 │ Controls (play/pause/reset)         │
@@ -476,16 +507,19 @@ def anneal_weight(self) -> None:
 **Visual Narrative for Multi-Day Demo**:
 
 Day 1:
+
 - High intrinsic rewards (lots of red in heatmap)
 - Intrinsic line dominates chart
 - Survival ~50 steps (random baseline)
 
 Day 2:
+
 - Heatmap cooling (more blue familiar cells)
 - Intrinsic line decreasing
 - Survival ~150 steps (learning patterns)
 
 Day 3:
+
 - Heatmap mostly blue (environment mastered)
 - Extrinsic line dominates (pure sparse rewards)
 - Survival 500+ steps (near-optimal behavior)
@@ -560,6 +594,7 @@ visualization:
 ### 6.1 Unit Tests
 
 **test_replay_buffer.py**:
+
 ```python
 def test_replay_buffer_capacity():
     """Buffer should not exceed capacity (FIFO)."""
@@ -572,6 +607,7 @@ def test_replay_buffer_device_handling():
 ```
 
 **test_rnd.py**:
+
 ```python
 def test_rnd_novelty_decreases():
     """Prediction error should decrease for repeated states."""
@@ -587,6 +623,7 @@ def test_rnd_novelty_map():
 ```
 
 **test_adaptive_intrinsic.py**:
+
 ```python
 def test_adaptive_annealing_triggers():
     """Intrinsic weight should decay when variance < threshold."""
@@ -604,6 +641,7 @@ def test_adaptive_survival_variance():
 ### 6.2 Integration Tests
 
 **test_rnd_integration.py**:
+
 ```python
 def test_intrinsic_reward_added():
     """Total reward should be extrinsic + intrinsic * weight."""
@@ -616,6 +654,7 @@ def test_replay_buffer_integration():
 ```
 
 **test_sparse_learning.py**:
+
 ```python
 def test_sparse_learning_with_intrinsic():
     """Agent should learn sparse reward task with intrinsic motivation.
@@ -634,6 +673,7 @@ def test_sparse_learning_with_intrinsic():
 ### 6.3 Visualization Tests
 
 **Manual QA** (run live demo):
+
 - Novelty heatmap transitions from red → blue over episodes
 - Intrinsic reward line decreases while extrinsic improves
 - Curriculum stage advances as agent learns
@@ -655,6 +695,7 @@ Phase 3 will be implemented in **8 tasks**:
 **Task 8**: End-to-end sparse learning test + YAML config
 
 Each task follows TDD workflow:
+
 1. Write failing test
 2. Implement minimal code to pass
 3. Verify test passes
@@ -667,6 +708,7 @@ Each task follows TDD workflow:
 **After Phase 3 completion:**
 
 **Technical**:
+
 - ✅ All 15+ tests pass (unit + integration)
 - ✅ RND prediction error decreases for repeated states (< 0.1 MSE after 1000 steps)
 - ✅ Adaptive weight anneals from 1.0 → 0.0 over training
@@ -674,12 +716,14 @@ Each task follows TDD workflow:
 - ✅ Q-network trains from replay buffer without errors
 
 **Visualization**:
+
 - ✅ Novelty heatmap updates in real-time
 - ✅ Intrinsic reward chart shows decay trend
 - ✅ Curriculum tracker displays stage progression
 - ✅ Survival trend chart shows multi-hour improvement
 
 **Demo Quality**:
+
 - ✅ Multi-day training runs without crashes
 - ✅ Viewers can watch exploration → exploitation transition
 - ✅ Clear visual narrative of agent learning
@@ -689,16 +733,19 @@ Each task follows TDD workflow:
 ## 9. Future Extensions (Post-Phase 3)
 
 **Phase 4** (Scale Testing):
+
 - Test n=1 → 10 agents
 - Per-agent RND (separate novelty maps)
 - Population-level intrinsic weight annealing
 
 **Phase 5** (Optimization):
+
 - Mixed precision (FP16) for RND networks
 - Shared RND encoder across agents
 - Prioritized experience replay
 
 **Phase 6** (Advanced Exploration):
+
 - Curiosity-driven exploration (ICM)
 - Empowerment maximization
 - Never-Give-Up (NGU) exploration
@@ -708,6 +755,7 @@ Each task follows TDD workflow:
 ## 10. Design Validation
 
 **Key Questions Answered**:
+
 - ✅ RND architecture: Match Q-network (3-layer MLP, 128-dim embeddings)
 - ✅ Annealing trigger: Survival time variance < 10.0
 - ✅ Annealing schedule: Exponential decay (0.99 per trigger)
@@ -718,6 +766,7 @@ Each task follows TDD workflow:
 - ✅ Composition: AdaptiveIntrinsic contains RND instance
 
 **Design Rationale**:
+
 - Conservative annealing ensures stable learning
 - Composition allows independent testing
 - Replay buffer enables flexible weight adjustment

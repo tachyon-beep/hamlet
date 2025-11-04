@@ -119,6 +119,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Goal**: Unlock design space by making meter count configurable
 
 #### TASK-001: Variable-Size Meter System
+
 - **Effort**: 13-19h
 - **Priority**: CRITICAL
 - **Dependencies**: None
@@ -135,6 +136,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
   - No dependencies - can start immediately
 
 **Success Criteria**:
+
 - [ ] Config loader accepts `num_meters` parameter
 - [ ] Tensors dynamically sized based on meter count
 - [ ] Network layers adapt to variable observation dimensions
@@ -148,6 +150,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Goal**: Define spatial substrate and action space abstractions
 
 #### TASK-002B: Configurable Spatial Substrates
+
 - **Effort**: 51-65h
 - **Priority**: HIGH
 - **Dependencies**: None
@@ -167,6 +170,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Parallel Execution**: TASK-002B + TASK-002A
 
 #### TASK-002A: UAC Action Space
+
 - **Effort**: 11-17h
 - **Priority**: HIGH
 - **Dependencies**: None (informs TASK-001 scope)
@@ -183,6 +187,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
   - Proves UNIVERSE_AS_CODE concept before larger migrations
 
 **Success Criteria (Phase 2)**:
+
 - [ ] substrate.yaml defines grid topology, boundaries, distance metrics
 - [ ] actions.yaml defines movement deltas and multi-meter costs
 - [ ] Agent can navigate 2D, 3D, hex, and aspatial substrates
@@ -198,6 +203,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Goal**: Create Pydantic DTOs to validate YAML schemas
 
 #### TASK-003: UAC Core DTOs
+
 - **Effort**: 7-12h
 - **Priority**: HIGH
 - **Dependencies**: TASK-002B, TASK-001, TASK-002A (schemas must exist first)
@@ -215,6 +221,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
   - Enables fail-fast on config errors at load time
 
 **Success Criteria**:
+
 - [ ] All 10 core DTOs implemented with Pydantic
 - [ ] No-defaults principle enforced (missing fields raise clear errors)
 - [ ] SubstrateConfig validates topology, boundaries, dimensions
@@ -228,6 +235,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Goal**: Implement 7-stage universe compiler with cross-validation
 
 #### TASK-004A: Compiler Implementation
+
 - **Effort**: 46-66h
 - **Priority**: HIGH
 - **Dependencies**: TASK-003 (required), TASK-001 (optional but beneficial)
@@ -252,6 +260,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Parallel Execution**: TASK-004A + TASK-004B
 
 #### TASK-004B: UAC Capability System
+
 - **Effort**: 8-12h
 - **Priority**: HIGH
 - **Dependencies**: TASK-003 (core DTOs must exist)
@@ -267,6 +276,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
   - Can run parallel to TASK-004A implementation
 
 **Success Criteria (Phase 4)**:
+
 - [ ] Universe compiler validates all YAML files in 7 stages
 - [ ] Symbol table resolves cross-file references
 - [ ] Clear error messages with line numbers and examples
@@ -283,6 +293,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Goal**: Move neural network architecture to YAML configuration
 
 #### TASK-005: BRAIN_AS_CODE
+
 - **Effort**: 22-31h
 - **Priority**: MEDIUM
 - **Dependencies**: TASK-002B (obs_dim computation), TASK-003 (DTO patterns), TASK-004A (compiler metadata)
@@ -302,6 +313,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
   - Enables A/B testing different networks via config
 
 **Success Criteria**:
+
 - [ ] brain.yaml defines network architecture (layers, activations, sizes)
 - [ ] NetworkFactory constructs networks from config
 - [ ] BrainCompiler creates optimizer and loss function from config
@@ -316,6 +328,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 **Goal**: GUI rendering for alternative spatial substrates
 
 #### TASK-006: Substrate-Agnostic Visualization
+
 - **Effort**: 14-64h (depending on scope)
 - **Priority**: LOW (explicitly deferred)
 - **Dependencies**: TASK-002B (substrates), TASK-002A (actions)
@@ -332,6 +345,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
   - Defer until TASK-001 through TASK-005 complete
 
 **Deferral Rationale**:
+
 - TASK-002B Phase 4 implements text-based visualization (4-6h)
 - Text output shows agent position, affordances, meters
 - Fast debugging without WebGL setup
@@ -339,6 +353,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 - Example: 3D cubic grid floor visualization in text
 
 **When to Revisit**:
+
 - After core UAC infrastructure complete (TASK-001 through TASK-005)
 - If impressive demos needed for stakeholders
 - If student feedback requests visual learners support
@@ -349,6 +364,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 ## Timeline and Effort Estimates
 
 ### Sequential Timeline (No Parallelization)
+
 - **Phase 1**: 13-19h (TASK-001)
 - **Phase 2**: 62-82h (TASK-002B + TASK-002A sequential)
 - **Phase 3**: 7-12h (TASK-003)
@@ -357,6 +373,7 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 - **Total**: **158-222h** (excludes TASK-006)
 
 ### Parallelized Timeline (Optimal)
+
 - **Phase 1**: TASK-001 = **13-19h**
 - **Phase 2**: max(TASK-002B, TASK-002A) = **51-65h** (saves 11-17h)
 - **Phase 3**: TASK-003 = **7-12h**
@@ -365,11 +382,13 @@ TASK-002A (Actions) ─────┐   │  │            ├──> TASK-005
 - **Total**: **139-193h** (saves 19-29h vs sequential)
 
 ### Time Savings from Parallelization
+
 - **Sequential**: 158-222h (≈20-28 working days)
 - **Parallelized**: 139-193h (≈17-24 working days)
 - **Savings**: 19-29h (12-13% reduction, ≈2-4 working days)
 
 ### Critical Path
+
 The critical path (cannot be shortened without reducing scope):
 
 ```
@@ -396,6 +415,7 @@ TASK-001 → TASK-002B → TASK-003 → TASK-004A → TASK-005
 > "Get the infrastructure right first. No point designing perfect reward functions if the 8-bar constraint limits what universes you can create."
 
 **Applied**:
+
 - Researched spatial substrates (foundation) ✓
 - Researched UAC compiler (foundation) ✓
 - Deferred reward model research (content) until foundation solid ✓
@@ -424,11 +444,13 @@ TASK-001 → TASK-002B → TASK-003 → TASK-004A → TASK-005
 > "Research reveals highest-leverage changes - where small effort enables huge capability."
 
 **Leverage Analysis**:
+
 - **TASK-001 (Variable meters)**: 13-19h → Unblocks 4-meter to 32-meter universes ✓ **HIGHEST LEVERAGE**
 - **TASK-002A (Actions)**: 11-17h → Config-driven action space, multi-meter costs
 - **TASK-002B (Substrates)**: 51-65h → Enables 2D/3D/hex/graph/aspatial topologies
 
 vs lower-leverage:
+
 - **TASK-006 (Visualization)**: 14-64h → Only affects GUI, text viz sufficient
 
 **Pattern**: Prioritize enabling capabilities over optimizing content. Capabilities compound, content is linear.
@@ -445,11 +467,13 @@ vs lower-leverage:
 **Why**: Hidden defaults create non-reproducible configs, operator doesn't know what values are being used, and changing code defaults silently breaks old configs.
 
 **Applied**:
+
 - **TASK-003** enforces no-defaults with Pydantic DTOs (required fields)
 - **TASK-004A** validates at load time (compilation), not runtime (interpretation)
 - **CompiledUniverse** is immutable artifact, computed once, used many times
 
 **7-Stage Compilation Pipeline** (TASK-004A):
+
 1. Parse YAML files
 2. Build symbol tables
 3. Resolve cross-file references
@@ -459,6 +483,7 @@ vs lower-leverage:
 7. Emit CompiledUniverse artifact
 
 **Benefits**:
+
 - Fail-fast on config errors (catch at load time)
 - 10-100x startup speedup with MessagePack caching
 - Clear error messages with line numbers and examples
@@ -474,12 +499,14 @@ vs lower-leverage:
 **Pattern**: If feature enables experimentation ("What if the world was a sphere?"), include it even if it's not "serious" or "practical."
 
 **Applied in TASK-002B** (Spatial Substrates):
+
 - ✓ 3D cubic grids (high value, low effort) - "What if there are floors?"
 - ✓ Toroidal boundaries (literally change clamp to modulo) - "What if the world wraps?"
 - ✓ Aspatial substrates (reveals grid is optional) - "What if there's no space?"
 - ✓ Hexagonal grids (teaches coordinate systems) - "What if cells have 6 neighbors?"
 
 **Applied in TASK-001** (Variable Meters):
+
 - ✓ 4-meter tutorials - "What if I only track energy and hunger?"
 - ✓ 32-meter complex sims - "What if I model neurotransmitters?"
 - ✓ Domain-specific universes - "What if this is a factory, not a Sim?"
@@ -492,6 +519,7 @@ vs lower-leverage:
 > "Research phase reveals true dependency graph, not just logical task breakdown."
 
 **Example**:
+
 - **Requirement**: "Make action space configurable"
 - **Research insight**: "Actions depend on substrate (4-way for square, 6-way for hex, 0-way for aspatial)"
 - **Conclusion**: Substrate (TASK-002B) must inform Actions (TASK-002A)
@@ -499,6 +527,7 @@ vs lower-leverage:
 **Applied**: Initially planned TASK-002A first, but research revealed TASK-002B should run parallel (actions informed by substrate, not blocked by it).
 
 **Dependency Discovery** (from subagent analysis):
+
 - TASK-003 notes "SubstrateConfig (TASK-002B integration)" → 002B precedes 003
 - TASK-004A "TASK-003 (required)" → 003 precedes 004A
 - TASK-005 "depends on TASK-002B (obs_dim)" → 002B precedes 005
@@ -509,20 +538,24 @@ vs lower-leverage:
 ### 7. "Exposed vs Hidden Knobs"
 
 **Test**: "Does changing this parameter change gameplay meaningfully?"
+
 - **Yes** → Should be in YAML (exposed knob)
 - **No** → Can stay in code (implementation detail)
 
 **Applied across tasks**:
 
 **TASK-002B (Substrates)**:
+
 - ✓ Exposed: `grid_size`, `topology`, `boundary_behavior`, `distance_metric`
 - ✗ Hidden: `tensor_dtype`, `device_placement`
 
 **TASK-002A (Actions)**:
+
 - ✓ Exposed: `move_energy_cost`, `action_deltas`, `multi_meter_costs`
 - ✗ Hidden: `action_tensor_indexing`
 
 **TASK-005 (BRAIN_AS_CODE)**:
+
 - ✓ Exposed: `hidden_layer_sizes`, `activation_functions`, `learning_rate`, `optimizer_type`
 - ✗ Hidden: `cuda_kernel_selection`, `tensor_memory_layout`
 
@@ -535,6 +568,7 @@ vs lower-leverage:
 ### High-Risk Dependencies
 
 **Risk 1: TASK-004A blocks TASK-005**
+
 - **Issue**: 46-66h compiler must complete before 22-31h BRAIN_AS_CODE
 - **Impact**: If TASK-004A slips, TASK-005 delayed
 - **Mitigation**:
@@ -543,6 +577,7 @@ vs lower-leverage:
   - Implement NetworkFactory stub that works with simple configs
 
 **Risk 2: TASK-002B is longest critical path**
+
 - **Issue**: 51-65h for substrates, longest task in Phase 2
 - **Impact**: Delays all subsequent phases
 - **Mitigation**:
@@ -551,6 +586,7 @@ vs lower-leverage:
   - Use text visualization (4-6h) before full implementation (51-65h)
 
 **Risk 3: Schema changes in 002B/002A require DTO revisions**
+
 - **Issue**: TASK-003 DTOs might need updates after 002B/002A implementation
 - **Impact**: Rework effort, potential delays
 - **Mitigation**:
@@ -559,6 +595,7 @@ vs lower-leverage:
   - Document schema changes in TASK-002B/002A completion notes
 
 **Risk 4: Checkpoint compatibility breaks**
+
 - **Issue**: TASK-001 changes meter count, breaks existing checkpoints
 - **Impact**: Loss of trained agents, curriculum progress
 - **Mitigation**:
@@ -571,21 +608,25 @@ vs lower-leverage:
 ### Low-Risk Opportunities
 
 **Opportunity 1: TASK-001 is quick win**
+
 - **Advantage**: 13-19h, no dependencies, CRITICAL priority
 - **Benefit**: Immediate design space unlock, boosts momentum
 - **Recommendation**: Start with TASK-001 for fast, high-impact delivery
 
 **Opportunity 2: TASK-004B doesn't block TASK-004A**
+
 - **Advantage**: Capability DTOs can run parallel to compiler
 - **Benefit**: Saves 8-12h by overlapping Phase 4
 - **Recommendation**: Start TASK-004B during TASK-004A implementation
 
 **Opportunity 3: TASK-006 is explicitly deferred**
+
 - **Advantage**: Text viz from TASK-002B sufficient for training
 - **Benefit**: Defer 14-64h GUI work indefinitely if not needed
 - **Recommendation**: Only implement if demo/stakeholder requirements emerge
 
 **Opportunity 4: Incremental substrate rollout**
+
 - **Advantage**: TASK-002B phases can deliver value incrementally
 - **Benefit**: 2D substrates first (24h), then 3D/hex (27-41h additional)
 - **Recommendation**: Break TASK-002B into Phase 1 (2D) and Phase 2 (3D/hex/graph)
@@ -596,7 +637,8 @@ vs lower-leverage:
 
 If preferring **contract-first design**, TASK-003 could move earlier:
 
-### Alternative Sequence:
+### Alternative Sequence
+
 1. TASK-001 (Meters) - 13-19h
 2. **TASK-003 (Core DTOs)** - 7-12h ← **EARLIER**
 3. TASK-002B (Substrates) - 51-65h
@@ -606,11 +648,13 @@ If preferring **contract-first design**, TASK-003 could move earlier:
 7. TASK-005 (BRAIN_AS_CODE) - 22-31h
 
 **Pros**:
+
 - Forces validation thinking during design
 - DTOs define contracts before implementation
 - Fail-fast on schema mismatches
 
 **Cons**:
+
 - TASK-003 needs to know schema structure from 002B/002A
 - DTOs might require revision after 002B/002A implementation
 - Rework effort if schemas change
@@ -618,6 +662,7 @@ If preferring **contract-first design**, TASK-003 could move earlier:
 **Trade-off**: DTOs document intended schemas, but may need updates when implementation reveals edge cases.
 
 **Recommendation**: **Stick with Option A (Implementation First)** because:
+
 - Subagent noted "SubstrateConfig (TASK-002B integration)" suggesting 002B precedes 003
 - TASK-002B/002A are well-specified in existing task docs (schemas already designed)
 - DTOs validate known schemas, not exploratory ones
@@ -630,12 +675,14 @@ If preferring **contract-first design**, TASK-003 could move earlier:
 ### Phase Completion Criteria
 
 **Phase 1 Complete When**:
+
 - [ ] Variable meter count (1-32) configurable in YAML
 - [ ] 4-meter and 12-meter configs load successfully
 - [ ] Agents train end-to-end with variable meters
 - [ ] Checkpoints include num_meters metadata
 
 **Phase 2 Complete When**:
+
 - [ ] 2D, 3D, hex, graph, aspatial substrates implemented
 - [ ] substrate.yaml loads and validates
 - [ ] actions.yaml defines movement and costs
@@ -643,18 +690,21 @@ If preferring **contract-first design**, TASK-003 could move earlier:
 - [ ] Text visualization renders all substrates
 
 **Phase 3 Complete When**:
+
 - [ ] All 10 core DTOs implemented
 - [ ] No-defaults principle enforced (missing fields raise errors)
 - [ ] SubstrateConfig, ActionConfig, MeterConfig validate schemas
 - [ ] Clear error messages with examples on validation failure
 
 **Phase 4 Complete When**:
+
 - [ ] 7-stage compilation pipeline implemented
 - [ ] Cross-file validation catches dangling refs, circularity, spatial impossibilities
 - [ ] CompiledUniverse cached with MessagePack (10-100x speedup)
 - [ ] Capability DTOs validate multi-tick, cooldowns, prerequisites
 
 **Phase 5 Complete When**:
+
 - [ ] brain.yaml defines network architecture
 - [ ] NetworkFactory constructs networks from config
 - [ ] All curriculum levels (L0-L3) have brain.yaml templates
@@ -669,58 +719,73 @@ If preferring **contract-first design**, TASK-003 could move earlier:
 ### Between Phases
 
 **Phase 1 → Phase 2**:
+
 - TASK-001 provides variable meter count → TASK-002B uses for obs_dim calculation
 - TASK-001 provides meter definitions → TASK-002A uses for multi-meter costs
 
 **Phase 2 → Phase 3**:
+
 - TASK-002B provides substrate.yaml schema → TASK-003 creates SubstrateConfig DTO
 - TASK-002A provides actions.yaml schema → TASK-003 creates ActionConfig DTO
 
 **Phase 3 → Phase 4**:
+
 - TASK-003 provides core DTOs → TASK-004A uses for validation contracts
 - TASK-003 provides SubstrateConfig → TASK-004A validates spatial feasibility
 
 **Phase 4 → Phase 5**:
+
 - TASK-004A provides CompiledUniverse → TASK-005 reads metadata (obs_dim)
 - TASK-004A provides symbol table → TASK-005 references meter names
 
 **Phase 5 → Phase 6** (deferred):
+
 - TASK-005 provides trained agents → TASK-006 visualizes in GUI
 
 ---
 
 ## Lessons Applied from Research Method
 
-### From RESEARCH-PLAN-REVIEW-LOOP.md:
+### From RESEARCH-PLAN-REVIEW-LOOP.md
 
 **Lesson 1: "Bones First, Content Later"** ✓
+
 - Foundation (001/002B/002A) before content (005)
 
 **Lesson 2: Technical Debt vs Design Constraints** ✓
+
 - TASK-001 removes 8-meter constraint (was debt, not design)
 
 **Lesson 3: Substrate Thinking** ✓
+
 - Implementation order follows substrate hierarchy (meters → spatial → actions)
 
 **Lesson 4: "Fuck Around and Find Out" Pedagogy** ✓
+
 - TASK-002B enables topology experimentation (3D, hex, toroidal, aspatial)
 
 **Lesson 5: Research Identifies Leverage Points** ✓
+
 - TASK-001 first (13-19h unlocks entire design space)
 
 **Lesson 6: Dependency Ordering from Research** ✓
+
 - Subagent analysis revealed true dependencies (002B → 003, 003 → 004A, 004A → 005)
 
 **Lesson 7: Exposed vs Hidden Knobs** ✓
+
 - All gameplay parameters moved to YAML (substrate, actions, brain)
 
 **Lesson 8: Research Documents as Future Reference** ✓
+
 - This document captures rationale for task ordering
 
 **Lesson 9: When Research Prevents Rework** ✓
+
 - Dependency analysis prevents implementing tasks out of order
 
 **Lesson 10: Distinguishing Research from Analysis Paralysis** ✓
+
 - Subagent analysis time-boxed (parallel execution, concise extraction)
 - Stopping criteria: dependency graph mapped, optimal ordering determined
 
@@ -753,22 +818,27 @@ If preferring **contract-first design**, TASK-003 could move earlier:
 Rather than "big bang" delivery after 139-193h:
 
 **Milestone 1** (13-19h): TASK-001 complete
+
 - Variable meter system deployed
 - 4-meter and 12-meter configs testable
 
 **Milestone 2** (64-84h): Phase 2 complete
+
 - Substrate and action space configurable
 - Students can experiment with 3D/hex/graph topologies
 
 **Milestone 3** (71-96h): Phase 3 complete
+
 - DTO validation enforces schema correctness
 - Config errors caught at load time with clear messages
 
 **Milestone 4** (117-162h): Phase 4 complete
+
 - Universe compiler validates cross-file references
 - 10-100x startup speedup with caching
 
 **Milestone 5** (139-193h): Phase 5 complete
+
 - BRAIN_AS_CODE enables architecture experimentation
 - All 5 curriculum levels configurable via YAML
 
@@ -781,6 +851,7 @@ The optimal task execution order is:
 **001 → (002B ∥ 002A) → 003 → (004A ∥ 004B) → 005 → (006 deferred)**
 
 This sequence:
+
 - **Respects dependencies** (no task starts before prerequisites complete)
 - **Maximizes parallelization** (saves 19-29h via concurrent execution)
 - **Follows substrate hierarchy** (meters → spatial → actions → validation → compilation)
@@ -799,6 +870,7 @@ This sequence:
 ## Appendix: Task Summaries
 
 ### TASK-001: Variable-Size Meter System
+
 **GOAL**: Make meter count configurable instead of hardcoded to exactly 8, enabling 4-meter tutorials, 12-meter complex simulations, and domain-specific universes.
 
 **DEPENDS ON**: None (foundational)
@@ -814,6 +886,7 @@ This sequence:
 ---
 
 ### TASK-002A: UAC Action Space
+
 **GOAL**: Move hardcoded action space from Python to config-driven YAML (actions.yaml) to achieve full UNIVERSE_AS_CODE compliance.
 
 **DEPENDS ON**: None (foundational, informs TASK-001 scope)
@@ -829,6 +902,7 @@ This sequence:
 ---
 
 ### TASK-002B: Configurable Spatial Substrates
+
 **GOAL**: Move spatial substrate (grid topology, boundaries, distance metrics) from hardcoded Python to config-driven YAML, enabling 2D/3D/hex/continuous/graph/aspatial universes.
 
 **DEPENDS ON**: None
@@ -844,6 +918,7 @@ This sequence:
 ---
 
 ### TASK-003: UAC Core DTOs
+
 **GOAL**: Create core DTOs for training, environment, curriculum, population, substrate, and master configuration with no-defaults enforcement.
 
 **DEPENDS ON**: TASK-002B, TASK-001, TASK-002A (schemas must exist first)
@@ -859,6 +934,7 @@ This sequence:
 ---
 
 ### TASK-004A: Universe Compiler
+
 **GOAL**: Implement 7-stage universe compiler that validates YAML configs, resolves cross-file references, and emits immutable CompiledUniverse artifact with caching.
 
 **DEPENDS ON**: TASK-003 (required), TASK-001 (optional)
@@ -874,6 +950,7 @@ This sequence:
 ---
 
 ### TASK-004B: UAC Capability System
+
 **GOAL**: Extend AffordanceConfig with capability composition (multi_tick, cooldown, meter_gated, skill_scaling, probabilistic, prerequisite) and effect pipelines.
 
 **DEPENDS ON**: TASK-003 (core DTOs must exist)
@@ -889,6 +966,7 @@ This sequence:
 ---
 
 ### TASK-005: BRAIN_AS_CODE
+
 **GOAL**: Move hardcoded neural network architecture and learning hyperparameters to YAML configuration (brain.yaml) to enable architecture experimentation.
 
 **DEPENDS ON**: TASK-002B (obs_dim), TASK-003 (DTOs), TASK-004A (compiler)
@@ -904,6 +982,7 @@ This sequence:
 ---
 
 ### TASK-006: Substrate-Agnostic Visualization
+
 **GOAL**: Implement substrate-agnostic GUI rendering to visualize alternative spatial substrates (hexagonal, 3D, graph, aspatial).
 
 **DEPENDS ON**: TASK-002B (substrates), TASK-002A (actions)

@@ -9,6 +9,7 @@
 **Tech Stack:** pytest, pytest-asyncio, pytest-cov, httpx, Vitest, @vue/test-utils, happy-dom, msw (Mock Service Worker)
 
 **Important Context:**
+
 - This is a pedagogical DRL project - do NOT test for "correct" strategies
 - Some "bugs" like reward hacking are intentional teaching moments
 - Tests should validate mechanics, not learning outcomes
@@ -21,6 +22,7 @@
 ### Task 1: Test Affordances System
 
 **Files:**
+
 - Create: `tests/test_environment/test_affordances.py`
 
 **Step 1: Write the failing test for affordance registry**
@@ -121,6 +123,7 @@ git commit -m "test: add comprehensive affordance system tests"
 ### Task 2: Test Renderer (State-to-JSON Serialization)
 
 **Files:**
+
 - Create: `tests/test_environment/test_renderer.py`
 
 **Step 1: Write the failing test for basic rendering**
@@ -219,6 +222,7 @@ git commit -m "test: add renderer state serialization tests"
 ### Task 3: Test Checkpoint Manager
 
 **Files:**
+
 - Create: `tests/test_training/test_checkpoint_manager.py`
 
 **Step 1: Write the failing test for checkpoint saving**
@@ -343,6 +347,7 @@ git commit -m "test: add checkpoint manager save/load tests"
 ### Task 4: Test FastAPI Server Endpoints
 
 **Files:**
+
 - Create: `tests/test_web/test_server.py`
 - Create: `tests/test_web/__init__.py`
 
@@ -424,6 +429,7 @@ git commit -m "test: add FastAPI server endpoint tests"
 ### Task 5: Test WebSocket Manager
 
 **Files:**
+
 - Create: `tests/test_web/test_websocket.py`
 
 **Step 1: Write the failing test for websocket connection**
@@ -512,6 +518,7 @@ git commit -m "test: add WebSocket manager connection tests"
 ### Task 6: Test Simulation Runner
 
 **Files:**
+
 - Create: `tests/test_web/test_simulation_runner.py`
 
 **Step 1: Write the failing test for simulation initialization**
@@ -599,6 +606,7 @@ git commit -m "test: add simulation runner control tests"
 ### Task 7: Test Training Server WebSocket
 
 **Files:**
+
 - Create: `tests/test_web/test_training_server.py`
 
 **Step 1: Write the failing test for training server connection**
@@ -701,6 +709,7 @@ git commit -m "test: add training server WebSocket tests"
 ### Task 8: Test Full Training Loop
 
 **Files:**
+
 - Create: `tests/integration/__init__.py`
 - Create: `tests/integration/test_full_training.py`
 
@@ -802,6 +811,7 @@ git commit -m "test: add integration tests for full training loop"
 ### Task 9: Test End-to-End WebSocket Flow
 
 **Files:**
+
 - Create: `tests/integration/test_websocket_flow.py`
 
 **Step 1: Write the failing test for WebSocket episode flow**
@@ -923,6 +933,7 @@ git commit -m "test: add end-to-end WebSocket flow integration tests"
 ### Task 10: Setup Vitest and Vue Test Utils
 
 **Files:**
+
 - Modify: `frontend/package.json`
 - Create: `frontend/vitest.config.js`
 - Create: `frontend/src/tests/setup.js`
@@ -1052,6 +1063,7 @@ git commit -m "test: setup Vitest and Vue Test Utils for frontend testing"
 ### Task 11: Test Pinia Store (simulation.js)
 
 **Files:**
+
 - Create: `frontend/src/tests/stores/simulation.test.js`
 
 **Step 1: Write the failing test for store initialization**
@@ -1217,6 +1229,7 @@ git commit -m "test: add comprehensive Pinia store tests"
 ### Task 12: Test MeterPanel Component
 
 **Files:**
+
 - Create: `frontend/src/tests/components/MeterPanel.test.js`
 
 **Step 1: Write the failing test for MeterPanel rendering**
@@ -1295,6 +1308,7 @@ git commit -m "test: add MeterPanel component tests"
 ### Task 13: Test Controls Component
 
 **Files:**
+
 - Create: `frontend/src/tests/components/Controls.test.js`
 
 **Step 1: Write the failing test for Controls rendering**
@@ -1375,6 +1389,7 @@ git commit -m "test: add Controls component interaction tests"
 ### Task 14: Test Grid Component
 
 **Files:**
+
 - Create: `frontend/src/tests/components/Grid.test.js`
 
 **Step 1: Write the failing test for Grid rendering**
@@ -1464,6 +1479,7 @@ git commit -m "test: add Grid component rendering tests"
 ### Task 15: Test StatsPanel Component
 
 **Files:**
+
 - Create: `frontend/src/tests/components/StatsPanel.test.js`
 
 **Step 1: Write the failing test for StatsPanel**
@@ -1551,6 +1567,7 @@ git commit -m "test: add StatsPanel component tests"
 ### Task 16: Test WebSocket Communication Integration
 
 **Files:**
+
 - Create: `frontend/src/tests/integration/websocket.test.js`
 
 **Step 1: Write integration test for full WebSocket flow**
@@ -1709,6 +1726,7 @@ git commit -m "test: add frontend WebSocket integration tests"
 ### Task 17: Add pytest.ini and Test Markers
 
 **Files:**
+
 - Modify: `pyproject.toml`
 
 **Step 1: Add pytest markers to pyproject.toml**
@@ -1752,6 +1770,7 @@ git commit -m "test: add pytest markers for test categorization"
 ### Task 18: Update CLAUDE.md with Testing Commands
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 **Step 1: Add comprehensive testing section to CLAUDE.md**
@@ -1821,6 +1840,7 @@ cd frontend && npm test -- --grep="WebSocket"
 - Backend: Aim for >80% coverage on core modules (environment, agent, training)
 - Frontend: Aim for >70% coverage on components and stores
 - Integration tests: Cover all major user flows (training, visualization, WebSocket communication)
+
 ```
 
 **Step 2: Commit**
@@ -1835,6 +1855,7 @@ git commit -m "docs: add comprehensive testing commands to CLAUDE.md"
 ### Task 19: Create Test README
 
 **Files:**
+
 - Create: `tests/README.md`
 
 **Step 1: Write comprehensive test documentation**
@@ -1857,12 +1878,14 @@ See `CLAUDE.md` "Known Behaviors (Not Bugs!)" for behaviors that are intentional
 ## Test Structure
 
 ```
+
 tests/
 ├── test_environment/       # Environment mechanics (grid, meters, affordances)
 ├── test_agent/            # Agent networks, replay buffer, observation utils
 ├── test_training/         # Training loop, config, checkpoints, metrics
 ├── test_web/              # FastAPI server, WebSocket, simulation runner
 └── integration/           # End-to-end flows (training, WebSocket)
+
 ```
 
 ## Running Tests
@@ -1877,6 +1900,7 @@ cd frontend && npm test
 ```
 
 ### By Category
+
 ```bash
 # Unit tests only (fast)
 uv run pytest -m unit
@@ -1889,6 +1913,7 @@ uv run pytest -m "not slow"
 ```
 
 ### Coverage
+
 ```bash
 # Backend coverage
 uv run pytest --cov=hamlet --cov-report=html
@@ -1912,6 +1937,7 @@ Follow TDD with @superpowers:test-driven-development skill:
 5. Commit
 
 Example:
+
 ```python
 import pytest
 from hamlet.environment.hamlet_env import HamletEnv
@@ -1950,11 +1976,13 @@ describe('MyComponent', () => {
 ## Continuous Integration
 
 Tests run automatically on:
+
 - Pull requests
 - Pushes to main
 - Manual workflow dispatch
 
 CI runs:
+
 1. Backend unit tests (fast)
 2. Backend integration tests (slow)
 3. Frontend tests
@@ -1963,6 +1991,7 @@ CI runs:
 ## Test Fixtures
 
 Common fixtures in `tests/conftest.py`:
+
 - `env`: Pre-configured HamletEnv
 - `agent`: Pre-configured DRLAgent
 - `tmp_checkpoint_dir`: Temporary directory for checkpoint tests
@@ -1970,6 +1999,7 @@ Common fixtures in `tests/conftest.py`:
 ## Debugging Tests
 
 ### Backend
+
 ```bash
 # Run with debugger breakpoints
 uv run pytest --pdb
@@ -1982,6 +2012,7 @@ uv run pytest -vv
 ```
 
 ### Frontend
+
 ```bash
 # Watch mode for debugging
 cd frontend && npm test -- --watch
@@ -1993,17 +2024,21 @@ cd frontend && npm run test:ui
 ## Known Test Quirks
 
 ### Async Tests
+
 Backend async tests (web server, WebSocket) require `@pytest.mark.asyncio` decorator.
 
 ### WebSocket Mocking
+
 Frontend WebSocket is globally mocked in `src/tests/setup.js`. Real WebSocket tests are in integration suite.
 
 ### Coverage Warnings
+
 You may see "module was never imported" warnings - this is normal for entry point scripts.
 
 ## Contributing Tests
 
 When adding new features:
+
 1. Write tests FIRST (TDD)
 2. Use appropriate markers (@pytest.mark.slow for >1s tests)
 3. Update this README if adding new test categories
@@ -2013,6 +2048,7 @@ When adding new features:
 
 See `CLAUDE.md` for project-specific testing guidance.
 See `docs/scraps/` for pedagogical context on "bugs" that are actually features.
+
 ```
 
 **Step 2: Commit**
@@ -2027,6 +2063,7 @@ git commit -m "docs: add comprehensive test suite documentation"
 ### Task 20: Create Frontend Test README
 
 **Files:**
+
 - Create: `frontend/src/tests/README.md`
 
 **Step 1: Write frontend-specific test documentation**
@@ -2046,6 +2083,7 @@ Comprehensive test suite for the Hamlet visualization frontend (Vue 3 + Pinia).
 ## Test Structure
 
 ```
+
 frontend/src/tests/
 ├── setup.js                # Global test configuration
 ├── sanity.test.js         # Vitest setup verification
@@ -2058,6 +2096,7 @@ frontend/src/tests/
 │   └── StatsPanel.test.js
 └── integration/           # Integration tests
     └── websocket.test.js
+
 ```
 
 ## Running Tests
@@ -2151,20 +2190,24 @@ mockWs.onmessage({ data: JSON.stringify({ type: 'connected' }) })
 ## Debugging
 
 ### Use Vitest UI
+
 ```bash
 npm run test:ui
 ```
 
 Opens interactive browser UI showing:
+
 - Test results
 - Component rendering
 - Console logs
 - Code coverage
 
 ### Use `console.log` Freely
+
 Vitest shows console output by default. No need for `-s` flag like pytest.
 
 ### Use `wrapper.html()`
+
 ```javascript
 console.log(wrapper.html())  // See rendered HTML
 console.log(wrapper.text())  // See text content
@@ -2173,7 +2216,9 @@ console.log(wrapper.text())  // See text content
 ## Common Issues
 
 ### "Cannot find module @/..."
+
 Make sure `vitest.config.js` has correct path alias:
+
 ```javascript
 resolve: {
   alias: {
@@ -2183,7 +2228,9 @@ resolve: {
 ```
 
 ### "Store not available"
+
 Make sure to create fresh Pinia in `beforeEach`:
+
 ```javascript
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -2191,7 +2238,9 @@ beforeEach(() => {
 ```
 
 ### Component not updating
+
 Use `await wrapper.vm.$nextTick()` after state changes:
+
 ```javascript
 store.currentEpisode = 5
 await wrapper.vm.$nextTick()
@@ -2211,6 +2260,7 @@ expect(wrapper.text()).toContain('5')
 - [Vitest Docs](https://vitest.dev/)
 - [Vue Test Utils Docs](https://test-utils.vuejs.org/)
 - [Pinia Testing Docs](https://pinia.vuejs.org/cookbook/testing.html)
+
 ```
 
 **Step 2: Commit**
@@ -2227,17 +2277,20 @@ git commit -m "docs: add frontend test suite documentation"
 Plan complete! This comprehensive test suite covers:
 
 **Backend (Python/pytest):**
+
 - ✅ Unit tests for affordances, renderer, checkpoint manager
 - ✅ Web server tests (FastAPI, WebSocket, simulation runner, training server)
 - ✅ Integration tests (full training loop, WebSocket flow)
 
 **Frontend (Vue 3/Vitest):**
+
 - ✅ Testing infrastructure setup (Vitest, Vue Test Utils, happy-dom)
 - ✅ Store tests (Pinia simulation store)
 - ✅ Component tests (MeterPanel, Grid, Controls, StatsPanel)
 - ✅ Integration tests (WebSocket communication)
 
 **Documentation:**
+
 - ✅ Test markers and configuration
 - ✅ Updated CLAUDE.md with testing commands
 - ✅ Backend test README

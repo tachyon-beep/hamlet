@@ -16,6 +16,7 @@ When watching our trained agent, we saw something weird:
 **Observation**: The agent kept trying to move in directions that would take it off the grid edge.
 
 **Symptoms**:
+
 - Agent at top edge (y=0) keeps selecting UP action
 - Agent at left edge (x=0) keeps selecting LEFT action
 - Actions don't move the agent (clamped to boundary)
@@ -27,6 +28,7 @@ When watching our trained agent, we saw something weird:
 > "The AI keeps trying to walk off the grid. We should probably mask the boundaries, since it doesn't have a universal map in its head anymore. It could be going 'gee, this map goes on forever and also I'm being stalked by a hospital'"
 
 **Translation**: Without action masking, the agent thinks:
+
 - The world might be infinite
 - Maybe there's something good past the edge
 - These movement actions just aren't working for some mysterious reason
@@ -60,12 +62,14 @@ Episode 1, Step 48:
 ### The Problem: Wasted Learning Budget
 
 **What the agent has to learn through trial and error**:
+
 1. Try LEFT at edge → Doesn't move, pay cost, get punished
 2. Try LEFT again → Still doesn't move, pay cost, get more punishment
 3. Try LEFT 100 more times → Finally learn "LEFT at edge = bad"
 4. Repeat this for TOP edge (UP), RIGHT edge (RIGHT), BOTTOM edge (DOWN)
 
 **Cost**:
+
 - Thousands of wasted steps
 - Paid movement costs for no-op actions
 - Confused Q-values at boundary states
@@ -80,12 +84,14 @@ Episode 1, Step 48:
 **Action masking** = Tell the agent which actions are physically possible right now
 
 Instead of:
+
 ```python
 # Agent can try all 5 actions
 actions = [UP, DOWN, LEFT, RIGHT, INTERACT]
 ```
 
 We do:
+
 ```python
 # Agent can only try valid actions
 if at_left_edge:
@@ -155,6 +161,7 @@ def select_action(self, observation, explore=True):
 ### Before Action Masking
 
 **Episode 100** (ε=0.8, still exploring):
+
 ```
 Steps: 147
 Wasted boundary attempts: 23 (15% of all actions)
@@ -163,6 +170,7 @@ Survival time: 147 steps
 ```
 
 **Episode 500** (ε=0.2, mostly exploiting):
+
 ```
 Steps: 289
 Wasted boundary attempts: 8 (2.8% of all actions)  [still happening!]
@@ -173,6 +181,7 @@ Survival time: 289 steps
 ### After Action Masking
 
 **Episode 100** (ε=0.8, still exploring):
+
 ```
 Steps: 162  [+15 steps from saved movement costs!]
 Wasted boundary attempts: 0 (0% of all actions)
@@ -181,6 +190,7 @@ Survival time: 162 steps
 ```
 
 **Episode 500** (ε=0.2, mostly exploiting):
+
 ```
 Steps: 318  [+29 steps improvement]
 Wasted boundary attempts: 0 (0% of all actions)
@@ -195,11 +205,13 @@ Survival time: 318 steps
 ### This Is About Information Efficiency
 
 **Bad approach**: Make the agent learn everything through trial and error
+
 - "Figure out which doors are locked by trying them all"
 - Wastes thousands of episodes
 - Agent gets confused about cause and effect
 
 **Good approach**: Give the agent the rules of physics
+
 - "Here are the doors you can use right now"
 - Agent focuses on learning strategy, not physics
 - Faster convergence to good policies
@@ -207,17 +219,20 @@ Survival time: 318 steps
 ### Real-World Examples
 
 **1. Board Games (Chess, Go)**
+
 - **Without masking**: Let AI try moving pawns backwards, moving off board
 - **With masking**: Only show legal moves
 - **Result**: AlphaGo uses action masking - learns strategy faster
 
 **2. Robotic Arm Control**
+
 - **Without masking**: Let robot try joint angles that would break itself
 - **Result**: Robot learns to avoid self-destruction (after breaking a few times)
 - **With masking**: Only allow safe joint angles
 - **Result**: Robot learns task without damaging itself
 
 **3. Autonomous Driving**
+
 - **Without masking**: Let car try driving into buildings
 - **Result**: Many crashes before learning "buildings are solid"
 - **With masking**: Only allow actions that keep car on road
@@ -269,6 +284,7 @@ If you mask the door action, it can't learn this sequence.
 **Lesson**: Any optimization that reduces episodes needed = huge win
 
 **Real numbers**:
+
 - Without masking: ~1000 episodes to converge
 - With masking: ~800 episodes to converge
 - **Savings**: 20% fewer episodes = 20% less compute time
@@ -278,6 +294,7 @@ If you mask the door action, it can't learn this sequence.
 **Concept**: Every boundary position has 2-3 invalid actions
 
 **Math**:
+
 - 8×8 grid = 64 positions
 - Boundary positions = 28 (4 corners + 24 edges)
 - Invalid actions = ~70 state-action pairs that should never be tried
@@ -287,10 +304,12 @@ If you mask the door action, it can't learn this sequence.
 ### 3. Reward Signal Clarity
 
 **Without masking**: Agent gets punished for trying invalid moves
+
 - "Why did I get punished? Bad position? Bad action? Bad timing?"
 - Reward signal is noisy
 
 **With masking**: Agent only tries valid moves
+
 - Rewards clearly reflect strategy quality
 - No confusion from physics violations
 
@@ -301,17 +320,20 @@ If you mask the door action, it can't learn this sequence.
 ### `/home/john/hamlet/src/hamlet/environment/hamlet_env.py`
 
 **Added method** (`get_valid_actions()`):
+
 - Returns boolean mask of valid actions
 - Checks boundary constraints
 - Called in observation generation
 
 **Modified** (`_observe_full()` and `_observe_partial()`):
+
 - Added `action_mask` to observation dictionary
 - Agent now receives mask with every observation
 
 ### `/home/john/hamlet/src/hamlet/agent/drl_agent.py`
 
 **Modified** (`select_action()`):
+
 - Extracts action_mask from observation
 - Exploration: samples only from valid actions
 - Exploitation: masks Q-values with -inf, argmax over valid actions
@@ -325,6 +347,7 @@ If you mask the door action, it can't learn this sequence.
 **Hypothesis**: Without action masking, ~10-20% of actions at boundaries are wasted
 
 **Method**:
+
 1. Train agent without action masking for 500 episodes
 2. Count boundary collision attempts
 3. Calculate percentage of wasted actions
@@ -336,6 +359,7 @@ If you mask the door action, it can't learn this sequence.
 **Hypothesis**: Action masking speeds up learning by 20%
 
 **Method**:
+
 1. Train 2 agents to 80% success rate
    - Agent A: No action masking
    - Agent B: With action masking
@@ -348,6 +372,7 @@ If you mask the door action, it can't learn this sequence.
 **Hypothesis**: Q-values at boundaries are more stable with masking
 
 **Method**:
+
 1. Train 2 agents for 1000 episodes
 2. Plot Q-value variance at boundary states
 3. Compare stability
@@ -377,6 +402,7 @@ If you mask the door action, it can't learn this sequence.
 **Solution**: Action masking - tell the agent which actions are physically possible
 
 **Benefit**:
+
 - 20% faster learning
 - Cleaner Q-values
 - No wasted movement costs

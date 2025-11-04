@@ -17,6 +17,7 @@
 ## Executive Summary
 
 ### Current State
+
 The interaction system currently supports **4 hardcoded interaction types** (`instant`, `multi_tick`, `continuous`, `dual`) with behavior partially baked into Python code (`vectorized_env.py`, `affordance_engine.py`). While Level 3 temporal mechanics introduced multi-tick interactions, many interaction patterns students might want to explore remain **impossible without code changes**.
 
 ---
@@ -28,6 +29,7 @@ This research follows the established UAC design principles from TASK-003 (Actio
 ### Conceptual Agnosticism
 
 The interaction schema should NOT assume:
+
 - ❌ Interactions must have instant effects
 - ❌ Interactions must cost resources
 - ❌ Interactions must be spatial (at a location)
@@ -36,6 +38,7 @@ The interaction schema should NOT assume:
 ### Structural Enforcement
 
 The schema MUST enforce:
+
 - ✅ All meter references exist in bars.yaml (validated at compile time)
 - ✅ Capability parameters are type-safe
 - ✅ Effect stages are well-defined (on_start, per_tick, on_completion, on_early_exit)
@@ -68,7 +71,9 @@ Actions (TASK-003) and Affordances (this research) should follow similar pattern
 ---
 
 ### Design Space
+
 Research identified **32+ distinct interaction patterns** across 5 dimensions:
+
 - **Spatial**: 6 patterns (proximity, remote, range-based, line-of-sight, zone, multi-location)
 - **Temporal**: 8 patterns (instant, multi-tick, cooldown, one-time, recurring, interruptible, resumable, scheduled)
 - **Conditional**: 10 patterns (unconditional, meter-gated, item-gated, skill-probabilistic, time-gated, sequence-gated, occupancy-limited, prerequisite-chained, state-dependent, weather-conditional)
@@ -76,17 +81,20 @@ Research identified **32+ distinct interaction patterns** across 5 dimensions:
 - **Occupancy**: 3 patterns (single, multi, queued)
 
 ### Recommended Approach
+
 **Hybrid: Capability Composition + Effect Pipeline** (Options B + C)
 
 Use **capability flags** to enable/disable features (composable behaviors) combined with **effect pipelines** for fine-grained control over interaction lifecycle. This balances expressivity (handles 90%+ of pedagogical use cases) with learnability (simple configs for simple cases, verbose for complex).
 
 **Pattern Alignment with TASK-003**:
+
 - Actions use single `type` (movement, interaction, passive, transaction)
 - Affordances use multiple composable `capabilities` (multi_tick, cooldown, meter_gated, etc.)
 - Both share `costs: [{meter, amount}]` and `effects: [{meter, amount}]` patterns
 - Both follow same validation approach (structural then semantic)
 
 ### Effort Estimate
+
 - **Phase 1 (Foundation)**: 8-10 hours - Capability system, validation infrastructure
 - **Phase 2 (Effect Pipeline)**: 6-8 hours - Multi-stage effects, conditional logic
 - **Phase 3 (Advanced Patterns)**: 2-4 hours - Cooldowns, prerequisites, queues
@@ -99,6 +107,7 @@ Use **capability flags** to enable/disable features (composable behaviors) combi
 ### 1.1 Hardcoded Interaction Patterns
 
 **Current Implementation** (`affordance_config.py` lines 77-78):
+
 ```python
 interaction_type: Literal["instant", "multi_tick", "continuous", "dual"]
 ```
@@ -136,6 +145,7 @@ interaction_type: Literal["instant", "multi_tick", "continuous", "dual"]
    - No queuing system
 
 **Pedagogical Impact**: Students cannot explore:
+
 - Skill-based interactions (gym effectiveness depends on fitness)
 - Remote actions (phone call from anywhere)
 - Cooldown mechanics (can't spam same action)
@@ -148,6 +158,7 @@ interaction_type: Literal["instant", "multi_tick", "continuous", "dual"]
 ### 1.4 Current Gap: Action-Affordance Asymmetry
 
 **Actions** (TASK-003 current state):
+
 ```yaml
 # actions.yaml (legacy)
 actions:
@@ -157,6 +168,7 @@ actions:
 ```
 
 **Affordances** (current state):
+
 ```yaml
 # affordances.yaml (current)
 affordances:
@@ -169,11 +181,13 @@ affordances:
 **Problem**: Actions can only cost energy (via `energy_cost` field), but affordances can cost multiple meters. This is an inconsistency in the UAC system.
 
 **Solution** (from TASK-003 Gap 2):
+
 - Add `costs: [{meter, amount}]` field to actions.yaml (matching affordances pattern)
 - Keep `energy_cost` for backward compatibility (auto-converts to costs list)
 - Both actions and affordances now use same cost pattern
 
 **Example** (future actions.yaml):
+
 ```yaml
 actions:
   - id: 0
@@ -193,6 +207,7 @@ This aligns actions with affordances - both use the same `costs: [{meter, amount
 ### 1.2 Current Interaction Lifecycle
 
 **Level 1-2 (Instant Mode)**:
+
 ```
 1. Agent issues INTERACT action
 2. Check proximity (distance == 0)
@@ -203,6 +218,7 @@ This aligns actions with affordances - both use the same `costs: [{meter, amount
 ```
 
 **Level 3+ (Multi-Tick Mode)**:
+
 ```
 1. Agent issues INTERACT action
 2. Check proximity (distance == 0)
@@ -217,6 +233,7 @@ This aligns actions with affordances - both use the same `costs: [{meter, amount
 ```
 
 **Key Observations**:
+
 - **No state persistence** across episodes (can't save progress)
 - **No early exit rewards** (agent must stay full duration or lose progress)
 - **No conditional effects** (same effect regardless of agent state)
@@ -227,6 +244,7 @@ This aligns actions with affordances - both use the same `costs: [{meter, amount
 ### 1.3 Multi-Tick Interaction Model (L3)
 
 **Current Implementation**:
+
 ```yaml
 - id: "10"
   name: "Job"
@@ -244,10 +262,12 @@ This aligns actions with affordances - both use the same `costs: [{meter, amount
 ```
 
 **75/25 Split Rationale**:
+
 - **75% linear**: Provides dense reward signal, encourages progress
 - **25% completion**: Incentivizes commitment, prevents "free sampling"
 
 **Progress Tracking** (`vectorized_env.py` lines 166-168):
+
 ```python
 self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
 self.last_interaction_affordance: list[str | None] = [None] * self.num_agents
@@ -255,12 +275,14 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
 ```
 
 **Current Limitations**:
+
 1. **No early exit mechanics**: Agent loses all progress if leaves before completion
 2. **No resumption**: Cannot pause and resume later (resets to tick 0)
 3. **No partial rewards**: No "you worked 2/4 ticks, here's partial payment"
 4. **No dynamic duration**: Cannot have skill-dependent completion time
 
 **Pedagogical Gap**: Students cannot model:
+
 - University (multi-semester degree with semester breaks)
 - Construction (resumable project across days)
 - Cooking (can pause and resume preparation)
@@ -273,9 +295,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
 ### 2.1 Spatial Patterns
 
 **1. Proximity (Current Default)**
+
 - **Mechanic**: Agent must be at exact position (`distance == 0`)
 - **Use Cases**: Bed, Shower, Gym (physical location required)
 - **Config**:
+
   ```yaml
   spatial_requirement:
     type: "proximity"
@@ -283,18 +307,22 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **2. Remote (No Spatial Constraint)**
+
 - **Mechanic**: Can interact from anywhere on grid
 - **Use Cases**: Phone call, meditation, rest command
 - **Config**:
+
   ```yaml
   spatial_requirement:
     type: "remote"  # No distance check
   ```
 
 **3. Range-Based (Distance Threshold)**
+
 - **Mechanic**: Can interact if within N tiles
 - **Use Cases**: Vending machine (see from distance), billboard (read from afar)
 - **Config**:
+
   ```yaml
   spatial_requirement:
     type: "range"
@@ -303,34 +331,42 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **4. Line-of-Sight (Vision-Based)**
+
 - **Mechanic**: Need clear path to affordance (no obstacles)
 - **Use Cases**: Sniper rifle, telescope, lighthouse
 - **Config**:
+
   ```yaml
   spatial_requirement:
     type: "line_of_sight"
     max_distance: 5
     requires_clear_path: true
   ```
+
   **Note**: Requires obstacle grid (not yet implemented)
 
 **5. Zone-Based (Region Containment)**
+
 - **Mechanic**: Agent must be in specific region (not exact tile)
 - **Use Cases**: Park (anywhere in park zone), Office (anywhere in building)
 - **Config**:
+
   ```yaml
   spatial_requirement:
     type: "zone"
     zone_id: "downtown"  # References zones.yaml
   ```
+
   **Note**: Requires multi-zone system (L4 planned)
 
 **6. Multi-Location (Multiple Valid Positions)**
+
 - **Mechanic**: Affordance exists at multiple positions (any valid)
 - **Use Cases**: ATM (multiple machines), Water fountain (multiple locations)
 - **Config**: Already supported via deployment system (multiple instances)
 
 **Priority**:
+
 - ✅ **High**: Remote, Range-Based (simple, high pedagogical value)
 - 🔶 **Medium**: Line-of-Sight (requires obstacle system, L5+)
 - 🔶 **Low**: Zone-Based (requires multi-zone, L4)
@@ -340,19 +376,23 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
 ### 2.2 Temporal Patterns
 
 **1. Instant (Current Default)**
+
 - **Mechanic**: Effects applied immediately in single step
 - **Use Cases**: Bed, Shower, HomeMeal (simple restoration)
 - **Config**: Already supported (`interaction_type: "instant"`)
 
 **2. Multi-Tick (Current L3)**
+
 - **Mechanic**: Requires N steps, effects distributed + completion bonus
 - **Use Cases**: Job (4 ticks), Gym (3 ticks), University (10 ticks)
 - **Config**: Already supported (`interaction_type: "multi_tick"`)
 
 **3. Cooldown (Post-Use Delay)**
+
 - **Mechanic**: After use, cannot use again for N steps
 - **Use Cases**: Energy drink (can't spam), Doctor (once per day), Skill training (daily limit)
 - **Config**:
+
   ```yaml
   temporal_constraint:
     type: "cooldown"
@@ -361,9 +401,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **4. One-Time (Consumable)**
+
 - **Mechanic**: Affordance disappears after single use
 - **Use Cases**: Treasure chest, quest item, limited resource
 - **Config**:
+
   ```yaml
   temporal_constraint:
     type: "one_time"
@@ -371,9 +413,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **5. Recurring (Periodic Reset)**
+
 - **Mechanic**: Effects can be claimed once per period (e.g., daily wage)
 - **Use Cases**: Daily quest, weekly paycheck, seasonal harvest
 - **Config**:
+
   ```yaml
   temporal_constraint:
     type: "recurring"
@@ -382,9 +426,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **6. Interruptible (Early Exit Allowed)**
+
 - **Mechanic**: Agent can leave before completion, keeps partial progress
 - **Use Cases**: University (drop out, keep partial education), Job (quit early, keep partial payment)
 - **Config**:
+
   ```yaml
   multi_tick:
     required_ticks: 10
@@ -393,9 +439,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **7. Resumable (Can Pause and Continue)**
+
 - **Mechanic**: Progress persists even if agent leaves
 - **Use Cases**: Construction project (resume next day), Cooking (pause and resume)
 - **Config**:
+
   ```yaml
   multi_tick:
     required_ticks: 10
@@ -404,9 +452,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **8. Scheduled (Time-Window Constraints)**
+
 - **Mechanic**: More complex than operating_hours (e.g., weekdays only, seasonal)
 - **Use Cases**: Weekend market, Summer festival, Night shift
 - **Config**:
+
   ```yaml
   temporal_constraint:
     type: "scheduled"
@@ -414,9 +464,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
       - { day_pattern: "weekday", hours: [8, 18] }
       - { day_pattern: "weekend", hours: [10, 14] }
   ```
+
   **Note**: Requires day/week system (not currently modeled)
 
 **Priority**:
+
 - ✅ **High**: Cooldown, Interruptible, Resumable (extend current multi-tick)
 - 🔶 **Medium**: One-Time, Recurring (inventory system needed)
 - 🔶 **Low**: Scheduled (requires calendar system)
@@ -426,14 +478,17 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
 ### 2.3 Conditional Patterns
 
 **1. Unconditional (Current Default)**
+
 - **Mechanic**: Always available if proximity + affordability checks pass
 - **Use Cases**: Bed, Shower, HomeMeal
 - **Config**: Default behavior
 
 **2. Meter-Gated (Threshold Requirement)**
+
 - **Mechanic**: Requires meter(s) above/below threshold
 - **Use Cases**: Gym requires energy >20%, Hospital only if health <50%
 - **Config**:
+
   ```yaml
   prerequisites:
     - type: "meter_threshold"
@@ -445,21 +500,26 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **3. Item-Gated (Inventory Requirement)**
+
 - **Mechanic**: Requires specific item in inventory
 - **Use Cases**: Library requires library card, Restaurant requires reservation
 - **Config**:
+
   ```yaml
   prerequisites:
     - type: "item_required"
       item: "library_card"
       consume: false  # Don't consume on use
   ```
+
   **Note**: Requires inventory system (not yet implemented)
 
 **4. Skill-Probabilistic (Success Rate Based on Meter)**
+
 - **Mechanic**: Interaction can fail, success probability depends on agent state
 - **Use Cases**: Gym effectiveness scales with fitness, Job performance depends on energy
 - **Config**:
+
   ```yaml
   effects:
     - meter: "fitness"
@@ -471,14 +531,17 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **5. Time-Gated (Operating Hours)**
+
 - **Mechanic**: Only available during certain hours (already implemented)
 - **Use Cases**: Job (9am-5pm), Bar (6pm-2am)
 - **Config**: Already supported (`operating_hours: [9, 17]`)
 
 **6. Sequence-Gated (Prerequisite Chain)**
+
 - **Mechanic**: Must complete affordance A before B unlocks
 - **Use Cases**: University progression (Freshman → Sophomore → Junior → Senior)
 - **Config**:
+
   ```yaml
   prerequisites:
     - type: "affordance_completed"
@@ -487,9 +550,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **7. Occupancy-Limited (Capacity Constraint)**
+
 - **Mechanic**: Maximum N agents can use simultaneously
 - **Use Cases**: Bed (1 agent), Classroom (30 agents), Bus (50 agents)
 - **Config**:
+
   ```yaml
   occupancy:
     max_concurrent: 1  # Single-occupancy
@@ -497,9 +562,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **8. Prerequisite-Chained (Multi-Step Unlocking)**
+
 - **Mechanic**: Complex AND/OR conditions to unlock
 - **Use Cases**: Advanced training (requires fitness >50% AND completed basic training)
 - **Config**:
+
   ```yaml
   prerequisites:
     operator: "AND"
@@ -512,9 +579,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **9. State-Dependent (Effect Varies by Agent State)**
+
 - **Mechanic**: Same affordance produces different effects based on meters
 - **Use Cases**: Gym gives more benefit if fitness is low, diminishing returns if high
 - **Config**:
+
   ```yaml
   effects:
     - meter: "fitness"
@@ -524,11 +593,13 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **10. Weather/Environment-Conditional (Future: L6)**
+
 - **Mechanic**: Availability depends on environmental state
 - **Use Cases**: Park (not available if raining), Beach (only in summer)
 - **Config**: Deferred (requires environment state system)
 
 **Priority**:
+
 - ✅ **High**: Meter-Gated, Skill-Probabilistic, Sequence-Gated (core pedagogical patterns)
 - 🔶 **Medium**: Occupancy-Limited, State-Dependent (useful but complex)
 - 🔶 **Low**: Item-Gated (needs inventory), Weather-Conditional (needs environment)
@@ -538,14 +609,17 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
 ### 2.4 Effect Patterns
 
 **1. Deterministic (Current Default)**
+
 - **Mechanic**: Fixed effects every time
 - **Use Cases**: Bed (+50% energy), Job (+$22.50)
 - **Config**: Already supported (default behavior)
 
 **2. Probabilistic (Success/Failure)**
+
 - **Mechanic**: Effects only apply if interaction succeeds (dice roll)
 - **Use Cases**: Gambling, Risky investment, Dating (might succeed or fail)
 - **Config**:
+
   ```yaml
   effects:
     - meter: "money"
@@ -557,9 +631,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **3. Scaled (Magnitude Depends on State)**
+
 - **Mechanic**: Effect amount varies based on agent's current meters
 - **Use Cases**: Gym (more effective if rested), Learning (better if high mood)
 - **Config**:
+
   ```yaml
   effects:
     - meter: "fitness"
@@ -570,9 +646,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **4. Staged (Different Effects per Tick)**
+
 - **Mechanic**: Each tick applies different effects (progression)
 - **Use Cases**: University (different learning per semester), Training (progressive difficulty)
 - **Config**:
+
   ```yaml
   multi_tick:
     required_ticks: 4
@@ -588,9 +666,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **5. Compound (Multi-Effect Interactions)**
+
 - **Mechanic**: Effects depend on other effects (cascading)
 - **Use Cases**: Alcohol (+social, -energy, THEN -health if energy low)
 - **Config**:
+
   ```yaml
   effects:
     - meter: "social"
@@ -606,6 +686,7 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **Priority**:
+
 - ✅ **High**: Probabilistic, Scaled (rich pedagogical scenarios)
 - 🔶 **Medium**: Staged, Compound (advanced patterns)
 
@@ -614,9 +695,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
 ### 2.5 Occupancy Patterns
 
 **1. Single-Occupancy (One Agent at a Time)**
+
 - **Mechanic**: Only one agent can use affordance simultaneously
 - **Use Cases**: Bed, Shower, Therapist (one-on-one)
 - **Config**:
+
   ```yaml
   occupancy:
     max_concurrent: 1
@@ -624,9 +707,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **2. Multi-Occupancy (Capacity Limit)**
+
 - **Mechanic**: Up to N agents can use simultaneously
 - **Use Cases**: Classroom (30 students), Bus (50 passengers), Restaurant (20 tables)
 - **Config**:
+
   ```yaml
   occupancy:
     max_concurrent: 30
@@ -634,9 +719,11 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **3. Queued (FIFO Waiting)**
+
 - **Mechanic**: Agents wait in line, served in order
 - **Use Cases**: Doctor (queue system), DMV (ticket queue)
 - **Config**:
+
   ```yaml
   occupancy:
     max_concurrent: 1
@@ -646,6 +733,7 @@ self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.l
   ```
 
 **Priority**:
+
 - ✅ **High**: Single-Occupancy (realistic resource competition)
 - 🔶 **Medium**: Queued (teaches waiting dynamics)
 - 🔶 **Low**: Multi-Occupancy (niche use case)
@@ -661,6 +749,7 @@ This section demonstrates how actions (TASK-003) and affordances (this research)
 ### Example 1: Resource Costs
 
 **Action** (TASK-003):
+
 ```yaml
 # actions.yaml
 actions:
@@ -674,6 +763,7 @@ actions:
 ```
 
 **Affordance** (this research):
+
 ```yaml
 # affordances.yaml
 affordances:
@@ -690,6 +780,7 @@ affordances:
 ### Example 2: Positive Effects
 
 **Action** (TASK-003):
+
 ```yaml
 # actions.yaml
 actions:
@@ -702,6 +793,7 @@ actions:
 ```
 
 **Affordance** (this research):
+
 ```yaml
 # affordances.yaml
 affordances:
@@ -718,6 +810,7 @@ affordances:
 ### Example 3: Type/Capability Categorization
 
 **Action** (TASK-003):
+
 ```yaml
 # actions.yaml
 actions:
@@ -728,6 +821,7 @@ actions:
 ```
 
 **Affordance** (this research):
+
 ```yaml
 # affordances.yaml
 affordances:
@@ -739,10 +833,12 @@ affordances:
 ```
 
 **Pattern Asymmetry** (intentional):
+
 - **Actions** have single `type` (simple) - actions are primitive behaviors
 - **Affordances** have multiple `capabilities` (composable) - affordances are compound behaviors
 
 This asymmetry is **by design**:
+
 - Actions are **primitive** (one type per action = clear semantics)
 - Affordances are **compound** (multiple capabilities compose = rich behaviors)
 
@@ -753,6 +849,7 @@ This asymmetry is **by design**:
 Both actions and affordances follow the same validation approach (from TASK-003 design principles):
 
 **Structural Validation** (syntax):
+
 ```python
 # Validate action structure
 for action in actions:
@@ -767,6 +864,7 @@ for affordance in affordances:
 ```
 
 **Semantic Validation** (cross-references):
+
 ```python
 # Validate meter references in actions
 valid_meters = {bar.name for bar in bars_config.bars}
@@ -793,6 +891,7 @@ for affordance in affordances:
 **Concept**: Predefine fixed set of interaction types (like current system)
 
 **Schema**:
+
 ```yaml
 affordances:
   - id: "Job"
@@ -811,6 +910,7 @@ affordances:
 ```
 
 **Registry of Types**:
+
 - `instant_restoration` (Bed, Shower)
 - `timed_resource_generator` (Job, Mining)
 - `skill_trainer` (Gym, University)
@@ -820,11 +920,13 @@ affordances:
 - ...
 
 **Pros**:
+
 - ✅ **Simple**: Operators just pick from menu
 - ✅ **Self-documenting**: Type name explains behavior
 - ✅ **Easy validation**: Check type exists, validate parameters
 
 **Cons**:
+
 - ❌ **Limited expressivity**: Can only use predefined types
 - ❌ **Code changes required**: Adding new type requires Python changes
 - ❌ **Naming overload**: Need to invent names for every pattern combination
@@ -841,6 +943,7 @@ affordances:
 **Concept**: Affordances declare **capabilities** (features) they want, system combines them
 
 **Schema**:
+
 ```yaml
 affordances:
   - id: "Job"
@@ -872,6 +975,7 @@ affordances:
 ```
 
 **Capability Registry** (Expandable):
+
 - `multi_tick` (duration, early_exit, resumable)
 - `cooldown` (duration, scope)
 - `meter_gated` (meter, min, max)
@@ -883,12 +987,14 @@ affordances:
 - `one_time_use` (respawn settings)
 
 **Pros**:
+
 - ✅ **Highly composable**: Mix any capabilities
 - ✅ **Extensible**: New capabilities = new YAML schema (no Python if logic generic)
 - ✅ **Explicit**: Clear what features are enabled
 - ✅ **Progressive disclosure**: Simple configs are short, complex configs are verbose
 
 **Cons**:
+
 - ⚠️ **Verbosity**: Complex interactions have many capability blocks
 - ⚠️ **Conflicting capabilities**: Need validation (can't be `one_time` + `multi_tick`)
 - ⚠️ **Learning curve**: Operators must understand capability interactions
@@ -904,6 +1010,7 @@ affordances:
 **Concept**: Define interaction as **pipeline of effect stages** (on_start, per_tick, on_completion, on_exit)
 
 **Schema**:
+
 ```yaml
 affordances:
   - id: "Job"
@@ -949,6 +1056,7 @@ affordances:
 ```
 
 **Stages**:
+
 - `on_start`: Prerequisites, entry costs, initial effects
 - `per_tick`: Recurring costs/effects each tick
 - `on_completion`: Bonus for finishing
@@ -956,12 +1064,14 @@ affordances:
 - `on_failure`: Effects if interaction fails (probabilistic)
 
 **Pros**:
+
 - ✅ **Explicit lifecycle**: Clear when effects apply
 - ✅ **Flexible**: Different effects at different stages
 - ✅ **Rich conditionals**: Can have per-stage prerequisites
 - ✅ **Self-documenting**: Pipeline shows interaction flow
 
 **Cons**:
+
 - ⚠️ **Verbose**: Even simple interactions need multiple stages
 - ⚠️ **Overlap with capabilities**: Stages + capabilities might conflict
 - ⚠️ **Validation complexity**: Need to ensure stages are consistent
@@ -977,6 +1087,7 @@ affordances:
 **Concept**: Simple boolean flags enable/disable behaviors (flat configuration)
 
 **Schema**:
+
 ```yaml
 affordances:
   - id: "Job"
@@ -1011,11 +1122,13 @@ affordances:
 ```
 
 **Pros**:
+
 - ✅ **Simple**: Just set flags true/false
 - ✅ **Easy to scan**: All settings visible at once
 - ✅ **Low verbosity**: Compact configs
 
 **Cons**:
+
 - ❌ **Flag explosion**: Need flag for every feature
 - ❌ **Implicit behavior**: What does `interruptible: true` actually do?
 - ❌ **Limited extensibility**: Adding feature = new flag everywhere
@@ -1043,6 +1156,7 @@ affordances:
 | **No-Code Extension** | No | Mostly | Partially | No |
 
 **Scores Summary**:
+
 - **Type System (A)**: Simple but limited (5/10 overall)
 - **Capability Composition (B)**: Expressive and extensible (8.5/10 overall) ⭐
 - **Effect Pipeline (C)**: Powerful but complex (7/10 overall)
@@ -1055,6 +1169,7 @@ affordances:
 ### Hybrid: Capability Composition + Effect Pipeline (B + C)
 
 **Rationale**:
+
 - **Capabilities** handle **behavioral features** (cooldown, meter-gating, probabilistic)
 - **Effect Pipeline** handles **effect distribution** (when effects apply in lifecycle)
 - **Best of both**: Composability + expressivity without excessive complexity
@@ -1221,6 +1336,7 @@ affordances:
 ### 5.1 Capability Registry (Extensible)
 
 **Core Capabilities** (Phase 1):
+
 1. ✅ `multi_tick` - Multi-step interactions
 2. ✅ `cooldown` - Post-use delay
 3. ✅ `meter_gated` - Threshold prerequisites
@@ -1243,6 +1359,7 @@ affordances:
 ### 5.2 Effect Pipeline Stages
 
 **Supported Stages**:
+
 - `instant`: For simple instant interactions (default)
 - `on_start`: When interaction begins (entry costs, prerequisites)
 - `per_tick`: Each tick during multi-tick interaction
@@ -1251,6 +1368,7 @@ affordances:
 - `on_failure`: When probabilistic interaction fails
 
 **Stage Semantics**:
+
 - **Instant interactions**: Only use `instant` stage
 - **Multi-tick interactions**: Use `on_start`, `per_tick`, `on_completion`, `on_early_exit`
 - **Probabilistic interactions**: Add `on_failure` for failure effects
@@ -1260,6 +1378,7 @@ affordances:
 ### 5.3 Migration Path (Backward Compatibility)
 
 **Current Configs** (no capabilities):
+
 ```yaml
 - id: "0"
   name: "Bed"
@@ -1272,12 +1391,14 @@ affordances:
 ```
 
 **Interpretation**:
+
 - No `capabilities` field → Use `interaction_type` (legacy mode)
 - `interaction_type: "instant"` → No multi-tick, instant effects
 - `interaction_type: "multi_tick"` → Implicit `multi_tick` capability
 - `interaction_type: "dual"` → Support both modes (based on `enable_temporal_mechanics`)
 
 **New Configs** (with capabilities):
+
 ```yaml
 - id: "10"
   name: "Job"
@@ -1290,6 +1411,7 @@ affordances:
 ```
 
 **Compiler Behavior**:
+
 - If `capabilities` exists → Use new system
 - If `interaction_type` exists (no capabilities) → Use legacy system
 - Never mix both (validation error)
@@ -1301,6 +1423,7 @@ affordances:
 ### Example 1: Simple Instant Interaction (Bed)
 
 **Current System**:
+
 ```yaml
 - id: "0"
   name: "Bed"
@@ -1313,6 +1436,7 @@ affordances:
 ```
 
 **New System** (unchanged for simple cases):
+
 ```yaml
 - id: "0"
   name: "Bed"
@@ -1330,6 +1454,7 @@ affordances:
 ### Example 2: Multi-Tick Interaction (Job)
 
 **Current System**:
+
 ```yaml
 - id: "10"
   name: "Job"
@@ -1343,6 +1468,7 @@ affordances:
 ```
 
 **New System** (with early exit + cooldown):
+
 ```yaml
 - id: "10"
   name: "Job"
@@ -1364,6 +1490,7 @@ affordances:
 ```
 
 **Added Behavior**:
+
 - Early exit allowed (keeps partial progress)
 - Cooldown prevents spamming
 - Mood penalty for quitting
@@ -1373,6 +1500,7 @@ affordances:
 ### Example 3: Skill-Gated Interaction (Gym)
 
 **Current System** (deterministic only):
+
 ```yaml
 - id: "12"
   name: "Gym"
@@ -1389,6 +1517,7 @@ affordances:
 ```
 
 **New System** (skill-based effectiveness):
+
 ```yaml
 - id: "12"
   name: "Gym"
@@ -1415,6 +1544,7 @@ affordances:
 ```
 
 **Added Behavior**:
+
 - Requires 20% energy to start
 - Effectiveness scales with current fitness (diminishing returns)
 - More realistic: Gym is less effective if already very fit
@@ -1424,11 +1554,13 @@ affordances:
 ### Example 4: Conditional Availability (Restaurant)
 
 **Current System** (not possible):
+
 ```yaml
 # Cannot model "only available if money >= $20"
 ```
 
 **New System** (meter-gated):
+
 ```yaml
 - id: "15"
   name: "FancyRestaurant"
@@ -1447,6 +1579,7 @@ affordances:
 ```
 
 **Added Behavior**:
+
 - Gated by multiple meters (money AND social)
 - Teaches resource management (need to save up)
 
@@ -1455,11 +1588,13 @@ affordances:
 ### Example 5: Multi-Stage Interaction (University)
 
 **Current System** (not possible):
+
 ```yaml
 # Cannot model 4-year progression
 ```
 
 **New System** (prerequisite chain):
+
 ```yaml
 - id: "30"
   name: "FreshmanYear"
@@ -1500,6 +1635,7 @@ affordances:
 ```
 
 **Added Behavior**:
+
 - Four-stage progression (Freshman → Sophomore → Junior → Senior)
 - Can pause and resume each year
 - Each year unlocks next (prerequisite chain)
@@ -1514,6 +1650,7 @@ affordances:
 **Goal**: Capability system infrastructure + core capabilities
 
 **Tasks**:
+
 1. **Capability Schema** (2h)
    - Define Pydantic models for capabilities (`MultiTickCapability`, `CooldownCapability`, etc.)
    - Add `capabilities` field to `AffordanceConfig`
@@ -1539,6 +1676,7 @@ affordances:
 **Goal**: Multi-stage effect application with lifecycle hooks
 
 **Tasks**:
+
 1. **Pipeline Executor** (3h)
    - Refactor `_handle_interactions()` to use pipeline stages
    - Apply `on_start` effects when interaction begins
@@ -1566,6 +1704,7 @@ affordances:
 **Goal**: Cooldowns, prerequisites, probabilistic success
 
 **Tasks**:
+
 1. **Cooldown System** (1-2h)
    - Track cooldown timers per agent per affordance
    - Decrement timers each step
@@ -1587,6 +1726,7 @@ affordances:
 **Goal**: Single-occupancy + queue system (complex state management)
 
 **Why Deferred**:
+
 - Requires global affordance state (which agents are using)
 - Queue system needs FIFO data structure
 - Adds complexity to checkpointing (must save queue state)
@@ -1708,6 +1848,7 @@ for affordance in affordances:
 Following TASK-003 "permissive semantics" principle, allow edge cases that are semantically valid:
 
 **Allow edge cases**:
+
 - ✅ `costs: []` - Free interaction (no resource cost)
 - ✅ `effects: []` - Purely informational interaction (no meter changes)
 - ✅ `duration_ticks: 1` - Multi-tick with duration=1 behaves like instant
@@ -1717,6 +1858,7 @@ Following TASK-003 "permissive semantics" principle, allow edge cases that are s
 - ✅ `operating_hours: [0, 24]` - Always open (24/7 availability)
 
 **Reject only true errors**:
+
 - ❌ `duration_ticks: -5` - Negative duration is nonsensical
 - ❌ `success_probability: 1.5` - Probability > 1 is invalid
 - ❌ `meter: "nonexistent"` - Dangling reference
@@ -1759,6 +1901,7 @@ for affordance in affordances:
 ### Legacy Config Support
 
 **Current Configs** (no capabilities):
+
 ```yaml
 - id: "0"
   name: "Bed"
@@ -1773,6 +1916,7 @@ for affordance in affordances:
 ```
 
 **Auto-Conversion** (during load):
+
 ```yaml
 # Converted to:
 - id: "0"
@@ -1793,6 +1937,7 @@ for affordance in affordances:
 ```
 
 **Conversion Logic**:
+
 1. If `interaction_type` present (no `capabilities`) → Legacy mode
 2. Convert `required_ticks` → `multi_tick.duration_ticks`
 3. Convert `costs` → `effects.instant` (negate amounts)
@@ -1811,6 +1956,7 @@ for affordance in affordances:
 **Example: Add `weather_conditional` capability**
 
 1. **Define Capability Schema** (YAML):
+
    ```yaml
    # In future: capabilities.yaml
    capabilities:
@@ -1826,6 +1972,7 @@ for affordance in affordances:
    ```
 
 2. **Implement Handler** (Python):
+
    ```python
    class WeatherConditionalHandler(CapabilityHandler):
        def check_availability(self, env_state, capability_config):
@@ -1838,6 +1985,7 @@ for affordance in affordances:
    ```
 
 3. **Register Handler** (Registration):
+
    ```python
    CAPABILITY_REGISTRY = {
        "multi_tick": MultiTickHandler,
@@ -1847,6 +1995,7 @@ for affordance in affordances:
    ```
 
 4. **Use in Configs**:
+
    ```yaml
    - id: "20"
      name: "Park"
@@ -1859,6 +2008,7 @@ for affordance in affordances:
    ```
 
 **Extensibility Pattern**:
+
 - New capability = New schema + Handler class + Registration
 - No changes to affordance configs (just add capability block)
 - Compiler validates capability exists in registry
@@ -1870,6 +2020,7 @@ for affordance in affordances:
 **Example: Add `on_interrupt` stage (for resumable interactions)**
 
 1. **Extend Effect Pipeline Schema**:
+
    ```python
    class EffectPipeline(BaseModel):
        instant: list[AffordanceEffect] = []
@@ -1882,6 +2033,7 @@ for affordance in affordances:
    ```
 
 2. **Implement Handler Logic**:
+
    ```python
    def handle_interrupt(self, agent_idx, affordance_name):
        pipeline = self.get_pipeline(affordance_name)
@@ -1890,6 +2042,7 @@ for affordance in affordances:
    ```
 
 3. **Use in Configs**:
+
    ```yaml
    - id: "30"
      name: "University"
@@ -1913,6 +2066,7 @@ for affordance in affordances:
 **Hybrid: Capability Composition + Effect Pipeline**
 
 **Why**:
+
 - ✅ **Balances expressivity and learnability**: Simple cases stay simple, complex cases possible
 - ✅ **Extensible without code changes**: New capabilities = new YAML schema + handler
 - ✅ **Backward compatible**: Legacy configs auto-convert
@@ -1921,6 +2075,7 @@ for affordance in affordances:
 - ✅ **Pattern consistency with actions**: Follows TASK-003 design principles (conceptual agnosticism, permissive semantics, structural enforcement)
 
 **What It Enables**:
+
 - Skill-based interactions (gym effectiveness depends on fitness)
 - Cooldown mechanics (prevent spamming)
 - Early exit rewards (quit job early, keep partial pay)
@@ -1930,6 +2085,7 @@ for affordance in affordances:
 - Multi-stage effects (different effects per tick)
 
 **What It Doesn't Enable (Yet)**:
+
 - Occupancy/queues (deferred to L5)
 - Inventory/item system (separate feature)
 - Weather/environment conditionals (needs environment state)

@@ -25,11 +25,13 @@ This document consolidates research findings for **6 unsolved problems** identif
 **With research findings**: 51-65 hours (+140-195%)
 
 **Critical path additions**:
+
 - Coordinate encoding: +20h (MUST implement for 3D)
 - Distance semantics: +8-12h (MUST implement for interactions)
 - obs_dim property: +8-11h (MUST implement for variable dims)
 
 **Deferrable work**:
+
 - Action validation: Move to TASK-004 (Compiler) - 17h
 - GUI visualization: Move to TASK-005 (separate project) - 24-64h
 - Explicit positioning: Defer to Phase 2 - 6h
@@ -84,6 +86,7 @@ class AspatialSubstrate(SpatialSubstrate):
 ```
 
 **Environment aggregates**:
+
 ```python
 self.observation_dim = (
     self.substrate.position_encoding_dim +  # Variable by substrate
@@ -98,12 +101,14 @@ self.observation_dim = (
 **Effort**: 8-11 hours
 
 **Phases**:
+
 1. Add `position_encoding_dim` property to substrate interface (2-3h)
 2. Implement for all substrate types (SquareGrid, Cubic, Hex, Aspatial) (3-4h)
 3. Update `VectorizedHamletEnv` to use substrate property (2-3h)
 4. Tests (1h)
 
 **Files to modify**:
+
 - `src/townlet/environment/substrate.py` (new file)
 - `src/townlet/environment/vectorized_env.py`
 
@@ -133,6 +138,7 @@ Different substrates require different action spaces:
 **Optimal Solution**: **Compile-Time Validation** (Stage 4 of Universe Compilation)
 
 **Architecture**:
+
 ```python
 class SubstrateActionValidator:
     """Validates substrate-action compatibility during compilation."""
@@ -164,6 +170,7 @@ def validate_square_grid(substrate, actions) -> ValidationResult:
 ```
 
 **Integration with Universe Compiler**:
+
 ```python
 # Stage 4: Validate substrate-action compatibility
 validator = SubstrateActionValidator(substrate_config, action_config)
@@ -177,6 +184,7 @@ if not result.valid:
 ```
 
 **Pedagogical Error Messages**:
+
 ```
 ❌ Substrate-Action Compatibility Error:
    Config pack: configs/my_3d_house
@@ -195,18 +203,21 @@ if not result.valid:
 **Effort**: 17 hours
 
 **Phases**:
+
 1. Validation infrastructure (4h)
 2. Substrate-specific validators (square, cubic, hex, aspatial) (6h)
 3. Compiler integration (3h)
 4. Testing (4h)
 
 **Files to create**:
+
 - `src/townlet/environment/substrate_action_validator.py` (new)
 - `src/townlet/compilation/universe_compiler.py` (Stage 4 integration)
 
 **Priority**: 🟡 **High** - But can be deferred to TASK-004 (Compiler Implementation)
 
 **Dependencies**:
+
 - TASK-000 (substrate types defined)
 - TASK-003 (actions.yaml schema)
 - TASK-004 (universe compiler pipeline)
@@ -220,6 +231,7 @@ if not result.valid:
 ### Problem Statement
 
 Current frontend assumes 2D square grid:
+
 - `GridVisualization.vue` renders 8×8 square
 - Agent positions use `(x, y)` coordinates
 - Hardcoded grid layout
@@ -231,6 +243,7 @@ Current frontend assumes 2D square grid:
 **Critical Insight**: **Visualization is DEFERRABLE** - should NOT block TASK-000!
 
 **Phase 1 (TASK-000)**: Text-based visualization (4-6h)
+
 ```python
 # Simple ASCII rendering
 def render_2d_square(env):
@@ -243,6 +256,7 @@ def render_2d_square(env):
 ```
 
 **Example output**:
+
 ```
 . . . B . . . .
 . . . . . . . .
@@ -255,6 +269,7 @@ def render_2d_square(env):
 ```
 
 **Phase 2-4 (TASK-005 - Separate Project)**: GUI rendering (24-64h)
+
 - Hexagonal SVG: 8-12h
 - 3D floor projection: 6-8h
 - Graph D3.js: 10-14h
@@ -265,12 +280,14 @@ def render_2d_square(env):
 **Effort**: 4-6 hours (text viz only)
 
 **Phases**:
+
 1. Text renderer interface (1-2h)
 2. 2D square renderer (1h)
 3. 3D cubic floor-by-floor renderer (1h)
 4. Hex/graph/aspatial renderers (1-2h)
 
 **Files to create**:
+
 - `src/townlet/demo/text_viz.py` (new)
 
 **Priority**: 🟢 **Low** - Nice-to-have for debugging, not critical
@@ -288,6 +305,7 @@ def render_2d_square(env):
 Current system: Affordance positions **not in config files** - randomized at runtime via `randomize_affordance_positions()`.
 
 **Challenge**: Different substrates need different position representations:
+
 - 2D square: `[x, y]`
 - 3D cubic: `[x, y, z]`
 - Hexagonal: `{q: 3, r: 4}` (axial coordinates)
@@ -301,6 +319,7 @@ Current system: Affordance positions **not in config files** - randomized at run
 **Recommended Approach**: Hybrid `position` field with substrate-specific interpretation
 
 **Phase 1 (TASK-000)**: Keep random placement (2h effort)
+
 ```python
 # Extend randomize_affordance_positions() for new substrates
 def randomize_affordance_positions(self):
@@ -325,6 +344,7 @@ def randomize_affordance_positions(self):
 ```
 
 **Phase 2 (Future)**: Add optional explicit positioning (6h effort)
+
 ```yaml
 # affordances.yaml (optional explicit positioning)
 affordances:
@@ -342,11 +362,13 @@ affordances:
 **Effort**: 2 hours (extend randomization)
 
 **Phases**:
+
 1. Extend `randomize_affordance_positions()` for 3D, hex, graph, aspatial (2h)
 
 **Future effort**: 6 hours (add optional explicit positioning)
 
 **Files to modify**:
+
 - `src/townlet/environment/vectorized_env.py`
 
 **Priority**: 🟢 **Low** - Random placement sufficient for experimentation
@@ -384,6 +406,7 @@ Current implementation: Hardcoded Manhattan distance and "exact position match" 
 2. **`compute_distance(pos1, pos2) → float`** - Optional for metrics/observations
 
 **Why this is elegant**:
+
 ```python
 # Aspatial substrate: Everything is adjacent!
 class AspatialSubstrate:
@@ -403,12 +426,14 @@ class GraphSubstrate:
 ```
 
 **Interaction check** (primary use case):
+
 ```python
 # vectorized_env.py
 can_interact = self.substrate.is_adjacent(agent_position, affordance_position)
 ```
 
 **Default implementation** (for simple substrates):
+
 ```python
 class SpatialSubstrate(ABC):
     def is_adjacent(self, pos1, pos2) -> bool:
@@ -422,6 +447,7 @@ class SpatialSubstrate(ABC):
 ```
 
 **Substrate-specific implementations**:
+
 ```python
 class SquareGridSubstrate:
     def is_adjacent(self, pos1, pos2) -> bool:
@@ -448,11 +474,13 @@ class ToroidalGridSubstrate:
 **Effort**: 8-12 hours
 
 **Phases**:
+
 1. Add `is_adjacent()` and `compute_distance()` to substrate interface (2-3h)
 2. Implement for all substrate types (4-6h)
 3. Update interaction logic in `VectorizedHamletEnv` (2-3h)
 
 **Files to modify**:
+
 - `src/townlet/environment/substrate.py` (interface)
 - `src/townlet/environment/vectorized_env.py` (interaction checks)
 
@@ -469,6 +497,7 @@ class ToroidalGridSubstrate:
 ### Problem Statement
 
 Current: **One-hot encoding** for grid position
+
 ```python
 # 8×8 grid = 64 dimensions
 flat_indices = positions[:, 1] * width + positions[:, 0]
@@ -492,6 +521,7 @@ one_hot.scatter_(1, flat_indices.unsqueeze(1), 1)
 **🎯 CRITICAL DISCOVERY**: L2 POMDP **already uses coordinate encoding successfully**!
 
 **Evidence** (`observation_builder.py:201`):
+
 ```python
 # L2 POMDP: Normalized position coordinates (NOT one-hot!)
 normalized_x = positions[:, 0] / (self.grid_size - 1)
@@ -505,6 +535,7 @@ position_encoding = torch.stack([normalized_x, normalized_y], dim=1)
 **Recommended Solution**: **Hybrid with auto-selection**
 
 **Auto-selection logic**:
+
 ```python
 def select_encoding_strategy(substrate):
     if substrate.type == "aspatial":
@@ -526,6 +557,7 @@ def select_encoding_strategy(substrate):
 ```
 
 **Implementation**:
+
 ```python
 class SquareGridSubstrate:
     def __init__(self, width, height, position_encoding="auto"):
@@ -586,11 +618,13 @@ class CubicGridSubstrate:
 **GAME-CHANGER**: Coordinate encoding enables **transfer learning across grid sizes**!
 
 **Current limitation** (one-hot):
+
 - Train on L0 (3×3): obs_dim = 36 (9 position + 27 other)
 - Cannot transfer to L1 (8×8): obs_dim = 91 (64 position + 27 other)
 - Network architecture incompatible (input layer size mismatch)
 
 **With coordinate encoding**:
+
 - Train on L0 (3×3): obs_dim = 29 (2 position + 27 other)
 - Transfer to L1 (8×8): obs_dim = 29 (2 position + 27 other) ✅ **SAME!**
 - Transfer to L1_large (16×16): obs_dim = 29 ✅ **STILL SAME!**
@@ -602,6 +636,7 @@ class CubicGridSubstrate:
 **Effort**: 20 hours (CRITICAL PATH)
 
 **Phases**:
+
 1. Add `encode_position()` to substrate interface (3h)
 2. Implement coordinate encoding for all substrates (5h)
 3. Auto-selection logic (3h)
@@ -609,6 +644,7 @@ class CubicGridSubstrate:
 5. Transfer learning tests (3D feasibility proof) (4h)
 
 **Files to modify**:
+
 - `src/townlet/environment/substrate.py` (interface + encoding methods)
 - `src/townlet/environment/vectorized_env.py` (use substrate encoding)
 - `src/townlet/agent/networks.py` (ensure works with coordinate inputs)
@@ -658,6 +694,7 @@ class CubicGridSubstrate:
 ### Revised With Research Findings: 51-65 hours
 
 **Phase 1: Substrate Abstraction Layer** (18-25h)
+
 - ✅ Create `SpatialSubstrate` interface (2h)
 - ✅ Implement `SquareGridSubstrate` (2h)
 - ✅ Implement `CubicGridSubstrate` (2h)
@@ -667,9 +704,11 @@ class CubicGridSubstrate:
 - ✅ **Implement coordinate encoding** (Problem 6) (5h)
 
 **Phase 2: Config Schema** (2-3h)
+
 - ✅ Pydantic DTOs for `substrate.yaml` (2-3h)
 
 **Phase 3: Environment Integration** (12-16h)
+
 - ✅ Update `VectorizedHamletEnv` to use substrate (4-6h)
 - ✅ Use `substrate.position_encoding_dim` for obs_dim (2h)
 - ✅ Use `substrate.is_adjacent()` for interactions (2-3h)
@@ -677,12 +716,15 @@ class CubicGridSubstrate:
 - ✅ **Extend `randomize_affordance_positions()`** (Problem 4) (1h)
 
 **Phase 4: Text Visualization** (4-6h)
+
 - ✅ **Text renderer for debugging** (Problem 3) (4-6h)
 
 **Phase 5: Migrate Configs** (3-4h)
+
 - ✅ Create `substrate.yaml` for L0, L0.5, L1, L2, L3 (3-4h)
 
 **Phase 6: Testing & Validation** (12-11h)
+
 - ✅ Test all substrate types (4h)
 - ✅ Test coordinate encoding (3h)
 - ✅ Test transfer learning (3h)
@@ -726,6 +768,7 @@ TASK-000 Phase 1 Complete
 **Update effort estimate**: 15-22h → 51-65h
 
 **Add to implementation plan**:
+
 - Phase 1: Add coordinate encoding support (Problem 6) - 20h
 - Phase 1: Add distance/adjacency abstraction (Problem 5) - 8-12h
 - Phase 1: Add obs_dim property (Problem 1) - 8-11h
@@ -733,10 +776,12 @@ TASK-000 Phase 1 Complete
 - Phase 4: Extend affordance randomization (Problem 4) - 2h
 
 **Add to risks section**:
+
 - **Risk**: One-hot encoding prevents 3D substrates
 - **Mitigation**: Implement coordinate encoding with auto-selection
 
 **Add to success criteria**:
+
 - [ ] Coordinate encoding works for 3D cubic grids (512 dims → 3 dims)
 - [ ] Transfer learning: train on 8×8, works on 16×16 (same obs_dim)
 - [ ] `is_adjacent()` works for all substrate types
@@ -749,17 +794,20 @@ TASK-000 Phase 1 Complete
 ### TASK-002: UAC Contracts (DTO Validation)
 
 **Add validation for**:
+
 - `substrate.yaml`: topology, dimensions, boundary, distance_metric, position_encoding
 - `affordances.yaml`: optional position field (list, dict, int, or null)
 
 ### TASK-004: Compiler Implementation
 
 **Add Stage 4**: Substrate-Action Compatibility Validation
+
 - **Effort**: +17h
 - **Validator**: `SubstrateActionValidator` with registry pattern
 - **Integration**: Compile-time error with pedagogical messages
 
 **Add to cross-validation**:
+
 - Validate affordance positions are in bounds for substrate
 - Validate action deltas match substrate dimensionality
 
@@ -768,6 +816,7 @@ TASK-000 Phase 1 Complete
 **Add dependency**: Needs `position_encoding` field from substrate config to handle variable encoding strategies.
 
 **Add example**:
+
 ```yaml
 # brain.yaml
 network:
@@ -779,6 +828,7 @@ network:
 ### NEW TASK-006: Substrate-Agnostic Visualization
 
 **Scope**: GUI rendering for all substrate types
+
 - Phase 1: Hexagonal SVG (8-12h)
 - Phase 2: 3D floor projection (6-8h)
 - Phase 3: Graph D3.js (10-14h)
@@ -893,6 +943,7 @@ network:
 ## Research Documents Reference
 
 All detailed research saved to:
+
 1. `RESEARCH-NETWORK-OBS-DIM-VARIABILITY.md`
 2. `RESEARCH-ACTION-COMPATIBILITY-VALIDATION.md`
 3. `RESEARCH-SUBSTRATE-AGNOSTIC-VISUALIZATION.md`

@@ -17,6 +17,7 @@ The plan demonstrates strong TDD alignment and thorough understanding of the tes
 ### Key Findings
 
 ✅ **Strengths**:
+
 - Excellent TDD methodology (strict RED-GREEN-REFACTOR cycles)
 - Proper fixture composition and reuse patterns
 - Comprehensive test coverage across all layers
@@ -24,18 +25,21 @@ The plan demonstrates strong TDD alignment and thorough understanding of the tes
 - Test isolation and independence maintained
 
 ⚠️ **Critical Issues**:
+
 1. **TASK NUMBER MISMATCH**: Plan references TASK-001, but specification file is named TASK-005
 2. **TEST FILE LOCATION CONFLICT**: Plan proposes new files that may conflict with existing consolidated test structure
 3. **MISSING DEPENDENCY ANALYSIS**: Doesn't account for AffordanceEngine meter validation changes
 4. **FIXTURE NAMING**: Some proposed fixtures may duplicate existing patterns
 
 ❌ **Blockers**:
+
 - Task numbering must be reconciled before proceeding
 - Test file organization must align with refactored structure
 
 ### Risk Assessment
 
 **Implementation Risk**: **MEDIUM** (was HIGH, reduced by strong TDD approach)
+
 - Task numbering confusion creates documentation risk
 - Test file conflicts could cause regressions
 - Complexity manageable with proper phasing
@@ -188,12 +192,14 @@ The plan demonstrates strong TDD alignment and thorough understanding of the tes
 #### Critical Issue: TASK NUMBER MISMATCH
 
 **Discovered Discrepancy**:
+
 - **Plan filename**: `plan-task-001-variable-size-meters-tdd-ready.md`
 - **Plan header (line 3)**: "Task: TASK-001 Variable-Size Meter System"
 - **Specification filename**: `docs/TASK-001-VARIABLE-SIZE-METER-SYSTEM.md`
 - **Specification header (line 1)**: "# TASK-005: Variable-Size Meter System"
 
 **Evidence**:
+
 ```markdown
 # From TASK-001-VARIABLE-SIZE-METER-SYSTEM.md line 1:
 # TASK-005: Variable-Size Meter System
@@ -203,23 +209,27 @@ The plan demonstrates strong TDD alignment and thorough understanding of the tes
 ```
 
 **Impact**: HIGH
+
 - Documentation inconsistency creates confusion
 - Task tracking and dependency graphs may be incorrect
 - Test file naming may reference wrong task number
 
 **Recommendation**:
+
 1. **IMMEDIATE**: Verify correct task number with project documentation
 2. Check `docs/TASK_IMPLEMENTATION_PLAN.md` (line 100) which references "TASK-001: Variable-Size Meter System"
 3. Rename either the specification file or update all references in the plan
 4. Update all test file docstrings to reference correct task number
 
 **Most Likely Resolution**:
+
 - Specification file should be renamed to `TASK-001-...` (matches implementation plan)
 - Or plan should be updated to reference TASK-005 throughout
 
 #### Missing Dependency: AffordanceEngine Meter Validation
 
 **From Specification** (TASK-001-VARIABLE-SIZE-METER-SYSTEM.md line 440-475):
+
 ```python
 class AffordanceEngine:
     def _validate_meter_references(self):
@@ -229,11 +239,13 @@ class AffordanceEngine:
 ```
 
 **Plan Coverage**: Line 907-951 mentions updating AffordanceEngine, but:
+
 - No dedicated tests for meter reference validation
 - No test for affordance loading with invalid meter names
 - Integration tests don't verify affordance validation
 
 **Recommendation**: Add Phase 2 test:
+
 ```python
 def test_affordance_with_invalid_meter_reference_rejected(self, cpu_device, config_4meter):
     """AffordanceEngine should reject affordances referencing non-existent meters."""
@@ -249,16 +261,19 @@ def test_affordance_with_invalid_meter_reference_rejected(self, cpu_device, conf
 **Issue**: Plan proposes creating new test files that conflict with consolidated structure
 
 **Lines Affected**:
+
 - Line 166-170: Test file organization table
 - Line 391: `tests/test_townlet/unit/test_configuration.py` (EXTEND existing file)
 - Line 759: `tests/test_townlet/unit/test_configuration.py` (EXTEND existing file)
 
 **Current Reality**:
+
 - `unit/test_configuration.py` already has 100+ lines and multiple test classes
 - Adding 6 more test classes (32+ tests) will make it 300+ lines
 - This violates good test organization (file becoming too large)
 
 **Recommendations**:
+
 1. **Best Practice**: Create `unit/environment/test_variable_meters.py` (NEW) for Phases 1-2
    - Justification: Meter logic is environment-specific, not general config
    - Precedent: Existing `unit/environment/test_meters.py` (line 1-100)
@@ -272,6 +287,7 @@ def test_affordance_with_invalid_meter_reference_rejected(self, cpu_device, conf
    - Group all TASK-001 test classes together
 
 **Impact if Ignored**: MEDIUM
+
 - Test discovery still works
 - But test organization becomes confusing
 - Hard to distinguish TASK-001 tests from general config tests
@@ -283,16 +299,19 @@ def test_affordance_with_invalid_meter_reference_rejected(self, cpu_device, conf
 **Lines Affected**: 187-289 (fixture definitions)
 
 **Specific Concerns**:
+
 - `config_4meter` - What if we later add L0_4meter curriculum level with different fixture?
 - `env_4meter` - Conflicts with potential future `env_l0_4meter`
 - `config_12meter` - No version or task identifier
 
 **Recommendations**:
+
 1. **Add task prefix**: `task001_config_4meter`, `task001_env_4meter`
 2. **Or add purpose suffix**: `config_4meter_minimal`, `env_4meter_tutorial`
 3. **Document scope in docstring**: "Use for: TASK-001 variable meter tests ONLY"
 
 **Example**:
+
 ```python
 @pytest.fixture
 def task001_config_4meter(tmp_path, test_config_pack_path):
@@ -311,7 +330,9 @@ def task001_config_4meter(tmp_path, test_config_pack_path):
 **Lines Affected**: 415-530 (Phase 1 tests)
 
 **Missing Tests**:
+
 1. **1-meter universe** (minimum valid)
+
    ```python
    def test_1_meter_config_validates(self):
        """1-meter config should validate (minimum valid case)."""
@@ -322,6 +343,7 @@ def task001_config_4meter(tmp_path, test_config_pack_path):
    ```
 
 2. **32-meter universe** (maximum valid)
+
    ```python
    def test_32_meter_config_validates(self):
        """32-meter config should validate (maximum valid case)."""
@@ -331,6 +353,7 @@ def task001_config_4meter(tmp_path, test_config_pack_path):
    ```
 
 3. **Non-contiguous indices with correct count** (more specific error)
+
    ```python
    def test_non_contiguous_indices_with_gaps_rejected(self):
        """Indices [0, 2, 3, 4] should be rejected (missing 1)."""
@@ -347,11 +370,13 @@ def task001_config_4meter(tmp_path, test_config_pack_path):
 **Lines Affected**: 1258-1373 (Phase 4 tests)
 
 **Missing Tests**:
+
 1. **obs_dim in metadata** - Test verifies it exists (line 1285) but not that it's correct
 2. **action_dim in metadata** - Not tested at all
 3. **Metadata inspection helper** - Line 1516-1537 shows helper but no test for it
 
 **Recommendation**: Add tests:
+
 ```python
 def test_checkpoint_metadata_has_correct_obs_dim(self, cpu_device, config_4meter, tmp_path):
     """Checkpoint metadata obs_dim should match environment."""
@@ -372,12 +397,14 @@ def test_inspect_checkpoint_metadata_without_loading_network(self, tmp_path):
 **Lines Affected**: 1557-1767 (Phase 5 tests)
 
 **Missing Integration Tests**:
+
 1. **Cross-meter-count checkpoint incompatibility** - Tested (line 1289), but not with population training
 2. **Curriculum progression with variable meters** - Not tested
 3. **Exploration (RND) with variable obs_dim** - Not tested
 4. **Replay buffer with variable obs_dim** - Not tested
 
 **Recommendation**: Add integration tests:
+
 ```python
 def test_replay_buffer_with_variable_obs_dim(self, cpu_device, config_4meter):
     """ReplayBuffer should store correct obs_dim for variable meters."""
@@ -399,16 +426,19 @@ def test_rnd_exploration_with_variable_obs_dim(self, cpu_device, config_4meter):
 **Issue**: REFACTOR phases are less detailed than RED/GREEN phases
 
 **Lines Affected**:
+
 - Line 638-668 (Phase 1 refactor)
 - Line 1030-1038 (Phase 2 refactor)
 - Line 1195-1213 (Phase 3 refactor)
 
 **Problem**: Refactor phases say "Extract constants", "Add docstrings" but don't specify:
+
 - Which constants to extract?
 - Which methods need docstrings?
 - What code smells to look for?
 
 **Recommendation**: Add refactor checklists:
+
 ```markdown
 ### 1.3: Refactor (REFACTOR)
 
@@ -427,16 +457,19 @@ Checklist:
 **Issue**: Plan mentions performance benchmarks (line 1733-1756) but marks them as optional
 
 **Lines Affected**:
+
 - Line 1733: `def test_performance_comparison_meter_counts(benchmark):`
 - Phase 5 success criteria (line 1759-1765) don't include performance
 
 **Concern**: Variable meter counts could have non-linear performance impact
+
 - 4 meters: Small obs_dim, fast
 - 8 meters: Standard
 - 12 meters: Larger obs_dim, potentially slower
 - But what about 32 meters? Could be significantly slower
 
 **Recommendation**: Make performance tests mandatory in Phase 5
+
 - Add to success criteria: "Performance degradation < 50% for 32-meter vs 8-meter"
 - Test memory usage as well as speed
 - Verify GPU tensor operations scale linearly
@@ -463,10 +496,12 @@ Checklist:
    - **Risk**: Plan identifies locations with `le=7` and `len(v) != 8`, but there may be more
    - **Evidence**: Specification (line 65-75) shows table of locations, but this is from "Subagent Analysis"
    - **Mitigation**: Run grep for all instances before starting:
+
      ```bash
      grep -r "le=7\|!= 8\|== 8" src/townlet/environment/*.py
      grep -r "torch.zeros.*8\)" src/townlet/environment/*.py
      ```
+
    - **Recommendation**: Add Phase 0.5: "Comprehensive Hardcoded-8 Audit" with grep-based verification
 
 2. **Cascade Configuration Validity with Variable Meters**
@@ -476,6 +511,7 @@ Checklist:
    - **Mitigation**: Plan addresses this in Phase 2 (line 993-1024) with AffordanceEngine validation
    - **Gap**: No test for loading 4-meter bars.yaml with 8-meter cascades.yaml
    - **Recommendation**: Add test:
+
      ```python
      def test_cascade_referencing_nonexistent_meter_rejected(self, cpu_device, config_4meter):
          """Cascade referencing meter index 7 should fail in 4-meter universe."""
@@ -488,6 +524,7 @@ Checklist:
    - **Impact**: Mentioned in specification (line 1157-1163) but dismissed as "operator's choice"
    - **Concern**: Could surprise operators if not documented
    - **Recommendation**: Add warning in config validation:
+
      ```python
      if meter_count > 16:
          logger.warning(
@@ -509,6 +546,7 @@ Checklist:
 ⚠️ Issue: Missing verification that fixtures actually work
 
 **Recommendation**: Add smoke test at end of Phase 0:
+
 ```python
 # Line 363-365 exists, but should be more specific:
 # 0.3: Verify Fixtures Load Correctly
@@ -529,12 +567,14 @@ def test_config_4meter_fixture_creates_valid_config(config_4meter):
 ⚠️ Minor: Some tests duplicate validation logic
 
 **Line 460-468: test_0_meters_rejected**
+
 ```python
 def test_0_meters_rejected(self):
     """Must have at least 1 meter."""
     with pytest.raises(ValueError, match="Must have at least 1 meter"):
         config = BarsConfig(version="2.0", bars=[], ...)
 ```
+
 **Issue**: This will likely raise a Pydantic validation error BEFORE reaching custom validator
 **Recommendation**: Verify error message matches Pydantic's actual error for empty list
 
@@ -548,6 +588,7 @@ def test_0_meters_rejected(self):
 **Issue**: Removes `le=7` but doesn't add dynamic upper bound
 **Problem**: Nothing prevents `BarConfig(index=999, ...)` from being created
 **Recommendation**: Add custom validator:
+
 ```python
 @field_validator("index")
 @classmethod
@@ -568,13 +609,16 @@ def validate_index(cls, v: int, info) -> int:
 ⚠️ Issue: Doesn't test meter name lookup failures
 
 **Line 830-856: test_engine_uses_name_based_lookups_not_hardcoded_indices**
+
 ```python
 def test_engine_uses_name_based_lookups_not_hardcoded_indices(...):
     # Verify _get_meter_index() method exists and works
     energy_idx = env.bars_config.meter_name_to_index["energy"]
 ```
+
 **Issue**: Tests that method works, but doesn't test error handling for invalid names
 **Recommendation**: Add test:
+
 ```python
 def test_get_meter_index_with_invalid_name_raises_error(self, cpu_device, config_4meter):
     """Looking up non-existent meter should raise KeyError."""
@@ -590,6 +634,7 @@ def test_get_meter_index_with_invalid_name_raises_error(self, cpu_device, config
 ⚠️ Issue: Hardcoded movement costs still present
 
 **Line 974-989: `_apply_movement_costs`**
+
 ```python
 cost_map = {
     "energy": self.move_energy_cost,
@@ -597,9 +642,11 @@ cost_map = {
     "satiation": 0.004,
 }
 ```
+
 **Issue**: This is STILL hardcoded! If a 4-meter universe doesn't have "hygiene", this will silently do nothing
 **Problem**: Plan says "will move to actions.yaml in TASK-003" but doesn't test that it works NOW
 **Recommendation**: Add test:
+
 ```python
 def test_movement_costs_only_applied_to_existing_meters(self, cpu_device, config_4meter):
     """Movement costs should only affect meters that exist in config."""
@@ -626,6 +673,7 @@ def test_movement_costs_only_applied_to_existing_meters(self, cpu_device, config
 ⚠️ Minor: Doesn't test RecurrentSpatialQNetwork (only SimpleQNetwork)
 
 **Recommendation**: Add test for recurrent networks:
+
 ```python
 def test_recurrent_network_with_variable_obs_dim(self, cpu_device, config_4meter):
     """RecurrentSpatialQNetwork should work with variable meters (POMDP)."""
@@ -655,6 +703,7 @@ def test_recurrent_network_with_variable_obs_dim(self, cpu_device, config_4meter
 ⚠️ Minor: Doesn't test checkpoint inspection helper (shown at line 1516-1537)
 
 **Recommendation**: Add test for inspect helper:
+
 ```python
 def test_inspect_checkpoint_metadata_helper(self, cpu_device, config_4meter, tmp_path):
     """inspect_checkpoint_metadata should work without loading network."""
@@ -677,13 +726,16 @@ def test_inspect_checkpoint_metadata_helper(self, cpu_device, config_4meter, tmp
 ⚠️ Issue: Integration tests use random policy, not actual trained agent
 
 **Line 1598-1599:**
+
 ```python
 # Random policy for testing
 actions = torch.randint(0, 5, (4,), device=cpu_device)
 ```
+
 **Issue**: This tests environment mechanics but not actual training convergence
 **Concern**: A bug in Q-network gradient flow wouldn't be caught
 **Recommendation**: Add test with minimal training:
+
 ```python
 def test_training_improves_survival_with_4_meters(self, cpu_device, config_4meter):
     """Agent should improve survival time with training (4-meter universe)."""
@@ -786,6 +838,7 @@ def test_training_improves_survival_with_4_meters(self, cpu_device, config_4mete
 **Revised Estimate**: 17-24 hours
 
 **Breakdown**:
+
 - **Phase 0**: 1h (unchanged)
 - **Phase 0.5** (NEW): 1-2h (comprehensive hardcoded-8 audit)
 - **Phase 1**: 3-4h → 4-5h (+1h for boundary tests)
@@ -803,6 +856,7 @@ def test_training_improves_survival_with_4_meters(self, cpu_device, config_4mete
 ### Proceed with Implementation? ⚠️ **YES, WITH REVISIONS**
 
 **Conditions**:
+
 1. ✅ Resolve task numbering (TASK-001 vs TASK-005)
 2. ✅ Clarify test file organization
 3. ✅ Add Phase 0.5: Comprehensive hardcoded-8 audit
@@ -810,6 +864,7 @@ def test_training_improves_survival_with_4_meters(self, cpu_device, config_4mete
 5. ⚠️ Consider adding boundary tests and training convergence tests
 
 **Quality Gate**:
+
 - [ ] Task number confirmed and all references updated
 - [ ] Test file organization decision documented
 - [ ] Hardcoded-8 audit completed and verified
@@ -842,6 +897,7 @@ Despite the issues identified, this plan demonstrates **exceptional quality** in
 The TASK-001 (or TASK-005?) implementation plan is **fundamentally sound** but requires **moderate revisions** before proceeding. The TDD methodology is excellent, fixture patterns are correct, and test coverage is comprehensive. However, task numbering confusion and test file organization conflicts must be resolved to avoid downstream problems.
 
 **Recommended Action**:
+
 1. Spend 2-3 hours resolving critical issues (task numbering, test organization, audit)
 2. Implement boundary tests and rename fixtures (1-2 hours)
 3. Then proceed with confidence - the plan is solid

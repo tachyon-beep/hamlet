@@ -47,12 +47,14 @@ elif action == 5:  # WAIT
    - Change action costs per-level without code changes
 
 4. **Action Costs Split**: Some in training.yaml, some hardcoded:
+
    ```yaml
    # training.yaml (partial)
    energy_move_depletion: 0.005
    energy_wait_depletion: 0.004
    energy_interact_depletion: 0.003
    ```
+
    But action space itself is Python code!
 
 ## Solution: Config-Driven Action Space
@@ -397,6 +399,7 @@ Initial configs should replicate current behavior exactly (6 actions with curren
 #### Phase 4: Remove Hardcoded Action Logic
 
 Delete hardcoded action handling from:
+
 - `vectorized_env.py` (if/elif chains)
 - `training.yaml` (move energy costs to actions.yaml)
 
@@ -438,6 +441,7 @@ This allows gradual migration without breaking existing configs.
 ### Estimated Effort
 
 **Core Action Space (Original Scope)**:
+
 - **Phase 1** (schema): 2-3 hours
 - **Phase 2** (env integration): 4-6 hours
 - **Phase 3** (migrate configs): 1-2 hours
@@ -445,6 +449,7 @@ This allows gradual migration without breaking existing configs.
 - **Subtotal (Original)**: 8-13 hours
 
 **Multi-Meter Costs Extension** (from research findings):
+
 - **Schema update** (ActionCost DTO, costs field): +1 hour
 - **Environment refactor** (apply multi-meter costs): +2-3 hours
 - **Subtotal (Extension)**: +3-4 hours
@@ -467,18 +472,21 @@ This allows gradual migration without breaking existing configs.
 Actions and affordances share similar cost/effect patterns to maintain consistency:
 
 **Actions (TASK-002B)**:
+
 - **Categorization**: Single `type` field (movement, interaction, passive, transaction)
 - **Costs**: `costs: [{meter, amount}]` (multi-meter pattern)
 - **Trigger**: Agent chooses action each timestep
 - **Examples**: UP, DOWN, INTERACT, WAIT, REST
 
 **Affordances (TASK-003)**:
+
 - **Categorization**: Multiple composable `capabilities` (multi_tick, cooldown, meter_gated, etc.)
 - **Effects**: Multi-stage `effect_pipeline` (on_start, per_tick, on_completion, etc.)
 - **Trigger**: Agent must be at affordance position and choose INTERACT
 - **Examples**: Bed, Hospital, Job, Bar
 
 **Why Different?**
+
 - Actions are **primitive** (one type = clear semantics: movement vs interaction vs passive)
 - Affordances are **compound** (multiple capabilities = rich behaviors: multi-tick + cooldown + meter-gated)
 - Actions are **always available** (can always move/wait)
@@ -486,6 +494,7 @@ Actions and affordances share similar cost/effect patterns to maintain consisten
 
 **Pattern Alignment**:
 Both use `{meter, amount}` structure for costs/effects:
+
 ```yaml
 # Action cost (depletes meters)
 costs:
@@ -500,11 +509,13 @@ effect_pipeline:
 ```
 
 This consistency enables:
+
 - Shared validation logic (TASK-004A validates meter references identically)
 - Easier mental model (operators learn pattern once, apply twice)
 - Future unification (actions could gain effect_pipeline if needed)
 
 **Permissive Semantics Example** (REST action):
+
 ```yaml
 # REST action with negative costs = restoration
 - id: 10
@@ -520,18 +531,21 @@ Negative costs are structurally valid (float type) even if semantically unusual.
 ### Design Principles (from TASK-001)
 
 **Conceptual Agnosticism**: The action config schema should NOT assume:
+
 - ❌ Actions must include movement
 - ❌ Movement must be on a 2D grid
 - ❌ Energy costs must be positive
 - ❌ There must be an INTERACT action
 
 **Structural Enforcement**: The schema MUST enforce:
+
 - ✅ Action IDs are contiguous from 0
 - ✅ Energy costs are floats (can be negative)
 - ✅ Movement actions define delta
 - ✅ All meter references exist in bars.yaml
 
 **Permissive Semantics, Strict Syntax**:
+
 - ✅ Allow: `energy_cost: -0.002` (rest action restores energy)
 - ✅ Allow: `actions: []` (no actions = pure observation task)
 - ❌ Reject: `energy_cost: "orange"` (type violation)

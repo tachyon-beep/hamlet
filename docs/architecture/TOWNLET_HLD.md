@@ -135,6 +135,7 @@ The BAC stack is three YAML layers. Together, they are the Software Defined Agen
 Change the YAMLs, you change the mind. Snapshot the YAMLs, you freeze the mind. Hash the snapshot, you can prove which mind took which action.
 
 ### 2.1 Layer 1: cognitive_topology.yaml
+
 Audience: governance, instructors, simulation designers
 Nickname: the character sheet
 
@@ -207,6 +208,7 @@ Layer 1 is what policy signs off on. It's the file you show when someone asks "w
 If you change Layer 1 between runs (for example, allow STEAL, or lower panic threshold, or turn social modelling off), that's not the same agent any more. That must produce a new cognitive hash.
 
 ### 2.2 Layer 2: agent_architecture.yaml
+
 Audience: engineers, grad students, researchers
 Nickname: the blueprint
 
@@ -306,6 +308,7 @@ Why Layer 2 matters:
 * It makes it obvious if someone quietly changed the optimiser or widened the GRU and then claimed "no behavioural change expected". Governance can now call nonsense on that.
 
 ### 2.3 Layer 3: execution_graph.yaml
+
 Audience: safety, audit, you at 2am
 Nickname: the think loop
 
@@ -748,6 +751,7 @@ Under Townlet v2.5, the old pattern "one giant RL class owns everything" is gone
 This is where we guarantee that what we run is what we declared, and what we declared is what we logged, and what we logged is what we can replay.
 
 ### 6.1 agent/factory.py
+
 The brain constructor
 
 The factory is the only code pathway allowed to build a live agent.
@@ -793,6 +797,7 @@ What factory.py does:
 So, in short: factory.py is "build the declared mind; prove it's the declared mind; assign it an identity". After this point, there's no ambiguity about what we're running.
 
 ### 6.2 agent/graph_agent.py
+
 The living brain
 
 GraphAgent replaces the old giant RL class. It's the runtime object we actually step every tick.
@@ -814,6 +819,7 @@ The essential contract with the rest of the simulator is simple: given the lates
 Also important: GraphAgent is always instantiated from the run's frozen snapshot. It never reads "live" configs during execution. This is how we stop "I hotpatched the EthicsFilter in memory for the live demo" type nonsense.
 
 ### 6.3 agent/graph_executor.py
+
 The cognition runner (the microkernel of thought)
 
 GraphExecutor is what actually runs the execution_graph.yaml.
@@ -853,6 +859,7 @@ Why this matters:
 * If someone wants to insert a new veto stage, or let panic bypass ethics, they must edit Layer 3, recompile, and accept a new cognitive hash. The change is governed as well as engineered.
 
 ### 6.4 EthicsFilter
+
 The seatbelt
 
 EthicsFilter is a first-class module, not an afterthought.
@@ -1262,54 +1269,54 @@ We judge success on three axes: technical, teaching, and governance. All three m
 
 ### 10.1 Technical success
 
-- [ ] We can launch a run from `configs/<run_name>/` and automatically create `runs/<run_name>__<timestamp>/` with a frozen `config_snapshot/` that contains:
-  - `config.yaml`
-  - `universe_as_code.yaml`
-  - `cognitive_topology.yaml` (Layer 1)
-  - `agent_architecture.yaml` (Layer 2)
-  - `execution_graph.yaml` (Layer 3)
+* [ ] We can launch a run from `configs/<run_name>/` and automatically create `runs/<run_name>__<timestamp>/` with a frozen `config_snapshot/` that contains:
+  * `config.yaml`
+  * `universe_as_code.yaml`
+  * `cognitive_topology.yaml` (Layer 1)
+  * `agent_architecture.yaml` (Layer 2)
+  * `execution_graph.yaml` (Layer 3)
 
-- [ ] `agent/factory.py` can reconstruct a functioning agent brain (GraphAgent) purely from that frozen `config_snapshot/`, without reading anything from live mutable config.
+* [ ] `agent/factory.py` can reconstruct a functioning agent brain (GraphAgent) purely from that frozen `config_snapshot/`, without reading anything from live mutable config.
 
-- [ ] `GraphAgent.think()` can tick once using only that snapshot: perception → hierarchical policy → panic_controller → EthicsFilter → `final_action`.
+* [ ] `GraphAgent.think()` can tick once using only that snapshot: perception → hierarchical policy → panic_controller → EthicsFilter → `final_action`.
 
-- [ ] Each checkpoint written under `runs/.../checkpoints/step_<N>/` includes:
-  - model weights for every module (perception, world_model, social_model, hierarchical_policy, panic_controller, EthicsFilter, etc)
-  - optimiser states
-  - RNG state
-  - a nested copy of `config_snapshot/`
-  - `cognitive_hash.txt` for that checkpoint
+* [ ] Each checkpoint written under `runs/.../checkpoints/step_<N>/` includes:
+  * model weights for every module (perception, world_model, social_model, hierarchical_policy, panic_controller, EthicsFilter, etc)
+  * optimiser states
+  * RNG state
+  * a nested copy of `config_snapshot/`
+  * `cognitive_hash.txt` for that checkpoint
 
-- [ ] Resuming from a checkpoint:
-  - reloads only from `runs/.../checkpoints/step_<N>/`
-  - writes a new run folder `runs/<run_name>__<launch_ts>_resume_<resume_ts>/`
-  - reproduces the same cognitive hash if the snapshot is unmodified
+* [ ] Resuming from a checkpoint:
+  * reloads only from `runs/.../checkpoints/step_<N>/`
+  * writes a new run folder `runs/<run_name>__<launch_ts>_resume_<resume_ts>/`
+  * reproduces the same cognitive hash if the snapshot is unmodified
 
-- [ ] Telemetry logs one structured row per tick into `runs/.../telemetry/`, with:
-  - `run_id`
-  - tick index
-  - full cognitive hash
-  - current_goal
-  - panic state
-  - candidate_action
-  - panic_adjusted_action (+ panic_reason)
-  - final_action
-  - ethics_veto_applied (+ veto_reason)
-  - planning_depth
-  - social_model.enabled
-  - short belief/world/social summaries
+* [ ] Telemetry logs one structured row per tick into `runs/.../telemetry/`, with:
+  * `run_id`
+  * tick index
+  * full cognitive hash
+  * current_goal
+  * panic state
+  * candidate_action
+  * panic_adjusted_action (+ panic_reason)
+  * final_action
+  * ethics_veto_applied (+ veto_reason)
+  * planning_depth
+  * social_model.enabled
+  * short belief/world/social summaries
 
-- [ ] The runtime UI ("Run Context Panel") surfaces, live:
-  - run_id
-  - short_cognitive_hash (pretty form of the full hash)
-  - tick / planned_run_length
-  - current_goal
-  - panic_state
-  - planning_depth (world_model.rollout_depth)
-  - social_model.enabled
-  - panic_override_last_tick (+ panic_reason)
-  - ethics_veto_last_tick (+ veto_reason)
-  - agent_claimed_reason (if introspection.publish_goal_reason is on)
+* [ ] The runtime UI ("Run Context Panel") surfaces, live:
+  * run_id
+  * short_cognitive_hash (pretty form of the full hash)
+  * tick / planned_run_length
+  * current_goal
+  * panic_state
+  * planning_depth (world_model.rollout_depth)
+  * social_model.enabled
+  * panic_override_last_tick (+ panic_reason)
+  * ethics_veto_last_tick (+ veto_reason)
+  * agent_claimed_reason (if introspection.publish_goal_reason is on)
 
 If we satisfy all of these criteria, we move from "a neural net that produces outputs" to a reproducible mind in a governed world.
 
@@ -1319,35 +1326,35 @@ If we satisfy all of these criteria, we move from "a neural net that produces ou
 
 The point of Townlet v2.5 is not just to make a smarter agent. It's to make a teachable agent. We hit pedagogical success when the system is something you can put in front of a class, and they can reason about it like a living system, not a superstition.
 
-- [ ] A beginner can answer "Why didn't it steal the food?" using only:
-  - the live Run Context Panel (which shows `ethics_veto_last_tick` and `veto_reason`)
-  - the run's `cognitive_topology.yaml` (which shows `compliance.forbid_actions: ["steal", ...]`)
+* [ ] A beginner can answer "Why didn't it steal the food?" using only:
+  * the live Run Context Panel (which shows `ethics_veto_last_tick` and `veto_reason`)
+  * the run's `cognitive_topology.yaml` (which shows `compliance.forbid_actions: ["steal", ...]`)
 
 In other words: you do not need to read source code to answer an ethics/safety question. You can answer it from YAML + UI.
 
-- [ ] An intermediate student can:
-  - edit `agent_architecture.yaml` (for example, swap GRU → LSTM in the perception module, or change hidden_dim)
-  - launch a new run
-  - observe how memory/behaviour changes
-  - explain the change in terms of memory capacity, not "the AI got weird"
+* [ ] An intermediate student can:
+  * edit `agent_architecture.yaml` (for example, swap GRU → LSTM in the perception module, or change hidden_dim)
+  * launch a new run
+  * observe how memory/behaviour changes
+  * explain the change in terms of memory capacity, not "the AI got weird"
 
 So they can perform controlled ablations by editing config, not by rewriting thousands of lines of Torch.
 
-- [ ] A researcher can:
-  - edit `execution_graph.yaml` to, for example, temporarily bypass `world_model_service` input into the policy
-  - rerun
-  - show that the agent becomes more impulsive / short-horizon
-  - prove that change via diff in `execution_graph.yaml` plus new `cognitive_hash.txt`
+* [ ] A researcher can:
+  * edit `execution_graph.yaml` to, for example, temporarily bypass `world_model_service` input into the policy
+  * rerun
+  * show that the agent becomes more impulsive / short-horizon
+  * prove that change via diff in `execution_graph.yaml` plus new `cognitive_hash.txt`
 
 Meaning: "remove foresight, observe impulsivity" is now a 1-line wiring experiment, not a 2-week surgery.
 
-- [ ] For any interesting emergent behaviour clip, we can pull the run folder and point to:
-  - which mind (full cognitive hash)
-  - which world rules (`universe_as_code.yaml`)
-  - which panic thresholds
-  - which compliance rules (`forbid_actions`, penalties)
-  - what goal the agent believed it was pursuing at that tick (`current_goal`)
-  - what reason the agent claimed (`agent_claimed_reason`)
+* [ ] For any interesting emergent behaviour clip, we can pull the run folder and point to:
+  * which mind (full cognitive hash)
+  * which world rules (`universe_as_code.yaml`)
+  * which panic thresholds
+  * which compliance rules (`forbid_actions`, penalties)
+  * what goal the agent believed it was pursuing at that tick (`current_goal`)
+  * what reason the agent claimed (`agent_claimed_reason`)
 
 This is critical for classroom demonstrations. Instructors can scrub to tick 842 and explain that the agent believed it was in SURVIVAL mode, panic was active, and EthicsFilter blocked `steal`.
 
@@ -1357,22 +1364,22 @@ This is critical for classroom demonstrations. Instructors can scrub to tick 8
 
 Governance stakeholders view the system through enforceability rather than aesthetics. Their central question is whether the artefact can withstand formal review.
 
-- [ ] We can prove to an auditor that, at tick T in run R:
-  - `cognitive_topology.yaml` at that tick had `forbid_actions: ["attack", "steal"]`
-  - `execution_graph.yaml` at that tick still routed all candidate actions through `EthicsFilter`
-  - telemetry for tick T shows `ethics_veto_applied: true` and `veto_reason: "steal forbidden"`
+* [ ] We can prove to an auditor that, at tick T in run R:
+  * `cognitive_topology.yaml` at that tick had `forbid_actions: ["attack", "steal"]`
+  * `execution_graph.yaml` at that tick still routed all candidate actions through `EthicsFilter`
+  * telemetry for tick T shows `ethics_veto_applied: true` and `veto_reason: "steal forbidden"`
 
 This allows us to state: the agent attempted to steal at tick T, the action was blocked, and both the configuration and telemetry demonstrate why.
 
-- [ ] We can replay that same mind, at that same point in time, using only the checkpoint directory from that run. We don't need any mutable source code or live config. That replayed agent produces the same cognitive hash and the same cognitive wiring.
+* [ ] We can replay that same mind, at that same point in time, using only the checkpoint directory from that run. We don't need any mutable source code or live config. That replayed agent produces the same cognitive hash and the same cognitive wiring.
 
 That is chain-of-custody for cognition.
 
-- *Operational note:* To deliver that proof, pull the tick record from `runs/<run_id>/telemetry/` (each row is produced by `VectorizedPopulation.build_telemetry_snapshot` in `src/townlet/population/vectorized.py`) and pair it with the matching checkpoint hash in `runs/<run_id>/checkpoints/step_<N>/cognitive_hash.txt`. The snapshot structure comes straight from `AgentTelemetrySnapshot` (`src/townlet/population/runtime_registry.py`), so auditors know exactly which JSON fields must be present.
+* *Operational note:* To deliver that proof, pull the tick record from `runs/<run_id>/telemetry/` (each row is produced by `VectorizedPopulation.build_telemetry_snapshot` in `src/townlet/population/vectorized.py`) and pair it with the matching checkpoint hash in `runs/<run_id>/checkpoints/step_<N>/cognitive_hash.txt`. The snapshot structure comes straight from `AgentTelemetrySnapshot` (`src/townlet/population/runtime_registry.py`), so auditors know exactly which JSON fields must be present.
 
-- [ ] We can demonstrate lineage rules:
-  - If you resume without changing the snapshot, it's the same mind (same hash).
-  - If you edit anything that changes cognition (panic thresholds, greed, social_model.enabled, EthicsFilter rules, rollout_depth, etc), the hash changes and we give it a new run_id. We don't pretend it's "the same agent, just adjusted a bit".
+* [ ] We can demonstrate lineage rules:
+  * If you resume without changing the snapshot, it's the same mind (same hash).
+  * If you edit anything that changes cognition (panic thresholds, greed, social_model.enabled, EthicsFilter rules, rollout_depth, etc), the hash changes and we give it a new run_id. We don't pretend it's "the same agent, just adjusted a bit".
 
 That's governance-grade identity, not research convenience.
 
@@ -1500,15 +1507,15 @@ Goal: pause/replay/fork without lying to audit.
 The checkpoint writer must emit, under `runs/<run_id>/checkpoints/step_<N>/`:
 
 * `weights.pt`
-  - all module weights from the GraphAgent (including EthicsFilter, panic_controller, etc)
+  * all module weights from the GraphAgent (including EthicsFilter, panic_controller, etc)
 * `optimizers.pt`
-  - optimiser states for each trainable module
+  * optimiser states for each trainable module
 * `rng_state.json`
-  - RNG state for both sim and agent
+  * RNG state for both sim and agent
 * `config_snapshot/`
-  - deep copy of the snapshot as of this checkpoint (not a pointer to `configs/`)
+  * deep copy of the snapshot as of this checkpoint (not a pointer to `configs/`)
 * `cognitive_hash.txt`
-  - the full hash at this checkpoint
+  * the full hash at this checkpoint
 
 Resume rules:
 
@@ -1839,9 +1846,9 @@ That implies:
 
 Layer mapping reminder:
 
-- Layer 1 (`cognitive_topology.yaml`) carries the privilege matrix shown above and the in-group definitions.
-- Layer 2 (`agent_architecture.yaml`) is where we would add the actual encoder/decoder blocks for the family channel or disable them entirely.
-- Layer 3 (`execution_graph.yaml`) wires the channel outputs into the policy and determines whether EthicsFilter sees the same signal.
+* Layer 1 (`cognitive_topology.yaml`) carries the privilege matrix shown above and the in-group definitions.
+* Layer 2 (`agent_architecture.yaml`) is where we would add the actual encoder/decoder blocks for the family channel or disable them entirely.
+* Layer 3 (`execution_graph.yaml`) wires the channel outputs into the policy and determines whether EthicsFilter sees the same signal.
 
 Keeping the responsibilities split like this is how we guarantee the hash changes whenever somebody tries to sneak extra bandwidth into the family line.
 

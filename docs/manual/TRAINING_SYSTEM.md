@@ -71,6 +71,7 @@ Trainer (orchestrator)
 **Purpose**: Manages multiple agents with intelligent buffer mode switching.
 
 **Features**:
+
 - Automatic buffer mode switching:
   - `<10 agents`: Per-agent buffers for learning isolation
   - `≥10 agents`: Shared buffer for memory efficiency
@@ -78,6 +79,7 @@ Trainer (orchestrator)
 - Unified API for single or multi-agent training
 
 **Example Usage**:
+
 ```python
 from hamlet.training.agent_manager import AgentManager
 from hamlet.training.config import AgentConfig
@@ -103,6 +105,7 @@ batch = manager.sample_batch(batch_size=64, agent_id="agent_0")
 **Purpose**: Comprehensive metrics tracking with multiple outputs.
 
 **Metrics Outputs**:
+
 1. **TensorBoard**: Real-time visualization during training
 2. **SQLite Database**: Structured storage for queries (`metrics` table)
 3. **Episode Replays**: Full trajectory storage (JSON)
@@ -110,6 +113,7 @@ batch = manager.sample_batch(batch_size=64, agent_id="agent_0")
 5. **Failure Events Table**: Tracks why episodes ended, saved in the `failure_events` table
 
 **Example Usage**:
+
 ```python
 from hamlet.training.metrics_manager import MetricsManager
 from hamlet.training.config import MetricsConfig
@@ -159,6 +163,7 @@ python analyze_failures.py --agent agent_0 --limit 5 --db metrics.db
 **Purpose**: MLflow integration for experiment tracking and comparison.
 
 **Features**:
+
 - Automatic experiment creation
 - Parameter logging
 - Metric tracking with steps
@@ -166,6 +171,7 @@ python analyze_failures.py --agent agent_0 --limit 5 --db metrics.db
 - Run comparison in MLflow UI
 
 **Example Usage**:
+
 ```python
 from hamlet.training.experiment_manager import ExperimentManager
 from hamlet.training.config import ExperimentConfig
@@ -197,6 +203,7 @@ manager.end_run()
 **Purpose**: Intelligent checkpoint management with best-N selection.
 
 **Features**:
+
 - Automatic checkpoint versioning
 - Keep best N by metric (reward, loss, etc.)
 - Or keep most recent N
@@ -204,6 +211,7 @@ manager.end_run()
 - Metadata storage
 
 **Example Usage**:
+
 ```python
 from hamlet.training.checkpoint_manager import CheckpointManager
 
@@ -301,6 +309,7 @@ class MyNewAlgorithm(BaseAlgorithm):
 ```
 
 Then register in `AgentManager`:
+
 ```python
 # In agent_manager.py, add to add_agent():
 elif config.algorithm.lower() == "my_algorithm":
@@ -340,6 +349,7 @@ uv run pytest tests/test_training/ --cov=hamlet.training
 ### Buffer Mode Switching
 
 The AgentManager automatically switches buffer modes:
+
 - **Per-agent mode** (`<10 agents`): Better learning isolation, more memory
 - **Shared mode** (`≥10 agents`): Memory efficient, faster sampling
 
@@ -348,6 +358,7 @@ Adjust threshold in `AgentManager(buffer_threshold=N)`.
 ### Checkpoint Frequency
 
 Balance checkpoint frequency vs disk I/O:
+
 - **High frequency** (every 10 episodes): More granular recovery, more disk writes
 - **Low frequency** (every 100 episodes): Less disk I/O, coarser recovery
 
@@ -356,6 +367,7 @@ Configure with `save_frequency` in training config.
 ### Metrics Sampling
 
 Reduce metrics overhead:
+
 - **Replay sampling**: Set `replay_sample_rate: 0.1` to save only 10% of episodes
 - **Logging frequency**: Set `log_frequency: 10` to log every 10th episode
 - **Database**: Disable if not needed for analysis
@@ -367,6 +379,7 @@ Reduce metrics overhead:
 **Symptoms**: Training crashes with OOM error
 
 **Solutions**:
+
 1. Reduce `replay_buffer_size`
 2. Reduce `batch_size`
 3. Increase buffer mode `buffer_threshold` for shared buffers
@@ -377,6 +390,7 @@ Reduce metrics overhead:
 **Symptoms**: Training takes longer than expected
 
 **Solutions**:
+
 1. Check `learning_starts` - high values delay learning
 2. Reduce `log_frequency` - logging has overhead
 3. Disable TensorBoard/replays if not needed
@@ -387,6 +401,7 @@ Reduce metrics overhead:
 **Symptoms**: No checkpoint files created
 
 **Solutions**:
+
 1. Check `save_frequency` - may be too high
 2. Verify `checkpoint_dir` is writable
 3. Check disk space
@@ -460,6 +475,7 @@ trainer.train()  # Will start from current state
 ## API Reference
 
 See docstrings in source code:
+
 - `src/hamlet/training/trainer.py` - Main Trainer class
 - `src/hamlet/training/agent_manager.py` - AgentManager
 - `src/hamlet/training/metrics_manager.py` - MetricsManager

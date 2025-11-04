@@ -22,6 +22,7 @@
 **Scope**: [One sentence: What's included and explicitly excluded]
 
 **Quick Assessment**:
+
 - **Current Limitation**: [What can't be done today]
 - **After Implementation**: [What becomes possible]
 - **Unblocks**: [What downstream work this enables]
@@ -38,6 +39,7 @@
 [Detailed description of what's hardcoded, inflexible, or broken]
 
 **Example** (code/config showing the limitation):
+
 ```python
 # Current problematic code
 ```
@@ -47,6 +49,7 @@
 **Test**: "If removed, would the system be more expressive or more fragile?"
 
 **Answer**: [More expressive / More fragile]
+
 - ✅ Enables: [Capability 1]
 - ✅ Enables: [Capability 2]
 - ❌ Does NOT: [What it doesn't break]
@@ -56,14 +59,17 @@
 ### Impact of Current Constraint
 
 **Cannot Create**:
+
 - [Use case 1 that's blocked]
 - [Use case 2 that's blocked]
 - [Use case 3 that's blocked]
 
 **Pedagogical Cost** (if applicable):
+
 - [How this limits teaching value]
 
 **Research Cost** (if applicable):
+
 - [How this limits experimentation]
 
 **From Analysis**: [Summary of why this is high-leverage]
@@ -91,12 +97,15 @@
 ### Compatibility Strategy
 
 **Backward Compatibility**:
+
 - [How existing configs/checkpoints are handled]
 
 **Migration Path**:
+
 - [How users upgrade from old system]
 
 **Versioning**:
+
 - [How we detect version mismatches]
 
 ---
@@ -108,6 +117,7 @@
 **Objective**: [What this phase establishes]
 
 **Changes**:
+
 - File: `path/to/file.py`
   - [Change 1]
   - [Change 2]
@@ -115,6 +125,7 @@
   - [Change 1]
 
 **Tests**:
+
 - [ ] Unit tests for new functionality
 - [ ] Existing tests still pass
 
@@ -128,6 +139,7 @@
 [Similar structure to Phase 1]
 
 **Migration**:
+
 - [ ] Old configs validated
 - [ ] New configs validated
 - [ ] Clear error messages
@@ -139,11 +151,13 @@
 **Objective**: [What this phase proves]
 
 **Testing**:
+
 - [ ] Full regression suite
 - [ ] Integration tests with real configs
 - [ ] Performance benchmarks (if applicable)
 
 **Documentation**:
+
 - [ ] Update CLAUDE.md
 - [ ] Update config examples
 - [ ] Update architecture docs
@@ -157,25 +171,30 @@
 ### Test Coverage Requirements
 
 **Unit Tests**:
+
 - [Subsystem 1]: X% coverage
 - [Subsystem 2]: Y% coverage
 
 **Integration Tests**:
+
 - [ ] Test 1: [Description]
 - [ ] Test 2: [Description]
 
 **Property-Based Tests** (if applicable):
+
 - [ ] Property 1: [Description]
 - [ ] Property 2: [Description]
 
 ### Regression Testing
 
 **Critical Paths**:
+
 - [ ] Existing training runs still work
 - [ ] Existing checkpoints load correctly
 - [ ] Existing configs validate
 
 **Performance Testing**:
+
 - [ ] No significant performance regression
 - [ ] Benchmark: [Specific metric] remains within [X%]
 
@@ -186,16 +205,19 @@
 ### For Existing Configs
 
 **Before** (old format):
+
 ```yaml
 # Old config structure
 ```
 
 **After** (new format):
+
 ```yaml
 # New config structure
 ```
 
 **Migration Script** (if needed):
+
 ```bash
 # Command to migrate configs
 ```
@@ -205,6 +227,7 @@
 **Compatibility**: [Full / Partial / None]
 
 **Migration Process**:
+
 1. [Step 1]
 2. [Step 2]
 
@@ -215,11 +238,13 @@
 ### Example 1: [Simple Use Case]
 
 **Config**:
+
 ```yaml
 # Example configuration
 ```
 
 **Usage**:
+
 ```python
 # Example code showing usage
 ```
@@ -229,11 +254,13 @@
 ### Example 2: [Complex Use Case]
 
 **Config**:
+
 ```yaml
 # More complex configuration
 ```
 
 **Usage**:
+
 ```python
 # Example code showing advanced usage
 ```
@@ -269,11 +296,13 @@
 ### Technical Risks
 
 **Risk 1: [Description]**
+
 - **Severity**: [High/Medium/Low]
 - **Mitigation**: [How to address]
 - **Contingency**: [Fallback plan]
 
 **Risk 2: [Description]**
+
 - **Severity**: [High/Medium/Low]
 - **Mitigation**: [How to address]
 - **Contingency**: [Fallback plan]
@@ -291,6 +320,7 @@
 **Breaking Changes**: [List if any]
 
 **Blast Radius**: [Small/Medium/Large]
+
 - [Description of potential impact]
 
 ---
@@ -300,14 +330,17 @@
 ### Detailed Estimates
 
 **Phase 1**: X hours
+
 - [Subtask 1]: X hours
 - [Subtask 2]: Y hours
 
 **Phase 2**: Y hours
+
 - [Subtask 1]: X hours
 - [Subtask 2]: Y hours
 
 **Phase 3**: Z hours
+
 - [Subtask 1]: X hours
 - [Subtask 2]: Y hours
 

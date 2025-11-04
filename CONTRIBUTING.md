@@ -75,6 +75,7 @@ npm run dev  # Start development server on http://localhost:5173
 ### IDE Configuration
 
 **VS Code**: Recommended extensions:
+
 - Python (Microsoft)
 - Pylance
 - Ruff
@@ -276,6 +277,7 @@ class SimpleQNetwork(nn.Module):
 ### Updating README
 
 When adding major features, update:
+
 - Main `README.md` with high-level overview
 - `docs/README.md` to reference new documentation
 - `CHANGELOG.md` to document changes
@@ -364,6 +366,7 @@ Use the feature request template (`.github/ISSUE_TEMPLATE/feature_request.md`) a
 ### Questions
 
 For questions about usage or architecture:
+
 - Check existing documentation in `docs/`
 - Search existing issues and discussions
 - Open a discussion (not an issue) for general questions

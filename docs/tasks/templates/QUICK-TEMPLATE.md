@@ -20,6 +20,7 @@
 **Scope**: [One sentence: Boundaries - what's IN and OUT of scope]
 
 **Quick Assessment**:
+
 - Current State: [What exists now - use ✅ ❌ checkboxes]
 - Goal: [What will exist after completion]
 - Impact: [Who/what benefits from this change]
@@ -35,10 +36,12 @@
 ### Current Limitations
 
 **What Doesn't Work**:
+
 - [Specific limitation 1]
 - [Specific limitation 2]
 
 **What We're Missing**:
+
 - [Missing capability 1]
 - [Missing capability 2]
 
@@ -48,6 +51,7 @@
 [Describe the main scenario this enables]
 
 **Secondary Use Cases**:
+
 - [Additional scenario 1]
 - [Additional scenario 2]
 
@@ -62,17 +66,20 @@
 ### Technical Approach
 
 **Implementation Steps**:
+
 1. [Step 1 with file reference]
 2. [Step 2 with file reference]
 3. [Step 3 with file reference]
 
 **Key Design Decisions**:
+
 - **Decision 1**: [What and why]
 - **Decision 2**: [What and why]
 
 ### Edge Cases
 
 **Must Handle**:
+
 - [Edge case 1 and approach]
 - [Edge case 2 and approach]
 
@@ -85,6 +92,7 @@
 **File**: `path/to/file.py:line_numbers`
 
 **Changes**:
+
 ```python
 # Example code showing the change
 def new_function():
@@ -92,6 +100,7 @@ def new_function():
 ```
 
 **Testing**:
+
 - [ ] Unit test: `test_new_functionality()`
 - [ ] Edge case: `test_edge_case()`
 
@@ -103,11 +112,13 @@ def new_function():
 [Description of integration changes]
 
 **Testing**:
+
 - [ ] Integration test: `test_end_to_end()`
 
 ### Phase 3: Validation (X minutes)
 
 **Verification Steps**:
+
 1. [ ] All tests pass
 2. [ ] No regressions
 3. [ ] Coverage meets threshold (if applicable)
@@ -118,6 +129,7 @@ def new_function():
 ## Testing Strategy
 
 **Test Requirements**:
+
 - **Unit Tests**: [List required unit tests]
 - **Integration Tests**: [List required integration tests]
 - **Property Tests**: [If applicable]
@@ -125,6 +137,7 @@ def new_function():
 **Coverage Target**: [X%] for modified files
 
 **Test-Driven Development**:
+
 - [ ] Write failing tests first (RED)
 - [ ] Watch tests fail correctly
 - [ ] Implement minimal code (GREEN)
@@ -136,12 +149,14 @@ def new_function():
 ## Acceptance Criteria
 
 **Must Have**:
+
 - [ ] [Criterion 1 - specific and testable]
 - [ ] [Criterion 2 - specific and testable]
 - [ ] All tests pass
 - [ ] No regressions in existing tests
 
 **Success Metrics**:
+
 - [Measurable outcome 1]
 - [Measurable outcome 2]
 
@@ -150,11 +165,13 @@ def new_function():
 ## Risk Assessment
 
 **Technical Risks**:
+
 - ✅ **LOW**: [Description]
 - ⚠️ **MEDIUM**: [Description]
 - ❌ **HIGH**: [Description]
 
 **Mitigation**:
+
 - [How to address medium/high risks]
 
 ---
@@ -162,6 +179,7 @@ def new_function():
 ## Future Enhancements (Out of Scope)
 
 **Not Included**:
+
 - [Enhancement 1 - link to future task if exists]
 - [Enhancement 2 - link to future task if exists]
 
@@ -172,14 +190,17 @@ def new_function():
 ## References
 
 **Related Tasks**:
+
 - TASK-XXX: [Related major task]
 - BUG-XXX: [Related bug fix]
 
 **Code Files**:
+
 - `src/path/to/file.py:line` - [What this file does]
 - `tests/path/to/test.py` - [What this tests]
 
 **Documentation**:
+
 - [Link to relevant design doc]
 - [Link to architecture doc]
 

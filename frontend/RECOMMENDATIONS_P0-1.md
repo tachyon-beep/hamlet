@@ -1,11 +1,13 @@
 # P0-1: Reduce Cognitive Load with Progressive Disclosure
 
 ## Problem
+
 Information overload: 8 meters + 15 affordances + 5 charts simultaneously visible.
 
 ## Solution: Tabbed Panels with Contextual Focus
 
 ### Left Panel - Refactor to Tabs
+
 **File**: `/home/john/hamlet/frontend/src/App.vue:11-21`
 
 ```vue
@@ -46,6 +48,7 @@ Information overload: 8 meters + 15 affordances + 5 charts simultaneously visibl
 ```
 
 ### CSS (add to App.vue scoped styles)
+
 ```css
 .panel-tabs {
   display: flex;
@@ -86,6 +89,7 @@ Information overload: 8 meters + 15 affordances + 5 charts simultaneously visibl
 ```
 
 ### Right Panel - Collapsible Charts
+
 **File**: `/home/john/hamlet/frontend/src/App.vue:91-110`
 
 ```vue
@@ -104,6 +108,7 @@ Information overload: 8 meters + 15 affordances + 5 charts simultaneously visibl
 ```
 
 ### CSS
+
 ```css
 .collapsible-section {
   background: var(--color-bg-secondary);
@@ -138,6 +143,7 @@ details[open] .chevron {
 ```
 
 ## Pedagogical Benefit
+
 - **Focused attention**: Students see meters first (survival priority)
 - **Critical alerts**: Badge shows dangerous states without switching tabs
 - **Progressive learning**: System complexity hidden until needed

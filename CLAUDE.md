@@ -21,6 +21,7 @@ HAMLET is a pedagogical Deep Reinforcement Learning (DRL) environment where agen
 ## Development Commands
 
 ### Setup
+
 ```bash
 # Install dependencies
 uv sync
@@ -30,6 +31,7 @@ uv sync --extra dev
 ```
 
 ### Training (Townlet System)
+
 ```bash
 # Set PYTHONPATH to include src directory
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
@@ -57,6 +59,7 @@ uv run scripts/run_demo.py --config configs/L3_temporal_mechanics
 ```
 
 ### Inference Server (Live Visualization)
+
 ```bash
 # IMPORTANT: Run inference server from worktree (where checkpoints are),
 # but run frontend from main repo (where package.json is)
@@ -89,6 +92,7 @@ watch -n 5 'sqlite3 demo_level2_5.db "SELECT episode, survival_steps, total_rewa
 ```
 
 ### Testing
+
 ```bash
 # Run all tests
 uv run pytest
@@ -101,6 +105,7 @@ uv run pytest --cov=townlet --cov-report=term-missing
 ```
 
 ### Code Quality
+
 ```bash
 # Format code
 uv run black src/townlet tests/
@@ -140,6 +145,7 @@ src/townlet/
 ### Core Components
 
 **1. Environment (`src/townlet/environment/`)**
+
 - `vectorized_env.py`: GPU-native vectorized environments
   - Batches multiple agents for parallel training
   - 8×8 grid with 14 affordances
@@ -148,6 +154,7 @@ src/townlet/
   - **Partial observability**: 5×5 local vision window, agent must build mental map
 
 **2. Agent Networks (`src/townlet/agent/`)**
+
 - `SimpleQNetwork`: MLP for full observability (~26K params)
 - `RecurrentSpatialQNetwork`: CNN + LSTM for partial observability (~600K params)
   - Vision encoder: 5×5 local window → 128 features
@@ -157,6 +164,7 @@ src/townlet/
   - Q-head: 256 → 128 → 5 actions
 
 **3. Population (`src/townlet/population/`)**
+
 - `VectorizedPopulation`: Coordinates batched agent training
   - Shared Q-network across agents
   - Experience replay buffer
@@ -165,6 +173,7 @@ src/townlet/
   - Handles both standard and recurrent networks
 
 **4. Curriculum (`src/townlet/curriculum/`)**
+
 - `AdversarialCurriculum`: Adaptive difficulty scaling
   - 5 stages: 50 → 100 → 200 → 350 → 500 steps
   - Advances on 70% survival rate + minimum entropy
@@ -172,12 +181,14 @@ src/townlet/
   - Prevents premature advancement (min 1000 episodes per stage)
 
 **5. Exploration (`src/townlet/exploration/`)**
+
 - `AdaptiveIntrinsicExploration`: RND + variance-based annealing
   - Random Network Distillation for novelty rewards
   - Anneals intrinsic weight when agent performs consistently (low variance + high survival)
   - Prevents premature annealing: requires survival >50 steps AND variance <100
 
 **6. Training Entry Point (CURRENT LOCATION)**
+
 - `src/townlet/demo/runner.py`: Main training orchestrator
   - ⚠️ Will be moved to `src/townlet/training/runner.py` during centralization
   - Coordinates: VectorizedHamletEnv, VectorizedPopulation, AdversarialCurriculum, AdaptiveIntrinsicExploration
@@ -189,17 +200,20 @@ src/townlet/
 **Fixed Affordance Vocabulary**: All curriculum levels observe the same 14 affordances (for transfer learning and observation stability), even if not all are deployed.
 
 **Full Observability**:
+
 - Grid encoding: grid_size × grid_size one-hot
 - Meters: 8 normalized values (energy, health, satiation, money, mood, social, fitness, hygiene)
 - Affordance at position: 15 one-hot (14 affordances + "none")
 - Temporal extras: 4 values (time_of_day, retirement_age, interaction_progress, interaction_ticks)
 
 **Observation dimensions by level**:
+
 - **L0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
 - **L0_5_dual_resource**: 76 dims (7×7 grid=49 + 8 meters + 15 affordances + 4 extras)
 - **L1_full_observability**: 91 dims (8×8 grid=64 + 8 meters + 15 affordances + 4 extras)
 
 **Partial Observability (Level 2 POMDP)**:
+
 - Local grid: 5×5 window (25 dims) - agent only sees local region
 - Position: normalized (x, y) (2 dims) - where am I on the grid?
 - Meters: 8 normalized values (8 dims)
@@ -210,11 +224,13 @@ src/townlet/
 **Key insight**: Observation dim varies by grid size, but affordance encoding is **constant** (always 14 affordances + "none"). This enables transfer learning - a model trained on L0 can be promoted to L1 without architecture changes.
 
 **Action space**: 5 discrete actions (UP=0, DOWN=1, LEFT=2, RIGHT=3, INTERACT=4)
+
 - Note: Action space is currently **hardcoded** but will be moved to YAML (see `docs/TASK-000-UAC-ACTION-SPACE.md`)
 
 ### Reward Structure
 
 **Per-Step Survival Rewards** (Current System):
+
 - **Alive agents**: +1.0 reward per step
 - **Dead agents**: 0.0 reward (episode ends)
 - **NO proximity shaping** (agents must explore and interact to survive)
@@ -223,6 +239,7 @@ src/townlet/
 - Baseline parameter retained for API compatibility but unused in calculations
 
 **Intrinsic Rewards**:
+
 - RND (Random Network Distillation) for novelty
 - Adaptive annealing based on performance consistency
 - Combined with extrinsic rewards: `total = extrinsic + intrinsic * weight`
@@ -230,6 +247,7 @@ src/townlet/
 ### Training Checkpoints
 
 Checkpoints saved periodically contain:
+
 - Q-network state dict
 - Optimizer state dict
 - Exploration state (RND networks, intrinsic weight, survival history)
@@ -241,29 +259,34 @@ Checkpoints saved periodically contain:
 
 Training is controlled via YAML configs in `configs/`. Each config pack is a directory containing multiple YAML files that define the universe.
 
-### Active Config Packs (Curriculum Levels):
+### Active Config Packs (Curriculum Levels)
 
 **L0_minimal** - Pedagogical: Learn temporal credit assignment
+
 - Single affordance (Bed) on 3×3 grid
 - Teaches spacing behavior (don't spam bed, space out usage)
 - Fast learning: epsilon_decay=0.99
 
 **L0_5_dual_resource** - Pedagogical: Multiple resource management
+
 - Four affordances (Bed, Hospital, HomeMeal, Job) on 7×7 grid
 - Teaches balancing energy + health cycles
 - Moderate learning: epsilon_decay=0.995
 
 **L1_full_observability** - Full observability baseline
+
 - All 14 affordances on 8×8 grid
 - Agent sees complete grid (no POMDP)
 - Standard MLP Q-network (~26K params)
 
 **L2_partial_observability** - POMDP with LSTM
+
 - All 14 affordances on 8×8 grid
 - Agent sees only 5×5 local window (must build mental map)
 - Recurrent spatial Q-network with LSTM (~600K params)
 
 **L3_temporal_mechanics** - Time-based affordances + multi-tick interactions
+
 - Operating hours (Job 9am-5pm, Bar 6pm-2am, etc.)
 - Multi-tick interactions (75% linear + 25% completion bonus)
 - 24-tick day/night cycle
@@ -271,6 +294,7 @@ Training is controlled via YAML configs in `configs/`. Each config pack is a dir
 ### Config Pack Structure (UNIVERSE_AS_CODE)
 
 Each config pack directory contains:
+
 ```
 configs/L0_minimal/
 ├── bars.yaml         # Meter definitions (energy, health, money, etc.)
@@ -332,18 +356,21 @@ training:
 The curriculum progresses from simple pedagogical tasks to complex POMDP challenges:
 
 **L0_minimal** (✅ Implemented): **Temporal Credit Assignment**
+
 - 3×3 grid, 1 affordance (Bed only)
 - Teaches spacing behavior (don't spam, space out usage)
 - Fast learning: epsilon_decay=0.99, ~500 episodes
 - Pedagogical goal: Learn that immediate actions have delayed consequences
 
 **L0_5_dual_resource** (✅ Implemented): **Multiple Resource Management**
+
 - 7×7 grid, 4 affordances (Bed, Hospital, HomeMeal, Job)
 - Teaches balancing energy + health cycles
 - Moderate learning: epsilon_decay=0.995
 - Introduces economic loop (Job → money → affordances)
 
 **L1_full_observability** (✅ Implemented): **Full Observability Baseline**
+
 - 8×8 grid, all 14 affordances
 - Agent sees complete grid (no POMDP)
 - Standard MLP Q-network (~26K params)
@@ -351,12 +378,14 @@ The curriculum progresses from simple pedagogical tasks to complex POMDP challen
 - Baseline for comparing POMDP performance
 
 **L2_partial_observability** (✅ Implemented): **POMDP with LSTM Memory**
+
 - 8×8 grid, all 14 affordances
 - Agent sees only 5×5 local window (must build mental map)
 - Recurrent spatial Q-network with LSTM (~600K params)
 - Teaches spatial memory and exploration under uncertainty
 
 **L3_temporal_mechanics** (✅ Implemented): **Time-Based Dynamics**
+
 - 24-tick day/night cycle with operating hours (Job 9am-5pm, Bar 6pm-2am)
 - Multi-tick interactions: 75% linear rewards + 25% completion bonus
 - Time-based action masking (closed affordances unavailable)
@@ -399,6 +428,7 @@ Q-network uses gradient clipping (`max_norm=10.0`) to prevent exploding gradient
 ### Economic Balance
 
 The environment is intentionally balanced for sustainability:
+
 - Full cycle cost varies by affordance choices
 - Job payment = $22.5
 - Sustainable with proper cycles
@@ -406,6 +436,7 @@ The environment is intentionally balanced for sustainability:
 ### Intrinsic Weight Annealing
 
 **Fixed bug (2025-10-30)**: Premature annealing caused by low variance threshold (10.0)
+
 - **New threshold**: 100.0
 - **New requirement**: Mean survival >50 steps before annealing
 - Prevents "consistently failing" from triggering "consistent performance" annealing
@@ -415,6 +446,7 @@ The environment is intentionally balanced for sustainability:
 ## Testing Strategy
 
 Tests focus on:
+
 - Environment mechanics (vectorized operations, GPU tensors)
 - Population training (batched updates, curriculum progression)
 - Exploration (RND novelty, annealing logic)
@@ -451,6 +483,7 @@ Tests focus on:
 **Core Principle**: "Everything configurable. Schema enforced mercilessly."
 
 HAMLET follows UNIVERSE_AS_CODE philosophy where all game mechanics are defined in YAML configuration files, not hardcoded in Python. This makes the system:
+
 - **Domain-agnostic**: Could model villages, factories, trading bots, or any other universe
 - **Experimentable**: Operators can test new mechanics without code changes
 - **Pedagogical**: Students learn RL concepts by editing config files
@@ -460,16 +493,19 @@ HAMLET follows UNIVERSE_AS_CODE philosophy where all game mechanics are defined 
 See `docs/` for detailed tasking statements:
 
 **TASK-000: UAC Action Space** - Move hardcoded action space to actions.yaml
+
 - Current: Action space (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT) is hardcoded
 - Goal: Define actions, movement deltas, energy costs in YAML
 - Benefits: Support diagonal movement, rest actions, alternative universes
 
 **TASK-001: UAC Contracts (Schema Enforcement)** - DTO-based config validation
+
 - Current: Configs validated at runtime with `.get()` defaults
 - Goal: Pydantic DTOs for compile-time validation with **no-defaults principle**
 - Benefits: Catch config errors before training starts, operator accountability
 
 **TASK-002: Universe Compilation Pipeline** - Cross-file validation
+
 - Current: Each YAML file validated independently
 - Goal: 7-stage compilation with dependency ordering (bars → actions → cascades → affordances → cues → training)
 - Benefits: Catch dangling references, missing INTERACT action, spatial impossibilities
@@ -484,6 +520,7 @@ See `docs/` for detailed tasking statements:
 - Training schedule (epsilon decay, target update frequency)
 
 This will enable:
+
 - Experimenting with different architectures without code changes
 - A/B testing exploration strategies across curriculum levels
 - Reproducing exact agent configurations from config files
@@ -517,6 +554,7 @@ This will enable:
 > "Trick students into learning graduate-level RL by making them think they're just playing The Sims."
 
 When in doubt:
+
 - Prioritize pedagogical value over technical purity
 - Preserve "interesting failures" as teaching moments
 - Document unexpected behaviors rather than immediately fixing them
@@ -528,6 +566,7 @@ When in doubt:
 ## Centralization Roadmap
 
 See `PLAN_TOWNLET_CENTRALIZATION.md` for detailed plan to:
+
 1. Move all active components to `src/townlet/`
 2. Update entry point to `python -m townlet.training.runner`
 3. Delete obsolete `src/hamlet/` code

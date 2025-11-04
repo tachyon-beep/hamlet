@@ -12,6 +12,7 @@
 Successfully integrated all findings from two research papers into task documents using a systematic 3-phase approach. All research papers are **READY TO RETIRE** with integration status markers added.
 
 **Key Metrics**:
+
 - **Integration Points**: 34/34 (100%)
 - **Research Papers**: 2/2 integrated and marked as archived
 - **Task Documents Updated**: 4 (TASK-002, TASK-003, TASK-004, TASK-005)
@@ -28,6 +29,7 @@ Successfully integrated all findings from two research papers into task document
 **Status**: ✅ ARCHIVED (Integrated 2025-11-04)
 
 **Findings Integrated**:
+
 1. ✅ Gap 1: Affordance Masking (operating hours, resource gates) → TASK-002
 2. ✅ Gap 2: Multi-Meter Action Costs → TASK-003
 3. ✅ Gap 3: RND Architecture → TASK-005 (deferred)
@@ -41,6 +43,7 @@ Successfully integrated all findings from two research papers into task document
 **Status**: ✅ ARCHIVED (Integrated 2025-11-04)
 
 **Findings Integrated**:
+
 1. ✅ Hardcoded Interaction Patterns → Capability System (TASK-002)
 2. ✅ Effect Pipeline System → Multi-stage effects (TASK-002)
 3. ✅ Pattern Consistency → Action-Affordance alignment (TASK-003)
@@ -55,6 +58,7 @@ Successfully integrated all findings from two research papers into task document
 ### TASK-002: UAC Contracts (+8-12h effort)
 
 **Updates Applied**:
+
 - ✅ Added 400+ lines of capability system documentation
 - ✅ Defined 6 core capabilities with Pydantic DTOs
 - ✅ Added effect pipeline system
@@ -64,6 +68,7 @@ Successfully integrated all findings from two research papers into task document
 - ✅ Updated effort: 7-12h → 15-24h
 
 **Key Additions**:
+
 - `BarConstraint` DTO for meter-based availability
 - `ModeConfig` DTO for operating hours
 - 6 capability DTOs (MultiTick, Cooldown, MeterGated, SkillScaling, Probabilistic, Prerequisite)
@@ -74,6 +79,7 @@ Successfully integrated all findings from two research papers into task document
 ### TASK-003: UAC Action Space (+3-4h effort)
 
 **Updates Applied**:
+
 - ✅ Added `ActionCost` DTO for multi-meter costs
 - ✅ Replaced `energy_cost` with `costs: list[ActionCost]`
 - ✅ Added backward compatibility for legacy configs
@@ -81,6 +87,7 @@ Successfully integrated all findings from two research papers into task document
 - ✅ Updated effort: 8-13h → 11-17h
 
 **Key Pattern**:
+
 - Actions now use `costs: [{meter, amount}]` matching affordances
 - Supports multi-meter depletion (energy + hygiene + satiation)
 - Supports restoration (negative amounts for REST action)
@@ -90,6 +97,7 @@ Successfully integrated all findings from two research papers into task document
 ### TASK-004: Universe Compiler (+6-8h effort)
 
 **Updates Applied**:
+
 - ✅ Added capability meter reference validation
 - ✅ Added effect pipeline consistency validation
 - ✅ Added availability constraint validation
@@ -98,6 +106,7 @@ Successfully integrated all findings from two research papers into task document
 - ✅ Updated effort: 40-58h → 46-66h
 
 **Validation Rules Added**:
+
 - Meter references in capabilities must exist
 - Mutually exclusive capabilities (instant + multi_tick)
 - Dependent capabilities (resumable requires multi_tick)
@@ -108,6 +117,7 @@ Successfully integrated all findings from two research papers into task document
 ### TASK-005: BRAIN_AS_CODE (+0h, deferred)
 
 **Updates Applied**:
+
 - ✅ Added "Optional Future Extension: RND Architecture" section
 - ✅ Documented deferral rationale
 - ✅ Provided implementation notes if requested
@@ -124,6 +134,7 @@ Successfully integrated all findings from two research papers into task document
 **Deliverable**: 34-point integration matrix mapping research findings to tasks
 
 **Quality**:
+
 - ✅ All gaps and findings identified
 - ✅ Task homes assigned
 - ✅ Effort estimates calculated
@@ -138,6 +149,7 @@ Successfully integrated all findings from two research papers into task document
 **Deliverable**: Updated task documents with research findings
 
 **Quality**:
+
 - ✅ All 34 integration points applied
 - ✅ 650+ lines of documentation added
 - ✅ All schemas defined with Pydantic DTOs
@@ -153,6 +165,7 @@ Successfully integrated all findings from two research papers into task document
 **Deliverable**: Comprehensive review report verifying integration completeness
 
 **Quality**:
+
 - ✅ Every integration point verified
 - ✅ No orphaned content found
 - ✅ Cross-references verified
@@ -166,24 +179,28 @@ Successfully integrated all findings from two research papers into task document
 ## Quality Metrics
 
 ### Completeness: 10/10
+
 - All 34 integration points addressed
 - All research findings have task homes
 - All schemas defined
 - All validation rules documented
 
 ### Consistency: 9/10
+
 - Terminology aligned across documents
 - Schema patterns consistent
 - Validation approach uniform
 - Minor: Standardized "skill_scaling" term (addressed)
 
 ### Clarity: 9/10
+
 - Implementers can follow without reading research
 - DTOs fully specified
 - Examples provided
 - Minor: Added navigation aids to dense sections (addressed)
 
 ### Accuracy: 10/10
+
 - No misinterpretations
 - Pydantic syntax correct
 - Validation logic implementable
@@ -196,16 +213,19 @@ Successfully integrated all findings from two research papers into task document
 ## Issues Found and Resolved
 
 ### Issue 1: Terminology Inconsistency ✅ RESOLVED
+
 - **Problem**: "skill_based_effectiveness" vs "skill_scaling"
 - **Fix**: Standardized on "skill_scaling" (already in TASK-002)
 - **Time**: 5 minutes
 
 ### Issue 2: Dense Capability Section ✅ RESOLVED
+
 - **Problem**: 400+ line section needs navigation
 - **Fix**: Added table of contents + quick reference table
 - **Time**: 15 minutes
 
 ### Issue 3: No Retirement Markers ✅ RESOLVED
+
 - **Problem**: Research papers not marked as archived
 - **Fix**: Added "STATUS: INTEGRATED" headers to both papers
 - **Time**: 5 minutes
@@ -225,6 +245,7 @@ Successfully integrated all findings from two research papers into task document
 | **TOTAL** | **77-114h** | **+17-24h** | **94-138h** | **+22-21%** |
 
 **Critical Path Impact**:
+
 - TASK-002 significantly expanded (recommend splitting into TASK-002A/2B)
 - Overall project impact: +22% effort (17-24 additional hours)
 
@@ -243,6 +264,7 @@ Successfully integrated all findings from two research papers into task document
 ## Recommendations
 
 ### Immediate Actions (Done)
+
 1. ✅ Add integration status headers to research papers
 2. ✅ Add navigation aids to TASK-002 capability section
 3. ✅ Standardize terminology (skill_scaling)
@@ -275,6 +297,7 @@ Phase 4: Agent Architecture
 ## Lessons Learned
 
 ### What Went Well
+
 1. ✅ **Systematic 3-phase approach** prevented gaps in integration
 2. ✅ **Integration matrix** (Phase 1) captured all 34 points accurately
 3. ✅ **Pattern consistency** maintaining `{meter, amount}` simplified design
@@ -282,12 +305,14 @@ Phase 4: Agent Architecture
 5. ✅ **Clear deferral rationale** (Gap 3 RND) prevents scope creep
 
 ### Challenges
+
 1. ⚠️ **TASK-002 scope expansion** (+114-200%) is significant
    - Mitigation: Split into TASK-002A (core) and TASK-002B (capabilities)
 2. ⚠️ **Cross-task coordination** (Gap 2 spans TASK-003 and TASK-004)
    - Mitigation: Clear implementation order (schema first, then validation)
 
 ### Process Improvements
+
 1. ✅ **Phase 3 review** caught 3 minor issues before implementation
 2. ✅ **Navigation aids** improve usability of dense documentation
 3. ✅ **Integration status markers** make research retirement clear

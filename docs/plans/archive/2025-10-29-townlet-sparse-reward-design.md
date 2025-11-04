@@ -32,6 +32,7 @@ Starting fresh as `src/townlet/` (sibling to `src/hamlet/`) gives us:
 **Prove that agents can learn indefinite survival with pure sparse rewards after proper curriculum preparation.**
 
 This is the "final boss" demonstration: No shaped rewards, no cheating, just terminal feedback and survival time. The agent must learn robust multi-objective optimization through:
+
 - Adversarial curriculum (auto-tuning difficulty)
 - Exploration strategies (epsilon-greedy, RND, adaptive intrinsic)
 - Population-based training (up to 100 agents on A100)
@@ -43,17 +44,20 @@ This is the "final boss" demonstration: No shaped rewards, no cheating, just ter
 ### 2.1 Primary Goals
 
 **Goal 1: Demonstrate Pure Sparse Reward Learning**
+
 - Agent survives indefinitely (1000+ steps) with only terminal rewards
 - No dense feedback after curriculum graduation
 - Curriculum: shaped → sparse transition via task complexity progression
 
 **Goal 2: Enable Multiple Exploration Approaches**
+
 - Pure sparse (epsilon-greedy only)
 - Adaptive intrinsic (RND with auto-annealing)
 - Permanent intrinsic (exploration scaffold)
 - Configurable via YAML for A/B comparison
 
 **Goal 3: Scale to 100 Agents on A100**
+
 - GPU-native vectorized environment
 - Target: >10K FPS (100 agents × 100 Hz)
 - Memory: <12GB VRAM
@@ -62,6 +66,7 @@ This is the "final boss" demonstration: No shaped rewards, no cheating, just ter
 ### 2.2 Success Criteria
 
 **Must Have**:
+
 - ✅ Indefinite survival with pure sparse rewards (no shaped rewards at endpoint)
 - ✅ Policy robustness (transfers to randomized affordance positions, depletion rates)
 - ✅ Interpretability (clear Q-value landscapes, sensible action distributions)
@@ -69,6 +74,7 @@ This is the "final boss" demonstration: No shaped rewards, no cheating, just ter
 - ✅ Oracle validation (Townlet matches Hamlet's shaped rewards at n=1)
 
 **Nice to Have**:
+
 - 🎯 Sample efficiency (converges by 50K episodes)
 - 🎯 Genetic reproduction (population evolves over generations)
 - 🎯 Pareto frontier tracking (survival vs exploration trade-offs)
@@ -87,12 +93,14 @@ This is the "final boss" demonstration: No shaped rewards, no cheating, just ter
 ### 3.1 Dual-Path Design
 
 **Hot Path** (training loop):
+
 - Batched PyTorch tensors: `[num_agents, ...]`
 - GPU-optimized operations (no Python loops)
 - Minimal overhead: action selection, reward calculation, state updates
 - Runs every step for every agent
 
 **Cold Path** (config/checkpoints/telemetry):
+
 - Pydantic DTOs with validation
 - CPU-friendly, human-readable (JSON/YAML)
 - Runs once per episode or checkpoint
@@ -277,6 +285,7 @@ hamlet/
 **Purpose**: GPU-native environment supporting `num_envs` parallel agents.
 
 **State Representation**:
+
 ```python
 agent_positions: Tensor[num_envs, 2]        # (x, y) coordinates
 meters: Tensor[num_envs, 6]                 # energy, hygiene, satiation, money, mood, social
@@ -285,6 +294,7 @@ step_counts: Tensor[num_envs]               # Episode lengths
 ```
 
 **Observation**: `[num_envs, 70]`
+
 - Grid encoding: 64 dims (one-hot agent position in 8×8 grid)
 - Meters: 4 dims (energy, hygiene, satiation, money normalized 0-1)
 - Proximity: 2 dims (distance to nearest affordance)
@@ -292,6 +302,7 @@ step_counts: Tensor[num_envs]               # Episode lengths
 **Actions**: `[num_envs]` int tensor (0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=INTERACT)
 
 **Key Methods**:
+
 ```python
 def reset(mask: Optional[Tensor] = None) -> Tensor:
     """Reset environments (selective via mask). Returns obs [num_envs, 70]."""
@@ -307,6 +318,7 @@ def _calculate_sparse_rewards() -> Tensor:
 ```
 
 **Vectorization Examples**:
+
 ```python
 # Movement (vectorized)
 deltas = torch.tensor([[0,-1], [0,1], [-1,0], [1,0], [0,0]])  # UP,DOWN,LEFT,RIGHT,INTERACT
@@ -328,11 +340,13 @@ dones = (fatal <= 0).any(dim=1) | (meters[:, 3] <= -100)  # Fatal depleted OR ba
 **Purpose**: Auto-tune environment difficulty based on agent performance.
 
 **Performance Metrics** (multi-signal):
+
 1. **Survival time**: Avg over last N episodes
 2. **Learning progress**: Reward improvement slope
 3. **Policy entropy**: Action distribution entropy (prevents premature convergence)
 
 **Decision Logic**:
+
 ```python
 if avg_survival > threshold_high AND learning_progress > 0 AND entropy < 0.5:
     # Agent has mastered current difficulty
@@ -346,11 +360,13 @@ else:
 ```
 
 **Difficulty Levers**:
+
 - `depletion_multiplier`: 0.1 (10x slower) to 1.0 (normal) to 2.0 (2x faster)
 - `active_meters`: Start with ["energy", "hygiene"], add ["satiation"], then ["money", "mood", "social"]
 - `reward_mode`: "shaped" → "sparse" transition at final stage
 
 **Curriculum Stages** (example progression):
+
 ```
 Stage 1: [energy, hygiene] at 0.2x depletion, shaped rewards
 Stage 2: [energy, hygiene, satiation] at 0.5x depletion, shaped rewards
@@ -360,6 +376,7 @@ Stage 5: [all 6 meters] at 1.0x depletion, SPARSE rewards (graduation!)
 ```
 
 **State Tracking** (per agent):
+
 ```python
 class CurriculumState:
     current_stage: int
@@ -401,6 +418,7 @@ def select_actions(q_values: Tensor, agent_states: BatchedAgentState) -> Tensor:
 **Random Network Distillation**: Predict fixed random network to encourage novelty.
 
 **Architecture**:
+
 - Fixed network: `obs → embedding` (frozen random weights)
 - Predictor network: `obs → embedding` (trained to match fixed)
 - Intrinsic reward: `||fixed(obs) - predictor(obs)||²`
@@ -452,6 +470,7 @@ def adapt_intrinsic_weight(self):
 ```
 
 **Config**:
+
 ```yaml
 exploration:
   strategy_type: adaptive_intrinsic
@@ -467,6 +486,7 @@ exploration:
 **Purpose**: Coordinate multiple agents, track Pareto frontier, handle reproduction (future).
 
 **Phase 1 Implementation** (n=1 to 10):
+
 ```python
 class VectorizedPopulation(PopulationManager):
     def __init__(self, num_agents: int, config: Config, device: torch.device):
@@ -535,6 +555,7 @@ class VectorizedPopulation(PopulationManager):
 ```
 
 **Pareto Frontier Tracking** (Phase 4):
+
 - Objectives: (survival_time, -sample_efficiency)
 - Track non-dominated agents
 - Visualize in TensorBoard
@@ -548,6 +569,7 @@ class VectorizedPopulation(PopulationManager):
 **Goal**: Define contracts, zero implementations.
 
 **Deliverables**:
+
 ```
 src/townlet/training/state.py          # DTOs (Pydantic + BatchedAgentState)
 src/townlet/curriculum/base.py         # CurriculumManager ABC
@@ -556,12 +578,14 @@ src/townlet/population/base.py         # PopulationManager ABC
 ```
 
 **Tests**:
+
 - `test_dto_validation`: Pydantic catches invalid values
 - `test_batched_state_shapes`: Tensor dimensions correct
 - `test_interface_contracts`: ABCs can't be instantiated
 - `test_dto_serialization`: JSON round-trip
 
 **Exit Criteria**:
+
 - ✅ `mypy --strict` passes on all interfaces
 - ✅ All DTOs have validation tests (epsilon ∈ [0,1], difficulty ∈ [0,1], etc.)
 - ✅ `BatchedAgentState` can be constructed, moved to device, detached to CPU
@@ -571,6 +595,7 @@ src/townlet/population/base.py         # PopulationManager ABC
 **Goal**: Vectorized environment + simplest strategy implementations at n=1.
 
 **Deliverables**:
+
 ```
 src/townlet/environment/vectorized_env.py   # VectorizedHamletEnv (full GPU)
 src/townlet/curriculum/static.py            # StaticCurriculum (no adaptation)
@@ -579,6 +604,7 @@ src/townlet/population/vectorized.py        # VectorizedPopulation (n=1 to 10)
 ```
 
 **Tests**:
+
 - `test_vectorized_env_step`: Forward pass works, returns correct shapes
 - `test_shaped_rewards_vectorized`: Matches Hamlet reference (oracle validation)
 - `test_epsilon_greedy_sampling`: Action distribution matches expected epsilon
@@ -586,6 +612,7 @@ src/townlet/population/vectorized.py        # VectorizedPopulation (n=1 to 10)
 - `test_checkpoint_save_restore`: Can save/load and resume training
 
 **Exit Criteria**:
+
 - ✅ Single agent (n=1) trains successfully with GPU implementation
 - ✅ Works on both CPU (`device='cpu'`) and GPU (`device='cuda'`)
 - ✅ Oracle validation: Townlet matches Hamlet shaped rewards within 1e-4
@@ -596,12 +623,14 @@ src/townlet/population/vectorized.py        # VectorizedPopulation (n=1 to 10)
 **Goal**: Auto-tuning difficulty based on survival + learning + entropy.
 
 **Deliverables**:
+
 ```
 src/townlet/curriculum/adversarial.py   # AdversarialCurriculum
 configs/townlet/curriculum_test.yaml     # Test config with fast progression
 ```
 
 **Tests**:
+
 - `test_difficulty_increases_on_mastery`: High survival → higher difficulty
 - `test_difficulty_decreases_on_struggle`: Low survival → lower difficulty
 - `test_entropy_prevents_premature_ramp`: Low entropy blocks difficulty increase
@@ -609,6 +638,7 @@ configs/townlet/curriculum_test.yaml     # Test config with fast progression
 - `test_shaped_to_sparse_transition`: Final stage switches to sparse rewards
 
 **Integration Test**:
+
 ```python
 def test_curriculum_progression_end_to_end():
     """Agent should progress through stages and reach sparse mode."""
@@ -627,6 +657,7 @@ def test_curriculum_progression_end_to_end():
 ```
 
 **Exit Criteria**:
+
 - ✅ Agent progresses through curriculum stages automatically
 - ✅ Can reach sparse mode (stage 5) within 5000 episodes
 - ✅ Can resume training mid-curriculum from checkpoint
@@ -636,6 +667,7 @@ def test_curriculum_progression_end_to_end():
 **Goal**: RND and adaptive intrinsic motivation.
 
 **Deliverables**:
+
 ```
 src/townlet/exploration/rnd.py                  # RNDExploration
 src/townlet/exploration/adaptive_intrinsic.py   # AdaptiveIntrinsicExploration
@@ -643,12 +675,14 @@ configs/townlet/sparse_adaptive.yaml            # Adaptive intrinsic config
 ```
 
 **Tests**:
+
 - `test_rnd_novelty_decreases`: Prediction error decreases for repeated states
 - `test_adaptive_annealing_triggers`: Intrinsic weight decays when competent
 - `test_intrinsic_reward_added`: Total reward = extrinsic + intrinsic
 - `test_curriculum_and_exploration_together`: Both systems work simultaneously
 
 **Integration Test**:
+
 ```python
 def test_sparse_learning_with_intrinsic():
     """Agent should learn sparse reward task with intrinsic motivation."""
@@ -669,6 +703,7 @@ def test_sparse_learning_with_intrinsic():
 ```
 
 **Exit Criteria**:
+
 - ✅ RND provides novelty signal (high reward for new states)
 - ✅ Adaptive intrinsic weight anneals automatically
 - ✅ Agent learns better with intrinsic motivation than pure epsilon-greedy
@@ -678,6 +713,7 @@ def test_sparse_learning_with_intrinsic():
 **Goal**: Validate architecture scales to n=10 without code changes.
 
 **Deliverables**:
+
 ```
 tests/test_townlet/test_scaling.py   # Parameterized tests at n=1,2,5,10
 scripts/profile_scaling.py            # Memory/time profiling
@@ -685,6 +721,7 @@ docs/SCALING_REPORT.md                # Document bottlenecks
 ```
 
 **Scaling Checkpoints**:
+
 ```
 n=1: Baseline (already working from Phase 1-3)
 n=2: Expose parallelism bugs (agents interfere?)
@@ -693,12 +730,14 @@ n=10: Production baseline (overnight training feasible?)
 ```
 
 **Tests at Each Scale**:
+
 - `test_population_trains_successfully`: All agents complete training
 - `test_independent_curricula`: Each agent's curriculum progresses independently
 - `test_memory_scales_linearly`: Memory = O(n), not O(n²)
 - `test_training_time_scales_sublinearly`: Batching provides speedup
 
 **Profiling**:
+
 ```bash
 # Memory profiling
 python -m memory_profiler scripts/profile_scaling.py --num-agents 10
@@ -709,6 +748,7 @@ python -m pstats profile.stats
 ```
 
 **Exit Criteria**:
+
 - ✅ All tests pass at n=1, 2, 5, 10
 - ✅ n=10 training completes overnight (<8 hours per 1000 episodes)
 - ✅ Memory usage < 8GB for n=10 on consumer GPU
@@ -719,12 +759,14 @@ python -m pstats profile.stats
 **Goal**: Scale to n=20, 50 with CPU/GPU optimizations.
 
 **Optimizations**:
+
 - Shared replay buffer (memory efficiency)
 - Mixed precision training (FP16/BF16)
 - Gradient checkpointing
 - Profiler-guided vectorization
 
 **Exit Criteria**:
+
 - ✅ n=50 completes training in <2 days
 
 ### Phase 6: A100 Demo (10-14 days, future)
@@ -732,11 +774,13 @@ python -m pstats profile.stats
 **Goal**: 100 agents on A100, >10K FPS.
 
 **Optimizations**:
+
 - Multi-GPU training (if needed)
 - Kernel fusion
 - Memory-efficient attention (if using transformers)
 
 **Exit Criteria**:
+
 - ✅ n=100 achieves >10K FPS on A100
 - ✅ Memory < 12GB VRAM
 - ✅ 100 agents train to convergence in <1 week
@@ -1137,6 +1181,7 @@ python -m pstats profile.stats
 ```
 
 **CI expectations**:
+
 - Unit tests: <5 minutes
 - Integration tests: <30 minutes
 - Oracle validation: <10 minutes
@@ -1149,16 +1194,19 @@ python -m pstats profile.stats
 ### 8.1 Coexistence Strategy
 
 **Phase 1-3**: Both packages coexist
+
 - Hamlet: Production teaching environment (known good)
 - Townlet: Experimental sparse reward system
 - Shared: `hamlet.training` infrastructure (Trainer, MetricsManager)
 
 **Phase 4**: Townlet proves out
+
 - All new features go to Townlet
 - Hamlet enters maintenance mode (bug fixes only)
 - Documentation updated to recommend Townlet
 
 **Phase 5**: Retirement
+
 - Hamlet moved to `src/hamlet_legacy/` (archived)
 - Townlet becomes primary
 - Update all demos, docs, configs to use Townlet
@@ -1166,6 +1214,7 @@ python -m pstats profile.stats
 ### 8.2 Reusable Hamlet Components
 
 **Keep (reuse in Townlet)**:
+
 - ✅ `hamlet.training.Trainer` (orchestration)
 - ✅ `hamlet.training.MetricsManager` (TensorBoard, SQLite, etc.)
 - ✅ `hamlet.training.CheckpointManager` (save/load logic)
@@ -1174,6 +1223,7 @@ python -m pstats profile.stats
 - ✅ `hamlet.agent.replay_buffer` (experience replay)
 
 **Retire (replaced by Townlet)**:
+
 - ❌ `hamlet.environment.hamlet_env` → `townlet.environment.vectorized_env`
 - ❌ `hamlet.agent.drl_agent` → `townlet.population.vectorized`
 - ❌ Dense reward logic → Curriculum-managed sparse/shaped switch
@@ -1240,38 +1290,46 @@ metrics:
 ### 9.1 Phase 7+ (Post-100 Agents)
 
 **Genetic Reproduction**:
+
 - Select parents from Pareto frontier
 - Network weight interpolation or config mutation
 - Diversity preservation (prevent convergence to single strategy)
 
 **Multi-Zone Environments**:
+
 - Level 3: Home zone, work zone, social zone
 - Hierarchical RL (meta-controller selects zone, low-level navigates)
 
 **Partial Observability (POMDP)**:
+
 - Level 2: Agent sees only local 3×3 window
 - LSTM/Transformer memory for temporal integration
 
 **Multi-Agent Competition**:
+
 - Level 4: Agents compete for affordances
 - Theory of mind (model other agents' intentions)
 
 ### 9.2 Research Directions
 
 **Curriculum Learning**:
+
 - Compare adversarial vs. fixed-stage curriculum
 - Investigate curriculum "forgetting" (does agent regress when difficulty increases?)
 
 **Exploration Strategies**:
+
 - Prioritized replay buffer (TD-error based)
 - Go-Explore (archive + exploration)
 - Never Give Up (episodic novelty + RND)
 
 **Algorithm Comparison**:
+
 - DQN vs. PPO vs. SAC on sparse rewards
 - Model-based RL (world models for planning)
 
 **Interpretability**:
+
 - Visualize Q-value heatmaps over grid
 - Policy distillation to decision trees
 - Attention mechanisms for meter importance
@@ -1283,16 +1341,19 @@ metrics:
 ### 10.1 Technical Metrics
 
 **Performance** (must meet):
+
 - n=1: <2 seconds per episode (CPU or GPU)
 - n=10: <5 seconds per episode (GPU)
 - n=100: >10K FPS (A100)
 
 **Memory** (must meet):
+
 - n=1: <500 MB
 - n=10: <2 GB
 - n=100: <12 GB VRAM
 
 **Learning** (target):
+
 - Sparse mode reached: <5000 episodes (with curriculum)
 - Indefinite survival: >500 steps average (last 100 episodes)
 - Oracle validation: <1e-4 error vs. Hamlet
@@ -1300,12 +1361,14 @@ metrics:
 ### 10.2 Pedagogical Metrics
 
 **Teachable Moments**:
+
 - ✅ Compare dense vs. sparse learning curves (show students the difference)
 - ✅ Demonstrate reward hacking (if it emerges)
 - ✅ Show curriculum progression (difficulty auto-tunes)
 - ✅ Visualize exploration strategies (epsilon vs. intrinsic)
 
 **Demo Quality**:
+
 - ✅ 100-agent A100 demo runs smoothly (<10 minutes to interesting behavior)
 - ✅ Web visualization shows live population diversity
 - ✅ Can explain every design decision to students
@@ -1361,6 +1424,7 @@ Townlet represents a **greenfield opportunity** to build Hamlet's sparse reward 
 The phased approach (Phases 0-4 for n=1→10, Phases 5-6 for n=50→100) ensures we always have a working system. If Phase 2 curriculum doesn't work, we haven't wasted Phase 3 exploration effort - all components are independently testable.
 
 **Next Steps**:
+
 1. Create feature branch: `git checkout -b feature/townlet-sparse-reward`
 2. Set up worktree: `git worktree add ../hamlet-townlet feature/townlet-sparse-reward`
 3. Phase 0: Define interfaces (2-3 days)
@@ -1403,16 +1467,19 @@ The phased approach (Phases 0-4 for n=1→10, Phases 5-6 for n=50→100) ensures
 ## Appendix B: References
 
 **Papers**:
+
 - Burda et al. (2018): "Exploration by Random Network Distillation" (RND)
 - Andrychowicz et al. (2017): "Hindsight Experience Replay" (sparse reward learning)
 - Bengio et al. (2009): "Curriculum Learning"
 - Graves et al. (2017): "Automated Curriculum Learning for Neural Networks"
 
 **Codebases**:
+
 - Hamlet: `~/hamlet/` (reference implementation)
 - Elspeth: `~/elspeth/` (best practices reference for tooling)
 
 **Tools**:
+
 - PyTorch: Deep learning framework
 - Pydantic: Data validation library
 - Hypothesis: Property-based testing

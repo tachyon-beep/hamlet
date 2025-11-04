@@ -13,6 +13,7 @@
 Phase 3.5 runs a multi-day demonstration of the Hamlet DRL system to validate stability, capture exploration→exploitation transitions, and generate rich teaching materials. The system will run unattended for 2-3 days, streaming live to remote viewers while capturing data for post-analysis.
 
 **Key Principles:**
+
 - **For but not with containers** - Design for easy containerization but run as simple processes
 - **SQLite as single source of truth** - Shared state, no complex orchestration
 - **Minimal viable features** - Ship working demo, avoid overengineering
@@ -72,12 +73,14 @@ Phase 3.5 runs a multi-day demonstration of the Hamlet DRL system to validate st
 **Purpose:** Orchestrates 10K episode training with checkpointing, metrics logging, and auto-recovery.
 
 **Interface (Containerization-Ready):**
+
 - **Input:** `HAMLET_CONFIG` env var → `configs/townlet/sparse_adaptive.yaml`
 - **Output:** Checkpoints to `HAMLET_CHECKPOINT_DIR`, metrics to `HAMLET_DB_PATH`
 - **Ports:** None (write-only)
 - **State:** SQLite at `$HAMLET_DB_PATH/demo_state.db`
 
 **Features:**
+
 ```python
 class DemoRunner:
     def __init__(self, config_path: str, db_path: str, checkpoint_dir: str):
@@ -102,17 +105,20 @@ class DemoRunner:
 ```
 
 **Metrics Written Per Episode:**
+
 - `episode_id`, `timestamp`, `survival_time`
 - `total_reward`, `extrinsic_reward`, `intrinsic_reward`
 - `intrinsic_weight`, `curriculum_stage`, `epsilon`
 
 **Checkpoints:**
+
 - Filename: `checkpoint_ep{episode:05d}.pt`
 - Contents: Q-network, target network, optimizer, RND predictor, exploration state, episode number
 - Frequency: Every 100 episodes
 - Retention: Keep all (disk is cheap, enables time-travel debugging)
 
 **Logging:**
+
 ```
 [2025-10-30 14:23:45] Episode 4230/10000 | Survival: 156 steps | Reward: 42.3 | Intrinsic Weight: 0.34 | Stage: 4/5
 [2025-10-30 14:23:50] Checkpoint saved: checkpoint_ep04200.pt
@@ -173,6 +179,7 @@ CREATE TABLE system_state (
 ```
 
 **Why SQLite:**
+
 - Single file, easy backup/copy/mount as Docker volume
 - ACID transactions = safe concurrent reads during writes
 - No server, no ports, no authentication
@@ -180,6 +187,7 @@ CREATE TABLE system_state (
 - Trivial CSV export: `sqlite3 demo_state.db ".mode csv" ".output data.csv" "SELECT * FROM episodes"`
 
 **Size Estimation:**
+
 - 10K episodes × ~200 bytes/episode ≈ 2 MB (tiny)
 - Position heatmap (rolling 100 episodes × 64 cells) ≈ 50 KB
 - Total DB size: <10 MB
@@ -191,6 +199,7 @@ CREATE TABLE system_state (
 **Purpose:** Serve frontend and stream real-time updates from SQLite to browsers.
 
 **Minimal WebSocket Server:**
+
 ```python
 class VizServer:
     def __init__(self, db_path: str, frontend_dir: str, port: int = 8765):
@@ -218,6 +227,7 @@ class VizServer:
 ```
 
 **What We're NOT Adding:**
+
 - ❌ Authentication (demo is public)
 - ❌ Rate limiting (low viewer count)
 - ❌ Complex state machine (just read and send)
@@ -225,6 +235,7 @@ class VizServer:
 - ❌ API versioning (no API, just WebSocket)
 
 **Containerization-Ready:**
+
 - `HAMLET_VIZ_PORT` env var (default 8765)
 - `HAMLET_DB_PATH` env var
 - `HAMLET_FRONTEND_DIR` env var (default `./frontend/dist`)
@@ -238,6 +249,7 @@ class VizServer:
 **Purpose:** Periodically capture screenshots, GIFs, and CSV exports for teaching materials.
 
 **Cron-Like Daemon:**
+
 ```python
 class SnapshotDaemon:
     def __init__(self, db_path: str, output_dir: str, browser_url: str):
@@ -277,17 +289,20 @@ class SnapshotDaemon:
 ```
 
 **Outputs:**
+
 - `snapshots/screenshot_{timestamp}.png` - Every 5 minutes
 - `snapshots/novelty_ep{start}-{end}.gif` - Every 50 episodes (~8 sec GIF, 25fps)
 - `exports/metrics_{timestamp}.csv` - Hourly
 - `exports/final_metrics.csv` - On completion
 
 **Dependencies:**
+
 - `selenium` or `playwright` for browser automation
 - `Pillow` for GIF generation
 - Headless Chrome
 
 **Containerization-Ready:**
+
 - `HAMLET_SNAPSHOT_DIR` env var
 - `HAMLET_BROWSER_URL` env var (default `http://localhost:5173`)
 
@@ -298,11 +313,13 @@ class SnapshotDaemon:
 **Reuses Phase 3 Visualization** with 4 new layers:
 
 **Layer 1: Position Heatmap** (already exists from Phase 3)
+
 - NoveltyHeatmap.vue component
 - 8×8 grid colored by visit frequency or novelty
 - Updates every episode
 
 **Layer 2: "Garden Path" Affordance Transitions** (NEW)
+
 ```vue
 <!-- components/AffordanceGraph.vue -->
 <template>
@@ -314,16 +331,19 @@ class SnapshotDaemon:
   </div>
 </template>
 ```
+
 - Sankey diagram or force-directed graph
 - Shows Bed→Job→Fridge→Shower patterns
 - Edge thickness = transition frequency
 - Edge color = time period (early=blue, late=red)
 
 **Layer 3: Temporal Novelty GIF** (generated offline by snapshot daemon)
+
 - Displayed as static image that updates every 50 episodes
 - Shows "boredom spreading" across the grid
 
 **Layer 4: Reward Decomposition Timeline** (extend existing IntrinsicRewardChart)
+
 - Stacked area chart showing extrinsic (bottom) + intrinsic (top)
 - X-axis: Episode number
 - Y-axis: Reward magnitude
@@ -401,6 +421,7 @@ WantedBy=multi-user.target
 ```
 
 **Commands:**
+
 ```bash
 # Enable and start
 sudo systemctl enable hamlet-demo
@@ -415,6 +436,7 @@ sudo systemctl restart hamlet-demo
 ```
 
 **Why systemd:**
+
 - Native to Ubuntu 24.04 and RunPod
 - Logs to journalctl (persistent, queryable)
 - Auto-restart on crashes
@@ -460,12 +482,14 @@ if episode == 5000:
 ```
 
 **Expected Behavior:**
+
 - Survival time dips (agent searches for moved affordances)
 - RND novelty spikes (familiar locations now empty, new locations occupied)
 - Within 200-500 episodes: survival time recovers as agent re-learns
 - Position heatmap shifts to new affordance locations
 
 **Visualization:**
+
 - Vertical line on survival trend chart at episode 5000
 - Annotation: "Affordances Randomized"
 - Shows the "disruption → recovery" arc
@@ -511,6 +535,7 @@ if episode == 5000:
 **Title:** "What Happens When an RL Agent Learns for 3 Days Straight"
 
 **Content:**
+
 - Time-lapse video showing novelty heatmap fading over hours
 - Survival time chart showing steady improvement
 - Garden path diagram: "The agent learned this routine"
@@ -520,18 +545,22 @@ if episode == 5000:
 ### Course Materials
 
 **Lecture 1: Exploration vs Exploitation**
+
 - Use intrinsic reward chart to show trade-off
 - "Early: curious, late: greedy"
 
 **Lecture 2: Curriculum Learning**
+
 - Show 5-stage progression from demo data
 - "Complexity increases as agent masters basics"
 
 **Lecture 3: Generalization**
+
 - Episode 5000 disruption as case study
 - "True learning means adapting to change"
 
 **Lecture 4: Emergent Behavior**
+
 - Document any reward hacking observed
 - "Agents optimize what you measure, not what you mean"
 
@@ -587,15 +616,18 @@ services:
 ## Timeline & Effort Estimate
 
 **Implementation:** 2-3 days
+
 - Day 1: demo_runner.py, SQLite schema, systemd setup
 - Day 2: viz_server.py extensions, snapshot_daemon.py, frontend tweaks
 - Day 3: Testing, debugging, deployment to server
 
 **Demo Runtime:** 2-3 days
+
 - 10K episodes at ~100-150 episodes/hour = 70-100 hours
 - Realistically: 48-72 hours is sufficient for teaching materials
 
 **Post-Demo Analysis:** 1 day
+
 - Generate final visualizations
 - Write blog post or documentation
 - Create Jupyter notebook with analysis

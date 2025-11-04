@@ -15,33 +15,40 @@ This report documents **ALL hardcoded spatial substrate references** in the HAML
 **Primary Location**: `/home/john/hamlet/src/townlet/environment/vectorized_env.py`
 
 #### Agent Positions (Line 160)
+
 ```python
 self.positions = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
 ```
+
 - **Shape**: `[num_agents, 2]` - **HARDCODED 2D**
 - **Dtype**: `torch.long` (discrete integer coordinates)
 - **Device**: GPU/CPU compatible
 
 #### Agent Position Reset (Line 198)
+
 ```python
 self.positions = torch.randint(0, self.grid_size, (self.num_agents, 2), device=self.device)
 ```
+
 - Random initialization in range `[0, grid_size)`
 - **2D assumption**: always generates `[x, y]` pairs
 
 #### Affordance Positions (Lines 105-108)
+
 ```python
 self.affordances = {
     name: torch.tensor([0, 0], device=device, dtype=torch.long)
     for name in affordance_names_to_deploy
 }
 ```
+
 - **Fixed 2D shape**: `[x, y]` hardcoded as `[0, 0]` placeholder
 - Actual positions assigned in `randomize_affordance_positions()` (line 707)
 
 ### 1.2 Position Update Locations
 
 #### Movement Execution (Lines 366-387, vectorized_env.py)
+
 ```python
 # Movement deltas (x, y) coordinates
 deltas = torch.tensor([
@@ -56,23 +63,27 @@ deltas = torch.tensor([
 movement_deltas = deltas[actions]  # [num_agents, 2]
 new_positions = self.positions + movement_deltas
 ```
+
 - **Cardinal directions only** (no diagonals)
 - **2D delta vectors**: `[dx, dy]`
 
 ### 1.3 Position Validation
 
 #### Interaction Progress Tracking (Lines 389-395, vectorized_env.py)
+
 ```python
 if self.enable_temporal_mechanics and old_positions is not None:
     for agent_idx in range(self.num_agents):
         if not torch.equal(old_positions[agent_idx], self.positions[agent_idx]):
             self.interaction_progress[agent_idx] = 0
 ```
+
 - Position equality check: **assumes fixed-size position vectors**
 
 ### 1.4 Position Serialization
 
 #### Checkpoint Save (Lines 661-679, vectorized_env.py)
+
 ```python
 def get_affordance_positions(self) -> dict:
     positions = {}
@@ -84,6 +95,7 @@ def get_affordance_positions(self) -> dict:
         "ordering": self.affordance_names,
     }
 ```
+
 - **Explicit [x, y] indexing**: `pos[0]` = x, `pos[1]` = y
 - **JSON serialization assumption**: list of 2 integers
 
@@ -106,13 +118,16 @@ def get_affordance_positions(self) -> dict:
 ### 2.2 Grid Size Usage in Code
 
 #### Environment Initialization (vectorized_env.py, lines 36, 72)
+
 ```python
 def __init__(self, grid_size: int = 8, ...):
     self.grid_size = grid_size
 ```
+
 - **Single dimension parameter**: Assumes square grid (width = height)
 
 #### Observation Dimension Calculation (vectorized_env.py, lines 116-124)
+
 ```python
 if partial_observability:
     window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
@@ -120,24 +135,29 @@ if partial_observability:
 else:
     self.observation_dim = grid_size * grid_size + 8 + (num_affordance_types + 1)
 ```
+
 - **Square grid multiplication**: `grid_size * grid_size`
 - **Fixed 2D position encoding**: `+ 2` (for x, y)
 
 ### 2.3 2D Coordinate Assumptions
 
 #### Position Indexing (vectorized_env.py, line 254)
+
 ```python
 # positions[:, 0] = x (column), positions[:, 1] = y (row)
 ```
+
 - **Documented convention**: `[x, y]` = `[column, row]`
 
 #### Boundary Checks (vectorized_env.py, lines 255-258)
+
 ```python
 at_top = self.positions[:, 1] == 0  # y == 0
 at_bottom = self.positions[:, 1] == self.grid_size - 1  # y == max
 at_left = self.positions[:, 0] == 0  # x == 0
 at_right = self.positions[:, 0] == self.grid_size - 1  # x == max
 ```
+
 - **Explicit axis indexing**: `[:, 0]` = x-axis, `[:, 1]` = y-axis
 
 ---
@@ -148,12 +168,14 @@ at_right = self.positions[:, 0] == self.grid_size - 1  # x == max
 
 **All distance calculations use Manhattan distance**.
 
-#### Primary Pattern (Used 4 times):
+#### Primary Pattern (Used 4 times)
+
 ```python
 distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
 ```
 
 **Locations**:
+
 1. **Action Masking** (vectorized_env.py, line 274)
 2. **Multi-tick Interactions** (vectorized_env.py, line 462)
 3. **Instant Interactions** (vectorized_env.py, line 541)
@@ -162,14 +184,17 @@ distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
 ### 3.2 Distance Calculation Breakdown
 
 #### Formula
+
 ```
 Manhattan distance = |x1 - x2| + |y1 - y2|
 ```
 
 #### Proximity Check (Adjacency)
+
 ```python
 on_this_affordance = distances == 0  # Agent on same cell
 ```
+
 - **Exact match only**: No proximity radius
 
 ---
@@ -179,15 +204,18 @@ on_this_affordance = distances == 0  # Agent on same cell
 ### 4.1 Boundary Type: **Clamp (Hard Walls)**
 
 #### Boundary Enforcement (vectorized_env.py, line 385)
+
 ```python
 new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
 ```
+
 - **Clamps to valid range**: `[0, grid_size-1]` for both x and y
 - **Prevents out-of-bounds**: Moving into wall keeps agent at edge
 
 ### 4.2 Action Masking for Boundaries
 
 #### Prevents Invalid Movement (vectorized_env.py, lines 253-264)
+
 ```python
 at_top = self.positions[:, 1] == 0
 at_bottom = self.positions[:, 1] == self.grid_size - 1
@@ -213,6 +241,7 @@ No wraparound logic found. Only **clamped boundaries** supported.
 **File**: `observation_builder.py`, lines 104-146
 
 #### Observation Structure
+
 ```python
 # Grid encoding: grid_size × grid_size one-hot
 grid_encoding = torch.zeros(num_agents, grid_size * grid_size, device=device)
@@ -234,6 +263,7 @@ flat_indices = positions[:, 1] * grid_size + positions[:, 0]
 **File**: `observation_builder.py`, lines 148-209
 
 #### Local Vision Window
+
 ```python
 window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
 
@@ -244,6 +274,7 @@ for dy in range(-vision_range, vision_range + 1):
 ```
 
 #### Observation Structure (L2 POMDP)
+
 - Local window: 25 dims (5×5)
 - Position: 2 dims (x, y normalized)
 - Meters: 8 dims
@@ -280,6 +311,7 @@ def randomize_affordance_positions(self):
 **Constraint**: `num_affordances + 1 (agent) < grid_size²`
 
 **Current Limits**:
+
 - 3×3 grid: max 8 affordances
 - 7×7 grid: max 48 affordances
 - 8×8 grid: max 63 affordances
@@ -305,6 +337,7 @@ def randomize_affordance_positions(self):
 ```
 
 **Assumptions**:
+
 - Separate width/height props
 - 2D SVG coordinates
 - Nested loops for Cartesian rendering
@@ -350,6 +383,7 @@ def _render_grid(self, ax, step_data: dict):
 **File**: `src/townlet/agent/networks.py`, lines 11-35
 
 **Spatial dependency**: `obs_dim` includes `grid_size²` grid encoding
+
 - L0 (3×3): `obs_dim = 36`
 - L1 (8×8): `obs_dim = 91`
 
@@ -368,6 +402,7 @@ self.position_encoder = nn.Linear(2, 32)
 ```
 
 **Spatial dependencies**:
+
 1. Vision encoder: `window_size × window_size` (25 cells)
 2. Position encoder: **2D coordinates hardcoded**
 3. CNN convolutions assume 2D spatial structure
@@ -401,6 +436,7 @@ assert obs.shape == (4, expected_dim)
 **Feasibility**: **Medium complexity**
 
 **Changes needed**:
+
 - Positions: `[N, 2]` → `[N, 3]`
 - Movement: Add UP/DOWN (z-axis) → 6 directions
 - Observation: `grid_size³` explosion (8³ = 512 dims!)
@@ -408,6 +444,7 @@ assert obs.shape == (4, expected_dim)
 - Network: Input dim scales cubically
 
 **Challenges**:
+
 - Observation explosion (512 vs 64 cells)
 - 3D visualization complexity
 - POMDP window (5³ = 125 cells)
@@ -417,12 +454,14 @@ assert obs.shape == (4, expected_dim)
 **Feasibility**: **High complexity**
 
 **Changes needed**:
+
 - Coordinates: Axial `(q, r)` or cube `(x, y, z)`
 - Movement: 6 directions (NE, E, SE, SW, W, NW)
 - Distance: Hex distance metric
 - Visualization: SVG polygons
 
 **Challenges**:
+
 - Coordinate math complexity
 - Different adjacency rules
 - Torus topology more natural
@@ -432,6 +471,7 @@ assert obs.shape == (4, expected_dim)
 **Feasibility**: **Very high complexity**
 
 **Changes needed**:
+
 - Positions: Node IDs instead of coordinates
 - Movement: Follow edges (adjacency)
 - Actions: Dynamic (varies per node)
@@ -439,6 +479,7 @@ assert obs.shape == (4, expected_dim)
 - Network: GNN recommended
 
 **Challenges**:
+
 - Variable action space per node
 - No closed-form distance
 - Complete movement rewrite
@@ -448,12 +489,14 @@ assert obs.shape == (4, expected_dim)
 **Feasibility**: **Highest complexity** (philosophically different)
 
 **Changes needed**:
+
 - Positions: Abstract state IDs
 - Movement: State transitions
 - Distance: Semantic similarity
 - Visualization: State diagram
 
 **Challenges**:
+
 - Loss of spatial intuition
 - Loses "Sims-like" appeal
 - When can agent interact?
@@ -560,6 +603,7 @@ REWARDS (substrate-agnostic!)
 ### Phase 1: Abstract Substrate Interface
 
 Create `substrate/base.py`:
+
 ```python
 class SpatialSubstrate(ABC):
     @abstractmethod
@@ -584,6 +628,7 @@ class SpatialSubstrate(ABC):
 ### Phase 2: Migrate Core Environment
 
 Replace hardcoded logic in `vectorized_env.py`:
+
 - `torch.randint(...)` → `substrate.random_positions(N)`
 - `torch.clamp(...)` → `substrate.clamp_positions(pos)`
 - Distance calcs → `substrate.compute_distance(...)`

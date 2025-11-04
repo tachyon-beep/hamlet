@@ -124,4 +124,3 @@ Assumption: existing population tests simulate single-agent scenarios; we will e
 - Implement per-agent audit logging pipeline once telemetry DTO stabilises.
 - Extend registry to track affordance visit counters & action entropy.
 - Evaluate integration with `docs/testing/REFACTORING_ACTIONS.md` timeline (ACTION #14 synergy for CI checks).
-

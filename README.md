@@ -210,6 +210,7 @@ The observation space is **standardized across all curriculum levels** to enable
 #### Fixed Affordance Vocabulary
 
 All levels observe the **same 14 affordances** in their state representation, even if not all are deployed in that level:
+
 - `Bed`, `LuxuryBed`, `Shower`, `HomeMeal`, `FastFood`, `Doctor`, `Hospital`, `Therapist`, `Recreation`, `Bar`, `Job`, `Labor`, `Gym`, `Park`
 
 **Key Insight**: A model trained on L0 (minimal) can be promoted to L1 (full) without architecture changes because the affordance encoding dimension is constant.
@@ -217,12 +218,14 @@ All levels observe the **same 14 affordances** in their state representation, ev
 #### Full Observability (L1)
 
 **Observation components**:
+
 - **Grid encoding**: `grid_size × grid_size` one-hot (e.g., 64 dims for 8×8 grid)
 - **Meters**: 8 normalized values [0.0-1.0] (energy, health, satiation, money, mood, social, fitness, hygiene)
 - **Affordance at position**: 15 one-hot (14 affordances + "none")
 - **Temporal extras**: 4 values (time_of_day, retirement_age, interaction_progress, interaction_ticks)
 
 **Dimensions by level**:
+
 - **L0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
 - **L0_5_dual_resource**: 76 dims (7×7 grid=49 + 8 meters + 15 affordances + 4 extras)
 - **L1_full_observability**: 91 dims (8×8 grid=64 + 8 meters + 15 affordances + 4 extras)
@@ -232,6 +235,7 @@ All levels observe the **same 14 affordances** in their state representation, ev
 #### Partial Observability (L2 POMDP)
 
 **Observation components**:
+
 - **Local grid**: 5×5 window (25 dims) - agent sees only nearby region
 - **Position**: Normalized (x, y) (2 dims) - "where am I on the grid?"
 - **Meters**: 8 normalized values (8 dims)
@@ -247,6 +251,7 @@ All levels observe the **same 14 affordances** in their state representation, ev
 #### Action Space
 
 **5 discrete actions** (currently hardcoded, will move to YAML per TASK-003):
+
 - `UP` = 0
 - `DOWN` = 1
 - `LEFT` = 2

@@ -9,6 +9,7 @@
 **Tech Stack:** Python 3.11+, Pydantic 2.x, PyTorch, YAML, Vue.js 3
 
 **Research Findings Summary:**
+
 - Action space hardcoded in 50+ files (environment, networks, population, tests, frontend)
 - 4 critical bugs discovered during research
 - Estimated effort: 2-3 days full-time work
@@ -23,6 +24,7 @@ These bugs exist regardless of TASK-000 and should be fixed first to avoid propa
 ### Task 0.1: Fix RecurrentSpatialQNetwork Default Action Dim
 
 **Files:**
+
 - Modify: `src/townlet/agent/networks.py:59`
 
 **Bug:** RecurrentSpatialQNetwork defaults to `action_dim=5` (missing WAIT action)
@@ -83,6 +85,7 @@ Expected output: FAIL (network outputs 5 actions, not 6)
 Modify: `src/townlet/agent/networks.py:59`
 
 Change:
+
 ```python
 def __init__(
     self,
@@ -90,6 +93,7 @@ def __init__(
 ```
 
 To:
+
 ```python
 def __init__(
     self,
@@ -130,6 +134,7 @@ Added: Test to verify both networks output correct action dimensions."
 ### Task 0.2: Fix Test Fixture Action Dimensions
 
 **Files:**
+
 - Modify: `tests/test_townlet/conftest.py:248`
 - Modify: `tests/test_townlet/conftest.py:266`
 
@@ -140,6 +145,7 @@ Added: Test to verify both networks output correct action dimensions."
 Modify: `tests/test_townlet/unit/test_network_action_dim.py`
 
 Add to end of file:
+
 ```python
 def test_simple_qnetwork_fixture_uses_6_actions(simple_q_network):
     """Test fixture should create network with 6 actions."""
@@ -175,11 +181,13 @@ Expected output: FAIL (fixtures create 5-action networks)
 Modify: `tests/test_townlet/conftest.py:248`
 
 Change:
+
 ```python
 return SimpleQNetwork(obs_dim=obs_dim, action_dim=5).to(device)  # ❌ WRONG
 ```
 
 To:
+
 ```python
 return SimpleQNetwork(obs_dim=obs_dim, action_dim=6).to(device)  # ✅ CORRECT
 ```
@@ -187,12 +195,14 @@ return SimpleQNetwork(obs_dim=obs_dim, action_dim=6).to(device)  # ✅ CORRECT
 Modify: `tests/test_townlet/conftest.py:266`
 
 Change:
+
 ```python
 return RecurrentSpatialQNetwork(
     action_dim=5,  # ❌ WRONG
 ```
 
 To:
+
 ```python
 return RecurrentSpatialQNetwork(
     action_dim=6,  # ✅ CORRECT
@@ -232,6 +242,7 @@ Added: Tests to verify fixtures create correct network dimensions."
 ### Task 0.3: Fix L0_5 Config Wait Cost Validation
 
 **Files:**
+
 - Modify: `configs/L0_5_dual_resource/training.yaml:36`
 
 **Bug:** L0_5 config sets wait cost (0.0049) too close to move cost (0.005), defeating purpose of WAIT as low-cost recovery action
@@ -271,11 +282,13 @@ Expected output: Shows wait is 98% of move cost (barely passes validation)
 Modify: `configs/L0_5_dual_resource/training.yaml:36`
 
 Change:
+
 ```yaml
 energy_wait_depletion: 0.0049  # ❌ Too high (98% of move cost)
 ```
 
 To:
+
 ```yaml
 energy_wait_depletion: 0.001  # ✅ Standard value (20% of move cost, matches L1+)
 ```
@@ -345,6 +358,7 @@ meaningful distinction between movement and waiting."
 ### Task 0.4: Document Hardcoded Hygiene/Satiation Costs Bug
 
 **Files:**
+
 - Create: `docs/bugs/bug-hardcoded-meter-costs.md`
 
 **Bug:** Hygiene/satiation costs (0.003, 0.004) are hardcoded in Python, not configurable
@@ -420,6 +434,7 @@ None. Must modify Python code to change costs.
 - **Blocks:** Operator experimentation with cost profiles
 - **Fix Planned:** TASK-000 Phase 2 (action dispatch refactoring)
 - **Status:** Documented, will fix during migration
+
 ```
 
 **Step 2: Commit**
@@ -443,6 +458,7 @@ until actions.yaml exists. Documented for Phase 2 of TASK-002."
 ### Task 1.1: Define ActionConfig Pydantic Schema
 
 **Files:**
+
 - Create: `src/townlet/environment/action_config.py`
 
 **Step 1: Write failing import test**
@@ -710,6 +726,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 1.2: Add Validation Tests for Action Schema
 
 **Files:**
+
 - Modify: `tests/test_townlet/unit/test_action_config.py`
 
 **Step 1: Write validation tests**
@@ -717,6 +734,7 @@ Part of TASK-002 (UAC Action Space)."
 Modify: `tests/test_townlet/unit/test_action_config.py`
 
 Add to end of file:
+
 ```python
 def test_valid_action_config():
     """Valid action config should parse successfully."""
@@ -895,6 +913,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 1.3: Create Example actions.yaml for L1
 
 **Files:**
+
 - Create: `configs/L1_full_observability/actions.yaml`
 
 **Step 1: Write test that loads L1 actions.yaml**
@@ -902,6 +921,7 @@ Part of TASK-002 (UAC Action Space)."
 Modify: `tests/test_townlet/unit/test_action_config.py`
 
 Add to end of file:
+
 ```python
 def test_load_l1_actions_config():
     """L1 config should have valid actions.yaml."""
@@ -1062,6 +1082,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 2.1: Add Action Config Loading to VectorizedEnv
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 
 **Step 1: Write test for environment loading actions.yaml**
@@ -1116,11 +1137,12 @@ uv run pytest tests/test_townlet/unit/test_env_action_loading.py -v
 
 Expected output: FAIL (env does not have action_config attribute)
 
-**Step 3: Add action config loading to VectorizedEnv.__init__**
+**Step 3: Add action config loading to VectorizedEnv.**init****
 
 Modify: `src/townlet/environment/vectorized_env.py`
 
 First, add import at top of file (around line 10):
+
 ```python
 from townlet.environment.action_config import load_action_config, ActionSpaceConfig
 ```
@@ -1128,11 +1150,13 @@ from townlet.environment.action_config import load_action_config, ActionSpaceCon
 Then modify `__init__` method (around line 150-170):
 
 Find this line:
+
 ```python
 self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 ```
 
 Replace with:
+
 ```python
 # Load action space configuration
 action_config_path = config_pack_path / "actions.yaml"
@@ -1215,6 +1239,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 2.2: Refactor Action Dispatch to Use Config
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 
 This is the largest refactoring task. Break into sub-steps.
@@ -1226,6 +1251,7 @@ This is the largest refactoring task. Break into sub-steps.
 Modify: `tests/test_townlet/unit/test_env_action_loading.py`
 
 Add to end of file:
+
 ```python
 def test_env_uses_config_deltas():
     """Environment should use movement deltas from config, not hardcoded."""
@@ -1324,6 +1350,7 @@ Part of TASK-002 (UAC Action Space)."
 Modify: `tests/test_townlet/unit/test_env_action_loading.py`
 
 Add to end of file:
+
 ```python
 def test_movement_uses_config_deltas():
     """Agent movement should use deltas from config, not hardcoded logic."""
@@ -1366,6 +1393,7 @@ Modify: `src/townlet/environment/vectorized_env.py`
 Find the `_execute_actions` method (around line 358-400).
 
 Replace the hardcoded delta tensor:
+
 ```python
 # OLD (hardcoded):
 deltas = torch.tensor(
@@ -1382,6 +1410,7 @@ deltas = torch.tensor(
 ```
 
 With:
+
 ```python
 # NEW (config-driven):
 deltas = self.action_deltas  # Loaded from actions.yaml or legacy fallback
@@ -1427,6 +1456,7 @@ Part of TASK-002 (UAC Action Space)."
 Modify: `tests/test_townlet/unit/test_env_action_loading.py`
 
 Add to end of file:
+
 ```python
 def test_action_type_masks_use_config():
     """Action type detection should use config, not hardcoded ID checks."""
@@ -1557,30 +1587,35 @@ movement_mask = actions < 4
 ```
 
 With:
+
 ```python
 # NEW (config-driven):
 movement_mask = self._get_movement_mask(actions)
 ```
 
 Similarly replace:
+
 ```python
 # OLD:
 wait_mask = actions == 5
 ```
 
 With:
+
 ```python
 # NEW:
 wait_mask = self._get_wait_mask(actions)
 ```
 
 And:
+
 ```python
 # OLD:
 interact_mask = actions == 4
 ```
 
 With:
+
 ```python
 # NEW:
 interact_mask = self._get_interact_mask(actions)
@@ -1625,6 +1660,7 @@ Part of TASK-002 (UAC Action Space)."
 Modify: `tests/test_townlet/unit/test_env_action_loading.py`
 
 Add to end of file:
+
 ```python
 def test_action_costs_from_config():
     """Action costs should come from config, not hardcoded values."""
@@ -1750,6 +1786,7 @@ Modify: `src/townlet/environment/vectorized_env.py`
 In `_execute_actions`, replace the hardcoded cost application blocks (around lines 396-433):
 
 Remove:
+
 ```python
 # OLD (hardcoded cost application):
 if movement_mask.any():
@@ -1762,6 +1799,7 @@ if wait_mask.any():
 ```
 
 Replace with:
+
 ```python
 # NEW (config-driven cost application):
 self._apply_action_costs(actions, movement_mask, wait_mask)
@@ -1804,6 +1842,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 2.3: Update Action Masking to Use Config
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 
 **Step 1: Write test for dynamic action masking**
@@ -1872,24 +1911,28 @@ Modify: `src/townlet/environment/vectorized_env.py`
 Find `get_action_masks` method (around line 239-293).
 
 Replace hardcoded mask shape:
+
 ```python
 # OLD:
 action_masks = torch.ones(self.num_agents, 6, dtype=torch.bool, device=self.device)
 ```
 
 With:
+
 ```python
 # NEW:
 action_masks = torch.ones(self.num_agents, self.action_dim, dtype=torch.bool, device=self.device)
 ```
 
 Replace hardcoded INTERACT index:
+
 ```python
 # OLD:
 action_masks[:, 4] = on_valid_affordance  # INTERACT is action 4
 ```
 
 With:
+
 ```python
 # NEW:
 if self.action_config is not None:
@@ -1906,6 +1949,7 @@ else:
 ```
 
 Replace hardcoded movement indices:
+
 ```python
 # OLD:
 action_masks[at_top, 0] = False     # Can't go UP (action 0)
@@ -1915,6 +1959,7 @@ action_masks[at_right, 3] = False   # Can't go RIGHT (action 3)
 ```
 
 With:
+
 ```python
 # NEW:
 if self.action_config is not None:
@@ -1980,6 +2025,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 3.1: Create actions.yaml for L0_minimal
 
 **Files:**
+
 - Create: `configs/L0_minimal/actions.yaml`
 
 **Step 1: Write test for L0 actions.yaml**
@@ -1987,6 +2033,7 @@ Part of TASK-002 (UAC Action Space)."
 Modify: `tests/test_townlet/unit/test_action_config.py`
 
 Add to end of file:
+
 ```python
 def test_load_l0_minimal_actions_config():
     """L0_minimal should have valid actions.yaml."""
@@ -2133,6 +2180,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 3.2: Create actions.yaml for L0_5_dual_resource
 
 **Files:**
+
 - Create: `configs/L0_5_dual_resource/actions.yaml`
 
 **Step 1: Create L0_5 actions.yaml**
@@ -2249,6 +2297,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 3.3: Create actions.yaml for L2, L3, and Template
 
 **Files:**
+
 - Create: `configs/L2_partial_observability/actions.yaml`
 - Create: `configs/L3_temporal_mechanics/actions.yaml`
 - Create: `configs/templates/actions.yaml`
@@ -2492,6 +2541,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 4.1: Make Frontend Action Map Dynamic
 
 **Files:**
+
 - Modify: `frontend/src/components/AgentBehaviorPanel.vue`
 - Modify: `frontend/src/stores/simulation.js`
 
@@ -2538,6 +2588,7 @@ await websocket.send(json.dumps({
 Modify: `frontend/src/stores/simulation.js`
 
 Add state for action metadata:
+
 ```javascript
 const actionMetadata = ref([])  // Received from server
 
@@ -2558,6 +2609,7 @@ return {
 Modify: `frontend/src/components/AgentBehaviorPanel.vue`
 
 Replace hardcoded actionMap:
+
 ```javascript
 // OLD (hardcoded):
 const actionMap = {
@@ -2571,6 +2623,7 @@ const actionMap = {
 ```
 
 With:
+
 ```javascript
 // NEW (dynamic):
 const actionMap = computed(() => {
@@ -2650,6 +2703,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 5.1: Remove Hardcoded Energy Cost Parameters from training.yaml
 
 **Files:**
+
 - Modify: `configs/L0_minimal/training.yaml`
 - Modify: `configs/L0_5_dual_resource/training.yaml`
 - Modify: `configs/L1_full_observability/training.yaml`
@@ -2663,6 +2717,7 @@ Part of TASK-002 (UAC Action Space)."
 Modify: `configs/L1_full_observability/training.yaml`
 
 Remove these lines (around line 28-30):
+
 ```yaml
 # REMOVE (now in actions.yaml):
 energy_move_depletion: 0.005
@@ -2675,6 +2730,7 @@ energy_interact_depletion: 0.0
 Modify: `src/townlet/environment/vectorized_env.py`
 
 In `__init__`, find where these are read:
+
 ```python
 # OLD (reads from training.yaml):
 self.move_energy_cost = env_config.get("energy_move_depletion", 0.005)
@@ -2682,6 +2738,7 @@ self.wait_energy_cost = env_config.get("energy_wait_depletion", 0.001)
 ```
 
 Replace with:
+
 ```python
 # NEW (reads from actions.yaml if available):
 if self.action_config is not None:
@@ -2739,6 +2796,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 5.2: Update CLAUDE.md Documentation
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 **Step 1: Update "Known Behaviors" section**
@@ -2748,6 +2806,7 @@ Modify: `CLAUDE.md`
 Update the hardcoding section (around line 440-462):
 
 Change:
+
 ```markdown
 ## Appendix: Current Action Space Hardcoding
 
@@ -2759,6 +2818,7 @@ self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 ```
 
 To:
+
 ```markdown
 ## Action Space Configuration (TASK-000 Complete)
 
@@ -2779,6 +2839,7 @@ actions:
 ```
 
 **Key Features:**
+
 - Action space size determined by config (not hardcoded 6)
 - Movement deltas defined in YAML (supports diagonal, wrapping, etc.)
 - Meter costs fully configurable (including negative for restoration)
@@ -2787,6 +2848,7 @@ actions:
 **Backward Compatibility:** If `actions.yaml` missing, falls back to legacy hardcoded 6-action space with deprecation warning.
 
 **Example Alternative Universes:** See TASK-000 documentation for factory box, trading bot examples.
+
 ```
 
 **Step 2: Update "Configuration System" section**
@@ -2796,6 +2858,7 @@ Add to config pack structure (around line 350):
 ```markdown
 Each config pack directory contains:
 ```
+
 configs/L0_minimal/
 ├── bars.yaml         # Meter definitions
 ├── cascades.yaml     # Meter relationships
@@ -2803,6 +2866,7 @@ configs/L0_minimal/
 ├── cues.yaml         # UI metadata
 ├── actions.yaml      # Action space definition (NEW!)
 └── training.yaml     # Hyperparameters
+
 ```
 ```
 
@@ -2826,6 +2890,7 @@ Part of TASK-002 (UAC Action Space)."
 ### Task 5.3: Create TASK-002 Completion Report
 
 **Files:**
+
 - Create: `docs/task-reports/TASK-002-completion.md`
 
 **Step 1: Write completion report**
@@ -2946,6 +3011,7 @@ actions:
 ## Files Modified
 
 **Python Backend (40+ files):**
+
 - `src/townlet/environment/action_config.py` (NEW)
 - `src/townlet/environment/vectorized_env.py` (MAJOR refactor)
 - `src/townlet/agent/networks.py` (bug fix)
@@ -2956,6 +3022,7 @@ actions:
 - 8+ test files (backward compatible)
 
 **Config Files (6 packs):**
+
 - `configs/L0_minimal/actions.yaml` (NEW)
 - `configs/L0_5_dual_resource/actions.yaml` (NEW)
 - `configs/L1_full_observability/actions.yaml` (NEW)
@@ -2965,11 +3032,13 @@ actions:
 - All `training.yaml` files (removed duplicate energy costs)
 
 **Frontend (3 files):**
+
 - `frontend/src/stores/simulation.js` (action metadata)
 - `frontend/src/components/AgentBehaviorPanel.vue` (dynamic action map)
 - `src/townlet/demo/unified_server.py` (send action metadata)
 
 **Documentation:**
+
 - `CLAUDE.md` (updated)
 - `docs/bugs/bug-hardcoded-meter-costs.md` (NEW)
 - `docs/task-reports/TASK-002-completion.md` (this report)
@@ -2997,6 +3066,7 @@ actions:
 ## Testing Coverage
 
 **Validation Tests:**
+
 - Contiguous action IDs
 - Movement actions require delta
 - Non-movement actions cannot have delta
@@ -3006,6 +3076,7 @@ actions:
 - File not found handling
 
 **Integration Tests:**
+
 - Environment loads action config
 - Action dispatch uses config deltas
 - Action type detection uses config
@@ -3014,6 +3085,7 @@ actions:
 - Frontend receives and uses action metadata
 
 **Regression Tests:**
+
 - All 100+ existing test assertions pass
 - L0, L0.5, L1, L2, L3 environments load correctly
 - Frontend displays actions correctly
@@ -3031,15 +3103,18 @@ actions:
 ## Next Steps
 
 ### Immediate (Optional)
+
 - Add diagonal movement example config pack
 - Add trading bot example config pack
 
 ### TASK-001 Dependencies
+
 - TASK-001 (UAC Contracts) can now proceed
 - Action space is first validated UAC subsystem
 - Demonstrates feasibility of config-driven architecture
 
 ### Long-Term (BRAIN_AS_CODE)
+
 - Move network architecture to YAML
 - Move training hyperparameters to YAML
 - Full reproducibility from config files alone
@@ -3064,6 +3139,7 @@ actions:
 - **Documentation:** CLAUDE.md, completion report, bug documentation
 
 **TASK-002: UAC Action Space ✅ COMPLETE**
+
 ```
 
 **Step 2: Commit**

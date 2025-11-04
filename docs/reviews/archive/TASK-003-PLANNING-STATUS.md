@@ -11,6 +11,7 @@
 Successfully executed a staged planning process for TASK-003 using three specialized subagents:
 
 ### 1. Research Subagent (COMPLETED ✅)
+
 - **Task:** Comprehensive investigation of current action space implementation
 - **Findings:**
   - Action space hardcoded across 50+ files (environment, networks, tests, frontend)
@@ -24,6 +25,7 @@ Successfully executed a staged planning process for TASK-003 using three special
 - **Output:** Comprehensive research findings (see first subagent output)
 
 ### 2. Planning Subagent (COMPLETED ✅)
+
 - **Task:** Develop detailed, bite-sized implementation plan
 - **Output:** `docs/plans/2025-11-04-uac-action-space.md`
 - **Structure:**
@@ -38,6 +40,7 @@ Successfully executed a staged planning process for TASK-003 using three special
 - **Estimated Effort:** 2-3 days full-time work
 
 ### 3. Review Subagent (COMPLETED ✅)
+
 - **Task:** Identify inconsistencies, gaps, and technical concerns
 - **Findings:** Plan is **80% ready** but has critical gaps
 - **Critical Issues Found:**
@@ -54,6 +57,7 @@ Successfully executed a staged planning process for TASK-003 using three special
 ## Current Plan Status
 
 ### Strengths ✅
+
 - **Excellent structure:** 6 phases with clear dependencies
 - **TDD methodology:** Test-first approach throughout
 - **Backward compatibility:** Legacy fallback mode well-designed
@@ -62,11 +66,13 @@ Successfully executed a staged planning process for TASK-003 using three special
 - **Detailed code snippets:** Makes implementation straightforward
 
 ### Critical Gaps 🚨 (BLOCKERS)
+
 1. **Missing research report file** - First subagent's output not persisted
 2. **Bug #5 not in plan** - `population/vectorized.py` also needs fixing
 3. **Performance regression risk** - Plan uses per-agent loops instead of vectorized ops
 
 ### High-Priority Gaps ⚠️
+
 4. **Meter name hardcoding** - Loads from bars.yaml needed, not hardcoded list
 5. **Multiple interaction actions** - Only masks first one, should mask all
 6. **Edge case tests missing** - Zero-cost, negative cost, empty costs, etc.
@@ -80,6 +86,7 @@ Successfully executed a staged planning process for TASK-003 using three special
 ### Before Implementation Starts
 
 **MUST FIX (Blockers):**
+
 1. ✅ Save research report to `docs/research/2025-11-04-uac-action-space-research.md`
    - Include complete file inventory
    - Document all 5 bugs (including Bug #5)
@@ -96,9 +103,10 @@ Successfully executed a staged planning process for TASK-003 using three special
 
 **SHOULD FIX (High Priority):**
 4. 📝 Fix meter name hardcoding (Task 2.2.4)
-   - Load meter names from bars.yaml during `__init__`
-   - Build dynamic meter_name → index mapping
-   - Validate action costs reference valid meters
+
+- Load meter names from bars.yaml during `__init__`
+- Build dynamic meter_name → index mapping
+- Validate action costs reference valid meters
 
 5. 📝 Handle multiple interaction actions (Task 2.3)
    - Mask ALL interaction-type actions, not just first
@@ -117,12 +125,14 @@ Successfully executed a staged planning process for TASK-003 using three special
 ### Implementation Approach
 
 **Recommended:** Use `superpowers:subagent-driven-development`
+
 - Dispatch fresh subagent per task
 - Code review between tasks (use `superpowers:code-reviewer`)
 - Fast iteration with quality gates
 - Stays in this session (no separate worktree needed)
 
 **Alternative:** Use `superpowers:executing-plans` in separate session
+
 - Batch execution with checkpoints
 - Less oversight but faster throughput
 
@@ -131,6 +141,7 @@ Successfully executed a staged planning process for TASK-003 using three special
 ## Next Steps
 
 ### Option 1: Iterate on Plan (Recommended)
+
 1. Address all blockers (#1-3)
 2. Address high-priority items (#4-8)
 3. Update plan with revised tasks
@@ -138,11 +149,13 @@ Successfully executed a staged planning process for TASK-003 using three special
 5. Execute via subagent-driven-development
 
 ### Option 2: Execute Current Plan
+
 1. Accept current plan with known gaps
 2. Address blockers during implementation
 3. Risk: May discover more issues mid-implementation
 
 ### Option 3: New Planning Session
+
 1. Start fresh with lessons learned
 2. Incorporate all review findings upfront
 3. More time investment but cleaner result
@@ -181,6 +194,7 @@ Use this to verify plan is ready:
 **Verdict:** The planning process has successfully identified a comprehensive, well-structured implementation approach with **known gaps that can be addressed**.
 
 **Suggested Action:**
+
 1. Review this status document and the three subagent outputs
 2. Decide whether to:
    - **Iterate:** Fix blockers and high-priority items, then execute

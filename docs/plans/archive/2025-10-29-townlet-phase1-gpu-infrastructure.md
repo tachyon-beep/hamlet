@@ -11,6 +11,7 @@
 **Duration:** 5-7 days
 
 **Exit Criteria:**
+
 - ✅ Single agent (n=1) trains successfully with GPU implementation
 - ✅ Works on both CPU and GPU
 - ✅ Oracle validation: Townlet matches Hamlet shaped rewards within 1e-4
@@ -21,17 +22,20 @@
 ## Task 1: VectorizedHamletEnv - Core Structure
 
 **Files:**
+
 - Create: `src/townlet/environment/vectorized_env.py`
 - Create: `tests/test_townlet/test_environment/test_vectorized_env.py`
 
 **Step 1: Write failing test for VectorizedHamletEnv construction**
 
 Create `tests/test_townlet/test_environment/__init__.py`:
+
 ```python
 """Tests for Townlet vectorized environment."""
 ```
 
 Create `tests/test_townlet/test_environment/test_vectorized_env.py`:
+
 ```python
 """Tests for VectorizedHamletEnv (GPU-native)."""
 
@@ -82,6 +86,7 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'townlet.environment.v
 **Step 3: Write minimal VectorizedHamletEnv implementation**
 
 Create `src/townlet/environment/vectorized_env.py`:
+
 ```python
 """
 Vectorized Hamlet environment for GPU-native training.
@@ -212,12 +217,14 @@ Part of Phase 1: GPU Infrastructure"
 ## Task 2: VectorizedHamletEnv - Step Function
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 - Modify: `tests/test_townlet/test_environment/test_vectorized_env.py`
 
 **Step 1: Write failing test for step function**
 
 Add to `tests/test_townlet/test_environment/test_vectorized_env.py`:
+
 ```python
 def test_vectorized_env_step():
     """Step should return batched (obs, rewards, dones, info)."""
@@ -285,6 +292,7 @@ Expected: FAIL with "AttributeError: 'VectorizedHamletEnv' object has no attribu
 **Step 3: Implement step function**
 
 Add to `src/townlet/environment/vectorized_env.py`:
+
 ```python
     def step(
         self,
@@ -477,12 +485,14 @@ Part of Phase 1: GPU Infrastructure"
 ## Task 3: StaticCurriculum - Trivial Implementation
 
 **Files:**
+
 - Create: `src/townlet/curriculum/static.py`
 - Create: `tests/test_townlet/test_curriculum/test_static.py`
 
 **Step 1: Write failing test for StaticCurriculum**
 
 Create `tests/test_townlet/test_curriculum/test_static.py`:
+
 ```python
 """Tests for StaticCurriculum (trivial implementation)."""
 
@@ -554,6 +564,7 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'townlet.curriculum.st
 **Step 3: Write StaticCurriculum implementation**
 
 Create `src/townlet/curriculum/static.py`:
+
 ```python
 """
 Static curriculum manager (trivial implementation).
@@ -661,6 +672,7 @@ Expected: PASS (2 tests)
 **Step 5: Update interface compliance tests**
 
 Add to `tests/test_townlet/test_interface_compliance.py`:
+
 ```python
 from townlet.curriculum.static import StaticCurriculum
 
@@ -722,12 +734,14 @@ Part of Phase 1: GPU Infrastructure"
 ## Task 4: EpsilonGreedyExploration - Vectorized Implementation
 
 **Files:**
+
 - Create: `src/townlet/exploration/epsilon_greedy.py`
 - Create: `tests/test_townlet/test_exploration/test_epsilon_greedy.py`
 
 **Step 1: Write failing test for EpsilonGreedyExploration**
 
 Create `tests/test_townlet/test_exploration/test_epsilon_greedy.py`:
+
 ```python
 """Tests for EpsilonGreedyExploration (vectorized)."""
 
@@ -840,6 +854,7 @@ Expected: FAIL with "ModuleNotFoundError"
 **Step 3: Write EpsilonGreedyExploration implementation**
 
 Create `src/townlet/exploration/epsilon_greedy.py`:
+
 ```python
 """
 Epsilon-greedy exploration strategy (vectorized).
@@ -976,6 +991,7 @@ Expected: PASS (4 tests)
 **Step 5: Update interface compliance tests**
 
 Add to `tests/test_townlet/test_interface_compliance.py`:
+
 ```python
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 
@@ -1043,12 +1059,14 @@ Part of Phase 1: GPU Infrastructure"
 ## Task 5: VectorizedPopulation - Population Coordinator
 
 **Files:**
+
 - Create: `src/townlet/population/vectorized.py`
 - Create: `tests/test_townlet/test_population/test_vectorized.py`
 
 **Step 1: Write failing test for VectorizedPopulation construction**
 
 Create `tests/test_townlet/test_population/test_vectorized.py`:
+
 ```python
 """Tests for VectorizedPopulation (population coordinator)."""
 
@@ -1117,6 +1135,7 @@ Expected: FAIL with "ModuleNotFoundError"
 **Step 3: Write VectorizedPopulation implementation**
 
 Create `src/townlet/population/vectorized.py`:
+
 ```python
 """
 Vectorized population manager.
@@ -1290,6 +1309,7 @@ Expected: PASS (2 tests)
 **Step 5: Update interface compliance tests**
 
 Add to `tests/test_townlet/test_interface_compliance.py`:
+
 ```python
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -1331,6 +1351,7 @@ def test_population_manager_compliance(population_class):
 ```
 
 Also update the imports at the top:
+
 ```python
 from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
@@ -1364,11 +1385,13 @@ Part of Phase 1: GPU Infrastructure"
 ## Task 6: Oracle Validation Tests
 
 **Files:**
+
 - Create: `tests/test_townlet/test_oracle_validation.py`
 
 **Step 1: Write oracle validation test comparing Townlet vs Hamlet**
 
 Create `tests/test_townlet/test_oracle_validation.py`:
+
 ```python
 """
 Oracle validation tests.
@@ -1515,6 +1538,7 @@ Expected: FAIL (rewards don't match yet - need to tune implementation)
 **Step 3: Fix any discrepancies found in oracle validation**
 
 If tests fail, investigate differences:
+
 - Meter depletion rates
 - Reward calculation
 - Affordance effects
@@ -1548,11 +1572,13 @@ Part of Phase 1: GPU Infrastructure"
 ## Task 7: Integration Test - Full Training Loop
 
 **Files:**
+
 - Create: `tests/test_townlet/test_integration.py`
 
 **Step 1: Write integration test for full training episode**
 
 Create `tests/test_townlet/test_integration.py`:
+
 ```python
 """
 Integration tests for Townlet training loop.
@@ -1744,11 +1770,13 @@ Part of Phase 1: GPU Infrastructure"
 ## Task 8: Phase 1 Documentation and Verification
 
 **Files:**
+
 - Create: `docs/townlet/PHASE1_VERIFICATION.md`
 
 **Step 1: Create Phase 1 verification checklist**
 
 Create `docs/townlet/PHASE1_VERIFICATION.md`:
+
 ```markdown
 # Townlet Phase 1 Verification Checklist
 
@@ -1841,11 +1869,13 @@ pytest --cov=townlet --cov-report=term-missing tests/test_townlet/
 ## Performance Baseline
 
 **n=1 (single agent)**:
+
 - Episode duration: [MEASURE] steps
 - Steps per second: [MEASURE] FPS
 - Memory usage: [MEASURE] MB
 
 **n=5 (small batch)**:
+
 - Steps per second: [MEASURE] FPS
 - Memory usage: [MEASURE] MB
 
@@ -1860,6 +1890,7 @@ pytest --cov=townlet --cov-report=term-missing tests/test_townlet/
 
 Phase 1 establishes working GPU infrastructure at n=1. All interfaces proven.
 Ready to implement adaptive curriculum (Phase 2) and intrinsic exploration (Phase 3).
+
 ```
 
 **Step 2: Run full verification**
@@ -1882,6 +1913,7 @@ Expected: All tests pass, 100% coverage on Phase 1 code
 **Step 3: Measure performance baseline**
 
 Create `scripts/measure_phase1_performance.py`:
+
 ```python
 """Measure Phase 1 performance baseline."""
 
@@ -2006,6 +2038,7 @@ git push origin phase1-complete
 ## Phase 1 Complete! 🎉
 
 **Deliverables Summary**:
+
 - ✅ VectorizedHamletEnv (GPU-native environment)
 - ✅ StaticCurriculum (trivial curriculum manager)
 - ✅ EpsilonGreedyExploration (vectorized exploration)
@@ -2015,11 +2048,13 @@ git push origin phase1-complete
 - ✅ Performance baseline measurements
 
 **Lines of Code**:
+
 - Source: ~800 LOC
 - Tests: ~700 LOC
 - Total: ~1,500 LOC
 
 **Test Coverage**:
+
 - Environment: 5 tests
 - StaticCurriculum: 2 tests
 - EpsilonGreedy: 4 tests
@@ -2030,6 +2065,7 @@ git push origin phase1-complete
 - **Total: 23 tests, 100% passing**
 
 **Next Phase**: Phase 2 - Adversarial Curriculum (5-7 days)
+
 - Auto-tuning difficulty based on survival + learning + entropy
 - Shaped → sparse transition
 - Curriculum progression tests

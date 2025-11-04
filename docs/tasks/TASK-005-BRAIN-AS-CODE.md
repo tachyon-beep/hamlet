@@ -947,6 +947,7 @@ compiled_brain = brain_compiler.compile()
 The brain compilation process needs substrate metadata to compute `obs_dim` correctly:
 
 **Required substrate properties**:
+
 1. `position_encoding_dim` - How many dimensions for position encoding?
    - 2D one-hot (8×8): 64 dims
    - 2D coordinates: 2 dims
@@ -960,6 +961,7 @@ The brain compilation process needs substrate metadata to compute `obs_dim` corr
    - `"none"` - No position (aspatial substrates)
 
 **obs_dim computation**:
+
 ```python
 # Brain compiler must query substrate config
 obs_dim = (
@@ -971,6 +973,7 @@ obs_dim = (
 ```
 
 **Example obs_dim variations**:
+
 | Substrate | Position Enc | Meters | Affordances | Temporal | **Total** |
 |-----------|--------------|--------|-------------|----------|-----------|
 | 2D (8×8, onehot) | 64 | 8 | 15 | 4 | **91** |
@@ -983,6 +986,7 @@ obs_dim = (
 Brain config CANNOT hardcode `obs_dim` - it must be computed from universe config at compile time.
 
 **Option 1: Auto-compute (recommended)**:
+
 ```yaml
 # brain.yaml
 network:
@@ -995,6 +999,7 @@ network:
 ```
 
 **Option 2: Validate (strict mode)**:
+
 ```yaml
 # brain.yaml
 network:
@@ -1005,6 +1010,7 @@ network:
 ```
 
 **Compilation error if mismatch**:
+
 ```
 ❌ BRAIN COMPILATION FAILED
 Expected obs_dim=91 but computed obs_dim=29 from universe config.
@@ -1023,6 +1029,7 @@ Fix: Either remove expected_obs_dim (auto-compute) or update to:
 ```
 
 **Benefits**:
+
 1. ✅ **Position encoding agnostic**: Network doesn't care if position is one-hot or coordinates
 2. ✅ **Substrate agnostic**: Same brain.yaml works for 2D, 3D, hex, aspatial
 3. ✅ **Meter count agnostic**: Same brain.yaml works for 4-meter or 12-meter universes
@@ -1031,21 +1038,25 @@ Fix: Either remove expected_obs_dim (auto-compute) or update to:
 ## Design Principles
 
 **Separation of Concerns**:
+
 - **Universe config** (bars, actions, affordances): Defines the world
 - **Brain config** (architecture, optimizer, learning): Defines the agent
 - **Training config** (epsilon, curriculum, exploration): Defines the learning process
 
 **No-Defaults Enforcement**:
+
 - ALL architectural choices must be explicit (hidden layer sizes, activation functions, etc.)
 - NO magic numbers hidden in code
 - Config file is complete specification of agent brain
 
 **Conceptual Agnosticism**:
+
 - Brain compiler doesn't assume "reasonable" architectures
 - Allows experimental configurations (1000-layer network, weird activations)
 - Validates structure (correct types), not semantics (sensible choices)
 
 **Compilation Errors Over Runtime Errors**:
+
 - Invalid brain config → clear error at load time
 - Missing required fields → helpful error message with example
 - Type mismatches caught by Pydantic
@@ -1101,6 +1112,7 @@ exploration:
 ```
 
 **Benefits**:
+
 - Researchers can experiment with different RND architectures
 - Test impact of RND capacity on exploration
 - A/B test RND vs UCB vs epsilon-greedy via config change
@@ -1108,6 +1120,7 @@ exploration:
 **Priority Justification: Why DEFERRED?**
 
 RND architecture is an **implementation detail**, not a **learning concept**:
+
 - Students learn "intrinsic motivation" concept, not "how many hidden layers RND should have"
 - Hardcoded RND works fine for pedagogical purposes
 - Low pedagogical value compared to other UAC features
@@ -1115,6 +1128,7 @@ RND architecture is an **implementation detail**, not a **learning concept**:
 **Recommendation**: Implement only if researchers specifically request RND architecture experimentation. Otherwise, keep hardcoded RND as "good enough" default.
 
 **Implementation Notes** (if needed):
+
 1. Add `RNDConfig` Pydantic DTO to `brain_config.py`
 2. Update `RNDExploration.__init__()` to accept config
 3. Validate `embed_dim` matches network architecture expectations

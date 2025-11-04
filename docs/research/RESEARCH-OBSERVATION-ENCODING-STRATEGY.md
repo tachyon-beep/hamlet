@@ -30,6 +30,7 @@ normalized_positions = positions.float() / (self.grid_size - 1)
 ```
 
 **Current observation dimensions:**
+
 - **L0_minimal (3×3)**: 36 dims (9 grid + 8 meters + 15 affordances + 4 temporal)
 - **L0_5_dual_resource (7×7)**: 76 dims (49 grid + 8 meters + 15 affordances + 4 temporal)
 - **L1_full_observability (8×8)**: 91 dims (64 grid + 8 meters + 15 affordances + 4 temporal)
@@ -62,6 +63,7 @@ One-hot encoding **explodes** for larger substrates:
 ### Option A: One-Hot Encoding (Current for Full Obs)
 
 **Implementation**:
+
 ```python
 def encode_position_onehot(positions: torch.Tensor, grid_size: int) -> torch.Tensor:
     """One-hot encoding of grid position.
@@ -80,12 +82,14 @@ def encode_position_onehot(positions: torch.Tensor, grid_size: int) -> torch.Ten
 ```
 
 **Pros**:
+
 - Discrete representation - each cell is independent feature
 - Network can learn per-cell patterns (e.g., "bottom-right corner is dangerous")
 - No continuous values - network doesn't need to learn spatial relationships
 - Easy to interpret - activation directly corresponds to grid cell
 
 **Cons**:
+
 - **Explodes for large grids**: 32×32 = 1024 dims
 - **Infeasible for 3D**: 8×8×3 = 512 dims, 16×16×4 = 1024 dims
 - **No transfer learning**: Network trained on 8×8 can't work on 16×16 (different obs_dim)
@@ -93,6 +97,7 @@ def encode_position_onehot(positions: torch.Tensor, grid_size: int) -> torch.Ten
 - **Sparse activation**: Only 1 dimension is active at a time (inefficient)
 
 **When to use**:
+
 - Small 2D grids (≤8×8 = 64 dims)
 - Tasks where per-cell learning is valuable (e.g., each cell has unique properties)
 - Baseline for comparison
@@ -100,6 +105,7 @@ def encode_position_onehot(positions: torch.Tensor, grid_size: int) -> torch.Ten
 ### Option B: Coordinate Encoding (Normalized Floats)
 
 **Implementation**:
+
 ```python
 def encode_position_coords(positions: torch.Tensor, grid_size: int) -> torch.Tensor:
     """Coordinate encoding with normalized floats.
@@ -115,6 +121,7 @@ def encode_position_coords(positions: torch.Tensor, grid_size: int) -> torch.Ten
 ```
 
 **Pros**:
+
 - **Compact**: Always 2 dims for 2D, 3 dims for 3D (regardless of grid size!)
 - **Scales to any size**: 8×8 and 32×32 both use 2 dims
 - **Enables transfer learning**: Network trained on 8×8 works on 16×16 (same obs_dim)
@@ -122,12 +129,14 @@ def encode_position_coords(positions: torch.Tensor, grid_size: int) -> torch.Ten
 - **Dense activation**: All dimensions convey information
 
 **Cons**:
+
 - **Network must learn spatial reasoning**: Must understand (0.5, 0.5) is center
 - **Continuous values**: Network needs capacity to process floats
 - **No per-cell patterns**: Can't learn "cell (3, 5) has special property"
 - **May need deeper networks**: Spatial reasoning requires more layers
 
 **When to use**:
+
 - Large 2D grids (≥16×16)
 - All 3D grids (cubic, etc.)
 - When transfer learning across grid sizes is desired
@@ -138,6 +147,7 @@ def encode_position_coords(positions: torch.Tensor, grid_size: int) -> torch.Ten
 ### Option C: Learned Position Embeddings
 
 **Implementation**:
+
 ```python
 class LearnedPositionEmbedding(nn.Module):
     def __init__(self, grid_size: int, embed_dim: int = 32):
@@ -150,12 +160,14 @@ class LearnedPositionEmbedding(nn.Module):
 ```
 
 **Pros**:
+
 - **Flexible dimensionality**: Can choose embed_dim (e.g., 32) independent of grid size
 - **Learned spatial structure**: Network learns similarity between nearby cells
 - **Better than one-hot for large grids**: 32 dims vs 1024 dims for 32×32
 - **Can capture patterns**: Embeddings can encode "corner", "edge", "center" concepts
 
 **Cons**:
+
 - **Requires training**: Must learn embeddings before Q-learning (pre-training overhead)
 - **No transfer across grid sizes**: 8×8 embedding table doesn't work for 16×16
 - **More parameters**: Adds parameters to network (grid_size² × embed_dim)
@@ -163,6 +175,7 @@ class LearnedPositionEmbedding(nn.Module):
 - **Opaque**: Hard to interpret what embeddings have learned
 
 **When to use**:
+
 - Large 2D grids where coordinate encoding isn't working
 - When you have time/data for pre-training embeddings
 - Research into spatial representation learning
@@ -172,6 +185,7 @@ class LearnedPositionEmbedding(nn.Module):
 ### Option D: Fourier/Sinusoidal Position Encoding
 
 **Implementation**:
+
 ```python
 def encode_position_fourier(positions: torch.Tensor, grid_size: int, num_freqs: int = 10) -> torch.Tensor:
     """Fourier position encoding (inspired by Transformers, NeRF).
@@ -199,6 +213,7 @@ def encode_position_fourier(positions: torch.Tensor, grid_size: int, num_freqs: 
 ```
 
 **Pros**:
+
 - **Fixed dimensionality**: Always 4 × num_freqs dims (e.g., 40 for num_freqs=10)
 - **Captures spatial frequencies**: sin/cos encode position at multiple scales
 - **No learnable parameters**: Deterministic encoding
@@ -206,12 +221,14 @@ def encode_position_fourier(positions: torch.Tensor, grid_size: int, num_freqs: 
 - **Better than raw coordinates**: More informative for networks
 
 **Cons**:
+
 - **Higher dimensional than coordinates**: 40 dims vs 2 dims
 - **Hyperparameter tuning**: Need to choose num_freqs
 - **Overkill for grids?**: Spatial frequencies matter more for continuous spaces
 - **Complexity**: Harder to implement and debug
 
 **When to use**:
+
 - Continuous substrates (smooth movement)
 - Very large grids where network struggles with raw coordinates
 - Research into representation learning
@@ -221,6 +238,7 @@ def encode_position_fourier(positions: torch.Tensor, grid_size: int, num_freqs: 
 ### Option E: No Position Encoding (Aspatial)
 
 **Implementation**:
+
 ```python
 def encode_position_aspatial() -> torch.Tensor:
     """No position encoding for aspatial substrates.
@@ -232,14 +250,17 @@ def encode_position_aspatial() -> torch.Tensor:
 ```
 
 **Pros**:
+
 - **Simplest**: No position = no encoding
 - **Reveals deep insight**: Position is optional, meters are fundamental
 - **Forces focus on resource management**: No spatial navigation crutch
 
 **Cons**:
+
 - **Only for aspatial substrates**: Doesn't apply to grids
 
 **When to use**:
+
 - Aspatial substrates (pure state machines)
 - Economic simulations without spatial component
 
@@ -317,6 +338,7 @@ substrate:
 ```
 
 **Auto-selection logic:**
+
 1. **Aspatial substrate** → `encoding = "none"` (0 dims)
 2. **2D grid ≤ 8×8** → `encoding = "onehot"` (64 dims, keeps current behavior)
 3. **2D grid > 8×8** → `encoding = "coords"` (2 dims, prevents explosion)
@@ -484,14 +506,17 @@ class AspatialSubstrate(SpatialSubstrate):
 ### Migration Path
 
 **Phase 1**: Keep current one-hot for existing configs (backward compatible)
+
 - L0, L0.5, L1 continue using one-hot (≤8×8 grids)
 - L2 POMDP already uses coordinates, no change needed
 
 **Phase 2**: Add coordinate encoding for 3D substrates
+
 - New config packs with 3D cubic grids auto-select coordinates
 - Test transfer learning: Train on 8×8, evaluate on 16×16
 
 **Phase 3**: Experiment with Fourier encoding for continuous substrates
+
 - Create config pack with continuous substrate
 - Compare Fourier vs coordinates for continuous control
 
@@ -504,6 +529,7 @@ class AspatialSubstrate(SpatialSubstrate):
 **Current limitation**: Can't train on small grid then transfer to large grid (obs_dim mismatch).
 
 **With coordinate encoding**:
+
 1. Train agent on L0 (3×3 grid, 2-dim coords)
 2. Transfer to L0.5 (7×7 grid, still 2-dim coords)
 3. Transfer to L1 (8×8 grid, still 2-dim coords)
@@ -518,15 +544,18 @@ Network architecture **never changes**! obs_dim stays constant.
 **Question**: Can agent trained on 2D grid transfer to 3D grid?
 
 **With coordinate encoding**:
+
 - 2D network: obs_dim = 2 (x, y) + 8 (meters) + 15 (affordances) + 4 (temporal) = 29
 - 3D network: obs_dim = 3 (x, y, z) + 8 (meters) + 15 (affordances) + 4 (temporal) = 30
 
 Almost compatible! Could:
+
 1. Train on 2D with frozen z=0
 2. Fine-tune on 3D by adding z dimension
 3. See if spatial reasoning transfers
 
 **With one-hot encoding**:
+
 - 2D (8×8): obs_dim = 64 + 8 + 15 + 4 = 91
 - 3D (8×8×3): obs_dim = 512 + 8 + 15 + 4 = 539
 
@@ -539,11 +568,13 @@ Completely incompatible. No transfer possible.
 ### Network Forward Pass
 
 **One-hot (8×8 = 64 dims)**:
+
 - Input layer: 64 → 256 (16,384 weights)
 - Sparse activation: Only 1 of 64 dims is 1.0
 - Fast lookup, but sparse gradients
 
 **Coordinate (2 dims)**:
+
 - Input layer: 2 → 256 (512 weights)
 - Dense activation: Both dims convey information
 - 32× fewer input weights!
@@ -553,6 +584,7 @@ Completely incompatible. No transfer possible.
 ### Training Time
 
 **Hypothesis**: Coordinate encoding may train **faster** despite requiring spatial reasoning, because:
+
 1. Fewer parameters (smaller network)
 2. Dense gradients (all dims contribute)
 3. Generalization across positions (learns "near edge" not "cell 17")
@@ -581,6 +613,7 @@ Both are negligible compared to network forward pass. No meaningful difference.
 **A**: Yes, with sufficient capacity. L2 POMDP uses 256-dim LSTM to process coordinates. Research (ICLR 2023 SNAC) shows pre-trained position estimation helps, but not required.
 
 **Capacity recommendation**:
+
 - Simple grids: 128-dim hidden layer sufficient
 - Complex 3D: 256-dim LSTM recommended
 - Continuous substrates: Consider Fourier encoding to help network
@@ -590,6 +623,7 @@ Both are negligible compared to network forward pass. No meaningful difference.
 **A**: **Both**. Auto-select for ease of use, but allow override for experimentation.
 
 Default logic:
+
 - Small 2D (≤8×8): one-hot (current behavior)
 - Large 2D (>8×8): coords (prevents explosion)
 - 3D (any): coords (only option)
@@ -603,6 +637,7 @@ Override: `position_encoding: "coords"` in substrate.yaml
 ## Estimated Effort
 
 ### Phase 1: Coordinate Encoding for Grid Substrates
+
 - Add `encode_position()` to `SpatialSubstrate` interface: **1 hour**
 - Implement coordinate encoding in `SquareGridSubstrate`: **1 hour**
 - Implement coordinate encoding in `CubicGridSubstrate`: **1 hour**
@@ -610,17 +645,20 @@ Override: `position_encoding: "coords"` in substrate.yaml
 - **Total Phase 1: 5 hours**
 
 ### Phase 2: Auto-Selection Logic
+
 - Add `position_encoding` field to substrate config schema: **1 hour**
 - Implement auto-selection in substrate factory: **1 hour**
 - Add config validation (reject one-hot for 3D): **1 hour**
 - **Total Phase 2: 3 hours**
 
 ### Phase 3: Fourier Encoding (Optional)
+
 - Implement Fourier encoding function: **2 hours**
 - Test on continuous substrate: **2 hours**
 - **Total Phase 3: 4 hours**
 
 ### Phase 4: Testing & Validation
+
 - Test coordinate encoding on L1 (compare to one-hot): **3 hours**
 - Test 3D substrate with coordinate encoding: **3 hours**
 - Test transfer learning (8×8 → 16×16): **2 hours**
@@ -641,6 +679,7 @@ Without coordinate encoding, 3D substrates require 512+ dims (infeasible). This 
 ### Value: **VERY HIGH**
 
 **Enables**:
+
 1. **3D cubic grids** (8×8×3, 16×16×4) - multi-story buildings, Minecraft-like
 2. **Large 2D grids** (16×16, 32×32) - bigger worlds
 3. **Transfer learning** - train on small grid, deploy on large grid
@@ -648,6 +687,7 @@ Without coordinate encoding, 3D substrates require 512+ dims (infeasible). This 
 5. **Curriculum progression** - L0 (3×3) → L1 (8×8) → L1_large (16×16) with same network
 
 **Pedagogical value**:
+
 - Students see transfer learning in action
 - Teaches spatial reasoning vs memorization
 - Reveals position encoding choices (not invisible)

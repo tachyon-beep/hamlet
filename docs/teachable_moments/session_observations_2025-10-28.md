@@ -6,6 +6,7 @@
 ## What Happened
 
 ### Setup Phase
+
 1. **Web UI was ready** - Backend (FastAPI + WebSocket) and Frontend (Vue 3) fully implemented
 2. **Dependencies installed** - Both Python (fastapi, uvicorn) and Node (Vue, Pinia, Vite) packages ready
 3. **Trained model existed** - But it was from episode ~50 (undertrained)
@@ -13,9 +14,11 @@
 ### The Debugging Journey
 
 #### Problem 1: "Disconnected" Status
+
 **Symptom**: Frontend showed "Disconnected" in red
 
 **Investigation**:
+
 - Backend running on port 8765 ✓
 - Frontend running on port 5173 ✓
 - WebSocket hardcoded to `localhost:8765`
@@ -24,6 +27,7 @@
 **Root cause**: WebSocket tried to connect to user's localhost, not server
 
 **Fix**: Changed WebSocket URL to use `window.location.hostname`
+
 ```javascript
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 const host = window.location.hostname
@@ -35,18 +39,22 @@ const wsUrl = `${protocol}//${host}:8765/ws`
 ---
 
 #### Problem 2: AttributeError on Connection
+
 **Symptom**: Connection established, then immediate crash
+
 ```
 AttributeError: 'Bed' object has no attribute 'affordance_type'
 ```
 
 **Investigation**:
+
 - Renderer tried to access `affordance.affordance_type`
 - Affordance class actually uses `affordance.name`
 
 **Root cause**: Attribute name mismatch
 
 **Fix**: Changed renderer to use correct attribute
+
 ```python
 # Before: affordance.affordance_type
 # After:  affordance.name
@@ -57,9 +65,11 @@ AttributeError: 'Bed' object has no attribute 'affordance_type'
 ---
 
 #### Problem 3: Agent Just Oscillating
+
 **Symptom**: Agent moved back and forth between two squares, never interacting
 
 **Investigation**:
+
 - Checkpoint epsilon: 0.778 (78% random)
 - Only 50 episodes of training
 - Agent had barely started learning
@@ -69,6 +79,7 @@ AttributeError: 'Bed' object has no attribute 'affordance_type'
 **Fix**: Trained fresh agent for 1000 episodes
 
 **Result**:
+
 - Reward improved from -104 → +79
 - Survival improved from 98 → 372 steps
 - Epsilon dropped to 0.05 (mostly exploitation)
@@ -90,6 +101,7 @@ After training completed and reloading the visualization:
 > when nothing is nearby is a great play to stay close to everything it might need"
 
 **Why this is brilliant**:
+
 1. It's an **exploit** the agent discovered (reward hacking)
 2. It's **technically optimal** given the reward function
 3. It's a perfect **teaching moment** for AI alignment
@@ -102,11 +114,13 @@ After training completed and reloading the visualization:
 ### 1. Live Visualization Amplifies Learning
 
 **Before web UI**: Training logs showed numbers
+
 ```
 Episode 1000: Reward +79.10, Steps 372.4
 ```
 
 **With web UI**: Actual behavior visible
+
 ```
 "Wait, why is it just standing there spamming interact?"
 ```
@@ -133,6 +147,7 @@ Every bug we hit taught something:
 Even the designer didn't predict the interact-spam strategy.
 
 **Why this matters for teaching**:
+
 - Shows optimization ≠ prediction
 - Demonstrates emergent behavior
 - Proves agent is "thinking" (optimizing)
@@ -145,12 +160,14 @@ Even the designer didn't predict the interact-spam strategy.
 ### 4. Real-Time Feedback Loop
 
 **Traditional ML workflow**:
+
 1. Train for hours
 2. Evaluate on test set
 3. Look at numbers
 4. Repeat
 
 **Hamlet workflow**:
+
 1. Watch agent live
 2. Notice weird behavior
 3. Hypothesize why
@@ -166,11 +183,13 @@ Even the designer didn't predict the interact-spam strategy.
 The interact-spam strategy is "wrong" but incredibly valuable:
 
 **If agent had worked perfectly**:
+
 - Students: "Cool, it works."
 - Lesson: Neural networks can learn.
 - Depth: Surface-level
 
 **With the exploit**:
+
 - Students: "Wait, that's not right... or is it?"
 - Lesson: Optimization ≠ intent, alignment problem, reward design
 - Depth: Graduate-level concepts
@@ -182,29 +201,35 @@ The interact-spam strategy is "wrong" but incredibly valuable:
 ## Unexpected Benefits
 
 ### 1. Remote Access Forced Better Design
+
 Having to fix the `localhost` hardcoding made the system more robust and deployable.
 
 ### 2. Undertrained Agent Provided Comparison
+
 Now we have Stage 1 (oscillating) and Stage 3 (exploit) for teaching progression.
 
 ### 3. Live Discovery Created Excitement
+
 Real-time observation of reward hacking was more impactful than planned demonstration would have been.
 
 ### 4. User Immediately Understood Significance
+
 The "trick students into learning" approach works on adults too!
 
 ---
 
 ## What Worked Well
 
-### Technical:
+### Technical
+
 - ✅ FastAPI + WebSocket architecture (reliable, low latency)
 - ✅ Vue 3 + Pinia state management (reactive, clean)
 - ✅ SVG-based grid rendering (smooth, scalable)
 - ✅ Real-time meter updates (immediate feedback)
 - ✅ Episode statistics panel (progress tracking)
 
-### Pedagogical:
+### Pedagogical
+
 - ✅ Immediate visual feedback on agent behavior
 - ✅ Meter depletion visible in real-time
 - ✅ Reward progression shows learning
@@ -215,7 +240,8 @@ The "trick students into learning" approach works on adults too!
 
 ## What Could Be Improved
 
-### Technical:
+### Technical
+
 - 🔧 Add coordinate display (for debugging positions)
 - 🔧 Show action name on grid (which action agent took)
 - 🔧 Highlight recently interacted affordance
@@ -223,7 +249,8 @@ The "trick students into learning" approach works on adults too!
 - 🔧 Episode replay feature (watch previous episodes)
 - 🔧 Model switcher in UI (compare different architectures)
 
-### Pedagogical:
+### Pedagogical
+
 - 🔧 Overlay Q-values on grid (show decision-making)
 - 🔧 Show epsilon value during play
 - 🔧 Visualize exploration vs exploitation actions (different colors)
@@ -252,6 +279,7 @@ The "trick students into learning" approach works on adults too!
 ## Lessons for Future Sessions
 
 ### 1. Always Save Intermediate Checkpoints
+
 Having episodes 50, 200, 500, 1000 would show complete learning arc.
 
 ```python
@@ -261,19 +289,24 @@ if episode in [50, 200, 500, 750, 1000]:
 ```
 
 ### 2. Document Behavior Observations
+
 Keep a "behavior log" during training:
+
 - Episode 50: Oscillating
 - Episode 200: First successful Job interaction
 - Episode 500: Consistent survival
 - Episode 1000: Reward hacking discovered
 
 ### 3. Plan for Surprises
+
 Best teaching moments are unplanned. Build time for exploration.
 
 ### 4. Make Iteration Fast
+
 Quick feedback loops enable experimentation. Web UI provides this.
 
 ### 5. Embrace "Bugs" as Features
+
 The interact-spam "bug" became the most valuable teaching moment.
 
 ---
@@ -281,36 +314,43 @@ The interact-spam "bug" became the most valuable teaching moment.
 ## Research Opportunities Identified
 
 ### Paper 1: "Reward Hacking in Simple RL Environments"
+
 Document the interact-spam exploit, analyze why it emerges, propose fixes.
 
 ### Paper 2: "Pedagogical RL: Teaching Through Observation"
+
 Evaluate learning outcomes: traditional vs. visualization-based teaching.
 
 ### Paper 3: "Emergent Behaviors in Survival Environments"
+
 Catalog strategies learned by agents, analyze relationship to reward structure.
 
 ### Paper 4: "Progressive RL: Multi-Stage Demonstration for Education"
+
 Framework for teaching RL through checkpoint progression.
 
 ---
 
 ## Next Steps Identified
 
-### Immediate (This Session):
+### Immediate (This Session)
+
 1. ✅ Fix WebSocket connection for remote access
 2. ✅ Fix renderer attribute error
 3. ✅ Train full 1000-episode agent
 4. ✅ Document reward hacking observation
 5. ✅ Capture pedagogical insights
 
-### Near-term (Next Session):
+### Near-term (Next Session)
+
 1. 🎯 Save multiple checkpoints at different training stages
 2. 🎯 Implement model selector in web UI
 3. 🎯 Add Q-value overlay visualization
 4. 🎯 Create comparative analysis: different reward functions
 5. 🎯 Document "fix the exploit" student assignment
 
-### Long-term (Research):
+### Long-term (Research)
+
 1. 🔮 Implement Level 2: POMDP with partial observability
 2. 🔮 Implement Level 4: Multi-agent competition
 3. 🔮 Create curriculum guide for educators
@@ -323,6 +363,7 @@ Framework for teaching RL through checkpoint progression.
 **What we planned**: Build a web UI to visualize trained agents
 
 **What we got**:
+
 - A working visualization system
 - An undertrained agent (Stage 1)
 - A fully trained agent (Stage 3)

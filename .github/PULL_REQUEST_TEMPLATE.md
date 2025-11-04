@@ -45,6 +45,7 @@ uv run pytest
 ### Manual Testing (if applicable)
 
 Describe any manual testing performed:
+
 - Configuration used
 - Training runs completed
 - Frontend testing done
@@ -75,6 +76,7 @@ Does this PR introduce any breaking changes?
 - [ ] Yes, breaking changes (describe below)
 
 **If yes, describe:**
+
 - What breaks and why
 - Migration path for users
 - Version bump required (major/minor)
@@ -106,5 +108,6 @@ Does this PR introduce any breaking changes?
 ---
 
 **For Reviewers:**
+
 - Focus areas for review: [Specify what you'd like reviewers to pay attention to]
 - Known limitations: [Any known issues or technical debt introduced]

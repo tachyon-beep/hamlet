@@ -9,6 +9,7 @@
 ## Executive Summary
 
 Add time-based mechanics and multi-interaction affordances to increase temporal planning complexity. Agents must learn:
+
 - **When** affordances are available (operating hours)
 - **How long** to commit to interactions (partial vs full completion)
 - **Opportunity cost** of time ("do I finish this shower or handle urgent need?")
@@ -20,6 +21,7 @@ Add time-based mechanics and multi-interaction affordances to increase temporal 
 ## Design Decisions
 
 ### 1. Time Representation
+
 - **24-tick day cycle**: `time_of_day = step_count % 24`
   - Tick 0 = midnight
   - Tick 6 = 6am (dawn)
@@ -29,6 +31,7 @@ Add time-based mechanics and multi-interaction affordances to increase temporal 
 - **Added to observation**: +1 float `[0.0, 1.0]` (normalized tick/24)
 
 ### 2. Multi-Interaction Mechanics
+
 - **Linear progress with early exit** (75/25 split)
   - 75% of benefit distributed evenly across required ticks
   - 25% bonus on full completion
@@ -38,6 +41,7 @@ Add time-based mechanics and multi-interaction affordances to increase temporal 
 - **Reset on movement**: Progress resets if agent moves away from affordance
 
 ### 3. Dynamic Affordances
+
 - **Time-dependent transformations**: Same grid position → different affordance by time
   - Example: CoffeeShop (8am-6pm) → Bar (6pm-4am)
 - **Enables richer temporal learning**: "Position (3,5) at tick 10 = coffee, at tick 20 = bar"
@@ -51,6 +55,7 @@ Add time-based mechanics and multi-interaction affordances to increase temporal 
 **Current**: 64 (grid) + 8 (meters) = 72 dimensions
 
 **New additions**:
+
 ```python
 observation = [
     grid_position,           # 64-dim one-hot (existing)
@@ -112,6 +117,7 @@ affordance_configs = {
 ### Static Affordances (24/7 Availability)
 
 #### Bed (Home - Always Available)
+
 ```python
 'Bed': {
     'required_ticks': 5,
@@ -132,6 +138,7 @@ affordance_configs = {
 ```
 
 #### LuxuryBed (Home - Premium Rest)
+
 ```python
 'LuxuryBed': {
     'required_ticks': 5,
@@ -150,6 +157,7 @@ affordance_configs = {
 ```
 
 #### Shower (Home - Always Available)
+
 ```python
 'Shower': {
     'required_ticks': 3,
@@ -169,6 +177,7 @@ affordance_configs = {
 ```
 
 #### HomeMeal (Home - Always Available)
+
 ```python
 'HomeMeal': {
     'required_ticks': 2,
@@ -187,6 +196,7 @@ affordance_configs = {
 ```
 
 #### Hospital (Emergency - 24/7)
+
 ```python
 'Hospital': {
     'required_ticks': 3,
@@ -204,6 +214,7 @@ affordance_configs = {
 ```
 
 #### Gym (24-Hour Fitness)
+
 ```python
 'Gym': {
     'required_ticks': 4,
@@ -223,6 +234,7 @@ affordance_configs = {
 ```
 
 #### FastFood (24/7 Convenience)
+
 ```python
 'FastFood': {
     'required_ticks': 1,
@@ -246,6 +258,7 @@ affordance_configs = {
 ### Business Hours Affordances (8am-6pm)
 
 #### Job (Office Work - Sustainable Income)
+
 ```python
 'Job': {
     'required_ticks': 4,
@@ -268,6 +281,7 @@ affordance_configs = {
 ```
 
 #### Labor (Physical Work - High Pay, High Cost)
+
 ```python
 'Labor': {
     'required_ticks': 4,
@@ -289,6 +303,7 @@ affordance_configs = {
 ```
 
 #### Doctor (Medical Care - Business Hours)
+
 ```python
 'Doctor': {
     'required_ticks': 2,
@@ -306,6 +321,7 @@ affordance_configs = {
 ```
 
 #### Therapist (Mental Health - Business Hours)
+
 ```python
 'Therapist': {
     'required_ticks': 3,
@@ -324,6 +340,7 @@ affordance_configs = {
 ```
 
 #### Recreation (Daytime Activity)
+
 ```python
 'Recreation': {
     'required_ticks': 2,
@@ -345,6 +362,7 @@ affordance_configs = {
 ### Dynamic Affordances (Time-Dependent Transformations)
 
 #### CoffeeShop (Daytime - Position Shared with Bar)
+
 ```python
 'CoffeeShop': {
     'required_ticks': 1,
@@ -368,6 +386,7 @@ affordance_configs = {
 ```
 
 #### Bar (Evening/Night - Same Position as CoffeeShop)
+
 ```python
 'Bar': {
     'required_ticks': 2,
@@ -389,6 +408,7 @@ affordance_configs = {
 ```
 
 #### Park (Dawn to Dusk)
+
 ```python
 'Park': {
     'required_ticks': 2,
@@ -415,6 +435,7 @@ affordance_configs = {
 **Current masking**: Movement (blocked by boundaries), INTERACT (blocked if not on affordable affordance)
 
 **New masking logic**:
+
 ```python
 def get_action_masks(self) -> torch.Tensor:
     """
@@ -460,6 +481,7 @@ def get_action_masks(self) -> torch.Tensor:
 ```
 
 **Wraparound handling** for hours like Bar (18, 4):
+
 ```python
 def is_open(time_of_day: int, hours: tuple) -> bool:
     """Check if affordance is open, handling midnight wraparound."""
@@ -567,12 +589,14 @@ def step(self, actions: torch.Tensor):
 ### 1. Time-of-Day Gradient Bar
 
 **Visual Design**:
+
 - Gradient bar showing 24-tick cycle
 - Day (6am-6pm): Yellow → Black gradient
 - Night (6pm-6am): Black → Yellow gradient
 - Current tick indicator (vertical line or arrow)
 
 **Implementation**:
+
 ```typescript
 function getTimeGradient(tick: number): string {
   if (tick >= 6 && tick < 18) {
@@ -593,6 +617,7 @@ function getTimeGradient(tick: number): string {
 ```
 
 **UI Elements**:
+
 ```vue
 <div class="time-bar">
   <div
@@ -608,11 +633,13 @@ function getTimeGradient(tick: number): string {
 ### 2. Affordance Transition Animation
 
 **Visual Design**:
+
 - Pulsing circle during transition (tick 18: CoffeeShop → Bar)
 - Icon swap with fade
 - Background color shift (bright → dark for night service)
 
 **Implementation**:
+
 ```vue
 <template>
   <!-- Transition pulse effect -->
@@ -683,11 +710,13 @@ function getTimeGradient(tick: number): string {
 ### 3. Interaction Progress Ring
 
 **Visual Design**:
+
 - Progress ring around agent sprite
 - Color-coded: yellow (in progress), green (completed)
 - Shows ticks_completed / ticks_required
 
 **Implementation**:
+
 ```vue
 <template>
   <!-- Progress ring around agent -->
@@ -737,6 +766,7 @@ const progressColor = computed(() => {
 ### 4. State Update Message Additions
 
 **WebSocket payload enhancements**:
+
 ```typescript
 interface StateUpdate {
   // ... existing fields ...
@@ -770,6 +800,7 @@ interface StateUpdate {
 ### Early Episodes (0-500): "Time is Confusing"
 
 **Observable behaviors**:
+
 - Agent goes to Job at random times (tick 3, tick 22, etc.)
 - Gets stuck at closed affordances (tries to INTERACT when masked out)
 - Dies at 6pm because Job closed and agent hasn't learned alternatives
@@ -780,6 +811,7 @@ interface StateUpdate {
 ### Mid Episodes (500-2000): "Learning the Clock"
 
 **Observable behaviors**:
+
 - Agent starts going to Job during business hours (tick 8-16)
 - Completes 2-3 ticks of Job, then leaves (partial strategy)
 - Discovers CoffeeShop before Job (energy boost for work)
@@ -790,6 +822,7 @@ interface StateUpdate {
 ### Late Episodes (2000-5000): "Sophisticated Scheduling"
 
 **Observable behaviors**:
+
 - **Morning routine**: CoffeeShop (1 tick) → Job (4 ticks, full shift)
 - **Opportunistic efficiency**: Shower for 2/3 ticks when "not that dirty"
 - **Evening optimization**: Bar (2 ticks, social recovery) → Bed (5 ticks, full sleep)
@@ -819,12 +852,14 @@ interface StateUpdate {
 ### Connection to Real-World RL
 
 **This teaches students**:
+
 - **Temporal credit assignment**: "Which past actions led to this reward 10 ticks later?"
 - **Horizon planning**: "Do I commit 5 ticks to Bed or handle urgent need?"
 - **Opportunity cost**: "What am I giving up by staying here?"
 - **Non-stationary environments**: "The world changes around me (time), I must adapt"
 
 **Real-world parallels**:
+
 - Delivery routing with time windows (packages must arrive 9am-5pm)
 - Shift scheduling for workers (maximize coverage, minimize overtime)
 - Resource allocation in time-sensitive contexts (hospital bed management)
@@ -834,41 +869,51 @@ interface StateUpdate {
 ## Implementation Risks & Mitigations
 
 ### Risk 1: Time Horizon Too Long
+
 **Problem**: 24-tick cycle may be too long for agent to learn temporal patterns
 
 **Mitigation**:
+
 - Start with shorter cycle (12 ticks) for initial experiments
 - Increase to 24 if learning succeeds
 - Monitor Q-value variance across time steps
 
 ### Risk 2: Observation Dimensionality
+
 **Problem**: 74 dimensions may exceed network capacity for recurrent architecture
 
 **Mitigation**:
+
 - Recurrent network already handles spatial patterns, temporal should be natural extension
 - If needed, increase LSTM hidden size from current value
 - Validate with baseline training runs
 
 ### Risk 3: Completion Bonus Too Small
+
 **Problem**: 25% bonus may not incentivize full commitment
 
 **Mitigation**:
+
 - Tunable via config: `completion_bonus_ratio = 0.25` (default)
 - Monitor agent behavior: if always bailing early, increase to 0.40
 - Document as hyperparameter in config schema
 
 ### Risk 4: Dynamic Affordance Confusion
+
 **Problem**: Agent may not understand position (3,5) is CoffeeShop at tick 10, Bar at tick 20
 
 **Mitigation**:
+
 - Observation includes time_of_day (agent can learn correlation)
 - Action masking prevents invalid interactions (agent can't INTERACT with closed affordance)
 - If still struggles, add affordance_type to observation (one-hot encoding)
 
 ### Risk 5: Training Time Increase
+
 **Problem**: More complex environment may slow episode throughput
 
 **Mitigation**:
+
 - Current throughput: ~10,000 episodes/hour
 - Expected with temporal mechanics: ~8,000 episodes/hour (20% slower)
 - Still acceptable for overnight training runs
@@ -879,18 +924,21 @@ interface StateUpdate {
 ## Success Metrics
 
 **Quantitative indicators**:
+
 1. **Temporal pattern learning**: Agent visits Job 80%+ during business hours (tick 8-18)
 2. **Completion rate**: Agent completes full Job shift (4/4 ticks) 60%+ of the time
 3. **Opportunistic efficiency**: Agent does partial Shower (2/3 ticks) when hygiene >60%
 4. **Survival time**: Increases to >300 steps with temporal planning (vs ~200 without)
 
 **Qualitative indicators**:
+
 1. Agent learns "morning routine" (CoffeeShop → Job sequence)
 2. Agent adapts to closed affordances (doesn't get stuck waiting for Job to open)
 3. Agent shows time-dependent behavior (different strategies at tick 10 vs tick 20)
 4. Agent demonstrates opportunity cost reasoning (bails on low-priority tasks for urgent needs)
 
 **Failure modes to watch for**:
+
 - Agent never completes full interactions (always bails at 1 tick) → bonus too small
 - Agent ignores time (goes to Job at random ticks) → time not in observation properly
 - Agent gets stuck at closed affordances (spams INTERACT) → action masking bug
@@ -901,18 +949,23 @@ interface StateUpdate {
 ## Future Extensions
 
 ### Level 3: Multi-Agent Conflict
+
 **Once temporal mechanics work well**:
+
 - Add resource contention: Only one agent can use Bed at a time
 - Agent must learn "Is position (2,3) occupied? Should I wait or go elsewhere?"
 - Teaches coordination and competition dynamics
 
 ### Level 4: Emergent Communication
+
 **After multi-agent conflict**:
+
 - Agents can "signal" intentions (reserve affordance for N ticks)
 - Cooperative scheduling emerges
 - Foundation for language grounding
 
 ### Advanced Temporal Features
+
 - **Fatigue accumulation**: Energy depletion rate increases with consecutive work shifts
 - **Circadian rhythm**: Sleep effectiveness varies by time (tick 0-6 = best sleep)
 - **Rush hour pricing**: Job pays more during peak hours (tick 12-14)
@@ -923,6 +976,7 @@ interface StateUpdate {
 ## Configuration Schema
 
 **New config section** (`configs/townlet_temporal.yaml`):
+
 ```yaml
 environment:
   grid_size: 8

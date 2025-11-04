@@ -15,6 +15,7 @@
 ## Implementation Status
 
 **✅ COMPLETED:**
+
 - **Phase 1**: Environment Backend - Multi-Interaction Tracking (Tasks 1.1, 1.2, 1.3)
 - **Phase 2**: Time-Based Action Masking (Task 2.1)
 - **Phase 4**: Frontend Visualization (Tasks 4.1, 4.2)
@@ -24,6 +25,7 @@
 - **Phase 6**: Verification (Tasks 6.1, 6.2)
 
 **⏸️ DEFERRED:**
+
 - **Phase 3**: Dynamic Affordances (Task 3.1)
   - Position-based affordance mapping (CoffeeShop↔Bar)
   - Requires architectural refactoring of affordance lookup system
@@ -41,12 +43,14 @@
 ### Task 1.1: Add Affordance Config Schema
 
 **Files:**
+
 - Create: `src/townlet/environment/affordance_config.py`
 - Test: `tests/test_townlet/test_affordance_config.py`
 
 **Step 1: Write test for affordance config loading**
 
 Create test file:
+
 ```python
 # tests/test_townlet/test_affordance_config.py
 import pytest
@@ -103,6 +107,7 @@ Expected: `ModuleNotFoundError: No module named 'townlet.environment.affordance_
 **Step 3: Implement affordance config module**
 
 Create file:
+
 ```python
 # src/townlet/environment/affordance_config.py
 """
@@ -434,12 +439,14 @@ git commit -m "feat: add affordance config schema for temporal mechanics
 ### Task 1.2: Add Time and Progress Tracking to VectorizedHamletEnv
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 - Test: `tests/test_townlet/test_vectorized_env_temporal.py`
 
 **Step 1: Write test for time tracking**
 
 Create test file:
+
 ```python
 # tests/test_townlet/test_vectorized_env_temporal.py
 import pytest
@@ -544,6 +551,7 @@ Expected: `TypeError: __init__() got an unexpected keyword argument 'enable_temp
 Modify `src/townlet/environment/vectorized_env.py`:
 
 Find the `__init__` method and add:
+
 ```python
 def __init__(
     self,
@@ -578,6 +586,7 @@ def __init__(
 ```
 
 Find the `reset()` method and add:
+
 ```python
 def reset(self) -> torch.Tensor:
     # ... existing reset code ...
@@ -593,6 +602,7 @@ def reset(self) -> torch.Tensor:
 ```
 
 Find the `step()` method and add time increment:
+
 ```python
 def step(self, actions: torch.Tensor):
     # ... existing step code ...
@@ -605,6 +615,7 @@ def step(self, actions: torch.Tensor):
 ```
 
 Find the `_get_observations()` method and extend:
+
 ```python
 def _get_observations(self) -> torch.Tensor:
     if self.partial_observability:
@@ -669,6 +680,7 @@ git commit -m "feat: add time tracking and progress to VectorizedHamletEnv
 ### Task 1.3: Implement Multi-Tick Interaction Logic
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py:_handle_interactions()`
 - Test: `tests/test_townlet/test_multi_interaction.py`
 
@@ -918,6 +930,7 @@ git commit -m "feat: implement multi-tick interaction mechanics
 ### Task 2.1: Implement Operating Hours Action Masking
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py:get_action_masks()`
 - Test: `tests/test_townlet/test_time_based_masking.py`
 
@@ -1108,6 +1121,7 @@ git commit -m "feat: add time-based action masking for operating hours
 ### Task 3.1: Implement Position-Based Affordance Mapping
 
 **Files:**
+
 - Create: `src/townlet/environment/dynamic_affordances.py`
 - Modify: `src/townlet/environment/vectorized_env.py`
 - Test: `tests/test_townlet/test_dynamic_affordances.py`
@@ -1334,6 +1348,7 @@ git commit -m "feat: implement dynamic affordances (CoffeeShop ↔ Bar)
 ### Task 4.1: Add Time-of-Day Gradient Bar
 
 **Files:**
+
 - Modify: `frontend/src/components/TimeOfDayBar.vue` (create new)
 - Modify: `frontend/src/components/MetersPanel.vue` (integrate)
 - Modify: `src/hamlet/web/renderer.py` (add time to state)
@@ -1561,7 +1576,8 @@ python -m hamlet.demo.live_inference checkpoints_level2 8766 0.2 1000
 cd frontend && npm run dev
 ```
 
-Open http://localhost:5173 and verify:
+Open <http://localhost:5173> and verify:
+
 - Gradient bar shows day/night transition
 - Tick marker moves as time progresses
 - Labels show current time (e.g., "2pm")
@@ -1584,6 +1600,7 @@ git commit -m "feat: add time-of-day gradient bar to UI
 ### Task 4.2: Add Interaction Progress Ring
 
 **Files:**
+
 - Create: `frontend/src/components/ProgressRing.vue`
 - Modify: `frontend/src/components/Grid.vue`
 
@@ -1735,6 +1752,7 @@ socket.on('state_update', (data) => {
 **Step 4: Test in browser**
 
 Verify:
+
 - Yellow ring appears when agent starts interaction
 - Ring fills as agent progresses (e.g., 2/5 on Bed)
 - Ring turns green when complete
@@ -1760,6 +1778,7 @@ git commit -m "feat: add interaction progress ring around agents
 ### Task 5.1: Add Temporal Mechanics Config
 
 **Files:**
+
 - Create: `configs/townlet_level_2_5_temporal.yaml`
 - Modify: `src/hamlet/demo/runner.py` (parse new config fields)
 
@@ -1884,6 +1903,7 @@ git commit -m "feat: add Level 2.5 temporal mechanics config
 ### Task 5.2: Fix pyproject.toml in Main Repo
 
 **Files:**
+
 - Modify: `/home/john/hamlet/pyproject.toml` (in main branch, not worktree)
 
 **Step 1: Switch to main branch**
@@ -1929,6 +1949,7 @@ cd /home/john/hamlet/.worktrees/temporal-mechanics
 ### Task 6.1: Integration Test - Full Temporal Cycle
 
 **Files:**
+
 - Create: `tests/test_townlet/test_temporal_integration.py`
 
 **Step 1: Write integration test**
@@ -2027,6 +2048,7 @@ git commit -m "test: add integration tests for temporal mechanics
 ### Task 6.2: Documentation Update
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 - Modify: `README.md`
 
@@ -2083,6 +2105,7 @@ git commit -m "docs: add Level 2.5 temporal mechanics to documentation
 **Implementation complete!**
 
 Phases implemented:
+
 1. ✅ Environment backend (multi-interaction tracking)
 2. ✅ Time system (24-tick cycle, action masking)
 3. ✅ Dynamic affordances (CoffeeShop/Bar transformation)
@@ -2090,6 +2113,7 @@ Phases implemented:
 5. ✅ Config and training integration
 
 **Files created:**
+
 - `src/townlet/environment/affordance_config.py`
 - `src/townlet/environment/dynamic_affordances.py`
 - `frontend/src/components/TimeOfDayBar.vue`
@@ -2098,6 +2122,7 @@ Phases implemented:
 - 4 test files
 
 **Files modified:**
+
 - `src/townlet/environment/vectorized_env.py`
 - `src/hamlet/web/renderer.py`
 - `src/hamlet/demo/runner.py`
@@ -2109,6 +2134,7 @@ Phases implemented:
 **Total commits:** 12 (one per logical feature)
 
 **Next steps:**
+
 1. Train for 5000 episodes: `python -m hamlet.demo.runner configs/townlet_level_2_5_temporal.yaml demo_temporal.db checkpoints_temporal 5000`
 2. Observe emergent behaviors (power napping, shift splitting, pre-work prep)
 3. Document teachable moments in `docs/teachable_moments/`

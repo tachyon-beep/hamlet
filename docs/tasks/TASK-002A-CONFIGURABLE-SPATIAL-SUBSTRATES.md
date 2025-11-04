@@ -44,10 +44,12 @@ new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
    - Remove spatial substrate entirely (pure state machine)
 
 4. **Spatial Substrate Split**: Some in training.yaml, most hardcoded in Python:
+
    ```yaml
    # training.yaml (partial)
    grid_size: 8
    ```
+
    But topology, boundaries, distance metric are Python code!
 
 ## Solution: Config-Driven Spatial Substrates
@@ -99,6 +101,7 @@ substrate:
 ### Key Insight: Substrate Is Optional, Not Fundamental
 
 The meters (energy, health, money, etc.) **ARE** the universe. The spatial substrate is just an **optional overlay** for:
+
 - Positioning affordances on a map
 - Enabling navigation mechanics
 - Creating distance-based challenges
@@ -534,6 +537,7 @@ new_positions = self.substrate.apply_movement(self.positions, movement_deltas)
 Create `substrate.yaml` for all existing config packs, replicating current behavior:
 
 **configs/L0_minimal/substrate.yaml**:
+
 ```yaml
 version: "1.0"
 description: "2D square grid for L0 minimal"
@@ -548,6 +552,7 @@ substrate:
 ```
 
 **configs/L1_full_observability/substrate.yaml**:
+
 ```yaml
 version: "1.0"
 description: "2D square grid for L1 full observability"
@@ -564,6 +569,7 @@ substrate:
 ### Phase 5: Create Example Alternative Substrates
 
 **configs/L1_3D_house/substrate.yaml** (3D cubic grid):
+
 ```yaml
 version: "1.0"
 description: "3-story house simulation"
@@ -578,6 +584,7 @@ substrate:
 ```
 
 **configs/L1_toroidal/substrate.yaml** (toroidal wraparound):
+
 ```yaml
 version: "1.0"
 description: "Pac-Man style wraparound world"
@@ -606,6 +613,7 @@ substrate:
 ## Success Criteria
 
 ### Core Substrate Implementation
+
 - [ ] `SpatialSubstrate` abstract interface defined
 - [ ] `substrate.yaml` schema defined with Pydantic DTOs
 - [ ] `SquareGridSubstrate` implemented (replicates current behavior)
@@ -616,17 +624,20 @@ substrate:
 - [ ] Can switch between 2D/3D by editing substrate.yaml (no code changes)
 
 ### Problem 1: obs_dim Variability
+
 - [ ] Substrate has `position_encoding_dim` property
 - [ ] Environment aggregates `substrate.position_encoding_dim` into total `observation_dim`
 - [ ] Different substrates produce correct obs_dim (2D=91, 3D=539, aspatial=27)
 
 ### Problem 5: Distance Semantics
+
 - [ ] Substrate has `is_adjacent(pos1, pos2) → bool` method
 - [ ] Substrate has `compute_distance(pos1, pos2) → float` method
 - [ ] Interactions use `is_adjacent()` check (not raw distance)
 - [ ] Aspatial substrate returns `True` for `is_adjacent()` (everything accessible)
 
 ### Problem 6: Observation Encoding (CRITICAL)
+
 - [ ] **Coordinate encoding works for 3D cubic grids** (512 dims → 3 dims)
 - [ ] Substrate has `encode_position(positions) → torch.Tensor` method
 - [ ] Auto-selection: small grids use one-hot, large/3D use coordinates
@@ -634,17 +645,20 @@ substrate:
 - [ ] L1 backward compatibility: one-hot encoding still works for ≤8×8
 
 ### Problem 3: Visualization
+
 - [ ] Text visualization renders all substrate types for debugging
 - [ ] 2D square grid ASCII rendering
 - [ ] 3D cubic floor-by-floor projection
 - [ ] Aspatial meters-only dashboard
 
 ### Problem 4: Affordance Placement
+
 - [ ] `randomize_affordance_positions()` works for 2D grids
 - [ ] `randomize_affordance_positions()` works for 3D cubic grids
 - [ ] `randomize_affordance_positions()` works for aspatial (returns empty tensor)
 
 ### Validation & Testing
+
 - [ ] Substrate compilation errors caught at load time
 - [ ] All tests pass with new substrate system
 - [ ] **3D feasibility proof**: 8×8×3 grid runs without memory issues
@@ -694,11 +708,13 @@ See: `docs/research/RESEARCH-TASK-002A-UNSOLVED-PROBLEMS-CONSOLIDATED.md`
 ### Critical Path Items
 
 🔴 **Must implement** for 3D substrate support:
+
 1. Coordinate encoding (Problem 6): 20h total
 2. Distance semantics (Problem 5): 8-12h total
 3. obs_dim property (Problem 1): 8-11h total
 
 ✅ **Deferred** to later tasks:
+
 - Action validation → TASK-004A (Compiler): 17h saved
 - GUI visualization → TASK-006 (separate project): 24-64h saved
 - Explicit affordance positioning → Phase 2: 6h saved
@@ -719,6 +735,7 @@ See: `docs/research/RESEARCH-TASK-002A-UNSOLVED-PROBLEMS-CONSOLIDATED.md`
 **Impact**: Without mitigation, 3D cubic substrates cannot be implemented (512+ dimensions infeasible for input layer).
 
 **Mitigation**: **Implement coordinate encoding** (normalized floats instead of one-hot)
+
 - 3D (8×8×3): 512 dims → 3 dims (170× reduction!)
 - 2D (16×16): 256 dims → 2 dims (128× reduction!)
 - Enables transfer learning (same network works on any grid size)
@@ -767,24 +784,28 @@ See: `docs/research/RESEARCH-TASK-002A-UNSOLVED-PROBLEMS-CONSOLIDATED.md`
 ## Design Principles
 
 **Conceptual Agnosticism**: The substrate system should NOT assume:
+
 - ❌ Space must be 2D or 3D (could be 4D, could be 0D aspatial)
 - ❌ Grid must be square (could be hex, triangular, irregular graph)
 - ❌ Distance must be Euclidean (could be Manhattan, graph distance, or meaningless for aspatial)
 - ❌ Positioning is fundamental (aspatial universes have no concept of "position")
 
 **Structural Enforcement**: The schema MUST enforce:
+
 - ✅ Position tensor shape matches substrate.position_dim
 - ✅ Boundary behavior is well-defined (clamp, wrap, bounce, fail)
 - ✅ Distance metric matches topology (hexagonal distance for hex grids)
 - ✅ Actions are valid for this substrate (caught in TASK-003)
 
 **Permissive Semantics, Strict Syntax**:
+
 - ✅ Allow: 3D, 4D, hexagonal, continuous, graph, aspatial
 - ✅ Allow: Weird topologies students want to experiment with
 - ❌ Reject: Invalid topology names, incompatible dimensions
 - ❌ Reject: Type errors (string dimensions when expecting int)
 
 **Key Insight**: The meters (bars) already form a continuous multidimensional state space. The spatial substrate is just an **optional overlay**. Making this explicit enables:
+
 - Aspatial universes (pure resource management)
 - Graph-based universes (abstract topologies)
 - Hybrid universes (spatial + aspatial components)

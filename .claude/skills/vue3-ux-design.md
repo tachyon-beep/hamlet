@@ -15,6 +15,7 @@ Skipping sections = guaranteed failure. This skill is 900+ lines because each li
 ## When This Skill Applies
 
 **MANDATORY for**:
+
 - Building any Vue 3 component
 - Creating real-time dashboards or data visualizations
 - Implementing forms with validation
@@ -207,6 +208,7 @@ const cardStyle = computed(() => ({
 ### 2.1 Semantic HTML First
 
 ❌ **NEVER**:
+
 ```vue
 <div class="button" @click="submit">Submit</div>
 <div class="input-wrapper">
@@ -216,6 +218,7 @@ const cardStyle = computed(() => ({
 ```
 
 ✅ **ALWAYS**:
+
 ```vue
 <button type="submit" @click="submit">Submit</button>
 <form @submit.prevent="handleSubmit">
@@ -231,6 +234,7 @@ const cardStyle = computed(() => ({
 ### 2.2 ARIA Attributes
 
 **Interactive elements**:
+
 ```vue
 <!-- Buttons with icons only -->
 <button aria-label="Close dialog" @click="close">
@@ -259,6 +263,7 @@ const cardStyle = computed(() => ({
 ```
 
 **Data tables**:
+
 ```vue
 <table>
   <thead>
@@ -272,6 +277,7 @@ const cardStyle = computed(() => ({
 ```
 
 **Live regions** (for real-time updates):
+
 ```vue
 <div aria-live="polite" aria-atomic="true">
   Episode {{ currentEpisode }} completed: {{ reward }} reward
@@ -295,6 +301,7 @@ const cardStyle = computed(() => ({
 ```
 
 **Focus management**:
+
 ```javascript
 const firstInputRef = ref(null)
 
@@ -328,11 +335,12 @@ color: { bg: '#2a2a3e', text: '#4a4a5e' }  // Fails WCAG
 color: { bg: '#2a2a3e', text: '#e0e0e0' }  // Passes WCAG AA
 ```
 
-**Check contrast**: Use browser DevTools or https://webaim.org/resources/contrastchecker/
+**Check contrast**: Use browser DevTools or <https://webaim.org/resources/contrastchecker/>
 
 ### 2.6 Test With Screen Readers
 
 **Before marking component complete**:
+
 - [ ] Test with VoiceOver (macOS) or NVDA (Windows)
 - [ ] Navigate with keyboard only (no mouse)
 - [ ] Verify all interactive elements are reachable
@@ -364,6 +372,7 @@ Is the state reusable logic with reactivity?
 ### 3.2 Props First (Decouple from Store)
 
 ❌ **NEVER** (tight coupling):
+
 ```vue
 <script setup>
 import { useSimulationStore } from '@/stores/simulation'
@@ -374,6 +383,7 @@ const data = computed(() => store.episodeHistory)
 ```
 
 ✅ **ALWAYS** (loose coupling):
+
 ```vue
 <script setup>
 // Component accepts data via props
@@ -394,12 +404,14 @@ defineProps({
 ### 3.3 When to Use Pinia
 
 **✅ Good use cases**:
+
 - Authentication state (current user, token)
 - WebSocket connection status
 - Application-wide settings (theme, locale)
 - Large shared datasets (cached API responses)
 
 **❌ Bad use cases**:
+
 - Component-local state (use `ref`)
 - Parent-child communication (use props/events)
 - Form state (use local state + validation library)
@@ -437,6 +449,7 @@ export function useWebSocket(url) {
 ```
 
 **Use in component**:
+
 ```vue
 <script setup>
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -556,6 +569,7 @@ export const useSimulationStore = defineStore('simulation', () => {
 ### 5.1 No Business Logic in Templates
 
 ❌ **NEVER**:
+
 ```vue
 <template>
   <div :style="{ width: (epsilon * 100) + '%' }">
@@ -565,6 +579,7 @@ export const useSimulationStore = defineStore('simulation', () => {
 ```
 
 ✅ **ALWAYS**:
+
 ```vue
 <template>
   <div :style="{ width: epsilonPercentage }">
@@ -593,6 +608,7 @@ const filteredSortedData = computed(() => {
 ### 5.2 Extract Constants
 
 ❌ **NEVER**:
+
 ```javascript
 if (percentage < 20) return 'critical'
 if (stress > 80) showAlert()
@@ -600,6 +616,7 @@ fetchData({ limit: 100 })
 ```
 
 ✅ **ALWAYS**:
+
 ```javascript
 const THRESHOLD_CRITICAL = 20
 const THRESHOLD_HIGH_STRESS = 80
@@ -637,6 +654,7 @@ const statusClass = computed(() =>
 ### 6.1 Mobile-First CSS
 
 ❌ **NEVER** (desktop-first):
+
 ```css
 .container {
   width: 1200px;
@@ -652,6 +670,7 @@ const statusClass = computed(() =>
 ```
 
 ✅ **ALWAYS** (mobile-first):
+
 ```css
 .container {
   width: 100%;
@@ -739,6 +758,7 @@ For component-level responsiveness:
 ### 6.6 Test Responsive Behavior
 
 **Before marking complete**:
+
 - [ ] Test at 320px (small phone)
 - [ ] Test at 375px (iPhone SE)
 - [ ] Test at 768px (tablet portrait)
@@ -753,11 +773,13 @@ For component-level responsiveness:
 ### 7.1 When to Optimize
 
 **❌ DO NOT optimize until you have**:
+
 1. Measured performance with Vue DevTools
 2. Identified actual bottleneck
 3. Confirmed it's a user-facing issue
 
 **✅ DO optimize when**:
+
 - Rendering >1000 items in list
 - Running heavy computation on every reactive change
 - Loading large datasets without pagination
@@ -929,12 +951,14 @@ watch(() => props.data, (newData) => {
 Before marking component complete:
 
 **Functionality**:
+
 - [ ] All features work as expected
 - [ ] Error states display correctly
 - [ ] Loading states show and hide properly
 - [ ] Empty states render when no data
 
 **Accessibility**:
+
 - [ ] Keyboard navigation works (Tab, Enter, Space, Arrows)
 - [ ] Screen reader announces changes (test with VoiceOver/NVDA)
 - [ ] Focus indicators visible
@@ -942,6 +966,7 @@ Before marking component complete:
 - [ ] Touch targets 44px+
 
 **Responsive**:
+
 - [ ] Works at 320px width (small phone)
 - [ ] Works at 768px width (tablet)
 - [ ] Works at 1280px width (desktop)
@@ -949,6 +974,7 @@ Before marking component complete:
 - [ ] Touch controls work on mobile
 
 **Performance**:
+
 - [ ] No lag when interacting
 - [ ] Large lists render smoothly
 - [ ] No unnecessary re-renders (check Vue DevTools)
@@ -956,6 +982,7 @@ Before marking component complete:
 ### 9.2 Code Review Checklist
 
 **Before submitting**:
+
 - [ ] No magic numbers (all extracted to constants/tokens)
 - [ ] No inline styles (moved to computed or CSS)
 - [ ] No business logic in template

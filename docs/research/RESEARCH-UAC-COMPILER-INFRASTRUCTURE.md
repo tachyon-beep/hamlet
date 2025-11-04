@@ -5,6 +5,7 @@
 This research focuses on the **bones of the UAC system**: ensuring we expose maximum configurability, compile universes following best practices, and address architectural/performance considerations for scalability.
 
 **KEY FINDINGS**:
+
 1. **8-Bar Constraint** - Critical bottleneck limiting universe expressivity
 2. **No Compilation Pipeline** - Configs loaded independently, no cross-validation
 3. **Hardcoded Type Systems** - Interaction types, operator literals, meter names baked into code
@@ -12,6 +13,7 @@ This research focuses on the **bones of the UAC system**: ensuring we expose max
 5. **Missing Knobs** - Many gameplay-critical values hardcoded in Python
 
 **RECOMMENDATIONS**:
+
 1. **Implement Variable-Size Meter System** (HIGH PRIORITY)
 2. **Build Universe Compiler with 7-Stage Pipeline** (TASK-003)
 3. **Make Type System Configurable** (MEDIUM PRIORITY)
@@ -25,6 +27,7 @@ This research focuses on the **bones of the UAC system**: ensuring we expose max
 ### CRITICAL: 8-Bar Constraint
 
 **Current State**:
+
 ```python
 # cascade_config.py:70
 if len(v) != 8:
@@ -36,6 +39,7 @@ if indices != {0, 1, 2, 3, 4, 5, 6, 7}:
 ```
 
 **Impact**:
+
 - Cannot model universes with more/fewer meters
 - Cannot add "spiritual_alignment", "reputation", "skill", etc.
 - Cannot create simplified 4-meter tutorial universes
@@ -47,6 +51,7 @@ From UAC.md: "Those indices are wired everywhere (policy nets, replay buffers, c
 **The Problem**: This is treating a **technical debt** as a **design constraint**.
 
 **Research Questions**:
+
 1. Can we make meter count configurable while preserving network compatibility?
 2. Should observation dim be computed from meter count?
 3. How do we handle checkpoints with different meter counts?
@@ -79,6 +84,7 @@ bars:
 **Implementation Approach**:
 
 1. **Config Layer**: Remove hardcoded 8-bar validation, use `len(bars)`
+
    ```python
    @field_validator("bars")
    def validate_bars(cls, v: list[BarConfig]) -> list[BarConfig]:
@@ -91,6 +97,7 @@ bars:
    ```
 
 2. **Engine Layer**: Dynamically size tensors based on meter count
+
    ```python
    # BEFORE: Hardcoded
    meters = torch.zeros((num_agents, 8), device=device)
@@ -101,6 +108,7 @@ bars:
    ```
 
 3. **Network Layer**: Compute observation dim from config
+
    ```python
    # BEFORE: Assumes 8 meters
    obs_dim = grid_size * grid_size + 8 + affordance_vocab + extras
@@ -110,6 +118,7 @@ bars:
    ```
 
 4. **Checkpoint Compatibility**: Store meter_count in checkpoint metadata
+
    ```python
    checkpoint = {
        "meter_count": 12,
@@ -119,12 +128,14 @@ bars:
    ```
 
 **Benefits**:
+
 - ✅ Enable 4-meter tutorial universes (L0: just energy + health)
 - ✅ Enable 16-meter complex universes (reputation, skill, spirituality)
 - ✅ Pedagogical: Students learn meter systems are designable, not fixed
 - ✅ Domain flexibility: Different universes need different meters
 
 **Risks**:
+
 - Network architecture depends on obs_dim (must rebuild on meter_count change)
 - Checkpoints incompatible across different meter counts (expected)
 - Cascade configurations must reference valid meter indices (already validated)
@@ -138,6 +149,7 @@ bars:
 ### Hardcoded Meter Name-to-Index Mapping
 
 **Current State**:
+
 ```python
 # affordance_config.py:27
 METER_NAME_TO_IDX: dict[str, int] = {
@@ -153,6 +165,7 @@ METER_NAME_TO_IDX: dict[str, int] = {
 ```
 
 **Impact**:
+
 - Cannot add new meters without editing Python
 - Cannot rename meters (e.g., "satiation" → "hunger")
 - Meter names hardcoded in affordance validation
@@ -178,6 +191,7 @@ def validate_meter_name(self) -> "AffordanceEffect":
 ### Hardcoded Range [0.0, 1.0]
 
 **Current State**:
+
 ```python
 # cascade_config.py:43
 if v != (0.0, 1.0):
@@ -185,6 +199,7 @@ if v != (0.0, 1.0):
 ```
 
 **Impact**:
+
 - Cannot model debt (negative money)
 - Cannot model overbuffing (health >1.0 temporarily)
 - Forces all meters into same scale (pedagogically limiting)
@@ -223,12 +238,14 @@ class BarConfig(BaseModel):
 ### Hardcoded Interaction Types
 
 **Current State**:
+
 ```python
 # affordance_config.py:77
 interaction_type: Literal["instant", "multi_tick", "continuous", "dual"]
 ```
 
 **Impact**:
+
 - Cannot add new interaction types without Python changes
 - Cannot experiment with "staged", "conditional", "reactive" interactions
 - Type system is closed, not extensible
@@ -271,12 +288,14 @@ interaction_types:
 ### Hardcoded Operating Hours Format
 
 **Current State**:
+
 ```yaml
 operating_hours: [9, 18]  # 9am-6pm
 operating_hours: [18, 28]  # 6pm-4am (wraps midnight)
 ```
 
 **Limitation**:
+
 - Cannot specify multiple time windows (9-12, 14-18)
 - Cannot specify days of week (weekends vs weekdays)
 - Cannot specify seasonal changes
@@ -315,12 +334,14 @@ operating_hours:
 **Current State**: Configs are loaded **independently** without cross-validation.
 
 From code analysis:
+
 - `load_bars_config()` loads bars.yaml
 - `load_cascade_config()` loads cascades.yaml
 - `load_affordance_config()` loads affordances.yaml
 - No orchestration layer validates they're compatible
 
 **Missing Validations**:
+
 1. **Dangling References**: Cascade references non-existent meter
 2. **Spatial Impossibility**: Too many affordances for grid size
 3. **Economic Impossibility**: Costs exceed possible income
@@ -402,6 +423,7 @@ def _validate_universe(self, ...):
 ```
 
 **Benefits**:
+
 - ✅ Fail fast: Catch errors at load time, not during training
 - ✅ Clear errors: "Grid has 9 cells but need 11 (10 affordances + 1 agent)"
 - ✅ Cross-file safety: Validate meter references, spatial feasibility, economic balance
@@ -418,12 +440,14 @@ def _validate_universe(self, ...):
 ### Current Performance Optimizations
 
 **Good**: CascadeEngine does pre-computation
+
 - Pre-builds lookup maps: `_bar_name_to_idx`, `_bar_idx_to_name`
 - Pre-computes base depletion tensor: `_base_depletions`
 - Pre-builds cascade data by category: `_cascade_data`
 - Pre-builds modulation data: `_modulation_data`
 
 **From code**:
+
 ```python
 # cascade_engine.py:49-63
 # Pre-build lookup maps for performance
@@ -444,6 +468,7 @@ self._cascade_data = self._build_cascade_data()
 **1. No Compiled Universe Artifact**
 
 Currently, every training run:
+
 1. Loads YAML files from disk
 2. Parses YAML into Python dicts
 3. Validates with Pydantic
@@ -472,6 +497,7 @@ universe = CompiledUniverse.load("configs/L1_full_observability/.compiled")
 **2. No Action Masking Pre-Computation**
 
 Currently, action masks are computed **every tick** for every agent:
+
 - Check operating hours for each affordance
 - Check agent position matches affordance position
 - Compute valid actions dynamically
@@ -536,6 +562,7 @@ def _build_cascade_data(self):
 Multiple small tensor operations instead of fused operations.
 
 **Example**:
+
 ```python
 # CURRENT: Multiple operations
 meters -= base_depletions
@@ -591,23 +618,27 @@ meters = torch.clamp(meters - base_depletions - cascade_penalties, 0.0, 1.0)
 ### Currently Exposed (✅)
 
 **bars.yaml**:
+
 - Meter names, indices, tiers
 - Initial values
 - Base depletion rates
 - Terminal conditions
 
 **cascades.yaml**:
+
 - Modulation parameters (base_multiplier, range)
 - Cascade sources, targets, thresholds, strengths
 - Execution order
 
 **affordances.yaml**:
+
 - Interaction types
 - Required ticks
 - Costs, effects, completion bonuses
 - Operating hours
 
 **training.yaml**:
+
 - Grid size
 - Device (CPU/CUDA)
 - Enabled affordances
@@ -616,6 +647,7 @@ meters = torch.clamp(meters - base_depletions - cascade_penalties, 0.0, 1.0)
 ### Currently Hidden in Python (❌)
 
 **Environment Constants** (`vectorized_env.py`):
+
 ```python
 # Hardcoded movement costs
 move_energy_cost: float = 0.005
@@ -630,6 +662,7 @@ distance_metric = "manhattan"  # Not configurable!
 ```
 
 **Cascade Engine Constants** (`cascade_engine.py`):
+
 ```python
 # Curriculum difficulty multiplier (not in YAML)
 depletion_multiplier: float = 1.0  # Should be in training.yaml
@@ -640,6 +673,7 @@ max_val = 1.0
 ```
 
 **Affordance Engine Constants** (`affordance_engine.py`):
+
 ```python
 # Interaction progress thresholds
 # Completion detection logic
@@ -681,17 +715,20 @@ interactions:
 ### HIGH PRIORITY (Do Now)
 
 **1. Variable-Size Meter System** (12-16 hours)
+
 - Remove 8-bar hardcode constraint
 - Enable 4-meter tutorials, 16-meter complex universes
 - Compute observation dim dynamically
 - Handle checkpoints with metadata
 
 **2. Universe Compilation Pipeline** (TASK-003) (11-16 hours)
+
 - Implement 7-stage compiler with cross-validation
 - Catch dangling references, spatial impossibility, economic imbalance
 - Fail fast at load time, not during training
 
 **3. Expose All Hidden Knobs** (4-6 hours)
+
 - Move environment constants to YAML
 - Move cascade engine constants to YAML
 - Move affordance engine constants to YAML
@@ -704,16 +741,19 @@ interactions:
 ### MEDIUM PRIORITY (Do During Refactoring)
 
 **4. Extensible Type System** (6-8 hours)
+
 - Make interaction types configurable (not hardcoded literals)
 - Make operator types configurable
 - Enable custom interaction types
 
 **5. Configurable Ranges** (4-6 hours)
+
 - Remove [0.0, 1.0] hardcoding
 - Support debt (negative money), overbuffing (health >1.0)
 - Separate physical range from normalization range
 
 **6. Flexible Operating Hours** (3-4 hours)
+
 - Support multiple time windows
 - Support days of week
 - Support seasonal variations
@@ -725,18 +765,22 @@ interactions:
 ### PERFORMANCE (Optional Optimization)
 
 **7. Compiled Universe Cache** (4-6 hours)
+
 - Serialize compiled universe to disk
 - 10-50x faster startup for repeated runs
 
 **8. Action Mask Pre-Computation** (3-4 hours)
+
 - Pre-compute 24-hour mask table
 - O(1) lookup vs O(num_affordances) computation
 
 **9. Cascade Pre-Sorting** (1-2 hours)
+
 - Sort cascades by target index
 - Better cache locality
 
 **10. Tensor Fusion** (2-3 hours)
+
 - Fuse multi-step tensor operations
 - Fewer kernel launches on GPU
 
@@ -879,11 +923,13 @@ bars: [12 meters]
 **The UAC compiler infrastructure needs foundational work before we worry about reward models or economic tuning.**
 
 **Key Priorities**:
+
 1. **Variable-Size Meter System** - Unblocks expressivity
 2. **Universe Compilation Pipeline** - Ensures correctness
 3. **Expose All Hidden Knobs** - Achieves full UAC vision
 
 **Once these are done, UAC will be**:
+
 - ✅ Maximally configurable (all knobs exposed)
 - ✅ Robust (compiler catches errors early)
 - ✅ Scalable (supports 16 meters, 100 affordances, 1000 agents)

@@ -12,6 +12,7 @@
 **Integration Status**: ✅ **COMPLETE**
 
 **Findings**:
+
 - Integration points addressed: **34/34** (100%)
 - Research papers ready to retire: **2/2**
 - Issues found: **0 critical, 3 recommendations**
@@ -36,6 +37,7 @@
 **Status**: ✅ **FULLY INTEGRATED**
 
 **TASK-002 Integration** (Line 766-1159):
+
 - ✅ `BarConstraint` DTO added (lines 788-799)
 - ✅ `ModeConfig` DTO added (lines 801-804)
 - ✅ `availability` field added to AffordanceConfig (line 814)
@@ -45,21 +47,25 @@
 - ✅ Backward compatibility strategy documented (lines 1065-1092)
 
 **TASK-004 Integration**:
+
 - ✅ Meter reference validation in availability (line 429-433)
 - ✅ Min < max validation enforced (line 794-799 in TASK-002 DTO)
 - ✅ Operating hours validation (lines implied in Stage 4 semantic validation)
 
 **Examples Preserved**:
+
 - ✅ Job operating hours (9am-5pm)
 - ✅ Bar operating hours (6pm-2am) with mood gate
 - ✅ Mode switching pattern documented
 
 **Effort Estimate**:
+
 - Original research: 6-8h
 - TASK-002 section: Shows expanded scope (+8-12h for full capability system)
 - Effort properly tracked: ✅
 
 **Validation**:
+
 ```python
 # Example validation from TASK-004 (lines 429-433)
 if capability.type == "meter_gated":
@@ -78,6 +84,7 @@ if capability.type == "meter_gated":
 **Status**: ✅ **FULLY INTEGRATED**
 
 **TASK-003 Integration** (Lines 252-289):
+
 - ✅ `ActionCost` DTO defined (line 252)
 - ✅ `costs: list[ActionCost]` field added to ActionConfig (line 268)
 - ✅ Backward compatibility: `energy_cost` auto-converts to costs (line 289)
@@ -85,15 +92,18 @@ if capability.type == "meter_gated":
 - ✅ REST action example with negative costs (restoration pattern)
 
 **TASK-004 Integration**:
+
 - ✅ Action cost meter reference validation added
 - ✅ Multi-meter cost validation logic documented
 
 **Examples Preserved**:
+
 - ✅ Movement costs (energy + hygiene + satiation)
 - ✅ REST action (negative amounts for restoration)
 - ✅ Pattern matching with affordances `{meter, amount}` format
 
 **Code Example**:
+
 ```yaml
 # From TASK-003 (lines ~80-91)
 actions:
@@ -107,6 +117,7 @@ actions:
 ```
 
 **Effort Estimate**:
+
 - Original research: 4-6h
 - TASK-003 impact: +3-4h added to task
 - Properly tracked: ✅
@@ -122,6 +133,7 @@ actions:
 **Status**: ✅ **DEFERRED (Documented)**
 
 **TASK-005 Integration** (Line 1057):
+
 - ✅ "Optional Future Extension: RND Architecture Configuration" section added
 - ✅ Deferred status clearly marked
 - ✅ Rationale provided: "Low pedagogical value, implementation detail"
@@ -129,6 +141,7 @@ actions:
 - ✅ Effort estimate: +1-2h (only if implemented)
 
 **Rationale for Deferral** (well-documented):
+
 - RND architecture is implementation detail
 - Students learn intrinsic motivation concept, not RND hyperparameters
 - Low pedagogical value compared to other UAC features
@@ -155,6 +168,7 @@ actions:
 **Status**: ✅ **FULLY INTEGRATED**
 
 **TASK-002 Integration** (Lines 856-1065):
+
 - ✅ Capability composition system fully documented
 - ✅ All 6 core capabilities defined with Pydantic DTOs:
   1. ✅ `MultiTickCapability` (lines 865-870)
@@ -168,6 +182,7 @@ actions:
 - ✅ Schema fully specified with Pydantic Field constraints
 
 **Examples Preserved**:
+
 - ✅ Bed (simple instant) - unchanged from current system
 - ✅ Job (multi_tick + cooldown + meter_gated) - full composition
 - ✅ Gym (skill_scaling + meter_gated + probabilistic) - advanced composition
@@ -175,6 +190,7 @@ actions:
 - ✅ University (prerequisite chain) - multi-stage progression
 
 **Design Patterns Captured**:
+
 - ✅ Conceptual agnosticism (no assumptions about interaction semantics)
 - ✅ Permissive semantics (allow edge cases like duration_ticks=1)
 - ✅ Structural enforcement (validate types, bounds, references)
@@ -190,6 +206,7 @@ actions:
 **Status**: ✅ **FULLY INTEGRATED**
 
 **TASK-002 Integration** (Lines 920-1065):
+
 - ✅ `EffectPipeline` DTO defined
 - ✅ All effect stages documented:
   - ✅ `instant` (for simple interactions)
@@ -202,6 +219,7 @@ actions:
 - ✅ Examples showing progression from simple to complex
 
 **Stage Schema Example**:
+
 ```python
 # From TASK-002 (inferred from lines 920-1065)
 class EffectPipeline(BaseModel):
@@ -214,6 +232,7 @@ class EffectPipeline(BaseModel):
 ```
 
 **Examples Preserved**:
+
 - ✅ Bed → instant effects only
 - ✅ Job → on_start + per_tick + on_completion + on_early_exit
 - ✅ Gym → per_tick + on_completion + on_failure (probabilistic)
@@ -230,6 +249,7 @@ class EffectPipeline(BaseModel):
 **Status**: ✅ **FULLY INTEGRATED**
 
 **Cross-Reference Analysis** (Research lines 650-780):
+
 - ✅ Actions and affordances both use `costs: [{meter, amount}]` pattern
 - ✅ Actions and affordances both use `effects: [{meter, amount}]` pattern
 - ✅ Validation consistency documented (structural then semantic)
@@ -237,11 +257,13 @@ class EffectPipeline(BaseModel):
 - ✅ Design rationale preserved ("actions are primitive, affordances are compound")
 
 **TASK-003 Reference**:
+
 - ✅ TASK-003 lines 252-289 show ActionCost implementation
 - ✅ TASK-003 documents pattern alignment with affordances
 - ✅ Section 2.6 in research explicitly shows action-affordance consistency
 
 **Validation Consistency**:
+
 - ✅ Both use two-stage validation (structural → semantic)
 - ✅ Both validate meter references in Stage 3 of compiler
 - ✅ Both use permissive semantics (allow edge cases)
@@ -257,6 +279,7 @@ class EffectPipeline(BaseModel):
 **Status**: ✅ **FULLY INTEGRATED**
 
 **TASK-002 Effort Breakdown**:
+
 - ✅ Original estimate: 7-12h
 - ✅ Updated estimate: 15-24h (after capability system addition)
 - ✅ Increase: +8-12h (+114-200%)
@@ -267,6 +290,7 @@ class EffectPipeline(BaseModel):
 - ✅ Total matches research: 16-22h (research) ≈ 16-22h (TASK-002 extension)
 
 **TASK-002 Recommendation**:
+
 - ✅ Split suggested: TASK-002A (core DTOs) + TASK-002B (capability system)
 - ✅ Rationale: Core DTOs enable other work, capabilities can follow
 - ✅ Properly documented in Phase 2 integration summary
@@ -328,6 +352,7 @@ class EffectPipeline(BaseModel):
 ### Completeness: 10/10
 
 **What's Complete**:
+
 - ✅ All 34 integration points from Phase 1 matrix addressed
 - ✅ All 3 gaps from RESEARCH-ENVIRONMENT-CONSTANTS-EXPOSURE integrated
 - ✅ All 4 findings from RESEARCH-INTERACTION-TYPE-REGISTRY integrated
@@ -345,17 +370,20 @@ class EffectPipeline(BaseModel):
 ### Consistency: 9/10
 
 **Terminology Alignment**:
+
 - ✅ Research uses "capability composition" → TASK-002 uses same term
 - ✅ Research uses "effect pipeline" → TASK-002 uses same term
 - ✅ Research uses "meter_gated" → TASK-002/004 use same term
 - ✅ Research uses `{meter, amount}` pattern → Tasks use same pattern
 
 **Schema Consistency**:
+
 - ✅ DTO patterns match across TASK-002 and TASK-003
 - ✅ Validation approach consistent (structural → semantic)
 - ✅ Permissive semantics principle applied uniformly
 
 **Minor Inconsistency** (-1 point):
+
 - Research uses "skill_based_effectiveness" (line 857) but also "skill_scaling" (line 1391)
 - TASK-002 uses "SkillScalingCapability" (line 885)
 - **Recommendation**: Standardize on one term ("skill_scaling" preferred for brevity)
@@ -369,6 +397,7 @@ class EffectPipeline(BaseModel):
 **Can Implementer Follow Without Reading Research?**: ✅ YES
 
 **What's Clear**:
+
 - ✅ All DTOs have complete Pydantic definitions with Field constraints
 - ✅ All examples include both YAML config and Python schema
 - ✅ Validation rules explicitly stated
@@ -376,6 +405,7 @@ class EffectPipeline(BaseModel):
 - ✅ Design rationale preserved (why capabilities over type system)
 
 **What Could Be Clearer** (-1 point):
+
 - TASK-002 capability section is 400+ lines - could benefit from internal navigation
 - **Recommendation**: Add table of contents for capability subsections
 - **Recommendation**: Add "Quick Reference" table showing capability → parameters → example
@@ -387,17 +417,20 @@ class EffectPipeline(BaseModel):
 ### Accuracy: 10/10
 
 **Schema Accuracy**:
+
 - ✅ Pydantic DTO syntax is correct
 - ✅ Field constraints are appropriate (gt=0 for tick counts, ge=0 le=1 for probabilities)
 - ✅ Union types correctly defined (CapabilityConfig)
 - ✅ Validation logic matches schema constraints
 
 **No Misinterpretations**:
+
 - ✅ Research recommendations accurately reflected in task documents
 - ✅ No drift from research intent
 - ✅ Examples match research use cases exactly
 
 **Code Examples**:
+
 - ✅ YAML examples are valid syntax
 - ✅ Python examples follow Pydantic v2 patterns
 - ✅ Validation logic is implementable
@@ -435,6 +468,7 @@ class EffectPipeline(BaseModel):
 **Impact**: Small - implementers might be confused which term to use
 
 **Recommendation**:
+
 - Standardize on "skill_scaling" (shorter, clearer)
 - Update TASK-002 line 885: `SkillScalingCapability` ✅ (already using this)
 - Update research to consistently use "skill_scaling" (or mark as archived)
@@ -450,7 +484,9 @@ class EffectPipeline(BaseModel):
 **Impact**: Minor - implementers might get lost in the details
 
 **Recommendation**:
+
 - Add internal table of contents at line 766:
+
   ```markdown
   ### Quick Navigation
   - [Affordance Masking Schema](#affordance-masking-schema) (lines 776-855)
@@ -458,6 +494,7 @@ class EffectPipeline(BaseModel):
   - [Effect Pipeline](#effect-pipeline) (lines 920-1065)
   - [Backward Compatibility](#backward-compatibility) (lines 1065-1092)
   ```
+
 - Add "Quick Reference Table" showing capability → parameters → example
 
 **Fix Effort**: 15 minutes
@@ -471,7 +508,9 @@ class EffectPipeline(BaseModel):
 **Impact**: Minor - unclear if research is active or archived
 
 **Recommendation**:
+
 - Add header to both research papers:
+
   ```markdown
   ---
   **STATUS**: INTEGRATED (2025-11-04)
@@ -479,6 +518,7 @@ class EffectPipeline(BaseModel):
   **Review Report**: docs/PHASE-3-REVIEW-REPORT.md
   ---
   ```
+
 - Move to `docs/research/archive/` directory OR add status marker in filename
 
 **Fix Effort**: 5 minutes
@@ -492,6 +532,7 @@ class EffectPipeline(BaseModel):
 **Recommendation**: ✅ **RETIRE**
 
 **Rationale**:
+
 - All 3 gaps fully integrated into TASK-002, TASK-003, TASK-004
 - All examples preserved in task documents
 - All validation rules documented
@@ -500,6 +541,7 @@ class EffectPipeline(BaseModel):
 - No valuable content orphaned
 
 **Action Items Before Retirement**:
+
 1. Add "INTEGRATED: 2025-11-04" header to research file
 2. Move to `docs/research/archive/` OR rename to `RESEARCH-ENVIRONMENT-CONSTANTS-EXPOSURE-ARCHIVED.md`
 3. Update CLAUDE.md to reference task documents instead of research
@@ -513,6 +555,7 @@ class EffectPipeline(BaseModel):
 **Recommendation**: ✅ **RETIRE**
 
 **Rationale**:
+
 - All 4 major findings fully integrated into TASK-002
 - All 6 core capabilities defined with complete schemas
 - Effect pipeline fully specified
@@ -523,6 +566,7 @@ class EffectPipeline(BaseModel):
 - No valuable content orphaned
 
 **Action Items Before Retirement**:
+
 1. Add "INTEGRATED: 2025-11-04" header to research file
 2. Move to `docs/research/archive/` OR rename to `RESEARCH-INTERACTION-TYPE-REGISTRY-ARCHIVED.md`
 3. Consider keeping Section 2 (Design Space) as permanent reference (32+ interaction patterns)
@@ -531,6 +575,7 @@ class EffectPipeline(BaseModel):
 **Safe to Archive**: ✅ YES
 
 **Optional Preservation**:
+
 - Section 2 (Interaction Pattern Design Space) could be extracted to `docs/reference/INTERACTION-PATTERNS-CATALOG.md` as a permanent reference
 - This is optional - research paper can be archived as-is
 
@@ -541,6 +586,7 @@ class EffectPipeline(BaseModel):
 ### Content from RESEARCH-ENVIRONMENT-CONSTANTS-EXPOSURE.md
 
 **All Content Accounted For**:
+
 - ✅ Gap 1 (Affordance Masking) → TASK-002 lines 766-855
 - ✅ Gap 2 (Multi-Meter Actions) → TASK-003 lines 252-289
 - ✅ Gap 3 (RND Architecture) → TASK-005 line 1057 (deferred)
@@ -555,6 +601,7 @@ class EffectPipeline(BaseModel):
 ### Content from RESEARCH-INTERACTION-TYPE-REGISTRY.md
 
 **All Content Accounted For**:
+
 - ✅ Section 1 (Current State Analysis) → Context captured in TASK-002
 - ✅ Section 2 (Interaction Pattern Design Space) → 32+ patterns documented, examples in TASK-002
 - ✅ Section 3 (Design Options) → Tradeoff analysis preserved, chosen approach implemented
@@ -567,6 +614,7 @@ class EffectPipeline(BaseModel):
 - ✅ Section 10 (Future Extensibility) → Documented in TASK-002
 
 **Optional Content to Preserve**:
+
 - Section 2 (Design Space) is valuable long-term reference
 - **Recommendation**: Extract to `docs/reference/INTERACTION-PATTERNS-CATALOG.md` (optional)
 
@@ -585,6 +633,7 @@ class EffectPipeline(BaseModel):
 Both research papers have been **fully and successfully integrated** into task documents. Every finding has a clear implementation home, all schemas are defined, all validation rules are documented, and all examples are preserved. The integration is complete, accurate, and implementable.
 
 **Integration Quality**: 38/40 (95%)
+
 - Completeness: 10/10
 - Consistency: 9/10 (minor terminology variance)
 - Clarity: 9/10 (dense sections could use navigation aids)
@@ -638,6 +687,7 @@ Both research papers have been **fully and successfully integrated** into task d
 **Phase 3 Review**: ✅ **COMPLETE**
 
 **Key Findings**:
+
 1. ✅ All 34 integration points successfully addressed
 2. ✅ Both research papers ready to retire
 3. ✅ No critical issues found
@@ -645,12 +695,14 @@ Both research papers have been **fully and successfully integrated** into task d
 5. ✅ Integration quality: 95% (excellent)
 
 **Research Investment**:
+
 - Phase 1 (Integration Matrix): 3 hours
 - Phase 2 (Task Updates): 2 hours
 - Phase 3 (Review): 2 hours
 - **Total**: 7 hours
 
 **Deliverables**:
+
 - 650+ lines of detailed integration documentation
 - 34 integration points fully traced
 - 4 task documents updated with research findings

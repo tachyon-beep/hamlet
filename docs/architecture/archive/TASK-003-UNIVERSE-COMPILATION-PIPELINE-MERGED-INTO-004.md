@@ -5,6 +5,7 @@
 ### Current State
 
 HAMLET configs are split across multiple YAML files:
+
 - `bars.yaml` - Meter definitions (energy, health, money, etc.)
 - `cascades.yaml` - Meter relationships (low satiation → low energy)
 - `affordances.yaml` - Interactions available (Bed, Hospital, etc.)
@@ -15,6 +16,7 @@ HAMLET configs are split across multiple YAML files:
 Each file is validated independently (via Pydantic DTOs), but **no cross-file validation** happens. This allows invalid universes:
 
 **Example 1: Dangling References**
+
 ```yaml
 # cascades.yaml
 - source: "hunger"      # ❌ References non-existent meter
@@ -26,6 +28,7 @@ Each file is validated independently (via Pydantic DTOs), but **no cross-file va
 ```
 
 **Example 2: Orphaned Affordances**
+
 ```yaml
 # affordances.yaml
 affordances:
@@ -41,6 +44,7 @@ actions:
 ```
 
 **Example 3: Invalid Meter References**
+
 ```yaml
 # cues.yaml
 cues:
@@ -157,30 +161,37 @@ The universe compiler validates configs in **dependency order**, ensuring all re
 ### Dependency Ordering Rationale
 
 **Stage 1 (bars.yaml) must be first** because:
+
 - Defines the "vocabulary" of the universe (what meters exist)
 - All other configs reference these meters
 - The "physics layer" - most fundamental
 
 **Stage 2 (actions.yaml) after bars** because:
+
 - Actions may reference energy meter for costs
 - Defines topology that affordances must respect
 
 **Stage 3 (cascades.yaml) after bars** because:
+
 - All source/target references must be valid meters
 - Modulations reference bar base_depletion values
 
 **Stage 4 (affordances.yaml) after bars + actions** because:
+
 - Affordance effects reference meters
 - Must validate INTERACT action exists if affordances defined
 
 **Stage 5 (cues.yaml) after bars** because:
+
 - UI cues reference meters for display
 
 **Stage 6 (training.yaml) after affordances + actions** because:
+
 - enabled_affordances references affordance definitions
 - Network architecture depends on action space size
 
 **Stage 7 (assembly) after all** because:
+
 - Cross-cutting validations require full universe view
 - Spatial feasibility checks (grid size vs affordance count)
 
@@ -538,6 +549,7 @@ env = VectorizedHamletEnv(universe["training"].environment, universe["actions"],
 ```
 
 **Compilation Output**:
+
 ```
 🌍 Compiling universe: L0_minimal
   ✅ Stage 1: Bars (8 meters)
@@ -568,6 +580,7 @@ actions:
 ```
 
 **Compilation Output**:
+
 ```
 🌍 Compiling universe: broken_config
   ✅ Stage 1: Bars (8 meters)
@@ -592,6 +605,7 @@ environment:
 ```
 
 **Compilation Output**:
+
 ```
 🌍 Compiling universe: L0_impossible
   ✅ Stage 1: Bars (8 meters)
@@ -647,12 +661,14 @@ Increase grid_size to at least 4 or reduce enabled_affordances.
 The compiler enforces **structural coherence** across the universe:
 
 **✅ ENFORCE** (structural/mathematical coherence):
+
 - Meter references resolve (no dangling pointers)
 - Grid has enough space for affordances (spatial feasibility)
 - INTERACT action exists if affordances defined (mechanism requirement)
 - Action IDs contiguous (indexing coherence)
 
 **❌ DON'T ENFORCE** (semantic reasonableness):
+
 - Whether epsilon_decay is "too slow" (performance hint, not error)
 - Whether energy costs are "reasonable" (operator's experiment)
 - Whether cascade thresholds are "well-tuned" (empirical question)

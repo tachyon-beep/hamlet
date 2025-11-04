@@ -12,6 +12,7 @@
 ### The Problem with Direct Relationships
 
 Simple meter systems have **direct causality**:
+
 - Low energy → go to Bed → energy restored
 - Low satiation → go to Fridge → satiation restored
 - Agent learns: "If meter X is low, do action Y"
@@ -21,10 +22,12 @@ This is **too simple** for teaching sophisticated AI reasoning.
 ### The Solution: Indirect Relationships
 
 **Indirect causality** requires the agent to discover hidden connections:
+
 - Low energy → poor job performance → less money → can't afford services → death
 - Agent must learn: "Energy affects MULTIPLE downstream outcomes"
 
 **Spatial trade-offs** create context-dependent decisions:
+
 - Hungry at home → HomeMeal is close and cheap (optimal)
 - Hungry at work → HomeMeal is far, FastFood is close but expensive (trade-off!)
 
@@ -70,17 +73,20 @@ class Job(Affordance):
 ### Why This Is Brilliant
 
 **Hidden Variable Problem**:
+
 - Job doesn't directly check if you HAVE energy/hygiene
 - It checks if you have ENOUGH energy/hygiene
 - Payment varies: $15 to $30 (2x difference!)
 
 **Cascading Failure Mode**:
+
 ```
 Neglect energy → Work for $15 → Can't afford Bed → Energy stays low →
 Work for $15 again → Money depletes → Can't afford anything → Death
 ```
 
 **Learning Challenge**:
+
 - Early agent: "I can work anytime, it always gives money!"
 - Reality: Working while tired gives HALF the money
 - Discovery: "Oh! I need to maintain energy/hygiene to maximize income!"
@@ -88,11 +94,13 @@ Work for $15 again → Money depletes → Can't afford anything → Death
 ### Pedagogical Value
 
 **Real-world analogy**: Burnout spiral
+
 - Tired employee → poor performance → lower income
 - Lower income → more stress → worse performance
 - Self-care is not optional, it's an **economic multiplier**
 
 **AI lesson**: Variables interact across domains
+
 - Biological meter (energy) affects economic meter (money)
 - Can't optimize meters in isolation
 - Must model **cross-domain dependencies**
@@ -118,6 +126,7 @@ class FastFood(Affordance):
 ```
 
 **Economics**:
+
 | Source | Cost | Satiation | Energy | Location | Distance from Job |
 |--------|------|-----------|--------|----------|-------------------|
 | HomeMeal | $3 | +45 | +35 | (1,3) | 9 steps |
@@ -126,11 +135,13 @@ class FastFood(Affordance):
 ### The Trade-off
 
 **When agent is at home (1,1 to 2,2)**:
+
 - HomeMeal is 1-2 steps away
 - FastFood is 7-8 steps away
 - **Optimal**: Use HomeMeal (close + cheap + healthy)
 
 **When agent is at work (6,6)**:
+
 - HomeMeal is 9 steps away (5 + 3 = 8 movement + 1 interact = 9 actions)
 - FastFood is 1 step away
 - **Trade-off**: HomeMeal saves $7 but costs 8 extra actions
@@ -140,6 +151,7 @@ class FastFood(Affordance):
   - But HomeMeal path takes 9 actions vs 1 action!
 
 **Emergent complexity**:
+
 - Is it worth traveling home for cheaper food?
 - Depends on: money buffer, energy level, time pressure
 - No single "correct" answer - **context-dependent optimization**
@@ -147,16 +159,19 @@ class FastFood(Affordance):
 ### Why This Is Brilliant
 
 **Location-aware decision-making**:
+
 - Same need (hunger) has different optimal solutions based on position
 - Agent must learn: "Where am I? What's nearby? What's my money situation?"
 - Not just "if hungry, eat" - now "if hungry AND at work AND low money, travel home first"
 
 **Economic pressure**:
+
 - FastFood costs 3.3× more than HomeMeal ($10 vs $3)
 - But convenience has value (1 action vs 9 actions)
 - Agent discovers: "I'm paying $7 for 8 actions of saved time"
 
 **Multi-step planning**:
+
 - Naive: Work → hungry → FastFood → broke → death
 - Smart: Work → travel home → HomeMeal → Bed → travel back → Work
 - Must plan ahead: "I'll be hungry after work, should I go home first?"
@@ -164,12 +179,14 @@ class FastFood(Affordance):
 ### Pedagogical Value
 
 **Real-world analogy**: Fast food vs home cooking
+
 - Fast food is expensive but convenient
 - Home cooking is cheap but time-consuming
 - Choice depends on: budget, time, location
 - No universally "best" option
 
 **AI lesson**: Spatial context matters
+
 - Same problem (hunger) has location-dependent solutions
 - Must integrate position into decision-making
 - Value trade-offs (money vs time vs distance)
@@ -200,6 +217,7 @@ self.affordance_positions = {
 ```
 
 **Visual Map**:
+
 ```
    0  1  2  3  4  5  6  7
 0  .  .  .  .  .  .  .  .
@@ -215,18 +233,21 @@ self.affordance_positions = {
 ### Zone Characteristics
 
 **Home Zone (1,1 to 2,2)**:
+
 - **Purpose**: Biological maintenance
 - **Affordances**: Bed (energy), Shower (hygiene), HomeMeal (satiation + energy)
 - **Cost**: Low ($3-5 per service)
 - **Strategic role**: Recovery base, cheap maintenance
 
 **Social Zone (3,3 to 4,4)**:
+
 - **Purpose**: Mental health maintenance
 - **Affordances**: Recreation (stress), Bar (social + stress)
 - **Cost**: Medium to high ($8-15)
 - **Strategic role**: Psychological upkeep, expensive but mandatory
 
 **Work Zone (5,6 to 6,6)**:
+
 - **Purpose**: Income generation
 - **Affordances**: Job (money), FastFood (convenience satiation)
 - **Cost**: FastFood expensive ($10), Job generates income ($15-30)
@@ -241,6 +262,7 @@ self.affordance_positions = {
 | **Work** | 7-10 | 3-5 | 0-2 |
 
 **Key insight**: Social zone is equidistant from Home and Work (3-5 steps)
+
 - Acts as a "hub" or "transition point"
 - Agent can stop at Bar/Recreation while traveling between zones
 
@@ -249,38 +271,47 @@ self.affordance_positions = {
 **Zone-based strategies emerge**:
 
 **Strategy 1: Commuter Pattern**
+
 ```
 Home (sleep + clean + eat) → Work → Work → Home (repeat)
 Skip social zone → high stress → eventually Recreation needed → death
 ```
+
 **Failure mode**: Neglecting stress/social leads to burnout
 
 **Strategy 2: Balanced Cycle**
+
 ```
 Home (Bed + Shower + HomeMeal) → Work → Social (Recreation or Bar) → Home
 ```
+
 **Success**: Maintains all meters, economically sustainable
 
 **Strategy 3: Work-Social Loop**
+
 ```
 Work → FastFood → Work → Bar → Work (repeat)
 Never go home → expensive food + skip cheap services → broke
 ```
+
 **Failure mode**: Ignoring cheap home services leads to poverty
 
 ### Why This Is Brilliant
 
 **Spatial affordances create natural routines**:
+
 - Agent discovers: "I should do multiple things in a zone before traveling"
 - E.g., "While I'm home, do Bed + Shower + HomeMeal" (batching)
 - Real-world analogy: Running errands in one trip vs multiple trips
 
 **Travel cost creates planning pressure**:
+
 - Each zone is 7-10 steps from opposite zone
 - Movement depletes energy/hygiene/satiation
 - "Should I go home now or wait until I need multiple things?"
 
 **Zone positioning models real life**:
+
 - Work far from home (daily commute)
 - Social zone in between (stopping for drinks after work)
 - Convenience food near work (lunch rush)
@@ -288,11 +319,13 @@ Never go home → expensive food + skip cheap services → broke
 ### Pedagogical Value
 
 **Real-world analogy**: Daily routines and commutes
+
 - Home/work separation creates structure
 - Social activities fit in between
 - Proximity affects choices (lunch near work vs going home)
 
 **AI lesson**: Spatial reasoning and planning
+
 - Must consider position in decision-making
 - Batching actions in zones is efficient
 - Route planning matters (don't zigzag unnecessarily)
@@ -304,6 +337,7 @@ Never go home → expensive food + skip cheap services → broke
 ### How Indirect Relationships Compound
 
 **Scenario 1: The Tired Worker Trap**
+
 ```
 Agent is at Work (6,6), low energy (30%), hungry
 
@@ -325,6 +359,7 @@ Option B: Go home first
 **Learning challenge**: Agent must discover that **spending money on self-care increases income**.
 
 **Scenario 2: The FastFood Temptation**
+
 ```
 Agent at Work (6,6), hungry, $20 in pocket
 
@@ -344,6 +379,7 @@ Option B: Travel home (9 steps), HomeMeal ($3)
 **Learning challenge**: Agent must learn **delayed gratification** (travel time for long-term benefit).
 
 **Scenario 3: The Bar Cascade**
+
 ```
 Social meter critical (15%), must go to Bar
 
@@ -366,16 +402,19 @@ Must maintain energy BEFORE working to earn full $30
 ### State Space Complexity
 
 **Dimensions**:
+
 - Position: (x, y) = 64 possible locations
 - Meters: 6 values × [0-100] range = ~10^12 combinations
 - Spatial context: 3 zones = 3 different strategic contexts
 - Economic state: Money buffer = continuous variable
 
 **Decision complexity**:
+
 - Before: "Which meter is lowest? Go there."
 - After: "Which meter is lowest? Where am I? Can I afford to travel? Will I be healthy enough to work later? Should I batch actions?"
 
 **Planning horizon**:
+
 - Before: 1-step lookahead ("hungry now → eat now")
 - After: 3-5 step lookahead ("hungry at work → go home → eat cheap → sleep → work healthy for full pay")
 
@@ -386,6 +425,7 @@ Must maintain energy BEFORE working to earn full $30
 ### Cost Breakdown
 
 **Full cycle maintenance** (visiting all zones):
+
 ```
 Home zone:     Bed ($5) + Shower ($3) + HomeMeal ($3)       = $11
 Social zone:   Recreation ($8) + Bar ($15)                   = $23
@@ -394,16 +434,19 @@ TOTAL:                                                        = $44
 ```
 
 **Income sources**:
+
 ```
 Job (healthy):   $30 per visit (energy > 40%, hygiene > 40%)
 Job (unhealthy): $15 per visit (energy < 40% OR hygiene < 40%)
 ```
 
 **Economics**:
+
 - Healthy cycle: $30 income - $44 costs = **-$14 deficit**
 - Unhealthy cycle: $15 income - $44 costs = **-$29 deficit**
 
 **Sustainable strategies**:
+
 1. Work 2× per cycle (healthy) = $60 income → +$16 surplus
 2. Skip optional services (Recreation or FastFood)
 3. Work 3× per cycle (allow unhealthy sometimes)
@@ -411,6 +454,7 @@ Job (unhealthy): $15 per visit (energy < 40% OR hygiene < 40%)
 ### Strategic Patterns
 
 **Pattern 1: Home-Work Shuttle** (simplest, risky)
+
 ```
 Home (Bed + Shower + HomeMeal) → Work → Work → Home (repeat)
 Income: $60 per cycle
@@ -421,6 +465,7 @@ Risk: Stress/social accumulate → eventually need Bar/Recreation → surprise d
 ```
 
 **Pattern 2: Balanced Maintenance** (sustainable)
+
 ```
 Home (all) → Work → Work → Social (Bar) → Bed → Shower → (repeat)
 Income: $60 per cycle (2 works)
@@ -431,6 +476,7 @@ Risk: Skipping Recreation → stress builds → need eventually
 ```
 
 **Pattern 3: Full Coverage** (optimal but tight)
+
 ```
 Home (all) → Work → Work → Social (Bar + Recreation) → Home (Bed + Shower) → (repeat)
 Income: $60 per cycle (2 works)
@@ -443,17 +489,20 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Failure Modes
 
 **Failure 1: FastFood Addiction**
+
 - Using FastFood instead of HomeMeal costs $7 extra per meal
 - Over 10 meals: $70 deficit
 - Leads to poverty → can't afford mandatory Bar → social collapse
 
 **Failure 2: Unhealthy Work**
+
 - Working with low energy → only $15 income (vs $30)
 - Deficit per work: $15 loss
 - After 5 unhealthy works: $75 lost
 - Can't recover economically
 
 **Failure 3: Ignoring Social**
+
 - Social depletes 0.6/step
 - After 83 steps without Bar: social = 0
 - Penalties accumulate (-2.0 reward per step)
@@ -466,10 +515,12 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Challenge 1: Discover Job Payment Penalty
 
 **What agent must learn**:
+
 - "Working while tired gives less money"
 - Hidden relationship: energy/hygiene → money
 
 **How agent discovers it**:
+
 1. Early episodes: Work randomly (sometimes healthy, sometimes tired)
 2. Experience replay: Compare outcomes
 3. Pattern recognition: "I earned $30 this time but $15 that time... what's different?"
@@ -481,10 +532,12 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Challenge 2: Learn HomeMeal vs FastFood Trade-off
 
 **What agent must learn**:
+
 - "HomeMeal is better value BUT depends on location"
 - Context-dependent decisions
 
 **How agent discovers it**:
+
 1. Initially: Use whichever food source is closer
 2. Observation: Money depletes faster when using FastFood often
 3. Pattern: "I use FastFood when at work, HomeMeal when at home"
@@ -496,11 +549,13 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Challenge 3: Multi-step Planning (Bar Cascade)
 
 **What agent must learn**:
+
 - "Bar requires follow-up actions (Bed + Shower)"
 - "Must have enough money for the full sequence"
 - "Must time Bar visit for when I can afford recovery"
 
 **How agent discovers it**:
+
 1. First Bar visit: Social fixed, but now low energy/hygiene
 2. Death shortly after: "Why did I die after fixing social?"
 3. Realizes: Bar creates new problems (energy/hygiene drain)
@@ -542,11 +597,13 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Teaching Moment 1: Indirect Causality
 
 **Lesson**: Variables interact across domains
+
 - Biological state (energy) affects economic outcome (money)
 - Can't optimize one meter in isolation
 - Must understand **cross-domain dependencies**
 
 **Real-world parallel**: Health → Productivity → Income
+
 - Personal health affects career performance
 - Economic decisions affect health (time for exercise, sleep)
 - System thinking required
@@ -554,11 +611,13 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Teaching Moment 2: Spatial Context
 
 **Lesson**: Location affects optimal decisions
+
 - Same problem (hunger) has location-dependent solutions
 - Must integrate position into planning
 - Convenience has value (time vs money trade-off)
 
 **Real-world parallel**: Daily life logistics
+
 - Where you are affects what you do (lunch near work vs home)
 - Batching errands saves time
 - Commute patterns shape routines
@@ -566,11 +625,13 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Teaching Moment 3: Delayed Gratification
 
 **Lesson**: Immediate convenience vs long-term benefit
+
 - FastFood is quick but expensive → short-term thinking
 - HomeMeal requires travel but saves money → long-term thinking
 - Trade-offs depend on context (is money tight? is time critical?)
 
 **Real-world parallel**: Financial decisions
+
 - Credit cards (convenient but expensive) vs saving (delayed but beneficial)
 - Fast food vs meal prep
 - Short-term gains vs long-term health
@@ -578,11 +639,13 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Teaching Moment 4: Cascading Dependencies
 
 **Lesson**: Actions have follow-on effects
+
 - Bar visit creates energy/hygiene problems
 - Those problems require money to fix
 - Must plan full sequence, not just immediate action
 
 **Real-world parallel**: Life decisions
+
 - Social event → tired next day → need recovery time
 - Buying house → mortgage → need stable income → lifestyle constraints
 - Multi-step consequences
@@ -594,6 +657,7 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Files Modified
 
 **Backend**:
+
 1. `src/hamlet/environment/entities.py`:
    - Made Job.interact() dynamic (payment varies by energy/hygiene)
    - Split Fridge into HomeMeal and FastFood classes
@@ -610,11 +674,13 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
    - Updated proximity shaping to guide to HomeMeal for satiation
 
 **Frontend**:
+
 1. `frontend/src/components/Grid.vue`:
    - Added HomeMeal (🥘) and FastFood (🍔) icons
    - Updated CSS for homemeal (orange) and fastfood (red) styling
 
 **Documentation**:
+
 1. `docs/indirect_relationships_and_spatial_complexity.md`: This file
 
 ---
@@ -624,30 +690,35 @@ Requires: Healthy work performance (can't afford unhealthy penalty)
 ### Hypothesis: Learning Stages
 
 **Stage 1 (Episodes 0-200): Random Exploration**
+
 - Agent uses affordances randomly
 - Frequent deaths (no strategy)
 - Job payment varies wildly (sometimes $15, sometimes $30)
 - No spatial batching
 
 **Stage 2 (Episodes 200-500): Direct Relationships**
+
 - Agent learns: "Low energy → Bed", "Low satiation → Food"
 - Still no job payment optimization (hasn't discovered penalty)
 - Random food choice (doesn't optimize HomeMeal vs FastFood)
 - Survives longer but inefficiently
 
 **Stage 3 (Episodes 500-800): Indirect Discovery**
+
 - Agent discovers: "Job pays more when healthy"
 - Starts maintaining energy/hygiene before work
 - Still inefficient food choices (doesn't consider location)
 - Economic management improves
 
 **Stage 4 (Episodes 800-1200): Spatial Optimization**
+
 - Agent discovers: "HomeMeal cheaper, FastFood convenient"
 - Context-aware food choices (location-based)
 - Zone batching emerges (multiple actions per zone visit)
 - Sustainable economic patterns
 
 **Stage 5 (Episodes 1200+): Sophisticated Strategy**
+
 - Multi-step planning (Bar → Bed → Shower → Work sequence)
 - Proactive maintenance (fix meters before critical)
 - Optimal routing (minimize travel)
@@ -720,6 +791,7 @@ The combination of **indirect relationships** and **spatial complexity** transfo
 **Result**: Agent must develop **human-like strategic thinking** to survive.
 
 **Pedagogical value**: Teaches that real-world problems require:
+
 - Understanding indirect effects
 - Considering spatial context
 - Planning multiple steps ahead

@@ -25,6 +25,7 @@
 ### 1. TASK NUMBERING MISMATCH ❌
 
 **Problem**:
+
 - Plan says: "TASK-001 Variable-Size Meter System"
 - Specification file named: `TASK-001-VARIABLE-SIZE-METER-SYSTEM.md`
 - Specification header says: "# TASK-005: Variable-Size Meter System"
@@ -32,6 +33,7 @@
 **Impact**: HIGH - Documentation inconsistency, tracking confusion
 
 **Action Required**:
+
 1. Verify correct task number with `docs/TASK_IMPLEMENTATION_PLAN.md`
 2. Rename specification file OR update all plan references
 3. Update test docstrings with correct task number
@@ -43,6 +45,7 @@
 ### 2. TEST FILE ORGANIZATION CONFLICT ⚠️
 
 **Problem**:
+
 - Plan proposes: `unit/environment/test_variable_meter_config.py` (NEW)
 - Reality: Tests consolidated in `unit/test_configuration.py` (100+ lines)
 - Adding 32+ tests will make file 300+ lines (too large)
@@ -52,14 +55,17 @@
 **Action Required**: Choose ONE approach:
 
 **Option A (Recommended)**: Create `unit/environment/test_variable_meters.py` (NEW)
+
 - Justification: Meter logic is environment-specific
 - Precedent: Existing `unit/environment/test_meters.py`
 
 **Option B**: Extend `unit/test_configuration.py`
+
 - Add clear section markers: `# TASK-001: Variable Meter System Tests`
 - Group all test classes together
 
 **Option C**: Create `unit/task-001/` subdirectory
+
 - Pros: Clear isolation
 - Cons: Breaks component organization convention
 
@@ -70,10 +76,12 @@
 ### 3. HARDCODED-8 AUDIT NEEDED 🔍
 
 **Problem**:
+
 - Plan identifies locations with `le=7` and `len(v) != 8`
 - But no comprehensive audit to ensure ALL instances found
 
 **Evidence**:
+
 ```bash
 $ grep -n "le=7\|len(v) != 8" src/townlet/environment/cascade_config.py
 27:    index: int = Field(ge=0, le=7, description="Meter index in tensor [0-7]")
@@ -83,6 +91,7 @@ $ grep -n "le=7\|len(v) != 8" src/townlet/environment/cascade_config.py
 ```
 
 **Action Required**: Add Phase 0.5: "Comprehensive Audit"
+
 ```bash
 # Run before Phase 1
 grep -r "le=7\|!= 8\|== 8" src/townlet/environment/*.py
@@ -99,11 +108,13 @@ grep -r "\[0.*7\]" src/townlet/environment/*.py  # Range syntax
 ### 4. Missing Boundary Tests
 
 **Gaps**:
+
 - No test for 1-meter universe (minimum valid)
 - No test for 32-meter universe (maximum valid)
 - Limited non-contiguous index patterns
 
 **Recommendation**: Add 3 tests to Phase 1
+
 ```python
 def test_1_meter_config_validates(self): ...
 def test_32_meter_config_validates(self): ...
@@ -117,10 +128,12 @@ def test_complex_non_contiguous_indices_rejected(self): ...
 ### 5. Fixture Naming Clarity
 
 **Problem**:
+
 - Proposed: `config_4meter`, `env_4meter`
 - Concern: Generic names may conflict with future curriculum fixtures
 
 **Recommendation**: Use task-specific names
+
 ```python
 @pytest.fixture
 def task001_config_4meter(tmp_path, test_config_pack_path):
@@ -140,6 +153,7 @@ def task001_config_4meter(tmp_path, test_config_pack_path):
 **Gap**: Phase 5 integration tests use random policy, don't verify actual training works
 
 **Recommendation**: Add test that training improves survival
+
 ```python
 def test_training_improves_survival_with_4_meters(self, cpu_device, config_4meter):
     """Agent should improve survival time with training."""
@@ -212,7 +226,7 @@ def test_training_improves_survival_with_4_meters(self, cpu_device, config_4mete
    - Add to plan as Phase 0.5
 
 4. ✅ **Rename fixtures** (30 min)
-   - Add task001_ prefix or _minimal suffix
+   - Add task001_prefix or_minimal suffix
    - Update all references in plan
    - Add scope documentation to docstrings
 
@@ -245,6 +259,7 @@ Before proceeding to Phase 1:
 **Success Probability**: 85% (with revisions), 65% (without)
 
 **Timeline**:
+
 1. Spend 2-3 hours on critical issues (today)
 2. Implement boundary tests and rename fixtures (+1-2 hours)
 3. Proceed with Phase 1 (tomorrow)

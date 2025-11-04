@@ -9,6 +9,7 @@ AdversarialCurriculum is an auto-tuning difficulty system that progressively cha
 ## Architecture
 
 **Multi-Signal Decision Logic:**
+
 ```python
 def should_advance(agent):
     survival_rate = agent.steps / max_steps
@@ -23,6 +24,7 @@ def should_advance(agent):
 ```
 
 **Components:**
+
 - `AdversarialCurriculum`: Main curriculum manager
 - `PerformanceTracker`: Per-agent metrics (survival, learning, entropy)
 - `StageConfig`: Stage specifications (meters, depletion, rewards)
@@ -42,29 +44,35 @@ def should_advance(agent):
 ## Decision Metrics
 
 ### 1. Survival Rate
+
 ```python
 survival_rate = episode_steps / max_steps_per_episode
 ```
 
 **Thresholds:**
+
 - Advance: > 0.7 (surviving 70%+ of episode)
 - Retreat: < 0.3 (dying early)
 
 ### 2. Learning Progress
+
 ```python
 learning_progress = current_avg_reward - prev_avg_reward
 ```
 
 **Thresholds:**
+
 - Advance: > 0 (improving)
 - Retreat: < 0 (regressing)
 
 ### 3. Action Entropy
+
 ```python
 entropy = -sum(p * log(p)) / log(num_actions)
 ```
 
 **Threshold:**
+
 - Advance gate: < 0.5 (converged policy)
 - High entropy: Still exploring randomly
 
@@ -124,6 +132,7 @@ curriculum:
 ```
 
 Load from config:
+
 ```python
 curriculum = AdversarialCurriculum.from_yaml('configs/my_config.yaml')
 ```
@@ -131,6 +140,7 @@ curriculum = AdversarialCurriculum.from_yaml('configs/my_config.yaml')
 ### Quick Testing Config
 
 For fast iteration during development, use `configs/curriculum_quick_test.yaml`:
+
 - Lower thresholds (advance at 50% survival instead of 70%)
 - Fewer steps required (50 instead of 1000)
 - Results in rapid progression through stages for testing
@@ -154,6 +164,7 @@ population.load_state_dict(checkpoint['population'])
 ```
 
 **Curriculum state includes:**
+
 - Agent stages
 - Episode rewards/steps
 - Reward baselines
@@ -162,6 +173,7 @@ population.load_state_dict(checkpoint['population'])
 ## Integration with VectorizedPopulation
 
 VectorizedPopulation automatically:
+
 1. Passes Q-values to curriculum for entropy calculation
 2. Calls `update_curriculum_tracker()` after each step
 3. Provides curriculum decisions to environment
@@ -171,16 +183,19 @@ VectorizedPopulation automatically:
 ## Testing
 
 Run full test suite:
+
 ```bash
 uv run pytest tests/test_townlet/test_curriculum/test_adversarial.py -v
 ```
 
 Run end-to-end progression test:
+
 ```bash
 uv run pytest tests/test_townlet/test_curriculum_progression.py -v
 ```
 
 Run long progression test (slow):
+
 ```bash
 uv run pytest tests/test_townlet/test_curriculum_progression.py -m slow -v
 ```
@@ -188,6 +203,7 @@ uv run pytest tests/test_townlet/test_curriculum_progression.py -m slow -v
 ## Expected Behavior
 
 **Typical progression timeline** (with default thresholds):
+
 - **Episodes 0-50:** Stage 1 (learning basic movement + bed/shower)
 - **Episodes 50-150:** Stage 2 (adding fridge management)
 - **Episodes 150-300:** Stage 3 (learning job + money)
@@ -199,17 +215,20 @@ uv run pytest tests/test_townlet/test_curriculum_progression.py -m slow -v
 ## Design Rationale
 
 **Why 5 stages?**
+
 - Gradual complexity increase prevents overwhelming agents
 - Each stage introduces 1-2 new concepts
 - Shaped rewards (stages 1-4) build foundational skills
 - Sparse rewards (stage 5) test true understanding
 
 **Why per-agent progression?**
+
 - Population diversity: Some agents explore different strategies
 - Robust learning: Faster learners don't wait for slower ones
 - Better curriculum signal: More data points for tuning
 
 **Why entropy gating?**
+
 - Prevents premature advancement during random exploration
 - Ensures policy convergence before increasing difficulty
 - Reduces regression after advancement
@@ -217,18 +236,22 @@ uv run pytest tests/test_townlet/test_curriculum_progression.py -m slow -v
 ## Common Pitfalls
 
 ❌ **Forgetting to call `update_curriculum_tracker()`**
+
 - Metrics won't update → no advancement
 - Always call after `step_population()`
 
 ❌ **Setting min_steps_at_stage too low**
+
 - Agents advance before learning → immediate retreat
 - Use 1000+ for real training, 50-100 for testing only
 
 ❌ **Using wrong reward thresholds**
+
 - Too high: Never advance (stuck at stage 1)
 - Too low: Advance prematurely → fail → retreat loop
 
 ❌ **Not saving curriculum state in checkpoints**
+
 - Training resumes from stage 1 → wasted time
 - Always include curriculum.state_dict() in checkpoints
 

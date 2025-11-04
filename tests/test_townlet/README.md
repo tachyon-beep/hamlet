@@ -433,6 +433,7 @@ This test suite was created Nov 2025 by consolidating 57 unstructured test files
 5. **Post-cutover**: Recording test integration (72 tests from test_recording/ subdirectory)
 
 **Key improvements**:
+
 - ✅ Organized unit/integration/properties structure
 - ✅ Shared fixtures eliminate duplication
 - ✅ CPU device ensures determinism

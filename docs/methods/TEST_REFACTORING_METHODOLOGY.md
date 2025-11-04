@@ -12,6 +12,7 @@
 This document describes a **high-precision, high-value methodology** for refactoring large test suites using AI-assisted subagent-driven development. The approach prioritizes quality over speed through mandatory research phases, code review checkpoints, and "measure twice, cut once" principles.
 
 **Key Results**:
+
 - ✅ 5 tasks completed, 201 tests created, 100% passing
 - ✅ Zero critical issues across all tasks
 - ✅ Average 2-4 subagents per task (~10min per task)
@@ -56,6 +57,7 @@ This document describes a **high-precision, high-value methodology** for refacto
 ### Why This Approach?
 
 **Advantages**:
+
 1. **Zero risk**: Old tests keep running, no disruption during refactoring
 2. **Clean validation**: Can review new architecture before committing
 3. **Clean git history**: One consolidated commit instead of incremental changes
@@ -63,6 +65,7 @@ This document describes a **high-precision, high-value methodology** for refacto
 5. **Development freeze**: Old codebase frozen, no moving targets
 
 **When NOT to use**:
+
 - Small test suites (<10 files) - direct refactoring is faster
 - Active development - parallel builds conflict with ongoing feature work
 - Time pressure - this method prioritizes quality over speed
@@ -76,6 +79,7 @@ This document describes a **high-precision, high-value methodology** for refacto
 **Purpose**: Understand what you're consolidating before writing any code.
 
 **Steps**:
+
 1. **Read ALL old test files** being consolidated
 2. **Document findings**:
    - What does each file test?
@@ -89,11 +93,13 @@ This document describes a **high-precision, high-value methodology** for refacto
 **Time investment**: 5-10% of task time (e.g., 2 minutes for 20-minute task)
 
 **Why mandatory**:
+
 - **Prevents rework**: Catching scope issues early saves hours
 - **Better organization**: Understanding patterns leads to cleaner structure
 - **Complete coverage**: Coverage map ensures nothing is missed
 
 **Example findings** (from Task 1):
+
 ```
 test_action_selection.py (559 lines)
 - Scope: ⚠️ MIXED
@@ -104,6 +110,7 @@ test_action_selection.py (559 lines)
 ```
 
 **Example findings** (from Task 3):
+
 ```
 test_affordance_integration.py (332 lines)
 - Scope: ⚠️ Integration tests, not unit tests
@@ -119,6 +126,7 @@ test_affordance_integration.py (332 lines)
 **Steps**:
 
 1. **Plan structure** based on research:
+
    ```python
    """Consolidated tests for [component].
 
@@ -138,6 +146,7 @@ test_affordance_integration.py (332 lines)
    ```
 
 2. **Use fixtures from conftest.py** (never duplicate):
+
    ```python
    def test_something(basic_env, cpu_device):
        # Use existing fixtures, don't create new environments
@@ -151,6 +160,7 @@ test_affordance_integration.py (332 lines)
    - Comprehensive docstrings
 
 4. **Run tests to verify**:
+
    ```bash
    pytest tests/path/to/new_file.py -v
    ```
@@ -197,6 +207,7 @@ test_affordance_integration.py (332 lines)
    - **Minor**: Documentation improvements, naming suggestions
 
 **Review outcome**:
+
 - **PASS**: Ready to proceed to next task
 - **NEEDS FIXES**: Fix issues before proceeding (go to Phase 3)
 - **REJECT**: Start over with lessons learned (rare, only if fundamentally flawed)
@@ -208,17 +219,20 @@ test_affordance_integration.py (332 lines)
 **Purpose**: Address issues found during review.
 
 **When to fix**:
+
 - **Critical issues**: ALWAYS fix before proceeding
 - **Important issues**: Fix if time permits, or document for Phase 2
 - **Minor issues**: Document for Phase 2, not blockers
 
 **Fix process**:
+
 1. Dispatch fix subagent with specific instructions
 2. Apply fixes
 3. Re-run tests
 4. Dispatch final reviewer to validate fixes
 
 **Example** (from Task 2):
+
 ```
 Issue: Flaky tests due to random agent spawning + CUDA non-determinism
 Fix: Use cpu_device + force agent position to center of grid
@@ -233,6 +247,7 @@ Result: 100% pass rate across 5 runs
 **Purpose**: Document results and proceed.
 
 **Steps**:
+
 1. **Update task tracking** (todos, status board)
 2. **Document results**:
    - Test count (new vs old)
@@ -250,12 +265,14 @@ Result: 100% pass rate across 5 runs
 **Rule**: Never write code before reading all old test files.
 
 **Why**:
+
 - Prevents scope violations
 - Identifies mixed concerns early
 - Leads to better organization
 - Ensures complete coverage
 
 **Evidence**:
+
 - Task 1 (no research): Scope violations found during review
 - Tasks 2-5 (with research): Clean scope boundaries, zero violations
 
@@ -266,11 +283,13 @@ Result: 100% pass rate across 5 runs
 **Rule**: Unit tests must use `cpu_device` fixture, not default device.
 
 **Problem**: CUDA introduces non-determinism through:
+
 - Random agent spawn positions
 - Floating-point operation ordering
 - Kernel execution timing
 
 **Solution**:
+
 ```python
 def test_movement_updates_position(cpu_device, test_config_pack_path):
     """Test that movement changes agent position."""
@@ -289,6 +308,7 @@ def test_movement_updates_position(cpu_device, test_config_pack_path):
 ```
 
 **When to use GPU**:
+
 - Integration tests (testing GPU performance)
 - Performance benchmarks
 - E2E tests (production environment)
@@ -300,6 +320,7 @@ def test_movement_updates_position(cpu_device, test_config_pack_path):
 **Rule**: Test behavior, not implementation details.
 
 **Good patterns**:
+
 ```python
 # Good: Behavioral assertion
 assert meters[0] > initial_value, "Energy should increase after rest"
@@ -313,6 +334,7 @@ assert result == pytest.approx(EXPECTED_ENERGY_RESTORATION, rel=1e-6)
 ```
 
 **Anti-patterns**:
+
 ```python
 # Bad: Brittle exact value
 assert meters[0] == 0.1875  # Breaks when config changes
@@ -325,6 +347,7 @@ assert obs.shape[1] == 89  # What is 89? Where did it come from?
 ```
 
 **Exception**: Mock config values can be exact when documented:
+
 ```python
 # From mock_config.yaml (frozen 2025-11-04)
 EXPECTED_BED_RESTORATION = 0.50  # +50% energy
@@ -338,6 +361,7 @@ assert result == pytest.approx(EXPECTED_BED_RESTORATION, rel=1e-6)
 **Rule**: Tests must be at the correct abstraction level.
 
 **Scope hierarchy**:
+
 ```
 Unit Tests (unit/)
 ├─ Environment: Test env mechanics via env.step()
@@ -367,6 +391,7 @@ E2E Tests (e2e/)
 | End-to-end training | `test_affordance_integration.py` | Integration tests in unit tests | `integration/test_affordance_integration.py` |
 
 **How to identify scope violations**:
+
 1. **Read the test**: What is it actually testing?
 2. **Check the abstraction**: Is it testing component A or component A→B interaction?
 3. **Ask**: "Could this test pass if component B is broken?"
@@ -380,6 +405,7 @@ E2E Tests (e2e/)
 **Rule**: Always check conftest.py before creating fixtures.
 
 **Available fixtures** (example from HAMLET):
+
 ```python
 # Configuration
 mock_config_path, test_config_pack_path, temp_config_pack
@@ -401,11 +427,13 @@ sample_observations, sample_actions
 ```
 
 **When to add a fixture**:
+
 - Used by 2+ test files
 - Complex setup (>5 lines)
 - Shared configuration
 
 **Never**:
+
 - Duplicate fixtures across files
 - Create one-off fixtures in test files
 - Hardcode paths or values that could be fixtures
@@ -419,11 +447,13 @@ sample_observations, sample_actions
 **Symptom**: Tests pass ~80% of the time, fail intermittently
 
 **Cause**: GPU introduces randomness in:
+
 - Agent spawn positions
 - Floating-point operation ordering
 - Kernel execution timing
 
 **Solution**:
+
 ```python
 def test_something(cpu_device):  # ← Force CPU
     env = VectorizedHamletEnv(..., device=cpu_device)
@@ -442,6 +472,7 @@ def test_something(cpu_device):  # ← Force CPU
 **Cause**: `env.reset()` places agents randomly. If agent spawns at top edge, UP action is masked.
 
 **Solution**:
+
 ```python
 env.reset()
 # Force agent to center where all movements are valid
@@ -462,6 +493,7 @@ assert env.positions[0, 0] == 3, "Agent should have moved UP"
 **Cause**: Legacy tests had environment + population + integration mixed together
 
 **Solution**: Research phase identifies these early
+
 ```
 Research findings:
 - test_action_selection.py (559 lines)
@@ -480,6 +512,7 @@ Decision: Extract environment tests, note population tests for Task 10
 **Cause**: Hardcoded exact values like `assert result == 0.1875`
 
 **Solution**: Use behavioral assertions or mock config
+
 ```python
 # Good: Behavioral
 assert result > initial_value, "Should increase"
@@ -501,6 +534,7 @@ assert result == pytest.approx(EXPECTED_VALUE, rel=1e-6)
 **Cause**: Not checking conftest.py before creating test-specific setup
 
 **Solution**: Extract to conftest.py
+
 ```python
 # Before (duplicated in 5 test files)
 def test_something():
@@ -534,23 +568,27 @@ def test_something(basic_env):
 ### Roles and Responsibilities
 
 **Dev Subagent**:
+
 - Conducts research phase (reads old files)
 - Implements new consolidated file
 - Runs tests to verify
 - Reports findings and results
 
 **Reviewer Subagent**:
+
 - Audits implementation against requirements
 - Verifies coverage and quality
 - Classifies issues (Critical/Important/Minor)
 - Recommends PASS / NEEDS FIXES / REJECT
 
 **Fix Subagent** (if needed):
+
 - Addresses specific issues from review
 - Re-runs tests to validate fixes
 - Reports what was changed
 
 **Final Reviewer Subagent** (if fixes applied):
+
 - Validates that fixes resolved issues
 - Confirms no new issues introduced
 - Gives final PASS verdict
@@ -625,6 +663,7 @@ def test_something(basic_env):
 ```
 
 **Typical subagent count**:
+
 - No issues: 2 subagents (dev + reviewer)
 - With fixes: 4 subagents (dev + reviewer + fix + final reviewer)
 
@@ -637,6 +676,7 @@ def test_something(basic_env):
 ### Success Indicators
 
 **Per-Task Metrics**:
+
 - ✅ All tests pass (100% pass rate)
 - ✅ Coverage preserved (≥85% of old functionality)
 - ✅ Zero critical issues
@@ -644,6 +684,7 @@ def test_something(basic_env):
 - ✅ Clear documentation (traceability to old tests)
 
 **Overall Metrics** (from HAMLET refactoring):
+
 - ✅ 5/5 tasks completed successfully
 - ✅ 201 tests created (all passing)
 - ✅ 0 critical issues across all tasks
@@ -653,16 +694,19 @@ def test_something(basic_env):
 ### Failure Modes
 
 **Critical failure** (restart task):
+
 - Tests don't pass
 - Major coverage gaps (>20% missing)
 - Scope violations not caught in research
 
 **Important failure** (fix before proceeding):
+
 - Missing edge cases
 - Poor organization
 - Fixture duplication
 
 **Minor failure** (document for later):
+
 - Documentation improvements
 - Naming suggestions
 - Non-blocking enhancements
@@ -754,6 +798,7 @@ class Test[Concern2]:
 
 3. **VERIFICATION PHASE**:
    - Run pytest:
+
      ```bash
      pytest path/to/new_file.py -v
      ```
@@ -775,6 +820,7 @@ class Test[Concern2]:
 Work from: `/path/to/repo/`
 
 **BEGIN WITH RESEARCH PHASE**
+
 ```
 
 ---
@@ -854,32 +900,40 @@ Working directory: `/path/to/repo/`
 ## Report Format
 
 ### Strengths
+
 - What the implementation does well
 
 ### Issues Found
 
 **Critical** (must fix):
+
 - [List critical issues]
 
 **Important** (should fix):
+
 - [List important issues]
 
 **Minor** (nice to have):
+
 - [List minor improvements]
 
 ### Coverage Assessment
+
 - What % of old test functionality is preserved?
 - Any significant gaps?
 
 ### Overall Assessment
+
 - **PASS**: Ready to proceed to next task
 - **NEEDS FIXES**: Fix issues before proceeding
 - **REJECT**: Start over with lessons learned
 
 ### Recommendations
+
 - Specific changes needed (if any)
 
 **BEGIN REVIEW**
+
 ```
 
 ---
@@ -927,6 +981,7 @@ def test_movement_updates_grid(cpu_device, test_config_pack_path):
 **Root cause**: No research phase, blindly consolidated all tests from `test_action_selection.py`
 
 **Discovery**:
+
 ```
 test_action_selection.py (559 lines):
 - Lines 1-200: Environment action masking (✅ in scope)
@@ -934,6 +989,7 @@ test_action_selection.py (559 lines):
 ```
 
 **Resolution**:
+
 - Kept environment tests in Task 1
 - Noted population tests for Task 10 (unit/population/test_action_selection.py)
 
@@ -948,6 +1004,7 @@ test_action_selection.py (559 lines):
 **Approach**: Identify gaps during research, add tests to fill them
 
 **Added tests** (6 new tests not in old files):
+
 1. `test_no_negative_values_after_depletion` - Multi-cycle clamping
 2. `test_no_overflow_above_one` - Upper bound clamping
 3. `test_cascade_engine_respects_bounds` - Engine-level clamping

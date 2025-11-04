@@ -19,17 +19,21 @@ TASK-000 partially addresses this with `substrate.compute_distance()` method, bu
 Distance is used in three places:
 
 1. **Interaction range checks** (`vectorized_env.py:274, 462, 541`):
+
    ```python
    distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
    at_affordance = distances == 0
    ```
+
    Agent must be at **exact position** (distance == 0) to interact.
 
 2. **Observation encoding** (`observation_builder.py:240`):
+
    ```python
    distances = torch.abs(positions - affordance_pos).sum(dim=1)
    on_affordance = distances == 0
    ```
+
    Used to determine "which affordance is agent currently on?"
 
 3. **Action masking** (implicit in boundary checks):
@@ -46,6 +50,7 @@ Distance is used in three places:
 Each substrate implements `compute_distance()` method. Environment calls this method for all distance calculations.
 
 **Implementation**:
+
 ```python
 # src/townlet/environment/substrate.py
 class SpatialSubstrate(ABC):
@@ -94,6 +99,7 @@ class AspatialSubstrate(SpatialSubstrate):
 ```
 
 **Usage in environment**:
+
 ```python
 # vectorized_env.py
 distances = self.substrate.compute_distance(self.positions, affordance_pos)
@@ -101,17 +107,20 @@ at_affordance = distances == 0  # Still requires exact match
 ```
 
 **Pros**:
+
 - ✅ Flexible: Each substrate defines its own metric
 - ✅ Clean abstraction: Environment doesn't need to know topology details
 - ✅ Supports all substrate types (2D, 3D, hex, toroidal, graph)
 
 **Cons**:
+
 - ❌ Still hardcodes "distance == 0" for interactions (what about "within range 2"?)
 - ❌ Graph distance is expensive (shortest path computation)
 - ❌ Aspatial substrates have meaningless distance (always 0)
 - ❌ Doesn't address "interaction range" configuration
 
 **Validation**:
+
 - Can detect unreachable affordances (distance == inf)
 - Cannot validate "all affordances within interaction range" (no range concept)
 
@@ -122,6 +131,7 @@ at_affordance = distances == 0  # Still requires exact match
 Add `distance_metric` field to substrate config, compute distance accordingly.
 
 **Implementation**:
+
 ```yaml
 # configs/L1_full_observability/substrate.yaml
 substrate:
@@ -143,17 +153,20 @@ substrate:
 ```
 
 **Pros**:
+
 - ✅ Operator control: Can experiment with different metrics on same topology
 - ✅ Config-driven: No code changes needed
 - ✅ Clear: Distance metric is explicit in config
 
 **Cons**:
+
 - ❌ Limited flexibility: Only predefined metrics supported
 - ❌ Metric must match topology (can't use "toroidal_manhattan" on clamp boundary)
 - ❌ Still doesn't address interaction range
 - ❌ Aspatial substrates still have meaningless distance
 
 **Validation**:
+
 - Can validate metric matches topology (no "toroidal" metric on clamped grid)
 
 ---
@@ -163,6 +176,7 @@ substrate:
 Each affordance defines `interaction_range` in YAML. Agent can interact if within range.
 
 **Implementation**:
+
 ```yaml
 # configs/L1_full_observability/affordances.yaml
 affordances:
@@ -183,6 +197,7 @@ affordances:
 ```
 
 **Usage**:
+
 ```python
 # vectorized_env.py
 for affordance_name, affordance_pos in self.affordances.items():
@@ -192,18 +207,21 @@ for affordance_name, affordance_pos in self.affordances.items():
 ```
 
 **Pros**:
+
 - ✅ Flexible: Different affordances have different ranges
 - ✅ Pedagogical: Teaches "reachability" vs "adjacency" (radio remote control!)
 - ✅ Config-driven: No code changes for new affordances
 - ✅ Supports "remote" interactions (distance > 0)
 
 **Cons**:
+
 - ❌ More complex: Operator must specify range for every affordance
 - ❌ Default range unclear (0? 1? depends on substrate?)
 - ❌ Graph substrates: Is range "hops" or spatial distance?
 - ❌ Aspatial substrates: Range is meaningless
 
 **Validation**:
+
 - Can validate: No affordances with range > max_distance in substrate
 - Cannot validate: "Unreachable" affordances (depends on runtime positions)
 
@@ -214,6 +232,7 @@ for affordance_name, affordance_pos in self.affordances.items():
 Replace distance with binary adjacency check: `substrate.is_adjacent(pos1, pos2)`.
 
 **Implementation**:
+
 ```python
 # src/townlet/environment/substrate.py
 class SpatialSubstrate(ABC):
@@ -250,6 +269,7 @@ class AspatialSubstrate(SpatialSubstrate):
 ```
 
 **Usage**:
+
 ```python
 # vectorized_env.py
 for affordance_name, affordance_pos in self.affordances.items():
@@ -257,6 +277,7 @@ for affordance_name, affordance_pos in self.affordances.items():
 ```
 
 **Pros**:
+
 - ✅ Simple: Binary yes/no, no numeric distance
 - ✅ Works for ALL substrates (2D, 3D, hex, graph, aspatial)
 - ✅ Clear semantics: "Can I interact with this?" (no ambiguous thresholds)
@@ -264,11 +285,13 @@ for affordance_name, affordance_pos in self.affordances.items():
 - ✅ No interaction range configuration needed (built into substrate)
 
 **Cons**:
+
 - ❌ Less flexible: Cannot have "remote" interactions (distance > 1)
 - ❌ Cannot distinguish "on affordance" vs "next to affordance"
 - ❌ 8-connected (diagonals) vs 4-connected ambiguity on square grids
 
 **Validation**:
+
 - Can validate: All affordances are "reachable" (some cell is adjacent)
 - Simplified: No need to check interaction ranges
 
@@ -294,18 +317,22 @@ for affordance_name, affordance_pos in self.affordances.items():
 ### Aspatial Substrates
 
 **Option A (compute_distance)**:
+
 ```python
 def compute_distance(self, pos1, pos2):
     return torch.zeros(pos1.shape[0])  # Always 0 (meaningless)
 ```
+
 - Distance is meaningless, but "distance == 0" still allows interactions
 - ✅ Works but semantically confusing
 
 **Option D (is_adjacent)**:
+
 ```python
 def is_adjacent(self, pos1, pos2):
     return torch.ones(pos1.shape[0], dtype=torch.bool)  # Always True
 ```
+
 - Everything is "adjacent" (no positioning)
 - ✅ Semantically correct! Aspatial means "everything is accessible"
 
@@ -316,20 +343,24 @@ def is_adjacent(self, pos1, pos2):
 ### Toroidal Boundaries
 
 **Option A (compute_distance)**:
+
 ```python
 # Must compute shortest path considering wraparound
 dx = torch.min(torch.abs(pos1[:, 0] - pos2[:, 0]), width - torch.abs(pos1[:, 0] - pos2[:, 0]))
 dy = torch.min(torch.abs(pos1[:, 1] - pos2[:, 1]), height - torch.abs(pos1[:, 1] - pos2[:, 1]))
 return dx + dy
 ```
+
 - ✅ Computes correct wraparound distance
 
 **Option D (is_adjacent)**:
+
 ```python
 # Check if distance <= 1 considering wraparound
 distances = toroidal_distance(pos1, pos2)  # Use Option A logic
 return distances <= 1
 ```
+
 - ✅ Still works, just checks adjacency after computing wraparound distance
 
 **Winner**: Both work. Option A is more general (supports range > 1).
@@ -339,15 +370,18 @@ return distances <= 1
 ### Graph Substrates
 
 **Option A (compute_distance)**:
+
 ```python
 # Shortest path (expensive! Need BFS/Dijkstra)
 def compute_distance(self, pos1, pos2):
     # Full shortest-path computation is O(V+E) per query
     return shortest_path_length(pos1, pos2)
 ```
+
 - ❌ Expensive: Shortest path for every interaction check
 
 **Option D (is_adjacent)**:
+
 ```python
 # Edge check (cheap! Just adjacency matrix lookup)
 def is_adjacent(self, pos1, pos2):
@@ -355,6 +389,7 @@ def is_adjacent(self, pos1, pos2):
     connected = self.adjacency[pos1[:, 0], pos2[:, 0]]
     return same_node | connected
 ```
+
 - ✅ Fast: O(1) adjacency matrix lookup
 
 **Winner**: Option D (is_adjacent) is much faster for graphs.
@@ -364,6 +399,7 @@ def is_adjacent(self, pos1, pos2):
 ### Hexagonal Grids
 
 **Option A (compute_distance)**:
+
 ```python
 # Hex distance formula
 def compute_distance(self, pos1, pos2):
@@ -371,14 +407,17 @@ def compute_distance(self, pos1, pos2):
     q2, r2 = pos2[:, 0], pos2[:, 1]
     return (torch.abs(q1 - q2) + torch.abs(r1 - r2) + torch.abs(q1 + r1 - q2 - r2)) / 2
 ```
+
 - ✅ Correct hex distance
 
 **Option D (is_adjacent)**:
+
 ```python
 # Check if hex distance <= 1
 def is_adjacent(self, pos1, pos2):
     return self.compute_distance(pos1, pos2) <= 1
 ```
+
 - ✅ Works, delegates to distance computation
 
 **Winner**: Both work. Option A is more general (if we ever want range > 1).
@@ -572,6 +611,7 @@ def _build_affordance_encoding(self, positions, affordances):
    - Aspatial: 0 movement actions (INTERACT, WAIT only)
 
 **Example validation error**:
+
 ```
 ❌ SUBSTRATE COMPILATION FAILED
 Substrate type 'aspatial' has no positioning, but actions.yaml defines movement actions.
@@ -601,6 +641,7 @@ affordances:
 ```
 
 **Implementation**:
+
 ```python
 # affordance_engine.py
 def get_interaction_range(self, affordance_name: str) -> int:
@@ -678,6 +719,7 @@ for affordance_name, affordance_pos in self.affordances.items():
 4. **Future extension**: Add `interaction_range` to affordances if pedagogical value emerges (radio remote control, etc.)
 
 **This design**:
+
 - ✅ Works for all substrate types
 - ✅ Clear semantics (adjacency = can interact)
 - ✅ Fast (O(1) for graphs, cheap for grids)

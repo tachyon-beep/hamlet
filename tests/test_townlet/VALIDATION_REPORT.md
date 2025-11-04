@@ -11,6 +11,7 @@
 The test suite refactoring has been **successfully completed** with 100% of critical behaviors preserved and significantly improved organization.
 
 **Key Metrics**:
+
 - ✅ Old suite: 66 files (unorganized structure)
 - ✅ New suite: 31 files (organized unit/integration/properties)
 - ✅ Test count: 560 tests (consolidated from scattered tests + recording tests)
@@ -25,6 +26,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 ### Old Test Suite (Before Refactoring)
 
 **Structure**: Flat, unorganized
+
 - 66 test files in `tests/test_townlet/` root
 - Mixed concerns (unit + integration in same files)
 - Duplicated fixtures across files
@@ -32,6 +34,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 - Hard to navigate and maintain
 
 **Problems Identified**:
+
 1. **Scope violations**: Environment tests mixed with population tests
 2. **Flaky tests**: CUDA randomness caused intermittent failures
 3. **Exact value assertions**: Tests broke when configs changed
@@ -41,6 +44,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 ### New Test Suite (After Refactoring)
 
 **Structure**: Three-tier architecture
+
 - 12 unit test files (component isolation)
 - 9 integration test files (cross-component interactions)
 - 3 property-based test files (edge case fuzzing)
@@ -50,6 +54,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 **Total**: 22 organized files (67% reduction from 66 files)
 
 **Improvements**:
+
 1. ✅ **Clear scope boundaries**: Unit vs integration vs properties
 2. ✅ **Deterministic tests**: CPU device eliminates flakiness
 3. ✅ **Behavioral assertions**: Tests survive config changes
@@ -94,6 +99,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 ### ✅ Environment Mechanics
 
 **Validated**:
+
 - ✅ Grid navigation (UP, DOWN, LEFT, RIGHT)
 - ✅ Action masking at boundaries
 - ✅ Agent spawn and positioning
@@ -102,6 +108,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 - ✅ Cascade engine (hunger → health, etc.)
 
 **Test Files**:
+
 - `unit/environment/test_action_masking.py` (37 tests)
 - `unit/environment/test_observations.py` (32 tests)
 - `unit/environment/test_affordances.py` (39 tests)
@@ -110,6 +117,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 ### ✅ Training Loop
 
 **Validated**:
+
 - ✅ Q-learning (network forward/backward pass)
 - ✅ Replay buffer (standard and sequential)
 - ✅ Epsilon-greedy exploration
@@ -119,6 +127,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 - ✅ Target network updates
 
 **Test Files**:
+
 - `unit/agent/test_networks.py` (19 tests)
 - `unit/training/test_replay_buffers.py` (52 tests)
 - `unit/exploration/test_exploration_strategies.py` (64 tests)
@@ -128,6 +137,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 ### ✅ Integration Points
 
 **Validated**:
+
 - ✅ Checkpointing (save/load state)
 - ✅ Signal purity (curriculum sees survival, not rewards)
 - ✅ Data flows (observation, reward, action pipelines)
@@ -136,6 +146,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 - ✅ Runner orchestration
 
 **Test Files**:
+
 - `integration/test_checkpointing.py` (15 tests)
 - `integration/test_curriculum_signal_purity.py` (11 tests)
 - `integration/test_data_flows.py` (8 tests)
@@ -168,6 +179,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 
 ~~1. **Recording tests** - Moved to separate `tests/test_townlet/test_recording/` directory (out of scope for this refactoring)~~
 **UPDATE**: ✅ Recording tests NOW INTEGRATED post-cutover:
+
 - Unit tests: `unit/recording/` (45 tests for data structures, database, criteria)
 - Integration tests: `integration/test_recording_*.py` (44 tests for recorder, playback, replay manager, video export)
 
@@ -291,6 +303,7 @@ The test suite refactoring has been **successfully completed** with 100% of crit
 The test suite refactoring has been **successfully completed** and is **ready for cutover**.
 
 **Summary**:
+
 - ✅ 66 files consolidated into 22 organized files (67% reduction)
 - ✅ 488 tests created (381 unit + 87 integration + 20 properties)
 - ✅ 100% pass rate (472/472, excluding intentional XFAIL)
@@ -310,11 +323,13 @@ The test suite refactoring has been **successfully completed** and is **ready fo
 ### Migration Performed
 
 **Before**:
+
 - 8 test files in separate `test_recording/` subdirectory (72 tests, 2780 lines)
 - Not following refactored structure conventions
 - Missing dependencies (msgpack, lz4) discovered during validation
 
 **After**:
+
 - ✅ Unit tests → `unit/recording/` (3 files, 45 tests)
   - test_data_structures.py (serialization roundtrips)
   - test_database.py (database operations)
@@ -339,6 +354,7 @@ The test suite refactoring has been **successfully completed** and is **ready fo
 **Mistake**: Initially excluded recording tests as "out of scope" without proper validation
 **Discovery**: Recording tests had import errors (missing msgpack, lz4 dependencies)
 **Resolution**:
+
 1. Fixed dependencies with `uv sync --all-extras`
 2. Migrated recording tests to proper structure
 3. Updated documentation with recording test coverage

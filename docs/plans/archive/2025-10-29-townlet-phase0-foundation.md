@@ -11,6 +11,7 @@
 **Duration:** 2-3 days
 
 **Exit Criteria:**
+
 - ✅ All DTOs have Pydantic validation (invalid values rejected)
 - ✅ BatchedAgentState correctly handles tensor operations
 - ✅ All ABCs prevent instantiation
@@ -22,6 +23,7 @@
 ## Task 1: Project Structure Setup
 
 **Files:**
+
 - Create: `src/townlet/__init__.py`
 - Create: `src/townlet/training/__init__.py`
 - Create: `src/townlet/curriculum/__init__.py`
@@ -33,14 +35,16 @@
 **Step 1: Create directory structure**
 
 Run:
+
 ```bash
 mkdir -p src/townlet/{training,curriculum,exploration,population,environment}
 mkdir -p tests/test_townlet
 ```
 
-**Step 2: Create package __init__ files**
+**Step 2: Create package **init** files**
 
 Create each `__init__.py` with:
+
 ```python
 """Townlet: GPU-native sparse reward system."""
 ```
@@ -50,6 +54,7 @@ Create each `__init__.py` with:
 Run: `tree src/townlet tests/test_townlet`
 
 Expected output:
+
 ```
 src/townlet/
 ├── __init__.py
@@ -85,17 +90,20 @@ Part of Phase 0: Foundation (DTOs + Interfaces)"
 ## Task 2: Cold Path DTOs - CurriculumDecision
 
 **Files:**
+
 - Create: `src/townlet/training/state.py`
 - Create: `tests/test_townlet/test_training/test_state.py`
 
 **Step 1: Write failing test for CurriculumDecision validation**
 
 Create `tests/test_townlet/test_training/__init__.py`:
+
 ```python
 """Tests for Townlet training infrastructure."""
 ```
 
 Create `tests/test_townlet/test_training/test_state.py`:
+
 ```python
 """Tests for Townlet state DTOs (cold path)."""
 
@@ -179,6 +187,7 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'townlet.training.stat
 **Step 3: Write minimal CurriculumDecision implementation**
 
 Create `src/townlet/training/state.py`:
+
 ```python
 """
 State representations for Townlet training.
@@ -256,12 +265,14 @@ Part of Phase 0: Foundation"
 ## Task 3: Cold Path DTOs - ExplorationConfig
 
 **Files:**
+
 - Modify: `src/townlet/training/state.py`
 - Modify: `tests/test_townlet/test_training/test_state.py`
 
 **Step 1: Write failing test for ExplorationConfig**
 
 Add to `tests/test_townlet/test_training/test_state.py`:
+
 ```python
 def test_exploration_config_valid():
     """ExplorationConfig should accept valid parameters."""
@@ -318,6 +329,7 @@ Expected: FAIL with "ImportError: cannot import name 'ExplorationConfig'"
 **Step 3: Write ExplorationConfig implementation**
 
 Add to `src/townlet/training/state.py`:
+
 ```python
 class ExplorationConfig(BaseModel):
     """
@@ -387,12 +399,14 @@ Part of Phase 0: Foundation"
 ## Task 4: Cold Path DTOs - PopulationCheckpoint
 
 **Files:**
+
 - Modify: `src/townlet/training/state.py`
 - Modify: `tests/test_townlet/test_training/test_state.py`
 
 **Step 1: Write failing test for PopulationCheckpoint**
 
 Add to `tests/test_townlet/test_training/test_state.py`:
+
 ```python
 def test_population_checkpoint_valid():
     """PopulationCheckpoint should accept valid parameters."""
@@ -477,11 +491,13 @@ Expected: FAIL with "ImportError: cannot import name 'PopulationCheckpoint'"
 **Step 3: Write PopulationCheckpoint implementation**
 
 Add to `src/townlet/training/state.py` (after imports, add `Dict, Any`):
+
 ```python
 from typing import List, Dict, Any
 ```
 
 Then add the class:
+
 ```python
 class PopulationCheckpoint(BaseModel):
     """
@@ -551,12 +567,14 @@ Part of Phase 0: Foundation"
 ## Task 5: Hot Path State - BatchedAgentState
 
 **Files:**
+
 - Modify: `src/townlet/training/state.py`
 - Create: `tests/test_townlet/test_training/test_batched_state.py`
 
 **Step 1: Write failing test for BatchedAgentState**
 
 Create `tests/test_townlet/test_training/test_batched_state.py`:
+
 ```python
 """Tests for BatchedAgentState (hot path tensor container)."""
 
@@ -670,12 +688,14 @@ Expected: FAIL with "ImportError: cannot import name 'BatchedAgentState'"
 **Step 3: Write BatchedAgentState implementation**
 
 Add to `src/townlet/training/state.py` (after imports, add torch and numpy):
+
 ```python
 import torch
 import numpy as np
 ```
 
 Then add the class:
+
 ```python
 class BatchedAgentState:
     """
@@ -783,17 +803,20 @@ Part of Phase 0: Foundation"
 ## Task 6: Interface - CurriculumManager ABC
 
 **Files:**
+
 - Create: `src/townlet/curriculum/base.py`
 - Create: `tests/test_townlet/test_curriculum/test_base.py`
 
 **Step 1: Write failing test for CurriculumManager interface**
 
 Create `tests/test_townlet/test_curriculum/__init__.py`:
+
 ```python
 """Tests for Townlet curriculum managers."""
 ```
 
 Create `tests/test_townlet/test_curriculum/test_base.py`:
+
 ```python
 """Tests for CurriculumManager abstract interface."""
 
@@ -847,6 +870,7 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'townlet.curriculum.ba
 **Step 3: Write CurriculumManager ABC implementation**
 
 Create `src/townlet/curriculum/base.py`:
+
 ```python
 """
 Abstract base class for curriculum managers.
@@ -955,17 +979,20 @@ Part of Phase 0: Foundation"
 ## Task 7: Interface - ExplorationStrategy ABC
 
 **Files:**
+
 - Create: `src/townlet/exploration/base.py`
 - Create: `tests/test_townlet/test_exploration/test_base.py`
 
 **Step 1: Write failing test for ExplorationStrategy interface**
 
 Create `tests/test_townlet/test_exploration/__init__.py`:
+
 ```python
 """Tests for Townlet exploration strategies."""
 ```
 
 Create `tests/test_townlet/test_exploration/test_base.py`:
+
 ```python
 """Tests for ExplorationStrategy abstract interface."""
 
@@ -1019,6 +1046,7 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'townlet.exploration.b
 **Step 3: Write ExplorationStrategy ABC implementation**
 
 Create `src/townlet/exploration/base.py`:
+
 ```python
 """
 Abstract base class for exploration strategies.
@@ -1168,17 +1196,20 @@ Part of Phase 0: Foundation"
 ## Task 8: Interface - PopulationManager ABC
 
 **Files:**
+
 - Create: `src/townlet/population/base.py`
 - Create: `tests/test_townlet/test_population/test_base.py`
 
 **Step 1: Write failing test for PopulationManager interface**
 
 Create `tests/test_townlet/test_population/__init__.py`:
+
 ```python
 """Tests for Townlet population managers."""
 ```
 
 Create `tests/test_townlet/test_population/test_base.py`:
+
 ```python
 """Tests for PopulationManager abstract interface."""
 
@@ -1229,6 +1260,7 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'townlet.population.ba
 **Step 3: Write PopulationManager ABC implementation**
 
 Create `src/townlet/population/base.py`:
+
 ```python
 """
 Abstract base class for population managers.
@@ -1331,11 +1363,13 @@ Part of Phase 0: Foundation"
 ## Task 9: Integration Test - Interface Compliance
 
 **Files:**
+
 - Create: `tests/test_townlet/test_interface_compliance.py`
 
 **Step 1: Write interface compliance test framework**
 
 Create `tests/test_townlet/test_interface_compliance.py`:
+
 ```python
 """
 Interface compliance tests.
@@ -1428,11 +1462,13 @@ Part of Phase 0: Foundation"
 ## Task 10: Documentation and Verification
 
 **Files:**
+
 - Create: `docs/townlet/PHASE0_VERIFICATION.md`
 
 **Step 1: Create verification checklist**
 
 Create `docs/townlet/PHASE0_VERIFICATION.md`:
+
 ```markdown
 # Townlet Phase 0 Verification Checklist
 
@@ -1519,6 +1555,7 @@ pytest --cov=townlet --cov-report=term-missing tests/test_townlet/
 ## Notes
 
 Phase 0 establishes contracts. All future implementations must satisfy these interfaces without API changes.
+
 ```
 
 **Step 2: Run full verification**
@@ -1572,6 +1609,7 @@ git push origin phase0-complete
 ## Phase 0 Complete! 🎉
 
 **Deliverables Summary**:
+
 - ✅ 3 Pydantic DTOs with validation (CurriculumDecision, ExplorationConfig, PopulationCheckpoint)
 - ✅ BatchedAgentState tensor container (hot path)
 - ✅ 3 abstract interfaces (CurriculumManager, ExplorationStrategy, PopulationManager)
@@ -1580,11 +1618,13 @@ git push origin phase0-complete
 - ✅ Verification checklist and documentation
 
 **Lines of Code**:
+
 - Source: ~450 LOC
 - Tests: ~600 LOC
 - Total: ~1,050 LOC
 
 **Next Phase**: Phase 1 - GPU Infrastructure + Trivial Implementations (5-7 days)
+
 - VectorizedHamletEnv (full GPU implementation)
 - StaticCurriculum (no adaptation)
 - EpsilonGreedyExploration (vectorized)

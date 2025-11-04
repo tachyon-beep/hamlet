@@ -14,6 +14,7 @@
 Implement the `insert_affordance_visits()` TODO stub to track **affordance transition patterns** (Bed → Hospital → Job → ...) in the SQLite database. This enables behavioral analysis, reward hacking detection, and curriculum validation through Markov chain analysis of agent strategies.
 
 **Implementation Completed:**
+
 - ✅ Database schema EXISTS (table `affordance_visits` created on init)
 - ✅ Affordance visit counts tracked (Bed: 5, Hospital: 3)
 - ✅ Transition sequences TRACKED (Bed→Hospital: 3)
@@ -30,6 +31,7 @@ Implement the `insert_affordance_visits()` TODO stub to track **affordance trans
 ### What Are Affordance Transitions?
 
 **Current Tracking (Visit Counts):**
+
 ```python
 affordance_visits[0] = {
     "Bed": 5,      # Used bed 5 times
@@ -37,10 +39,12 @@ affordance_visits[0] = {
     "Job": 2        # Used job 2 times
 }
 ```
+
 - Tells you **HOW MUCH** each affordance was used
 - Already logged to TensorBoard and saved in recordings
 
 **Missing Tracking (Transitions):**
+
 ```python
 affordance_transitions[0] = {
     "Bed": {"Hospital": 3, "Job": 2},  # After Bed → Hospital (3×) or Job (2×)
@@ -48,6 +52,7 @@ affordance_transitions[0] = {
     "Job": {"Bed": 1}                  # After Job → Bed (1×)
 }
 ```
+
 - Tells you **WHAT SEQUENCE** agent used
 - Reveals behavioral patterns (work→eat→sleep cycles)
 - Detects reward hacking (Bed→Bed spam loops)
@@ -92,11 +97,13 @@ CREATE INDEX IF NOT EXISTS idx_visits_episode ON affordance_visits(episode_id);
 ```
 
 **Semantics:**
+
 - `from_affordance`: Affordance agent just used
 - `to_affordance`: Affordance agent used NEXT
 - `visit_count`: How many times this transition occurred in episode
 
 **Example Data:**
+
 ```
 | episode_id | from_affordance | to_affordance | visit_count |
 |------------|-----------------|---------------|-------------|
@@ -111,6 +118,7 @@ CREATE INDEX IF NOT EXISTS idx_visits_episode ON affordance_visits(episode_id);
 This represents a **transition matrix** / **Markov chain**: Episode 100 had 7 total transitions.
 
 **Optional Additional Indices** (for analysis queries):
+
 ```sql
 -- For querying specific transitions
 CREATE INDEX IF NOT EXISTS idx_visits_transition
@@ -124,6 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_visits_count
 ### Data Flow
 
 **Existing Flow (Visit Counts):**
+
 ```
 VectorizedHamletEnv.step()
     ↓
@@ -135,6 +144,7 @@ TensorBoard logging, Recording metadata (NOT database)
 ```
 
 **New Flow (Transitions):**
+
 ```
 VectorizedHamletEnv.step()
     ↓
@@ -154,12 +164,14 @@ Database persistence (SQL INSERT)
 ### Integration Points
 
 **Where to track**: `runner.py` (recommended)
+
 - ✅ Already collecting affordance visits here
 - ✅ Access to `successful_interactions` events
 - ✅ All telemetry in one place
 - ✅ Minimal code changes
 
 **When to persist**: Per episode (recommended)
+
 - ✅ Batch insert all transitions at episode end
 - ✅ Matches existing `insert_episode()` pattern
 - ✅ Single transaction (efficient)
@@ -167,6 +179,7 @@ Database persistence (SQL INSERT)
 - ❌ Alternative: Streaming (heavy DB overhead)
 
 **Coordination with existing telemetry**:
+
 - TensorBoard: Still gets visit counts (unchanged)
 - Recording metadata: Still gets visit counts (unchanged)
 - Database: Additionally gets transitions (new)
@@ -180,6 +193,7 @@ Database persistence (SQL INSERT)
 **File**: `src/townlet/demo/database.py:176`
 
 **Current (TODO stub):**
+
 ```python
 def insert_affordance_visits(self, episode_id: int, transitions: dict[str, dict[str, int]]):
     """Insert affordance transition counts for an episode.
@@ -194,6 +208,7 @@ def insert_affordance_visits(self, episode_id: int, transitions: dict[str, dict[
 ```
 
 **Implementation:**
+
 ```python
 def insert_affordance_visits(self, episode_id: int, transitions: dict[str, dict[str, int]]):
     """Insert affordance transition counts for an episode.
@@ -228,11 +243,13 @@ def insert_affordance_visits(self, episode_id: int, transitions: dict[str, dict[
 ```
 
 **Edge Cases:**
+
 - Empty episode (no interactions): Early return, no DB operations
 - Self-loops (Bed→Bed): Valid, represents consecutive usage
 - Single affordance (only "Bed"): No transitions (need 2+ interactions)
 
 **Testing:**
+
 ```python
 # tests/test_townlet/unit/recording/test_database.py
 def test_insert_affordance_visits(tmp_path):
@@ -283,12 +300,14 @@ def test_insert_affordance_visits_self_loop(tmp_path):
 **File**: `src/townlet/demo/runner.py`
 
 **Current state tracking** (line ~413):
+
 ```python
 # Episode initialization
 affordance_visits = [defaultdict(int) for _ in range(num_agents)]
 ```
 
 **Add transition tracking:**
+
 ```python
 # Episode initialization (line ~413)
 affordance_visits = [defaultdict(int) for _ in range(num_agents)]
@@ -299,6 +318,7 @@ last_affordance = [None for _ in range(num_agents)]
 ```
 
 **Current interaction tracking** (line ~444):
+
 ```python
 if "successful_interactions" in agent_state.info:
     for agent_idx, affordance_name in agent_state.info["successful_interactions"].items():
@@ -307,6 +327,7 @@ if "successful_interactions" in agent_state.info:
 ```
 
 **Modified to track transitions:**
+
 ```python
 if "successful_interactions" in agent_state.info:
     for agent_idx, affordance_name in agent_state.info["successful_interactions"].items():
@@ -325,12 +346,14 @@ if "successful_interactions" in agent_state.info:
 ```
 
 **Edge Cases:**
+
 1. **First interaction**: `last_affordance[agent_idx]` is `None` → no transition recorded (correct)
 2. **Episode reset**: Clear `last_affordance` at episode start (already done via list initialization)
 3. **Self-loops**: `prev == affordance_name` → valid transition (Bed→Bed)
 4. **Multi-agent**: Each agent has independent transition history
 
 **Data Structure Example:**
+
 ```python
 # After episode with interactions: Bed → Hospital → Bed → Job
 affordance_transitions[0] = {
@@ -341,6 +364,7 @@ affordance_transitions[0] = {
 ```
 
 **Testing:**
+
 ```python
 # tests/test_townlet/integration/test_affordance_tracking.py
 def test_transition_tracking_simple_sequence():
@@ -367,6 +391,7 @@ def test_transition_tracking_first_interaction_no_transition():
 **File**: `src/townlet/demo/runner.py` (line ~700, after episode completes)
 
 **Current code** (around line 700):
+
 ```python
 # Insert episode metrics
 self.db.insert_episode(
@@ -382,6 +407,7 @@ self.db.insert_episode(
 ```
 
 **Add transition persistence:**
+
 ```python
 # Insert episode metrics
 self.db.insert_episode(
@@ -410,6 +436,7 @@ if affordance_transitions[0]:
 ```
 
 **Optional: Add logging for debug**
+
 ```python
 if affordance_transitions[0]:
     total_transitions = sum(sum(to_affs.values()) for to_affs in affordance_transitions[0].values())
@@ -420,12 +447,14 @@ if affordance_transitions[0]:
 Currently only agent 0 is tracked. To support multiple agents:
 
 **Option A: Single agent (current):**
+
 ```python
 if affordance_transitions[0]:
     self.db.insert_affordance_visits(episode_id, transitions=dict(affordance_transitions[0]))
 ```
 
 **Option B: All agents (future enhancement):**
+
 ```python
 for agent_idx in range(num_agents):
     if affordance_transitions[agent_idx]:
@@ -440,6 +469,7 @@ for agent_idx in range(num_agents):
 **Recommendation**: Start with Option A (agent 0 only) for simplicity. Multi-agent support can be added later if needed.
 
 **Testing:**
+
 ```python
 # tests/test_townlet/integration/test_runner_affordance_persistence.py
 def test_runner_persists_transitions_to_database():
@@ -459,17 +489,20 @@ def test_runner_handles_empty_transitions():
 ### Phase 4: Testing & Validation (1 hour)
 
 **Unit Tests** (`tests/test_townlet/unit/recording/test_database.py`):
+
 - ✅ `test_insert_affordance_visits()` - Basic insertion
 - ✅ `test_insert_affordance_visits_empty()` - Empty dict handling
 - ✅ `test_insert_affordance_visits_self_loop()` - Self-loop recording
 - ✅ `test_query_affordance_transitions()` - Verify retrieval
 
 **Integration Tests** (`tests/test_townlet/integration/test_affordance_tracking.py`):
+
 - ✅ `test_transition_tracking_simple_sequence()` - Bed → Hospital → Bed
 - ✅ `test_transition_tracking_self_loop()` - Bed → Bed → Bed
 - ✅ `test_runner_persists_transitions_to_database()` - End-to-end persistence
 
 **Validation Queries** (manual testing):
+
 ```sql
 -- 1. Verify transitions were inserted
 SELECT COUNT(*) FROM affordance_visits;
@@ -499,6 +532,7 @@ ORDER BY from_affordance, to_affordance;
 ```
 
 **Test with Real Training Run:**
+
 ```bash
 # Run L0 minimal config for 100 episodes
 uv run scripts/run_demo.py --config configs/L0_minimal
@@ -516,6 +550,7 @@ ORDER BY total DESC;
 ```
 
 **Expected Results (L0 minimal - Bed only):**
+
 - Should see mostly `Bed → Bed` transitions (self-loops)
 - Early episodes: Random patterns
 - Later episodes: Regular spacing patterns (learned to avoid spam)
@@ -527,6 +562,7 @@ ORDER BY total DESC;
 ### Behavioral Pattern Discovery
 
 **Query: Most Common Transitions**
+
 ```sql
 SELECT
     from_affordance,
@@ -540,6 +576,7 @@ LIMIT 10;
 ```
 
 **Example Output:**
+
 ```
 | from       | to         | total | percentage |
 |------------|------------|-------|------------|
@@ -548,11 +585,13 @@ LIMIT 10;
 | Hospital   | Job        | 280   | 17.7%      |
 | Bed        | Job        | 210   | 13.3%      |
 ```
+
 **Insight**: "Agents learned work→sleep→heal→work cycle!"
 
 ### Reward Hacking Detection
 
 **Query: Self-Loop Analysis**
+
 ```sql
 SELECT
     from_affordance,
@@ -569,17 +608,20 @@ ORDER BY self_loop_count DESC;
 ```
 
 **Example Output:**
+
 ```
 | affordance | self_loop_count | self_loop_percentage |
 |------------|-----------------|----------------------|
 | Bed        | 1250            | 85.2%                |
 | Hospital   | 45              | 12.1%                |
 ```
+
 **Insight**: "85% of Bed transitions are self-loops → potential spam exploit!"
 
 ### Curriculum Stage Comparison
 
 **Query: Transition Evolution Across Stages**
+
 ```sql
 SELECT
     e.curriculum_stage,
@@ -593,6 +635,7 @@ ORDER BY e.curriculum_stage, count DESC;
 ```
 
 **Example Output:**
+
 ```
 | stage | from     | to       | count |
 |-------|----------|----------|-------|
@@ -602,11 +645,13 @@ ORDER BY e.curriculum_stage, count DESC;
 | 2     | Bed      | Hospital | 320   |
 | 2     | Hospital | Job      | 280   |
 ```
+
 **Insight**: "Stage 1 agents spam Bed, Stage 2 agents show clear work→sleep→heal patterns!"
 
 ### Markov Chain Transition Matrix
 
 **Python Analysis:**
+
 ```python
 import sqlite3
 import pandas as pd
@@ -636,12 +681,14 @@ print(transition_probs)
 ```
 
 **Interpretation:**
+
 - P(next=Hospital | current=Bed) = 60% → "After Bed, agents usually go to Hospital"
 - P(next=Bed | current=Job) = 70% → "After Job, agents usually sleep"
 
 ### Visualization: Sankey Diagram
 
 **Plotly Example:**
+
 ```python
 import plotly.graph_objects as go
 
@@ -682,12 +729,14 @@ fig.show()
    - Analyze temporal patterns: "Agents go to Job at 9am, Bed at 10pm"
 
 3. **Retrieval Methods**
+
    ```python
    def get_affordance_transitions(self, episode_id: int) -> dict:
        """Reconstruct transitions dict from database for analysis."""
    ```
 
 4. **Aggregation Views**
+
    ```sql
    CREATE VIEW transition_probabilities AS
    SELECT
@@ -712,12 +761,14 @@ fig.show()
 ## Acceptance Criteria
 
 **Phase 1 Complete When:**
+
 - [ ] `insert_affordance_visits()` method implemented (not `pass`)
 - [ ] Empty transitions handled gracefully (early return)
 - [ ] Batch insert uses `executemany()` for efficiency
 - [ ] Unit tests pass: insertion, empty dict, self-loops
 
 **Phase 2 Complete When:**
+
 - [ ] `affordance_transitions` data structure added to runner
 - [ ] `last_affordance` state tracking added
 - [ ] Transition recording logic added to interaction loop
@@ -725,12 +776,14 @@ fig.show()
 - [ ] Integration tests pass: simple sequence, self-loop tracking
 
 **Phase 3 Complete When:**
+
 - [ ] `db.insert_affordance_visits()` called after episode
 - [ ] Nested defaultdict converted to regular dict
 - [ ] Integration test passes: end-to-end persistence
 - [ ] Manual validation: query database shows expected transitions
 
 **Phase 4 Complete When:**
+
 - [ ] All unit tests pass
 - [ ] All integration tests pass
 - [ ] Real training run produces valid transition data
@@ -738,6 +791,7 @@ fig.show()
 - [ ] Documentation updated (CLAUDE.md, this task file)
 
 **Overall Task Complete When:**
+
 - [ ] All acceptance criteria met
 - [ ] TODO comment removed from `database.py:176`
 - [ ] PR created with implementation + tests
@@ -748,20 +802,24 @@ fig.show()
 ## Effort Breakdown
 
 **Phase 1: Database Insertion** - 30 minutes
+
 - Implement method body: 15 min
 - Write unit tests: 15 min
 
 **Phase 2: Transition Tracking** - 1-2 hours
+
 - Add data structures: 15 min
 - Modify interaction loop: 30 min
 - Handle edge cases: 15 min
 - Write integration tests: 30-60 min
 
 **Phase 3: Integration** - 30 minutes
+
 - Add DB call in runner: 10 min
 - Test with real training run: 20 min
 
 **Phase 4: Testing & Validation** - 1 hour
+
 - Run full test suite: 15 min
 - Manual validation queries: 15 min
 - Documentation updates: 30 min
@@ -773,20 +831,24 @@ fig.show()
 ## Risk Assessment
 
 **Technical Risks:**
+
 - ✅ **LOW**: Database schema exists, no migration needed
 - ✅ **LOW**: Data source exists (`successful_interactions`), just needs formatting
 - ✅ **LOW**: Integration point clear (runner after episode)
 - ✅ **LOW**: Performance impact minimal (batch insert, ~10-20 rows per episode)
 
 **Blocking Dependencies:**
+
 - ✅ **NONE**: All prerequisites exist
 
 **Regression Risks:**
+
 - ✅ **LOW**: New code path, doesn't modify existing telemetry
 - ✅ **LOW**: Empty dict handling prevents crashes
 - ⚠️ **MEDIUM**: Nested defaultdict conversion must preserve structure
 
 **Mitigation:**
+
 - Comprehensive unit tests for data structure conversion
 - Integration tests verify end-to-end correctness
 - Manual validation with real training runs
@@ -796,16 +858,19 @@ fig.show()
 ## Related Work
 
 **Related TODOs in `database.py`:**
+
 - `insert_position_heatmap()` (line 187): Track spatial visit patterns
 - `get_position_heatmap()` (line 204): Query spatial data
 - Both marked "TODO: Implement in Task 5 for visualization"
 
 **Connection:**
+
 - Affordance transitions = **behavioral flow** (action sequences)
 - Position heatmap = **spatial coverage** (movement patterns)
 - Complementary analysis dimensions
 
 **Existing Affordance Tracking:**
+
 - TensorBoard: `log_affordance_usage()` logs visit counts (real-time monitoring)
 - Recording: `EpisodeMetadata.affordance_visits` stores counts (replay/analysis)
 - This task: Transition sequences (behavioral pattern analysis)
@@ -815,19 +880,23 @@ fig.show()
 ## References
 
 **Code Files:**
+
 - `src/townlet/demo/database.py:176` - TODO stub to implement
 - `src/townlet/demo/runner.py:413` - Episode initialization (add transition tracking)
 - `src/townlet/demo/runner.py:444` - Interaction loop (add transition recording)
 - `src/townlet/demo/runner.py:700` - Episode completion (add DB persistence)
 
 **Database Schema:**
+
 - `src/townlet/demo/database.py:51-58` - Table creation SQL
 
 **Existing Telemetry:**
+
 - `src/townlet/training/tensorboard_logger.py:261` - TensorBoard affordance logging
 - `src/townlet/recording/data_structures.py:99` - Recording metadata structure
 
 **Tests:**
+
 - `tests/test_townlet/unit/recording/test_database.py` - Database unit tests
 - `tests/test_townlet/integration/test_runner_integration.py` - Runner integration tests
 
@@ -836,6 +905,7 @@ fig.show()
 ## Notes
 
 **Why This Wasn't Implemented Originally:**
+
 - Marked "Task 2" in TODO → deferred for later
 - Visit counts (what) deemed higher priority than transitions (sequence)
 - Database schema was created proactively (good foresight!)
@@ -844,6 +914,7 @@ fig.show()
 This feature directly supports the HAMLET mission: "Trick students into learning graduate-level RL by making them think they're just playing The Sims."
 
 Transition analysis makes emergent behavior **visible and exciting**:
+
 - Students see agents **learn** work→sleep cycles
 - Students detect **reward hacking** through self-loop analysis
 - Students understand **exploration vs. exploitation** through stage comparison
@@ -851,6 +922,7 @@ Transition analysis makes emergent behavior **visible and exciting**:
 
 **Why Implement Now:**
 Behavioral analysis will be valuable for:
+
 - Debugging curriculum design during upcoming transformation
 - Validating agent learning progression
 - Creating compelling visualizations for pedagogy
@@ -863,6 +935,7 @@ Behavioral analysis will be valuable for:
 **Completion Date**: 2025-11-04
 
 **Methodology**: Test-Driven Development (TDD)
+
 - RED-GREEN-REFACTOR cycle followed throughout
 - All tests written before implementation
 - Watched tests fail, then pass
@@ -871,27 +944,35 @@ Behavioral analysis will be valuable for:
 **Implementation Summary**:
 
 ### Phase 1: Database Method (30 minutes)
+
 ✅ Implemented `insert_affordance_visits()` in `database.py:176-205`
+
 - Batch insert using `executemany()` for efficiency
 - Empty transitions handled gracefully (early return)
 - Self-loops supported (Bed→Bed)
 - **Tests**: 3 unit tests written and passing
 
 ### Phase 2: Transition Tracking (1 hour)
+
 ✅ Added transition tracking in `runner.py:415-460`
+
 - Data structures: `affordance_transitions`, `last_affordance` (line 415-416)
 - Tracking logic: Records transitions when affordances used (line 453-460)
 - Edge cases: First interaction (no prev), self-loops, multi-agent
 - **Tests**: 1 integration test written and passing
 
 ### Phase 3: Database Integration (30 minutes)
+
 ✅ Added database persistence in `runner.py:540-550`
+
 - Converts nested defaultdict to regular dict
 - Calls `insert_affordance_visits()` after episode
 - Agent 0 only (multi-agent support future enhancement)
 
 ### Verification & Testing (30 minutes)
+
 ✅ All acceptance criteria met:
+
 - 4 tests total (3 unit + 1 integration)
 - All tests pass
 - No regressions (18 tests pass)
@@ -899,6 +980,7 @@ Behavioral analysis will be valuable for:
 - End-to-end validation: 50 episodes, transitions persisted
 
 **Files Modified**:
+
 - `src/townlet/demo/database.py` - Implemented method
 - `src/townlet/demo/runner.py` - Added tracking (3 locations)
 - `tests/test_townlet/unit/recording/test_database.py` - Added 3 tests
@@ -907,6 +989,7 @@ Behavioral analysis will be valuable for:
 **Total Time**: ~2.5 hours (under 3-4 hour estimate)
 
 **Next Steps**:
+
 - Feature is production-ready for behavioral analysis
 - Can be used immediately for:
   - Reward hacking detection (`SELECT * FROM affordance_visits WHERE from_affordance = to_affordance`)

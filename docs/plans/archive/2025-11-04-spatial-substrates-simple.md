@@ -11,6 +11,7 @@
 **Scope:** Get substrate abstraction "in the system" before TASK-001 (schemas), TASK-002 (actions), TASK-003 (universe compiler).
 
 **Research Summary:**
+
 - Position tensors always `[num_agents, 2]`
 - Manhattan distance in 4 locations
 - Observation dim depends on `grid_size²`
@@ -18,6 +19,7 @@
 - Estimated: 6-8 hours (simplified from original 15-22)
 
 **Review Findings Addressed:**
+
 - ✅ encode_positions() verified to match current ObservationBuilder (lines 127-137)
 - ✅ Added get_valid_spawn_positions() method (7th abstract method)
 - ✅ Documented LSTM/POMDP limitations in Summary section
@@ -29,6 +31,7 @@
 ### Task 1.1: Create Abstract Substrate Interface
 
 **Files:**
+
 - Create: `src/townlet/substrate/__init__.py`
 - Create: `src/townlet/substrate/base.py`
 
@@ -128,6 +131,7 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 1.2: Implement Grid2DSubstrate (Current Behavior)
 
 **Files:**
+
 - Create: `src/townlet/substrate/grid2d.py`
 
 **Step 1: Implement Grid2D**
@@ -208,7 +212,7 @@ class Grid2DSubstrate(SpatialSubstrate):
         return [(x, y) for x in range(self.width) for y in range(self.height)]
 ```
 
-**Step 2: Update __init__.py**
+**Step 2: Update **init**.py**
 
 Modify: `src/townlet/substrate/__init__.py`
 
@@ -240,6 +244,7 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 1.3: Implement AspatialSubstrate (Demonstrates Concept)
 
 **Files:**
+
 - Create: `src/townlet/substrate/aspatial.py`
 
 **Step 1: Implement Aspatial**
@@ -288,7 +293,7 @@ class AspatialSubstrate(SpatialSubstrate):
         return [()]  # Single position with no coordinates
 ```
 
-**Step 2: Update __init__.py**
+**Step 2: Update **init**.py**
 
 Modify: `src/townlet/substrate/__init__.py`
 
@@ -324,9 +329,10 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 2.1: Add Substrate to VectorizedEnv
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 
-**Step 1: Add substrate creation in __init__**
+**Step 1: Add substrate creation in **init****
 
 Modify: `src/townlet/environment/vectorized_env.py`
 
@@ -343,11 +349,13 @@ self.substrate = Grid2DSubstrate(width=grid_size, height=grid_size)
 Find line ~160 where positions are initialized:
 
 Change:
+
 ```python
 self.positions = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
 ```
 
 To:
+
 ```python
 self.positions = self.substrate.random_positions(self.num_agents, self.device)
 ```
@@ -370,6 +378,7 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 2.2: Replace Movement with Substrate
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 
 **Step 1: Find movement application**
@@ -384,6 +393,7 @@ new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
 **Step 2: Replace with substrate**
 
 Change to:
+
 ```python
 new_positions = self.substrate.apply_movement(self.positions, movement_deltas)
 ```
@@ -406,11 +416,13 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 2.3: Replace Distance Calculations
 
 **Files:**
+
 - Modify: `src/townlet/environment/vectorized_env.py`
 
 **Step 1: Find distance calculations**
 
 Research found 4 locations with:
+
 ```python
 distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
 ```
@@ -418,6 +430,7 @@ distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
 **Step 2: Replace all occurrences**
 
 In each location (lines ~274, ~462, ~541), replace with:
+
 ```python
 distances = self.substrate.compute_distance(self.positions, affordance_pos)
 ```
@@ -448,6 +461,7 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 2.4: Update ObservationBuilder
 
 **Files:**
+
 - Modify: `src/townlet/environment/observation_builder.py`
 
 **Step 1: Pass substrate to ObservationBuilder**
@@ -455,6 +469,7 @@ Part of TASK-000 (Spatial Substrates)."
 Modify `vectorized_env.py` around line where ObservationBuilder is created:
 
 Change:
+
 ```python
 self.observation_builder = ObservationBuilder(
     grid_size=grid_size,
@@ -463,6 +478,7 @@ self.observation_builder = ObservationBuilder(
 ```
 
 To:
+
 ```python
 self.observation_builder = ObservationBuilder(
     substrate=self.substrate,
@@ -470,7 +486,7 @@ self.observation_builder = ObservationBuilder(
 )
 ```
 
-**Step 2: Update ObservationBuilder.__init__**
+**Step 2: Update ObservationBuilder.**init****
 
 Modify: `src/townlet/environment/observation_builder.py`
 
@@ -488,6 +504,7 @@ def __init__(self, substrate, partial_observability, vision_range, ...):
 Around line where `observation_dim` is calculated:
 
 Change:
+
 ```python
 if partial_observability:
     # ... local window calc
@@ -496,6 +513,7 @@ else:
 ```
 
 To:
+
 ```python
 if partial_observability:
     # ... local window calc (unchanged for now)
@@ -523,6 +541,7 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 3.1: Add Simple YAML Loader
 
 **Files:**
+
 - Create: `src/townlet/substrate/loader.py`
 
 **Step 1: Create simple YAML loader**
@@ -603,6 +622,7 @@ Part of TASK-000 (Spatial Substrates)."
 ### Task 3.2: Create Example substrate.yaml
 
 **Files:**
+
 - Create: `configs/L1_full_observability/substrate.yaml`
 
 **Step 1: Create L1 substrate config**
@@ -687,6 +707,7 @@ Create status file showing what's done.
 ## Summary
 
 **Completed:**
+
 - ✅ Abstract SpatialSubstrate interface (7 methods)
 - ✅ Grid2DSubstrate (replicates current behavior exactly)
 - ✅ AspatialSubstrate (demonstrates concept)
@@ -698,9 +719,11 @@ Create status file showing what's done.
 **Known Limitations:**
 
 1. **RecurrentSpatialQNetwork (LSTM) not substrate-aware**: The position encoder in `networks.py` (line 367) is hardcoded to 2D:
+
    ```python
    self.position_encoder = nn.Linear(2, 32)  # HARDCODED 2D
    ```
+
    **Impact**: AspatialSubstrate only works with SimpleQNetwork. POMDP configs (L2, L3) require Grid2D substrate.
    **Fix**: Deferred to BRAIN_AS_CODE task (network architecture configuration).
 
@@ -713,6 +736,7 @@ Create status file showing what's done.
    **Fix**: Deferred to checkpoint migration work.
 
 **Deferred to Later Tasks:**
+
 - TASK-001: Full Pydantic schema validation
 - TASK-002: Action space compatibility
 - TASK-003: Universe compilation pipeline

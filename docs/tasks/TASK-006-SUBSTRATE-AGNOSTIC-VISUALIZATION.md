@@ -10,6 +10,7 @@
 ## Problem Statement
 
 Current HAMLET frontend assumes 2D square grid with hardcoded Vue components:
+
 - `GridVisualization.vue` renders 8×8 square grid only
 - Agent positions use `(x, y)` coordinates
 - Affordance icons placed at grid coordinates
@@ -91,6 +92,7 @@ const hexPoints = computed(() => {
 - Agent movement along hex edges
 
 **Files to create**:
+
 - `frontend/src/components/visualizations/HexTile.vue`
 - `frontend/src/components/visualizations/HexGrid.vue`
 - `frontend/src/utils/hexCoordinates.ts`
@@ -129,6 +131,7 @@ const hexPoints = computed(() => {
 - Agent appears on current floor only
 
 **Approach**: Simpler than full 3D rendering
+
 - No camera controls needed
 - No occlusion handling needed
 - Easy to implement (flat stacking)
@@ -136,6 +139,7 @@ const hexPoints = computed(() => {
 **Alternative** (optional, Phase 4): Full 3D WebGL rendering with Three.js
 
 **Files to modify**:
+
 - `frontend/src/components/visualizations/GridVisualization.vue` (add floor prop)
 - `frontend/src/components/FloorSelector.vue` (new)
 
@@ -213,6 +217,7 @@ export function renderGraph(
 - Show available movement edges
 
 **Files to create**:
+
 - `frontend/src/components/visualizations/GraphVisualization.vue`
 - `frontend/src/utils/graphRenderer.ts`
 
@@ -338,6 +343,7 @@ export class Scene3D {
 ### TASK-002A (Spatial Substrates) - REQUIRED
 
 Must be complete before starting this task:
+
 - Substrate types defined (2D, 3D, hex, graph, aspatial)
 - Substrate config loading (`substrate.yaml`)
 - Backend substrate implementation
@@ -345,12 +351,14 @@ Must be complete before starting this task:
 ### TASK-002B (Action Space) - REQUIRED
 
 Needed for rendering agent movement:
+
 - Action deltas (how agent moves)
 - Action availability (which actions valid where)
 
 ### TASK-003 (Compiler) - OPTIONAL
 
 Helpful but not blocking:
+
 - Compiled universe provides metadata for rendering
 
 ---
@@ -358,12 +366,14 @@ Helpful but not blocking:
 ## Success Criteria
 
 ### Phase 1: Hexagonal Grid
+
 - [ ] Hex tiles render correctly with axial coordinates
 - [ ] Affordances placed at hex centers
 - [ ] Agent moves along hex edges
 - [ ] Hover/click interactions work
 
 ### Phase 2: 3D Floor Projection
+
 - [ ] Floor selector UI works
 - [ ] Current floor renders as 2D grid
 - [ ] Agent appears on correct floor
@@ -371,6 +381,7 @@ Helpful but not blocking:
 - [ ] Can switch floors and see agent on different levels
 
 ### Phase 3: Graph Visualization
+
 - [ ] D3 force-directed graph renders
 - [ ] Nodes labeled with IDs
 - [ ] Edges show connections
@@ -378,6 +389,7 @@ Helpful but not blocking:
 - [ ] Affordances shown at nodes
 
 ### Phase 4: Full 3D WebGL (OPTIONAL)
+
 - [ ] Three.js scene renders 3D grid
 - [ ] Camera controls work (orbit, zoom, pan)
 - [ ] Agent renders as 3D object
@@ -390,17 +402,20 @@ Helpful but not blocking:
 ## Estimated Effort
 
 ### Minimum Viable (Hex + 3D Projection)
+
 - **Phase 1** (Hex): 8-12 hours
 - **Phase 2** (3D projection): 6-8 hours
 - **Total**: **14-20 hours**
 
 ### Complete (+ Graph)
+
 - **Phase 1** (Hex): 8-12 hours
 - **Phase 2** (3D projection): 6-8 hours
 - **Phase 3** (Graph): 10-14 hours
 - **Total**: **24-34 hours**
 
 ### Full (+ WebGL 3D)
+
 - **Phase 1** (Hex): 8-12 hours
 - **Phase 2** (3D projection): 6-8 hours
 - **Phase 3** (Graph): 10-14 hours
@@ -424,6 +439,7 @@ Helpful but not blocking:
 3D rendering can be slow on Chromebooks, budget laptops.
 
 **Mitigation**:
+
 - Keep Phase 2 as fallback (2D floor views)
 - Optimize Phase 4 (LOD, culling, instancing)
 - Provide "low performance mode" toggle
@@ -433,6 +449,7 @@ Helpful but not blocking:
 WebGL support varies across browsers, especially older ones.
 
 **Mitigation**:
+
 - Detect WebGL support, fallback to Phase 2 if unavailable
 - Test on Firefox, Chrome, Safari, Edge
 
@@ -441,6 +458,7 @@ WebGL support varies across browsers, especially older ones.
 Three.js/D3.js have breaking changes between major versions.
 
 **Mitigation**:
+
 - Pin dependency versions
 - Document which versions tested
 - Keep visualization separate from core logic (loose coupling)
@@ -452,12 +470,14 @@ Three.js/D3.js have breaking changes between major versions.
 ### Text Visualization is Sufficient (from research)
 
 **TASK-002A Phase 4 implements text-based visualization** (4-6 hours) that provides:
+
 - ✅ Debugging: See agent position, affordances, meters
 - ✅ Validation: Confirm substrate behavior correct
 - ✅ Experimentation: Test 3D, hex, graph substrates without GUI
 - ✅ Fast: No WebGL setup, works in any terminal
 
 **Example text output** (3D cubic, floor 1):
+
 ```
 Floor 1:
 . . . B . . . .
@@ -474,11 +494,13 @@ Floor 2:
 ### GUI is "Nice-to-Have"
 
 **GUI rendering is valuable for**:
+
 - Impressive demos/videos for stakeholders
 - Making substrate differences visually obvious
 - Student engagement (visual learners)
 
 **BUT NOT CRITICAL FOR**:
+
 - Learning RL concepts (students analyze metrics, not graphics)
 - Training agents (backend only)
 - Debugging substrate logic (text sufficient)
@@ -501,28 +523,34 @@ Floor 2:
 ## Relationship to Other Tasks
 
 **After TASK-002A** (Spatial Substrates):
+
 - Substrate types defined
 - Backend substrate implementation complete
 - Text visualization available
 
 **After TASK-002B** (Action Space):
+
 - Action definitions available
 - Agent movement logic defined
 
 **After TASK-003** (Compiler):
+
 - Compiled universe metadata available
 - Config loading stable
 
 **After TASK-005** (BRAIN_AS_CODE):
+
 - Network architecture configurable
 - Full UAC system complete
 
 **THEN TASK-006** (This task):
+
 - Add GUI rendering for visual appeal
 - Enhance student engagement
 - Enable impressive demos
 
 **Recommended sequence**:
+
 ```
 TASK-001 → TASK-002A → TASK-002B → TASK-003 → TASK-004A → TASK-004B → TASK-005 → TASK-006
                                                                                       ↑
@@ -562,6 +590,7 @@ export function renderSubstrate(substrate: SubstrateConfig) {
 ### Fallback Strategy
 
 Always provide text visualization as fallback:
+
 - If WebGL unsupported
 - If substrate type unknown
 - If rendering errors occur
