@@ -2,6 +2,13 @@
 
 **A pedagogical Deep Reinforcement Learning environment designed to "trick students into learning graduate-level RL by making them think they're just playing The Sims."**
 
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Tests](https://img.shields.io/badge/tests-644%2B%20passing-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-70%25-yellowgreen)](tests/)
+
 ## Overview
 
 Hamlet is a GPU-accelerated DRL training environment where agents learn to survive by managing 8 interconnected physiological and economic meters through strategic interaction with 14 affordances. Progressive complexity levels introduce partial observability (POMDP), temporal mechanics, and intrinsic motivation.

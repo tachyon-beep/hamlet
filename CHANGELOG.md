@@ -8,17 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Documentation structure overhaul with comprehensive docs/README.md
-- Observation space documentation in main README
-- Complete pyproject.toml metadata (keywords, classifiers, URLs)
-- LICENSE file (MIT)
-- CHANGELOG.md (this file)
+- **Repository Cleanup (Phase 1-3)**:
+  - LICENSE file (MIT) with proper copyright notice
+  - CHANGELOG.md (this file) following Keep a Changelog format
+  - CONTRIBUTING.md with comprehensive development guidelines
+  - CODE_OF_CONDUCT.md (Contributor Covenant v2.1)
+  - SECURITY.md with responsible disclosure policy
+  - GitHub issue templates (bug report, feature request)
+  - GitHub pull request template
+  - .python-version file (3.13) for version management
+  - frontend/.nvmrc file (Node 20) for consistent Node.js versions
+- **Documentation**:
+  - Documentation structure overhaul with comprehensive docs/README.md
+  - Observation space documentation in main README
+  - Complete pyproject.toml metadata (keywords, classifiers, URLs, pytest markers)
+  - All missing dependencies added to pyproject.toml
+
+### Changed
+- Replaced print() statements with proper logging in:
+  - src/townlet/demo/live_inference.py
+  - src/townlet/recording/__main__.py
+- Updated pyproject.toml with all top-level dependencies
 
 ### Fixed
-- README affordance count (14, not 15)
-- README test count (644+, not 387)
+- README affordance count (14, not 15) - CoffeeShop commented out
+- README test count (644+, not 387) with correct recording test count (73)
+- README entry point paths now correctly point to scripts/run_demo.py
 - Documentation paths now correctly point to docs/manual/ and docs/architecture/
-- Entry point path corrected to scripts/run_demo.py
+- .gitignore patterns:
+  - Changed __pycache__/ to **/__pycache__/ for recursive matching
+  - Consolidated database patterns (*.db, *.db-shm, *.db-wal, *.sqlite, *.sqlite3)
+  - Removed duplicate patterns
+- CI workflow now includes mypy type checking
 
 ## [0.1.0] - 2025-11-04
 

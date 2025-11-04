@@ -28,3 +28,6 @@ jobs:
 
       - name: Black (format check)
         run: uv run black --check src tests
+
+      - name: Mypy (type check)
+        run: uv run mypy src/townlet
