@@ -178,6 +178,80 @@ class TestEpisodeRecorder:
             assert item.time_of_day == 12
             assert item.interaction_progress == 0.33
 
+    def test_record_temporal_mechanics_from_environment(self, cpu_device):
+        """record_step should capture temporal state from VectorizedHamletEnv.
+
+        Integration test: Verify that temporal mechanics state (time_of_day,
+        interaction_progress) from a live environment gets correctly recorded.
+        """
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+        from townlet.recording.recorder import EpisodeRecorder
+
+        # Create environment with temporal mechanics enabled
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            device=cpu_device,
+            enable_temporal_mechanics=True,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = {"max_queue_size": 100}
+
+            recorder = EpisodeRecorder(
+                config=config,
+                output_dir=Path(tmpdir),
+                database=None,
+                curriculum=None,
+            )
+
+            # Stop writer thread to prevent it from consuming queue items
+            recorder.writer.stop()
+            recorder.writer_thread.join(timeout=1.0)
+
+            # Reset environment and set agent on Bed
+            env.reset()
+            assert "Bed" in env.affordances, "Bed affordance not deployed"
+            env.positions[0] = env.affordances["Bed"]
+            env.meters[0, 0] = 0.3  # Low energy
+
+            # Record 3 interaction steps
+            for i in range(3):
+                # Take INTERACT action
+                obs, reward, done, info = env.step(torch.tensor([4], device=cpu_device))
+
+                # Record step with temporal state
+                recorder.record_step(
+                    step=i,
+                    positions=env.positions[0],
+                    meters=env.meters[0],
+                    action=4,
+                    reward=reward[0].item(),
+                    intrinsic_reward=0.0,
+                    done=done[0].item(),
+                    time_of_day=env.time_of_day,
+                    interaction_progress=env.interaction_progress[0].item() / 10.0,  # Normalized
+                )
+
+            # Verify 3 steps recorded with temporal state
+            assert recorder.queue.qsize() == 3
+
+            # Check each recorded step
+            for i in range(3):
+                item = recorder.queue.get_nowait()
+
+                # Time advances with each step (24-tick cycle)
+                assert item.time_of_day is not None
+                assert 0 <= item.time_of_day < 24
+
+                # Interaction progress increases (Bed requires 5 ticks)
+                assert item.interaction_progress is not None
+                assert item.interaction_progress >= 0.0
+
+                # Progress should increase with each interaction
+                expected_progress = (i + 1) / 10.0  # Raw progress / 10.0
+                assert item.interaction_progress == expected_progress
+
     def test_finish_episode_adds_marker(self):
         """finish_episode should add EpisodeEndMarker to queue."""
         from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata
