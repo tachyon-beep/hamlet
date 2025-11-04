@@ -62,6 +62,10 @@ def export_episode_video(
     affordances = replay.get_affordances()
     total_steps = replay.get_total_steps()
 
+    if metadata is None:
+        logger.error("Failed to get episode metadata")
+        return False
+
     # Auto-detect grid size from affordance positions if not provided
     if grid_size is None:
         affordance_positions = affordances.get("positions", affordances)
@@ -83,6 +87,10 @@ def export_episode_video(
         for step_index in range(total_steps):
             replay.seek(step_index)
             step_data = replay.get_current_step()
+
+            if step_data is None:
+                logger.error(f"Failed to get step data at index {step_index}")
+                return False
 
             # Render frame
             frame = renderer.render_frame(step_data, metadata, affordances)
@@ -209,7 +217,7 @@ def batch_export_videos(
 
     # Query database for recordings
     db = DemoDatabase(database_path)
-    recordings = db.query_recordings(
+    recordings = db.list_recordings(
         stage=stage,
         reason=reason,
         min_reward=min_reward,

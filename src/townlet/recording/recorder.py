@@ -10,8 +10,8 @@ import threading
 from dataclasses import asdict
 from pathlib import Path
 
-import lz4.frame
-import msgpack
+import lz4.frame  # type: ignore[import-untyped]
+import msgpack  # type: ignore[import-untyped]
 import torch
 
 from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata, RecordedStep
@@ -119,7 +119,7 @@ class EpisodeRecorder:
 
         recorded_step = RecordedStep(
             step=step,
-            position=(positions[0].item(), positions[1].item()),
+            position=(int(positions[0].item()), int(positions[1].item())),
             meters=tuple(meters.tolist()),
             action=action,
             reward=reward,

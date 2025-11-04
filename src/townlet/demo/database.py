@@ -312,7 +312,7 @@ class DemoDatabase:
             List of recording metadata dicts, ordered by episode_id DESC
         """
         query = "SELECT * FROM episode_recordings WHERE 1=1"
-        params = []
+        params: list[int | str | float] = []
 
         if stage is not None:
             query += " AND curriculum_stage = ?"
