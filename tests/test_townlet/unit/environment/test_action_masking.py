@@ -245,7 +245,6 @@ class TestInteractMasking:
 
         # Test in center (not on affordance)
         basic_env.positions[0] = torch.tensor([4, 4], device=basic_env.device)
-        masks_center = basic_env.get_action_masks()
 
         # Test on Bed (on affordance)
         bed_pos = basic_env.affordances["Bed"]
@@ -557,7 +556,7 @@ class TestActionMaskingIntegration:
 
         # But movement should work if not at boundary
         # Job is at (6, 6) in default config - check if movements are available
-        job_x, job_y = job_pos[0].item(), job_pos[1].item()
+        _job_x, job_y = job_pos[0].item(), job_pos[1].item()
         if job_y > 0:
             assert masks[0, 0], "UP should be available if not at boundary"
         if job_y < 7:
@@ -581,7 +580,7 @@ class TestActionMaskingIntegration:
         assert masks[0, 5], "WAIT should be available"
 
         # Movement depends on boundary (check position)
-        bed_x, bed_y = bed_pos[0].item(), bed_pos[1].item()
+        _bed_x, bed_y = bed_pos[0].item(), bed_pos[1].item()
         if bed_y > 0:
             assert masks[0, 0], "UP should be available if not at top boundary"
 

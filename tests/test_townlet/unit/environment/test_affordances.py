@@ -730,8 +730,8 @@ class TestAffordanceBatching:
 
         # Store initial states
         initial_energy = multi_agent_env.meters[:, 0].clone()
-        initial_hygiene = multi_agent_env.meters[:, 1].clone()
-        initial_satiation = multi_agent_env.meters[:, 2].clone()
+        _initial_hygiene = multi_agent_env.meters[:, 1].clone()
+        _initial_satiation = multi_agent_env.meters[:, 2].clone()
 
         # Only agent 0 interacts
         actions = torch.tensor([4, 0, 1, 2], device=multi_agent_env.device)  # 0=INTERACT, others=MOVE

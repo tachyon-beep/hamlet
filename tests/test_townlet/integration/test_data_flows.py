@@ -132,9 +132,9 @@ class TestObservationPipeline:
         # Extract components from observation
         local_grid = obs[0, :25]  # First 25 dims = 5×5 local window
         position = obs[0, 25:27]  # Next 2 dims = normalized position
-        meters = obs[0, 27:35]  # Next 8 dims = meters
+        _meters = obs[0, 27:35]  # Next 8 dims = meters (not asserted)
         affordance = obs[0, 35:50]  # Next 15 dims = affordance encoding
-        temporal = obs[0, 50:54]  # Last 4 dims = temporal features
+        _temporal = obs[0, 50:54]  # Last 4 dims = temporal features (not asserted)
 
         # Verify local grid is in valid range [0, 1]
         assert (local_grid >= 0).all() and (local_grid <= 1).all(), "Local grid values should be in [0, 1]"
@@ -648,6 +648,6 @@ class TestActionPipeline:
         assert final_obs.shape == initial_obs.shape, "Observation shape should remain consistent"
 
         # Observations should differ (state changed)
-        obs_changed = not torch.allclose(initial_obs, final_obs, atol=1e-6)
-        # Note: Observations might be same if agent didn't move and meters didn't change significantly
-        # But over 10 random movement steps, at least energy should deplete
+        # Note: Not asserting obs_changed because observations might be same if agent didn't move
+        # and meters didn't change significantly. Over 10 random movement steps, at least
+        # energy should deplete, but not guaranteed with random actions.

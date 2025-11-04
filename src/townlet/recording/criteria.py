@@ -212,7 +212,7 @@ class RecordingCriteria:
             return True, f"stage_{stage}_first_{stage_count}"
 
         # Check last N episodes (using curriculum transition prediction)
-        last_n = self.stage_boundaries_config.get("last_n", 10)
+        # Note: last_n config available but not currently used - relying on transition prediction
         stage_info = self.curriculum.get_stage_info(agent_idx=0)
         if stage_info.get("likely_transition_soon", False):
             return True, f"stage_{stage}_pre_transition"

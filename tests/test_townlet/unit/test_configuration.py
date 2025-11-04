@@ -955,7 +955,7 @@ class TestEpsilonConfiguration:
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
-        runner = DemoRunner(
+        _runner = DemoRunner(
             config_dir=config_dir,
             db_path=tmp_path / "test.db",
             checkpoint_dir=tmp_path / "checkpoints",
