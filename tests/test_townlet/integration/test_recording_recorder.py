@@ -75,7 +75,7 @@ class TestEpisodeRecorder:
             assert item.position == (3, 5)
             assert item.action == 4
 
-    def test_record_step_clones_tensors(self):
+    def test_record_step_clones_tensors(self, cpu_device):
         """record_step should clone tensors to prevent training loop blocking."""
         from townlet.recording.recorder import EpisodeRecorder
 
@@ -89,10 +89,9 @@ class TestEpisodeRecorder:
                 curriculum=None,
             )
 
-            # Create tensors on GPU if available
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            positions = torch.tensor([3, 5], device=device)
-            meters = torch.tensor([1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85], device=device)
+            # Create tensors on CPU device for determinism
+            positions = torch.tensor([3, 5], device=cpu_device)
+            meters = torch.tensor([1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85], device=cpu_device)
 
             # Original tensor reference
             original_positions_ptr = positions.data_ptr()
