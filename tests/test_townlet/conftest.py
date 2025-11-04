@@ -551,6 +551,31 @@ def task001_env_4meter(cpu_device: torch.device, task001_config_4meter: Path) ->
 
 
 @pytest.fixture
+def task001_env_4meter_pomdp(cpu_device: torch.device, task001_config_4meter: Path) -> VectorizedHamletEnv:
+    """4-meter POMDP environment for TASK-001 recurrent network testing.
+
+    Args:
+        cpu_device: CPU device for deterministic behavior
+        task001_config_4meter: Path to 4-meter config pack
+
+    Returns:
+        VectorizedHamletEnv instance with 4 meters and partial observability
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=True,  # POMDP mode for recurrent networks
+        vision_range=2,  # 5×5 local window
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        config_pack_path=task001_config_4meter,
+        device=cpu_device,
+    )
+
+
+@pytest.fixture
 def task001_env_12meter(cpu_device: torch.device, task001_config_12meter: Path) -> VectorizedHamletEnv:
     """12-meter environment for TASK-001 testing.
 

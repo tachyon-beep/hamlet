@@ -110,7 +110,7 @@ class VectorizedPopulation(PopulationManager):
             self.q_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
-                num_meters=8,
+                num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
             ).to(device)
@@ -123,7 +123,7 @@ class VectorizedPopulation(PopulationManager):
             self.target_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
-                num_meters=8,
+                num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
             ).to(device)

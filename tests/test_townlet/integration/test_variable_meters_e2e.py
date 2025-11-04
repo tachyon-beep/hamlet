@@ -212,8 +212,8 @@ class TestVariableMetersEndToEnd:
         # Get initial values
         initial_meters = env.meters.clone()
 
-        # Take a few steps (WAIT action = 4, lowest energy cost)
-        actions = torch.tensor([4], device=cpu_device)  # WAIT
+        # Take a few steps (WAIT action = 5, lowest energy cost)
+        actions = torch.tensor([5], device=cpu_device)  # WAIT (action 5)
         for _ in range(5):
             obs, rewards, dones, info = env.step(actions)
 
@@ -294,3 +294,63 @@ class TestVariableMetersEndToEnd:
         # All meters should stay in valid range
         assert torch.all(env.meters >= 0.0), "Meters should not go below 0"
         assert torch.all(env.meters <= 1.0), "Meters should not exceed 1"
+
+    def test_recurrent_network_with_4meters(self, cpu_device, task001_env_4meter_pomdp):
+        """Test that recurrent networks work with 4-meter POMDP config.
+
+        This test verifies that RecurrentSpatialQNetwork is initialized with
+        dynamic num_meters instead of hardcoded 8. In a 4-meter config, the
+        network expects num_meters features in the observation but receives
+        a different count if hardcoded.
+        """
+        from townlet.curriculum.adversarial import AdversarialCurriculum
+        from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+        from townlet.population.vectorized import VectorizedPopulation
+
+        curriculum = AdversarialCurriculum(max_steps_per_episode=50)
+        curriculum.initialize_population(1)
+
+        exploration = EpsilonGreedyExploration(
+            epsilon=1.0,
+            epsilon_min=0.1,
+            epsilon_decay=0.99,
+        )
+
+        # Create population with recurrent network on 4-meter POMDP env
+        # This should work without shape mismatches
+        population = VectorizedPopulation(
+            env=task001_env_4meter_pomdp,
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=task001_env_4meter_pomdp.observation_dim,
+            action_dim=5,
+            network_type="recurrent",  # Use recurrent network
+            replay_buffer_capacity=100,
+            batch_size=32,
+        )
+
+        # Verify environment setup
+        assert task001_env_4meter_pomdp.meters.shape[1] == 4, "Should have 4 meters"
+
+        # Verify network was created successfully
+        assert population.q_network is not None, "Q-network should be created"
+        assert population.is_recurrent, "Should be using recurrent network"
+
+        # Reset environment
+        obs = task001_env_4meter_pomdp.reset()
+        assert obs.shape[1] == task001_env_4meter_pomdp.observation_dim, "Observation should match obs_dim"
+
+        # Verify network's num_meters parameter matches environment
+        assert population.q_network.num_meters == 4, f"Network should have num_meters=4, got {population.q_network.num_meters}"
+        assert population.target_network.num_meters == 4, f"Target network should have num_meters=4, got {population.target_network.num_meters}"
+
+        # Verify network can process observations correctly
+        # This tests that the network's num_meters matches the environment's meter count
+        with torch.no_grad():
+            q_values, hidden = population.q_network(obs)  # Recurrent networks return (q_values, hidden_state)
+            assert q_values.shape == (1, 5), f"Q-values should be [1, 5], got {q_values.shape}"
+
+        # Note: We don't test environment steps here because AffordanceEngine has hardcoded meter indices
+        # (separate bug to be fixed later - not part of recurrent network fix)
