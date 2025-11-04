@@ -6,13 +6,15 @@ Uses matplotlib for high-quality visualization suitable for YouTube.
 """
 
 import logging
-import numpy as np
+
 import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend
-import matplotlib.pyplot as plt
+import numpy as np
+
+matplotlib.use("Agg")  # Non-interactive backend
 import matplotlib.patches as patches
-from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 
 logger = logging.getLogger(__name__)
 
@@ -64,16 +66,16 @@ class EpisodeVideoRenderer:
 
         # Set style
         if style == "dark":
-            plt.style.use('dark_background')
-            self.bg_color = '#1a1a2e'
-            self.grid_color = '#16213e'
-            self.text_color = '#eee'
-            self.agent_color = '#00d9ff'
+            plt.style.use("dark_background")
+            self.bg_color = "#1a1a2e"
+            self.grid_color = "#16213e"
+            self.text_color = "#eee"
+            self.agent_color = "#00d9ff"
         else:
-            self.bg_color = '#ffffff'
-            self.grid_color = '#f0f0f0'
-            self.text_color = '#333'
-            self.agent_color = '#0066cc'
+            self.bg_color = "#ffffff"
+            self.grid_color = "#f0f0f0"
+            self.text_color = "#333"
+            self.agent_color = "#0066cc"
 
     def render_frame(
         self,
@@ -134,14 +136,16 @@ class EpisodeVideoRenderer:
         """Render grid with agent and affordances."""
         ax.set_xlim(-0.5, self.grid_size - 0.5)
         ax.set_ylim(-0.5, self.grid_size - 0.5)
-        ax.set_aspect('equal')
+        ax.set_aspect("equal")
         ax.invert_yaxis()  # Y increases downward
 
         # Grid background
         for x in range(self.grid_size):
             for y in range(self.grid_size):
                 rect = patches.Rectangle(
-                    (x - 0.5, y - 0.5), 1, 1,
+                    (x - 0.5, y - 0.5),
+                    1,
+                    1,
                     linewidth=1,
                     edgecolor=self.grid_color,
                     facecolor=self.grid_color,
@@ -163,7 +167,9 @@ class EpisodeVideoRenderer:
             color = AFFORDANCE_COLORS.get(name, "#95a5a6")
 
             rect = patches.Rectangle(
-                (x - 0.4, y - 0.4), 0.8, 0.8,
+                (x - 0.4, y - 0.4),
+                0.8,
+                0.8,
                 linewidth=2,
                 edgecolor=color,
                 facecolor=color,
@@ -172,37 +178,34 @@ class EpisodeVideoRenderer:
             ax.add_patch(rect)
 
             # Affordance label
-            ax.text(x, y, name[:3], ha='center', va='center',
-                    fontsize=8, color='white', weight='bold')
+            ax.text(x, y, name[:3], ha="center", va="center", fontsize=8, color="white", weight="bold")
 
         # Draw agent
         agent_pos = step_data["position"]
         agent_x, agent_y = agent_pos[0], agent_pos[1]
 
         circle = patches.Circle(
-            (agent_x, agent_y), 0.35,
+            (agent_x, agent_y),
+            0.35,
             color=self.agent_color,
             linewidth=2,
-            edgecolor='white',
+            edgecolor="white",
             zorder=10,
         )
         ax.add_patch(circle)
 
         # Agent label
-        ax.text(agent_x, agent_y, "A", ha='center', va='center',
-                fontsize=12, color='white', weight='bold', zorder=11)
+        ax.text(agent_x, agent_y, "A", ha="center", va="center", fontsize=12, color="white", weight="bold", zorder=11)
 
         # Action arrow
         action = step_data["action"]
         if action < 4:  # Movement actions
             dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
-            ax.arrow(agent_x, agent_y, dx * 0.3, dy * 0.3,
-                     head_width=0.2, head_length=0.15,
-                     fc='yellow', ec='yellow', alpha=0.8, zorder=9)
+            ax.arrow(agent_x, agent_y, dx * 0.3, dy * 0.3, head_width=0.2, head_length=0.15, fc="yellow", ec="yellow", alpha=0.8, zorder=9)
 
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_title("Grid View", color=self.text_color, fontsize=14, weight='bold')
+        ax.set_title("Grid View", color=self.text_color, fontsize=14, weight="bold")
 
     def _render_meters(self, ax, step_data: dict):
         """Render meter bars."""
@@ -214,7 +217,7 @@ class EpisodeVideoRenderer:
         ax.set_yticks(range(len(meters)))
         ax.set_yticklabels([name.capitalize() for name in meter_names])
         ax.set_xticks([0, 0.5, 1.0])
-        ax.set_xticklabels(['0', '50', '100'])
+        ax.set_xticklabels(["0", "50", "100"])
 
         # Draw bars
         for i, (name, value) in enumerate(zip(meter_names, meters)):
@@ -227,28 +230,27 @@ class EpisodeVideoRenderer:
             ax.barh(i, value, height=0.8, left=0, color=color, alpha=0.9)
 
             # Value text
-            ax.text(value + 0.02, i, f"{value * 100:.0f}%",
-                    va='center', fontsize=9, color=self.text_color)
+            ax.text(value + 0.02, i, f"{value * 100:.0f}%", va="center", fontsize=9, color=self.text_color)
 
         ax.invert_yaxis()
-        ax.set_title("Agent Meters", color=self.text_color, fontsize=12, weight='bold')
+        ax.set_title("Agent Meters", color=self.text_color, fontsize=12, weight="bold")
         ax.tick_params(colors=self.text_color)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color(self.text_color)
-        ax.spines['left'].set_color(self.text_color)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_color(self.text_color)
+        ax.spines["left"].set_color(self.text_color)
 
     def _render_info(self, ax, step_data: dict, metadata: dict):
         """Render episode info panel."""
-        ax.axis('off')
+        ax.axis("off")
 
         info_lines = [
             f"Episode: {metadata['episode_id']}",
             f"Stage: {metadata['curriculum_stage']}",
-            f"",
+            "",
             f"Step: {step_data['step']}",
             f"Survival: {metadata['survival_steps']}",
-            f"",
+            "",
             f"Action: {ACTION_NAMES[step_data['action']]}",
             f"Reward: {step_data['reward']:.2f}",
             f"Total: {metadata['total_reward']:.1f}",
@@ -258,7 +260,7 @@ class EpisodeVideoRenderer:
         if step_data.get("time_of_day") is not None:
             hour = step_data["time_of_day"]
             time_str = f"{hour:02d}:00"
-            info_lines.append(f"")
+            info_lines.append("")
             info_lines.append(f"Time: {time_str}")
 
         if step_data.get("interaction_progress") is not None:
@@ -268,53 +270,70 @@ class EpisodeVideoRenderer:
         # Render text
         y_pos = 0.95
         for line in info_lines:
-            ax.text(0.1, y_pos, line,
-                    transform=ax.transAxes,
-                    fontsize=10,
-                    color=self.text_color,
-                    verticalalignment='top',
-                    weight='bold' if line.startswith(('Episode', 'Stage', 'Step')) else 'normal')
+            ax.text(
+                0.1,
+                y_pos,
+                line,
+                transform=ax.transAxes,
+                fontsize=10,
+                color=self.text_color,
+                verticalalignment="top",
+                weight="bold" if line.startswith(("Episode", "Stage", "Step")) else "normal",
+            )
             y_pos -= 0.08
 
-        ax.set_title("Episode Info", color=self.text_color, fontsize=12, weight='bold', loc='left')
+        ax.set_title("Episode Info", color=self.text_color, fontsize=12, weight="bold", loc="left")
 
     def _render_qvalues(self, ax, step_data: dict):
         """Render Q-values bar chart."""
         q_values = step_data.get("q_values")
 
         if q_values is None or len(q_values) == 0:
-            ax.axis('off')
-            ax.text(0.5, 0.5, "Q-values not recorded",
-                    ha='center', va='center',
-                    transform=ax.transAxes,
-                    fontsize=10, color=self.text_color, alpha=0.5)
+            ax.axis("off")
+            ax.text(
+                0.5,
+                0.5,
+                "Q-values not recorded",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=10,
+                color=self.text_color,
+                alpha=0.5,
+            )
             return
 
         # Action names (handle both 5 and 6 action cases)
         all_action_names = ["Up", "Down", "Left", "Right", "Interact", "Wait"]
-        action_names = all_action_names[:len(q_values)]
+        action_names = all_action_names[: len(q_values)]
         action = step_data["action"]
 
         # Color bars
-        colors = ['#95a5a6'] * len(q_values)
-        colors[action] = '#2ecc71'  # Highlight chosen action
+        colors = ["#95a5a6"] * len(q_values)
+        colors[action] = "#2ecc71"  # Highlight chosen action
 
         # Draw bars
-        bars = ax.bar(action_names, q_values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        bars = ax.bar(action_names, q_values, color=colors, alpha=0.8, edgecolor="white", linewidth=1.5)
 
         # Value labels on bars
         for bar, val in zip(bars, q_values):
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2, height,
-                    f'{val:.2f}',
-                    ha='center', va='bottom',
-                    fontsize=9, color=self.text_color, weight='bold')
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                height,
+                f"{val:.2f}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                color=self.text_color,
+                weight="bold",
+            )
 
-        ax.set_ylabel('Q-Value', color=self.text_color, fontsize=10)
-        ax.set_title("Action Q-Values (Green = Chosen)", color=self.text_color, fontsize=12, weight='bold')
+        ax.set_ylabel("Q-Value", color=self.text_color, fontsize=10)
+        ax.set_title("Action Q-Values (Green = Chosen)", color=self.text_color, fontsize=12, weight="bold")
         ax.tick_params(colors=self.text_color)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color(self.text_color)
-        ax.spines['left'].set_color(self.text_color)
-        ax.grid(axis='y', alpha=0.3, color=self.text_color)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_color(self.text_color)
+        ax.spines["left"].set_color(self.text_color)
+        ax.grid(axis="y", alpha=0.3, color=self.text_color)

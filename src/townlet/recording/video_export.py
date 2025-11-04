@@ -10,8 +10,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import numpy as np
-
 from townlet.demo.database import DemoDatabase
 from townlet.recording.replay import ReplayManager
 from townlet.recording.video_renderer import EpisodeVideoRenderer
@@ -73,9 +71,7 @@ def export_episode_video(
         grid_size = max_coord + 1  # Grid is 0-indexed
         logger.info(f"Auto-detected grid size: {grid_size}×{grid_size}")
 
-    logger.info(
-        f"Rendering {total_steps} frames at {dpi} DPI (stage {metadata['curriculum_stage']})..."
-    )
+    logger.info(f"Rendering {total_steps} frames at {dpi} DPI (stage {metadata['curriculum_stage']})...")
 
     renderer = EpisodeVideoRenderer(grid_size=grid_size, dpi=dpi, style=style)
 
@@ -105,9 +101,7 @@ def export_episode_video(
 
         # Encode with ffmpeg
         logger.info(f"Encoding to MP4 at {fps} FPS...")
-        success = _encode_video_ffmpeg(
-            tmpdir_path, output_path, fps=fps, speed=speed
-        )
+        success = _encode_video_ffmpeg(tmpdir_path, output_path, fps=fps, speed=speed)
 
         if success:
             file_size_mb = output_path.stat().st_size / (1024 * 1024)
@@ -118,9 +112,7 @@ def export_episode_video(
             return False
 
 
-def _encode_video_ffmpeg(
-    frames_dir: Path, output_path: Path, fps: int = 30, speed: float = 1.0
-) -> bool:
+def _encode_video_ffmpeg(frames_dir: Path, output_path: Path, fps: int = 30, speed: float = 1.0) -> bool:
     """Encode frames to MP4 using ffmpeg.
 
     Args:
@@ -170,9 +162,7 @@ def _encode_video_ffmpeg(
     ]
 
     try:
-        result = subprocess.run(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True
-        )
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"ffmpeg encoding failed: {e.stderr}")

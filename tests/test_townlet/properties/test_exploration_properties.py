@@ -92,7 +92,9 @@ class TestEpsilonDecayProperties:
             exploration2.decay_epsilon()
 
         # PROPERTY: Both should have identical epsilon
-        assert abs(exploration1.epsilon - exploration2.epsilon) < 1e-10, f"Epsilons differ: {exploration1.epsilon} vs {exploration2.epsilon}"
+        assert (
+            abs(exploration1.epsilon - exploration2.epsilon) < 1e-10
+        ), f"Epsilons differ: {exploration1.epsilon} vs {exploration2.epsilon}"
 
     @given(
         epsilon_min=st.floats(min_value=0.001, max_value=0.1),

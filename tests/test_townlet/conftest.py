@@ -13,25 +13,25 @@ Usage:
 
 import shutil
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import pytest
 import torch
 import yaml
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
-from townlet.population.vectorized import VectorizedPopulation
+from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.curriculum.static import StaticCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.replay_buffer import ReplayBuffer
-
 
 # =============================================================================
 # CONFIGURATION FIXTURES
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def mock_config_path() -> Path:
@@ -79,19 +79,20 @@ def temp_config_pack(tmp_path: Path, test_config_pack_path: Path) -> Path:
 
 
 @pytest.fixture
-def mock_config(mock_config_path: Path) -> Dict[str, Any]:
+def mock_config(mock_config_path: Path) -> dict[str, Any]:
     """Load mock configuration as a dictionary.
 
     Returns:
         Dict containing frozen mock configuration
     """
-    with open(mock_config_path, 'r') as f:
+    with open(mock_config_path) as f:
         return yaml.safe_load(f)
 
 
 # =============================================================================
 # DEVICE FIXTURES
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def device() -> torch.device:
@@ -116,6 +117,7 @@ def cpu_device() -> torch.device:
 # =============================================================================
 # ENVIRONMENT FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def basic_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
@@ -233,6 +235,7 @@ def multi_agent_env(test_config_pack_path: Path, device: torch.device) -> Vector
 # NETWORK FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def simple_qnetwork(basic_env: VectorizedHamletEnv, device: torch.device) -> SimpleQNetwork:
     """Create a SimpleQNetwork for full observability.
@@ -271,6 +274,7 @@ def recurrent_qnetwork(pomdp_env: VectorizedHamletEnv, device: torch.device) -> 
 # =============================================================================
 # TRAINING COMPONENT FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def replay_buffer(device: torch.device) -> ReplayBuffer:
@@ -345,10 +349,7 @@ def epsilon_greedy_exploration(device: torch.device) -> EpsilonGreedyExploration
 
 
 @pytest.fixture
-def adaptive_intrinsic_exploration(
-    basic_env: VectorizedHamletEnv,
-    device: torch.device
-) -> AdaptiveIntrinsicExploration:
+def adaptive_intrinsic_exploration(basic_env: VectorizedHamletEnv, device: torch.device) -> AdaptiveIntrinsicExploration:
     """Create an adaptive intrinsic exploration strategy with RND.
 
     Configuration:
@@ -376,7 +377,7 @@ def vectorized_population(
     basic_env: VectorizedHamletEnv,
     adversarial_curriculum: AdversarialCurriculum,
     epsilon_greedy_exploration: EpsilonGreedyExploration,
-    device: torch.device
+    device: torch.device,
 ) -> VectorizedPopulation:
     """Create a vectorized population for training.
 
@@ -407,6 +408,7 @@ def vectorized_population(
 # UTILITY FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def sample_observations(basic_env: VectorizedHamletEnv, device: torch.device) -> torch.Tensor:
     """Generate sample observations from basic environment.
@@ -436,20 +438,13 @@ def sample_actions(device: torch.device) -> torch.Tensor:
 # PYTEST CONFIGURATION
 # =============================================================================
 
+
 def pytest_configure(config):
     """Configure pytest with custom markers."""
-    config.addinivalue_line(
-        "markers", "slow: mark test as slow (run with --runslow)"
-    )
-    config.addinivalue_line(
-        "markers", "gpu: mark test as requiring GPU (skipped if no CUDA)"
-    )
-    config.addinivalue_line(
-        "markers", "integration: mark test as integration test"
-    )
-    config.addinivalue_line(
-        "markers", "e2e: mark test as end-to-end test"
-    )
+    config.addinivalue_line("markers", "slow: mark test as slow (run with --runslow)")
+    config.addinivalue_line("markers", "gpu: mark test as requiring GPU (skipped if no CUDA)")
+    config.addinivalue_line("markers", "integration: mark test as integration test")
+    config.addinivalue_line("markers", "e2e: mark test as end-to-end test")
 
 
 def pytest_collection_modifyitems(config, items):

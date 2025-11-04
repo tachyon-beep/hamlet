@@ -11,14 +11,12 @@ Test Organization:
 - TestAdaptiveAnnealing: Variance-based annealing during training (3 tests)
 """
 
-import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.population.vectorized import VectorizedPopulation
 from townlet.curriculum.static import StaticCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
-
+from townlet.population.vectorized import VectorizedPopulation
 
 # =============================================================================
 # TEST CLASS 1: RND Intrinsic Rewards
@@ -160,8 +158,8 @@ class TestRNDIntrinsicRewards:
         agent_state = population.step_population(env)
 
         # Verify reward structure
-        assert hasattr(agent_state, 'rewards'), "Agent state should have combined rewards"
-        assert hasattr(agent_state, 'intrinsic_rewards'), "Agent state should have intrinsic rewards"
+        assert hasattr(agent_state, "rewards"), "Agent state should have combined rewards"
+        assert hasattr(agent_state, "intrinsic_rewards"), "Agent state should have intrinsic rewards"
 
         # Verify shapes
         assert agent_state.rewards.shape == (1,), "Combined rewards should be [num_agents]"
@@ -252,19 +250,15 @@ class TestRNDIntrinsicRewards:
             batch = population.replay_buffer.sample(5)
 
             # Verify batch contains 'rewards' key (combined rewards)
-            assert 'rewards' in batch, "Replay buffer should store 'rewards' key"
+            assert "rewards" in batch, "Replay buffer should store 'rewards' key"
 
             # Verify rewards are combined (not separate)
-            assert 'intrinsic_rewards' not in batch, (
-                "Replay buffer should NOT store separate intrinsic rewards"
-            )
-            assert 'rewards_extrinsic' not in batch, (
-                "Replay buffer should NOT store separate extrinsic rewards"
-            )
+            assert "intrinsic_rewards" not in batch, "Replay buffer should NOT store separate intrinsic rewards"
+            assert "rewards_extrinsic" not in batch, "Replay buffer should NOT store separate extrinsic rewards"
 
             # Verify rewards are tensors
-            assert isinstance(batch['rewards'], torch.Tensor), "Rewards should be tensors"
-            assert batch['rewards'].shape[0] == 5, "Batch should have 5 samples"
+            assert isinstance(batch["rewards"], torch.Tensor), "Rewards should be tensors"
+            assert batch["rewards"].shape[0] == 5, "Batch should have 5 samples"
 
 
 # =============================================================================
@@ -279,9 +273,7 @@ class TestAdaptiveAnnealing:
     performance (low variance + high survival).
     """
 
-    def test_intrinsic_weight_decreases_after_consistent_performance(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_intrinsic_weight_decreases_after_consistent_performance(self, cpu_device, test_config_pack_path):
         """Verify intrinsic weight decreases when agent performs consistently well.
 
         This test validates the critical contract:
@@ -331,25 +323,18 @@ class TestAdaptiveAnnealing:
         # Verify weight decreased
         final_weight = exploration.get_intrinsic_weight()
         assert final_weight < initial_weight, (
-            f"Weight should decrease after consistent performance: "
-            f"initial={initial_weight}, final={final_weight}"
+            f"Weight should decrease after consistent performance: " f"initial={initial_weight}, final={final_weight}"
         )
 
         # Verify weight followed exponential decay
         # After annealing: weight should be around 0.9 (one decay step)
         # Note: may anneal multiple times if conditions met repeatedly
-        assert final_weight <= 0.9, (
-            f"Weight should have decayed to at most 0.9, got {final_weight}"
-        )
+        assert final_weight <= 0.9, f"Weight should have decayed to at most 0.9, got {final_weight}"
 
         # Verify weight respects minimum floor
-        assert final_weight >= 0.1, (
-            f"Weight should not go below minimum (0.1), got {final_weight}"
-        )
+        assert final_weight >= 0.1, f"Weight should not go below minimum (0.1), got {final_weight}"
 
-    def test_annealing_requires_survival_above_50_steps(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_annealing_requires_survival_above_50_steps(self, cpu_device, test_config_pack_path):
         """Verify annealing requires mean survival > 50 steps (prevents premature annealing).
 
         This test validates the critical fix for the "consistent failure" bug:
@@ -391,10 +376,7 @@ class TestAdaptiveAnnealing:
 
         # Verify weight did NOT decrease (annealing should not trigger)
         weight = exploration.get_intrinsic_weight()
-        assert abs(weight - 1.0) < 1e-6, (
-            f"Weight should NOT decrease for consistent failure: "
-            f"expected 1.0, got {weight}"
-        )
+        assert abs(weight - 1.0) < 1e-6, f"Weight should NOT decrease for consistent failure: " f"expected 1.0, got {weight}"
 
         # Now simulate consistent SUCCESS (low variance, high survival)
         for i in range(20):
@@ -403,10 +385,7 @@ class TestAdaptiveAnnealing:
 
         # Verify weight DID decrease (annealing should trigger)
         weight_after = exploration.get_intrinsic_weight()
-        assert weight_after < 1.0, (
-            f"Weight should decrease for consistent success: "
-            f"expected < 1.0, got {weight_after}"
-        )
+        assert weight_after < 1.0, f"Weight should decrease for consistent success: " f"expected < 1.0, got {weight_after}"
 
     def test_annealing_requires_low_variance(self, cpu_device, test_config_pack_path):
         """Verify annealing requires variance < threshold (prevents annealing during exploration).
@@ -452,8 +431,7 @@ class TestAdaptiveAnnealing:
         # Verify weight did NOT decrease (high variance prevents annealing)
         weight_high_variance = exploration.get_intrinsic_weight()
         assert abs(weight_high_variance - 1.0) < 1e-6, (
-            f"Weight should NOT decrease with high variance: "
-            f"expected 1.0, got {weight_high_variance}"
+            f"Weight should NOT decrease with high variance: " f"expected 1.0, got {weight_high_variance}"
         )
 
         # Now simulate LOW variance (agent converged)
@@ -465,6 +443,5 @@ class TestAdaptiveAnnealing:
         # Verify weight DID decrease (low variance + high survival triggers annealing)
         weight_low_variance = exploration.get_intrinsic_weight()
         assert weight_low_variance < 1.0, (
-            f"Weight should decrease with low variance + high survival: "
-            f"expected < 1.0, got {weight_low_variance}"
+            f"Weight should decrease with low variance + high survival: " f"expected < 1.0, got {weight_low_variance}"
         )

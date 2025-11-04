@@ -10,17 +10,12 @@ Task 13b: Multi-Episode Training Loop Integration Tests
 Focus: Test training loop over multiple episodes with real components
 """
 
-import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.population.vectorized import VectorizedPopulation
 from townlet.curriculum.static import StaticCurriculum
-from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
-from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
-from townlet.training.state import BatchedAgentState
-
+from townlet.population.vectorized import VectorizedPopulation
 
 # =============================================================================
 # TEST CLASS 1: Masked Loss Integration
@@ -116,11 +111,9 @@ class TestMaskedLossIntegration:
         # Verify training metrics are finite (masked loss should prevent NaN/Inf)
         # Only check if training actually occurred (buffer had enough episodes)
         if population.last_loss is not None:
-            assert torch.isfinite(torch.tensor(population.last_loss)), \
-                f"Loss should be finite, got {population.last_loss}"
+            assert torch.isfinite(torch.tensor(population.last_loss)), f"Loss should be finite, got {population.last_loss}"
         if population.last_td_error is not None:
-            assert torch.isfinite(torch.tensor(population.last_td_error)), \
-                f"TD error should be finite, got {population.last_td_error}"
+            assert torch.isfinite(torch.tensor(population.last_td_error)), f"TD error should be finite, got {population.last_td_error}"
 
     def test_action_masking_enforced_in_q_values(self, cpu_device, test_config_pack_path):
         """Verify action masking enforced in Q-values during action selection.
@@ -432,9 +425,10 @@ class TestMultiEpisodeTraining:
 
         # Verify approximate exponential decay (epsilon_10 ≈ 1.0 * 0.9^10 = 0.349)
         # After 20 episodes: epsilon ≈ 1.0 * 0.9^20 = 0.122 (clamped to 0.1)
-        expected_epsilon_10 = 1.0 * (0.9 ** 10)
-        assert abs(epsilon_history[10] - expected_epsilon_10) < 0.05, \
-            f"Epsilon at episode 10 should be ~{expected_epsilon_10}, got {epsilon_history[10]}"
+        expected_epsilon_10 = 1.0 * (0.9**10)
+        assert (
+            abs(epsilon_history[10] - expected_epsilon_10) < 0.05
+        ), f"Epsilon at episode 10 should be ~{expected_epsilon_10}, got {epsilon_history[10]}"
 
     def test_replay_buffer_accumulation_during_training(self, cpu_device, test_config_pack_path):
         """Verify replay buffer accumulates transitions during training.
@@ -501,8 +495,9 @@ class TestMultiEpisodeTraining:
 
         # Verify buffer size increased (or stayed at capacity)
         for i in range(1, len(buffer_sizes)):
-            assert buffer_sizes[i] >= buffer_sizes[i-1] or buffer_sizes[i] == 500, \
-                f"Buffer size should increase or stay at capacity: {buffer_sizes}"
+            assert (
+                buffer_sizes[i] >= buffer_sizes[i - 1] or buffer_sizes[i] == 500
+            ), f"Buffer size should increase or stay at capacity: {buffer_sizes}"
 
     def test_target_network_updates_at_frequency(self, cpu_device, test_config_pack_path):
         """Verify target network updated at specified frequency.
@@ -576,8 +571,7 @@ class TestMultiEpisodeTraining:
 
         # If enough training steps occurred, target network should have updated
         if population.training_step_counter >= 10:
-            assert target_weights_changed, \
-                f"Target network should update after {population.training_step_counter} training steps"
+            assert target_weights_changed, f"Target network should update after {population.training_step_counter} training steps"
 
     def test_q_values_improve_over_time(self, cpu_device, test_config_pack_path):
         """Verify Q-values become more certain over time (reduced variance).
@@ -656,8 +650,7 @@ class TestMultiEpisodeTraining:
         # Verify Q-values changed (learning occurred)
         # Note: We can't assert exact improvement due to randomness,
         # but Q-values should be different after training
-        assert abs(final_mean - initial_mean) > 0.01 or abs(final_std - initial_std) > 0.01, \
-            "Q-values should change after training"
+        assert abs(final_mean - initial_mean) > 0.01 or abs(final_std - initial_std) > 0.01, "Q-values should change after training"
 
         # Verify training metrics were updated
         assert population.last_q_values_mean is not None, "Should have Q-value metrics"

@@ -7,8 +7,9 @@ Handles loading, decompressing, and streaming recorded episodes.
 import logging
 from pathlib import Path
 from typing import Any
-import msgpack
+
 import lz4.frame
+import msgpack
 
 logger = logging.getLogger(__name__)
 

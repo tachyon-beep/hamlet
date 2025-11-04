@@ -28,7 +28,6 @@ from townlet.curriculum.adversarial import AdversarialCurriculum, PerformanceTra
 from townlet.curriculum.static import StaticCurriculum
 from townlet.training.state import BatchedAgentState
 
-
 # =============================================================================
 # STATIC CURRICULUM TESTS
 # =============================================================================

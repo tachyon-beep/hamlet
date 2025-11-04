@@ -15,15 +15,13 @@ Note: Full interaction flows are tested in test_affordances.py through
 the environment integration layer.
 """
 
-import pytest
 import torch
-from pathlib import Path
 
+from townlet.environment.affordance_config import load_affordance_config
 from townlet.environment.affordance_engine import (
     AffordanceEngine,
     create_affordance_engine,
 )
-from townlet.environment.affordance_config import load_affordance_config
 
 
 class TestAffordanceQueries:
@@ -31,9 +29,7 @@ class TestAffordanceQueries:
 
     def test_get_affordance_by_id(self, cpu_device, test_config_pack_path):
         """Get affordance by ID should return correct config."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Get Bed by ID (ID is "0" in config)
@@ -43,9 +39,7 @@ class TestAffordanceQueries:
 
     def test_get_affordance_invalid_id_returns_none(self, cpu_device, test_config_pack_path):
         """Get affordance with invalid ID should return None."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Invalid ID
@@ -54,9 +48,7 @@ class TestAffordanceQueries:
 
     def test_get_num_affordances(self, cpu_device, test_config_pack_path):
         """Get number of affordances should return correct count."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Test config has 14 affordances
@@ -64,9 +56,7 @@ class TestAffordanceQueries:
 
     def test_get_affordance_action_map(self, cpu_device, test_config_pack_path):
         """Get affordance action map should return name-to-index mapping."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         action_map = engine.get_affordance_action_map()
@@ -89,25 +79,17 @@ class TestAffordanceQueries:
 class TestOperatingHours:
     """Test operating hours and availability checks."""
 
-    def test_is_affordance_open_invalid_name_returns_false(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_is_affordance_open_invalid_name_returns_false(self, cpu_device, test_config_pack_path):
         """Check if invalid affordance name returns False."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Invalid affordance name
         assert not engine.is_affordance_open("InvalidAffordance", time_of_day=12)
 
-    def test_is_affordance_open_wraparound_hours(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_is_affordance_open_wraparound_hours(self, cpu_device, test_config_pack_path):
         """Check midnight wraparound hours (Bar: 18-28 = 6pm-4am)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Bar: [18, 28] (6pm to 4am, wraps midnight)
@@ -120,9 +102,7 @@ class TestOperatingHours:
 
     def test_is_affordance_open_normal_hours(self, cpu_device, test_config_pack_path):
         """Check normal operating hours (Job: 8-18 = 8am-6pm)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Job: [8, 18] (8am to 6pm, no wraparound)
@@ -139,9 +119,7 @@ class TestAffordabilityChecking:
 
     def test_check_affordability_single_cost(self, cpu_device, test_config_pack_path):
         """Check affordability with single cost (money)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=4, device=cpu_device)
 
         # Create meter tensors (4 agents)
@@ -158,9 +136,7 @@ class TestAffordabilityChecking:
 
     def test_check_affordability_multiple_costs(self, cpu_device, test_config_pack_path):
         """Check affordability with no costs (always affordable)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=4, device=cpu_device)
 
         # Create meter tensors
@@ -176,13 +152,9 @@ class TestAffordabilityChecking:
         expected = torch.tensor([True, True, True, True], device=cpu_device)
         assert torch.equal(can_afford, expected)
 
-    def test_check_affordability_all_agents_can_afford(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_check_affordability_all_agents_can_afford(self, cpu_device, test_config_pack_path):
         """All agents can afford should return all True."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=4, device=cpu_device)
 
         # All agents have plenty of money
@@ -195,13 +167,9 @@ class TestAffordabilityChecking:
         # All should be able to afford
         assert torch.all(can_afford)
 
-    def test_check_affordability_mixed_affordability(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_check_affordability_mixed_affordability(self, cpu_device, test_config_pack_path):
         """Mixed affordability should return correct mask."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=4, device=cpu_device)
 
         # Varied money levels
@@ -222,9 +190,7 @@ class TestCostQueries:
 
     def test_get_affordance_cost_instant_mode(self, cpu_device, test_config_pack_path):
         """Get instant mode cost should return correct value."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Shower instant cost: $0.03
@@ -237,22 +203,16 @@ class TestCostQueries:
 
     def test_get_affordance_cost_per_tick_mode(self, cpu_device, test_config_pack_path):
         """Get per-tick mode cost should return correct value."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Bed per-tick cost: $0.01 per tick
         cost = engine.get_affordance_cost("Bed", cost_mode="per_tick")
         assert abs(cost - 0.01) < 1e-6
 
-    def test_get_affordance_cost_invalid_affordance(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_get_affordance_cost_invalid_affordance(self, cpu_device, test_config_pack_path):
         """Get cost for invalid affordance should return 0.0."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         cost = engine.get_affordance_cost("InvalidAffordance", cost_mode="instant")
@@ -260,9 +220,7 @@ class TestCostQueries:
 
     def test_get_required_ticks_instant(self, cpu_device, test_config_pack_path):
         """Get required ticks for dual-mode affordances returns actual tick count."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Shower is dual-mode, requires 3 ticks
@@ -275,9 +233,7 @@ class TestCostQueries:
 
     def test_get_required_ticks_multi_tick(self, cpu_device, test_config_pack_path):
         """Get required ticks for multi-tick affordance should return correct value."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Bed requires 5 ticks
@@ -288,13 +244,9 @@ class TestCostQueries:
         ticks = engine.get_required_ticks("Job")
         assert ticks == 4
 
-    def test_get_required_ticks_invalid_affordance(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_get_required_ticks_invalid_affordance(self, cpu_device, test_config_pack_path):
         """Get required ticks for invalid affordance should return 1."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         ticks = engine.get_required_ticks("InvalidAffordance")
@@ -306,17 +258,13 @@ class TestActionMasking:
 
     def test_get_action_masks_all_enabled(self, cpu_device, test_config_pack_path):
         """Action masks with all checks enabled."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agent with money at noon
         meters = torch.ones((2, 8), dtype=torch.float32, device=cpu_device)
 
-        masks = engine.get_action_masks(
-            meters, time_of_day=12, check_affordability=True, check_hours=True
-        )
+        masks = engine.get_action_masks(meters, time_of_day=12, check_affordability=True, check_hours=True)
 
         # Should return [batch_size, num_actions]
         # num_actions = 4 (movement) + 15 (affordances, including "none") = 19
@@ -335,17 +283,13 @@ class TestActionMasking:
 
     def test_get_action_masks_check_hours_only(self, cpu_device, test_config_pack_path):
         """Action masks with only hours check (no affordability)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agents with NO money
         meters = torch.zeros((2, 8), dtype=torch.float32, device=cpu_device)
 
-        masks = engine.get_action_masks(
-            meters, time_of_day=12, check_affordability=False, check_hours=True
-        )
+        masks = engine.get_action_masks(meters, time_of_day=12, check_affordability=False, check_hours=True)
 
         # Job should be open at noon (ignoring affordability)
         job_idx = 4 + engine.affordance_name_to_idx["Job"]
@@ -355,13 +299,9 @@ class TestActionMasking:
         bar_idx = 4 + engine.affordance_name_to_idx["Bar"]
         assert not torch.any(masks[:, bar_idx])
 
-    def test_get_action_masks_check_affordability_only(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_get_action_masks_check_affordability_only(self, cpu_device, test_config_pack_path):
         """Action masks with only affordability check (no hours)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agent 0: has money, Agent 1: no money
@@ -369,9 +309,7 @@ class TestActionMasking:
         meters[0, 3] = 0.50  # Agent 0 has $50
         meters[1, 3] = 0.00  # Agent 1 has $0
 
-        masks = engine.get_action_masks(
-            meters, time_of_day=2, check_affordability=True, check_hours=False
-        )
+        masks = engine.get_action_masks(meters, time_of_day=2, check_affordability=True, check_hours=False)
 
         # Shower costs $0.03
         shower_idx = 4 + engine.affordance_name_to_idx["Shower"]
@@ -387,33 +325,25 @@ class TestActionMasking:
 
     def test_get_action_masks_both_disabled(self, cpu_device, test_config_pack_path):
         """Action masks with both checks disabled (all available)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agents with NO money at closed time
         meters = torch.zeros((2, 8), dtype=torch.float32, device=cpu_device)
 
-        masks = engine.get_action_masks(
-            meters, time_of_day=5, check_affordability=False, check_hours=False
-        )
+        masks = engine.get_action_masks(meters, time_of_day=5, check_affordability=False, check_hours=False)
 
         # All actions should be available
         assert torch.all(masks)
 
     def test_get_action_masks_closed_affordance(self, cpu_device, test_config_pack_path):
         """Closed affordance should be masked."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         meters = torch.ones((2, 8), dtype=torch.float32, device=cpu_device)
 
-        masks = engine.get_action_masks(
-            meters, time_of_day=5, check_affordability=True, check_hours=True
-        )
+        masks = engine.get_action_masks(meters, time_of_day=5, check_affordability=True, check_hours=True)
 
         # Job is closed at 5am (8am-6pm)
         job_idx = 4 + engine.affordance_name_to_idx["Job"]
@@ -423,13 +353,9 @@ class TestActionMasking:
         bar_idx = 4 + engine.affordance_name_to_idx["Bar"]
         assert not torch.any(masks[:, bar_idx])
 
-    def test_get_action_masks_unaffordable_instant(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_get_action_masks_unaffordable_instant(self, cpu_device, test_config_pack_path):
         """Unaffordable instant affordance should be masked."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agent with insufficient money
@@ -437,9 +363,7 @@ class TestActionMasking:
         meters[0, 3] = 0.02  # $0.02 < $0.03 (Shower cost)
         meters[1, 3] = 0.50  # $0.50 > $0.03
 
-        masks = engine.get_action_masks(
-            meters, time_of_day=12, check_affordability=True, check_hours=False
-        )
+        masks = engine.get_action_masks(meters, time_of_day=12, check_affordability=True, check_hours=False)
 
         # Shower costs $0.03
         shower_idx = 4 + engine.affordance_name_to_idx["Shower"]
@@ -450,13 +374,9 @@ class TestActionMasking:
         # Agent 1 can afford
         assert masks[1, shower_idx]
 
-    def test_get_action_masks_unaffordable_per_tick(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_get_action_masks_unaffordable_per_tick(self, cpu_device, test_config_pack_path):
         """Unaffordable per-tick affordance should be masked."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agent with insufficient money for per-tick cost
@@ -464,9 +384,7 @@ class TestActionMasking:
         meters[0, 3] = 0.005  # $0.005 < $0.01 (Bed per-tick cost)
         meters[1, 3] = 0.50  # $0.50 > $0.01
 
-        masks = engine.get_action_masks(
-            meters, time_of_day=12, check_affordability=True, check_hours=False
-        )
+        masks = engine.get_action_masks(meters, time_of_day=12, check_affordability=True, check_hours=False)
 
         # Bed costs $0.01 per tick
         bed_idx = 4 + engine.affordance_name_to_idx["Bed"]
@@ -481,13 +399,9 @@ class TestActionMasking:
 class TestInteractionTypeValidation:
     """Test type validation for instant vs multi-tick."""
 
-    def test_apply_instant_raises_on_multi_tick_only(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_apply_instant_raises_on_multi_tick_only(self, cpu_device, test_config_pack_path):
         """Applying instant to multi_tick-only affordance should raise ValueError."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         # Bed is multi_tick only in temporal mode
@@ -508,18 +422,12 @@ class TestInteractionTypeValidation:
         agent_mask = torch.tensor([True], device=cpu_device)
 
         # Test that instant-only affordance works with apply_instant
-        result = engine.apply_instant_interaction(
-            meters, "Shower", agent_mask, check_affordability=False
-        )
+        result = engine.apply_instant_interaction(meters, "Shower", agent_mask, check_affordability=False)
         assert result.shape == meters.shape
 
-    def test_apply_multi_tick_raises_on_instant_only(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_apply_multi_tick_raises_on_instant_only(self, cpu_device, test_config_pack_path):
         """Applying multi_tick to instant-only affordance would raise ValueError (if any existed)."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         meters = torch.ones((1, 8), dtype=torch.float32, device=cpu_device)
@@ -528,16 +436,12 @@ class TestInteractionTypeValidation:
         # Note: All test affordances are dual-type, so this test verifies
         # that dual-type affordances work with multi_tick (no error)
         # In a config with instant-only affordances, ValueError would be raised
-        result = engine.apply_multi_tick_interaction(
-            meters, "Shower", current_tick=0, agent_mask=agent_mask
-        )
+        result = engine.apply_multi_tick_interaction(meters, "Shower", current_tick=0, agent_mask=agent_mask)
         assert result.shape == meters.shape
 
     def test_dual_type_works_with_both(self, cpu_device, test_config_pack_path):
         """Dual-type affordances should work with both instant and multi_tick."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         meters = torch.ones((1, 8), dtype=torch.float32, device=cpu_device)
@@ -545,15 +449,11 @@ class TestInteractionTypeValidation:
 
         # Bed is dual-type
         # Should work with instant
-        result_instant = engine.apply_instant_interaction(
-            meters, "Bed", agent_mask, check_affordability=False
-        )
+        result_instant = engine.apply_instant_interaction(meters, "Bed", agent_mask, check_affordability=False)
         assert result_instant.shape == meters.shape
 
         # Should also work with multi_tick
-        result_multi = engine.apply_multi_tick_interaction(
-            meters, "Bed", current_tick=0, agent_mask=agent_mask
-        )
+        result_multi = engine.apply_multi_tick_interaction(meters, "Bed", current_tick=0, agent_mask=agent_mask)
         assert result_multi.shape == meters.shape
 
 
@@ -574,9 +474,7 @@ class TestFactoryFunction:
         assert engine.device == cpu_device
         assert engine.get_num_affordances() > 0
 
-    def test_create_affordance_engine_custom_config(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_create_affordance_engine_custom_config(self, cpu_device, test_config_pack_path):
         """Create engine with custom config path."""
         config_path = test_config_pack_path / "affordances.yaml"
 
@@ -595,31 +493,21 @@ class TestFactoryFunction:
 class TestAdditionalEdgeCases:
     """Test additional edge cases for higher coverage."""
 
-    def test_apply_instant_with_invalid_affordance_returns_unchanged(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_apply_instant_with_invalid_affordance_returns_unchanged(self, cpu_device, test_config_pack_path):
         """Applying instant interaction to invalid affordance returns meters unchanged."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         meters = torch.ones((1, 8), dtype=torch.float32, device=cpu_device)
         agent_mask = torch.tensor([True], device=cpu_device)
 
         # Invalid affordance should return meters unchanged
-        result = engine.apply_instant_interaction(
-            meters, "InvalidAffordance", agent_mask, check_affordability=False
-        )
+        result = engine.apply_instant_interaction(meters, "InvalidAffordance", agent_mask, check_affordability=False)
         assert torch.equal(result, meters)
 
-    def test_apply_instant_with_affordability_check(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_apply_instant_with_affordability_check(self, cpu_device, test_config_pack_path):
         """Applying instant interaction with affordability check should mask unaffordable agents."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agent 0: can afford, Agent 1: cannot afford
@@ -631,39 +519,27 @@ class TestAdditionalEdgeCases:
         agent_mask = torch.tensor([True, True], device=cpu_device)
 
         # Apply Shower with affordability check
-        result = engine.apply_instant_interaction(
-            meters, "Shower", agent_mask, check_affordability=True
-        )
+        result = engine.apply_instant_interaction(meters, "Shower", agent_mask, check_affordability=True)
 
         # Agent 0 should have hygiene increase, Agent 1 should not
         assert result[0, 1] > meters[0, 1]
         assert result[1, 1] == meters[1, 1]
 
-    def test_apply_multi_tick_with_invalid_affordance_returns_unchanged(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_apply_multi_tick_with_invalid_affordance_returns_unchanged(self, cpu_device, test_config_pack_path):
         """Applying multi-tick interaction to invalid affordance returns meters unchanged."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         meters = torch.ones((1, 8), dtype=torch.float32, device=cpu_device)
         agent_mask = torch.tensor([True], device=cpu_device)
 
         # Invalid affordance should return meters unchanged
-        result = engine.apply_multi_tick_interaction(
-            meters, "InvalidAffordance", current_tick=0, agent_mask=agent_mask
-        )
+        result = engine.apply_multi_tick_interaction(meters, "InvalidAffordance", current_tick=0, agent_mask=agent_mask)
         assert torch.equal(result, meters)
 
-    def test_apply_multi_tick_with_affordability_check(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_apply_multi_tick_with_affordability_check(self, cpu_device, test_config_pack_path):
         """Applying multi-tick interaction with affordability check should mask unaffordable agents."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=2, device=cpu_device)
 
         # Agent 0: can afford, Agent 1: cannot afford per-tick cost
@@ -675,21 +551,15 @@ class TestAdditionalEdgeCases:
         agent_mask = torch.tensor([True, True], device=cpu_device)
 
         # Apply Bed multi-tick with affordability check
-        result = engine.apply_multi_tick_interaction(
-            meters, "Bed", current_tick=0, agent_mask=agent_mask, check_affordability=True
-        )
+        result = engine.apply_multi_tick_interaction(meters, "Bed", current_tick=0, agent_mask=agent_mask, check_affordability=True)
 
         # Agent 0 should have changes, Agent 1 should not (blocked by affordability)
         assert not torch.equal(result[0], meters[0])
         assert torch.equal(result[1], meters[1])
 
-    def test_apply_multi_tick_completion_bonus(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_apply_multi_tick_completion_bonus(self, cpu_device, test_config_pack_path):
         """Test completion bonus is applied on final tick."""
-        affordance_config = load_affordance_config(
-            test_config_pack_path / "affordances.yaml"
-        )
+        affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml")
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device)
 
         meters = torch.zeros((1, 8), dtype=torch.float32, device=cpu_device)
@@ -701,16 +571,12 @@ class TestAdditionalEdgeCases:
         # Apply first 4 ticks (Bed requires 5)
         initial_energy = meters[0, 0].item()
         for tick in range(4):
-            meters = engine.apply_multi_tick_interaction(
-                meters, "Bed", current_tick=tick, agent_mask=agent_mask
-            )
+            meters = engine.apply_multi_tick_interaction(meters, "Bed", current_tick=tick, agent_mask=agent_mask)
 
         energy_after_4_ticks = meters[0, 0].item()
 
         # Apply final tick (should include completion bonus)
-        meters = engine.apply_multi_tick_interaction(
-            meters, "Bed", current_tick=4, agent_mask=agent_mask
-        )
+        meters = engine.apply_multi_tick_interaction(meters, "Bed", current_tick=4, agent_mask=agent_mask)
 
         final_energy = meters[0, 0].item()
 

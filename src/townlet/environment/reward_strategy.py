@@ -79,9 +79,7 @@ class RewardStrategy:
             )
 
         if meters.shape != (self.num_agents, 8):
-            raise ValueError(
-                f"RewardStrategy expected meters shaped [{self.num_agents}, 8], got {meters.shape}"
-            )
+            raise ValueError(f"RewardStrategy expected meters shaped [{self.num_agents}, 8], got {meters.shape}")
 
         # Extract health and energy (already normalized to [0, 1] in environment)
         energy = meters[:, 0].clamp(min=0.0, max=1.0)  # Clamp to [0, 1]
@@ -91,7 +89,7 @@ class RewardStrategy:
         # (baseline_steps parameter retained for API compatibility but unused)
         rewards = torch.where(
             dones,
-            0.0,              # Dead: no reward
+            0.0,  # Dead: no reward
             health * energy,  # Alive: modulated by internal state
         )
 

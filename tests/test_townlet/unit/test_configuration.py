@@ -28,7 +28,8 @@ import torch
 import yaml
 from pydantic import ValidationError
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.demo.runner import DemoRunner
 from townlet.environment.affordance_config import (
     AffordanceConfig,
     AffordanceConfigCollection,
@@ -44,15 +45,13 @@ from townlet.environment.cascade_config import (
     EnvironmentConfig,
     load_bars_config,
     load_cascades_config,
-    load_environment_config,
     load_default_config,
+    load_environment_config,
 )
-from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
+from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
-from townlet.curriculum.adversarial import AdversarialCurriculum
-from townlet.demo.runner import DemoRunner
-
 
 # =============================================================================
 # CONFIG PACK LOADING TESTS
@@ -224,9 +223,7 @@ class TestBarsConfig:
 
         for bar in config.bars:
             expected = expected_depletions[bar.name]
-            assert bar.base_depletion == expected, (
-                f"{bar.name}: expected base_depletion={expected}, got {bar.base_depletion}"
-            )
+            assert bar.base_depletion == expected, f"{bar.name}: expected base_depletion={expected}, got {bar.base_depletion}"
 
     def test_bars_config_validates_terminal_conditions(self, test_config_pack_path: Path):
         """Test that terminal conditions are correct."""
@@ -374,9 +371,7 @@ class TestCascadesConfig:
 
         for name, expected_strength in expected_strengths.items():
             cascade = cascades_by_name[name]
-            assert cascade.strength == expected_strength, (
-                f"{name}: expected strength={expected_strength}, got {cascade.strength}"
-            )
+            assert cascade.strength == expected_strength, f"{name}: expected strength={expected_strength}, got {cascade.strength}"
 
     def test_cascades_config_validates_thresholds(self, test_config_pack_path: Path):
         """Test that all cascades use 30% threshold."""
@@ -384,9 +379,7 @@ class TestCascadesConfig:
         config = load_cascades_config(cascades_path)
 
         for cascade in config.cascades:
-            assert cascade.threshold == 0.3, (
-                f"{cascade.name}: expected threshold=0.3, got {cascade.threshold}"
-            )
+            assert cascade.threshold == 0.3, f"{cascade.name}: expected threshold=0.3, got {cascade.threshold}"
 
     def test_cascades_config_validates_execution_order(self, test_config_pack_path: Path):
         """Test that execution order is defined correctly."""
@@ -743,9 +736,7 @@ class TestAffordanceCategories:
         collection = load_affordance_config(config_path)
 
         dual = [aff for aff in collection.affordances if aff.interaction_type == "dual"]
-        assert len(dual) == len(collection.affordances), (
-            "All affordances should be dual-mode in production config"
-        )
+        assert len(dual) == len(collection.affordances), "All affordances should be dual-mode in production config"
 
     def test_free_affordances(self, test_config_pack_path: Path):
         """Test identification of free (no-cost) affordances."""
@@ -887,7 +878,7 @@ class TestEpsilonConfiguration:
                 "initial_intrinsic_weight": 1.0,
                 "variance_threshold": 100.0,
                 "survival_window": 100,
-            }
+            },
         }
 
         exploration = AdaptiveIntrinsicExploration(
@@ -943,7 +934,7 @@ class TestEpsilonConfiguration:
                 "epsilon_start": 0.9,
                 "epsilon_decay": 0.97,
                 "epsilon_min": 0.03,
-            }
+            },
         }
 
         training_yaml = config_dir / "training.yaml"
@@ -988,9 +979,7 @@ class TestTrainingHyperparameters:
     are configurable for VectorizedPopulation.
     """
 
-    def test_population_uses_train_frequency_from_config(
-        self, test_config_pack_path: Path, cpu_device: torch.device
-    ):
+    def test_population_uses_train_frequency_from_config(self, test_config_pack_path: Path, cpu_device: torch.device):
         """VectorizedPopulation should accept train_frequency and other hyperparameters."""
         env = VectorizedHamletEnv(
             num_agents=1,
@@ -1083,7 +1072,7 @@ class TestTrainingHyperparameters:
                 "batch_size": 128,
                 "sequence_length": 4,
                 "max_grad_norm": 15.0,
-            }
+            },
         }
 
         training_yaml = config_dir / "training.yaml"
@@ -1151,7 +1140,7 @@ class TestMaxEpisodesConfiguration:
             "training": {
                 "device": "cpu",
                 "max_episodes": 500,  # Config says 500
-            }
+            },
         }
 
         training_yaml = config_dir / "training.yaml"
@@ -1205,7 +1194,7 @@ class TestMaxEpisodesConfiguration:
             "training": {
                 "device": "cpu",
                 "max_episodes": 500,  # Config says 500
-            }
+            },
         }
 
         training_yaml = config_dir / "training.yaml"
@@ -1259,7 +1248,7 @@ class TestMaxEpisodesConfiguration:
             "training": {
                 "device": "cpu",
                 # No max_episodes specified
-            }
+            },
         }
 
         training_yaml = config_dir / "training.yaml"
@@ -1287,6 +1276,7 @@ class TestMaxEpisodesConfiguration:
             pytest.skip("Test config not found")
 
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
 

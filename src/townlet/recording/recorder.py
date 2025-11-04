@@ -4,16 +4,17 @@ Episode recorder implementation.
 Provides non-blocking recording of episode data via async queue + background writer thread.
 """
 
+import logging
 import queue
 import threading
-import logging
-from pathlib import Path
-import torch
-import msgpack
-import lz4.frame
 from dataclasses import asdict
+from pathlib import Path
 
-from townlet.recording.data_structures import RecordedStep, EpisodeMetadata, EpisodeEndMarker
+import lz4.frame
+import msgpack
+import torch
+
+from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata, RecordedStep
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class EpisodeRecorder:
         # Convert tensors to Python types (cheap, avoids GPU blocking)
         # Handle q_values: could be tensor or list (if already converted by population)
         if q_values is not None:
-            if hasattr(q_values, 'tolist'):
+            if hasattr(q_values, "tolist"):
                 q_values_tuple = tuple(q_values.tolist())
             else:
                 q_values_tuple = tuple(q_values)
@@ -109,7 +110,7 @@ class EpisodeRecorder:
 
         # Handle action_masks: convert tensor to tuple of bools
         if action_masks is not None:
-            if hasattr(action_masks, 'tolist'):
+            if hasattr(action_masks, "tolist"):
                 action_masks_tuple = tuple(action_masks.tolist())
             else:
                 action_masks_tuple = tuple(action_masks)

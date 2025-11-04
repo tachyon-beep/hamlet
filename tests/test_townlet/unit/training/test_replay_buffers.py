@@ -17,7 +17,6 @@ import torch
 from townlet.training.replay_buffer import ReplayBuffer
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
 
-
 # =============================================================================
 # STANDARD REPLAY BUFFER (Feed-forward DQN)
 # =============================================================================
@@ -904,10 +903,7 @@ class TestPostTerminalMasking:
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
-            "dones": torch.tensor(
-                [False, False, False, True, False, False, False, False, False, False],
-                device=cpu_device
-            ),
+            "dones": torch.tensor([False, False, False, True, False, False, False, False, False, False], device=cpu_device),
         }
         buffer.store_episode(episode)
 

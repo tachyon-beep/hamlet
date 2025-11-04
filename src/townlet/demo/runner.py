@@ -476,7 +476,9 @@ class DemoRunner:
                             step=step,
                             positions=self.env.positions[0],  # Agent 0 position
                             meters=self.env.meters[0],  # Agent 0 meters
-                            action=agent_state.actions[0].item() if hasattr(agent_state.actions[0], "item") else int(agent_state.actions[0]),
+                            action=(
+                                agent_state.actions[0].item() if hasattr(agent_state.actions[0], "item") else int(agent_state.actions[0])
+                            ),
                             reward=float(extrinsic_only[0].item()),
                             intrinsic_reward=float(agent_state.intrinsic_rewards[0].item()),
                             done=bool(agent_state.dones[0].item()),
@@ -540,14 +542,8 @@ class DemoRunner:
                 # NEW: Insert affordance transitions for agent 0
                 if affordance_transitions[0]:
                     # Convert nested defaultdict to regular dict for database insertion
-                    transitions_dict = {
-                        from_aff: dict(to_affs)
-                        for from_aff, to_affs in affordance_transitions[0].items()
-                    }
-                    self.db.insert_affordance_visits(
-                        episode_id=self.current_episode,
-                        transitions=transitions_dict
-                    )
+                    transitions_dict = {from_aff: dict(to_affs) for from_aff, to_affs in affordance_transitions[0].items()}
+                    self.db.insert_affordance_visits(episode_id=self.current_episode, transitions=transitions_dict)
 
                 # Finish episode recording if enabled
                 if self.recorder is not None:
@@ -661,18 +657,26 @@ class DemoRunner:
                         final_meter_values = {name: final_meters[0][i].item() for i, name in enumerate(meter_names)}
 
                     # Get affordance usage for agent 0
-                    affordance_summary = ", ".join(f"{name}: {count}" for name, count in affordance_visits[0].items()) if affordance_visits[0] else "None"
+                    affordance_summary = (
+                        ", ".join(f"{name}: {count}" for name, count in affordance_visits[0].items()) if affordance_visits[0] else "None"
+                    )
 
                     logger.info("=" * 80)
                     logger.info(f"📊 SUMMARY - Episode {self.current_episode}/{self.max_episodes}")
                     logger.info("-" * 80)
                     logger.info(f"Performance:    Survival: {int(step_counts_cpu[0].item())} steps | Stage: {stage_overview}")
-                    logger.info(f"Rewards:        Total: {total_reward:.2f} | Extrinsic: {extrinsic_reward:.2f} | Intrinsic: {weighted_intrinsic:.2f}")
+                    logger.info(
+                        f"Rewards:        Total: {total_reward:.2f} | Extrinsic: {extrinsic_reward:.2f} | Intrinsic: {weighted_intrinsic:.2f}"
+                    )
                     logger.info(f"Exploration:    ε: {epsilon_value:.3f} | Intrinsic Weight: {intrinsic_weight_value:.3f}")
                     if training_metrics["training_step"] > 0:
-                        logger.info(f"Training:       Steps: {training_metrics['training_step']} | Loss: {training_metrics['loss']:.4f} | TD Error: {training_metrics['td_error']:.4f}")
+                        logger.info(
+                            f"Training:       Steps: {training_metrics['training_step']} | Loss: {training_metrics['loss']:.4f} | TD Error: {training_metrics['td_error']:.4f}"
+                        )
                     if final_meter_values:
-                        logger.info(f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | Health: {final_meter_values.get('health', 0):.2f} | Money: ${final_meter_values.get('money', 0)*100:.1f}")
+                        logger.info(
+                            f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | Health: {final_meter_values.get('health', 0):.2f} | Money: ${final_meter_values.get('money', 0)*100:.1f}"
+                        )
                     logger.info(f"Affordances:    {affordance_summary}")
                     logger.info("=" * 80)
 

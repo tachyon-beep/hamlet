@@ -7,15 +7,13 @@ Task 13a: Episode Execution Integration Tests
 Focus: Test complete episode execution with real components
 """
 
-import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.population.vectorized import VectorizedPopulation
 from townlet.curriculum.static import StaticCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.state import BatchedAgentState
-
 
 # =============================================================================
 # TEST CLASS: Episode Lifecycle
@@ -192,8 +190,7 @@ class TestEpisodeLifecycle:
 
         # Verify hidden state evolved during episode
         h_final, c_final = recurrent_network.get_hidden_state()
-        assert not torch.allclose(initial_h, h_final, atol=1e-6), \
-            "Hidden state should change during episode (memory accumulation)"
+        assert not torch.allclose(initial_h, h_final, atol=1e-6), "Hidden state should change during episode (memory accumulation)"
 
         # Episode should complete
         assert step_count > 0, "Episode should run at least 1 step"
@@ -484,28 +481,23 @@ class TestEpisodeLifecycle:
             agent_state = population.step_population(env)
 
             # Validate observation
-            assert agent_state.observations.shape == (1, env.observation_dim), \
-                f"Step {step}: Observation shape should be (1, {env.observation_dim})"
-            assert torch.isfinite(agent_state.observations).all(), \
-                f"Step {step}: Observation should not contain NaN/Inf"
+            assert agent_state.observations.shape == (
+                1,
+                env.observation_dim,
+            ), f"Step {step}: Observation shape should be (1, {env.observation_dim})"
+            assert torch.isfinite(agent_state.observations).all(), f"Step {step}: Observation should not contain NaN/Inf"
 
             # Validate action
-            assert agent_state.actions.shape == (1,), \
-                f"Step {step}: Action shape should be (1,)"
-            assert 0 <= agent_state.actions[0] < 6, \
-                f"Step {step}: Action should be in range [0, 6)"
+            assert agent_state.actions.shape == (1,), f"Step {step}: Action shape should be (1,)"
+            assert 0 <= agent_state.actions[0] < 6, f"Step {step}: Action should be in range [0, 6)"
 
             # Validate reward
-            assert agent_state.rewards.shape == (1,), \
-                f"Step {step}: Reward shape should be (1,)"
-            assert torch.isfinite(agent_state.rewards).all(), \
-                f"Step {step}: Reward should not contain NaN/Inf"
+            assert agent_state.rewards.shape == (1,), f"Step {step}: Reward shape should be (1,)"
+            assert torch.isfinite(agent_state.rewards).all(), f"Step {step}: Reward should not contain NaN/Inf"
 
             # Validate info dict
-            assert isinstance(agent_state.info, dict), \
-                f"Step {step}: Info should be a dictionary"
-            assert "step_counts" in agent_state.info, \
-                f"Step {step}: Info should contain step_counts"
+            assert isinstance(agent_state.info, dict), f"Step {step}: Info should be a dictionary"
+            assert "step_counts" in agent_state.info, f"Step {step}: Info should contain step_counts"
 
             # Store cycle data
             observations.append(agent_state.observations.clone())
@@ -524,5 +516,4 @@ class TestEpisodeLifecycle:
         # Verify observations changed over time (agent moved or environment updated)
         # Note: Observations might stay same if agent doesn't move, so we just check
         # that the data flow completed without errors
-        assert all(obs.shape == (1, env.observation_dim) for obs in observations), \
-            "All observations should have consistent shape"
+        assert all(obs.shape == (1, env.observation_dim) for obs in observations), "All observations should have consistent shape"

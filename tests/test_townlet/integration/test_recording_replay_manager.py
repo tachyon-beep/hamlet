@@ -4,13 +4,13 @@ Tests for ReplayManager.
 Tests loading and controlling episode replay.
 """
 
-import pytest
 import tempfile
-import msgpack
-import lz4.frame
-from pathlib import Path
-from dataclasses import asdict
 import time
+from dataclasses import asdict
+from pathlib import Path
+
+import lz4.frame
+import msgpack
 
 
 class TestReplayManager:
@@ -18,8 +18,8 @@ class TestReplayManager:
 
     def test_replay_manager_initialization(self):
         """ReplayManager should initialize with database and directory."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -36,9 +36,9 @@ class TestReplayManager:
 
     def test_load_episode_from_file(self):
         """ReplayManager should load and decompress episode."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -114,8 +114,8 @@ class TestReplayManager:
 
     def test_load_nonexistent_episode(self):
         """ReplayManager should return False for nonexistent episode."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -132,9 +132,9 @@ class TestReplayManager:
 
     def test_replay_step_progression(self):
         """ReplayManager should advance through steps."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -216,9 +216,9 @@ class TestReplayManager:
 
     def test_replay_at_end(self):
         """ReplayManager should detect end of episode."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -293,9 +293,9 @@ class TestReplayManager:
 
     def test_replay_seek(self):
         """ReplayManager should support seeking."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -377,9 +377,9 @@ class TestReplayManager:
 
     def test_replay_reset(self):
         """ReplayManager should reset to beginning."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -453,9 +453,9 @@ class TestReplayManager:
 
     def test_replay_unload(self):
         """ReplayManager should unload episode."""
-        from townlet.recording.replay import ReplayManager
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
+        from townlet.recording.replay import ReplayManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)

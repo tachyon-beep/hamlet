@@ -5,8 +5,8 @@ Determines which episodes should be recorded based on multiple independent crite
 Uses OR logic: any criterion can trigger recording.
 """
 
-from typing import Optional, Tuple
-from collections import deque, defaultdict
+from collections import defaultdict, deque
+
 from townlet.recording.data_structures import EpisodeMetadata
 
 
@@ -42,7 +42,7 @@ class RecordingCriteria:
         self.stage_boundaries_config = criteria_config.get("stage_boundaries", {})
 
         # State tracking for stage transitions
-        self.last_stage: Optional[int] = None
+        self.last_stage: int | None = None
         self.transition_episodes: set[int] = set()
 
         # State tracking for performance criterion
@@ -52,7 +52,7 @@ class RecordingCriteria:
         # State tracking for stage boundaries
         self.stage_episode_counts: dict[int, int] = defaultdict(int)
 
-    def should_record(self, metadata: EpisodeMetadata) -> Tuple[bool, str]:
+    def should_record(self, metadata: EpisodeMetadata) -> tuple[bool, str]:
         """Determine if episode should be recorded.
 
         Checks all enabled criteria in order. Returns True on first match.
@@ -100,7 +100,7 @@ class RecordingCriteria:
         # No criteria matched
         return False, ""
 
-    def _check_periodic(self, metadata: EpisodeMetadata) -> Optional[Tuple[bool, str]]:
+    def _check_periodic(self, metadata: EpisodeMetadata) -> tuple[bool, str] | None:
         """Check if periodic criterion is met.
 
         Records every N episodes where N is the configured interval.
@@ -114,7 +114,7 @@ class RecordingCriteria:
 
         return None
 
-    def _check_stage_transitions(self, metadata: EpisodeMetadata) -> Optional[Tuple[bool, str]]:
+    def _check_stage_transitions(self, metadata: EpisodeMetadata) -> tuple[bool, str] | None:
         """Check if stage transition criterion is met.
 
         Records episodes before and after stage transitions.
@@ -149,7 +149,7 @@ class RecordingCriteria:
 
         return None
 
-    def _check_performance(self, metadata: EpisodeMetadata) -> Optional[Tuple[bool, str]]:
+    def _check_performance(self, metadata: EpisodeMetadata) -> tuple[bool, str] | None:
         """Check if performance criterion is met.
 
         Records episodes with rewards in top or bottom percentile of recent history.
@@ -192,7 +192,7 @@ class RecordingCriteria:
 
         return None
 
-    def _check_stage_boundaries(self, metadata: EpisodeMetadata) -> Optional[Tuple[bool, str]]:
+    def _check_stage_boundaries(self, metadata: EpisodeMetadata) -> tuple[bool, str] | None:
         """Check if stage boundaries criterion is met.
 
         Records first N and last N episodes at each curriculum stage.

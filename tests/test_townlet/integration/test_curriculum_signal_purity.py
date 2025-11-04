@@ -240,9 +240,7 @@ class TestCurriculumSignalInterpretability:
         # Or if it's just the last value, 150 > 50
         assert reward_150 > reward_50
 
-    def test_signal_purity_across_multiple_episodes_with_active_rnd(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_signal_purity_across_multiple_episodes_with_active_rnd(self, cpu_device, test_config_pack_path):
         """Verify curriculum receives pure survival time over 10 episodes with active RND.
 
         Critical integration test: Run multiple episodes with active RND exploration
@@ -317,17 +315,14 @@ class TestCurriculumSignalInterpretability:
             # Critical assertion: Curriculum reward equals survival time
             # NOT inflated by intrinsic rewards from RND exploration
             assert abs(curriculum_reward - survival_time) < 1e-5, (
-                f"Episode {episode}: Curriculum reward ({curriculum_reward}) "
-                f"should equal survival time ({survival_time})"
+                f"Episode {episode}: Curriculum reward ({curriculum_reward}) " f"should equal survival time ({survival_time})"
             )
 
         # Verify all episodes showed positive survival
         for i, curr_r in enumerate(curriculum_rewards_log):
             assert curr_r > 0, f"Episode {i}: Curriculum should see survival time > 0"
 
-    def test_curriculum_stage_advancement_uses_survival_rate_not_rewards(
-        self, cpu_device, test_config_pack_path
-    ):
+    def test_curriculum_stage_advancement_uses_survival_rate_not_rewards(self, cpu_device, test_config_pack_path):
         """Verify stage transitions based on survival rate, not reward magnitude.
 
         Critical integration test: Run episodes with varying survival times
@@ -416,14 +411,12 @@ class TestCurriculumSignalInterpretability:
         # Verify: Stage should NOT have advanced (low survival rate)
         # Even if intrinsic rewards were large, advancement is based on survival performance
         assert final_stage <= initial_stage, (
-            f"Curriculum should not advance with low survival rate (30%). "
-            f"Initial stage: {initial_stage}, Final stage: {final_stage}"
+            f"Curriculum should not advance with low survival rate (30%). " f"Initial stage: {initial_stage}, Final stage: {final_stage}"
         )
 
         # Additional verification: Curriculum sees survival rate, not total rewards
         # (curriculum tracker would show ~30.0, not inflated reward values)
         last_curriculum_reward = curriculum.tracker.prev_avg_reward[0].item()
         assert 25.0 < last_curriculum_reward < 35.0, (
-            f"Curriculum should see survival time (~30), "
-            f"not inflated reward. Got: {last_curriculum_reward}"
+            f"Curriculum should see survival time (~30), " f"not inflated reward. Got: {last_curriculum_reward}"
         )

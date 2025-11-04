@@ -8,13 +8,6 @@ This module tests the runner's integration with core components:
 """
 
 import sqlite3
-import tempfile
-import time
-from pathlib import Path
-
-import pytest
-import torch
-import yaml
 
 
 class TestRunnerRecordingIntegration:
@@ -60,7 +53,7 @@ training:
         )
 
         # Verify recorder attribute exists and starts as None
-        assert hasattr(runner, 'recorder')
+        assert hasattr(runner, "recorder")
         assert runner.recorder is None
 
     def test_runner_config_has_recording_field(self, tmp_path):
@@ -170,6 +163,7 @@ training:
 
         # Copy test config pack files (bars, cascades, affordances, cues)
         import shutil
+
         for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
@@ -254,6 +248,7 @@ training:
 
         # Copy test config pack files
         import shutil
+
         for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
@@ -279,10 +274,8 @@ training:
         # Should have at least checkpoint at episode 100 and final checkpoint at 150
         checkpoint_episodes = [int(cp.stem.replace("checkpoint_ep", "")) for cp in checkpoints]
 
-        assert 100 in checkpoint_episodes, \
-            f"Checkpoint should exist at episode 100, found: {checkpoint_episodes}"
-        assert 150 in checkpoint_episodes, \
-            f"Checkpoint should exist at final episode 150, found: {checkpoint_episodes}"
+        assert 100 in checkpoint_episodes, f"Checkpoint should exist at episode 100, found: {checkpoint_episodes}"
+        assert 150 in checkpoint_episodes, f"Checkpoint should exist at final episode 150, found: {checkpoint_episodes}"
 
     def test_runner_database_logging_after_episode(self, tmp_path, test_config_pack_path, cpu_device):
         """Verify runner logs episode metrics to database after each episode.
@@ -337,6 +330,7 @@ training:
 
         # Copy test config pack files
         import shutil
+
         for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
@@ -366,10 +360,7 @@ training:
         assert episode_count == 5, f"Should have 5 episode records, got {episode_count}"
 
         # Check required fields exist (database schema uses survival_time not survival_steps)
-        cursor.execute(
-            "SELECT survival_time, total_reward, curriculum_stage, epsilon "
-            "FROM episodes LIMIT 1"
-        )
+        cursor.execute("SELECT survival_time, total_reward, curriculum_stage, epsilon " "FROM episodes LIMIT 1")
         record = cursor.fetchone()
         assert record is not None, "Episode record should exist"
 
@@ -446,6 +437,7 @@ training:
 
         # Copy test config pack files
         import shutil
+
         for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
@@ -475,14 +467,10 @@ training:
 
         # We should have at least 1 transition recorded across 50 episodes
         # (Agent will use Bed multiple times, creating Bed→Bed transitions)
-        assert transition_count > 0, \
-            f"Expected at least 1 affordance transition recorded, got {transition_count}"
+        assert transition_count > 0, f"Expected at least 1 affordance transition recorded, got {transition_count}"
 
         # Verify transition structure
-        cursor.execute(
-            "SELECT episode_id, from_affordance, to_affordance, visit_count "
-            "FROM affordance_visits LIMIT 1"
-        )
+        cursor.execute("SELECT episode_id, from_affordance, to_affordance, visit_count " "FROM affordance_visits LIMIT 1")
         record = cursor.fetchone()
 
         if record is not None:

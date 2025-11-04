@@ -4,12 +4,12 @@ Tests for episode recorder.
 Tests the core recording infrastructure: EpisodeRecorder and RecordingWriter.
 """
 
-import pytest
 import queue
+import tempfile
 import threading
 import time
 from pathlib import Path
-import tempfile
+
 import torch
 
 
@@ -37,8 +37,8 @@ class TestEpisodeRecorder:
 
     def test_record_step_adds_to_queue(self):
         """record_step should add RecordedStep to queue."""
-        from townlet.recording.recorder import EpisodeRecorder
         from townlet.recording.data_structures import RecordedStep
+        from townlet.recording.recorder import EpisodeRecorder
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = {"max_queue_size": 100}
@@ -115,8 +115,9 @@ class TestEpisodeRecorder:
 
     def test_record_step_with_q_values(self):
         """record_step should handle optional Q-values."""
-        from townlet.recording.recorder import EpisodeRecorder
         import numpy as np
+
+        from townlet.recording.recorder import EpisodeRecorder
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = {"max_queue_size": 100}
@@ -182,8 +183,8 @@ class TestEpisodeRecorder:
 
     def test_finish_episode_adds_marker(self):
         """finish_episode should add EpisodeEndMarker to queue."""
+        from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata
         from townlet.recording.recorder import EpisodeRecorder
-        from townlet.recording.data_structures import EpisodeMetadata, EpisodeEndMarker
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = {"max_queue_size": 100}
@@ -279,8 +280,8 @@ class TestRecordingWriter:
 
     def test_writer_buffers_steps(self):
         """Writer should buffer RecordedStep items."""
-        from townlet.recording.recorder import RecordingWriter
         from townlet.recording.data_structures import RecordedStep
+        from townlet.recording.recorder import RecordingWriter
 
         with tempfile.TemporaryDirectory() as tmpdir:
             test_queue = queue.Queue(maxsize=100)
@@ -324,17 +325,12 @@ class TestRecordingWriter:
 
     def test_writer_clears_buffer_on_episode_end(self):
         """Writer should clear buffer after processing episode end."""
+        from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata, RecordedStep
         from townlet.recording.recorder import RecordingWriter
-        from townlet.recording.data_structures import RecordedStep, EpisodeMetadata, EpisodeEndMarker
 
         with tempfile.TemporaryDirectory() as tmpdir:
             test_queue = queue.Queue(maxsize=100)
-            config = {
-                "compression": "lz4",
-                "criteria": {
-                    "periodic": {"enabled": True, "interval": 1}  # Record everything
-                }
-            }
+            config = {"compression": "lz4", "criteria": {"periodic": {"enabled": True, "interval": 1}}}  # Record everything
 
             # Mock database
             class MockDatabase:

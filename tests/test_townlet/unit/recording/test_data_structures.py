@@ -4,9 +4,9 @@ Tests for recording data structures.
 Test serialization/deserialization roundtrips for episode recording data.
 """
 
-import msgpack
-import pytest
 from dataclasses import asdict
+
+import msgpack
 
 
 class TestRecordedStep:
@@ -195,7 +195,7 @@ class TestEpisodeEndMarker:
 
     def test_episode_end_marker_creation(self):
         """EpisodeEndMarker should wrap metadata."""
-        from townlet.recording.data_structures import EpisodeMetadata, EpisodeEndMarker
+        from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata
 
         metadata = EpisodeMetadata(
             episode_id=100,

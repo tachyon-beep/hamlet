@@ -16,7 +16,6 @@ Tests cover:
 
 import math
 
-import pytest
 import torch
 
 from townlet.environment.observation_builder import ObservationBuilder
@@ -350,9 +349,22 @@ class TestTemporalFeatures:
             vision_range=8,
             enable_temporal_mechanics=True,
             num_affordance_types=14,
-            affordance_names=["Bed", "Bathroom", "Shower", "Fridge", "Microwave",
-                            "Gym", "Hospital", "Job", "Bar", "CoffeeShop",
-                            "Restaurant", "Park", "SocialClub", "MeditationCenter"],
+            affordance_names=[
+                "Bed",
+                "Bathroom",
+                "Shower",
+                "Fridge",
+                "Microwave",
+                "Gym",
+                "Hospital",
+                "Job",
+                "Bar",
+                "CoffeeShop",
+                "Restaurant",
+                "Park",
+                "SocialClub",
+                "MeditationCenter",
+            ],
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -419,9 +431,22 @@ class TestTemporalFeatures:
             vision_range=8,
             enable_temporal_mechanics=True,
             num_affordance_types=14,
-            affordance_names=["Bed", "Bathroom", "Shower", "Fridge", "Microwave",
-                            "Gym", "Hospital", "Job", "Bar", "CoffeeShop",
-                            "Restaurant", "Park", "SocialClub", "MeditationCenter"],
+            affordance_names=[
+                "Bed",
+                "Bathroom",
+                "Shower",
+                "Fridge",
+                "Microwave",
+                "Gym",
+                "Hospital",
+                "Job",
+                "Bar",
+                "CoffeeShop",
+                "Restaurant",
+                "Park",
+                "SocialClub",
+                "MeditationCenter",
+            ],
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -464,9 +489,22 @@ class TestTemporalFeatures:
             vision_range=8,
             enable_temporal_mechanics=False,
             num_affordance_types=14,
-            affordance_names=["Bed", "Bathroom", "Shower", "Fridge", "Microwave",
-                            "Gym", "Hospital", "Job", "Bar", "CoffeeShop",
-                            "Restaurant", "Park", "SocialClub", "MeditationCenter"],
+            affordance_names=[
+                "Bed",
+                "Bathroom",
+                "Shower",
+                "Fridge",
+                "Microwave",
+                "Gym",
+                "Hospital",
+                "Job",
+                "Bar",
+                "CoffeeShop",
+                "Restaurant",
+                "Park",
+                "SocialClub",
+                "MeditationCenter",
+            ],
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -626,9 +664,22 @@ class TestObservationUpdates:
             vision_range=8,
             enable_temporal_mechanics=False,
             num_affordance_types=14,
-            affordance_names=["Bed", "Bathroom", "Shower", "Fridge", "Microwave",
-                            "Gym", "Hospital", "Job", "Bar", "CoffeeShop",
-                            "Restaurant", "Park", "SocialClub", "MeditationCenter"],
+            affordance_names=[
+                "Bed",
+                "Bathroom",
+                "Shower",
+                "Fridge",
+                "Microwave",
+                "Gym",
+                "Hospital",
+                "Job",
+                "Bar",
+                "CoffeeShop",
+                "Restaurant",
+                "Park",
+                "SocialClub",
+                "MeditationCenter",
+            ],
         )
 
         positions = torch.tensor([[0, 0]], device=device)

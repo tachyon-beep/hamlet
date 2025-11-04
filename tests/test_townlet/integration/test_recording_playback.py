@@ -4,12 +4,12 @@ Tests for playback system.
 Tests loading and replaying recorded episodes through the inference server.
 """
 
-import pytest
 import tempfile
-import msgpack
-import lz4.frame
-from pathlib import Path
 from dataclasses import asdict
+from pathlib import Path
+
+import lz4.frame
+import msgpack
 
 
 class TestReplayLoading:
@@ -17,9 +17,10 @@ class TestReplayLoading:
 
     def test_load_replay_from_database(self):
         """Should load replay data from database query."""
+        import time
+
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
-        import time
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -93,8 +94,9 @@ class TestReplayLoading:
 
     def test_decompress_and_deserialize_replay(self):
         """Should decompress and deserialize replay data."""
-        from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
         import time
+
+        from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)

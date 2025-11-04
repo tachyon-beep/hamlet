@@ -14,11 +14,11 @@ Date: November 2, 2025
 
 import logging
 import re
+import shutil
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
-import shutil
 
 import yaml
 
@@ -264,14 +264,11 @@ class UnifiedServer:
         log_file = run_dir / "training.log"
 
         # Create file handler with same format as console
-        file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+        file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
         file_handler.setLevel(logging.INFO)
 
         # Use same format as console logging
-        formatter = logging.Formatter(
-            "[%(asctime)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        formatter = logging.Formatter("[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         file_handler.setFormatter(formatter)
 
         # Add to root logger (captures all module logs)

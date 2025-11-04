@@ -102,10 +102,7 @@ class VectorizedHamletEnv:
 
         # DEPLOYED affordances: have positions on grid, can be interacted with
         # Positions will be randomized by randomize_affordance_positions() before first use
-        self.affordances = {
-            name: torch.tensor([0, 0], device=device, dtype=torch.long)
-            for name in affordance_names_to_deploy
-        }
+        self.affordances = {name: torch.tensor([0, 0], device=device, dtype=torch.long) for name in affordance_names_to_deploy}
 
         # OBSERVATION VOCABULARY: Full list from YAML, used for fixed observation encoding
         # This stays constant across all curriculum levels for transfer learning
@@ -175,7 +172,7 @@ class VectorizedHamletEnv:
         # Randomize affordance positions on initialization (will be re-randomized each episode)
         self.randomize_affordance_positions()
 
-    def attach_runtime_registry(self, registry: "AgentRuntimeRegistry") -> None:
+    def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
         """Attach runtime registry for telemetry-aware reward baselines."""
         if registry.get_baseline_tensor().shape != (self.num_agents,):
             raise ValueError(f"Registry baseline shape {registry.get_baseline_tensor().shape} does not match num_agents={self.num_agents}")

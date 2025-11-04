@@ -40,9 +40,7 @@ def deserialize_metadata(data: dict) -> "EpisodeMetadata":
         EpisodeMetadata instance
     """
     # Convert affordance positions from lists to tuples
-    data["affordance_layout"] = {
-        name: tuple(pos) for name, pos in data["affordance_layout"].items()
-    }
+    data["affordance_layout"] = {name: tuple(pos) for name, pos in data["affordance_layout"].items()}
 
     return EpisodeMetadata(**data)
 

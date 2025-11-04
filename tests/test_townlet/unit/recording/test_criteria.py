@@ -4,7 +4,6 @@ Tests for recording criteria evaluator.
 Tests each criterion independently and combined OR logic.
 """
 
-import pytest
 import time
 
 
@@ -199,7 +198,7 @@ class TestStageTransitionCriterion:
             metadata = _make_metadata(episode_id=ep_id, survival_steps=50, total_reward=100.0, curriculum_stage=2)
             should_record, reason = criteria.should_record(metadata)
             assert should_record is True
-            assert reason == f"after_transition_100"
+            assert reason == "after_transition_100"
 
         # Episode 110 should not record (outside after window)
         metadata = _make_metadata(episode_id=110, survival_steps=50, total_reward=100.0, curriculum_stage=2)

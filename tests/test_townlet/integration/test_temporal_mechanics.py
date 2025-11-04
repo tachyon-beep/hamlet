@@ -75,7 +75,6 @@ Set TEMPORAL_MECHANICS_IMPLEMENTED = True when implementation is complete.
 Tests will then run normally and report failures if implementation doesn't match spec.
 """
 
-import math
 import pytest
 import torch
 
@@ -83,14 +82,8 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 # Temporal mechanics is partially implemented - mark tests appropriately
 TEMPORAL_MECHANICS_IMPLEMENTED = False  # Set to True when temporal mechanics is complete
-skip_temporal = pytest.mark.skipif(
-    not TEMPORAL_MECHANICS_IMPLEMENTED,
-    reason="Temporal mechanics not yet fully implemented"
-)
-xfail_temporal = pytest.mark.xfail(
-    reason="Temporal mechanics not yet fully implemented",
-    strict=False
-)
+skip_temporal = pytest.mark.skipif(not TEMPORAL_MECHANICS_IMPLEMENTED, reason="Temporal mechanics not yet fully implemented")
+xfail_temporal = pytest.mark.xfail(reason="Temporal mechanics not yet fully implemented", strict=False)
 
 
 # =============================================================================
@@ -619,11 +612,14 @@ class TestMultiAgentTemporal:
 
         # Execute 3 steps
         for i in range(3):
-            actions = torch.tensor([
-                4,  # Agent 0: INTERACT (Bed)
-                4,  # Agent 1: INTERACT (Job)
-                0,  # Agent 2: UP (no interaction)
-            ], device=cpu_device)
+            actions = torch.tensor(
+                [
+                    4,  # Agent 0: INTERACT (Bed)
+                    4,  # Agent 1: INTERACT (Job)
+                    0,  # Agent 2: UP (no interaction)
+                ],
+                device=cpu_device,
+            )
 
             obs, _, _, _ = env.step(actions)
 
@@ -742,9 +738,10 @@ class TestTemporalIntegrations:
 
         New test: Validates that time_of_day and interaction_progress are recorded.
         """
-        from townlet.recording.episode_recorder import EpisodeRecorder
-        import tempfile
         import sqlite3
+        import tempfile
+
+        from townlet.recording.episode_recorder import EpisodeRecorder
 
         env = VectorizedHamletEnv(
             num_agents=1,
@@ -798,13 +795,16 @@ class TestTemporalIntegrations:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT state FROM episode_steps
                 WHERE episode_number = 0
                 ORDER BY step_number
-            """)
+            """
+            )
 
             import json
+
             rows = cursor.fetchall()
             assert len(rows) == 3
 
@@ -817,12 +817,13 @@ class TestTemporalIntegrations:
                 assert state["time_of_day"] == i
 
                 # Progress should increase (1/5, 2/5, 3/5)
-                expected_progress = (i + 1)
+                expected_progress = i + 1
                 assert state["interaction_progress"] == expected_progress
 
             conn.close()
 
         finally:
             import os
+
             if os.path.exists(db_path):
                 os.remove(db_path)

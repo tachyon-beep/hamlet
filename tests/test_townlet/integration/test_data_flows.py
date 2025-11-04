@@ -7,15 +7,13 @@ Task 13c: Data Flow Integration Tests
 Focus: Trace data through complete pipelines to verify transformations
 """
 
-import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.population.vectorized import VectorizedPopulation
 from townlet.curriculum.static import StaticCurriculum
-from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
-
+from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.population.vectorized import VectorizedPopulation
 
 # =============================================================================
 # TEST CLASS 1: Observation Pipeline
@@ -60,12 +58,10 @@ class TestObservationPipeline:
         # Verify observation dimension calculation
         # Full obs: grid_size² + 8 meters + 15 affordances + 4 temporal
         expected_dim = (5 * 5) + 8 + 15 + 4  # 25 + 8 + 15 + 4 = 52
-        assert obs.shape == (1, expected_dim), \
-            f"Observation should be [1, {expected_dim}], got {obs.shape}"
+        assert obs.shape == (1, expected_dim), f"Observation should be [1, {expected_dim}], got {obs.shape}"
 
         # Verify observation matches environment's reported dimension
-        assert obs.shape[1] == env.observation_dim, \
-            f"Observation dim should match environment ({env.observation_dim}), got {obs.shape[1]}"
+        assert obs.shape[1] == env.observation_dim, f"Observation dim should match environment ({env.observation_dim}), got {obs.shape[1]}"
 
         # Verify observations are finite (no NaN/Inf)
         assert torch.isfinite(obs).all(), "Observations should not contain NaN/Inf"
@@ -92,8 +88,10 @@ class TestObservationPipeline:
         population.reset()
 
         # Verify population's current_obs matches environment's observation
-        assert population.current_obs.shape == (1, expected_dim), \
-            f"Population obs should be [1, {expected_dim}], got {population.current_obs.shape}"
+        assert population.current_obs.shape == (
+            1,
+            expected_dim,
+        ), f"Population obs should be [1, {expected_dim}], got {population.current_obs.shape}"
 
     def test_partial_observability_5x5_window_correct(self, cpu_device, test_config_pack_path):
         """Verify partial observability produces correct 5×5 local window.
@@ -126,12 +124,10 @@ class TestObservationPipeline:
         # Verify POMDP observation dimension (FIXED across all grid sizes)
         # Partial obs: 5×5 window (25) + position (2) + meters (8) + affordances (15) + temporal (4) = 54
         expected_dim = 25 + 2 + 8 + 15 + 4
-        assert obs.shape == (1, expected_dim), \
-            f"POMDP observation should be [1, {expected_dim}], got {obs.shape}"
+        assert obs.shape == (1, expected_dim), f"POMDP observation should be [1, {expected_dim}], got {obs.shape}"
 
         # Verify observation matches environment's reported dimension
-        assert obs.shape[1] == env.observation_dim, \
-            f"POMDP obs dim should match environment ({env.observation_dim}), got {obs.shape[1]}"
+        assert obs.shape[1] == env.observation_dim, f"POMDP obs dim should match environment ({env.observation_dim}), got {obs.shape[1]}"
 
         # Extract components from observation
         local_grid = obs[0, :25]  # First 25 dims = 5×5 local window
@@ -141,17 +137,14 @@ class TestObservationPipeline:
         temporal = obs[0, 50:54]  # Last 4 dims = temporal features
 
         # Verify local grid is in valid range [0, 1]
-        assert (local_grid >= 0).all() and (local_grid <= 1).all(), \
-            "Local grid values should be in [0, 1]"
+        assert (local_grid >= 0).all() and (local_grid <= 1).all(), "Local grid values should be in [0, 1]"
 
         # Verify position is normalized [0, 1]
-        assert (position >= 0).all() and (position <= 1).all(), \
-            "Position should be normalized to [0, 1]"
+        assert (position >= 0).all() and (position <= 1).all(), "Position should be normalized to [0, 1]"
 
         # Verify affordance encoding is one-hot (sums to 1)
         affordance_sum = affordance.sum().item()
-        assert abs(affordance_sum - 1.0) < 1e-6, \
-            f"Affordance encoding should sum to 1.0 (one-hot), got {affordance_sum}"
+        assert abs(affordance_sum - 1.0) < 1e-6, f"Affordance encoding should sum to 1.0 (one-hot), got {affordance_sum}"
 
         # Step agent and verify local window updates
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -184,8 +177,7 @@ class TestObservationPipeline:
         # Verify observations changed (local window updates as agent moves)
         # Note: Might not change if agent doesn't move, so we just verify structure
         final_obs = population.current_obs
-        assert final_obs.shape == initial_obs.shape, \
-            "Observation shape should remain consistent across steps"
+        assert final_obs.shape == initial_obs.shape, "Observation shape should remain consistent across steps"
 
 
 # =============================================================================
@@ -248,7 +240,7 @@ class TestRewardPipeline:
         agent_state = population.step_population(env)
 
         # Verify rewards exist
-        assert hasattr(agent_state, 'rewards'), "Agent state should have rewards"
+        assert hasattr(agent_state, "rewards"), "Agent state should have rewards"
         assert agent_state.rewards.shape == (2,), "Rewards should be [num_agents]"
 
         # Verify rewards are finite
@@ -260,8 +252,7 @@ class TestRewardPipeline:
             # Alive agents should have positive rewards (survival + any intrinsic)
             # Note: With epsilon-greedy (no RND), intrinsic = 0, so rewards should be ~1.0
             alive_rewards = agent_state.rewards[alive_agents]
-            assert (alive_rewards > 0).all(), \
-                f"Alive agents should have positive rewards, got {alive_rewards}"
+            assert (alive_rewards > 0).all(), f"Alive agents should have positive rewards, got {alive_rewards}"
 
     def test_exploration_intrinsic_reward_combined(self, cpu_device, test_config_pack_path):
         """Verify intrinsic rewards are combined with extrinsic rewards.
@@ -321,8 +312,8 @@ class TestRewardPipeline:
         agent_state = population.step_population(env)
 
         # Verify both reward components exist
-        assert hasattr(agent_state, 'rewards'), "Agent state should have combined rewards"
-        assert hasattr(agent_state, 'intrinsic_rewards'), "Agent state should have intrinsic rewards"
+        assert hasattr(agent_state, "rewards"), "Agent state should have combined rewards"
+        assert hasattr(agent_state, "intrinsic_rewards"), "Agent state should have intrinsic rewards"
 
         # Verify intrinsic rewards are non-negative (MSE property of RND)
         intrinsic = agent_state.intrinsic_rewards[0].item()
@@ -346,8 +337,7 @@ class TestRewardPipeline:
             intrinsic_rewards_collected.append(agent_state.intrinsic_rewards[0].item())
 
         # At least some intrinsic rewards should be positive (RND detects novelty)
-        assert sum(intrinsic_rewards_collected) > 0, \
-            "RND should produce non-zero novelty rewards over 10 steps"
+        assert sum(intrinsic_rewards_collected) > 0, "RND should produce non-zero novelty rewards over 10 steps"
 
     def test_combined_reward_stored_in_replay_buffer(self, cpu_device, test_config_pack_path):
         """Verify combined rewards are stored in replay buffer (not separate rewards).
@@ -409,25 +399,22 @@ class TestRewardPipeline:
                 break
 
         # Verify replay buffer has transitions
-        assert len(population.replay_buffer) >= 10, \
-            "Replay buffer should have at least 10 transitions"
+        assert len(population.replay_buffer) >= 10, "Replay buffer should have at least 10 transitions"
 
         # Sample from replay buffer (need intrinsic_weight for combined reward calculation)
         batch = population.replay_buffer.sample(batch_size=10, intrinsic_weight=0.5)
 
         # Verify batch contains 'rewards' key (combined rewards)
-        assert 'rewards' in batch, "Replay buffer should store 'rewards' key"
+        assert "rewards" in batch, "Replay buffer should store 'rewards' key"
 
         # Verify rewards are combined (NOT separate)
-        assert 'intrinsic_rewards' not in batch, \
-            "Replay buffer should NOT store separate intrinsic rewards"
-        assert 'rewards_extrinsic' not in batch, \
-            "Replay buffer should NOT store separate extrinsic rewards"
+        assert "intrinsic_rewards" not in batch, "Replay buffer should NOT store separate intrinsic rewards"
+        assert "rewards_extrinsic" not in batch, "Replay buffer should NOT store separate extrinsic rewards"
 
         # Verify rewards are tensors with correct shape
-        assert isinstance(batch['rewards'], torch.Tensor), "Rewards should be tensors"
-        assert batch['rewards'].shape[0] == 10, "Batch should have 10 samples"
-        assert torch.isfinite(batch['rewards']).all(), "Rewards should be finite"
+        assert isinstance(batch["rewards"], torch.Tensor), "Rewards should be tensors"
+        assert batch["rewards"].shape[0] == 10, "Batch should have 10 samples"
+        assert torch.isfinite(batch["rewards"]).all(), "Rewards should be finite"
 
 
 # =============================================================================
@@ -494,18 +481,16 @@ class TestActionPipeline:
             q_values = population.q_network(population.current_obs)
 
         # Verify Q-values shape
-        assert q_values.shape == (2, 6), \
-            f"Q-values should be [2, 6], got {q_values.shape}"
+        assert q_values.shape == (2, 6), f"Q-values should be [2, 6], got {q_values.shape}"
 
         # Verify Q-values are finite (untrained network should still produce valid outputs)
-        assert torch.isfinite(q_values).all(), \
-            "Q-values should not contain NaN/Inf from untrained network"
+        assert torch.isfinite(q_values).all(), "Q-values should not contain NaN/Inf from untrained network"
 
         # Step population and verify actions are based on Q-values (epsilon=0, greedy)
         agent_state = population.step_population(env)
 
         # Verify actions exist
-        assert hasattr(agent_state, 'actions'), "Agent state should have actions"
+        assert hasattr(agent_state, "actions"), "Agent state should have actions"
         assert agent_state.actions.shape == (2,), "Actions should be [num_agents]"
 
         # Verify actions are valid (in range [0, 6))
@@ -580,8 +565,7 @@ class TestActionPipeline:
             assert 0 <= y < 5, f"Y position should be in [0, 5), got {y}"
 
         # Verify action variety (not all same action)
-        assert len(set(actions_taken)) > 1, \
-            "Should have variety of actions (not all same)"
+        assert len(set(actions_taken)) > 1, "Should have variety of actions (not all same)"
 
     def test_actions_to_environment_execution(self, cpu_device, test_config_pack_path):
         """Verify actions execute in environment and cause state changes.
@@ -657,13 +641,11 @@ class TestActionPipeline:
                 break
 
         # Verify state changed over 10 steps (agent moved or energy depleted)
-        assert state_changes_detected, \
-            "State should change over 10 steps (position or energy)"
+        assert state_changes_detected, "State should change over 10 steps (position or energy)"
 
         # Verify observations updated (should differ from initial)
         final_obs = population.current_obs
-        assert final_obs.shape == initial_obs.shape, \
-            "Observation shape should remain consistent"
+        assert final_obs.shape == initial_obs.shape, "Observation shape should remain consistent"
 
         # Observations should differ (state changed)
         obs_changed = not torch.allclose(initial_obs, final_obs, atol=1e-6)

@@ -7,7 +7,7 @@ Manages Q-networks, replay buffers, and training loops.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, cast
 
 import torch
 import torch.nn as nn
@@ -41,7 +41,7 @@ class VectorizedPopulation(PopulationManager):
 
     def __init__(
         self,
-        env: "VectorizedHamletEnv",
+        env: VectorizedHamletEnv,
         curriculum: CurriculumManager,
         exploration: ExplorationStrategy,
         agent_ids: list[str],
@@ -369,7 +369,7 @@ class VectorizedPopulation(PopulationManager):
 
         return None
 
-    def select_greedy_actions(self, env: "VectorizedHamletEnv") -> torch.Tensor:
+    def select_greedy_actions(self, env: VectorizedHamletEnv) -> torch.Tensor:
         """
         Select greedy actions with action masking for inference.
 
@@ -400,7 +400,7 @@ class VectorizedPopulation(PopulationManager):
 
         return actions
 
-    def select_epsilon_greedy_actions(self, env: "VectorizedHamletEnv", epsilon: float) -> torch.Tensor:
+    def select_epsilon_greedy_actions(self, env: VectorizedHamletEnv, epsilon: float) -> torch.Tensor:
         """
         Select epsilon-greedy actions with action masking.
 
@@ -433,7 +433,7 @@ class VectorizedPopulation(PopulationManager):
 
     def step_population(
         self,
-        envs: "VectorizedHamletEnv",
+        envs: VectorizedHamletEnv,
     ) -> BatchedAgentState:
         """
         Execute one training step for entire population.

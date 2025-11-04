@@ -17,7 +17,6 @@ Old files consolidated: test_affordance_engine.py, test_affordance_effects.py,
 test_affordance_equivalence.py, test_affordance_integration.py
 """
 
-import pytest
 import torch
 
 
@@ -81,8 +80,7 @@ class TestAffordanceAvailability:
 
         # Bed operating hours: [0, 24]
         for hour in range(24):
-            assert engine.is_affordance_open("Bed", time_of_day=hour), \
-                f"Bed should be open at {hour}:00"
+            assert engine.is_affordance_open("Bed", time_of_day=hour), f"Bed should be open at {hour}:00"
 
     def test_insufficient_money_blocks_interaction(self, basic_env):
         """Insufficient money should prevent interaction."""
@@ -102,10 +100,8 @@ class TestAffordanceAvailability:
 
         # Hygiene should NOT increase (interaction blocked)
         # Note: passive depletion still occurs
-        assert basic_env.meters[0, 1] <= initial_hygiene, \
-            "Hygiene should not increase without money"
-        assert abs(basic_env.meters[0, 3] - initial_money) < 1e-6, \
-            "Money should not change"
+        assert basic_env.meters[0, 1] <= initial_hygiene, "Hygiene should not increase without money"
+        assert abs(basic_env.meters[0, 3] - initial_money) < 1e-6, "Money should not change"
 
     def test_sufficient_money_allows_interaction(self, basic_env):
         """Sufficient money should allow interaction."""
@@ -124,10 +120,8 @@ class TestAffordanceAvailability:
         basic_env.step(actions)
 
         # Hygiene should increase, money should decrease
-        assert basic_env.meters[0, 1] > initial_hygiene, \
-            "Hygiene should increase with money"
-        assert basic_env.meters[0, 3] < initial_money, \
-            "Money should decrease"
+        assert basic_env.meters[0, 1] > initial_hygiene, "Hygiene should increase with money"
+        assert basic_env.meters[0, 3] < initial_money, "Money should decrease"
 
     def test_park_is_free(self, basic_env):
         """Park should work even with $0 (free affordance)."""
@@ -146,10 +140,8 @@ class TestAffordanceAvailability:
         basic_env.step(actions)
 
         # Fitness should increase, money unchanged
-        assert basic_env.meters[0, 7] > initial_fitness, \
-            "Park should work for free"
-        assert abs(basic_env.meters[0, 3] - initial_money) < 1e-6, \
-            "Money should not change (Park is free)"
+        assert basic_env.meters[0, 7] > initial_fitness, "Park should work for free"
+        assert abs(basic_env.meters[0, 3] - initial_money) < 1e-6, "Money should not change (Park is free)"
 
 
 class TestInstantAffordanceEffects:
@@ -615,8 +607,7 @@ class TestMultiTickInteractions:
         energy_gain = final_energy - initial_energy
 
         # Should be close to full restoration (accounting for passive depletion)
-        assert energy_gain > 0.40, \
-            f"Expected ~0.50 energy gain, got {energy_gain}"
+        assert energy_gain > 0.40, f"Expected ~0.50 energy gain, got {energy_gain}"
 
     def test_bed_early_exit_no_bonus(self, temporal_env):
         """Early exit from multi-tick interaction should skip completion bonus."""
@@ -643,8 +634,7 @@ class TestMultiTickInteractions:
         # Should have linear benefits only (no 25% bonus)
         # 3 ticks * (0.50 * 0.75 / 5) = 0.225
         # Should be less than full completion
-        assert energy_gain < 0.40, \
-            f"Early exit should not give full restoration, got {energy_gain}"
+        assert energy_gain < 0.40, f"Early exit should not give full restoration, got {energy_gain}"
 
     def test_multi_tick_per_tick_costs(self, temporal_env):
         """Multi-tick interactions should apply per-tick costs."""
@@ -665,8 +655,7 @@ class TestMultiTickInteractions:
         # Bed: $0.01 per tick * 5 ticks = $0.05
         money_spent = initial_money - temporal_env.meters[0, 3].item()
 
-        assert abs(money_spent - 0.05) < 0.01, \
-            f"Expected $0.05 cost for 5 ticks, got {money_spent}"
+        assert abs(money_spent - 0.05) < 0.01, f"Expected $0.05 cost for 5 ticks, got {money_spent}"
 
 
 class TestAffordanceBatching:
@@ -722,14 +711,10 @@ class TestAffordanceBatching:
         multi_agent_env.step(actions)
 
         # Only agents 0 and 2 should have hygiene increase
-        assert multi_agent_env.meters[0, 1] > initial_hygiene[0], \
-            "Agent 0 should interact (has money)"
-        assert multi_agent_env.meters[1, 1] <= initial_hygiene[1] + 0.01, \
-            "Agent 1 should not interact (no money)"
-        assert multi_agent_env.meters[2, 1] > initial_hygiene[2], \
-            "Agent 2 should interact (has money)"
-        assert multi_agent_env.meters[3, 1] <= initial_hygiene[3] + 0.01, \
-            "Agent 3 should not interact (insufficient money)"
+        assert multi_agent_env.meters[0, 1] > initial_hygiene[0], "Agent 0 should interact (has money)"
+        assert multi_agent_env.meters[1, 1] <= initial_hygiene[1] + 0.01, "Agent 1 should not interact (no money)"
+        assert multi_agent_env.meters[2, 1] > initial_hygiene[2], "Agent 2 should interact (has money)"
+        assert multi_agent_env.meters[3, 1] <= initial_hygiene[3] + 0.01, "Agent 3 should not interact (insufficient money)"
 
     def test_batch_processing_preserves_individual_states(self, multi_agent_env):
         """Batch processing should not leak state between agents."""
@@ -753,12 +738,10 @@ class TestAffordanceBatching:
         multi_agent_env.step(actions)
 
         # Agent 0 should have energy change, others should not
-        assert multi_agent_env.meters[0, 0] != initial_energy[0], \
-            "Agent 0 should change (interacted)"
+        assert multi_agent_env.meters[0, 0] != initial_energy[0], "Agent 0 should change (interacted)"
         # Other agents may have passive depletion but no affordance effects
         # Just verify they didn't get Bed's energy boost
-        assert abs(multi_agent_env.meters[1, 0] - initial_energy[1]) < 0.1, \
-            "Agent 1 should not get Bed's effects"
+        assert abs(multi_agent_env.meters[1, 0] - initial_energy[1]) < 0.1, "Agent 1 should not get Bed's effects"
 
 
 class TestAffordanceEquivalence:
@@ -767,8 +750,9 @@ class TestAffordanceEquivalence:
     def test_bed_instant_vs_multitick_total_equals(self, cpu_device):
         """Bed instant mode should equal multi-tick total (75% linear + 25% bonus)."""
         # This validates the 75%/25% split for multi-tick interactions
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
         from pathlib import Path
+
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
         config_path = Path(__file__).parent.parent.parent.parent.parent / "configs" / "test"
 
@@ -824,17 +808,28 @@ class TestAffordanceEquivalence:
         # So temporal will have ~4 extra steps of depletion
         passive_diff = 4 * 0.005  # 4 extra steps * 0.5% per step
 
-        assert abs(instant_gain - temporal_gain - passive_diff) < 0.05, \
-            f"Instant gain ({instant_gain}) should equal temporal gain ({temporal_gain}) + passive diff ({passive_diff})"
+        assert (
+            abs(instant_gain - temporal_gain - passive_diff) < 0.05
+        ), f"Instant gain ({instant_gain}) should equal temporal gain ({temporal_gain}) + passive diff ({passive_diff})"
 
     def test_all_affordances_have_consistent_effects(self, basic_env, cpu_device):
         """All affordances should produce deterministic, consistent effects."""
         # This ensures affordance engine produces reliable results
 
         affordances_to_test = [
-            "Bed", "Shower", "HomeMeal", "FastFood", "Bar",
-            "Doctor", "Hospital", "Therapist", "Park", "Gym",
-            "Job", "Labor", "Recreation"
+            "Bed",
+            "Shower",
+            "HomeMeal",
+            "FastFood",
+            "Bar",
+            "Doctor",
+            "Hospital",
+            "Therapist",
+            "Park",
+            "Gym",
+            "Job",
+            "Labor",
+            "Recreation",
         ]
 
         for aff_name in affordances_to_test:
@@ -852,5 +847,4 @@ class TestAffordanceEquivalence:
 
             # Verify some effect occurred
             meter_diff = (basic_env.meters[0] - initial_meters).abs().sum()
-            assert meter_diff > 1e-6, \
-                f"{aff_name} should modify meters (got diff={meter_diff})"
+            assert meter_diff > 1e-6, f"{aff_name} should modify meters (got diff={meter_diff})"

@@ -10,17 +10,15 @@ Test Organization:
 - TestLSTMForwardPass: Forward pass with POMDP (1 test)
 """
 
-import pytest
 import torch
 import torch.nn.functional as F
 
 from townlet.agent.networks import RecurrentSpatialQNetwork
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.population.vectorized import VectorizedPopulation
 from townlet.curriculum.static import StaticCurriculum
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
+from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
-
 
 # =============================================================================
 # TEST CLASS 1: LSTM Hidden State Persistence
@@ -30,9 +28,7 @@ from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
 class TestLSTMHiddenStatePersistence:
     """Test LSTM hidden state lifecycle during episode execution."""
 
-    def test_hidden_state_persists_across_10_steps_within_episode(
-        self, test_config_pack_path, cpu_device
-    ):
+    def test_hidden_state_persists_across_10_steps_within_episode(self, test_config_pack_path, cpu_device):
         """
         Verify hidden state evolves during episode rollout.
 
@@ -96,12 +92,8 @@ class TestLSTMHiddenStatePersistence:
             h_next, c_next = hidden_states[i + 1]
 
             # Hidden states should be different (memory evolving)
-            assert not torch.allclose(h_curr, h_next, atol=1e-6), (
-                f"Hidden state should change between steps {i} and {i+1}"
-            )
-            assert not torch.allclose(c_curr, c_next, atol=1e-6), (
-                f"Cell state should change between steps {i} and {i+1}"
-            )
+            assert not torch.allclose(h_curr, h_next, atol=1e-6), f"Hidden state should change between steps {i} and {i+1}"
+            assert not torch.allclose(c_curr, c_next, atol=1e-6), f"Cell state should change between steps {i} and {i+1}"
 
     def test_hidden_state_resets_on_death(self, test_config_pack_path, cpu_device):
         """
@@ -163,16 +155,10 @@ class TestLSTMHiddenStatePersistence:
         recurrent_network = population.q_network
         h, c = recurrent_network.get_hidden_state()
 
-        assert torch.allclose(h, torch.zeros_like(h)), (
-            "Hidden state should be zeros after death"
-        )
-        assert torch.allclose(c, torch.zeros_like(c)), (
-            "Cell state should be zeros after death"
-        )
+        assert torch.allclose(h, torch.zeros_like(h)), "Hidden state should be zeros after death"
+        assert torch.allclose(c, torch.zeros_like(c)), "Cell state should be zeros after death"
 
-    def test_hidden_state_resets_after_flush_on_max_steps(
-        self, test_config_pack_path, cpu_device
-    ):
+    def test_hidden_state_resets_after_flush_on_max_steps(self, test_config_pack_path, cpu_device):
         """
         Verify hidden state resets after flush_episode() on max_steps survival.
 
@@ -223,16 +209,10 @@ class TestLSTMHiddenStatePersistence:
         recurrent_network = population.q_network
         h, c = recurrent_network.get_hidden_state()
 
-        assert torch.allclose(h, torch.zeros_like(h)), (
-            "Hidden state should be zeros after flush"
-        )
-        assert torch.allclose(c, torch.zeros_like(c)), (
-            "Cell state should be zeros after flush"
-        )
+        assert torch.allclose(h, torch.zeros_like(h)), "Hidden state should be zeros after flush"
+        assert torch.allclose(c, torch.zeros_like(c)), "Cell state should be zeros after flush"
 
-    def test_hidden_state_shape_correct_during_episode(
-        self, test_config_pack_path, cpu_device
-    ):
+    def test_hidden_state_shape_correct_during_episode(self, test_config_pack_path, cpu_device):
         """
         Verify hidden state shape during multi-agent rollout.
 
@@ -282,12 +262,8 @@ class TestLSTMHiddenStatePersistence:
         for _ in range(10):
             population.step_population(env)
             h, c = recurrent_network.get_hidden_state()
-            assert h.shape == (1, 2, 256), (
-                f"Hidden state shape should be (1, 2, 256), got {h.shape}"
-            )
-            assert c.shape == (1, 2, 256), (
-                f"Cell state shape should be (1, 2, 256), got {c.shape}"
-            )
+            assert h.shape == (1, 2, 256), f"Hidden state shape should be (1, 2, 256), got {h.shape}"
+            assert c.shape == (1, 2, 256), f"Cell state shape should be (1, 2, 256), got {c.shape}"
 
 
 # =============================================================================
@@ -298,9 +274,7 @@ class TestLSTMHiddenStatePersistence:
 class TestLSTMBatchTraining:
     """Test LSTM batch training with sequence sampling."""
 
-    def test_hidden_state_batch_size_correct_during_training(
-        self, test_config_pack_path, cpu_device
-    ):
+    def test_hidden_state_batch_size_correct_during_training(self, test_config_pack_path, cpu_device):
         """
         Verify hidden state shape changes from num_agents to batch_size during training.
 
@@ -346,9 +320,7 @@ class TestLSTMBatchTraining:
         # Verify initial shape (episode batch size = num_agents)
         recurrent_network = population.q_network
         h, c = recurrent_network.get_hidden_state()
-        assert h.shape == (1, 2, 256), (
-            f"Initial hidden state should be (1, 2, 256), got {h.shape}"
-        )
+        assert h.shape == (1, 2, 256), f"Initial hidden state should be (1, 2, 256), got {h.shape}"
 
         # Run enough steps to trigger training (need 16+ episodes in buffer)
         # Each episode needs to die to be stored
@@ -361,9 +333,7 @@ class TestLSTMBatchTraining:
 
         # After training, hidden state should be back to num_agents
         h, c = recurrent_network.get_hidden_state()
-        assert h.shape == (1, 2, 256), (
-            f"After training, hidden state should be (1, 2, 256), got {h.shape}"
-        )
+        assert h.shape == (1, 2, 256), f"After training, hidden state should be (1, 2, 256), got {h.shape}"
 
     def test_lstm_training_with_sequences(self, cpu_device):
         """
@@ -518,8 +488,7 @@ class TestLSTMBatchTraining:
         final_loss = sum(losses[-10:]) / 10
 
         assert final_loss < initial_loss * 0.5, (
-            f"Loss should decrease during training. "
-            f"Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
+            f"Loss should decrease during training. " f"Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
         )
 
     def test_lstm_memory_persistence_in_training(self, cpu_device):
@@ -576,9 +545,7 @@ class TestLSTMBatchTraining:
 class TestLSTMForwardPass:
     """Test LSTM forward pass with POMDP observations."""
 
-    def test_partial_observability_5x5_window_to_lstm(
-        self, test_config_pack_path, cpu_device
-    ):
+    def test_partial_observability_5x5_window_to_lstm(self, test_config_pack_path, cpu_device):
         """
         Verify POMDP environment → LSTM data flow.
 
@@ -615,9 +582,7 @@ class TestLSTMForwardPass:
         # Verify observation shape (POMDP)
         # 5×5 grid (25) + position (2) + meters (8) + affordance (15) + temporal (4) = 54
         expected_obs_dim = 25 + 2 + 8 + 15 + 4
-        assert obs.shape == (1, expected_obs_dim), (
-            f"Expected obs shape (1, {expected_obs_dim}), got {obs.shape}"
-        )
+        assert obs.shape == (1, expected_obs_dim), f"Expected obs shape (1, {expected_obs_dim}), got {obs.shape}"
 
         # Reset hidden state
         network.reset_hidden_state(batch_size=1, device=cpu_device)
@@ -638,9 +603,5 @@ class TestLSTMForwardPass:
 
         # Verify hidden state changed from initial zeros
         initial_h, initial_c = network.get_hidden_state()
-        assert not torch.allclose(h, initial_h, atol=1e-6), (
-            "Hidden state should change after forward pass"
-        )
-        assert not torch.allclose(c, initial_c, atol=1e-6), (
-            "Cell state should change after forward pass"
-        )
+        assert not torch.allclose(h, initial_h, atol=1e-6), "Hidden state should change after forward pass"
+        assert not torch.allclose(c, initial_c, atol=1e-6), "Cell state should change after forward pass"

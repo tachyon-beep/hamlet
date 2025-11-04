@@ -21,11 +21,10 @@ from pathlib import Path
 import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.environment.cascade_config import load_environment_config
 from townlet.environment.cascade_engine import CascadeEngine
 from townlet.environment.meter_dynamics import MeterDynamics
-
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 # =============================================================================
 # Fixtures
@@ -229,8 +228,7 @@ class TestModulation:
             expected_depletion = 0.001 * expected_mult
             expected_health = initial_health - expected_depletion
 
-            assert torch.isclose(result[0, 6], torch.tensor(expected_health), atol=1e-5), \
-                f"fitness={fitness}, mult={expected_mult}"
+            assert torch.isclose(result[0, 6], torch.tensor(expected_health), atol=1e-5), f"fitness={fitness}, mult={expected_mult}"
 
 
 # =============================================================================
@@ -885,10 +883,7 @@ class TestCascadeEngineInitialization:
         assert cascade_engine._base_depletions.shape == (8,)
         assert cascade_engine._base_depletions[0] == 0.005  # energy
         # health (handled by fitness modulation, not base depletion)
-        assert torch.isclose(
-            cascade_engine._base_depletions[6],
-            torch.tensor(0.0, device=cascade_engine.device)
-        )
+        assert torch.isclose(cascade_engine._base_depletions[6], torch.tensor(0.0, device=cascade_engine.device))
 
         # Check cascade data built
         assert len(cascade_engine._cascade_data) > 0

@@ -10,7 +10,6 @@ Properties tested:
 4. Buffer handles any push/sample sequence without crashing
 """
 
-import pytest
 import torch
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st

@@ -22,7 +22,6 @@ from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.exploration.rnd import RNDExploration
 from townlet.training.state import BatchedAgentState
 
-
 # =============================================================================
 # EPSILON-GREEDY EXPLORATION
 # =============================================================================

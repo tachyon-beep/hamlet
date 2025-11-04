@@ -162,10 +162,7 @@ class TestInteractMasking:
         basic_env.positions[0] = torch.tensor([4, 4], device=basic_env.device)
 
         # Verify not on any affordance
-        on_affordance = any(
-            torch.equal(basic_env.positions[0], pos)
-            for pos in basic_env.affordances.values()
-        )
+        on_affordance = any(torch.equal(basic_env.positions[0], pos) for pos in basic_env.affordances.values())
 
         if not on_affordance:
             masks = basic_env.get_action_masks()
@@ -234,10 +231,7 @@ class TestInteractMasking:
         multi_agent_env.positions[1] = torch.tensor([4, 4], device=multi_agent_env.device)
 
         # Verify agent 1 is not on affordance
-        on_affordance = any(
-            torch.equal(multi_agent_env.positions[1], pos)
-            for pos in multi_agent_env.affordances.values()
-        )
+        on_affordance = any(torch.equal(multi_agent_env.positions[1], pos) for pos in multi_agent_env.affordances.values())
 
         if not on_affordance:
             masks = multi_agent_env.get_action_masks()

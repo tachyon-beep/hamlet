@@ -14,11 +14,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.recording.replay import ReplayManager
-from townlet.demo.database import DemoDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -762,7 +762,11 @@ class LiveInferenceServer:
             interaction_progress_raw = self.env.interaction_progress[0].item() if hasattr(self.env, "interaction_progress") else 0
             interaction_progress_normalized = 0.0
 
-            if interaction_progress_raw > 0 and hasattr(self.env, "last_interaction_affordance") and self.env.last_interaction_affordance[0] is not None:
+            if (
+                interaction_progress_raw > 0
+                and hasattr(self.env, "last_interaction_affordance")
+                and self.env.last_interaction_affordance[0] is not None
+            ):
                 from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
 
                 affordance_name = self.env.last_interaction_affordance[0]
@@ -798,7 +802,6 @@ class LiveInferenceServer:
         # Remove dead clients
         self.clients -= dead_clients
 
-
     async def _handle_load_replay(self, websocket: WebSocket, data: dict):
         """Handle load_replay command."""
         if not self.replay_manager:
@@ -825,17 +828,19 @@ class LiveInferenceServer:
 
         # Send confirmation
         metadata = self.replay_manager.get_metadata()
-        await self._broadcast_to_clients({
-            "type": "replay_loaded",
-            "episode_id": episode_id,
-            "metadata": {
-                "survival_steps": metadata["survival_steps"],
-                "total_reward": metadata["total_reward"],
-                "curriculum_stage": metadata["curriculum_stage"],
-                "timestamp": metadata["timestamp"],
-            },
-            "total_steps": self.replay_manager.get_total_steps(),
-        })
+        await self._broadcast_to_clients(
+            {
+                "type": "replay_loaded",
+                "episode_id": episode_id,
+                "metadata": {
+                    "survival_steps": metadata["survival_steps"],
+                    "total_reward": metadata["total_reward"],
+                    "curriculum_stage": metadata["curriculum_stage"],
+                    "timestamp": metadata["timestamp"],
+                },
+                "total_steps": self.replay_manager.get_total_steps(),
+            }
+        )
 
         # Send first step
         await self._send_replay_step()
@@ -865,10 +870,12 @@ class LiveInferenceServer:
         )
 
         # Send response
-        await websocket.send_json({
-            "type": "recordings_list",
-            "recordings": recordings,
-        })
+        await websocket.send_json(
+            {
+                "type": "recordings_list",
+                "recordings": recordings,
+            }
+        )
 
     async def _handle_replay_control(self, websocket: WebSocket, data: dict):
         """Handle replay_control command."""
@@ -908,10 +915,12 @@ class LiveInferenceServer:
 
         # End of replay
         if self.replay_manager and self.replay_manager.is_at_end():
-            await self._broadcast_to_clients({
-                "type": "replay_finished",
-                "episode_id": self.replay_manager.episode_id,
-            })
+            await self._broadcast_to_clients(
+                {
+                    "type": "replay_finished",
+                    "episode_id": self.replay_manager.episode_id,
+                }
+            )
             self.replay_playing = False
             logger.info("Replay finished")
 
@@ -953,19 +962,12 @@ class LiveInferenceServer:
                     "last_action": step_data["action"],
                 }
             ],
-            "affordances": [
-                {"type": name, "x": pos[0], "y": pos[1]}
-                for name, pos in affordances.items()
-            ],
+            "affordances": [{"type": name, "x": pos[0], "y": pos[1]} for name, pos in affordances.items()],
         }
 
         # Build meter state
         meter_names = ["energy", "hygiene", "satiation", "money", "health", "fitness", "mood", "social"]
-        agent_meters = {
-            "agent_0": {
-                "meters": {name: val for name, val in zip(meter_names, meters_tuple)}
-            }
-        }
+        agent_meters = {"agent_0": {"meters": {name: val for name, val in zip(meter_names, meters_tuple)}}}
 
         # Build state update
         state_update = {

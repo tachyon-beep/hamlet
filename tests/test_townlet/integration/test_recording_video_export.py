@@ -4,10 +4,10 @@ Tests for video export functionality.
 Tests rendering frames and exporting to MP4.
 """
 
-import pytest
 import tempfile
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 
 class TestVideoRenderer:
@@ -165,13 +165,15 @@ class TestVideoExport:
 
     def test_export_episode_to_mp4(self):
         """Should export episode to MP4 file."""
-        from townlet.recording.video_export import export_episode_video
+        import time
+        from dataclasses import asdict
+
+        import lz4.frame
+        import msgpack
+
         from townlet.demo.database import DemoDatabase
         from townlet.recording.data_structures import EpisodeMetadata, RecordedStep
-        from dataclasses import asdict
-        import msgpack
-        import lz4.frame
-        import time
+        from townlet.recording.video_export import export_episode_video
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)

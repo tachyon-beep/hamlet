@@ -3,7 +3,6 @@
 import sqlite3
 from pathlib import Path
 from typing import Any
-from typing import Any
 
 
 class DemoDatabase:
@@ -199,8 +198,7 @@ class DemoDatabase:
                 rows.append((episode_id, from_aff, to_aff, count))
 
         self.conn.executemany(
-            "INSERT INTO affordance_visits (episode_id, from_affordance, to_affordance, visit_count) VALUES (?, ?, ?, ?)",
-            rows
+            "INSERT INTO affordance_visits (episode_id, from_affordance, to_affordance, visit_count) VALUES (?, ?, ?, ?)", rows
         )
         self.conn.commit()
 

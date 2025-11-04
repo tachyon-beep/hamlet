@@ -4,8 +4,6 @@ Tests for database recording integration.
 Tests the episode_recordings table and query methods.
 """
 
-import pytest
-import sqlite3
 import tempfile
 import time
 from pathlib import Path
@@ -23,9 +21,7 @@ class TestDatabaseRecording:
             db = DemoDatabase(db_path)
 
             # Verify table exists
-            cursor = db.conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='episode_recordings'"
-            )
+            cursor = db.conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='episode_recordings'")
             result = cursor.fetchone()
             assert result is not None
             assert result[0] == "episode_recordings"
@@ -65,10 +61,7 @@ class TestDatabaseRecording:
             )
 
             # Verify inserted
-            cursor = db.conn.execute(
-                "SELECT * FROM episode_recordings WHERE episode_id = ?",
-                (100,)
-            )
+            cursor = db.conn.execute("SELECT * FROM episode_recordings WHERE episode_id = ?", (100,))
             row = cursor.fetchone()
 
             assert row is not None
@@ -374,10 +367,7 @@ class TestAffordanceTransitions:
             db.insert_affordance_visits(episode_id=100, transitions=transitions)
 
             # Query back
-            cursor = db.conn.execute(
-                "SELECT * FROM affordance_visits WHERE episode_id = ? ORDER BY from_affordance, to_affordance",
-                (100,)
-            )
+            cursor = db.conn.execute("SELECT * FROM affordance_visits WHERE episode_id = ? ORDER BY from_affordance, to_affordance", (100,))
             rows = cursor.fetchall()
 
             assert len(rows) == 3
@@ -410,10 +400,7 @@ class TestAffordanceTransitions:
             db.insert_affordance_visits(episode_id=100, transitions={})
 
             # Verify no rows inserted
-            cursor = db.conn.execute(
-                "SELECT COUNT(*) as count FROM affordance_visits WHERE episode_id = ?",
-                (100,)
-            )
+            cursor = db.conn.execute("SELECT COUNT(*) as count FROM affordance_visits WHERE episode_id = ?", (100,))
             result = cursor.fetchone()
             assert result["count"] == 0
 
@@ -431,10 +418,7 @@ class TestAffordanceTransitions:
 
             db.insert_affordance_visits(episode_id=100, transitions=transitions)
 
-            cursor = db.conn.execute(
-                "SELECT * FROM affordance_visits WHERE episode_id = ?",
-                (100,)
-            )
+            cursor = db.conn.execute("SELECT * FROM affordance_visits WHERE episode_id = ?", (100,))
             rows = cursor.fetchall()
 
             assert len(rows) == 1

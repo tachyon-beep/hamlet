@@ -20,7 +20,6 @@ Total: 38 tests → 15 comprehensive integration tests
 import tempfile
 from pathlib import Path
 
-import pytest
 import torch
 import yaml
 
@@ -30,7 +29,6 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
-
 
 # =============================================================================
 # TEST CLASS 1: Environment Checkpointing (3 tests)
@@ -83,8 +81,7 @@ class TestEnvironmentCheckpointing:
         # Verify positions match
         for name, original_pos in original_positions.items():
             assert name in env2.affordances, f"Affordance {name} should exist after load"
-            assert torch.equal(env2.affordances[name], original_pos), \
-                f"Affordance {name} position should be preserved"
+            assert torch.equal(env2.affordances[name], original_pos), f"Affordance {name} position should be preserved"
 
     def test_environment_checkpoint_preserves_agent_state(self, cpu_device, test_config_pack_path):
         """Environment should preserve agent state via manual save/restore (no built-in checkpointing).
@@ -164,10 +161,8 @@ class TestEnvironmentCheckpointing:
         env.set_affordance_positions(checkpoint2)
 
         # Verify checkpoints are identical
-        assert checkpoint1["positions"] == checkpoint2["positions"], \
-            "Affordance positions should be identical across cycles"
-        assert checkpoint1["ordering"] == checkpoint2["ordering"], \
-            "Affordance ordering should be identical across cycles"
+        assert checkpoint1["positions"] == checkpoint2["positions"], "Affordance positions should be identical across cycles"
+        assert checkpoint1["ordering"] == checkpoint2["ordering"], "Affordance ordering should be identical across cycles"
 
 
 # =============================================================================
@@ -298,8 +293,9 @@ class TestPopulationCheckpointing:
         # Verify weights match exactly
         restored_weights = pop2.q_network.state_dict()
         for key in original_weights.keys():
-            assert torch.allclose(original_weights[key], restored_weights[key], atol=1e-6), \
-                f"Q-network weights for {key} should match exactly"
+            assert torch.allclose(
+                original_weights[key], restored_weights[key], atol=1e-6
+            ), f"Q-network weights for {key} should match exactly"
 
     def test_population_checkpoint_preserves_replay_buffer(self, cpu_device, test_config_pack_path):
         """Replay buffer should be preserved with exact contents across checkpoint cycle."""
@@ -366,8 +362,9 @@ class TestPopulationCheckpointing:
         pop2.load_checkpoint_state(checkpoint)
 
         # Verify buffer size restored
-        assert len(pop2.replay_buffer) == original_buffer_size, \
-            f"Replay buffer size should match: {original_buffer_size} vs {len(pop2.replay_buffer)}"
+        assert (
+            len(pop2.replay_buffer) == original_buffer_size
+        ), f"Replay buffer size should match: {original_buffer_size} vs {len(pop2.replay_buffer)}"
 
 
 # =============================================================================
@@ -414,17 +411,14 @@ class TestCurriculumCheckpointing:
         curriculum2.initialize_population(3)
 
         # Verify fresh curriculum starts at stage 1
-        assert torch.all(curriculum2.tracker.agent_stages == 1), \
-            "Fresh curriculum should start all agents at stage 1"
+        assert torch.all(curriculum2.tracker.agent_stages == 1), "Fresh curriculum should start all agents at stage 1"
 
         # Load saved state
         curriculum2.load_state_dict(state)
 
         # Verify stages restored
-        assert torch.equal(curriculum2.tracker.agent_stages, original_stages), \
-            "Agent stages should be restored"
-        assert torch.equal(curriculum2.tracker.steps_at_stage, original_steps), \
-            "Steps at stage should be restored"
+        assert torch.equal(curriculum2.tracker.agent_stages, original_stages), "Agent stages should be restored"
+        assert torch.equal(curriculum2.tracker.steps_at_stage, original_steps), "Steps at stage should be restored"
 
     def test_curriculum_checkpoint_preserves_performance_history(self, cpu_device):
         """Curriculum should preserve episode performance history across checkpoint cycle."""
@@ -456,8 +450,9 @@ class TestCurriculumCheckpointing:
         curriculum2.load_state_dict(state)
 
         # Verify history is preserved (check that recent episodes match)
-        assert curriculum2.tracker.episode_rewards.shape == curriculum1.tracker.episode_rewards.shape, \
-            "Performance history shape should match"
+        assert (
+            curriculum2.tracker.episode_rewards.shape == curriculum1.tracker.episode_rewards.shape
+        ), "Performance history shape should match"
 
 
 # =============================================================================
@@ -548,8 +543,9 @@ class TestExplorationCheckpointing:
         exploration2.load_state(state)
 
         # Verify epsilon restored
-        assert abs(exploration2.rnd.epsilon - decayed_epsilon) < 1e-6, \
-            f"Epsilon should be restored: {decayed_epsilon} vs {exploration2.rnd.epsilon}"
+        assert (
+            abs(exploration2.rnd.epsilon - decayed_epsilon) < 1e-6
+        ), f"Epsilon should be restored: {decayed_epsilon} vs {exploration2.rnd.epsilon}"
 
 
 # =============================================================================
@@ -806,8 +802,7 @@ class TestRunnerCheckpointing:
             # 1. Q-network weights
             q_weights_after = runner2.population.q_network.state_dict()
             for key in q_weights_before.keys():
-                assert torch.allclose(q_weights_before[key], q_weights_after[key], atol=1e-6), \
-                    f"Q-network weights for {key} should match"
+                assert torch.allclose(q_weights_before[key], q_weights_after[key], atol=1e-6), f"Q-network weights for {key} should match"
 
             # 2. Curriculum stage
             stage_after = runner2.curriculum.tracker.agent_stages[0].item()
@@ -815,13 +810,11 @@ class TestRunnerCheckpointing:
 
             # 3. Exploration epsilon
             epsilon_after = runner2.exploration.rnd.epsilon
-            assert abs(epsilon_after - epsilon_before) < 1e-6, \
-                f"Epsilon should match: {epsilon_before} vs {epsilon_after}"
+            assert abs(epsilon_after - epsilon_before) < 1e-6, f"Epsilon should match: {epsilon_before} vs {epsilon_after}"
 
             # 4. Replay buffer size
             buffer_size_after = len(runner2.population.replay_buffer)
-            assert buffer_size_after == buffer_size_before, \
-                f"Replay buffer size should match: {buffer_size_before} vs {buffer_size_after}"
+            assert buffer_size_after == buffer_size_before, f"Replay buffer size should match: {buffer_size_before} vs {buffer_size_after}"
 
 
 # =============================================================================
@@ -911,8 +904,7 @@ class TestCheckpointRoundTrip:
         weights_at_150_v2 = pop2.q_network.state_dict()
 
         # Verify networks have same architecture
-        assert set(weights_at_150.keys()) == set(weights_at_150_v2.keys()), \
-            "Network architectures should match"
+        assert set(weights_at_150.keys()) == set(weights_at_150_v2.keys()), "Network architectures should match"
 
         # Verify weights have changed from initial (training happened)
         initial_weights = checkpoint["q_network"]
@@ -1021,9 +1013,7 @@ class TestCheckpointRoundTrip:
         assert curriculum2.tracker.agent_stages[1].item() == 3, "Agent 1 should be at stage 3"
 
         # 3. Q-network loaded correctly
-        assert len(population2.replay_buffer) == len(population.replay_buffer), \
-            "Replay buffer sizes should match"
+        assert len(population2.replay_buffer) == len(population.replay_buffer), "Replay buffer sizes should match"
 
         # 4. Exploration state consistent
-        assert abs(exploration2.rnd.epsilon - exploration.rnd.epsilon) < 1e-6, \
-            "Epsilon should match"
+        assert abs(exploration2.rnd.epsilon - exploration.rnd.epsilon) < 1e-6, "Epsilon should match"
