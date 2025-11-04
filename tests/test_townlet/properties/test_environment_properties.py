@@ -25,7 +25,7 @@ class TestEnvironmentBoundaryProperties:
 
     @given(
         grid_size=st.integers(min_value=5, max_value=12),  # Min 5 to fit affordances
-        action_sequence=st.lists(st.integers(min_value=0, max_value=4), min_size=1, max_size=50),
+        action_sequence=st.lists(st.integers(min_value=0, max_value=5), min_size=1, max_size=50),
     )
     @settings(max_examples=50)  # Reduce examples for faster tests
     def test_agents_never_leave_grid_bounds(self, grid_size, action_sequence):
@@ -104,7 +104,7 @@ class TestEnvironmentBoundaryProperties:
 
         # Execute random actions
         for _ in range(num_steps):
-            actions = torch.randint(0, 5, (num_agents,))
+            actions = torch.randint(0, 6, (num_agents,))
             obs, rewards, dones, info = env.step(actions)
 
             # PROPERTY: All meters in [0, 1]
@@ -155,7 +155,7 @@ class TestEnvironmentBoundaryProperties:
 
         # Execute random actions and verify dimensions persist
         for _ in range(10):
-            actions = torch.randint(0, 5, (num_agents,))
+            actions = torch.randint(0, 6, (num_agents,))
             obs, rewards, dones, info = env.step(actions)
 
             # PROPERTY: Observations always match expected dimension

@@ -584,7 +584,7 @@ class TestLSTMForwardPass:
 
         # Create recurrent network
         network = RecurrentSpatialQNetwork(
-            action_dim=5,
+            action_dim=6,
             window_size=5,
             num_meters=8,
             num_affordance_types=env.num_affordance_types,

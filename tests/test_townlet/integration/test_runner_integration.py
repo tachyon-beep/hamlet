@@ -501,3 +501,432 @@ training:
             assert isinstance(count, int) and count > 0, "visit_count should be positive integer"
 
         conn.close()
+
+
+class TestRunnerConfigValidation:
+    """Test runner config validation and error messages (PDR-002 compliance)."""
+
+    def test_missing_required_environment_params_raises_helpful_error(self, tmp_path):
+        """Missing required environment params should raise ValueError with helpful message.
+
+        Verifies PDR-002 no-defaults enforcement: all UAC parameters must be explicit.
+        Error message should show which params are missing and how to fix.
+        """
+        import pytest
+
+        from townlet.demo.runner import DemoRunner
+
+        # Create config missing required environment parameters
+        config_content = """
+environment:
+  # Missing: grid_size, partial_observability, vision_range, energy costs
+  enable_temporal_mechanics: false
+  enabled_affordances: []
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  network_type: simple
+  gamma: 0.99
+  replay_buffer_capacity: 1000
+
+curriculum:
+  max_steps_per_episode: 50
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 10
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 10
+
+training:
+  device: cpu
+  max_episodes: 1
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 32
+  max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_decay: 0.99
+  epsilon_min: 0.01
+"""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "training.yaml").write_text(config_content)
+
+        # Should raise ValueError with helpful message when trying to initialize
+        with pytest.raises(ValueError, match="Missing required parameters"):
+            runner = DemoRunner(
+                config_dir=config_dir,
+                db_path=tmp_path / "test.db",
+                checkpoint_dir=tmp_path / "checkpoints",
+                max_episodes=1,
+            )
+            # Validation happens in initialize() which is called by run()
+            runner.run()
+
+    def test_missing_required_training_params_raises_helpful_error(self, tmp_path):
+        """Missing required training params should raise ValueError with helpful message."""
+        import pytest
+
+        from townlet.demo.runner import DemoRunner
+
+        # Create config missing required training parameters
+        config_content = """
+environment:
+  grid_size: 8
+  partial_observability: false
+  vision_range: 2
+  enable_temporal_mechanics: false
+  enabled_affordances: []
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  network_type: simple
+  gamma: 0.99
+  replay_buffer_capacity: 1000
+
+curriculum:
+  max_steps_per_episode: 50
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 10
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 10
+
+training:
+  device: cpu
+  max_episodes: 1
+  # Missing: train_frequency, target_update_frequency, batch_size, max_grad_norm, epsilon params
+"""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "training.yaml").write_text(config_content)
+
+        # Should raise ValueError mentioning training section when trying to initialize
+        with pytest.raises(ValueError, match="Missing required parameters.*training"):
+            runner = DemoRunner(
+                config_dir=config_dir,
+                db_path=tmp_path / "test.db",
+                checkpoint_dir=tmp_path / "checkpoints",
+                max_episodes=1,
+            )
+            # Validation happens in initialize() which is called by run()
+            runner.run()
+
+
+class TestRunnerResourceCleanup:
+    """Test runner resource cleanup and context manager protocol (QUICK-002)."""
+
+    def test_context_manager_cleanup_on_normal_exit(self, tmp_path, test_config_pack_path):
+        """Context manager should cleanup resources (DB, TensorBoard) on normal exit."""
+        from townlet.demo.runner import DemoRunner
+
+        # Create minimal valid config
+        config_content = """
+environment:
+  grid_size: 8
+  partial_observability: false
+  vision_range: 2
+  enable_temporal_mechanics: false
+  enabled_affordances: []
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  network_type: simple
+  gamma: 0.99
+  replay_buffer_capacity: 1000
+
+curriculum:
+  max_steps_per_episode: 50
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 10
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 10
+
+training:
+  device: cpu
+  max_episodes: 1
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 32
+  max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_decay: 0.99
+  epsilon_min: 0.01
+"""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "training.yaml").write_text(config_content)
+
+        # Copy test config pack files
+        import shutil
+
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+            src = test_config_pack_path / file
+            dst = config_dir / file
+            if src.exists():
+                shutil.copy(src, dst)
+
+        db_path = tmp_path / "test.db"
+        checkpoint_dir = tmp_path / "checkpoints"
+
+        # Use context manager
+        with DemoRunner(
+            config_dir=config_dir,
+            db_path=db_path,
+            checkpoint_dir=checkpoint_dir,
+            max_episodes=1,
+        ) as runner:
+            # Verify runner is initialized
+            assert runner.db is not None
+            assert runner.tb_logger is not None
+
+        # After exit, database connection should be closed
+        # Verify by checking that _closed flag is True
+        assert runner.db._closed is True, "Database connection should be closed after context exit"
+
+    def test_idempotent_cleanup_safe_to_call_multiple_times(self, tmp_path, test_config_pack_path):
+        """_cleanup() should be idempotent - safe to call multiple times."""
+        from townlet.demo.runner import DemoRunner
+
+        # Create minimal valid config
+        config_content = """
+environment:
+  grid_size: 8
+  partial_observability: false
+  vision_range: 2
+  enable_temporal_mechanics: false
+  enabled_affordances: []
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  network_type: simple
+  gamma: 0.99
+  replay_buffer_capacity: 1000
+
+curriculum:
+  max_steps_per_episode: 50
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 10
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 10
+
+training:
+  device: cpu
+  max_episodes: 1
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 32
+  max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_decay: 0.99
+  epsilon_min: 0.01
+"""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "training.yaml").write_text(config_content)
+
+        # Copy test config pack files
+        import shutil
+
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+            src = test_config_pack_path / file
+            dst = config_dir / file
+            if src.exists():
+                shutil.copy(src, dst)
+
+        db_path = tmp_path / "test.db"
+        checkpoint_dir = tmp_path / "checkpoints"
+
+        with DemoRunner(
+            config_dir=config_dir,
+            db_path=db_path,
+            checkpoint_dir=checkpoint_dir,
+            max_episodes=1,
+        ) as runner:
+            pass
+
+        # Call cleanup multiple times - should not raise exception
+        runner._cleanup()
+        runner._cleanup()
+        runner._cleanup()
+
+        # Verify connection still closed after multiple cleanups
+        assert runner.db._closed is True
+
+    def test_context_manager_cleanup_on_exception(self, tmp_path, test_config_pack_path):
+        """Context manager should cleanup resources even when exception occurs inside block."""
+        from townlet.demo.runner import DemoRunner
+
+        # Create minimal valid config
+        config_content = """
+environment:
+  grid_size: 8
+  partial_observability: false
+  vision_range: 2
+  enable_temporal_mechanics: false
+  enabled_affordances: []
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  network_type: simple
+  gamma: 0.99
+  replay_buffer_capacity: 1000
+
+curriculum:
+  max_steps_per_episode: 50
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 10
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 10
+
+training:
+  device: cpu
+  max_episodes: 1
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 32
+  max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_decay: 0.99
+  epsilon_min: 0.01
+"""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "training.yaml").write_text(config_content)
+
+        # Copy test config pack files
+        import shutil
+
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+            src = test_config_pack_path / file
+            dst = config_dir / file
+            if src.exists():
+                shutil.copy(src, dst)
+
+        db_path = tmp_path / "test.db"
+        checkpoint_dir = tmp_path / "checkpoints"
+
+        # Intentionally raise exception inside context manager
+        import pytest
+
+        with pytest.raises(RuntimeError, match="Intentional test exception"):
+            with DemoRunner(
+                config_dir=config_dir,
+                db_path=db_path,
+                checkpoint_dir=checkpoint_dir,
+                max_episodes=1,
+            ) as runner:
+                # Store reference to verify cleanup after exception
+                runner_ref = runner
+                raise RuntimeError("Intentional test exception")
+
+        # Verify cleanup happened despite exception
+        assert runner_ref.db._closed is True, "Database should be closed even after exception"
+
+
+class TestDatabaseDefensiveChecks:
+    """Test database defensive checks after close() (Issue #5)."""
+
+    def test_database_operations_after_close_raise_runtime_error(self, tmp_path):
+        """Database operations after close() should raise RuntimeError with helpful message."""
+        import pytest
+
+        from townlet.demo.database import DemoDatabase
+
+        db_path = tmp_path / "test.db"
+        db = DemoDatabase(db_path)
+
+        # Close the database
+        db.close()
+
+        # Verify all database operations raise RuntimeError after close
+        with pytest.raises(RuntimeError, match="Database connection is closed"):
+            db.insert_episode(
+                episode_id=1,
+                timestamp=1234567890.0,
+                survival_time=100,
+                total_reward=50.0,
+                extrinsic_reward=45.0,
+                intrinsic_reward=5.0,
+                intrinsic_weight=0.5,
+                curriculum_stage=1,
+                epsilon=0.5,
+            )
+
+        with pytest.raises(RuntimeError, match="Database connection is closed"):
+            db.get_latest_episodes()
+
+        with pytest.raises(RuntimeError, match="Database connection is closed"):
+            db.set_system_state("test_key", "test_value")
+
+        with pytest.raises(RuntimeError, match="Database connection is closed"):
+            db.get_system_state("test_key")
+
+        with pytest.raises(RuntimeError, match="Database connection is closed"):
+            db.insert_affordance_visits(1, {"Bed": {"Hospital": 3}})
+
+        with pytest.raises(RuntimeError, match="Database connection is closed"):
+            db.get_recording(1)
+
+        with pytest.raises(RuntimeError, match="Database connection is closed"):
+            db.list_recordings()
+
+    def test_database_close_is_idempotent(self, tmp_path):
+        """Database close() should be idempotent - safe to call multiple times."""
+        from townlet.demo.database import DemoDatabase
+
+        db_path = tmp_path / "test.db"
+        db = DemoDatabase(db_path)
+
+        # Close multiple times - should not raise exception
+        db.close()
+        db.close()
+        db.close()
+
+        # Verify state is still closed
+        assert db._closed is True

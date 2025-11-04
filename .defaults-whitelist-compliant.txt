@@ -61,6 +61,25 @@ src/townlet/agent/networks.py:RecurrentSpatialQNetwork:reset_hidden_state:device
 src/townlet/agent/networks.py:RecurrentSpatialQNetwork:reset_hidden_state:batch_size  # Performance tuning
 
 # ============================================================================
+# BACKWARDS COMPATIBILITY EXCEPTIONS (Runtime Defaults)
+# ============================================================================
+#
+# These are runtime defaults (dict.get() with fallback), not function signature
+# defaults, so they won't be caught by the no-defaults linter. They are documented
+# here for transparency and to guide future refactoring.
+#
+# runner.py:345 - enable_temporal_mechanics
+#   Code: enable_temporal_mechanics = environment_cfg.get("enable_temporal_mechanics", False)
+#   Rationale: Backwards compatibility for pre-L3 configs (temporal mechanics
+#              introduced in Level 3). Old configs (L0, L0.5, L1, L2) work without
+#              this parameter by silently defaulting to False.
+#   Trade-off: ✅ Backwards compatible (old configs work)
+#              ❌ Violates fail-fast principle (missing param → silent fallback)
+#   Status: Accepted compromise for smooth curriculum progression
+#   Future: Consider requiring parameter when all curriculum levels use temporal
+#           mechanics, or add migration path with deprecation warning
+
+# ============================================================================
 # REMOVED FROM PREVIOUS WHITELIST (Non-Compliant)
 # ============================================================================
 #

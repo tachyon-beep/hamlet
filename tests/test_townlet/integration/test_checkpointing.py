@@ -122,7 +122,7 @@ class TestEnvironmentCheckpointing:
         # Reset and take some steps
         env.reset()
         for _ in range(10):
-            actions = torch.randint(0, 5, (2,), device=cpu_device)
+            actions = torch.randint(0, 6, (2,), device=cpu_device)
             env.step(actions)
 
         # Capture agent state manually (environment doesn't have save_checkpoint)
@@ -182,7 +182,7 @@ class TestEnvironmentCheckpointing:
         # Reset and take steps
         env.reset()
         for _ in range(20):
-            actions = torch.randint(0, 5, (1,), device=cpu_device)
+            actions = torch.randint(0, 6, (1,), device=cpu_device)
             env.step(actions)
 
         # First save/load cycle (affordance positions only)
@@ -231,7 +231,7 @@ class TestPopulationCheckpointing:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -1164,7 +1164,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -1203,7 +1203,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -1225,7 +1225,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -1246,7 +1246,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -1268,7 +1268,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -1292,7 +1292,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -1315,7 +1315,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 

@@ -47,7 +47,7 @@ class VectorizedPopulation(PopulationManager):
         agent_ids: list[str],
         device: torch.device,
         obs_dim: int = 70,
-        action_dim: int = 5,
+        action_dim: int = 6,
         learning_rate: float = 0.00025,
         gamma: float = 0.99,
         replay_buffer_capacity: int = 10000,
@@ -771,7 +771,7 @@ class VectorizedPopulation(PopulationManager):
             "meter_names": bars_config.meter_names,
             "version": bars_config.version,
             "obs_dim": self.env.observation_dim,
-            "action_dim": 5,  # Hardcoded for now (will be moved to actions.yaml in TASK-002B)
+            "action_dim": 6,  # Hardcoded for now (will be moved to actions.yaml in TASK-002B)
         }
 
         # Target network (recurrent mode only)

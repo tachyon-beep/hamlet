@@ -253,7 +253,7 @@ def simple_qnetwork(basic_env: VectorizedHamletEnv, device: torch.device) -> Sim
         SimpleQNetwork instance
     """
     obs_dim = basic_env.observation_builder.get_observation_dim()
-    return SimpleQNetwork(obs_dim=obs_dim, action_dim=5).to(device)
+    return SimpleQNetwork(obs_dim=obs_dim, action_dim=6, hidden_dim=128).to(device)
 
 
 @pytest.fixture
@@ -268,10 +268,11 @@ def recurrent_qnetwork(pomdp_env: VectorizedHamletEnv, device: torch.device) -> 
         RecurrentSpatialQNetwork instance
     """
     return RecurrentSpatialQNetwork(
-        grid_size=5,  # 5×5 local vision
-        num_affordance_types=14,
+        action_dim=6,
+        window_size=5,  # 5×5 local vision
         num_meters=pomdp_env.meter_count,  # Dynamic meter count (TASK-001)
-        action_dim=5,
+        num_affordance_types=14,
+        enable_temporal_features=False,
         hidden_dim=256,
     ).to(device)
 

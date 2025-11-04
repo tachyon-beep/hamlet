@@ -32,6 +32,18 @@ class DemoDatabase:
 
         self._create_schema()
 
+    def _ensure_open(self):
+        """Ensure database connection is open.
+
+        Raises:
+            RuntimeError: If database connection is closed
+        """
+        if self._closed:
+            raise RuntimeError(
+                "Database connection is closed. Cannot perform database operations "
+                "after close() has been called. Create a new DemoDatabase instance."
+            )
+
     def _create_schema(self):
         """Create database schema if it doesn't exist."""
         self.conn.executescript(
@@ -119,7 +131,11 @@ class DemoDatabase:
             intrinsic_weight: Current intrinsic weight
             curriculum_stage: Current curriculum stage (1-5)
             epsilon: Current exploration epsilon
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         self.conn.execute(
             """INSERT OR REPLACE INTO episodes
                (episode_id, timestamp, survival_time, total_reward, extrinsic_reward,
@@ -147,7 +163,11 @@ class DemoDatabase:
 
         Returns:
             List of episode dictionaries
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         cursor = self.conn.execute("SELECT * FROM episodes ORDER BY episode_id DESC LIMIT ?", (limit,))
         return [dict(row) for row in cursor.fetchall()]
 
@@ -157,7 +177,11 @@ class DemoDatabase:
         Args:
             key: State key
             value: State value (will be converted to string)
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         self.conn.execute("INSERT OR REPLACE INTO system_state (key, value) VALUES (?, ?)", (key, str(value)))
         self.conn.commit()
 
@@ -169,7 +193,11 @@ class DemoDatabase:
 
         Returns:
             State value or None if not found
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         cursor = self.conn.execute("SELECT value FROM system_state WHERE key = ?", (key,))
         row = cursor.fetchone()
         return row["value"] if row else None
@@ -190,7 +218,11 @@ class DemoDatabase:
             #   (episode_id, "Bed", "Hospital", 3)
             #   (episode_id, "Bed", "Job", 1)
             #   (episode_id, "Hospital", "Bed", 2)
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         if not transitions:
             return  # No transitions to insert (empty episode)
 
@@ -252,7 +284,11 @@ class DemoDatabase:
             reason: Recording reason (e.g., 'periodic', 'stage_transition')
             file_size: Uncompressed file size in bytes
             compressed_size: Compressed file size in bytes
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         self.conn.execute(
             """INSERT OR REPLACE INTO episode_recordings
                (episode_id, file_path, timestamp, survival_steps, total_reward,
@@ -285,7 +321,11 @@ class DemoDatabase:
 
         Returns:
             Recording metadata dict or None if not found
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         cursor = self.conn.execute(
             "SELECT * FROM episode_recordings WHERE episode_id = ?",
             (episode_id,),
@@ -312,7 +352,11 @@ class DemoDatabase:
 
         Returns:
             List of recording metadata dicts, ordered by episode_id DESC
+
+        Raises:
+            RuntimeError: If database connection is closed
         """
+        self._ensure_open()
         query = "SELECT * FROM episode_recordings WHERE 1=1"
         params: list[int | str | float] = []
 
