@@ -292,7 +292,8 @@ class TestBarsConfig:
             "terminal_conditions": [],
         }
 
-        with pytest.raises(ValidationError, match="indices must be 0-7"):
+        # TASK-001: Error message changed from "indices must be 0-7" to more detailed message
+        with pytest.raises(ValidationError, match="Bar indices must be contiguous from 0 to 7"):
             BarsConfig(**bars_data)
 
 
@@ -942,7 +943,7 @@ class TestEpsilonConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files from test pack
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
@@ -1080,7 +1081,7 @@ class TestTrainingHyperparameters:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
@@ -1148,7 +1149,7 @@ class TestMaxEpisodesConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
@@ -1202,7 +1203,7 @@ class TestMaxEpisodesConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
@@ -1256,7 +1257,7 @@ class TestMaxEpisodesConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
