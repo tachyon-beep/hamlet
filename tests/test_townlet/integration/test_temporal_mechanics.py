@@ -278,7 +278,6 @@ class TestOperatingHours:
 class TestMultiTickInteractions:
     """Multi-tick interaction mechanics (linear + completion bonus)."""
 
-    @xfail_temporal
     def test_progressive_benefit_accumulation(self, cpu_device):
         """Verify linear benefits accumulate per tick.
 
@@ -292,8 +291,11 @@ class TestMultiTickInteractions:
         )
 
         env.reset()
+
+        # Use actual Bed position (randomized on reset)
+        assert "Bed" in env.affordances, "Bed affordance not deployed in test config"
         env.meters[0, 0] = 0.3  # Start at 30% energy to avoid clamping
-        env.positions[0] = torch.tensor([1, 1], device=cpu_device)  # On Bed (default position)
+        env.positions[0] = env.affordances["Bed"]
 
         initial_energy = env.meters[0, 0].item()
 
@@ -313,7 +315,6 @@ class TestMultiTickInteractions:
         energy_after_2 = env.meters[0, 0].item()
         assert abs((energy_after_2 - initial_energy) - 0.140) < 0.02
 
-    @xfail_temporal
     def test_completion_bonus(self, cpu_device):
         """Verify 25% bonus on full completion.
 
@@ -327,9 +328,12 @@ class TestMultiTickInteractions:
         )
 
         env.reset()
+
+        # Use actual Bed position (randomized on reset)
+        assert "Bed" in env.affordances, "Bed affordance not deployed in test config"
         env.meters[0, 0] = 0.3  # Start at 30% energy
         env.meters[0, 6] = 0.7  # Start at 70% health (to see bonus)
-        env.positions[0] = torch.tensor([1, 1], device=cpu_device)
+        env.positions[0] = env.affordances["Bed"]
 
         initial_energy = env.meters[0, 0].item()
         initial_health = env.meters[0, 6].item()
@@ -351,7 +355,6 @@ class TestMultiTickInteractions:
         # (cascading effects from energy/satiation also apply)
         assert (final_health - initial_health) > 0.015
 
-    @xfail_temporal
     def test_multi_tick_job_completion(self, cpu_device):
         """Verify Job completion over 4 ticks with money gain.
 
@@ -365,7 +368,10 @@ class TestMultiTickInteractions:
         )
 
         env.reset()
-        env.positions[0] = torch.tensor([6, 6], device=cpu_device)  # On Job
+
+        # Use actual Job position (randomized on reset)
+        assert "Job" in env.affordances, "Job affordance not deployed in test config"
+        env.positions[0] = env.affordances["Job"]
         env.meters[0, 3] = 0.5  # Start with $50
         env.time_of_day = 10  # 10am (Job open 8-18)
 
@@ -386,7 +392,6 @@ class TestMultiTickInteractions:
         # Normalized: +0.28125
         assert (final_money - initial_money) > 0.25  # At least 25% gain
 
-    @xfail_temporal
     def test_money_charged_per_tick(self, cpu_device):
         """Verify cost charged each tick, not on completion.
 
@@ -400,7 +405,10 @@ class TestMultiTickInteractions:
         )
 
         env.reset()
-        env.positions[0] = torch.tensor([1, 1], device=cpu_device)
+
+        # Use actual Bed position (randomized on reset)
+        assert "Bed" in env.affordances, "Bed affordance not deployed in test config"
+        env.positions[0] = env.affordances["Bed"]
         env.meters[0, 3] = 0.50  # Start with $50
 
         # Bed costs $1/tick = 0.01 normalized
@@ -414,7 +422,6 @@ class TestMultiTickInteractions:
         money_after_2 = env.meters[0, 3].item()
         assert abs(money_after_2 - 0.48) < 0.001  # $49 - $1 = $48
 
-    @xfail_temporal
     def test_interaction_progress_in_observations(self, cpu_device):
         """Verify interaction progress (0.0-1.0) appears in observations.
 
@@ -427,31 +434,32 @@ class TestMultiTickInteractions:
             enable_temporal_mechanics=True,
         )
 
-        env.reset()
-        env.positions[0] = torch.tensor([1, 1], device=cpu_device)  # On Bed (5 ticks)
+        obs = env.reset()
+
+        # Use actual Bed position (randomized on reset)
+        assert "Bed" in env.affordances, "Bed affordance not deployed in test config"
+        env.positions[0] = env.affordances["Bed"]
         env.meters[0, 0] = 0.3  # Low energy
 
-        # Initial observation: no progress
-        obs = env.reset()
-        progress_feature = obs[0, -1]
+        # Initial observation: no progress (interaction_progress at -2, lifetime at -1)
+        progress_feature = obs[0, -2]
         assert progress_feature == 0.0
 
-        # After 1 tick: progress = 1/5 = 0.2
+        # After 1 tick: progress = 1 (raw) / 10.0 (normalization) = 0.1
         obs, _, _, _ = env.step(torch.tensor([4], device=cpu_device))
-        progress_feature = obs[0, -1]
+        progress_feature = obs[0, -2]
+        assert progress_feature == pytest.approx(0.1, abs=0.01)
+
+        # After 2 ticks: progress = 2 / 10.0 = 0.2
+        obs, _, _, _ = env.step(torch.tensor([4], device=cpu_device))
+        progress_feature = obs[0, -2]
         assert progress_feature == pytest.approx(0.2, abs=0.01)
 
-        # After 2 ticks: progress = 2/5 = 0.4
+        # After 3 ticks: progress = 3 / 10.0 = 0.3
         obs, _, _, _ = env.step(torch.tensor([4], device=cpu_device))
-        progress_feature = obs[0, -1]
-        assert progress_feature == pytest.approx(0.4, abs=0.01)
+        progress_feature = obs[0, -2]
+        assert progress_feature == pytest.approx(0.3, abs=0.01)
 
-        # After 3 ticks: progress = 3/5 = 0.6
-        obs, _, _, _ = env.step(torch.tensor([4], device=cpu_device))
-        progress_feature = obs[0, -1]
-        assert progress_feature == pytest.approx(0.6, abs=0.01)
-
-    @xfail_temporal
     def test_completion_bonus_timing(self, cpu_device):
         """Verify completion bonus applied ONLY on final tick.
 
@@ -465,7 +473,10 @@ class TestMultiTickInteractions:
         )
 
         env.reset()
-        env.positions[0] = torch.tensor([6, 6], device=cpu_device)  # On Job
+
+        # Use actual Job position (randomized on reset)
+        assert "Job" in env.affordances, "Job affordance not deployed in test config"
+        env.positions[0] = env.affordances["Job"]
         env.meters[0, 3] = 0.5  # Start with $50
         env.time_of_day = 10  # 10am (Job open)
 
