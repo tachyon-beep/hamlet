@@ -177,9 +177,6 @@ class VectorizedPopulation(PopulationManager):
         """Reset all environments and state."""
         self.current_obs = self.env.reset()
 
-        # Initialize reward baseline for current curriculum
-        baselines = self._update_reward_baseline()
-
         # Reset recurrent network hidden state (if applicable)
         if self.is_recurrent:
             recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
@@ -188,7 +185,7 @@ class VectorizedPopulation(PopulationManager):
         # Get epsilon from exploration strategy (handle both direct and composed)
         # Sync telemetry + exploration metrics (initial epsilon / stage)
         self.sync_exploration_metrics()
-        self._sync_curriculum_metrics(baselines)
+        self._sync_curriculum_metrics()
 
     # ------------------------------------------------------------------ #
     # Episode lifecycle helpers
@@ -260,31 +257,26 @@ class VectorizedPopulation(PopulationManager):
             return float(self.exploration.get_intrinsic_weight())
         return 0.0
 
-    def _sync_curriculum_metrics(self, baselines: torch.Tensor | None = None) -> None:
+    def _sync_curriculum_metrics(self) -> None:
         """
-        Write curriculum metadata (stage + baseline) into the runtime registry.
+        Write curriculum metadata (stage) into the runtime registry.
 
         Prefers the most recent curriculum decisions; falls back to tracker state
         when decisions are unavailable (e.g. before the first population step).
         """
         if self.current_curriculum_decisions:
-            stage_baseline = baselines if baselines is not None else self.runtime_registry.get_baseline_tensor()
-
             for idx, decision in enumerate(self.current_curriculum_decisions):
                 stage_value = self._difficulty_to_stage(float(decision.difficulty_level))
                 self.runtime_registry.set_curriculum_stage(agent_idx=idx, stage=stage_value)
-                self.runtime_registry.set_baseline(agent_idx=idx, value=stage_baseline[idx])
             return
 
         tracker = getattr(self.curriculum, "tracker", None)
         if tracker is None or not hasattr(tracker, "agent_stages"):
             return
 
-        stage_baseline = baselines if baselines is not None else self.runtime_registry.get_baseline_tensor()
         for idx in range(self.num_agents):
             stage_value = int(tracker.agent_stages[idx].item())
             self.runtime_registry.set_curriculum_stage(agent_idx=idx, stage=stage_value)
-            self.runtime_registry.set_baseline(agent_idx=idx, value=stage_baseline[idx])
 
     @staticmethod
     def _difficulty_to_stage(difficulty_level: float) -> int:
@@ -347,32 +339,6 @@ class VectorizedPopulation(PopulationManager):
         survival_time = len(episode["observations"])
         self._store_episode_and_reset(agent_idx)
         self._finalize_episode(agent_idx, survival_time)
-
-    def _update_reward_baseline(self):
-        """Update reward baseline when curriculum changes (P2.1: per-agent support)."""
-        if self.current_curriculum_decisions:
-            # P2.1: Extract per-agent multipliers
-            multipliers = torch.tensor(
-                [d.depletion_multiplier for d in self.current_curriculum_decisions],
-                dtype=torch.float32,
-                device=self.device,
-            )
-
-            # Check if any agent's multiplier changed
-            if not hasattr(self, "current_depletion_multipliers"):
-                self.current_depletion_multipliers = multipliers.clone()
-                baselines = self.env.update_baseline_for_curriculum(multipliers)
-                self.runtime_registry.set_baselines(baselines.clone())
-            elif not torch.equal(multipliers, self.current_depletion_multipliers):
-                self.current_depletion_multipliers = multipliers.clone()
-                baselines = self.env.update_baseline_for_curriculum(multipliers)
-                self.runtime_registry.set_baselines(baselines.clone())
-            else:
-                baselines = self.runtime_registry.get_baseline_tensor()
-
-            return baselines
-
-        return None
 
     def select_greedy_actions(self, env: VectorizedHamletEnv) -> torch.Tensor:
         """
@@ -487,9 +453,8 @@ class VectorizedPopulation(PopulationManager):
                 self.agent_ids,
             )
 
-        # 3.5 Update reward baseline if curriculum changed
-        baselines = self._update_reward_baseline()
-        self._sync_curriculum_metrics(baselines)
+        # 3.5 Sync curriculum metrics to registry
+        self._sync_curriculum_metrics()
 
         # 4. Get action masks from environment
         action_masks = envs.get_action_masks()
