@@ -2,9 +2,10 @@
 
 **Task**: TASK-001 Variable-Size Meter System
 **Priority**: CRITICAL
-**Effort**: 13-19 hours
+**Effort**: 15-21 hours (updated for test infrastructure integration)
 **Status**: Ready for TDD Implementation
 **Created**: 2025-11-04
+**Updated**: 2025-11-04 (integrated with new test infrastructure)
 **Method**: Research → Plan → Review Loop (see `docs/methods/RESEARCH-PLAN-REVIEW-LOOP.md`)
 
 ---
@@ -108,6 +109,208 @@ def validate_bars(cls, v: list[BarConfig]) -> list[BarConfig]:
 
 ---
 
+## Test Infrastructure Integration
+
+### Overview of New Test Infrastructure (November 2025)
+
+HAMLET/Townlet has a comprehensive test infrastructure with **560 tests** (67% coverage):
+- **Unit tests** (`tests/test_townlet/unit/`) - Isolated component testing (426 tests)
+- **Integration tests** (`tests/test_townlet/integration/`) - Cross-component interactions (114 tests)
+- **Property tests** (`tests/test_townlet/properties/`) - Hypothesis-based fuzzing (20 tests)
+- **Shared fixtures** (`conftest.py`) - Eliminate test duplication
+
+**TASK-001 tests will integrate into this structure**, not create parallel test files.
+
+### Key Test Infrastructure Patterns
+
+#### 1. Always Use `cpu_device` Fixture
+```python
+def test_my_feature(cpu_device):
+    """Always use CPU for deterministic tests."""
+    env = VectorizedHamletEnv(..., device=cpu_device)  # ✅ Not device="cuda"
+```
+
+**Why**: Prevents GPU randomness, ensures reproducible results.
+
+#### 2. Fixture Composition Pattern
+```python
+# conftest.py provides composed fixtures
+@pytest.fixture
+def config_4meter(tmp_path, test_config_pack_path):
+    """4-meter config pack (composes base fixtures)."""
+    # ...
+
+@pytest.fixture
+def env_4meter(cpu_device, config_4meter):
+    """4-meter environment (composes config + device)."""
+    return VectorizedHamletEnv(..., device=cpu_device, config_pack_path=config_4meter)
+```
+
+**Why**: Reusable, composable, eliminates duplication.
+
+#### 3. Behavioral Assertions (Not Exact Values)
+```python
+# ✅ Good: Behavioral
+assert late_survival.mean() > early_survival.mean(), "Agents should improve"
+
+# ❌ Bad: Exact value (fragile)
+assert late_survival.mean() == 123.45, "Must be exactly 123.45"
+```
+
+**Why**: Tests should verify behavior, not implementation details.
+
+### Test File Organization for TASK-001
+
+| Phase | Test File | Type |
+|-------|-----------|------|
+| **Phase 1** | `unit/environment/test_variable_meter_config.py` | Unit (NEW) |
+| **Phase 2** | `unit/environment/test_variable_meter_engine.py` | Unit (NEW) |
+| **Phase 3** | `unit/agent/test_variable_meter_networks.py` | Unit (NEW) |
+| **Phase 4** | `integration/test_checkpointing.py` | Integration (EXTEND) |
+| **Phase 5** | `integration/test_variable_meter_integration.py` | Integration (NEW) |
+
+**Rationale**: Mirrors existing structure - unit tests in component directories (`environment/`, `agent/`), integration tests in `integration/`.
+
+### Required Conftest.py Fixtures
+
+Before starting Phase 1, add these fixtures to `tests/test_townlet/conftest.py`:
+
+```python
+# =============================================================================
+# TASK-001: VARIABLE METER CONFIG FIXTURES
+# =============================================================================
+# Required imports (add to top of conftest.py if not present):
+# import copy
+# import shutil
+# import yaml
+
+@pytest.fixture
+def config_4meter(tmp_path, test_config_pack_path):
+    """Create temporary 4-meter config pack for testing.
+
+    Meters: energy, health, money, mood
+    Use for: TASK-001 variable meter config/engine tests
+    """
+    config_4m = tmp_path / "config_4m"
+    shutil.copytree(test_config_pack_path, config_4m)
+
+    # Create 4-meter bars.yaml
+    bars_config = {
+        "version": "2.0",
+        "description": "4-meter test universe",
+        "bars": [
+            {"name": "energy", "index": 0, "tier": "pivotal",
+             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.005},
+            {"name": "health", "index": 1, "tier": "pivotal",
+             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.0},
+            {"name": "money", "index": 2, "tier": "resource",
+             "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.0},
+            {"name": "mood", "index": 3, "tier": "secondary",
+             "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001},
+        ],
+        "terminal_conditions": [
+            {"meter": "energy", "operator": "<=", "value": 0.0},
+            {"meter": "health", "operator": "<=", "value": 0.0},
+        ],
+    }
+
+    with open(config_4m / "bars.yaml", 'w') as f:
+        yaml.safe_dump(bars_config, f)
+
+    # Simplify cascades.yaml
+    cascades_config = {
+        "version": "2.0",
+        "modulations": [],
+        "cascades": [
+            {"name": "low_mood_hits_energy", "category": "secondary_to_pivotal",
+             "source": "mood", "source_index": 3, "target": "energy",
+             "target_index": 0, "threshold": 0.2, "strength": 0.01}
+        ],
+        "execution_order": ["secondary_to_pivotal"],
+    }
+
+    with open(config_4m / "cascades.yaml", 'w') as f:
+        yaml.safe_dump(cascades_config, f)
+
+    return config_4m
+
+
+@pytest.fixture
+def config_12meter(tmp_path, test_config_pack_path):
+    """Create temporary 12-meter config pack for testing.
+
+    Meters: 8 standard + reputation, skill, spirituality, community_trust
+    Use for: TASK-001 variable meter scaling tests
+    """
+    config_12m = tmp_path / "config_12m"
+    shutil.copytree(test_config_pack_path, config_12m)
+
+    # Load existing 8-meter bars
+    with open(test_config_pack_path / "bars.yaml", 'r') as f:
+        bars_8m = yaml.safe_load(f)
+
+    # Add 4 new meters
+    extra_meters = [
+        {"name": "reputation", "index": 8, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.002},
+        {"name": "skill", "index": 9, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.3, "base_depletion": 0.001},
+        {"name": "spirituality", "index": 10, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.6, "base_depletion": 0.002},
+        {"name": "community_trust", "index": 11, "tier": "secondary",
+         "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001},
+    ]
+
+    bars_12m = copy.deepcopy(bars_8m)  # Deep copy to avoid modifying original
+    bars_12m["bars"].extend(extra_meters)
+
+    with open(config_12m / "bars.yaml", 'w') as f:
+        yaml.safe_dump(bars_12m, f)
+
+    return config_12m
+
+
+@pytest.fixture
+def env_4meter(cpu_device, config_4meter):
+    """4-meter environment for TASK-001 testing."""
+    return VectorizedHamletEnv(
+        num_agents=1, grid_size=8, partial_observability=False,
+        device=cpu_device, config_pack_path=config_4meter,
+    )
+
+
+@pytest.fixture
+def env_12meter(cpu_device, config_12meter):
+    """12-meter environment for TASK-001 testing."""
+    return VectorizedHamletEnv(
+        num_agents=1, grid_size=8, partial_observability=False,
+        device=cpu_device, config_pack_path=config_12meter,
+    )
+```
+
+**Location**: Add after existing training component fixtures in `conftest.py`.
+
+### Fixture Usage Example
+
+```python
+# OLD (from original plan - hardcoded paths)
+def test_4_meter_env():
+    env = VectorizedHamletEnv(
+        num_agents=2,
+        config_pack_path=Path("configs/L0_4meter_tutorial")  # ❌ Hardcoded
+    )
+
+# NEW (using fixtures)
+def test_4_meter_env(cpu_device, config_4meter):
+    env = VectorizedHamletEnv(
+        num_agents=2,
+        device=cpu_device,  # ✅ CPU for determinism
+        config_pack_path=config_4meter,  # ✅ Fixture
+    )
+```
+
+---
+
 ## TDD Implementation Plan
 
 ### TDD Approach: RED-GREEN-REFACTOR
@@ -122,6 +325,62 @@ Each phase follows strict TDD:
 
 ---
 
+## Phase 0: Setup Test Fixtures (1 hour)
+
+### Goal
+Prepare test infrastructure with fixtures for 4-meter and 12-meter config packs before starting TDD.
+
+### 0.1: Add Fixtures to Conftest.py
+
+**File**: `tests/test_townlet/conftest.py`
+
+Add the fixtures documented in the "Test Infrastructure Integration" section (lines 176-289) to conftest.py.
+
+**Required imports** (add to top of conftest.py if not present):
+```python
+import copy
+import shutil
+import yaml
+```
+
+**Fixtures to add**:
+- `config_4meter`: Creates temporary 4-meter config pack
+- `config_12meter`: Creates temporary 12-meter config pack
+- `env_4meter`: 4-meter environment fixture
+- `env_12meter`: 12-meter environment fixture
+
+### 0.2: Verify Fixtures Load Correctly
+
+**Smoke test** to verify fixtures work:
+
+```bash
+# Test fixture imports
+python -c "import copy, shutil, yaml; print('✓ All imports available')"
+
+# Collect tests to verify no import errors
+pytest --collect-only tests/test_townlet/conftest.py
+
+# Verify config_4meter fixture can be instantiated
+pytest tests/test_townlet/unit/test_configuration.py -k "test_4_meter" --collect-only
+```
+
+### 0.3: Create Minimal Test Configs (Optional)
+
+If 4-meter or 12-meter config packs don't exist yet, the fixtures will create them dynamically using `tmp_path`. No manual config creation needed.
+
+### Phase 0 Success Criteria
+- [ ] conftest.py has copy, shutil, yaml imports
+- [ ] config_4meter fixture added
+- [ ] config_12meter fixture added
+- [ ] env_4meter fixture added
+- [ ] env_12meter fixture added
+- [ ] `pytest --collect-only` runs without import errors
+- [ ] Fixtures compose correctly (tmp_path → config → env)
+
+**Estimated Time**: 1 hour
+
+---
+
 ## Phase 1: Config Schema Refactor (3-4 hours)
 
 ### Goal
@@ -129,18 +388,31 @@ Make `BarsConfig` accept variable-size meter lists (1-32 meters).
 
 ### 1.1: Write Tests for Variable Meter Count Validation (RED)
 
-**Test File**: `tests/test_townlet/test_variable_meters_config.py` (NEW)
+**Test File**: `tests/test_townlet/unit/test_configuration.py` (EXTEND existing file)
 
 ```python
-import pytest
+"""Unit tests for variable-size meter configuration (TASK-001 Phase 1).
+
+Tests that BarsConfig accepts variable meter counts (1-32) instead of
+hardcoded 8 meters.
+"""
+
 from pathlib import Path
-from townlet.environment.cascade_config import BarsConfig, BarConfig, load_bars_config
+
+import pytest
+import yaml
+
+from townlet.environment.cascade_config import (
+    BarConfig,
+    BarsConfig,
+    load_bars_config,
+)
 
 
 class TestVariableMeterConfigValidation:
     """Test that BarsConfig accepts variable meter counts."""
 
-    def test_4_meter_config_validates(self):
+    def test_4_meter_config_validates(self, tmp_path):
         """4-meter config should validate successfully."""
         config = BarsConfig(
             version="2.0",
@@ -162,7 +434,7 @@ class TestVariableMeterConfigValidation:
         assert config.meter_count == 4
         assert config.meter_names == ["energy", "health", "money", "mood"]
 
-    def test_12_meter_config_validates(self):
+    def test_12_meter_config_validates(self, tmp_path):
         """12-meter config should validate successfully."""
         bars = [
             BarConfig(name=f"meter_{i}", index=i, tier="secondary",
@@ -180,9 +452,9 @@ class TestVariableMeterConfigValidation:
         assert config.meter_count == 12
         assert len(config.meter_names) == 12
 
-    def test_existing_8_meter_config_still_validates(self):
+    def test_existing_8_meter_config_still_validates(self, test_config_pack_path):
         """Backward compatibility: 8-meter configs still work."""
-        config = load_bars_config(Path("configs/L1_full_observability/bars.yaml"))
+        config = load_bars_config(test_config_pack_path / "bars.yaml")
         assert config.meter_count == 8
 
     def test_0_meters_rejected(self):
@@ -257,7 +529,7 @@ class TestVariableMeterConfigValidation:
             )
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_config.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -v`
 
 **Expected**: 🔴 **ALL TESTS FAIL** (RED phase)
 - Current code validates len(v) == 8
@@ -358,7 +630,7 @@ class CascadeConfig(BaseModel):
     category: str
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_config.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -v`
 
 **Expected**: 🟢 **ALL TESTS PASS** (GREEN phase)
 
@@ -391,7 +663,7 @@ class BarsConfig(BaseModel):
         # ... rest of validation
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_config.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -v`
 
 **Expected**: 🟢 **STILL PASS** after refactoring
 
@@ -483,55 +755,69 @@ Make all tensor operations use dynamic meter count, not hardcoded 8.
 
 ### 2.1: Write Tests for Dynamic Tensor Sizing (RED)
 
-**Test File**: `tests/test_townlet/test_variable_meters_engine.py` (NEW)
+**Test File**: `tests/test_townlet/unit/test_configuration.py` (EXTEND existing file with new test classes)
 
 ```python
+"""Unit tests for variable-size meter engine dynamics (TASK-001 Phase 2).
+
+Tests that engine layer creates tensors of correct size for variable meters.
+"""
+
 import pytest
 import torch
 from pathlib import Path
+
 from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.environment.cascade_engine import CascadeEngine
 
 
 class TestVariableMeterEngineDynamics:
     """Test that engine creates tensors of correct size for variable meters."""
 
-    def test_4_meter_env_creates_correct_tensor_shape(self):
+    def test_4_meter_env_creates_correct_tensor_shape(self, cpu_device, config_4meter):
         """4-meter env should create [num_agents, 4] tensor."""
         env = VectorizedHamletEnv(
             num_agents=2,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         # Meters tensor should be [2, 4]
         assert env.meters.shape == (2, 4)
         assert env.meter_count == 4
 
-    def test_8_meter_env_still_works(self):
+    def test_8_meter_env_still_works(self, cpu_device, test_config_pack_path):
         """Backward compat: 8-meter env still creates [num_agents, 8] tensor."""
         env = VectorizedHamletEnv(
             num_agents=2,
-            config_pack_path=Path("configs/L1_full_observability")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=test_config_pack_path,
         )
 
         assert env.meters.shape == (2, 8)
         assert env.meter_count == 8
 
-    def test_12_meter_env_creates_correct_tensor_shape(self):
+    def test_12_meter_env_creates_correct_tensor_shape(self, cpu_device, config_12meter):
         """12-meter env should create [num_agents, 12] tensor."""
-        # First create config (if doesn't exist yet, this will fail - that's OK for TDD)
         env = VectorizedHamletEnv(
             num_agents=2,
-            config_pack_path=Path("configs/L2_12meter_complex")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_12meter,
         )
 
         assert env.meters.shape == (2, 12)
         assert env.meter_count == 12
 
-    def test_meters_initialized_with_config_values(self):
+    def test_meters_initialized_with_config_values(self, cpu_device, config_4meter):
         """Meters should be initialized with values from bars.yaml."""
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         # Check initial values match bars.yaml
@@ -541,29 +827,60 @@ class TestVariableMeterEngineDynamics:
         assert env.meters[0, 2].item() == pytest.approx(0.5)  # money
         assert env.meters[0, 3].item() == pytest.approx(0.7)  # mood
 
-    def test_observation_dim_scales_with_meter_count(self):
+    def test_engine_uses_name_based_lookups_not_hardcoded_indices(
+        self, cpu_device, config_4meter
+    ):
+        """Engine should use _get_meter_index() instead of hardcoded [0], [3], [6]."""
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
+        )
+
+        # Verify _get_meter_index() method exists and works
+        energy_idx = env.bars_config.meter_name_to_index["energy"]
+        health_idx = env.bars_config.meter_name_to_index["health"]
+        money_idx = env.bars_config.meter_name_to_index["money"]
+        mood_idx = env.bars_config.meter_name_to_index["mood"]
+
+        assert energy_idx == 0
+        assert health_idx == 1
+        assert money_idx == 2
+        assert mood_idx == 3
+
+        # Verify all meter names can be looked up
+        for meter_name in env.bars_config.meter_names:
+            idx = env.bars_config.meter_name_to_index[meter_name]
+            assert 0 <= idx < env.meter_count
+
+    def test_observation_dim_scales_with_meter_count(self, cpu_device, config_4meter, test_config_pack_path):
         """obs_dim should scale correctly with meter count."""
         env_4 = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         env_8 = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
-            config_pack_path=Path("configs/L1_full_observability")
+            device=cpu_device,
+            config_pack_path=test_config_pack_path,
         )
 
         # obs_dim should differ by exactly 4 (meter count difference)
         # obs_dim = grid_size² + meter_count + affordances + extras
         assert env_8.observation_dim == env_4.observation_dim + 4
 
-    def test_cascade_engine_uses_dynamic_meter_count(self):
+    def test_cascade_engine_uses_dynamic_meter_count(self, cpu_device, config_4meter):
         """CascadeEngine should build tensors of size [meter_count]."""
         env = VectorizedHamletEnv(
             num_agents=2,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         # Base depletion tensor should be [4]
@@ -578,7 +895,7 @@ class TestVariableMeterEngineDynamics:
         assert env.meters[0, 0] < initial_meters[0, 0]
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_engine.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters -v`
 
 **Expected**: 🔴 **ALL TESTS FAIL** (RED phase)
 - Current code hardcodes `torch.zeros((num_agents, 8))`
@@ -706,7 +1023,7 @@ class CascadeEngine:
         meters.clamp_(min=0.0)
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_engine.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters -v`
 
 **Expected**: 🟢 **ALL TESTS PASS** (GREEN phase)
 
@@ -716,7 +1033,7 @@ class CascadeEngine:
 - Add type hints to `_get_meter_index()`
 - Consolidate meter lookups
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_engine.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters -v`
 
 **Expected**: 🟢 **STILL PASS**
 
@@ -738,27 +1055,32 @@ Networks receive correct observation dimension based on meter count.
 
 ### 3.1: Write Tests for Network obs_dim (RED)
 
-**Test File**: `tests/test_townlet/test_variable_meters_network.py` (NEW)
+**Test File**: `tests/test_townlet/unit/agent/test_variable_meter_networks.py` (NEW)
 
 ```python
+"""Unit tests for networks with variable meter obs_dim (TASK-001 Phase 3)."""
+
 import pytest
 import torch
 from pathlib import Path
-from townlet.agent.networks import SimpleQNetwork
+
+from townlet.agent.networks import SimpleQNetwork, RecurrentSpatialQNetwork
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
 class TestVariableMeterNetworkCompatibility:
     """Test that networks handle variable meter counts correctly."""
 
-    def test_network_with_4_meter_obs_dim(self):
+    def test_network_with_4_meter_obs_dim(self, cpu_device, config_4meter):
         """Network should work with 4-meter obs_dim."""
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
-        network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=5)
+        network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=5).to(cpu_device)
 
         # Forward pass should work
         obs = env.reset()
@@ -766,44 +1088,52 @@ class TestVariableMeterNetworkCompatibility:
 
         assert q_values.shape == (1, 5)  # [batch, actions]
 
-    def test_network_with_8_meter_obs_dim(self):
+    def test_network_with_8_meter_obs_dim(self, cpu_device, test_config_pack_path):
         """Network should work with 8-meter obs_dim (backward compat)."""
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L1_full_observability")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=test_config_pack_path,
         )
 
-        network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=5)
+        network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=5).to(cpu_device)
         obs = env.reset()
         q_values = network(obs)
 
         assert q_values.shape == (1, 5)
 
-    def test_network_with_12_meter_obs_dim(self):
+    def test_network_with_12_meter_obs_dim(self, cpu_device, config_12meter):
         """Network should work with 12-meter obs_dim."""
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L2_12meter_complex")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_12meter,
         )
 
-        network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=5)
+        network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=5).to(cpu_device)
         obs = env.reset()
         q_values = network(obs)
 
         assert q_values.shape == (1, 5)
 
-    def test_obs_dim_difference_equals_meter_count_difference(self):
+    def test_obs_dim_difference_equals_meter_count_difference(
+        self, cpu_device, config_4meter, config_12meter
+    ):
         """obs_dim should scale linearly with meter_count."""
         env_4 = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         env_12 = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
-            config_pack_path=Path("configs/L2_12meter_complex")
+            device=cpu_device,
+            config_pack_path=config_12meter,
         )
 
         # Difference should be exactly meter count difference
@@ -813,7 +1143,7 @@ class TestVariableMeterNetworkCompatibility:
         assert obs_dim_diff == meter_count_diff  # 8 meter difference
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_network.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/agent/test_variable_meter_networks.py -v`
 
 **Expected**: 🔴 **MAY FAIL** if obs_dim not computed correctly in Phase 2
 - If Phase 2 done correctly, these should pass immediately
@@ -858,7 +1188,7 @@ class SimpleQNetwork(nn.Module):
 
 **No changes needed** - network already takes `obs_dim` as parameter.
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_network.py -v`
+**Run Tests**: `pytest tests/test_townlet/unit/agent/test_variable_meter_networks.py -v`
 
 **Expected**: 🟢 **ALL TESTS PASS** (GREEN phase)
 
@@ -899,9 +1229,19 @@ Store meter_count in checkpoint metadata; validate on load.
 
 ### 4.1: Write Tests for Checkpoint Metadata (RED)
 
-**Test File**: `tests/test_townlet/test_variable_meters_checkpoint.py` (NEW)
+**Test File**: `tests/test_townlet/integration/test_checkpointing.py` (EXTEND existing)
+
+Add the following test class to the existing checkpoint test file:
 
 ```python
+"""
+Checkpoint tests for variable-size meter system (TASK-001).
+
+Extends existing integration/test_checkpointing.py with tests for:
+- Checkpoint metadata includes meter count
+- Loading validates meter count matches
+- Legacy checkpoints load with backward compatibility
+"""
 import pytest
 import torch
 from pathlib import Path
@@ -910,13 +1250,17 @@ from townlet.training.state import save_checkpoint, load_checkpoint
 
 
 class TestVariableMeterCheckpoints:
-    """Test checkpoint saving/loading with variable meters."""
+    """Test checkpoint saving/loading with variable meters (TASK-001)."""
 
-    def test_checkpoint_includes_meter_metadata(self, tmp_path):
+    def test_checkpoint_includes_meter_metadata(
+        self, cpu_device, config_4meter, tmp_path
+    ):
         """Saved checkpoint should include meter count and names."""
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         checkpoint_path = tmp_path / "test_checkpoint.pt"
@@ -940,16 +1284,22 @@ class TestVariableMeterCheckpoints:
         assert "version" in checkpoint_data["universe_metadata"]
         assert "obs_dim" in checkpoint_data["universe_metadata"]
 
-    def test_loading_checkpoint_validates_meter_count(self, tmp_path):
+    def test_loading_checkpoint_validates_meter_count(
+        self, cpu_device, config_4meter, test_config_pack_path, tmp_path
+    ):
         """Loading checkpoint should fail if meter counts don't match."""
         env_4 = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         env_8 = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L1_full_observability")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=test_config_pack_path,  # 8-meter baseline
         )
 
         checkpoint_path = tmp_path / "test_checkpoint.pt"
@@ -966,11 +1316,15 @@ class TestVariableMeterCheckpoints:
         with pytest.raises(ValueError, match="meter count mismatch"):
             load_checkpoint(checkpoint_path, env_8)
 
-    def test_loading_checkpoint_with_matching_meters_succeeds(self, tmp_path):
+    def test_loading_checkpoint_with_matching_meters_succeeds(
+        self, cpu_device, config_4meter, tmp_path
+    ):
         """Loading checkpoint should succeed if meter counts match."""
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         checkpoint_path = tmp_path / "test_checkpoint.pt"
@@ -989,7 +1343,9 @@ class TestVariableMeterCheckpoints:
         assert checkpoint.episode == 100
         assert checkpoint.universe_metadata["meter_count"] == 4
 
-    def test_legacy_checkpoint_loads_with_warning(self, tmp_path):
+    def test_legacy_checkpoint_loads_with_warning(
+        self, cpu_device, test_config_pack_path, tmp_path
+    ):
         """Legacy checkpoints (no metadata) should load with warning."""
         # Create fake legacy checkpoint (no universe_metadata)
         legacy_data = {
@@ -1004,7 +1360,9 @@ class TestVariableMeterCheckpoints:
 
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L1_full_observability")  # 8 meters
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=test_config_pack_path,  # 8-meter baseline
         )
 
         # Load should work (assumes 8 meters)
@@ -1014,7 +1372,7 @@ class TestVariableMeterCheckpoints:
         assert checkpoint.episode == 50
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_checkpoint.py -v`
+**Run Tests**: `pytest tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints -v`
 
 **Expected**: 🔴 **ALL TESTS FAIL** (RED phase)
 - `universe_metadata` doesn't exist in current checkpoint format
@@ -1145,7 +1503,7 @@ def load_checkpoint(path: Path, current_env) -> PopulationCheckpoint:
     return checkpoint
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_checkpoint.py -v`
+**Run Tests**: `pytest tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints -v`
 
 **Expected**: 🟢 **ALL TESTS PASS** (GREEN phase)
 
@@ -1196,99 +1554,118 @@ Ensure end-to-end training works with variable meters.
 
 ### 5.1: Write Integration Tests (RED)
 
-**Test File**: `tests/test_townlet/test_variable_meters_integration.py` (NEW)
+**Test File**: `tests/test_townlet/integration/test_variable_meter_integration.py` (NEW)
 
 ```python
+"""
+Integration tests for variable-size meter system (TASK-001).
+
+Tests end-to-end training flows with 4, 8, and 12-meter universes:
+- Full episode rollouts
+- Training with checkpointing
+- Cascade effects with variable meters
+"""
 import pytest
 import torch
 from pathlib import Path
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.population.vectorized import VectorizedPopulation
+from townlet.training.state import save_checkpoint, load_checkpoint
 
 
 class TestVariableMeterIntegration:
-    """End-to-end integration tests for variable meter system."""
+    """End-to-end integration tests for variable meter system (TASK-001)."""
 
-    def test_full_training_episode_4_meters(self):
+    def test_full_training_episode_4_meters(self, cpu_device, config_4meter):
         """Full training episode with 4-meter universe should complete."""
         env = VectorizedHamletEnv(
             num_agents=4,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         # Reset and run episode
         obs = env.reset()
         assert obs.shape == (4, env.observation_dim)
 
-        done = torch.zeros(4, dtype=torch.bool)
+        done = torch.zeros(4, dtype=torch.bool, device=cpu_device)
         steps = 0
         max_steps = 500
 
         while not done.all() and steps < max_steps:
             # Random policy for testing
-            actions = torch.randint(0, 5, (4,), device=env.device)
+            actions = torch.randint(0, 5, (4,), device=cpu_device)
             obs, rewards, done, info = env.step(actions)
             steps += 1
 
-        # Should complete without errors
-        assert steps < max_steps  # At least some agents should die naturally
+        # Should complete without errors (at least some agents die)
+        assert steps < max_steps
 
-    def test_full_training_episode_8_meters(self):
+    def test_full_training_episode_8_meters(self, cpu_device, test_config_pack_path):
         """Full training episode with 8-meter universe (backward compat)."""
         env = VectorizedHamletEnv(
             num_agents=4,
-            config_pack_path=Path("configs/L1_full_observability")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=test_config_pack_path,  # 8-meter baseline
         )
 
         obs = env.reset()
-        done = torch.zeros(4, dtype=torch.bool)
+        done = torch.zeros(4, dtype=torch.bool, device=cpu_device)
         steps = 0
 
         while not done.all() and steps < 500:
-            actions = torch.randint(0, 5, (4,), device=env.device)
+            actions = torch.randint(0, 5, (4,), device=cpu_device)
             obs, rewards, done, info = env.step(actions)
             steps += 1
 
         # Should complete without errors
         assert steps < 500
 
-    def test_full_training_episode_12_meters(self):
+    def test_full_training_episode_12_meters(self, cpu_device, config_12meter):
         """Full training episode with 12-meter universe should complete."""
         env = VectorizedHamletEnv(
             num_agents=4,
-            config_pack_path=Path("configs/L2_12meter_complex")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_12meter,
         )
 
         obs = env.reset()
-        done = torch.zeros(4, dtype=torch.bool)
+        done = torch.zeros(4, dtype=torch.bool, device=cpu_device)
         steps = 0
 
         while not done.all() and steps < 500:
-            actions = torch.randint(0, 5, (4,), device=env.device)
+            actions = torch.randint(0, 5, (4,), device=cpu_device)
             obs, rewards, done, info = env.step(actions)
             steps += 1
 
         # Should complete without errors
         assert steps < 500
 
-    def test_training_with_checkpointing_4_meters(self, tmp_path):
+    def test_training_with_checkpointing_4_meters(
+        self, cpu_device, config_4meter, tmp_path
+    ):
         """Training with save/load checkpoints should work."""
         env = VectorizedHamletEnv(
             num_agents=2,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         population = VectorizedPopulation(
             env=env,
             learning_rate=0.00025,
             gamma=0.99,
-            device=env.device
+            device=cpu_device,
         )
 
         # Train for 10 episodes
         for episode in range(10):
             obs = env.reset()
-            done = torch.zeros(2, dtype=torch.bool)
+            done = torch.zeros(2, dtype=torch.bool, device=cpu_device)
 
             while not done.all():
                 actions = population.select_actions(obs, epsilon=0.1)
@@ -1309,11 +1686,15 @@ class TestVariableMeterIntegration:
         assert checkpoint.episode == 10
         assert checkpoint.universe_metadata["meter_count"] == 4
 
-    def test_cascade_effects_work_with_variable_meters(self):
+    def test_cascade_effects_work_with_variable_meters(
+        self, cpu_device, config_4meter
+    ):
         """Cascade effects should apply correctly with any meter count."""
         env = VectorizedHamletEnv(
             num_agents=1,
-            config_pack_path=Path("configs/L0_4meter_tutorial")
+            grid_size=8,
+            device=cpu_device,
+            config_pack_path=config_4meter,
         )
 
         # Set up specific meter values to trigger cascades
@@ -1329,11 +1710,10 @@ class TestVariableMeterIntegration:
         final_energy = env.meters[0, 0].item()
 
         # At minimum, should not crash
-        assert final_energy >= 0.0
-        assert final_energy <= 1.0
+        assert 0.0 <= final_energy <= 1.0
 ```
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_integration.py -v`
+**Run Tests**: `pytest tests/test_townlet/integration/test_variable_meter_integration.py -v`
 
 **Expected**: 🔴 **MAY FAIL** if Phases 1-4 incomplete
 - If all previous phases passed, integration tests should pass
@@ -1345,7 +1725,7 @@ Debug and fix any issues revealed by integration tests:
 - Cascade configuration issues
 - Population/training loop issues
 
-**Run Tests**: `pytest tests/test_townlet/test_variable_meters_integration.py -v`
+**Run Tests**: `pytest tests/test_townlet/integration/test_variable_meter_integration.py -v`
 
 **Expected**: 🟢 **ALL TESTS PASS** (GREEN phase)
 
@@ -1515,15 +1895,17 @@ training:
 
 | Phase | Description | TDD Time | Implementation Time | Total |
 |-------|-------------|----------|---------------------|-------|
+| **Phase 0** | Setup test fixtures | 0h | 1h | 1h |
 | **Phase 1** | Config schema refactor | 1-1.5h | 2-2.5h | 3-4h |
 | **Phase 2** | Engine layer refactor | 1.5-2h | 2.5-4h | 4-6h |
 | **Phase 3** | Network layer updates | 0.5-1h | 1.5-2h | 2-3h |
 | **Phase 4** | Checkpoint compatibility | 1-1.5h | 1-1.5h | 2-3h |
 | **Phase 5** | Integration testing | 1-1.5h | 1-1.5h | 2-3h |
-| **Total** | | **5-7.5h** | **8-11.5h** | **13-19h** |
+| **Total** | | **4.5-7.5h** (TDD) | **9.5-12.5h** (Impl) | **15-21h** |
 
 **TDD Overhead**: ~40% of time spent writing tests first (RED phase)
 **Value**: Prevents regressions, documents expected behavior, enables confident refactoring
+**Note**: Phase 0 is setup/infrastructure, not TDD (no tests written)
 
 ---
 
@@ -1546,6 +1928,140 @@ training:
 4. **Pedagogical Materials**:
    - Write lesson on "Designing Meter Systems"
    - Show meter count affects agent behavior
+
+---
+
+## Running TASK-001 Tests
+
+This section provides pytest commands for running TASK-001 tests at various granularities.
+
+### Run All TASK-001 Tests
+
+```bash
+# Run all variable meter tests (unit + integration)
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation \
+       tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine \
+       tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters \
+       tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters \
+       tests/test_townlet/unit/agent/test_networks.py::TestVariableMeterNetworks \
+       tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints \
+       tests/test_townlet/integration/test_variable_meter_integration.py \
+       -v
+```
+
+### Run Tests By Phase
+
+**Phase 1: Config Schema**
+```bash
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -v
+```
+
+**Phase 2: Engine Layer**
+```bash
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine \
+       tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters \
+       tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters -v
+```
+
+**Phase 3: Network Layer**
+```bash
+pytest tests/test_townlet/unit/agent/test_networks.py::TestVariableMeterNetworks -v
+```
+
+**Phase 4: Checkpoint Compatibility**
+```bash
+pytest tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints -v
+```
+
+**Phase 5: Integration**
+```bash
+pytest tests/test_townlet/integration/test_variable_meter_integration.py -v
+```
+
+### Run with Coverage
+
+```bash
+# Coverage for all TASK-001 tests
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation \
+       tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine \
+       tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters \
+       tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters \
+       tests/test_townlet/unit/agent/test_networks.py::TestVariableMeterNetworks \
+       tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints \
+       tests/test_townlet/integration/test_variable_meter_integration.py \
+       --cov=townlet.environment.cascade_config \
+       --cov=townlet.environment.vectorized_env \
+       --cov=townlet.environment.cascade_engine \
+       --cov=townlet.environment.observation_builder \
+       --cov=townlet.agent.networks \
+       --cov=townlet.training.state \
+       --cov-report=term-missing \
+       -v
+```
+
+### Run Specific Test Classes
+
+```bash
+# Config tests
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -v
+
+# Engine tests
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine -v
+pytest tests/test_townlet/unit/test_configuration.py::TestCascadeEngineVariableMeters -v
+pytest tests/test_townlet/unit/test_configuration.py::TestObservationBuilderVariableMeters -v
+
+# Network tests
+pytest tests/test_townlet/unit/agent/test_networks.py::TestVariableMeterNetworks -v
+
+# Checkpoint tests
+pytest tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints -v
+
+# Integration tests
+pytest tests/test_townlet/integration/test_variable_meter_integration.py::TestVariableMeterIntegration -v
+```
+
+### Watch Mode (Continuous Testing During Development)
+
+```bash
+# Watch and rerun tests on file changes (requires pytest-watch)
+ptw tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation -- -v
+```
+
+### Quick Smoke Test
+
+Run one test from each phase to verify basic functionality:
+
+```bash
+pytest \
+  tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation::test_4_meter_config_validates \
+  tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine::test_4_meter_env_creates_correct_tensor_shape \
+  tests/test_townlet/unit/agent/test_networks.py::TestVariableMeterNetworks::test_network_with_4_meter_obs_dim \
+  tests/test_townlet/integration/test_checkpointing.py::TestVariableMeterCheckpoints::test_checkpoint_includes_meter_metadata \
+  tests/test_townlet/integration/test_variable_meter_integration.py::TestVariableMeterIntegration::test_full_training_episode_4_meters \
+  -v
+```
+
+### Fixture Verification
+
+Test that required fixtures are working correctly:
+
+```bash
+# Verify cpu_device fixture
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterConfigValidation::test_4_meter_config_validates -v -s
+
+# Verify config_4meter fixture creates correct config
+pytest tests/test_townlet/unit/test_configuration.py::TestVariableMeterEngine::test_4_meter_env_creates_correct_tensor_shape -v -s
+```
+
+### Expected Test Counts
+
+- **Phase 0 (Fixtures)**: ~0 tests (setup only, verified with --collect-only)
+- **Phase 1 (Config)**: ~6 tests
+- **Phase 2 (Engine)**: ~13 tests (5 env + 4 cascade + 4 observation)
+- **Phase 3 (Network)**: ~4 tests
+- **Phase 4 (Checkpoint)**: ~4 tests
+- **Phase 5 (Integration)**: ~5 tests
+- **Total**: ~32 tests for TASK-001
 
 ---
 
