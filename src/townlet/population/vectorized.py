@@ -103,6 +103,7 @@ class VectorizedPopulation(PopulationManager):
         self.last_loss = 0.0
         self.last_q_values_mean = 0.0
         self.last_training_step = 0
+        self.last_rnd_loss = 0.0  # RND predictor loss (for monitoring intrinsic exploration)
 
         # Q-network (shared across all agents for now)
         self.q_network: nn.Module
@@ -534,6 +535,8 @@ class VectorizedPopulation(PopulationManager):
                 rnd.obs_buffer.append(self.current_obs[i].cpu())
             # Train predictor if buffer is full
             rnd_loss = rnd.update_predictor()
+            # Track RND loss for monitoring (similar to Q-network loss)
+            self.last_rnd_loss = rnd_loss
 
         # 9. Train Q-network from replay buffer (every train_frequency steps)
         self.total_steps += 1
