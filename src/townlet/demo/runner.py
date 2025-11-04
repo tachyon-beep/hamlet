@@ -411,6 +411,9 @@ class DemoRunner:
                 episode_intrinsic_reward = torch.zeros(num_agents, device=self.env.device)
                 final_meters = [None for _ in range(num_agents)]
                 affordance_visits = [defaultdict(int) for _ in range(num_agents)]
+                # NEW: Transition tracking
+                affordance_transitions = [defaultdict(lambda: defaultdict(int)) for _ in range(num_agents)]
+                last_affordance = [None for _ in range(num_agents)]
                 last_agent_state: BatchedAgentState | None = None
 
                 for step in range(max_steps):
@@ -444,7 +447,17 @@ class DemoRunner:
                     if "successful_interactions" in agent_state.info:
                         for agent_idx, affordance_name in agent_state.info["successful_interactions"].items():
                             if 0 <= agent_idx < num_agents:
+                                # Existing: count tracking
                                 affordance_visits[agent_idx][affordance_name] += 1
+
+                                # NEW: transition tracking
+                                prev = last_affordance[agent_idx]
+                                if prev is not None:
+                                    # Record transition: prev → current
+                                    affordance_transitions[agent_idx][prev][affordance_name] += 1
+
+                                # Update last affordance for next transition
+                                last_affordance[agent_idx] = affordance_name
 
                     for idx in range(num_agents):
                         if agent_state.dones[idx] and final_meters[idx] is None:
@@ -523,6 +536,18 @@ class DemoRunner:
                     curriculum_stage=int(stages_cpu[0].item()),
                     epsilon=epsilon_value,
                 )
+
+                # NEW: Insert affordance transitions for agent 0
+                if affordance_transitions[0]:
+                    # Convert nested defaultdict to regular dict for database insertion
+                    transitions_dict = {
+                        from_aff: dict(to_affs)
+                        for from_aff, to_affs in affordance_transitions[0].items()
+                    }
+                    self.db.insert_affordance_visits(
+                        episode_id=self.current_episode,
+                        transitions=transitions_dict
+                    )
 
                 # Finish episode recording if enabled
                 if self.recorder is not None:

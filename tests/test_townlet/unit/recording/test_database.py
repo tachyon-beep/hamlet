@@ -353,3 +353,94 @@ class TestDatabaseRecording:
             assert recordings[9]["episode_id"] == 10
 
             db.conn.close()
+
+
+class TestAffordanceTransitions:
+    """Test affordance transition tracking in database."""
+
+    def test_insert_affordance_visits(self):
+        """insert_affordance_visits should insert transition counts."""
+        from townlet.demo.database import DemoDatabase
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = DemoDatabase(db_path)
+
+            transitions = {
+                "Bed": {"Hospital": 3, "Job": 1},
+                "Hospital": {"Bed": 2},
+            }
+
+            db.insert_affordance_visits(episode_id=100, transitions=transitions)
+
+            # Query back
+            cursor = db.conn.execute(
+                "SELECT * FROM affordance_visits WHERE episode_id = ? ORDER BY from_affordance, to_affordance",
+                (100,)
+            )
+            rows = cursor.fetchall()
+
+            assert len(rows) == 3
+            assert rows[0]["episode_id"] == 100
+            assert rows[0]["from_affordance"] == "Bed"
+            assert rows[0]["to_affordance"] == "Hospital"
+            assert rows[0]["visit_count"] == 3
+
+            assert rows[1]["episode_id"] == 100
+            assert rows[1]["from_affordance"] == "Bed"
+            assert rows[1]["to_affordance"] == "Job"
+            assert rows[1]["visit_count"] == 1
+
+            assert rows[2]["episode_id"] == 100
+            assert rows[2]["from_affordance"] == "Hospital"
+            assert rows[2]["to_affordance"] == "Bed"
+            assert rows[2]["visit_count"] == 2
+
+            db.conn.close()
+
+    def test_insert_affordance_visits_empty(self):
+        """Empty transitions should not crash."""
+        from townlet.demo.database import DemoDatabase
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = DemoDatabase(db_path)
+
+            # Should complete without error
+            db.insert_affordance_visits(episode_id=100, transitions={})
+
+            # Verify no rows inserted
+            cursor = db.conn.execute(
+                "SELECT COUNT(*) as count FROM affordance_visits WHERE episode_id = ?",
+                (100,)
+            )
+            result = cursor.fetchone()
+            assert result["count"] == 0
+
+            db.conn.close()
+
+    def test_insert_affordance_visits_self_loop(self):
+        """Self-loops (Bed→Bed) should be recorded."""
+        from townlet.demo.database import DemoDatabase
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = DemoDatabase(db_path)
+
+            transitions = {"Bed": {"Bed": 5}}  # Agent used Bed 5 times consecutively
+
+            db.insert_affordance_visits(episode_id=100, transitions=transitions)
+
+            cursor = db.conn.execute(
+                "SELECT * FROM affordance_visits WHERE episode_id = ?",
+                (100,)
+            )
+            rows = cursor.fetchall()
+
+            assert len(rows) == 1
+            assert rows[0]["episode_id"] == 100
+            assert rows[0]["from_affordance"] == "Bed"
+            assert rows[0]["to_affordance"] == "Bed"
+            assert rows[0]["visit_count"] == 5
+
+            db.conn.close()

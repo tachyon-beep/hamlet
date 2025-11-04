@@ -388,3 +388,108 @@ training:
         assert isinstance(epsilon, float) or isinstance(epsilon, int), "epsilon should be numeric"
 
         conn.close()
+
+
+class TestRunnerAffordanceTransitions:
+    """Test runner tracking of affordance transitions (Phase 2)."""
+
+    def test_runner_persists_transitions_to_database(self, tmp_path, test_config_pack_path, cpu_device):
+        """Runner should persist affordance transitions to database after episode.
+
+        Integration test: When agent uses affordances in sequence (Bed → Hospital → Job),
+        runner should track transitions and save to database using insert_affordance_visits().
+        """
+        from townlet.demo.runner import DemoRunner
+
+        # Create config with enabled affordances (Bed only for simplicity)
+        config_content = """
+environment:
+  grid_size: 3
+  partial_observability: false
+  enabled_affordances: ["Bed"]  # Single affordance to test self-loops
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  network_type: simple
+  gamma: 0.99
+  replay_buffer_capacity: 1000
+
+curriculum:
+  max_steps_per_episode: 100  # Enough steps to interact multiple times
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 10
+
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 10
+
+training:
+  device: cpu
+  max_episodes: 50  # More episodes = higher chance of interactions
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 32
+  max_grad_norm: 10.0
+  epsilon_start: 0.9  # Higher epsilon = more exploration = more interactions
+  epsilon_decay: 0.99
+  epsilon_min: 0.01
+"""
+        # Write config
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "training.yaml").write_text(config_content)
+
+        # Copy test config pack files
+        import shutil
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+            src = test_config_pack_path / file
+            dst = config_dir / file
+            if src.exists():
+                shutil.copy(src, dst)
+
+        # Create runner
+        db_path = tmp_path / "test.db"
+        checkpoint_dir = tmp_path / "checkpoints"
+        runner = DemoRunner(
+            config_dir=config_dir,
+            db_path=db_path,
+            checkpoint_dir=checkpoint_dir,
+            max_episodes=50,
+        )
+
+        # Run training
+        runner.run()
+
+        # Verify: Database has affordance_visits records
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Check that affordance_visits table has records
+        cursor.execute("SELECT COUNT(*) FROM affordance_visits")
+        transition_count = cursor.fetchone()[0]
+
+        # We should have at least 1 transition recorded across 50 episodes
+        # (Agent will use Bed multiple times, creating Bed→Bed transitions)
+        assert transition_count > 0, \
+            f"Expected at least 1 affordance transition recorded, got {transition_count}"
+
+        # Verify transition structure
+        cursor.execute(
+            "SELECT episode_id, from_affordance, to_affordance, visit_count "
+            "FROM affordance_visits LIMIT 1"
+        )
+        record = cursor.fetchone()
+
+        if record is not None:
+            episode_id, from_aff, to_aff, count = record
+            assert isinstance(episode_id, int), "episode_id should be integer"
+            assert isinstance(from_aff, str), "from_affordance should be string"
+            assert isinstance(to_aff, str), "to_affordance should be string"
+            assert isinstance(count, int) and count > 0, "visit_count should be positive integer"
+
+        conn.close()

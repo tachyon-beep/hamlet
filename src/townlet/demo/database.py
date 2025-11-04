@@ -180,9 +180,29 @@ class DemoDatabase:
             episode_id: Episode number
             transitions: Dict mapping from_affordance -> {to_affordance: count}
 
-        TODO: Implement in Task 2 when tracking affordance visits
+        Example:
+            transitions = {
+                "Bed": {"Hospital": 3, "Job": 1},
+                "Hospital": {"Bed": 2}
+            }
+            # Inserts 3 rows:
+            #   (episode_id, "Bed", "Hospital", 3)
+            #   (episode_id, "Bed", "Job", 1)
+            #   (episode_id, "Hospital", "Bed", 2)
         """
-        pass
+        if not transitions:
+            return  # No transitions to insert (empty episode)
+
+        rows = []
+        for from_aff, to_affs in transitions.items():
+            for to_aff, count in to_affs.items():
+                rows.append((episode_id, from_aff, to_aff, count))
+
+        self.conn.executemany(
+            "INSERT INTO affordance_visits (episode_id, from_affordance, to_affordance, visit_count) VALUES (?, ?, ?, ?)",
+            rows
+        )
+        self.conn.commit()
 
     def insert_position_heatmap(
         self,
