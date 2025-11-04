@@ -19,11 +19,11 @@ import pytest
 import torch
 
 from townlet.environment.affordance_config import load_affordance_config
-from townlet.environment.cascade_config import load_bars_config
 from townlet.environment.affordance_engine import (
     AffordanceEngine,
     create_affordance_engine,
 )
+from townlet.environment.cascade_config import load_bars_config
 
 
 @pytest.fixture
