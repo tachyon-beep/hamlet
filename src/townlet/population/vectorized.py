@@ -114,9 +114,10 @@ class VectorizedPopulation(PopulationManager):
                 num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
+                hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
             ).to(device)
         else:
-            self.q_network = SimpleQNetwork(obs_dim, action_dim).to(device)
+            self.q_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(device)  # TODO(BRAIN_AS_CODE): Should come from config
 
         # Target network (stabilises training for both feed-forward and recurrent agents)
         self.target_network: nn.Module
@@ -127,9 +128,12 @@ class VectorizedPopulation(PopulationManager):
                 num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
+                hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
             ).to(device)
         else:
-            self.target_network = SimpleQNetwork(obs_dim, action_dim).to(device)
+            self.target_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(
+                device
+            )  # TODO(BRAIN_AS_CODE): Should come from config
 
         # Initialize common target network state
         self.target_network.load_state_dict(self.q_network.state_dict())
@@ -503,7 +507,7 @@ class VectorizedPopulation(PopulationManager):
 
         # 7. Compute intrinsic rewards (if RND-based exploration)
         intrinsic_rewards = torch.zeros_like(rewards)
-        if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
+        if isinstance(self.exploration, RNDExploration | AdaptiveIntrinsicExploration):
             intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs)
 
         # 7. Store transition in replay buffer
@@ -528,7 +532,7 @@ class VectorizedPopulation(PopulationManager):
             )
 
         # 8. Train RND predictor (if applicable)
-        if isinstance(self.exploration, (RNDExploration, AdaptiveIntrinsicExploration)):
+        if isinstance(self.exploration, RNDExploration | AdaptiveIntrinsicExploration):
             rnd = self.exploration.rnd if isinstance(self.exploration, AdaptiveIntrinsicExploration) else self.exploration
             # Accumulate observations in RND buffer
             for i in range(self.num_agents):

@@ -45,6 +45,7 @@ class TestLSTMHiddenStatePersistence:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -112,6 +113,7 @@ class TestLSTMHiddenStatePersistence:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -174,6 +176,7 @@ class TestLSTMHiddenStatePersistence:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -228,6 +231,7 @@ class TestLSTMHiddenStatePersistence:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -291,6 +295,7 @@ class TestLSTMBatchTraining:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -562,6 +567,7 @@ class TestLSTMForwardPass:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )

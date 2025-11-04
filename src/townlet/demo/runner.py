@@ -342,21 +342,28 @@ class DemoRunner:
         vision_range = environment_cfg["vision_range"]
         # enabled_affordances: None = all affordances (semantic meaning)
         enabled_affordances = environment_cfg.get("enabled_affordances", None)
+        enable_temporal_mechanics = environment_cfg.get("enable_temporal_mechanics", False)  # Default False for backwards compatibility
         move_energy_cost = environment_cfg["energy_move_depletion"]
         wait_energy_cost = environment_cfg["energy_wait_depletion"]
         interact_energy_cost = environment_cfg["energy_interact_depletion"]
+
+        # TODO(UAC): agent_lifespan should be in config (TASK-006: BRAIN_AS_CODE)
+        # For now, use constant 1000 (standard test value)
+        agent_lifespan = 1000
 
         # Create environment FIRST (need it to auto-detect dimensions)
         self.env = VectorizedHamletEnv(
             num_agents=num_agents,
             grid_size=grid_size,
-            device=device,
             partial_observability=partial_observability,
             vision_range=vision_range,
-            enabled_affordances=enabled_affordances,
+            enable_temporal_mechanics=enable_temporal_mechanics,
             move_energy_cost=move_energy_cost,
             wait_energy_cost=wait_energy_cost,
             interact_energy_cost=interact_energy_cost,
+            agent_lifespan=agent_lifespan,
+            device=device,
+            enabled_affordances=enabled_affordances,
             config_pack_path=self.config_dir,
         )
 

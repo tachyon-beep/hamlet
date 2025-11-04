@@ -33,16 +33,16 @@ class VectorizedHamletEnv:
     def __init__(
         self,
         num_agents: int,
-        grid_size: int = 8,
+        grid_size: int,
+        partial_observability: bool,
+        vision_range: int,
+        enable_temporal_mechanics: bool,
+        move_energy_cost: float,
+        wait_energy_cost: float,
+        interact_energy_cost: float,
+        agent_lifespan: int,
         device: torch.device = torch.device("cpu"),
-        partial_observability: bool = False,
-        vision_range: int = 2,
-        enable_temporal_mechanics: bool = False,
         enabled_affordances: list[str] | None = None,
-        move_energy_cost: float = 0.005,
-        wait_energy_cost: float = 0.001,
-        interact_energy_cost: float = 0.0,
-        agent_lifespan: int = 1000,
         config_pack_path: Path | None = None,
     ):
         """
@@ -51,15 +51,21 @@ class VectorizedHamletEnv:
         Args:
             num_agents: Number of parallel agents
             grid_size: Grid dimension (grid_size × grid_size)
-            device: PyTorch device (cpu or cuda)
+            device: PyTorch device (default: cpu). Infrastructure default - PDR-002 exemption.
             partial_observability: If True, agent sees only local window (POMDP)
             vision_range: Radius of vision window (2 = 5×5 window)
             enable_temporal_mechanics: Enable time-based mechanics and multi-tick interactions
-            enabled_affordances: List of affordance names to enable (None = all affordances)
-            move_energy_cost: Energy cost per movement action (default 0.005 = 0.5%)
-            wait_energy_cost: Energy cost per WAIT action (default 0.001 = 0.1%)
-            interact_energy_cost: Energy cost per INTERACT action (default 0.0 = free)
-            agent_lifespan: Maximum lifetime in steps (default 1000) - provides retirement incentive
+            enabled_affordances: List of affordance names to enable (None = all affordances). Semantic default.
+            move_energy_cost: Energy cost per movement action
+            wait_energy_cost: Energy cost per WAIT action
+            interact_energy_cost: Energy cost per INTERACT action
+            agent_lifespan: Maximum lifetime in steps (provides retirement incentive)
+            config_pack_path: Path to config pack (default: configs/test). Infrastructure fallback - PDR-002 exemption.
+
+        Note (PDR-002 Compliance):
+            - device and config_pack_path have infrastructure defaults (exempted from no-defaults principle)
+            - enabled_affordances=None is a semantic default (None means "all affordances enabled")
+            - All other parameters are UAC behavioral parameters and MUST be explicitly provided
         """
         project_root = Path(__file__).parent.parent.parent.parent
         default_pack = project_root / "configs" / "test"
@@ -160,7 +166,8 @@ class VectorizedHamletEnv:
             device=device, num_agents=num_agents, meter_count=meter_count, energy_idx=self.energy_idx, health_idx=self.health_idx
         )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
-        self._cached_baseline_tensor = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
+        # Baseline will be computed dynamically via calculate_baseline_survival() during curriculum updates
+        self._cached_baseline_tensor = torch.zeros((num_agents,), dtype=torch.float32, device=device)
 
         # Initialize meter dynamics
         self.meter_dynamics = MeterDynamics(

@@ -1,0 +1,146 @@
+# No-Defaults Linter Whitelist (PDR-002 Compliant)
+#
+# Format: <filepath>::<class>::<function>::<variable>:<rule_id>
+# Use * for wildcards, ** for path components
+#
+# This whitelist contains ONLY infrastructure/telemetry/debug exemptions.
+# ALL UAC/BAC parameters must be explicit (no defaults allowed).
+#
+# Generated: 2025-11-05
+# Compliant with: PDR-002-NO-DEFAULTS-PRINCIPLE.md
+# Reviewed by: Claude (Sonnet 4.5)
+#
+# KEY PRINCIPLE: Only parameters that affect WHERE/HOW code runs (infrastructure)
+# are whitelisted. Parameters that affect WHAT the algorithm does (UAC/BAC) are
+# NEVER whitelisted and must be explicit in config files.
+
+# ============================================================================
+# MODULE-LEVEL WHITELISTS
+# ============================================================================
+
+# Recording - Optional telemetry feature system (does not affect UAC/BAC)
+# File paths, compression settings, frame rates = infrastructure
+src/townlet/recording/**:*
+
+# ============================================================================
+# FILE-LEVEL WHITELISTS
+# ============================================================================
+
+# TensorBoard logger - Telemetry/debug system
+# Flush frequency, log levels, histogram toggles = debug/infrastructure
+src/townlet/training/tensorboard_logger.py:*
+
+# ============================================================================
+# FUNCTION-LEVEL WHITELISTS (Specific exemptions)
+# ============================================================================
+
+# Demo/Runner - Infrastructure params ONLY
+# NOTE: ALL UAC/BAC params (grid_size, epsilon, learning_rate, etc.) removed
+src/townlet/demo/runner.py:*:*:device  # Hardware selection (runtime)
+src/townlet/demo/runner.py:*:*:checkpoint_dir  # File system path (infrastructure)
+src/townlet/demo/runner.py:*:*:db_path  # File system path (infrastructure)
+src/townlet/demo/runner.py:*:*:log_dir  # File system path (infrastructure)
+
+src/townlet/demo/unified_server.py:*:*:output_subdir  # File system path (infrastructure)
+src/townlet/demo/unified_server.py:*:*:port  # Network port (infrastructure)
+src/townlet/demo/unified_server.py:*:*:host  # Network host (infrastructure)
+
+# State DTOs - Metadata/operational defaults ONLY
+# Empty dicts/lists for checkpoint metadata are acceptable (not behavioral)
+src/townlet/training/state.py:PopulationCheckpoint:__init__:curriculum_states  # Metadata (empty dict)
+src/townlet/training/state.py:PopulationCheckpoint:__init__:exploration_states  # Metadata (empty dict)
+src/townlet/training/state.py:PopulationCheckpoint:__init__:pareto_frontier  # Metadata (empty list)
+src/townlet/training/state.py:PopulationCheckpoint:__init__:metrics_summary  # Metadata (empty dict)
+src/townlet/training/state.py:BatchedAgentState:__init__:info  # Runtime dict (operational)
+
+# Networks - Operational defaults ONLY (BAC params removed)
+# hidden=None is internal state (computed), not config-driven
+# device/batch_size are runtime/performance tuning
+src/townlet/agent/networks.py:RecurrentSpatialQNetwork:forward:hidden  # Internal state (computed)
+src/townlet/agent/networks.py:RecurrentSpatialQNetwork:reset_hidden_state:device  # Hardware selection
+src/townlet/agent/networks.py:RecurrentSpatialQNetwork:reset_hidden_state:batch_size  # Performance tuning
+
+# ============================================================================
+# REMOVED FROM PREVIOUS WHITELIST (Non-Compliant)
+# ============================================================================
+#
+# The following were removed because they contain UAC/BAC defaults:
+#
+# ❌ src/townlet/demo/**:* (global whitelist)
+#    - Removed: grid_size, partial_observability, vision_range, enable_temporal_mechanics
+#    - Removed: move_energy_cost, wait_energy_cost, interact_energy_cost
+#    - Removed: epsilon_start, epsilon_decay, epsilon_min
+#    - Removed: learning_rate, gamma, batch_size, replay_buffer_capacity
+#    - Removed: max_steps_per_episode, survival_advance_threshold, entropy_gate
+#    - Removed: embed_dim, initial_intrinsic_weight, variance_threshold
+#    - Reason: All are UAC/BAC parameters, must be explicit in training.yaml
+#
+# ❌ src/townlet/agent/networks.py:* (global whitelist)
+#    - Removed: hidden_dim, action_dim, num_meters, num_affordance_types
+#    - Removed: enable_temporal_features, window_size
+#    - Reason: Network architecture is BAC (Brain-as-Code), must be in config
+#
+# ❌ src/townlet/environment/** (all environment modules)
+#    - Removed: vectorized_env.py, affordance_config.py, cascade_config.py
+#    - Removed: affordance_engine.py, cascade_engine.py, meter_dynamics.py
+#    - Removed: observation_builder.py, reward_strategy.py
+#    - Reason: All environment parameters are UAC (Universe-as-Code)
+#
+# ❌ src/townlet/curriculum/** (curriculum modules)
+#    - Removed: adversarial.py, static.py
+#    - Reason: Curriculum stages, thresholds, window sizes are UAC
+#
+# ❌ src/townlet/exploration/** (exploration strategies)
+#    - Removed: adaptive_intrinsic.py, epsilon_greedy.py, rnd.py
+#    - Reason: Exploration parameters are BAC (Brain-as-Code)
+#
+# ❌ src/townlet/population/** (population training)
+#    - Removed: vectorized.py, base.py
+#    - Reason: Training dynamics (learning_rate, batch_size) are BAC
+#
+# ❌ src/townlet/training/replay_buffer.py:*
+# ❌ src/townlet/training/sequential_replay_buffer.py:*
+#    - Reason: Buffer capacity affects training (BAC)
+#
+# ❌ src/townlet/training/state.py:ExplorationConfig:*
+#    - Removed: epsilon, epsilon_decay, intrinsic_weight, rnd_hidden_dim
+#    - Reason: Exploration strategy parameters are BAC
+#
+# ============================================================================
+# REFACTORING ROADMAP
+# ============================================================================
+#
+# To remove dependencies on removed whitelist entries, complete these tasks:
+#
+# 1. TASK-003: Replace dict.get() with Pydantic DTOs
+#    - Files: runner.py, unified_server.py
+#    - Status: Planned
+#
+# 2. TASK-001: UAC Schema Enforcement
+#    - Files: environment/**, affordance_config.py, cascade_config.py
+#    - Status: In Progress
+#
+# 3. TASK-005: BRAIN_AS_CODE (Network Config)
+#    - Files: agent/networks.py, exploration/**, population/**
+#    - Status: Planned
+#
+# 4. TASK-004A: Curriculum Config
+#    - Files: curriculum/adversarial.py, curriculum/static.py
+#    - Status: Planned
+#
+# Track progress: python scripts/no_defaults_lint.py src/townlet/ --whitelist .defaults-whitelist-compliant.txt
+#
+# ============================================================================
+# MAINTENANCE NOTES
+# ============================================================================
+#
+# Before adding new entries to this whitelist, ask:
+# 1. Does this parameter affect WHAT the algorithm does? (UAC/BAC) → NO whitelist
+# 2. Does this parameter affect WHERE/HOW code runs? (infrastructure) → Whitelist OK
+# 3. Is this truly optional metadata/telemetry? → Whitelist OK
+# 4. Can I remove this default instead of whitelisting? (preferred) → Remove it
+#
+# Whitelist size target: <20 entries
+# Review frequency: Quarterly (Q1, Q2, Q3, Q4)
+# Next review: Q1 2026
+#
