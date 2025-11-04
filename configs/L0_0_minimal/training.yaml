@@ -21,7 +21,7 @@
 # - Pedagogical: "simplest RL problem with temporal structure"
 
 run_metadata:
-  output_subdir: L0_minimal
+  output_subdir: L0_0_minimal
 
 # Environment configuration
 environment:

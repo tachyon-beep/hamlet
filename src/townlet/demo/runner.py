@@ -666,16 +666,20 @@ class DemoRunner:
                     logger.info("-" * 80)
                     logger.info(f"Performance:    Survival: {int(step_counts_cpu[0].item())} steps | Stage: {stage_overview}")
                     logger.info(
-                        f"Rewards:        Total: {total_reward:.2f} | Extrinsic: {extrinsic_reward:.2f} | Intrinsic: {weighted_intrinsic:.2f}"
+                        f"Rewards:        Total: {total_reward:.2f} | "
+                        f"Extrinsic: {extrinsic_reward:.2f} | Intrinsic: {weighted_intrinsic:.2f}"
                     )
                     logger.info(f"Exploration:    ε: {epsilon_value:.3f} | Intrinsic Weight: {intrinsic_weight_value:.3f}")
                     if training_metrics["training_step"] > 0:
                         logger.info(
-                            f"Training:       Steps: {training_metrics['training_step']} | Loss: {training_metrics['loss']:.4f} | TD Error: {training_metrics['td_error']:.4f}"
+                            f"Training:       Steps: {training_metrics['training_step']} | "
+                            f"Loss: {training_metrics['loss']:.4f} | TD Error: {training_metrics['td_error']:.4f}"
                         )
                     if final_meter_values:
                         logger.info(
-                            f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | Health: {final_meter_values.get('health', 0):.2f} | Money: ${final_meter_values.get('money', 0)*100:.1f}"
+                            f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | "
+                            f"Health: {final_meter_values.get('health', 0):.2f} | "
+                            f"Money: ${final_meter_values.get('money', 0)*100:.1f}"
                         )
                     logger.info(f"Affordances:    {affordance_summary}")
                     logger.info("=" * 80)

@@ -24,7 +24,7 @@ class BarConfig(BaseModel):
     """Configuration for a single meter (bar)."""
 
     name: str = Field(description="Meter name (e.g., 'energy', 'health')")
-    index: int = Field(ge=0, le=7, description="Meter index in tensor [0-7]")
+    index: int = Field(ge=0, description="Meter index in tensor (validated by BarsConfig)")
     tier: Literal["pivotal", "primary", "secondary", "resource"] = Field(description="Tier in cascade hierarchy")
     range: tuple[float, float] = Field(default=(0.0, 1.0), description="Min and max values")
     initial: float = Field(ge=0.0, le=1.0, description="Initial value at spawn")
@@ -66,14 +66,22 @@ class BarsConfig(BaseModel):
     @field_validator("bars")
     @classmethod
     def validate_bars(cls, v: list[BarConfig]) -> list[BarConfig]:
-        """Validate bar list."""
-        if len(v) != 8:
-            raise ValueError(f"Expected 8 bars, got {len(v)}")
+        """Validate bar list (variable size: 1-32 meters)."""
+        meter_count = len(v)
 
-        # Check all indices are unique and cover 0-7
+        # Must have at least 1 meter
+        if meter_count < 1:
+            raise ValueError("Must have at least 1 meter")
+
+        # Maximum 32 meters (reasonable upper limit)
+        if meter_count > 32:
+            raise ValueError(f"Too many meters: {meter_count}. Max 32 supported.")
+
+        # Check indices are contiguous from 0
         indices = {bar.index for bar in v}
-        if indices != {0, 1, 2, 3, 4, 5, 6, 7}:
-            raise ValueError(f"Bar indices must be 0-7, got {sorted(indices)}")
+        expected_indices = set(range(meter_count))
+        if indices != expected_indices:
+            raise ValueError(f"Bar indices must be contiguous from 0 to {meter_count-1}, " f"got {sorted(indices)}")
 
         # Check all names are unique
         names = [bar.name for bar in v]
@@ -81,6 +89,22 @@ class BarsConfig(BaseModel):
             raise ValueError(f"Duplicate bar names found: {names}")
 
         return v
+
+    @property
+    def meter_count(self) -> int:
+        """Number of meters in this universe."""
+        return len(self.bars)
+
+    @property
+    def meter_names(self) -> list[str]:
+        """List of meter names in index order."""
+        sorted_bars = sorted(self.bars, key=lambda b: b.index)
+        return [bar.name for bar in sorted_bars]
+
+    @property
+    def meter_name_to_index(self) -> dict[str, int]:
+        """Map meter names to indices."""
+        return {bar.name: bar.index for bar in self.bars}
 
 
 # ============================================================================
@@ -114,9 +138,9 @@ class CascadeConfig(BaseModel):
     category: str = Field(description="Category (e.g., 'primary_to_pivotal', 'secondary_to_primary')")
 
     source: str = Field(description="Source meter name")
-    source_index: int = Field(ge=0, le=7, description="Source meter index")
+    source_index: int = Field(ge=0, description="Source meter index (validated against meter_count)")
     target: str = Field(description="Target meter name")
-    target_index: int = Field(ge=0, le=7, description="Target meter index")
+    target_index: int = Field(ge=0, description="Target meter index (validated against meter_count)")
 
     threshold: float = Field(gt=0.0, le=1.0, description="Threshold below which cascade applies")
     strength: float = Field(gt=0.0, description="Penalty strength (gradient factor)")

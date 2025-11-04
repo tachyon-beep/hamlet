@@ -1,7 +1,7 @@
 # Discovered Insights - Testing Findings & Traps
 
-**Created:** October 31, 2025  
-**Purpose:** Document unexpected behaviors, design traps, and bugs discovered during systematic test implementation  
+**Created:** October 31, 2025
+**Purpose:** Document unexpected behaviors, design traps, and bugs discovered during systematic test implementation
 **Status:** ACTIVE - Updated as tests are written and run
 
 ---
@@ -16,8 +16,8 @@
 
 ### INSIGHT #1: Dual Energy Depletion (NOT A BUG - CORRECT DESIGN)
 
-**Date:** October 31, 2025  
-**Discovered While:** Writing base depletion tests  
+**Date:** October 31, 2025
+**Discovered While:** Writing base depletion tests
 **Severity:** CRITICAL UNDERSTANDING
 
 #### The Discovery
@@ -139,7 +139,7 @@ for step in range(10):
 
 ### SUSPECT #1: Cascading Penalties Too Aggressive?
 
-**Status:** NOT YET TESTED  
+**Status:** NOT YET TESTED
 **Location:** `_apply_secondary_to_primary_effects()` lines 820-860
 
 #### The Concern
@@ -179,7 +179,7 @@ If death spiral starts at 75 steps, game may be unwinnable from low satiation st
 
 ### SUSPECT #2: Fitness Death Spiral
 
-**Status:** NOT YET TESTED  
+**Status:** NOT YET TESTED
 **Location:** `_deplete_meters()` lines 800-815
 
 #### The Concern
@@ -216,7 +216,7 @@ Agent starting with 50% health would die in ~115 steps.
 
 ### SUSPECT #3: Action Masking Not Working?
 
-**Status:** NOT YET TESTED  
+**Status:** NOT YET TESTED
 **Location:** `get_action_masks()` lines 300-350
 
 #### The Concern
@@ -241,7 +241,7 @@ This would manifest as:
 
 ### SUSPECT #4: LSTM Not Using History?
 
-**Status:** NOT YET TESTED  
+**Status:** NOT YET TESTED
 **Location:** `agent/networks.py` RecurrentSpatialQNetwork
 
 #### The Concern
@@ -262,7 +262,7 @@ This would explain poor POMDP performance.
 
 ### SUSPECT #5: Reward Signal Too Weak?
 
-**Status:** NOT YET TESTED  
+**Status:** NOT YET TESTED
 **Location:** `_calculate_shaped_rewards()` lines 950-1000
 
 #### The Concern
@@ -304,7 +304,7 @@ Only 5% improvement despite 3x longer survival!
 
 ### CONFIRMED #1: Money Doesn't Deplete Passively
 
-**Status:** CONFIRMED CORRECT  
+**Status:** CONFIRMED CORRECT
 **Date:** Code review October 31, 2025
 
 Money is a resource, not a need. It only changes via:
@@ -318,7 +318,7 @@ This is correct design - money is a constraint, not a meter.
 
 ### CONFIRMED #2: Secondary Meters Don't Cause Direct Death
 
-**Status:** CONFIRMED CORRECT  
+**Status:** CONFIRMED CORRECT
 **Date:** Code review October 31, 2025
 
 Only PRIMARY meters (health, energy) cause death when reaching 0.
@@ -378,8 +378,8 @@ Agent must learn: "explore early, exploit once you know where things are"
 
 ### DESIGN INSIGHT #1: Hard Threshold Creates Cliff Effect
 
-**Date:** October 31, 2025  
-**Status:** DESIGN FLAW - To be fixed in refactor  
+**Date:** October 31, 2025
+**Status:** DESIGN FLAW - To be fixed in refactor
 **Severity:** MEDIUM - Affects gameplay feel and learning curve
 
 #### The Problem
@@ -522,9 +522,9 @@ When documenting this codebase later:
 
 ### BUG #1: Social and Fitness Start at 50%, Not 100%
 
-**Date:** October 31, 2025  
-**Discovered While:** Running base depletion tests  
-**Severity:** CRITICAL - Requirements→Implementation Flaw  
+**Date:** October 31, 2025
+**Discovered While:** Running base depletion tests
+**Severity:** CRITICAL - Requirements→Implementation Flaw
 **Status:** CONFIRMED BUG
 
 #### The Discovery
@@ -557,7 +557,7 @@ Starting at 50% social means:
 
 #### Why This Is Wrong
 
-**Requirements:** All meters should start at 100% (healthy agent)  
+**Requirements:** All meters should start at 100% (healthy agent)
 **Implementation:** Social and Fitness start at 50% (struggling agent)
 
 This creates:
@@ -578,7 +578,7 @@ This creates:
 
 **Actual behavior (starting at 50%):**
 
-- Social depletes 0.6% per step  
+- Social depletes 0.6% per step
 - Reaches 30% threshold in 33 steps ❌
 - Reaches 0% in 83 steps ❌
 - Mood gets cascading penalty starting at step 33 ❌
@@ -698,9 +698,9 @@ This created an **insidious debugging trap**:
 
 ### BUG #2: Fitness → Health Uses Hard Thresholds (Inconsistent Pattern)
 
-**Date:** October 31, 2025  
-**Discovered While:** Auditing cascade consistency  
-**Severity:** MEDIUM - Design inconsistency  
+**Date:** October 31, 2025
+**Discovered While:** Auditing cascade consistency
+**Severity:** MEDIUM - Design inconsistency
 **Status:** ✅ FIXED - Now uses smooth gradient (0.5x to 3.0x)
 
 #### The Problem
@@ -802,9 +802,9 @@ self.meters[:, 6] = torch.clamp(
 
 ### BALANCE ISSUE #1: Combined Low Meters Create Unrecoverable Death Spiral
 
-**Date:** October 31, 2025  
-**Discovered While:** Running combined cascade tests  
-**Severity:** HIGH - Affects learnability  
+**Date:** October 31, 2025
+**Discovered While:** Running combined cascade tests
+**Severity:** HIGH - Affects learnability
 **Status:** DOCUMENTED - Needs game balance evaluation
 
 #### The Discovery
@@ -841,7 +841,7 @@ self.meters[:, 6] = torch.clamp(
 **This creates tight time pressure:**
 
 - Agent needs ~20-30 steps to explore and find affordances
-- Agent needs ~10-20 steps to reach affordances  
+- Agent needs ~10-20 steps to reach affordances
 - Agent needs 4-5 ticks to complete interactions
 - **Minimum survival time needed: 50-80 steps**
 - **Actual survival with combined low meters + movement: 60-80 steps**
@@ -942,9 +942,9 @@ survival_bonus = max(0, steps_survived - MINIMUM_EXPECTED_LIFE) * 0.1
 
 ### ~~BUG #2~~ RESOLVED: Cascade Calculation Produces 36% More Damage Than Expected
 
-**Date:** October 31, 2025  
-**Discovered While:** Running cascading meter tests  
-**Severity:** ~~HIGH~~ FALSE ALARM - My math was wrong  
+**Date:** October 31, 2025
+**Discovered While:** Running cascading meter tests
+**Severity:** ~~HIGH~~ FALSE ALARM - My math was wrong
 **Status:** RESOLVED - Environment is correct
 
 #### The Discovery

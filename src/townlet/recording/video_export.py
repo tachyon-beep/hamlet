@@ -62,6 +62,10 @@ def export_episode_video(
     affordances = replay.get_affordances()
     total_steps = replay.get_total_steps()
 
+    if metadata is None:
+        logger.error("Failed to get episode metadata")
+        return False
+
     # Auto-detect grid size from affordance positions if not provided
     if grid_size is None:
         affordance_positions = affordances.get("positions", affordances)
@@ -83,6 +87,10 @@ def export_episode_video(
         for step_index in range(total_steps):
             replay.seek(step_index)
             step_data = replay.get_current_step()
+
+            if step_data is None:
+                logger.error(f"Failed to get step data at index {step_index}")
+                return False
 
             # Render frame
             frame = renderer.render_frame(step_data, metadata, affordances)
@@ -162,7 +170,7 @@ def _encode_video_ffmpeg(frames_dir: Path, output_path: Path, fps: int = 30, spe
     ]
 
     try:
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        subprocess.run(cmd, capture_output=True, check=True, text=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"ffmpeg encoding failed: {e.stderr}")
@@ -209,7 +217,7 @@ def batch_export_videos(
 
     # Query database for recordings
     db = DemoDatabase(database_path)
-    recordings = db.query_recordings(
+    recordings = db.list_recordings(
         stage=stage,
         reason=reason,
         min_reward=min_reward,

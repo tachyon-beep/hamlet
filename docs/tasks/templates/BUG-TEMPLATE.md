@@ -41,7 +41,7 @@
 - OS: [Linux/macOS/Windows version]
 - Python: [Version]
 - HAMLET Version: [Commit hash or tag]
-- Config: [Which config pack: L0_minimal, L1_full_observability, etc.]
+- Config: [Which config pack: L0_0_minimal, L1_full_observability, etc.]
 
 **Hardware** (if relevant):
 
@@ -56,7 +56,7 @@
 # Commands to reproduce the bug
 cd /path/to/hamlet
 export PYTHONPATH=...
-python -m townlet.demo.runner --config configs/L0_minimal
+python -m townlet.demo.runner --config configs/L0_0_minimal
 ```
 
 **Reproduction Rate**: [Always | 8/10 runs | Rare]

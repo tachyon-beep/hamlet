@@ -218,9 +218,9 @@ class TestReplayBufferSamplingProperties:
         assert buffer.rewards_intrinsic is not None
 
         for idx in torch.randperm(num_transitions)[:5]:  # Check 5 random samples
-            expected = buffer.rewards_extrinsic[idx] + buffer.rewards_intrinsic[idx] * intrinsic_weight
+            _expected = buffer.rewards_extrinsic[idx] + buffer.rewards_intrinsic[idx] * intrinsic_weight
             # Find this sample in the batch (may not be there due to random sampling)
-            # Skip verification if not in batch
+            # Skip verification if not in batch (would need to search through batch)
 
     @given(
         push_sample_sequence=st.lists(

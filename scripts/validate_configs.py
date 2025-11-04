@@ -9,13 +9,14 @@ Tests:
 4. No schema violations
 """
 
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 def load_yaml(filepath: Path) -> dict:
     """Load YAML file and return parsed dict."""
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         return yaml.safe_load(f)
 
 
@@ -155,9 +156,7 @@ def validate_values_match_code(bars_config: dict, cascades_config: dict) -> list
         if name in bars:
             actual = bars[name]["base_depletion"]
             if actual != expected_depletion:
-                errors.append(
-                    f"Bar {name}: Expected base_depletion={expected_depletion}, got {actual}"
-                )
+                errors.append(f"Bar {name}: Expected base_depletion={expected_depletion}, got {actual}")
 
     # Check cascade strengths from meter_dynamics.py
     expected_strengths = {
@@ -178,9 +177,7 @@ def validate_values_match_code(bars_config: dict, cascades_config: dict) -> list
         if name in cascades:
             actual = cascades[name]["strength"]
             if actual != expected_strength:
-                errors.append(
-                    f"Cascade {name}: Expected strength={expected_strength}, got {actual}"
-                )
+                errors.append(f"Cascade {name}: Expected strength={expected_strength}, got {actual}")
 
     return errors
 
@@ -205,14 +202,14 @@ def main():
     # Load YAML files
     try:
         bars_config = load_yaml(bars_path)
-        print(f"✅ bars.yaml loaded successfully")
+        print("✅ bars.yaml loaded successfully")
     except Exception as e:
         print(f"❌ ERROR loading bars.yaml: {e}")
         return 1
 
     try:
         cascades_config = load_yaml(cascades_path)
-        print(f"✅ cascades.yaml loaded successfully")
+        print("✅ cascades.yaml loaded successfully")
     except Exception as e:
         print(f"❌ ERROR loading cascades.yaml: {e}")
         return 1

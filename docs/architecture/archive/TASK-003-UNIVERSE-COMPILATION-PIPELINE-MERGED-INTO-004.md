@@ -526,7 +526,7 @@ class UniverseCompilationError(Exception):
 
 ```python
 # Replace current scattered config loading
-compiler = UniverseCompiler("configs/L0_minimal")
+compiler = UniverseCompiler("configs/L0_0_minimal")
 
 try:
     universe = compiler.compile()
@@ -551,7 +551,7 @@ env = VectorizedHamletEnv(universe["training"].environment, universe["actions"],
 **Compilation Output**:
 
 ```
-🌍 Compiling universe: L0_minimal
+🌍 Compiling universe: L0_0_minimal
   ✅ Stage 1: Bars (8 meters)
   ✅ Stage 2: Actions (6 actions)
   ❌ Stage 3: Cascades - FAILED

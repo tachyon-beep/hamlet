@@ -1303,7 +1303,7 @@ recording = [
 
 **Files to modify:**
 
-- `configs/L0_minimal/training.yaml` - Add recording config
+- `configs/L0_0_minimal/training.yaml` - Add recording config
 - `CLAUDE.md` - Document recording system
 - `README.md` - Add usage examples
 

@@ -103,6 +103,7 @@ class VectorizedPopulation(PopulationManager):
         self.last_loss = 0.0
         self.last_q_values_mean = 0.0
         self.last_training_step = 0
+        self.last_rnd_loss = 0.0  # RND predictor loss (for monitoring intrinsic exploration)
 
         # Q-network (shared across all agents for now)
         self.q_network: nn.Module
@@ -110,7 +111,7 @@ class VectorizedPopulation(PopulationManager):
             self.q_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
-                num_meters=8,
+                num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
             ).to(device)
@@ -123,7 +124,7 @@ class VectorizedPopulation(PopulationManager):
             self.target_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
-                num_meters=8,
+                num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
             ).to(device)
@@ -396,7 +397,7 @@ class VectorizedPopulation(PopulationManager):
             masked_q_values[~action_masks] = float("-inf")
 
             # Select best valid action
-            actions = masked_q_values.argmax(dim=1)
+            actions: torch.Tensor = masked_q_values.argmax(dim=1)
 
         return actions
 
@@ -447,9 +448,10 @@ class VectorizedPopulation(PopulationManager):
         # 1. Get Q-values from network
         with torch.no_grad():
             if self.is_recurrent:
-                q_values, new_hidden = self.q_network(self.current_obs)
+                recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
+                q_values, new_hidden = recurrent_network(self.current_obs)
                 # Update hidden state for next step (episode rollout memory)
-                self.q_network.set_hidden_state(new_hidden)
+                recurrent_network.set_hidden_state(new_hidden)
             else:
                 q_values = self.q_network(self.current_obs)
 
@@ -515,7 +517,8 @@ class VectorizedPopulation(PopulationManager):
                 self.current_episodes[i]["dones"].append(dones[i].cpu())
         else:
             # For feedforward networks: store individual transitions
-            self.replay_buffer.push(
+            standard_buffer = cast(ReplayBuffer, self.replay_buffer)
+            standard_buffer.push(
                 observations=self.current_obs,
                 actions=actions,
                 rewards_extrinsic=rewards,
@@ -531,7 +534,9 @@ class VectorizedPopulation(PopulationManager):
             for i in range(self.num_agents):
                 rnd.obs_buffer.append(self.current_obs[i].cpu())
             # Train predictor if buffer is full
-            loss = rnd.update_predictor()
+            rnd_loss = rnd.update_predictor()
+            # Track RND loss for monitoring (similar to Q-network loss)
+            self.last_rnd_loss = rnd_loss
 
         # 9. Train Q-network from replay buffer (every train_frequency steps)
         self.total_steps += 1
@@ -545,7 +550,8 @@ class VectorizedPopulation(PopulationManager):
 
             if self.is_recurrent:
                 # Sequential LSTM training with target network for temporal dependencies
-                batch = self.replay_buffer.sample_sequences(
+                sequential_buffer = cast(SequentialReplayBuffer, self.replay_buffer)
+                batch = sequential_buffer.sample_sequences(
                     batch_size=self.batch_size,
                     seq_len=self.sequence_length,
                     intrinsic_weight=intrinsic_weight,
@@ -556,23 +562,25 @@ class VectorizedPopulation(PopulationManager):
 
                 # PASS 1: Collect Q-predictions from online network
                 # Unroll through sequence, maintaining hidden state for gradient computation
-                self.q_network.reset_hidden_state(batch_size=batch_size, device=self.device)
+                recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
+                recurrent_network.reset_hidden_state(batch_size=batch_size, device=self.device)
                 q_pred_list = []
 
                 for t in range(seq_len):
-                    q_values, _ = self.q_network(batch["observations"][:, t, :])
+                    q_values, _ = recurrent_network(batch["observations"][:, t, :])
                     q_pred = q_values.gather(1, batch["actions"][:, t].unsqueeze(1)).squeeze()
                     q_pred_list.append(q_pred)
 
                 # PASS 2: Collect Q-targets from target network
                 # Unroll through sequence with target network to maintain hidden state
                 with torch.no_grad():
-                    self.target_network.reset_hidden_state(batch_size=batch_size, device=self.device)
+                    target_recurrent = cast(RecurrentSpatialQNetwork, self.target_network)
+                    target_recurrent.reset_hidden_state(batch_size=batch_size, device=self.device)
                     q_values_list = []
 
                     # First, unroll through entire sequence to collect Q-values
                     for t in range(seq_len):
-                        q_values, _ = self.target_network(batch["observations"][:, t, :])
+                        q_values, _ = target_recurrent(batch["observations"][:, t, :])
                         q_values_list.append(q_values)
 
                     # Now compute targets using Q-values from next timestep
@@ -596,7 +604,7 @@ class VectorizedPopulation(PopulationManager):
                 losses = F.mse_loss(q_pred_all, q_target_all, reduction="none")  # [batch, seq_len]
                 mask = batch["mask"].float()  # [batch, seq_len] - True for valid timesteps
                 masked_loss = (losses * mask).sum() / mask.sum().clamp_min(1)
-                loss = masked_loss
+                loss: torch.Tensor = masked_loss
 
                 # Store training metrics
                 with torch.no_grad():
@@ -628,10 +636,12 @@ class VectorizedPopulation(PopulationManager):
                     self.target_network.load_state_dict(self.q_network.state_dict())
 
                 # Reset hidden state back to episode batch size after training
-                self.q_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
+                recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
+                recurrent_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
             else:
                 # Standard feedforward DQN training (unchanged)
-                batch = self.replay_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
+                standard_buffer = cast(ReplayBuffer, self.replay_buffer)
+                batch = standard_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
 
                 q_pred = self.q_network(batch["observations"]).gather(1, batch["actions"].unsqueeze(1)).squeeze()
 
@@ -675,7 +685,7 @@ class VectorizedPopulation(PopulationManager):
         if dones.any():
             reset_indices = torch.where(dones)[0]
             for idx in reset_indices:
-                survival_time = self.episode_step_counts[idx].item()
+                survival_time = int(self.episode_step_counts[idx].item())
                 if self.is_recurrent:
                     self._store_episode_and_reset(idx)
                 self._finalize_episode(idx, survival_time)
@@ -771,6 +781,7 @@ class VectorizedPopulation(PopulationManager):
         - Replay buffer contents
         - Exploration strategy state
         - Curriculum state
+        - Universe metadata (meter count, names) for validation (TASK-001)
 
         Returns:
             Complete checkpoint state dictionary
@@ -781,6 +792,17 @@ class VectorizedPopulation(PopulationManager):
             "optimizer": self.optimizer.state_dict(),
             "total_steps": self.total_steps,
             "exploration_state": self.exploration.checkpoint_state(),
+        }
+
+        # Universe metadata for compatibility validation (TASK-001)
+        # This allows detecting meter count mismatches when loading checkpoints
+        bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+        checkpoint["universe_metadata"] = {
+            "meter_count": bars_config.meter_count,
+            "meter_names": bars_config.meter_names,
+            "version": bars_config.version,
+            "obs_dim": self.env.observation_dim,
+            "action_dim": 5,  # Hardcoded for now (will be moved to actions.yaml in TASK-002B)
         }
 
         # Target network (recurrent mode only)
@@ -802,7 +824,50 @@ class VectorizedPopulation(PopulationManager):
 
         Args:
             checkpoint: State dictionary from get_checkpoint_state()
+
+        Raises:
+            ValueError: If checkpoint universe metadata doesn't match current environment
         """
+        # Validate universe compatibility (TASK-001)
+        if "universe_metadata" in checkpoint:
+            metadata = checkpoint["universe_metadata"]
+            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+            current_meter_count = bars_config.meter_count
+
+            # Validate meter count matches
+            checkpoint_meter_count = metadata.get("meter_count")
+            if checkpoint_meter_count != current_meter_count:
+                raise ValueError(
+                    f"Checkpoint meter count mismatch: checkpoint has {checkpoint_meter_count} meters, "
+                    f"but current environment has {current_meter_count} meters. "
+                    f"Cannot load checkpoint trained on different universe configuration."
+                )
+
+            # Validate obs_dim matches (secondary check)
+            checkpoint_obs_dim = metadata.get("obs_dim")
+            current_obs_dim = self.env.observation_dim
+            if checkpoint_obs_dim != current_obs_dim:
+                import warnings
+
+                warnings.warn(
+                    f"Checkpoint obs_dim mismatch: checkpoint has {checkpoint_obs_dim}, "
+                    f"current env has {current_obs_dim}. This may indicate grid size or "
+                    f"observability mode differences. Proceeding with caution.",
+                    UserWarning,
+                )
+        else:
+            # Legacy checkpoint (no universe_metadata) - assume 8-meter default
+            import warnings
+
+            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+            current_meter_count = bars_config.meter_count
+            warnings.warn(
+                f"Loading legacy checkpoint without universe_metadata. "
+                f"Assuming 8-meter configuration. Current environment has {current_meter_count} meters. "
+                f"If this doesn't match, loading will likely fail.",
+                UserWarning,
+            )
+
         # Restore Q-network
         self.q_network.load_state_dict(checkpoint["q_network"])
 

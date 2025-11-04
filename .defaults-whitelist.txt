@@ -1,0 +1,95 @@
+# No-Defaults Linter Whitelist (Structural)
+#
+# Format: <filepath>::<class>::<function>::<variable>:<rule_id>
+# Use * for wildcards, ** for path components
+#
+# This uses STRUCTURAL patterns instead of line-based patterns.
+# Benefits:
+#   - Stable across refactors (doesn't break when code moves)
+#   - More semantic (whitelist whole classes/modules)
+#   - Easier to maintain (20 patterns vs 278 line numbers)
+#
+# Generated: 2025-11-04
+# Replaces: 278 line-based entries with ~20 structural patterns
+#
+
+# ============================================================================
+# MODULE-LEVEL WHITELISTS
+# ============================================================================
+# Whitelist entire modules that are legacy/temporary
+
+# Demo/Runner - Temporary entry point, extensive dict.get usage
+# Will be replaced by TASK-003 DTOs and moved to townlet/training/
+src/townlet/demo/**:*
+
+# Recording - Optional feature system, some defaults acceptable
+src/townlet/recording/**:*
+
+# ============================================================================
+# FILE-LEVEL WHITELISTS
+# ============================================================================
+# Whitelist entire files that need refactoring
+
+# Legacy agent networks - will be replaced by BRAIN_AS_CODE (TASK-005)
+src/townlet/agent/networks.py:*
+
+# Curriculum - will be config-driven in TASK-004A
+src/townlet/curriculum/adversarial.py:*
+src/townlet/curriculum/static.py:*
+
+# TensorBoard logger - telemetry system, many dict.get calls
+src/townlet/training/tensorboard_logger.py:*
+
+# ============================================================================
+# CLASS-LEVEL WHITELISTS
+# ============================================================================
+# Whitelist specific classes that have acceptable defaults
+
+# Environment modules - will be refactored in TASK-003/TASK-004A
+src/townlet/environment/affordance_config.py:*
+src/townlet/environment/affordance_engine.py:*
+src/townlet/environment/cascade_config.py:*
+src/townlet/environment/cascade_engine.py:*
+src/townlet/environment/meter_dynamics.py:*
+src/townlet/environment/observation_builder.py:*
+src/townlet/environment/reward_strategy.py:*
+src/townlet/environment/vectorized_env.py:*
+
+# Exploration - will be config-driven in BRAIN_AS_CODE (TASK-005)
+src/townlet/exploration/**:*
+
+# Population - will use config DTOs in TASK-003
+src/townlet/population/**:*
+
+# Training infrastructure - will use DTOs in TASK-003
+src/townlet/training/replay_buffer.py:*
+src/townlet/training/sequential_replay_buffer.py:*
+
+# State DTOs - some defaults are metadata (acceptable per no-defaults principle)
+src/townlet/training/state.py:*
+
+# ============================================================================
+# EXCEPTIONAL LINE-BASED WHITELISTS
+# ============================================================================
+# Use line-based patterns ONLY for one-off exceptions that don't fit structural patterns
+# (Currently none - prefer structural patterns)
+
+# ============================================================================
+# TEMPORARY - Will be removed by TASK-003 and TASK-004A
+# ============================================================================
+#
+# Most of these whitelisted patterns exist because:
+#   1. Config loading uses dict.get() instead of Pydantic DTOs (TASK-003)
+#   2. Affordance system has hardcoded defaults (TASK-004A)
+#   3. Runner is temporary entry point (will move to townlet/training/)
+#   4. Exploration/curriculum not yet config-driven (TASK-005)
+#
+# NEXT STEPS:
+# 1. TASK-003: Replace dict.get() with Pydantic DTOs (no-defaults principle)
+# 2. TASK-004A: Universe compiler validates all config
+# 3. Move runner to townlet/training/, use DTOs
+# 4. TASK-005: Make networks/exploration config-driven (BRAIN_AS_CODE)
+# 5. Remove most entries from this whitelist
+#
+# Track progress: python scripts/no_defaults_lint.py src/townlet/ --whitelist .defaults-whitelist.txt
+#

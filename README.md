@@ -226,7 +226,7 @@ All levels observe the **same 14 affordances** in their state representation, ev
 
 **Dimensions by level**:
 
-- **L0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
+- **L0_0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
 - **L0_5_dual_resource**: 76 dims (7×7 grid=49 + 8 meters + 15 affordances + 4 extras)
 - **L1_full_observability**: 91 dims (8×8 grid=64 + 8 meters + 15 affordances + 4 extras)
 

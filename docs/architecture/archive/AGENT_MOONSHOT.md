@@ -22,17 +22,17 @@ These modules communicate via a "universal language" of well-defined data struct
 
 The "significant tension" between our current v1.0 agent and our v2.0 roadmap goals is the tension between two different types of learning:
 
-* **v1.0 ("The Flashcard Memorizer"):** A brilliant reactive, model-free agent that *memorizes* the value ($Q(s, a)$) of actions in states it has seen. It excels at stable, defined problems.
-* **v2.0 ("The Grammar Engine"):** A predictive, model-based agent that learns the *underlying rules ("grammar")* of its world. By learning the "physics" (World Model) and "psychology" (Social Model), it can generate novel, intelligent behavior for situations it has *never* seen.
+- **v1.0 ("The Flashcard Memorizer"):** A brilliant reactive, model-free agent that *memorizes* the value ($Q(s, a)$) of actions in states it has seen. It excels at stable, defined problems.
+- **v2.0 ("The Grammar Engine"):** A predictive, model-based agent that learns the *underlying rules ("grammar")* of its world. By learning the "physics" (World Model) and "psychology" (Social Model), it can generate novel, intelligent behavior for situations it has *never* seen.
 
 **Our "Pedagogical First" principle dictates that this v2.0 system must be interpretable.** The core deliverable is not just an agent that *works*, but an agent whose *thought process* can be inspected, debugged, and used for teaching.
 
 ### 3. v1.0 Baseline Architecture (For Context)
 
-* **System:** Monolithic, model-free Deep Q-Network (DQN).
-* **Policy:** A single network (`RecurrentSpatialQNetwork`) that maps observations directly to Q-values.
-* **Strengths:** Excellent for Phase 3.5 (stable, single-agent, full/partial observability).
-* **Limitations:** Fundamentally unequipped to handle non-stationarity (Phase 5), complex agent-agent interactions (Phase 4), or hierarchical planning (Phase 7) in a robust or interpretable way.
+- **System:** Monolithic, model-free Deep Q-Network (DQN).
+- **Policy:** A single network (`RecurrentSpatialQNetwork`) that maps observations directly to Q-values.
+- **Strengths:** Excellent for Phase 3.5 (stable, single-agent, full/partial observability).
+- **Limitations:** Fundamentally unequipped to handle non-stationarity (Phase 5), complex agent-agent interactions (Phase 4), or hierarchical planning (Phase 7) in a robust or interpretable way.
 
 -----
 
@@ -42,60 +42,60 @@ The v2.0 agent is a system of four "expert" modules that collaborate to produce 
 
 #### Module A: Perception Encoder (The "Eyes")
 
-* **Roadmap Goal:** Phase 6 (POMDP Extension)
-* **Purpose:** To solve partial observability. It answers the question: "What is the *true* state of the world, given my limited 5x5 view?"
-* **Architecture:** A recurrent network is essential.
+- **Roadmap Goal:** Phase 6 (POMDP Extension)
+- **Purpose:** To solve partial observability. It answers the question: "What is the *true* state of the world, given my limited 5x5 view?"
+- **Architecture:** A recurrent network is essential.
     1. `CNN` processes the 5x5 grid view.
     2. `MLP` processes the vector inputs (self-meters, time).
     3. The concatenated features + `prev_action` are fed into an **LSTM/GRU**.
     4. The output of the LSTM/GRU is passed to two heads to generate the parameters for the `BeliefDistribution` (e.g., `mean` and `log_std` for a Gaussian).
-* **Output:** `BeliefDistribution` (see Sec. 5) - the "universal language."
+- **Output:** `BeliefDistribution` (see Sec. 5) - the "universal language."
 
 #### Module B: World Model (The "Physics Engine")
 
-* **Roadmap Goal:** Phase 5 (Non-Stationarity & Continuous Learning)
-* **Purpose:** To learn the "physics" of the environment. It answers the question: "If I'm in this state and I take this action, what will happen to my meters, position, and reward?"
-* **Architecture:** A predictive, feed-forward model.
+- **Roadmap Goal:** Phase 5 (Non-Stationarity & Continuous Learning)
+- **Purpose:** To learn the "physics" of the environment. It answers the question: "If I'm in this state and I take this action, what will happen to my meters, position, and reward?"
+- **Architecture:** A predictive, feed-forward model.
     1. **Input:** `BeliefDistribution`, `ActionSequence`.
     2. **Core:** An autoregressive "step" model that predicts `t+1` from `t`.
     3. **Heads:** Predicts `next_state`, `next_reward`, `next_done`.
     4. **Refinement:** Includes a **`Value Head`**. This allows the model to be pre-trained to predict not just the next state, but the *value* of that state, aligning it with RL goals from day one.
-* **Prerequisite:** This module *must* be trained on a data-driven environment. The hardcoded logic in `vectorized_env.py` (Actions \#1, \#12) must be refactored to be configuration-driven (e.g., YAML) so the World Model can learn these rules.
+- **Prerequisite:** This module *must* be trained on a data-driven environment. The hardcoded logic in `vectorized_env.py` (Actions \#1, \#12) must be refactored to be configuration-driven (e.g., YAML) so the World Model can learn these rules.
 
 #### Module C: Social Model (The "Psychology Engine")
 
-* **Roadmap Goal:** Phase 4 (Multi-Agent Competition & Theory of Mind)
-* **Purpose:** To learn the "psychology" of other agents. It answers the question: "What does Agent 2 *intend* to do?"
-* **Core Challenge:** Solves the "non-predictable complexity" (non-stationarity) of other agents.
-* **Our "Detective" Solution:**
+- **Roadmap Goal:** Phase 4 (Multi-Agent Competition & Theory of Mind)
+- **Purpose:** To learn the "psychology" of other agents. It answers the question: "What does Agent 2 *intend* to do?"
+- **Core Challenge:** Solves the "non-predictable complexity" (non-stationarity) of other agents.
+- **Our "Detective" Solution:**
     1. **Environment "Cheat" (Cue-Based):** The environment is refactored to generate **`public_cues`** correlated with an agent's hidden state (e.g., `is_slumped`, `is_wearing_work_outfit`).
     2. **Training "Cheat" (CTDE):** The module is trained via **Centralized Training for Decentralized Execution**.
-* **Architecture:**
-  * **Input:** The `social_cues` component of the `BeliefDistribution`.
-  * **Core:** An LSTM/GRU that processes a *history* of an opponent's `(public_cues, action)` pairs.
-  * **Output:** `SocialPrediction` (see Sec. 5), a prediction of the opponent's *hidden* `Goal` or `intent`.
+- **Architecture:**
+  - **Input:** The `social_cues` component of the `BeliefDistribution`.
+  - **Core:** An LSTM/GRU that processes a *history* of an opponent's `(public_cues, action)` pairs.
+  - **Output:** `SocialPrediction` (see Sec. 5), a prediction of the opponent's *hidden* `Goal` or `intent`.
 
 #### Module D: Hierarchical Policy (The "CEO")
 
-* **Roadmap Goal:** Phase 7 (Hierarchical RL)
+- **Roadmap Goal:** Phase 7 (Hierarchical RL)
 
-* **Purpose:** To be the agent's "will" or decision-maker. It explicitly separates long-term strategy from short-term tactics.
+- **Purpose:** To be the agent's "will" or decision-maker. It explicitly separates long-term strategy from short-term tactics.
 
-* **Architecture:** This is explicitly two separate sub-modules.
+- **Architecture:** This is explicitly two separate sub-modules.
 
-* **D1: Meta-Controller (The "Strategist")**
+- **D1: Meta-Controller (The "Strategist")**
 
-  * **Timescale:** Slow (e.g., runs every 50 steps or when a goal is complete).
-  * **Inputs:** `BeliefDistribution` (self), `ImaginedFutures` (physics), `SocialPrediction` (others).
-  * **Task:** Asks, "What is our *strategic goal* right now?"
-  * **Output:** An explicit, interpretable `Goal` struct.
+  - **Timescale:** Slow (e.g., runs every 50 steps or when a goal is complete).
+  - **Inputs:** `BeliefDistribution` (self), `ImaginedFutures` (physics), `SocialPrediction` (others).
+  - **Task:** Asks, "What is our *strategic goal* right now?"
+  - **Output:** An explicit, interpretable `Goal` struct.
 
-* **D2: Controller (The "Operator")**
+- **D2: Controller (The "Operator")**
 
-  * **Timescale:** Fast (runs every game tick).
-  * **Inputs:** `BeliefDistribution`, `ImaginedFutures`, `SocialPrediction`, AND the current `Goal`.
-  * **Task:** Asks, "Given our *goal*, what is the single best *primitive action* to take *right now*?"
-  * **Output:** A `PrimitiveAction` (e.g., `up`, `down`, `interact`).
+  - **Timescale:** Fast (runs every game tick).
+  - **Inputs:** `BeliefDistribution`, `ImaginedFutures`, `SocialPrediction`, AND the current `Goal`.
+  - **Task:** Asks, "Given our *goal*, what is the single best *primitive action* to take *right now*?"
+  - **Output:** A `PrimitiveAction` (e.g., `up`, `down`, `interact`).
 
 ### 5. 📦 Key Data Structures (The "Universal Language")
 
@@ -108,9 +108,9 @@ class BeliefDistribution:
     """The full probabilistic belief of the agent about the hidden world state."""
     # Parameters for a Gaussian distribution (e.g., [mean, log_std])
     # This represents the agent's belief over all hidden variables.
-    distribution_params: torch.Tensor 
+    distribution_params: torch.Tensor
     distribution_type: str = "gaussian"
-    
+
     # Raw data for other modules
     known_state: torch.Tensor      # Ground truth self-data (meters, pos, money)
     social_cues: torch.Tensor      # Raw public cues of other agents
@@ -156,11 +156,11 @@ This is the end-to-end operational flow for a single game tick.
 2. **PERCEIVE (Module A):** The `PerceptionEncoder` processes this data.
 3. **BROADCAST:** Module A outputs the `BeliefDistribution_t`. This is the **single source of truth** for all other modules.
 4. **PREDICT (Parallel):**
-      * **Module B (World Model)** is called by the Policy (Module D) to "imagine" the outcomes of several candidate action sequences, generating a list of `ImaginedFutures`.
-      * **Module C (Social Model)** processes the `BeliefDistribution_t.social_cues` to generate `SocialPrediction_t` for all observed agents.
+      - **Module B (World Model)** is called by the Policy (Module D) to "imagine" the outcomes of several candidate action sequences, generating a list of `ImaginedFutures`.
+      - **Module C (Social Model)** processes the `BeliefDistribution_t.social_cues` to generate `SocialPrediction_t` for all observed agents.
 5. **DECIDE (Module D):**
-      * **D1 (Meta-Controller):** Checks if the `current_Goal` is complete (via `termination_condition`). If yes, it uses all inputs (`Belief`, `Futures`, `Social`) to select a new `Goal`.
-      * **D2 (Controller):** Uses all inputs and the `current_Goal` to select the single, optimal `PrimitiveAction_t`.
+      - **D1 (Meta-Controller):** Checks if the `current_Goal` is complete (via `termination_condition`). If yes, it uses all inputs (`Belief`, `Futures`, `Social`) to select a new `Goal`.
+      - **D2 (Controller):** Uses all inputs and the `current_Goal` to select the single, optimal `PrimitiveAction_t`.
 6. **ACT:** The `PrimitiveAction_t` is sent to the environment. The `BeliefDistribution_t.recurrent_state` is saved for the next tick.
 
 ### 7. 🛠️ Training & Implementation Strategy
@@ -182,29 +182,29 @@ Before any end-to-end RL, each module is pre-trained on a simpler, supervised ta
 
 This is the engineering migration path to de-risk the refactor.
 
-* **Phase 1: Foundation (Prerequisites)**
+- **Phase 1: Foundation (Prerequisites)**
 
-  * Implement the explicit data structures (Sec. 5).
-  * Refactor the environment for `public_cues` (for Module C).
-  * Refactor environment "physics" (Actions \#1, \#12) to be data-driven (for Module B).
+  - Implement the explicit data structures (Sec. 5).
+  - Refactor the environment for `public_cues` (for Module C).
+  - Refactor environment "physics" (Actions \#1, \#12) to be data-driven (for Module B).
 
-* **Phase 2: v1.5 (Perception Test)**
+- **Phase 2: v1.5 (Perception Test)**
 
-  * **Architecture:** `Module A (Perception)` + v1.0 `Q-Network`.
-  * **Logic:** The Q-Network's input is replaced. Instead of `raw_observation`, it now takes the `BeliefDistribution.distribution_params`.
-  * **Goal:** Validate that `Module A` can solve the POMDP task and is a viable replacement.
+  - **Architecture:** `Module A (Perception)` + v1.0 `Q-Network`.
+  - **Logic:** The Q-Network's input is replaced. Instead of `raw_observation`, it now takes the `BeliefDistribution.distribution_params`.
+  - **Goal:** Validate that `Module A` can solve the POMDP task and is a viable replacement.
 
-* **Phase 3: v1.7 (Planning Test)**
+- **Phase 3: v1.7 (Planning Test)**
 
-  * **Architecture:** `v1.5` + `Module B (World Model)`.
-  * **Logic:** Use the `ImaginedFutures` from the pre-trained World Model to enhance the Q-learning update (e.g., Dyna-style multi-step rollouts).
-  * **Goal:** Validate that `Module B` can accelerate learning and adapt to non-stationarity.
+  - **Architecture:** `v1.5` + `Module B (World Model)`.
+  - **Logic:** Use the `ImaginedFutures` from the pre-trained World Model to enhance the Q-learning update (e.g., Dyna-style multi-step rollouts).
+  - **Goal:** Validate that `Module B` can accelerate learning and adapt to non-stationarity.
 
-* **Phase 4: v2.0 (Full System Integration)**
+- **Phase 4: v2.0 (Full System Integration)**
 
-  * **Architecture:** All pre-trained modules are integrated.
-  * **Logic:** The v1.0 `Q-Network` is fully *removed* and *replaced* by the pre-trained `Module D (Hierarchical Policy)`.
-  * **Goal:** The full "Smart Collection" is now active and ready for final, end-to-end fine-tuning with RL.
+  - **Architecture:** All pre-trained modules are integrated.
+  - **Logic:** The v1.0 `Q-Network` is fully *removed* and *replaced* by the pre-trained `Module D (Hierarchical Policy)`.
+  - **Goal:** The full "Smart Collection" is now active and ready for final, end-to-end fine-tuning with RL.
 
 ### 8. 🎓 Pedagogical Payoff & UI Strategy
 
@@ -218,7 +218,7 @@ This is the "product" of the v2.0 architecture: a fully transparent, debuggable 
 
 ```python
 def debug_agent_failure(trace):
-    
+
     # 1. Is it 'blind'?
     if trace.belief_state.uncertainty['my_meters'] > 0.9:
         print("DIAGNOSIS: PERCEPTION (A) FAILURE.")
@@ -228,7 +228,7 @@ def debug_agent_failure(trace):
     elif trace.imagined_futures['fridge_path'].reward < 0:
         print("DIAGNOSIS: WORLD MODEL (B) FAILURE.")
         print("Agent 'believes' the fridge has a negative reward. Its 'physics' is wrong.")
-        
+
     # 3. Is it 'scared' or 'polite'?
     elif trace.social_prediction['agent_2'].predicted_goal == 'use_fridge':
         print("DIAGNOSIS: SOCIAL MODEL (C) INTERFERENCE.")
@@ -244,10 +244,10 @@ def debug_agent_failure(trace):
 
 This architecture enables a new curriculum based on debugging the agent's "mind."
 
-* **Lab 1: Perception Failures:** "Agent keeps bumping into walls. Examine the `BeliefDistribution`'s uncertainty. Why is it 'lost'?"
-* **Lab 2: World Model Limitations:** "Agent tries to use the 'job' affordance at 3 AM. Analyze its `ImaginedFuture` for this action. What did it *think* would happen?"
-* **Lab 3: Social Misunderstandings:** "Agent avoids an empty bed. Analyze the `SocialPrediction`. Which *public cue* from Agent 2 did it misinterpret?"
-* **Lab 4: Goal Conflicts:** "Agent starves while having high 'money'. Debug the `Meta-Controller`'s `Goal` selection logic. Is its 'priority' wrong?"
+- **Lab 1: Perception Failures:** "Agent keeps bumping into walls. Examine the `BeliefDistribution`'s uncertainty. Why is it 'lost'?"
+- **Lab 2: World Model Limitations:** "Agent tries to use the 'job' affordance at 3 AM. Analyze its `ImaginedFuture` for this action. What did it *think* would happen?"
+- **Lab 3: Social Misunderstandings:** "Agent avoids an empty bed. Analyze the `SocialPrediction`. Which *public cue* from Agent 2 did it misinterpret?"
+- **Lab 4: Goal Conflicts:** "Agent starves while having high 'money'. Debug the `Meta-Controller`'s `Goal` selection logic. Is its 'priority' wrong?"
 
 #### 8.3 Progressive Complexity UI
 
@@ -276,25 +276,25 @@ AGENT_COMPLEXITY_LEVELS = {
 
 #### Technical Success
 
-* [ ] **v1.5:** Agent matches or exceeds v1.0 performance in POMDP settings.
-* [ ] **v1.7:** World Model predictions (for `known_state` & `reward`) achieve \>80% accuracy on a test set.
-* [ ] **v2.0:** All modules are integrated and end-to-end training is stable and converges.
-* [ ] **Demo:** The real-time visualization successfully renders all module outputs (`Belief`, `Goal`, etc.) without crashing.
+- [ ] **v1.5:** Agent matches or exceeds v1.0 performance in POMDP settings.
+- [ ] **v1.7:** World Model predictions (for `known_state` & `reward`) achieve \>80% accuracy on a test set.
+- [ ] **v2.0:** All modules are integrated and end-to-end training is stable and converges.
+- [ ] **Demo:** The real-time visualization successfully renders all module outputs (`Belief`, `Goal`, etc.) without crashing.
 
 #### Pedagogical Success
 
-* [ ] **Lab Completion:** Students can successfully use the debugging UI to diagnose the 4 "Lab" scenarios (Sec 8.2).
-* [ ] **Conceptual Understanding:** Students can verbally explain the "flashcard" vs. "grammar" analogy and identify which module is responsible for which behavior.
-* [**Student-led Extension:** Students begin to extend the modules (e.g., custom `Goal` selectors in Module D) for their own projects.
+- [ ] **Lab Completion:** Students can successfully use the debugging UI to diagnose the 4 "Lab" scenarios (Sec 8.2).
+- [ ] **Conceptual Understanding:** Students can verbally explain the "flashcard" vs. "grammar" analogy and identify which module is responsible for which behavior.
+- [**Student-led Extension:** Students begin to extend the modules (e.g., custom `Goal` selectors in Module D) for their own projects.
 
 ### 11. 🔬 Future Research Projects Enabled
 
 This architecture is not an endpoint; it's a platform. It unlocks numerous research avenues:
 
-* "Extending the World Model to handle *novel* affordances without re-training."
-* "Improving the Social Model's inference capabilities with more complex 'cues'."
-* "Investigating emergent `Goal` selection strategies in the Meta-Controller."
-* "Adding an explicit communication channel for Phase 8, using the `SocialPrediction` as a foundation."
+- "Extending the World Model to handle *novel* affordances without re-training."
+- "Improving the Social Model's inference capabilities with more complex 'cues'."
+- "Investigating emergent `Goal` selection strategies in the Meta-Controller."
+- "Adding an explicit communication channel for Phase 8, using the `SocialPrediction` as a foundation."
 
 Master Design Document: Appendix A (v1.1)
 
@@ -330,23 +330,23 @@ class AgentDNA:
     greed: float        # High = high 'money' goal priority
     agreeableness: float# High = high 'social' goal priority
     curiosity: float    # High = high 'exploration' goal priority
-    
+
     # --- Genetic Metadata ---
     generation: int
     parent_ids: Tuple[Optional[int], Optional[int]]
-    
+
     # --- NEW: Family & Communication ID ---
     family_id: int      # The int64 "key" to the private comms channel
 
     def as_tensor(self) -> torch.Tensor:
-        """ 
+        """
         Converts traits into a fixed-shape tensor for the Policy.
-        SHAPE: [1, 4] 
+        SHAPE: [1, 4]
         """
         return torch.tensor([[
-            self.neuroticism, 
-            self.greed, 
-            self.agreeableness, 
+            self.neuroticism,
+            self.greed,
+            self.agreeableness,
             self.curiosity
         ]])
 
@@ -372,13 +372,13 @@ class RawObservation:
 
     my_known_state: torch.Tensor
     # SHAPE: [B, K_MAX]
-    
+
     visible_grid: torch.Tensor
     # SHAPE: [B, 5, 5]
-    
+
     visible_agent_cues: torch.Tensor
     # SHAPE: [B, N_AGENTS_MAX - 1, C_MAX]
-    
+
     # --- NEW: Family Communication ---
     family_comm_channel: torch.Tensor
     # SHAPE: [B, N_AGENTS_MAX - 1] (as int64)
@@ -465,10 +465,10 @@ Add these optional but recommended fields to `affordances.yaml`. They are metada
 
 Why these fields:
 
-* `quality` lets you have many beds without hardcoding effects; better beds = larger scale.
-* `capacity` + `exclusive` allow multiple beds in same tile or bunkbeds without a global owner.
-* `interruptible` prevents agents from being trapped in interactions (important for emergent behaviours).
-* `distance_limit` supports affordances like phones/teleporters being usable from nearby tiles without special-case logic.
+- `quality` lets you have many beds without hardcoding effects; better beds = larger scale.
+- `capacity` + `exclusive` allow multiple beds in same tile or bunkbeds without a global owner.
+- `interruptible` prevents agents from being trapped in interactions (important for emergent behaviours).
+- `distance_limit` supports affordances like phones/teleporters being usable from nearby tiles without special-case logic.
 
 WEP: **likely (~75%)** these fields cover 90% of use-cases without code changes.
 
@@ -478,22 +478,22 @@ WEP: **likely (~75%)** these fields cover 90% of use-cases without code changes.
 
 1. **Reservation vs. Use**
 
-   * *Reservation phase*: when agent begins interaction, engine checks capacity & preconditions; if accepted, it creates a **local reservation token** tied to that agent only for the duration. Reservation is ephemeral and only lives in tick context (not persisted to config). No global persistent ownership.
+   - *Reservation phase*: when agent begins interaction, engine checks capacity & preconditions; if accepted, it creates a **local reservation token** tied to that agent only for the duration. Reservation is ephemeral and only lives in tick context (not persisted to config). No global persistent ownership.
 2. **Capacity & contention resolution**
 
-   * If multiple agents attempt to reserve and capacity is exceeded in the same tick, resolve deterministically: sort agents by `(priority, agent_id)` where `priority` is e.g. distance, hunger, or a fixed tie-breaker (or random seeded). Use seed so replays deterministic.
+   - If multiple agents attempt to reserve and capacity is exceeded in the same tick, resolve deterministically: sort agents by `(priority, agent_id)` where `priority` is e.g. distance, hunger, or a fixed tie-breaker (or random seeded). Use seed so replays deterministic.
 3. **Atomic per-tick effect application**
 
-   * Collect all accepted affordance effects (including per-tick effects). Sum deltas per bar, then apply atomically. Clamp to min/max afterwards. This preserves your no-global-state goal and avoids partial application weirdness.
+   - Collect all accepted affordance effects (including per-tick effects). Sum deltas per bar, then apply atomically. Clamp to min/max afterwards. This preserves your no-global-state goal and avoids partial application weirdness.
 4. **Interrupts**
 
-   * If `interruptible: true` and agent moves or receives an effect that should break (health→0, death), engine aborts multi-tick and applies partial completion semantics defined by `on_interrupt` (configurable: refund fraction, no bonus, partial penalty). Keep `on_interrupt` declarative.
+   - If `interruptible: true` and agent moves or receives an effect that should break (health→0, death), engine aborts multi-tick and applies partial completion semantics defined by `on_interrupt` (configurable: refund fraction, no bonus, partial penalty). Keep `on_interrupt` declarative.
 5. **Implicit local state**
 
-   * Allow affordances to carry **ephemeral local interaction state** only (e.g., `interaction_progress` keyed by agent id) stored in the tick context or agent’s own state. Do not persist affordance occupancy beyond the tick unless it is a reservation token. This respects your "owned only while on it" rule.
+   - Allow affordances to carry **ephemeral local interaction state** only (e.g., `interaction_progress` keyed by agent id) stored in the tick context or agent’s own state. Do not persist affordance occupancy beyond the tick unless it is a reservation token. This respects your "owned only while on it" rule.
 6. **Special effects whitelist**
 
-   * Allow `effect_type: teleport` in YAML, but require engine to implement the handler. Keep the effect set small and versioned. If you add a special effect (eg. `kill_target`) implement it once in engine and then any affordance can reference it.
+   - Allow `effect_type: teleport` in YAML, but require engine to implement the handler. Keep the effect set small and versioned. If you add a special effect (eg. `kill_target`) implement it once in engine and then any affordance can reference it.
 
 WEP: **very likely (~85%)** these rules prevent race conditions and keep world stateless.
 
@@ -518,9 +518,9 @@ WEP: **likely (~70%)** this pattern balances purity and practical needs.
 
 ## Contention & emergent behaviour examples
 
-* Multiple beds: two agents try to sleep in same tile; capacity=1 ⇒ engine resolves reservation deterministically and the losing agent can choose alternate affordance or queue (queueing implemented in agent, not engine). This spawns interesting emergent choices: do I wait, steal someone’s bed, or choose a poorer bed? Exactly what you want.
+- Multiple beds: two agents try to sleep in same tile; capacity=1 ⇒ engine resolves reservation deterministically and the losing agent can choose alternate affordance or queue (queueing implemented in agent, not engine). This spawns interesting emergent choices: do I wait, steal someone’s bed, or choose a poorer bed? Exactly what you want.
 
-* Phone ambulance decisions: agent near death chooses between running to hospital affordance on map vs using a phone affordance that costs money but teleports. The decision emerges purely from bars (health, money, distance/time-to-hospital). No flashy code required.
+- Phone ambulance decisions: agent near death chooses between running to hospital affordance on map vs using a phone affordance that costs money but teleports. The decision emerges purely from bars (health, money, distance/time-to-hospital). No flashy code required.
 
 WEP: **very likely (~85%)** you'll see rich trade-offs with these simple rules.
 
@@ -557,10 +557,10 @@ WEP: **very likely (~85%)** these prevent drift from design.
 
 ## Short checklist to paste into your sprint ticket
 
-* [ ] Add optional fields to `affordances.yaml`: `capacity`, `exclusive`, `quality`, `interruptible`, `distance_limit`, `on_interrupt`.
-* [ ] Implement engine reservation token system (ephemeral, per-tick).
-* [ ] Implement deterministic contention tie-breaker (seeded).
-* [ ] Add `effect_type` whitelist and engine handlers for `teleport` and any future specials.
-* [ ] Add CI check: `affordances` must only reference bar-changes or official `effect_type` tokens.
-* [ ] Add unit tests: reservation, atomic application, interrupt, teleport resolution.
-* [ ] Log reservations and outcome to trace for Module B/C training.
+- [ ] Add optional fields to `affordances.yaml`: `capacity`, `exclusive`, `quality`, `interruptible`, `distance_limit`, `on_interrupt`.
+- [ ] Implement engine reservation token system (ephemeral, per-tick).
+- [ ] Implement deterministic contention tie-breaker (seeded).
+- [ ] Add `effect_type` whitelist and engine handlers for `teleport` and any future specials.
+- [ ] Add CI check: `affordances` must only reference bar-changes or official `effect_type` tokens.
+- [ ] Add unit tests: reservation, atomic application, interrupt, teleport resolution.
+- [ ] Log reservations and outcome to trace for Module B/C training.

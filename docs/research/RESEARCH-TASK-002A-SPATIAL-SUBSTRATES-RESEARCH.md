@@ -109,7 +109,7 @@ def get_affordance_positions(self) -> dict:
 
 | Config Pack | Grid Size | Grid Type | Total Cells |
 |-------------|-----------|-----------|-------------|
-| L0_minimal | 3×3 | Square | 9 |
+| L0_0_minimal | 3×3 | Square | 9 |
 | L0_5_dual_resource | 7×7 | Square | 49 |
 | L1_full_observability | 8×8 | Square | 64 |
 | L2_partial_observability | 8×8 | Square | 64 |

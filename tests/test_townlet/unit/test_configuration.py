@@ -292,7 +292,8 @@ class TestBarsConfig:
             "terminal_conditions": [],
         }
 
-        with pytest.raises(ValidationError, match="indices must be 0-7"):
+        # TASK-001: Error message changed from "indices must be 0-7" to more detailed message
+        with pytest.raises(ValidationError, match="Bar indices must be contiguous from 0 to 7"):
             BarsConfig(**bars_data)
 
 
@@ -664,7 +665,8 @@ class TestAffordanceConfigLoading:
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
 
-        collection = load_affordance_config(config_path)
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
+        collection = load_affordance_config(config_path, bars_config)
 
         assert collection.version == "2.0"
         assert collection.status == "PRODUCTION - Dual-mode ready"
@@ -677,7 +679,8 @@ class TestAffordanceConfigLoading:
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
 
-        collection = load_affordance_config(config_path)
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
+        collection = load_affordance_config(config_path, bars_config)
 
         expected_ids = {str(i) for i in range(14)}  # IDs 0-13 inclusive
         actual_ids = {aff.id for aff in collection.affordances}
@@ -690,7 +693,8 @@ class TestAffordanceConfigLoading:
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
 
-        collection = load_affordance_config(config_path)
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
+        collection = load_affordance_config(config_path, bars_config)
 
         # Test lookup
         bed = collection.get_affordance("0")  # Bed has ID "0" in dual-mode config
@@ -710,7 +714,8 @@ class TestAffordanceConfigLoading:
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
 
-        collection = load_affordance_config(config_path)
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
+        collection = load_affordance_config(config_path, bars_config)
 
         for affordance in collection.affordances:
             assert len(affordance.operating_hours) == 2
@@ -733,7 +738,8 @@ class TestAffordanceCategories:
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
 
-        collection = load_affordance_config(config_path)
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
+        collection = load_affordance_config(config_path, bars_config)
 
         dual = [aff for aff in collection.affordances if aff.interaction_type == "dual"]
         assert len(dual) == len(collection.affordances), "All affordances should be dual-mode in production config"
@@ -745,7 +751,8 @@ class TestAffordanceCategories:
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
 
-        collection = load_affordance_config(config_path)
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
+        collection = load_affordance_config(config_path, bars_config)
 
         free_affordances = {aff.name for aff in collection.affordances if len(aff.costs) == 0}
         # Park, Job, Labor are free in instant mode
@@ -758,7 +765,8 @@ class TestAffordanceCategories:
         if not config_path.exists():
             pytest.skip(f"Config file not found: {config_path}")
 
-        collection = load_affordance_config(config_path)
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
+        collection = load_affordance_config(config_path, bars_config)
 
         # FastFood has fitness and health penalties
         fastfood = collection.get_affordance("4")
@@ -784,10 +792,11 @@ class TestAffordanceConfigEdgeCases:
     Tests missing files, empty affordances, duplicate IDs.
     """
 
-    def test_load_nonexistent_file_raises_error(self):
+    def test_load_nonexistent_file_raises_error(self, test_config_pack_path: Path):
         """Test that loading non-existent file raises appropriate error."""
+        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
         with pytest.raises(FileNotFoundError):
-            load_affordance_config(Path("configs/nonexistent.yaml"))
+            load_affordance_config(Path("configs/nonexistent.yaml"), bars_config)
 
     def test_empty_affordances_list(self):
         """Test that empty affordances list is valid."""
@@ -942,11 +951,11 @@ class TestEpsilonConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files from test pack
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
-        runner = DemoRunner(
+        _runner = DemoRunner(
             config_dir=config_dir,
             db_path=tmp_path / "test.db",
             checkpoint_dir=tmp_path / "checkpoints",
@@ -1080,7 +1089,7 @@ class TestTrainingHyperparameters:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
@@ -1148,7 +1157,7 @@ class TestMaxEpisodesConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
@@ -1202,7 +1211,7 @@ class TestMaxEpisodesConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
@@ -1256,7 +1265,7 @@ class TestMaxEpisodesConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files
-        l0_config = Path("configs/L0_minimal")
+        l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 

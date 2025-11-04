@@ -1033,7 +1033,7 @@ epsilon_decay = training_cfg.get("epsilon_decay", 0.995)
 
 ### Example 2: Misleading Comments (L0)
 
-**File**: `configs/L0_minimal/training.yaml`
+**File**: `configs/L0_0_minimal/training.yaml`
 
 **Problem**:
 
@@ -1050,7 +1050,7 @@ environment:
 
 ### Example 3: Slow Epsilon Decay (L0)
 
-**File**: `configs/L0_minimal/training.yaml`
+**File**: `configs/L0_0_minimal/training.yaml`
 
 **Problem**:
 

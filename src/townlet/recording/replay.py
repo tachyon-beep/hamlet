@@ -6,10 +6,13 @@ Handles loading, decompressing, and streaming recorded episodes.
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import lz4.frame
-import msgpack
+import lz4.frame  # type: ignore[import-untyped]
+import msgpack  # type: ignore[import-untyped]
+
+if TYPE_CHECKING:
+    from townlet.demo.database import DemoDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,7 @@ class ReplayManager:
     Loads episode data from disk and provides step-by-step playback control.
     """
 
-    def __init__(self, database, recordings_base_dir: Path):
+    def __init__(self, database: "DemoDatabase", recordings_base_dir: Path):
         """Initialize replay manager.
 
         Args:

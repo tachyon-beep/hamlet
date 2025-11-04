@@ -390,7 +390,7 @@ for agent_idx in range(self.num_agents):
 
 Update all existing config packs to include `actions.yaml`:
 
-1. **L0_minimal**: 4-way movement + interact + wait
+1. **L0_0_minimal**: 4-way movement + interact + wait
 2. **L0_5_dual_resource**: 4-way movement + interact + wait
 3. **L1_full_observability**: 4-way movement + interact + wait
 
@@ -575,7 +575,7 @@ self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 # src/townlet/agent/networks.py:45
 self.q_head = nn.Linear(hidden_dim, action_dim)  # Must match action space
 
-# configs/L0_minimal/training.yaml:28-30
+# configs/L0_0_minimal/training.yaml:28-30
 # Energy costs defined but action space is Python
 energy_move_depletion: 0.005
 energy_wait_depletion: 0.003

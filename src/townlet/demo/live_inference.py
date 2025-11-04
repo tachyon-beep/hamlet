@@ -78,7 +78,7 @@ class LiveInferenceServer:
         logger.info(f"LiveInferenceServer initialized with total_episodes={total_episodes}")
         self.config_dir = Path(config_dir) if config_dir else None
         if training_config_path:
-            self.config_path = Path(training_config_path)
+            self.config_path: Path | None = Path(training_config_path)
         elif self.config_dir is not None:
             self.config_path = self.config_dir / "training.yaml"
         else:
@@ -105,7 +105,7 @@ class LiveInferenceServer:
         self.current_step = 0
 
         # Affordance interaction tracking (for UI display)
-        self.affordance_interactions = {}  # {affordance_name: count}
+        self.affordance_interactions: dict[str, int] = {}  # {affordance_name: count}
 
         # Checkpoint auto-update mode
         self.auto_checkpoint_mode = False  # If true, automatically check for new checkpoints after each episode
@@ -316,6 +316,7 @@ class LiveInferenceServer:
 
         # Load Q-network weights
         if "population_state" in checkpoint:
+            assert self.population is not None, "Population must be initialized before loading checkpoint"
             self.population.q_network.load_state_dict(checkpoint["population_state"]["q_network"])
             logger.info("Loaded Q-network weights")
 
@@ -656,6 +657,10 @@ class LiveInferenceServer:
 
     async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor, step_reward: float = 1.0):
         """Broadcast current state to all clients."""
+        # Ensure environment and population are initialized
+        assert self.env is not None, "Environment must be initialized before broadcasting state"
+        assert self.population is not None, "Population must be initialized before broadcasting state"
+
         # Get agent position (unpack for frontend compatibility)
         agent_pos = self.env.positions[0].cpu().tolist()
 
@@ -767,12 +772,10 @@ class LiveInferenceServer:
                 and hasattr(self.env, "last_interaction_affordance")
                 and self.env.last_interaction_affordance[0] is not None
             ):
-                from townlet.environment.affordance_config import AFFORDANCE_CONFIGS
-
                 affordance_name = self.env.last_interaction_affordance[0]
-                config = AFFORDANCE_CONFIGS.get(affordance_name)
-                if config:
-                    required_ticks = config["required_ticks"]
+                # Get required ticks from affordance engine
+                required_ticks = self.env.affordance_engine.get_required_ticks(affordance_name)
+                if required_ticks > 0:
                     interaction_progress_normalized = interaction_progress_raw / required_ticks
 
             # Get agent age and lifetime progress
@@ -828,6 +831,10 @@ class LiveInferenceServer:
 
         # Send confirmation
         metadata = self.replay_manager.get_metadata()
+        if metadata is None:
+            await websocket.send_json({"type": "error", "message": "Failed to load episode metadata"})
+            return
+
         await self._broadcast_to_clients(
             {
                 "type": "replay_loaded",

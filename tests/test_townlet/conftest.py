@@ -11,6 +11,7 @@ Usage:
         assert basic_env.grid_size == 8
 """
 
+import copy
 import shutil
 from pathlib import Path
 from typing import Any
@@ -265,7 +266,7 @@ def recurrent_qnetwork(pomdp_env: VectorizedHamletEnv, device: torch.device) -> 
     return RecurrentSpatialQNetwork(
         grid_size=5,  # 5×5 local vision
         num_affordance_types=14,
-        num_meters=8,
+        num_meters=pomdp_env.meter_count,  # Dynamic meter count (TASK-001)
         action_dim=5,
         hidden_dim=256,
     ).to(device)
@@ -401,6 +402,394 @@ def vectorized_population(
         replay_buffer_capacity=1000,
         batch_size=32,
         device=device,
+    )
+
+
+# =============================================================================
+# TASK-001: VARIABLE METER CONFIG FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
+    """Create temporary 4-meter config pack for TASK-001 testing.
+
+    Meters: energy, health, money, mood
+    Use ONLY for: TASK-001 variable meter tests
+    Do NOT use for: L0 curriculum (use separate curriculum fixtures)
+
+    Args:
+        tmp_path: pytest's temporary directory
+        test_config_pack_path: Path to source config pack
+
+    Returns:
+        Path to temporary 4-meter config pack directory
+    """
+    config_4m = tmp_path / "config_4m"
+    shutil.copytree(test_config_pack_path, config_4m)
+
+    # Create 4-meter bars.yaml
+    bars_config = {
+        "version": "2.0",
+        "description": "4-meter test universe",
+        "bars": [
+            {
+                "name": "energy",
+                "index": 0,
+                "tier": "pivotal",
+                "range": [0.0, 1.0],
+                "initial": 1.0,
+                "base_depletion": 0.005,
+                "description": "Energy level",
+            },
+            {
+                "name": "health",
+                "index": 1,
+                "tier": "pivotal",
+                "range": [0.0, 1.0],
+                "initial": 1.0,
+                "base_depletion": 0.0,
+                "description": "Health status",
+            },
+            {
+                "name": "money",
+                "index": 2,
+                "tier": "resource",
+                "range": [0.0, 1.0],
+                "initial": 0.5,
+                "base_depletion": 0.0,
+                "description": "Financial resources",
+            },
+            {
+                "name": "mood",
+                "index": 3,
+                "tier": "secondary",
+                "range": [0.0, 1.0],
+                "initial": 0.7,
+                "base_depletion": 0.001,
+                "description": "Mood state",
+            },
+        ],
+        "terminal_conditions": [
+            {"meter": "energy", "operator": "<=", "value": 0.0, "description": "Death by energy depletion"},
+            {"meter": "health", "operator": "<=", "value": 0.0, "description": "Death by health failure"},
+        ],
+    }
+
+    with open(config_4m / "bars.yaml", "w") as f:
+        yaml.safe_dump(bars_config, f)
+
+    # Simplify cascades.yaml
+    cascades_config = {
+        "version": "2.0",
+        "description": "Simplified cascades for 4-meter testing",
+        "math_type": "gradient_penalty",
+        "modulations": [],
+        "cascades": [
+            {
+                "name": "low_mood_hits_energy",
+                "category": "secondary_to_pivotal",
+                "description": "Low mood drains energy",
+                "source": "mood",
+                "source_index": 3,
+                "target": "energy",
+                "target_index": 0,
+                "threshold": 0.2,
+                "strength": 0.01,
+            }
+        ],
+        "execution_order": ["secondary_to_pivotal"],
+    }
+
+    with open(config_4m / "cascades.yaml", "w") as f:
+        yaml.safe_dump(cascades_config, f)
+
+    # Create affordances.yaml with FULL 14-affordance vocabulary but only using 4 meters
+    # This maintains observation vocabulary consistency while validating meter references
+    # Note: Only enabled_affordances (Bed, Hospital, HomeMeal=FastFood, Job) will be deployed
+    affordances_config = {
+        "version": "2.0",
+        "description": "4-meter test affordances (full vocabulary, 4-meter compatible)",
+        "status": "TEST",
+        "affordances": [
+            {
+                "id": "0",
+                "name": "Bed",
+                "category": "energy",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.05}],
+                "effects": [{"meter": "energy", "amount": 0.50}, {"meter": "health", "amount": 0.02}],
+                "operating_hours": [0, 24],
+            },
+            {
+                "id": "1",
+                "name": "LuxuryBed",
+                "category": "energy",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.11}],
+                "effects": [{"meter": "energy", "amount": 0.75}, {"meter": "health", "amount": 0.05}],
+                "operating_hours": [0, 24],
+            },
+            {
+                "id": "2",
+                "name": "Shower",
+                "category": "hygiene",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.03}],
+                "effects": [{"meter": "mood", "amount": 0.20}],  # Use mood instead of hygiene
+                "operating_hours": [0, 24],
+            },
+            {
+                "id": "3",
+                "name": "HomeMeal",
+                "category": "food",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.04}],
+                "effects": [{"meter": "energy", "amount": 0.20}, {"meter": "mood", "amount": 0.10}],
+                "operating_hours": [0, 24],
+            },
+            {
+                "id": "4",
+                "name": "FastFood",
+                "category": "food",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.06}],
+                "effects": [{"meter": "energy", "amount": 0.30}],
+                "operating_hours": [0, 24],
+            },
+            {
+                "id": "5",
+                "name": "Restaurant",
+                "category": "food",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.12}],
+                "effects": [{"meter": "energy", "amount": 0.40}, {"meter": "mood", "amount": 0.15}],
+                "operating_hours": [11, 22],
+            },
+            {
+                "id": "6",
+                "name": "Gym",
+                "category": "fitness",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.08}, {"meter": "energy", "amount": 0.10}],
+                "effects": [{"meter": "health", "amount": 0.15}, {"meter": "mood", "amount": 0.05}],
+                "operating_hours": [6, 22],
+            },
+            {
+                "id": "7",
+                "name": "Hospital",
+                "category": "health",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.15}],
+                "effects": [{"meter": "health", "amount": 0.60}],
+                "operating_hours": [0, 24],
+            },
+            {
+                "id": "8",
+                "name": "Job",
+                "category": "income",
+                "interaction_type": "instant",
+                "costs": [{"meter": "energy", "amount": 0.15}],
+                "effects": [{"meter": "money", "amount": 0.225}, {"meter": "mood", "amount": -0.05}],
+                "operating_hours": [8, 18],
+            },
+            {
+                "id": "9",
+                "name": "Park",
+                "category": "leisure",
+                "interaction_type": "instant",
+                "costs": [],
+                "effects": [{"meter": "mood", "amount": 0.20}],
+                "operating_hours": [6, 20],
+            },
+            {
+                "id": "10",
+                "name": "Library",
+                "category": "leisure",
+                "interaction_type": "instant",
+                "costs": [],
+                "effects": [{"meter": "mood", "amount": 0.15}],
+                "operating_hours": [8, 20],
+            },
+            {
+                "id": "11",
+                "name": "Bar",
+                "category": "social",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.15}],
+                "effects": [{"meter": "mood", "amount": 0.25}],
+                "operating_hours": [18, 28],
+            },
+            {
+                "id": "12",
+                "name": "Recreation",
+                "category": "leisure",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.10}],
+                "effects": [{"meter": "mood", "amount": 0.30}],
+                "operating_hours": [12, 24],
+            },
+            {
+                "id": "13",
+                "name": "SocialEvent",
+                "category": "social",
+                "interaction_type": "instant",
+                "costs": [{"meter": "money", "amount": 0.08}],
+                "effects": [{"meter": "mood", "amount": 0.20}],
+                "operating_hours": [18, 23],
+            },
+        ],
+    }
+
+    with open(config_4m / "affordances.yaml", "w") as f:
+        yaml.safe_dump(affordances_config, f)
+
+    return config_4m
+
+
+@pytest.fixture
+def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
+    """Create temporary 12-meter config pack for TASK-001 testing.
+
+    Meters: 8 standard + reputation, skill, spirituality, community_trust
+    Use ONLY for: TASK-001 variable meter scaling tests
+    Do NOT use for: L2 curriculum (use separate curriculum fixtures)
+
+    Args:
+        tmp_path: pytest's temporary directory
+        test_config_pack_path: Path to source config pack
+
+    Returns:
+        Path to temporary 12-meter config pack directory
+    """
+    config_12m = tmp_path / "config_12m"
+    shutil.copytree(test_config_pack_path, config_12m)
+
+    # Load existing 8-meter bars
+    with open(test_config_pack_path / "bars.yaml") as f:
+        bars_8m = yaml.safe_load(f)
+
+    # Add 4 new meters
+    extra_meters = [
+        {
+            "name": "reputation",
+            "index": 8,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.5,
+            "base_depletion": 0.002,
+            "description": "Social reputation",
+        },
+        {
+            "name": "skill",
+            "index": 9,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.3,
+            "base_depletion": 0.001,
+            "description": "Professional skills",
+        },
+        {
+            "name": "spirituality",
+            "index": 10,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.6,
+            "base_depletion": 0.002,
+            "description": "Spiritual wellbeing",
+        },
+        {
+            "name": "community_trust",
+            "index": 11,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.7,
+            "base_depletion": 0.001,
+            "description": "Community trust level",
+        },
+    ]
+
+    bars_12m = copy.deepcopy(bars_8m)  # Deep copy to avoid modifying original
+    bars_12m["bars"].extend(extra_meters)
+
+    with open(config_12m / "bars.yaml", "w") as f:
+        yaml.safe_dump(bars_12m, f)
+
+    return config_12m
+
+
+@pytest.fixture
+def task001_env_4meter(cpu_device: torch.device, task001_config_4meter: Path) -> VectorizedHamletEnv:
+    """4-meter environment for TASK-001 testing.
+
+    Args:
+        cpu_device: CPU device for deterministic behavior
+        task001_config_4meter: Path to 4-meter config pack
+
+    Returns:
+        VectorizedHamletEnv instance with 4 meters
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=8,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        config_pack_path=task001_config_4meter,
+        device=cpu_device,
+    )
+
+
+@pytest.fixture
+def task001_env_4meter_pomdp(cpu_device: torch.device, task001_config_4meter: Path) -> VectorizedHamletEnv:
+    """4-meter POMDP environment for TASK-001 recurrent network testing.
+
+    Args:
+        cpu_device: CPU device for deterministic behavior
+        task001_config_4meter: Path to 4-meter config pack
+
+    Returns:
+        VectorizedHamletEnv instance with 4 meters and partial observability
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=True,  # POMDP mode for recurrent networks
+        vision_range=2,  # 5×5 local window
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        config_pack_path=task001_config_4meter,
+        device=cpu_device,
+    )
+
+
+@pytest.fixture
+def task001_env_12meter(cpu_device: torch.device, task001_config_12meter: Path) -> VectorizedHamletEnv:
+    """12-meter environment for TASK-001 testing.
+
+    Args:
+        cpu_device: CPU device for deterministic behavior
+        task001_config_12meter: Path to 12-meter config pack
+
+    Returns:
+        VectorizedHamletEnv instance with 12 meters
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=8,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        config_pack_path=task001_config_12meter,
+        device=cpu_device,
     )
 
 

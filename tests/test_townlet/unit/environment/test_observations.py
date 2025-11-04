@@ -591,13 +591,13 @@ class TestObservationUpdates:
         env.positions[0] = torch.tensor([4, 4], device=cpu_device, dtype=torch.long)
 
         obs1 = env._get_observations()
-        local_grid1 = obs1[0, :25]
+        _local_grid1 = obs1[0, :25]
         position1 = obs1[0, 25:27]
 
         # Move RIGHT (guaranteed valid from center)
         actions = torch.tensor([3], device=cpu_device)  # RIGHT
         obs2, _, _, _ = env.step(actions)
-        local_grid2 = obs2[0, :25]
+        _local_grid2 = obs2[0, :25]
         position2 = obs2[0, 25:27]
 
         # Position MUST change (moved from (4,4) to (4,5))

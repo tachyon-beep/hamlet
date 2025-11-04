@@ -31,7 +31,7 @@ normalized_positions = positions.float() / (self.grid_size - 1)
 
 **Current observation dimensions:**
 
-- **L0_minimal (3×3)**: 36 dims (9 grid + 8 meters + 15 affordances + 4 temporal)
+- **L0_0_minimal (3×3)**: 36 dims (9 grid + 8 meters + 15 affordances + 4 temporal)
 - **L0_5_dual_resource (7×7)**: 76 dims (49 grid + 8 meters + 15 affordances + 4 temporal)
 - **L1_full_observability (8×8)**: 91 dims (64 grid + 8 meters + 15 affordances + 4 temporal)
 - **L2_partial_observability (5×5 window)**: 54 dims (25 local grid + 2 position + 8 meters + 15 affordances + 4 temporal)
@@ -67,11 +67,11 @@ One-hot encoding **explodes** for larger substrates:
 ```python
 def encode_position_onehot(positions: torch.Tensor, grid_size: int) -> torch.Tensor:
     """One-hot encoding of grid position.
-    
+
     Args:
         positions: [batch, 2] (x, y) coordinates
         grid_size: Size of square grid
-    
+
     Returns:
         [batch, grid_size²] one-hot vectors
     """
@@ -109,11 +109,11 @@ def encode_position_onehot(positions: torch.Tensor, grid_size: int) -> torch.Ten
 ```python
 def encode_position_coords(positions: torch.Tensor, grid_size: int) -> torch.Tensor:
     """Coordinate encoding with normalized floats.
-    
+
     Args:
         positions: [batch, 2] (x, y) coordinates
         grid_size: Size of square grid
-    
+
     Returns:
         [batch, 2] normalized coordinates in [0, 1]
     """
@@ -153,7 +153,7 @@ class LearnedPositionEmbedding(nn.Module):
     def __init__(self, grid_size: int, embed_dim: int = 32):
         super().__init__()
         self.embedding = nn.Embedding(grid_size * grid_size, embed_dim)
-    
+
     def forward(self, positions: torch.Tensor, grid_size: int) -> torch.Tensor:
         flat_indices = positions[:, 1] * grid_size + positions[:, 0]
         return self.embedding(flat_indices)
@@ -189,26 +189,26 @@ class LearnedPositionEmbedding(nn.Module):
 ```python
 def encode_position_fourier(positions: torch.Tensor, grid_size: int, num_freqs: int = 10) -> torch.Tensor:
     """Fourier position encoding (inspired by Transformers, NeRF).
-    
+
     Args:
         positions: [batch, 2] (x, y) coordinates
         grid_size: Size of square grid
         num_freqs: Number of frequency bands
-    
+
     Returns:
         [batch, 4 * num_freqs] encoded positions
             For each dim (x, y): [sin(2^0 * pi * x), cos(2^0 * pi * x), ..., sin(2^(num_freqs-1) * pi * x), cos(2^(num_freqs-1) * pi * x)]
     """
     normalized = positions.float() / (grid_size - 1)  # [0, 1]
     freqs = 2.0 ** torch.arange(num_freqs, device=positions.device) * torch.pi
-    
+
     encoded = []
     for i in range(normalized.shape[1]):  # x, y
         coord = normalized[:, i:i+1]  # [batch, 1]
         angles = coord * freqs  # [batch, num_freqs]
         encoded.append(torch.sin(angles))
         encoded.append(torch.cos(angles))
-    
+
     return torch.cat(encoded, dim=1)  # [batch, 4 * num_freqs]
 ```
 
@@ -242,7 +242,7 @@ def encode_position_fourier(positions: torch.Tensor, grid_size: int, num_freqs: 
 ```python
 def encode_position_aspatial() -> torch.Tensor:
     """No position encoding for aspatial substrates.
-    
+
     Returns:
         [batch, 0] empty tensor
     """
@@ -359,24 +359,24 @@ class SpatialSubstrate(ABC):
     def get_position_encoding_strategy(self) -> str:
         """Return encoding strategy: 'onehot', 'coords', 'fourier', 'learned', 'none'."""
         pass
-    
+
     @abstractmethod
     def get_position_dim(self) -> int:
         """Return dimensionality of position vectors (2 for 2D, 3 for 3D, 0 for aspatial)."""
         pass
-    
+
     @abstractmethod
     def get_observation_dim(self) -> int:
         """Return dimensionality of position encoding in observations."""
         pass
-    
+
     @abstractmethod
     def encode_position(self, positions: torch.Tensor) -> torch.Tensor:
         """Encode positions into observation space.
-        
+
         Args:
             positions: [batch, position_dim] raw positions
-        
+
         Returns:
             [batch, observation_dim] encoded positions
         """
@@ -384,12 +384,12 @@ class SpatialSubstrate(ABC):
 
 
 class SquareGridSubstrate(SpatialSubstrate):
-    def __init__(self, width: int, height: int, boundary: str = "clamp", 
+    def __init__(self, width: int, height: int, boundary: str = "clamp",
                  position_encoding: str = "auto"):
         self.width = width
         self.height = height
         self.boundary = boundary
-        
+
         # Auto-select encoding
         if position_encoding == "auto":
             if width * height <= 64:  # 8×8 or smaller
@@ -398,13 +398,13 @@ class SquareGridSubstrate(SpatialSubstrate):
                 self.position_encoding = "coords"
         else:
             self.position_encoding = position_encoding
-    
+
     def get_position_encoding_strategy(self) -> str:
         return self.position_encoding
-    
+
     def get_position_dim(self) -> int:
         return 2  # (x, y)
-    
+
     def get_observation_dim(self) -> int:
         if self.position_encoding == "onehot":
             return self.width * self.height
@@ -414,7 +414,7 @@ class SquareGridSubstrate(SpatialSubstrate):
             return 40  # 2 dims × 10 freqs × 2 (sin/cos)
         else:
             raise ValueError(f"Unknown encoding: {self.position_encoding}")
-    
+
     def encode_position(self, positions: torch.Tensor) -> torch.Tensor:
         if self.position_encoding == "onehot":
             return self._encode_onehot(positions)
@@ -424,32 +424,32 @@ class SquareGridSubstrate(SpatialSubstrate):
             return self._encode_fourier(positions)
         else:
             raise ValueError(f"Unknown encoding: {self.position_encoding}")
-    
+
     def _encode_onehot(self, positions: torch.Tensor) -> torch.Tensor:
         flat_indices = positions[:, 1] * self.width + positions[:, 0]
-        one_hot = torch.zeros((positions.shape[0], self.width * self.height), 
+        one_hot = torch.zeros((positions.shape[0], self.width * self.height),
                              device=positions.device)
         one_hot.scatter_(1, flat_indices.unsqueeze(1), 1)
         return one_hot
-    
+
     def _encode_coords(self, positions: torch.Tensor) -> torch.Tensor:
         # Normalize to [0, 1]
         normalized_x = positions[:, 0].float() / (self.width - 1)
         normalized_y = positions[:, 1].float() / (self.height - 1)
         return torch.stack([normalized_x, normalized_y], dim=1)
-    
+
     def _encode_fourier(self, positions: torch.Tensor, num_freqs: int = 10) -> torch.Tensor:
-        normalized = positions.float() / torch.tensor([self.width - 1, self.height - 1], 
+        normalized = positions.float() / torch.tensor([self.width - 1, self.height - 1],
                                                        device=positions.device)
         freqs = 2.0 ** torch.arange(num_freqs, device=positions.device) * torch.pi
-        
+
         encoded = []
         for i in range(2):  # x, y
             coord = normalized[:, i:i+1]
             angles = coord * freqs
             encoded.append(torch.sin(angles))
             encoded.append(torch.cos(angles))
-        
+
         return torch.cat(encoded, dim=1)
 
 
@@ -460,7 +460,7 @@ class CubicGridSubstrate(SpatialSubstrate):
         self.height = height
         self.depth = depth
         self.boundary = boundary
-        
+
         # Force coordinate encoding for 3D (one-hot would be 512+ dims!)
         if position_encoding == "auto":
             self.position_encoding = "coords"
@@ -468,10 +468,10 @@ class CubicGridSubstrate(SpatialSubstrate):
             raise ValueError("One-hot encoding infeasible for 3D grids (512+ dims). Use 'coords' or 'fourier'.")
         else:
             self.position_encoding = position_encoding
-    
+
     def get_position_dim(self) -> int:
         return 3  # (x, y, z)
-    
+
     def get_observation_dim(self) -> int:
         if self.position_encoding == "coords":
             return 3
@@ -479,7 +479,7 @@ class CubicGridSubstrate(SpatialSubstrate):
             return 60  # 3 dims × 10 freqs × 2 (sin/cos)
         else:
             raise ValueError(f"Unknown encoding: {self.position_encoding}")
-    
+
     def encode_position(self, positions: torch.Tensor) -> torch.Tensor:
         if self.position_encoding == "coords":
             normalized_x = positions[:, 0].float() / (self.width - 1)
@@ -495,10 +495,10 @@ class CubicGridSubstrate(SpatialSubstrate):
 class AspatialSubstrate(SpatialSubstrate):
     def get_position_dim(self) -> int:
         return 0  # No position!
-    
+
     def get_observation_dim(self) -> int:
         return 0  # No encoding
-    
+
     def encode_position(self, positions: torch.Tensor) -> torch.Tensor:
         return torch.zeros((positions.shape[0], 0), device=positions.device)
 ```

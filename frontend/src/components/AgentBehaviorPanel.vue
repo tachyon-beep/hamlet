@@ -87,7 +87,7 @@
           v-for="(prob, index) in actionProbabilities"
           :key="index"
           class="q-value-item"
-          :class="{ 
+          :class="{
             'best-action': index === bestActionIndex && actionMasks?.[index],
             'action-masked': !actionMasks?.[index]
           }"
@@ -317,28 +317,28 @@ const displayQValues = computed(() => {
 const actionProbabilities = computed(() => {
   const qvals = displayQValues.value
   const masks = props.actionMasks
-  
+
   // Safety check for empty or invalid data
   if (!qvals || qvals.length === 0 || !masks || masks.length === 0) {
     return [0, 0, 0, 0, 0, 0]
   }
-  
+
   // Filter to only valid (unmasked) actions for normalization
   const validQValues = qvals.filter((q, i) => masks[i])
-  
+
   if (validQValues.length === 0) {
     return qvals.map(() => 0)
   }
-  
+
   // Find max and min Q-values among valid actions only
   const maxQ = Math.max(...validQValues)
   const minQ = Math.min(...validQValues)
-  
+
   // If all Q-values are the same, return uniform distribution for valid actions
   if (maxQ === minQ) {
     return qvals.map((q, i) => masks[i] ? 100 / validQValues.length : 0)
   }
-  
+
   // Normalize to 0-100 scale based on min-max range
   // Masked actions always get 0%
   const range = maxQ - minQ
@@ -357,37 +357,37 @@ const bestActionIndex = computed(() => {
 const mockConfidence = computed(() => {
   const probs = actionProbabilities.value
   if (probs.length === 0) return 0
-  
+
   // Filter out masked actions (they have 0% probability)
   const validProbs = probs.filter(p => p > 0)
-  
+
   if (validProbs.length === 0) return 0
-  
+
   // Sort to get top 2 probabilities among valid actions
   const sortedProbs = [...validProbs].sort((a, b) => b - a)
   const bestProb = sortedProbs[0]
   const secondBestProb = sortedProbs[1] || 0
-  
+
   // Calculate separation between best and second-best (0-100)
   const separation = bestProb - secondBestProb
-  
+
   // Factor in epsilon (high epsilon = low confidence due to exploration)
   // Confidence = separation * (1 - epsilon)
   // At epsilon=1.0 (full exploration), confidence = 0%
   // At epsilon=0.0 (full exploitation), confidence = separation
   const exploitationFactor = 1 - props.epsilon
   const confidence = separation * exploitationFactor
-  
-  console.log('Confidence calc:', { 
+
+  console.log('Confidence calc:', {
     validCount: validProbs.length,
-    bestProb, 
-    secondBestProb, 
-    separation, 
-    epsilon: props.epsilon, 
-    exploitationFactor, 
-    confidence 
+    bestProb,
+    secondBestProb,
+    separation,
+    epsilon: props.epsilon,
+    exploitationFactor,
+    confidence
   })
-  
+
   return Math.round(confidence)
 })
 

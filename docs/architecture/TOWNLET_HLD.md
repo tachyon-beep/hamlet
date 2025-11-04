@@ -42,22 +42,22 @@ We get this by doing three things.
 
 Earlier releases relied on a monolithic recurrent Q-network that attempted to handle perception, planning, social reasoning, panic, ethics, and action selection in a single block. Townlet v2.5 decomposes the mind into explicit cognitive modules:
 
-- Perception / belief state builder  
+- Perception / belief state builder
   Transforms partial, noisy observations into an internal belief state.
 
-- World Model  
+- World Model
   Predicts state transitions for candidate actions, allowing the agent to learn the town’s dynamics, including non-stationary changes such as price shifts.
 
-- Social Model  
+- Social Model
   Estimates the likely behaviour and goals of nearby agents using the public cues that Universe as Code exposes. It receives no hidden state at runtime.
 
-- Hierarchical Policy  
+- Hierarchical Policy
   Selects a strategic goal (for example SURVIVAL versus THRIVING) and chooses the concrete action that advances that goal each tick.
 
-- Panic Controller  
+- Panic Controller
   Overrides normal planning when survival thresholds such as energy or health fall below configured limits.
 
-- EthicsFilter  
+- EthicsFilter
   Applies the final compliance gate. It forbids actions that violate policy (for example, "steal" or "attack") or downgrades risky options. Panic cannot bypass ethics.
 
 Modules and their interactions are declared in configuration and materialised at runtime. We can explicitly disable the Social Model for ablation without touching shared policy code, adjust the planning horizon from two to six ticks via configuration, or introduce a new panic rule without retraining perception.
@@ -108,16 +108,16 @@ This delivers the glass-box promise: Townlet shifts from passive observation to 
 
 ### 1.5 Why This Matters (Governance, Research, Teaching)
 
-Interpretability  
+Interpretability
 We can answer "which part of the mind did that and why" with evidence. Telemetry records whether panic overrode the policy or EthicsFilter vetoed a candidate action.
 
-Reproducibility  
+Reproducibility
 Behaviour is not anecdotal; it is a run folder with a configuration snapshot and hash that any reviewer can rehydrate.
 
-Accountability  
+Accountability
 If something unsafe occurs, we examine which safety setting permitted it, which execution-graph step executed it, the relevant panic thresholds, and the governing world rules. The issue becomes diagnosable and auditable.
 
-Pedagogy / curriculum  
+Pedagogy / curriculum
 Students, auditors, and policy teams can read the YAML to see what the agent was authorised to do, diff successive versions of the mind or world, and run controlled comparisons. The platform supports causal reasoning rather than speculation.
 
 Summary: Townlet v2.5 treats the brain and the world as configuration, snapshots and hashes them at runtime, and exposes live introspection with governance veto logging. That is now the standard operating model.
@@ -1948,10 +1948,10 @@ We already limit special handlers to a small whitelist (for example `teleport`, 
 
 Two policy issues are still open:
 
-1. Teleport semantics  
+1. Teleport semantics
    Teleport confers map control and safety bypass. Allowing an agent to call an ambulance from anywhere and teleport to hospital can be an intentional survival path, but it must not arise accidentally. Any new `effect_type` added to the whitelist should therefore be treated as a governance event, require an updated hash, and undergo review.
 
-2. Claim semantics for capacity / reservation  
+2. Claim semantics for capacity / reservation
    At present, use of an affordance (for example, a bed) is modelled as an ephemeral reservation with deterministic tie-breaking. YAML does not encode ownership, which avoids hidden state that the world model cannot learn. Introducing persistent ownership—for example, "this is my bed now"—would constitute a change to world rules and must trigger a new run. Otherwise decisions would depend on invisible state not reflected in `universe_as_code.yaml`.
 
 ---

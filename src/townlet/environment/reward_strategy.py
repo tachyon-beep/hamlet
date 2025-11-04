@@ -39,16 +39,22 @@ class RewardStrategy:
     is no longer used in reward calculation.
     """
 
-    def __init__(self, device: torch.device, num_agents: int = 1):
+    def __init__(self, device: torch.device, num_agents: int = 1, meter_count: int = 8, energy_idx: int = 0, health_idx: int = 6):
         """
         Initialize reward strategy.
 
         Args:
             device: torch device for tensor operations
             num_agents: number of agents for vectorized baseline (P2.1)
+            meter_count: number of meters in the universe (TASK-001)
+            energy_idx: index of energy meter (default 0)
+            health_idx: index of health meter (default 6)
         """
         self.device = device
         self.num_agents = num_agents
+        self.meter_count = meter_count
+        self.energy_idx = energy_idx
+        self.health_idx = health_idx
 
     def calculate_rewards(
         self,
@@ -67,8 +73,8 @@ class RewardStrategy:
             dones: [num_agents] whether each agent is dead
             baseline_steps: Baseline survival expectation (retained for API
                            compatibility, not used in interoception rewards)
-            meters: [num_agents, 8] meter values already normalized to [0,1]
-                   (energy=0, health=6)
+            meters: [num_agents, meter_count] meter values already normalized to [0,1]
+                   (energy at energy_idx, health at health_idx)
 
         Returns:
             rewards: [num_agents] calculated rewards (health × energy when alive, 0.0 when dead)
@@ -78,12 +84,12 @@ class RewardStrategy:
                 f"RewardStrategy expected tensors shaped [{self.num_agents}], got " f"step_counts={step_counts.shape}, dones={dones.shape}"
             )
 
-        if meters.shape != (self.num_agents, 8):
-            raise ValueError(f"RewardStrategy expected meters shaped [{self.num_agents}, 8], got {meters.shape}")
+        if meters.shape != (self.num_agents, self.meter_count):
+            raise ValueError(f"RewardStrategy expected meters shaped [{self.num_agents}, {self.meter_count}], got {meters.shape}")
 
         # Extract health and energy (already normalized to [0, 1] in environment)
-        energy = meters[:, 0].clamp(min=0.0, max=1.0)  # Clamp to [0, 1]
-        health = meters[:, 6].clamp(min=0.0, max=1.0)  # Clamp to [0, 1]
+        energy = meters[:, self.energy_idx].clamp(min=0.0, max=1.0)  # Clamp to [0, 1]
+        health = meters[:, self.health_idx].clamp(min=0.0, max=1.0)  # Clamp to [0, 1]
 
         # Interoception-aware reward: health × energy
         # (baseline_steps parameter retained for API compatibility but unused)

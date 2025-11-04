@@ -93,9 +93,6 @@ class TestEpisodeRecorder:
             positions = torch.tensor([3, 5], device=cpu_device)
             meters = torch.tensor([1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85], device=cpu_device)
 
-            # Original tensor reference
-            original_positions_ptr = positions.data_ptr()
-
             recorder.record_step(
                 step=0,
                 positions=positions,

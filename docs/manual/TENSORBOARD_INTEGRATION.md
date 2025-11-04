@@ -1,7 +1,7 @@
 # TensorBoard Integration for Hamlet
 
-**Status:** ✅ READY TO USE  
-**Version:** Initial implementation (November 1, 2025)  
+**Status:** ✅ READY TO USE
+**Version:** Initial implementation (November 1, 2025)
 **Module:** `townlet.training.tensorboard_logger`
 
 ## Overview
@@ -29,7 +29,7 @@ tb_logger = TensorBoardLogger(
 # In your training loop
 for episode in range(max_episodes):
     # ... run episode ...
-    
+
     # Log episode metrics
     tb_logger.log_episode(
         episode=episode,
@@ -77,19 +77,19 @@ class DemoRunner:
     def __init__(self, config_path, db_path, checkpoint_dir, max_episodes):
         # Existing initialization...
         self.db = DemoDatabase(self.db_path)
-        
+
         # NEW: Add TensorBoard logger
         self.tb_logger = TensorBoardLogger(
             log_dir=checkpoint_dir / "tensorboard",
             flush_every=10,
             log_histograms=True,
         )
-    
+
     def run(self):
         # Training loop...
         for episode in range(self.max_episodes):
             # ... run episode ...
-            
+
             # Existing: Log to SQLite
             self.db.insert_episode(
                 episode_id=self.current_episode,
@@ -98,7 +98,7 @@ class DemoRunner:
                 total_reward=episode_reward,
                 # ... other fields ...
             )
-            
+
             # NEW: Log to TensorBoard
             self.tb_logger.log_episode(
                 episode=self.current_episode,
@@ -110,7 +110,7 @@ class DemoRunner:
                 epsilon=self.exploration.rnd.epsilon,
                 intrinsic_weight=self.exploration.get_intrinsic_weight(),
             )
-            
+
             # Log training step metrics (optional, more detailed)
             if step % 100 == 0:  # Every 100 training steps
                 self.tb_logger.log_training_step(
@@ -130,10 +130,10 @@ class VectorizedPopulation:
     def __init__(self, ..., tensorboard_logger=None):
         self.tb_logger = tensorboard_logger
         self.training_steps = 0
-    
+
     def step_population(self, envs):
         # ... existing training logic ...
-        
+
         # Log Q-value statistics
         if self.tb_logger and self.training_steps % 100 == 0:
             with torch.no_grad():
@@ -142,13 +142,13 @@ class VectorizedPopulation:
                     step=self.training_steps,
                     q_values=q_values,
                 )
-        
+
         self.training_steps += 1
         return batch_state
-    
+
     def train_q_network(self, batch):
         # ... DQN training ...
-        
+
         # Log loss and TD error
         if self.tb_logger:
             self.tb_logger.log_training_step(
@@ -427,24 +427,24 @@ class DemoRunner:
     def __init__(self, config_path, db_path, checkpoint_dir, max_episodes):
         # Existing
         self.db = DemoDatabase(db_path)
-        
+
         # NEW: TensorBoard
         self.tb_logger = TensorBoardLogger(
             log_dir=checkpoint_dir / "tensorboard",
             flush_every=10,
         )
-    
+
     def run(self):
         # Create components with TensorBoard logger
         self.population = VectorizedPopulation(
             ...,
             tensorboard_logger=self.tb_logger,  # Pass logger
         )
-        
+
         for episode in range(self.max_episodes):
             # Run episode
             survival_time, rewards, affordance_counts = self._run_episode()
-            
+
             # Log to both systems
             self.db.insert_episode(...)  # SQLite
             self.tb_logger.log_episode(  # TensorBoard
@@ -457,10 +457,10 @@ class DemoRunner:
                 epsilon=self.exploration.epsilon,
                 intrinsic_weight=self.exploration.intrinsic_weight,
             )
-            
+
             # Affordance tracking
             self.tb_logger.log_affordance_usage(episode, affordance_counts)
-            
+
             # Network stats every 100 episodes
             if episode % 100 == 0:
                 self.tb_logger.log_network_stats(
@@ -468,13 +468,13 @@ class DemoRunner:
                     self.population.q_network,
                     optimizer=self.population.optimizer,
                 )
-        
+
         # Hyperparameter summary
         self.tb_logger.log_hyperparameters(
             hparams=self._get_hparams(),
             metrics=self._get_final_metrics(),
         )
-        
+
         self.tb_logger.close()
 ```
 
@@ -510,18 +510,18 @@ You should see:
 
 ## Troubleshooting
 
-**Issue:** "No dashboards are active for the current data set"  
+**Issue:** "No dashboards are active for the current data set"
 **Solution:** Make sure you're logging at least one scalar metric with `log_episode()`
 
-**Issue:** "Slow performance"  
+**Issue:** "Slow performance"
 **Solution:** Increase `flush_every`, disable `log_histograms` and `log_gradients`
 
-**Issue:** "TensorBoard shows old data"  
+**Issue:** "TensorBoard shows old data"
 **Solution:** Delete the log directory or create a new one with a timestamp:
 
 ```python
 log_dir=f"runs/exp_{int(time.time())}"
 ```
 
-**Issue:** "Multi-agent panels cluttered"  
+**Issue:** "Multi-agent panels cluttered"
 **Solution:** Use TensorBoard regex filtering: `agent_0/.*` to show only one agent

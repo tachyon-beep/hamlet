@@ -18,8 +18,10 @@ Total: 38 tests → 15 comprehensive integration tests
 """
 
 import tempfile
+import warnings
 from pathlib import Path
 
+import pytest
 import torch
 import yaml
 
@@ -1017,3 +1019,202 @@ class TestCheckpointRoundTrip:
 
         # 4. Exploration state consistent
         assert abs(exploration2.rnd.epsilon - exploration.rnd.epsilon) < 1e-6, "Epsilon should match"
+
+
+# =============================================================================
+# TEST CLASS 7: Variable Meter Checkpoint Validation (TASK-001 Phase 4)
+# =============================================================================
+
+
+class TestVariableMeterCheckpoints:
+    """Test checkpoint saving/loading with variable meters (TASK-001).
+
+    Verifies that checkpoints include meter metadata and validate compatibility.
+    """
+
+    def test_checkpoint_includes_meter_metadata(self, cpu_device, task001_env_4meter):
+        """Saved checkpoint should include meter count and names in metadata."""
+        curriculum = AdversarialCurriculum(
+            max_steps_per_episode=100,
+            survival_advance_threshold=0.7,
+            survival_retreat_threshold=0.3,
+        )
+        curriculum.initialize_population(1)
+
+        exploration = EpsilonGreedyExploration(
+            epsilon=0.5,
+            epsilon_min=0.1,
+            epsilon_decay=0.99,
+        )
+
+        population = VectorizedPopulation(
+            env=task001_env_4meter,
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=task001_env_4meter.observation_dim,
+            action_dim=5,
+            network_type="simple",
+        )
+
+        # Get checkpoint
+        checkpoint = population.get_checkpoint_state()
+
+        # Verify universe_metadata exists
+        assert "universe_metadata" in checkpoint, "Checkpoint should contain universe_metadata"
+
+        metadata = checkpoint["universe_metadata"]
+        assert "meter_count" in metadata, "Metadata should contain meter_count"
+        assert "meter_names" in metadata, "Metadata should contain meter_names"
+        assert "version" in metadata, "Metadata should contain version"
+        assert "obs_dim" in metadata, "Metadata should contain obs_dim"
+
+        # Verify values
+        assert metadata["meter_count"] == 4, f"Should have 4 meters, got {metadata['meter_count']}"
+        assert metadata["meter_names"] == [
+            "energy",
+            "health",
+            "money",
+            "mood",
+        ], f"Should have correct meter names, got {metadata['meter_names']}"
+
+    def test_loading_checkpoint_validates_meter_count(self, cpu_device, task001_env_4meter, basic_env, tmp_path):
+        """Loading checkpoint should fail if meter counts don't match."""
+        # Create 4-meter population and save checkpoint (no training needed)
+        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
+        curriculum.initialize_population(1)
+        exploration = EpsilonGreedyExploration()
+
+        pop_4meter = VectorizedPopulation(
+            env=task001_env_4meter,
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=task001_env_4meter.observation_dim,
+            action_dim=5,
+            network_type="simple",
+        )
+
+        # Save checkpoint (no training needed for metadata test)
+        checkpoint_4meter = pop_4meter.get_checkpoint_state()
+
+        # Verify checkpoint has correct metadata
+        assert checkpoint_4meter["universe_metadata"]["meter_count"] == 4
+
+        # Try to load into 8-meter environment (should fail)
+        curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
+        curriculum2.initialize_population(1)
+        exploration2 = EpsilonGreedyExploration()
+
+        pop_8meter = VectorizedPopulation(
+            env=basic_env,  # 8-meter env
+            curriculum=curriculum2,
+            exploration=exploration2,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=basic_env.observation_dim,
+            action_dim=5,
+            network_type="simple",
+        )
+
+        # Loading should raise ValueError
+        with pytest.raises(ValueError, match="meter count mismatch"):
+            pop_8meter.load_checkpoint_state(checkpoint_4meter)
+
+    def test_loading_checkpoint_with_matching_meters_succeeds(self, cpu_device, task001_env_4meter):
+        """Loading checkpoint should succeed if meter counts match."""
+        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
+        curriculum.initialize_population(1)
+        exploration = EpsilonGreedyExploration()
+
+        pop1 = VectorizedPopulation(
+            env=task001_env_4meter,
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=task001_env_4meter.observation_dim,
+            action_dim=5,
+            network_type="simple",
+        )
+
+        # Save checkpoint (no training needed)
+        checkpoint = pop1.get_checkpoint_state()
+
+        # Verify checkpoint has correct metadata
+        assert checkpoint["universe_metadata"]["meter_count"] == 4
+
+        # Create new population with same meter count
+        curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
+        curriculum2.initialize_population(1)
+        exploration2 = EpsilonGreedyExploration()
+
+        pop2 = VectorizedPopulation(
+            env=task001_env_4meter,  # Same 4-meter env
+            curriculum=curriculum2,
+            exploration=exploration2,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=task001_env_4meter.observation_dim,
+            action_dim=5,
+            network_type="simple",
+        )
+
+        # Load should succeed (no exception)
+        pop2.load_checkpoint_state(checkpoint)
+
+        # Verify metadata matched
+        assert checkpoint["universe_metadata"]["meter_count"] == 4
+
+    def test_legacy_checkpoint_loads_with_default_assumption(self, cpu_device, basic_env):
+        """Legacy checkpoints (no metadata) should load with warning."""
+        # Create a real checkpoint first to get proper network state
+        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
+        curriculum.initialize_population(1)
+        exploration = EpsilonGreedyExploration()
+
+        population = VectorizedPopulation(
+            env=basic_env,  # 8-meter env
+            curriculum=curriculum,
+            exploration=exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=basic_env.observation_dim,
+            action_dim=5,
+            network_type="simple",
+        )
+
+        # Get a real checkpoint and remove universe_metadata to simulate legacy
+        checkpoint = population.get_checkpoint_state()
+        legacy_checkpoint = {k: v for k, v in checkpoint.items() if k != "universe_metadata"}
+
+        # Verify universe_metadata was removed
+        assert "universe_metadata" not in legacy_checkpoint
+
+        # Create new population
+        curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
+        curriculum2.initialize_population(1)
+        exploration2 = EpsilonGreedyExploration()
+
+        population2 = VectorizedPopulation(
+            env=basic_env,  # 8-meter env
+            curriculum=curriculum2,
+            exploration=exploration2,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=basic_env.observation_dim,
+            action_dim=5,
+            network_type="simple",
+        )
+
+        # Loading legacy checkpoint should warn but succeed
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            population2.load_checkpoint_state(legacy_checkpoint)
+
+            # Verify warning was issued
+            assert len(w) == 1
+            assert "legacy checkpoint" in str(w[0].message).lower()
+            assert "universe_metadata" in str(w[0].message)

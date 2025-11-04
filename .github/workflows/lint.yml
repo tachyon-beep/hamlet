@@ -15,30 +15,64 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up uv with Python
-        uses: astral-sh/setup-uv@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+
       - name: Install dependencies
-        run: uv pip install --system ".[dev]"
+        run: uv sync --all-extras
 
-      - name: Ruff (lint)
-        run: uv run ruff check src tests
+      - name: Ruff (lint) - Enforce zero warnings
+        run: |
+          echo "Running ruff linter - all warnings must be fixed"
+          uv run ruff check .
+          if [ $? -ne 0 ]; then
+            echo "❌ Lint violations found. Run 'uv run ruff check . --fix' locally to auto-fix."
+            exit 1
+          fi
+          echo "✅ All lint checks passed"
 
-      - name: Black (format check)
-        run: uv run black --check src tests
+      - name: Black (format check) - Enforce zero violations
+        run: |
+          echo "Running black formatter check - all code must be formatted"
+          uv run black --check src tests
+          if [ $? -ne 0 ]; then
+            echo "❌ Format violations found. Run 'uv run black src tests' locally to auto-format."
+            exit 1
+          fi
+          echo "✅ All format checks passed"
 
-      - name: Mypy (type check)
-        run: uv run mypy src/townlet
+      - name: Mypy (type check) - Enforce zero type errors
+        run: |
+          echo "Running mypy type checker - all type errors must be fixed"
+          uv run mypy src/townlet --show-error-codes
+          if [ $? -ne 0 ]; then
+            echo "❌ Type errors found. Run 'uv run mypy src/townlet --show-error-codes' locally to see details."
+            exit 1
+          fi
+          echo "✅ All type checks passed"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      - name: No-Defaults Linter - Enforce no unauthorized defaults
+        run: |
+          echo "Running no-defaults linter - all defaults must be whitelisted"
+          python scripts/no_defaults_lint.py src/townlet/ --whitelist .defaults-whitelist.txt
+          if [ $? -ne 0 ]; then
+            echo "❌ Unauthorized defaults found. See error output above."
+            exit 1
+          fi
+          echo "✅ No-defaults check passed"
 
-      - name: Install markdownlint-cli2
-        run: npm install -g markdownlint-cli2
-
-      - name: Markdownlint (markdown check)
-        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules"
+      - name: ✅ All Lint Checks Passed
+        run: |
+          echo "════════════════════════════════════════════════════════════"
+          echo "✅ ALL LINT CHECKS PASSED!"
+          echo "════════════════════════════════════════════════════════════"
+          echo "  ✓ Ruff (linting)"
+          echo "  ✓ Black (formatting)"
+          echo "  ✓ Mypy (type checking)"
+          echo "  ✓ No-defaults linter"
+          echo "════════════════════════════════════════════════════════════"

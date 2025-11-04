@@ -1418,7 +1418,7 @@ import warnings
 with warnings.catch_warnings(record=True) as w:
     warnings.simplefilter('always')
     env = VectorizedHamletEnv(
-        config_pack_path=Path('configs/L0_minimal'),
+        config_pack_path=Path('configs/L0_0_minimal'),
         num_agents=1,
         device='cpu',
     )
@@ -1473,7 +1473,7 @@ The complete plan would include:
 
 **Phase 6: Config Migration** (7 tasks)
 
-- Create substrate.yaml for L0_minimal (3×3 grid)
+- Create substrate.yaml for L0_0_minimal (3×3 grid)
 - Create substrate.yaml for L0_5 through L3
 - Create substrate.yaml for templates
 - Add toroidal example (wrap boundary)

@@ -50,7 +50,7 @@ class CascadeEngine:
         self._bar_name_to_idx = {bar.name: bar.index for bar in config.bars.bars}
         self._bar_idx_to_name = {bar.index: bar.name for bar in config.bars.bars}
 
-        # Pre-compute base depletion tensor [8]
+        # Pre-compute base depletion tensor [meter_count]
         self._base_depletions = self._build_base_depletion_tensor()
 
         # Pre-build cascade tensors for efficient batch application
@@ -64,12 +64,13 @@ class CascadeEngine:
 
     def _build_base_depletion_tensor(self) -> torch.Tensor:
         """
-        Build tensor of base depletion rates [8].
+        Build tensor of base depletion rates [meter_count].
 
         Returns:
-            Tensor of shape [8] with depletion rates by index
+            Tensor of shape [meter_count] with depletion rates by index
         """
-        depletions = torch.zeros(8, device=self.device)
+        meter_count = self.config.bars.meter_count
+        depletions = torch.zeros(meter_count, device=self.device)
 
         for bar in self.config.bars.bars:
             depletions[bar.index] = bar.base_depletion
@@ -146,11 +147,11 @@ class CascadeEngine:
         Apply base depletion rates to all meters with curriculum difficulty scaling.
 
         Args:
-            meters: [num_agents, 8] current meter values
+            meters: [num_agents, meter_count] current meter values
             depletion_multiplier: Curriculum difficulty multiplier (0.2 = 20% difficulty)
 
         Returns:
-            meters: [num_agents, 8] meters after base depletions
+            meters: [num_agents, meter_count] meters after base depletions
         """
         # Apply curriculum difficulty scaling to base depletions
         scaled_depletions = self._base_depletions * depletion_multiplier
@@ -163,10 +164,10 @@ class CascadeEngine:
         Apply modulation effects (e.g., fitness modulates health depletion).
 
         Args:
-            meters: [num_agents, 8] current meter values
+            meters: [num_agents, meter_count] current meter values
 
         Returns:
-            meters: [num_agents, 8] meters after modulations
+            meters: [num_agents, meter_count] meters after modulations
         """
         for mod in self._modulation_data:
             # Get source and target meter values
@@ -197,11 +198,11 @@ class CascadeEngine:
         - Apply penalty = strength * deficit to target
 
         Args:
-            meters: [num_agents, 8] current meter values
+            meters: [num_agents, meter_count] current meter values
             categories: List of cascade categories to apply (e.g., ['primary_to_pivotal'])
 
         Returns:
-            meters: [num_agents, 8] meters after cascades
+            meters: [num_agents, meter_count] meters after cascades
         """
         for category in categories:
             if category not in self._cascade_data:
@@ -236,7 +237,7 @@ class CascadeEngine:
         Check terminal conditions (death).
 
         Args:
-            meters: [num_agents, 8] current meter values
+            meters: [num_agents, meter_count] current meter values
             dones: [num_agents] current done flags
 
         Returns:
@@ -281,10 +282,10 @@ class CascadeEngine:
         5. Secondary → Pivotal (weak) cascades
 
         Args:
-            meters: [num_agents, 8] current meter values
+            meters: [num_agents, meter_count] current meter values
 
         Returns:
-            meters: [num_agents, 8] meters after all cascades
+            meters: [num_agents, meter_count] meters after all cascades
         """
         # Get execution order from config
         execution_order = self.config.cascades.execution_order
@@ -316,9 +317,10 @@ class CascadeEngine:
         Get initial meter values from bars.yaml configuration.
 
         Returns:
-            Tensor of shape [8] with initial values for all meters by index
+            Tensor of shape [meter_count] with initial values for all meters by index
         """
-        initial_values = torch.zeros(8, device=self.device)
+        meter_count = self.config.bars.meter_count
+        initial_values = torch.zeros(meter_count, device=self.device)
 
         for bar in self.config.bars.bars:
             initial_values[bar.index] = bar.initial
