@@ -10,8 +10,6 @@ from typing import Any
 import msgpack
 import lz4.frame
 
-from townlet.recording.data_structures import deserialize_step, deserialize_metadata
-
 logger = logging.getLogger(__name__)
 
 

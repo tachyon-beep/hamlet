@@ -176,8 +176,8 @@ class TestLSTMHiddenStatePersistence:
         """
         Verify hidden state resets after flush_episode() on max_steps survival.
 
-        When agent survives max_steps, flush_episode(synthetic_done=True) should
-        reset hidden state to prevent memory leakage into next episode.
+        When agent survives max_steps, flush_episode() should reset hidden state
+        to prevent memory leakage into next episode.
         """
         env = VectorizedHamletEnv(
             num_agents=1,
@@ -216,8 +216,8 @@ class TestLSTMHiddenStatePersistence:
         for _ in range(50):
             population.step_population(env)
 
-        # Flush episode (synthetic done)
-        population.flush_episode(agent_idx=0, synthetic_done=True)
+        # Flush episode (max_steps survival)
+        population.flush_episode(agent_idx=0)
 
         # Hidden state should be zeros after flush
         recurrent_network = population.q_network

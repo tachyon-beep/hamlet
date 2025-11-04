@@ -114,7 +114,7 @@ class DemoRunner:
             return
 
         for agent_idx in range(self.population.num_agents):
-            self.population.flush_episode(agent_idx, synthetic_done=False)
+            self.population.flush_episode(agent_idx)
 
     def save_checkpoint(self):
         """Save checkpoint at current episode."""
@@ -495,7 +495,7 @@ class DemoRunner:
                 # CRITICAL: Loop over all agents to support multi-agent configs (not just agent 0)
                 for agent_idx in range(self.population.num_agents):
                     if not last_agent_state.dones[agent_idx]:  # Agent survived to max_steps without dying
-                        self.population.flush_episode(agent_idx=agent_idx, synthetic_done=True)
+                        self.population.flush_episode(agent_idx=agent_idx)
 
                 epsilon_value = (
                     self.exploration.rnd.epsilon if hasattr(self.exploration, "rnd") else getattr(self.exploration, "epsilon", 0.0)

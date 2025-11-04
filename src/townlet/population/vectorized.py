@@ -320,19 +320,15 @@ class VectorizedPopulation(PopulationManager):
         self.episode_step_counts[agent_idx] = 0
         self._reset_hidden_state(agent_idx)
 
-    def flush_episode(self, agent_idx: int, synthetic_done: bool = False) -> None:
+    def flush_episode(self, agent_idx: int) -> None:
         """
         Flush current episode for an agent to replay buffer.
 
-        Used when:
-        - Agent dies (real done)
-        - Episode hits max_steps (synthetic done)
-
+        Used when agent dies or episode hits max_steps.
         This prevents memory leaks and ensures successful episodes reach the replay buffer.
 
         Args:
             agent_idx: Index of agent to flush
-            synthetic_done: If True, treat as done even if environment didn't signal it
         """
         if not self.is_recurrent:
             # Feedforward mode: transitions already in buffer, nothing to flush
