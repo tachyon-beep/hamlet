@@ -17,6 +17,27 @@
 
 ---
 
+## ⚠️ CRITICAL: Performance Optimization Addendum Required
+
+**Date:** 2025-11-04
+**Reviewer:** Claude (Peer Review Agent)
+
+**Peer review identified critical performance issues** in the action dispatch implementation shown in Phase 2. The plan uses per-agent loops that should be vectorized for GPU performance.
+
+**📄 READ FIRST:** [`plan-task-002b-uac-action-space-addendum.md`](./plan-task-002b-uac-action-space-addendum.md)
+
+**Key optimizations required:**
+- **Issue #1:** Pre-build action type ID tensors for vectorized masking (100x faster)
+- **Issue #2:** Pre-build action cost tensor for vectorized cost application (100x faster)
+- **Issue #3:** Add negative cost tests (REST action validation)
+- **Issue #4:** Add optional icon field for frontend (UX improvement)
+
+**Implementation impact:** +2-3 hours effort, 100x performance improvement
+
+**Status:** ✅ Addendum created - incorporate into implementation
+
+---
+
 ## Phase 0: Pre-Migration Bug Fixes (Fix Before Starting)
 
 These bugs exist regardless of TASK-000 and should be fixed first to avoid propagating errors.
