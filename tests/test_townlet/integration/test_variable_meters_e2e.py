@@ -227,3 +227,33 @@ class TestVariableMetersEndToEnd:
         # Meters should stay in valid range [0, 1]
         assert torch.all(final_meters >= 0.0), "Meters should not go below 0"
         assert torch.all(final_meters <= 1.0), "Meters should not exceed 1"
+
+    def test_action_masking_with_4meters(self, cpu_device, task001_env_4meter):
+        """Test that action masking works correctly with 4-meter config.
+
+        This test verifies that dead agent detection uses dynamic meter indices
+        instead of hardcoded indices (energy=0, health=6). In a 4-meter config,
+        accessing meters[:, 6] would cause IndexError.
+        """
+        env = task001_env_4meter
+
+        # Reset environment
+        env.reset()
+
+        # Get initial action masks (should work without IndexError)
+        masks = env.get_action_masks()
+        assert masks.shape == (1, 6), f"Action masks should be [1, 6], got {masks.shape}"
+
+        # Kill the agent by setting health to 0
+        # Find health meter index from config
+        bars_config = env.meter_dynamics.cascade_engine.config.bars
+        health_idx = bars_config.meter_name_to_index.get("health", 0)
+
+        # Set health to 0 (agent should be dead)
+        env.meters[0, health_idx] = 0.0
+
+        # Get action masks - should mask all actions for dead agent
+        masks = env.get_action_masks()
+
+        # All actions should be masked (False) for dead agent
+        assert not torch.any(masks[0]), "Dead agent should have all actions masked"

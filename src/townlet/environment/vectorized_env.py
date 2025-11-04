@@ -146,11 +146,11 @@ class VectorizedHamletEnv:
         # Initialize reward strategy (P2.1: per-agent baseline support, TASK-001: variable meters)
         # Get energy and health indices from bars_config
         meter_name_to_index = bars_config.meter_name_to_index
-        energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
-        health_idx = meter_name_to_index.get("health", min(6, meter_count - 1))  # Default to 6 or last meter
+        self.energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
+        self.health_idx = meter_name_to_index.get("health", min(6, meter_count - 1))  # Default to 6 or last meter
 
         self.reward_strategy = RewardStrategy(
-            device=device, num_agents=num_agents, meter_count=meter_count, energy_idx=energy_idx, health_idx=health_idx
+            device=device, num_agents=num_agents, meter_count=meter_count, energy_idx=self.energy_idx, health_idx=self.health_idx
         )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
         self._cached_baseline_tensor = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
@@ -298,7 +298,8 @@ class VectorizedHamletEnv:
 
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking
-        dead_agents = (self.meters[:, 6] <= 0.0) | (self.meters[:, 0] <= 0.0)  # health OR energy
+        # TASK-001: Use dynamic meter indices instead of hardcoded 0 and 6
+        dead_agents = (self.meters[:, self.health_idx] <= 0.0) | (self.meters[:, self.energy_idx] <= 0.0)  # health OR energy
         action_masks[dead_agents] = False
 
         return action_masks
