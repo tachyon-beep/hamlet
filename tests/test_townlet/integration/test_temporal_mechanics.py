@@ -182,7 +182,6 @@ class TestTimeProgression:
 class TestOperatingHours:
     """Time-based affordance availability and action masking."""
 
-    @xfail_temporal
     def test_operating_hours_mask_job(self, cpu_device):
         """Verify Job is masked out after 6pm (closed hours).
 
@@ -196,7 +195,10 @@ class TestOperatingHours:
         )
 
         env.reset()
-        env.positions[0] = torch.tensor([6, 6], device=cpu_device)  # On Job
+
+        # Use actual Job position (randomized on reset)
+        assert "Job" in env.affordances, "Job affordance not deployed in test config"
+        env.positions[0] = env.affordances["Job"]
         env.meters[0, 3] = 1.0
 
         # 10am: Job open (operating hours: 8-18)
@@ -209,7 +211,6 @@ class TestOperatingHours:
         masks = env.get_action_masks()
         assert not masks[0, 4]  # INTERACT blocked
 
-    @xfail_temporal
     def test_bar_wraparound_hours(self, cpu_device):
         """Verify Bar operating hours wrap around midnight (6pm-4am).
 
@@ -223,17 +224,10 @@ class TestOperatingHours:
         )
 
         env.reset()
-        # Find Bar position (affordance id=9)
-        bar_pos = None
-        for pos, aff_id in env.affordance_map.items():
-            if aff_id == 9:  # Bar
-                bar_pos = torch.tensor([pos[0], pos[1]], device=cpu_device)
-                break
 
-        if bar_pos is None:
-            pytest.skip("Bar affordance not deployed in test config")
-
-        env.positions[0] = bar_pos
+        # Use actual Bar position (randomized on reset)
+        assert "Bar" in env.affordances, "Bar affordance not deployed in test config"
+        env.positions[0] = env.affordances["Bar"]
         env.meters[0, 3] = 1.0  # $100 money
 
         # 8pm: Bar open (operating hours: 18-28, i.e., 6pm-4am)
@@ -251,7 +245,6 @@ class TestOperatingHours:
         masks = env.get_action_masks()
         assert not masks[0, 4]  # INTERACT blocked
 
-    @xfail_temporal
     def test_24_hour_affordances(self, cpu_device):
         """Verify 24-hour affordances (Bed, Hospital) are always available.
 
@@ -265,8 +258,10 @@ class TestOperatingHours:
         )
 
         env.reset()
-        # Bed is always at (1,1) in default config
-        env.positions[0] = torch.tensor([1, 1], device=cpu_device)
+
+        # Use actual Bed position (randomized on reset)
+        assert "Bed" in env.affordances, "Bed affordance not deployed in test config"
+        env.positions[0] = env.affordances["Bed"]
 
         # Test at multiple times
         for time in [0, 6, 12, 18, 23]:
