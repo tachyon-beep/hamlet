@@ -84,6 +84,9 @@ class TestEpisodeLifecycle:
         # Reset environment and population
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         # Verify initial observation shape
         assert population.current_obs.shape == (1, env.observation_dim)
 
@@ -136,8 +139,8 @@ class TestEpisodeLifecycle:
             partial_observability=True,
             vision_range=2,  # 5×5 vision window
             enable_temporal_mechanics=False,
-            move_energy_cost=0.0001,  # Minimal cost to prevent death during test
-            wait_energy_cost=0.00005,  # Must be less than move_energy_cost
+            move_energy_cost=0.00001,  # Ultra-minimal to prevent cascade-induced death (satiation→energy/health)
+            wait_energy_cost=0.000001,  # Must be less than move_energy_cost
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
@@ -170,6 +173,10 @@ class TestEpisodeLifecycle:
         # Reset environment and population
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        # (cascade effects like satiation→energy/health can kill agent even with minimal costs)
+        env.meters.fill_(1.0)
+
         # Capture initial hidden state
         recurrent_network = population.q_network
         h0, c0 = recurrent_network.get_hidden_state()
@@ -192,6 +199,11 @@ class TestEpisodeLifecycle:
                 episode_done = True
 
             step_count += 1
+
+        # Verify agent survived (death resets hidden state to zeros, causing false failures)
+        assert not episode_done, (
+            f"Agent died after {step_count} steps (cascade effects). " "Death resets hidden state to zeros, invalidating test."
+        )
 
         # Verify hidden state evolved during episode
         h_final, c_final = recurrent_network.get_hidden_state()
@@ -403,6 +415,9 @@ class TestEpisodeLifecycle:
         # Reset environment and population
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         # Run for exactly max_steps
         step_count = 0
         final_state = None
@@ -478,6 +493,10 @@ class TestEpisodeLifecycle:
 
         # Reset environment and population
         population.reset()
+
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         initial_obs = population.current_obs.clone()
 
         # Track data cycle over 10 steps

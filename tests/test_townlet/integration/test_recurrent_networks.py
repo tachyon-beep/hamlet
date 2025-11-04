@@ -78,6 +78,9 @@ class TestLSTMHiddenStatePersistence:
         # Reset environment and population
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         # Capture initial hidden state
         recurrent_network = population.q_network
         h0, c0 = recurrent_network.get_hidden_state()
@@ -210,6 +213,9 @@ class TestLSTMHiddenStatePersistence:
 
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         # Run 50 steps (no death expected)
         for _ in range(50):
             population.step_population(env)
@@ -265,6 +271,9 @@ class TestLSTMHiddenStatePersistence:
         )
 
         population.reset()
+
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
 
         # Verify initial shape
         recurrent_network = population.q_network
@@ -331,6 +340,9 @@ class TestLSTMBatchTraining:
         )
 
         population.reset()
+
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
 
         # Verify initial shape (episode batch size = num_agents)
         recurrent_network = population.q_network
@@ -607,7 +619,7 @@ class TestLSTMForwardPass:
         q_values, new_hidden = network(obs)
 
         # Verify Q-values shape
-        assert q_values.shape == (1, 5), f"Expected Q-values shape (1, 5), got {q_values.shape}"
+        assert q_values.shape == (1, 6), f"Expected Q-values shape (1, 6), got {q_values.shape}"
 
         # Verify hidden state shape
         h, c = new_hidden
