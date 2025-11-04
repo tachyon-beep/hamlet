@@ -1,0 +1,141 @@
+# MOCK CONFIGURATION FOR STABLE TEST ASSERTIONS
+#
+# This configuration is FROZEN and should NOT be changed without updating dependent tests.
+# Any tests that use exact value assertions (e.g., "energy == 0.50") MUST use this config.
+#
+# Purpose: Provides a stable reference for regression tests while allowing the main
+# configs to evolve during development.
+#
+# Usage in tests:
+#   from pathlib import Path
+#   mock_config = Path(__file__).parent.parent / "fixtures" / "mock_config.yaml"
+#   env = VectorizedHamletEnv(..., config_pack_path=mock_config.parent.parent.parent / "configs/test")
+#
+# Version: 1.0.0 (Locked 2025-11-04)
+
+version: "1.0.0"
+description: "Frozen test configuration for exact-value assertions"
+locked_date: "2025-11-04"
+
+# Environment parameters
+environment:
+  grid_size: 8
+  partial_observability: false
+  vision_range: 8
+  enable_temporal_mechanics: false
+
+  # Energy costs (FROZEN)
+  energy_move_depletion: 0.005   # Move costs 0.5% energy
+  energy_wait_depletion: 0.001   # Wait costs 0.1% energy
+  energy_interact_depletion: 0.0  # Interact costs 0% energy
+
+# Meter base depletion rates (FROZEN)
+meters:
+  energy:
+    base_depletion: 0.005  # 0.5% per step
+    initial: 1.0
+    death_threshold: 0.0
+
+  health:
+    base_depletion: 0.0    # No base depletion
+    initial: 1.0
+    death_threshold: 0.0
+
+  satiation:
+    base_depletion: 0.004  # 0.4% per step
+    initial: 1.0
+
+  hygiene:
+    base_depletion: 0.002  # 0.2% per step
+    initial: 1.0
+
+  money:
+    base_depletion: 0.0    # No base depletion
+    initial: 0.5           # Start with $50
+
+  mood:
+    base_depletion: 0.003  # 0.3% per step
+    initial: 1.0
+
+  social:
+    base_depletion: 0.002  # 0.2% per step
+    initial: 1.0
+
+  fitness:
+    base_depletion: 0.001  # 0.1% per step
+    initial: 1.0
+
+# Affordance effects (FROZEN - Instant mode only for mock)
+affordances:
+  Bed:
+    id: 0
+    costs:
+      money: 0.05  # $5
+    effects:
+      energy: 0.50  # +50%
+      health: 0.02  # +2%
+
+  Shower:
+    id: 2
+    costs:
+      money: 0.03  # $3
+    effects:
+      hygiene: 0.40  # +40%
+
+  HomeMeal:
+    id: 3
+    costs:
+      money: 0.03  # $3
+    effects:
+      satiation: 0.45  # +45%
+      health: 0.03     # +3%
+
+  Job:
+    id: 10
+    costs: {}
+    effects:
+      money: 0.225      # +$22.50
+      energy: -0.15     # -15%
+      social: 0.02      # +2%
+      health: -0.03     # -3%
+
+# Cascade effects (FROZEN)
+cascades:
+  # Satiation → Energy (hunger drains energy)
+  satiation_to_energy:
+    source: satiation
+    target: energy
+    threshold: 0.3     # When satiation < 30%
+    penalty: 0.01      # +1% energy depletion
+
+  # Satiation → Health (hunger damages health)
+  satiation_to_health:
+    source: satiation
+    target: health
+    threshold: 0.3
+    penalty: 0.005     # +0.5% health damage
+
+  # Fitness → Health (low fitness weakens health)
+  fitness_to_health:
+    source: fitness
+    target: health
+    threshold: 0.25
+    penalty: 0.003     # +0.3% health damage
+
+  # Mood → Energy (depression drains energy)
+  mood_to_energy:
+    source: mood
+    target: energy
+    threshold: 0.25
+    penalty: 0.008     # +0.8% energy depletion
+
+# Expected computed values (for assertion documentation)
+expected_values:
+  baseline_survival_steps: 166  # 1.0 / (0.005 + 0.001) = 166.67 steps
+
+  obs_dim_full_observability: 72    # 8x8 grid (64) + 8 meters
+  obs_dim_partial_observability: 35  # 5x5 vision (25) + position (2) + 8 meters
+  obs_dim_temporal_full: 74          # 72 + time_of_day (1) + interaction_progress (1)
+  obs_dim_temporal_partial: 37       # 35 + 2
+
+  action_space_size: 5  # UP, DOWN, LEFT, RIGHT, INTERACT
