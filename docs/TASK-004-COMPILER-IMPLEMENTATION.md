@@ -269,7 +269,7 @@ class UniverseSymbolTable:
     def __init__(self):
         self.meters: dict[str, BarConfig] = {}
         self.affordances: dict[str, AffordanceConfig] = {}
-        # Future: actions, stages when TASK-002 implemented
+        # Future: actions, stages when TASK-003 (Action Space) implemented
 
     def register_meter(self, name: str, config: BarConfig):
         """Register meter for later reference resolution."""
@@ -868,7 +868,7 @@ def _stage_5_compute_metadata(
         for i, aff in enumerate(raw_configs.affordances.affordances)
     }
 
-    # Action metadata (currently hardcoded, will be dynamic after TASK-002)
+    # Action metadata (currently hardcoded, will be dynamic after TASK-003 Action Space)
     action_count = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 
     # Observation dimension (complex calculation)
@@ -1436,6 +1436,17 @@ Catches errors across multiple files:
 
 ### Recommended (for full benefit)
 
+**TASK-002A (UAC Core DTOs)**:
+- Provides core configuration DTOs (TrainingConfig, EnvironmentConfig, etc.)
+- Compiler uses these DTOs for type-safe config loading
+- Without it, compiler loads raw YAML dicts (less safe)
+- With it, configs are validated at load time
+
+**TASK-002B (UAC Capabilities)** (optional):
+- Provides capability system DTOs (multi_tick, cooldown, etc.)
+- Compiler validates capability composition rules
+- Optional - compiler works without it for basic configs
+
 **TASK-005 (Variable-Size Meter System)**:
 - Enables dynamic meter_count in metadata
 - Without it, meter_count is always 8 (but compiler still works)
@@ -1445,9 +1456,8 @@ Catches errors across multiple files:
 
 All future UAC work depends on robust compilation:
 - **TASK-000** (Spatial Substrates): Compiler validates substrate configs
-- **TASK-002** (Action Space): Compiler validates action-substrate compatibility
-- **TASK-003** (Universe Compilation): This IS the compilation pipeline
-- **TASK-004** (BRAIN_AS_CODE): Compiler provides obs_dim, action_dim metadata
+- **TASK-003** (Action Space): Compiler validates action-substrate compatibility
+- **TASK-005** (BRAIN_AS_CODE): Compiler provides obs_dim, action_dim metadata
 
 ---
 
@@ -1860,8 +1870,8 @@ After completing this task:
 
 Compiler is foundation for:
 - **TASK-000**: Validate substrate configs
-- **TASK-002**: Validate action-substrate compatibility
-- **TASK-004**: Use compiled obs_dim, action_dim
+- **TASK-003**: Validate action-substrate compatibility
+- **TASK-005**: Use compiled obs_dim, action_dim
 
 ### 2. Add More Validation Rules
 
