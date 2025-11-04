@@ -9,14 +9,11 @@ configurations. Tests cover:
 - Meter dynamics with variable meter counts
 """
 
-import tempfile
-from pathlib import Path
 
 import pytest
 import torch
 
 from townlet.curriculum.adversarial import AdversarialCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
@@ -344,7 +341,9 @@ class TestVariableMetersEndToEnd:
 
         # Verify network's num_meters parameter matches environment
         assert population.q_network.num_meters == 4, f"Network should have num_meters=4, got {population.q_network.num_meters}"
-        assert population.target_network.num_meters == 4, f"Target network should have num_meters=4, got {population.target_network.num_meters}"
+        assert (
+            population.target_network.num_meters == 4
+        ), f"Target network should have num_meters=4, got {population.target_network.num_meters}"
 
         # Verify network can process observations correctly
         # This tests that the network's num_meters matches the environment's meter count

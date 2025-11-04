@@ -1070,12 +1070,14 @@ class TestVariableMeterCheckpoints:
 
         # Verify values
         assert metadata["meter_count"] == 4, f"Should have 4 meters, got {metadata['meter_count']}"
-        assert metadata["meter_names"] == ["energy", "health", "money", "mood"], \
-            f"Should have correct meter names, got {metadata['meter_names']}"
+        assert metadata["meter_names"] == [
+            "energy",
+            "health",
+            "money",
+            "mood",
+        ], f"Should have correct meter names, got {metadata['meter_names']}"
 
-    def test_loading_checkpoint_validates_meter_count(
-        self, cpu_device, task001_env_4meter, basic_env, tmp_path
-    ):
+    def test_loading_checkpoint_validates_meter_count(self, cpu_device, task001_env_4meter, basic_env, tmp_path):
         """Loading checkpoint should fail if meter counts don't match."""
         # Create 4-meter population and save checkpoint (no training needed)
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
@@ -1117,12 +1119,11 @@ class TestVariableMeterCheckpoints:
 
         # Loading should raise ValueError
         import pytest
+
         with pytest.raises(ValueError, match="meter count mismatch"):
             pop_8meter.load_checkpoint_state(checkpoint_4meter)
 
-    def test_loading_checkpoint_with_matching_meters_succeeds(
-        self, cpu_device, task001_env_4meter
-    ):
+    def test_loading_checkpoint_with_matching_meters_succeeds(self, cpu_device, task001_env_4meter):
         """Loading checkpoint should succeed if meter counts match."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
         curriculum.initialize_population(1)
@@ -1167,9 +1168,7 @@ class TestVariableMeterCheckpoints:
         # Verify metadata matched
         assert checkpoint["universe_metadata"]["meter_count"] == 4
 
-    def test_legacy_checkpoint_loads_with_default_assumption(
-        self, cpu_device, basic_env
-    ):
+    def test_legacy_checkpoint_loads_with_default_assumption(self, cpu_device, basic_env):
         """Legacy checkpoints (no metadata) should load with warning."""
         import warnings
 

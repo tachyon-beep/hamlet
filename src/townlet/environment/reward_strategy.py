@@ -39,9 +39,7 @@ class RewardStrategy:
     is no longer used in reward calculation.
     """
 
-    def __init__(
-        self, device: torch.device, num_agents: int = 1, meter_count: int = 8, energy_idx: int = 0, health_idx: int = 6
-    ):
+    def __init__(self, device: torch.device, num_agents: int = 1, meter_count: int = 8, energy_idx: int = 0, health_idx: int = 6):
         """
         Initialize reward strategy.
 

@@ -21,8 +21,7 @@ class TestCascadeEngineDynamicSizing:
 
         # Depletion tensor should be [4] not [8]
         assert engine._base_depletions.shape == (4,), (
-            f"Expected depletion tensor shape (4,) for 4-meter config, "
-            f"got {engine._base_depletions.shape}"
+            f"Expected depletion tensor shape (4,) for 4-meter config, " f"got {engine._base_depletions.shape}"
         )
 
     def test_12meter_depletions_tensor_size(self, cpu_device, task001_config_12meter):
@@ -32,8 +31,7 @@ class TestCascadeEngineDynamicSizing:
 
         # Depletion tensor should be [12] not [8]
         assert engine._base_depletions.shape == (12,), (
-            f"Expected depletion tensor shape (12,) for 12-meter config, "
-            f"got {engine._base_depletions.shape}"
+            f"Expected depletion tensor shape (12,) for 12-meter config, " f"got {engine._base_depletions.shape}"
         )
 
     def test_4meter_initial_values_tensor_size(self, cpu_device, task001_config_4meter):
@@ -43,10 +41,7 @@ class TestCascadeEngineDynamicSizing:
 
         # Initial values tensor should be [4] not [8]
         initial = engine.get_initial_meter_values()
-        assert initial.shape == (4,), (
-            f"Expected initial_values tensor shape (4,) for 4-meter config, "
-            f"got {initial.shape}"
-        )
+        assert initial.shape == (4,), f"Expected initial_values tensor shape (4,) for 4-meter config, " f"got {initial.shape}"
 
     def test_12meter_initial_values_tensor_size(self, cpu_device, task001_config_12meter):
         """CascadeEngine should create 12-element initial_values tensor for 12-meter config."""
@@ -55,10 +50,7 @@ class TestCascadeEngineDynamicSizing:
 
         # Initial values tensor should be [12] not [8]
         initial = engine.get_initial_meter_values()
-        assert initial.shape == (12,), (
-            f"Expected initial_values tensor shape (12,) for 12-meter config, "
-            f"got {initial.shape}"
-        )
+        assert initial.shape == (12,), f"Expected initial_values tensor shape (12,) for 12-meter config, " f"got {initial.shape}"
 
     def test_depletions_contain_correct_values(self, cpu_device, task001_config_4meter):
         """Depletion tensor should contain actual base_depletion values from config."""
@@ -67,9 +59,7 @@ class TestCascadeEngineDynamicSizing:
 
         # Expected: energy=0.005, health=0.0, money=0.0, mood=0.001
         expected = torch.tensor([0.005, 0.0, 0.0, 0.001], device=cpu_device)
-        assert torch.allclose(engine._base_depletions, expected), (
-            f"Expected base_depletions {expected}, got {engine._base_depletions}"
-        )
+        assert torch.allclose(engine._base_depletions, expected), f"Expected base_depletions {expected}, got {engine._base_depletions}"
 
 
 class TestVectorizedEnvDynamicSizing:
@@ -82,8 +72,7 @@ class TestVectorizedEnvDynamicSizing:
 
         # Meters tensor should be [num_agents, 4] not [num_agents, 8]
         assert env.meters.shape == (num_agents, 4), (
-            f"Expected meters tensor shape ({num_agents}, 4) for 4-meter config, "
-            f"got {env.meters.shape}"
+            f"Expected meters tensor shape ({num_agents}, 4) for 4-meter config, " f"got {env.meters.shape}"
         )
 
     def test_12meter_meters_tensor_size(self, task001_env_12meter):
@@ -93,14 +82,11 @@ class TestVectorizedEnvDynamicSizing:
 
         # Meters tensor should be [num_agents, 12] not [num_agents, 8]
         assert env.meters.shape == (num_agents, 12), (
-            f"Expected meters tensor shape ({num_agents}, 12) for 12-meter config, "
-            f"got {env.meters.shape}"
+            f"Expected meters tensor shape ({num_agents}, 12) for 12-meter config, " f"got {env.meters.shape}"
         )
 
     def test_4meter_observation_dim_full_obs(self, cpu_device, task001_config_4meter):
         """VectorizedHamletEnv should compute correct obs_dim for 4-meter full obs config."""
-        config = load_environment_config(task001_config_4meter)
-
         # 4-meter config uses 8×8 grid (copied from test config pack)
         # Full obs: grid_onehot(64) + meters(4) + affordance_onehot(15) + temporal(4) = 87
         env = VectorizedHamletEnv(
@@ -111,15 +97,10 @@ class TestVectorizedEnvDynamicSizing:
             enabled_affordances=["Bed", "Hospital", "HomeMeal", "Job"],
         )
 
-        assert env.observation_dim == 87, (
-            f"Expected obs_dim=87 for 4-meter full obs (64+4+15+4), "
-            f"got {env.observation_dim}"
-        )
+        assert env.observation_dim == 87, f"Expected obs_dim=87 for 4-meter full obs (64+4+15+4), " f"got {env.observation_dim}"
 
     def test_12meter_observation_dim_full_obs(self, cpu_device, task001_config_12meter):
         """VectorizedHamletEnv should compute correct obs_dim for 12-meter full obs config."""
-        config = load_environment_config(task001_config_12meter)
-
         # 12-meter config has 8×8 grid
         # Full obs: grid_onehot(64) + meters(12) + affordance_onehot(15) + temporal(4) = 95
         env = VectorizedHamletEnv(
@@ -130,15 +111,10 @@ class TestVectorizedEnvDynamicSizing:
             enabled_affordances=["Bed"],  # Minimal for testing
         )
 
-        assert env.observation_dim == 95, (
-            f"Expected obs_dim=95 for 12-meter full obs (64+12+15+4), "
-            f"got {env.observation_dim}"
-        )
+        assert env.observation_dim == 95, f"Expected obs_dim=95 for 12-meter full obs (64+12+15+4), " f"got {env.observation_dim}"
 
     def test_4meter_observation_dim_pomdp(self, cpu_device, task001_config_4meter):
         """VectorizedHamletEnv should compute correct obs_dim for 4-meter POMDP config."""
-        config = load_environment_config(task001_config_4meter)
-
         # POMDP: local_grid(25) + position(2) + meters(4) + affordance_onehot(15) + temporal(4) = 50
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_4meter,
@@ -149,15 +125,10 @@ class TestVectorizedEnvDynamicSizing:
             enabled_affordances=["Bed", "Hospital", "HomeMeal", "Job"],
         )
 
-        assert env.observation_dim == 50, (
-            f"Expected obs_dim=50 for 4-meter POMDP (25+2+4+15+4), "
-            f"got {env.observation_dim}"
-        )
+        assert env.observation_dim == 50, f"Expected obs_dim=50 for 4-meter POMDP (25+2+4+15+4), " f"got {env.observation_dim}"
 
     def test_12meter_observation_dim_pomdp(self, cpu_device, task001_config_12meter):
         """VectorizedHamletEnv should compute correct obs_dim for 12-meter POMDP config."""
-        config = load_environment_config(task001_config_12meter)
-
         # POMDP: local_grid(25) + position(2) + meters(12) + affordance_onehot(15) + temporal(4) = 58
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_12meter,
@@ -168,7 +139,4 @@ class TestVectorizedEnvDynamicSizing:
             enabled_affordances=["Bed"],  # Minimal for testing
         )
 
-        assert env.observation_dim == 58, (
-            f"Expected obs_dim=58 for 12-meter POMDP (25+2+12+15+4), "
-            f"got {env.observation_dim}"
-        )
+        assert env.observation_dim == 58, f"Expected obs_dim=58 for 12-meter POMDP (25+2+12+15+4), " f"got {env.observation_dim}"

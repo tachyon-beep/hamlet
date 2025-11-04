@@ -87,6 +87,7 @@ class VectorizedHamletEnv:
         # Load bars configuration to get meter_count for observation dimensions
         # This must happen before observation dimension calculation
         from townlet.environment.cascade_config import load_bars_config
+
         bars_config_path = self.config_pack_path / "bars.yaml"
         bars_config = load_bars_config(bars_config_path)
         self.meter_count = bars_config.meter_count

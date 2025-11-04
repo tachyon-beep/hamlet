@@ -433,28 +433,50 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
         "version": "2.0",
         "description": "4-meter test universe",
         "bars": [
-            {"name": "energy", "index": 0, "tier": "pivotal",
-             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.005,
-             "description": "Energy level"},
-            {"name": "health", "index": 1, "tier": "pivotal",
-             "range": [0.0, 1.0], "initial": 1.0, "base_depletion": 0.0,
-             "description": "Health status"},
-            {"name": "money", "index": 2, "tier": "resource",
-             "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.0,
-             "description": "Financial resources"},
-            {"name": "mood", "index": 3, "tier": "secondary",
-             "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001,
-             "description": "Mood state"},
+            {
+                "name": "energy",
+                "index": 0,
+                "tier": "pivotal",
+                "range": [0.0, 1.0],
+                "initial": 1.0,
+                "base_depletion": 0.005,
+                "description": "Energy level",
+            },
+            {
+                "name": "health",
+                "index": 1,
+                "tier": "pivotal",
+                "range": [0.0, 1.0],
+                "initial": 1.0,
+                "base_depletion": 0.0,
+                "description": "Health status",
+            },
+            {
+                "name": "money",
+                "index": 2,
+                "tier": "resource",
+                "range": [0.0, 1.0],
+                "initial": 0.5,
+                "base_depletion": 0.0,
+                "description": "Financial resources",
+            },
+            {
+                "name": "mood",
+                "index": 3,
+                "tier": "secondary",
+                "range": [0.0, 1.0],
+                "initial": 0.7,
+                "base_depletion": 0.001,
+                "description": "Mood state",
+            },
         ],
         "terminal_conditions": [
-            {"meter": "energy", "operator": "<=", "value": 0.0,
-             "description": "Death by energy depletion"},
-            {"meter": "health", "operator": "<=", "value": 0.0,
-             "description": "Death by health failure"},
+            {"meter": "energy", "operator": "<=", "value": 0.0, "description": "Death by energy depletion"},
+            {"meter": "health", "operator": "<=", "value": 0.0, "description": "Death by health failure"},
         ],
     }
 
-    with open(config_4m / "bars.yaml", 'w') as f:
+    with open(config_4m / "bars.yaml", "w") as f:
         yaml.safe_dump(bars_config, f)
 
     # Simplify cascades.yaml
@@ -464,15 +486,22 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
         "math_type": "gradient_penalty",
         "modulations": [],
         "cascades": [
-            {"name": "low_mood_hits_energy", "category": "secondary_to_pivotal",
-             "description": "Low mood drains energy",
-             "source": "mood", "source_index": 3, "target": "energy",
-             "target_index": 0, "threshold": 0.2, "strength": 0.01}
+            {
+                "name": "low_mood_hits_energy",
+                "category": "secondary_to_pivotal",
+                "description": "Low mood drains energy",
+                "source": "mood",
+                "source_index": 3,
+                "target": "energy",
+                "target_index": 0,
+                "threshold": 0.2,
+                "strength": 0.01,
+            }
         ],
         "execution_order": ["secondary_to_pivotal"],
     }
 
-    with open(config_4m / "cascades.yaml", 'w') as f:
+    with open(config_4m / "cascades.yaml", "w") as f:
         yaml.safe_dump(cascades_config, f)
 
     return config_4m
@@ -497,29 +526,53 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
     shutil.copytree(test_config_pack_path, config_12m)
 
     # Load existing 8-meter bars
-    with open(test_config_pack_path / "bars.yaml", 'r') as f:
+    with open(test_config_pack_path / "bars.yaml") as f:
         bars_8m = yaml.safe_load(f)
 
     # Add 4 new meters
     extra_meters = [
-        {"name": "reputation", "index": 8, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.5, "base_depletion": 0.002,
-         "description": "Social reputation"},
-        {"name": "skill", "index": 9, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.3, "base_depletion": 0.001,
-         "description": "Professional skills"},
-        {"name": "spirituality", "index": 10, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.6, "base_depletion": 0.002,
-         "description": "Spiritual wellbeing"},
-        {"name": "community_trust", "index": 11, "tier": "secondary",
-         "range": [0.0, 1.0], "initial": 0.7, "base_depletion": 0.001,
-         "description": "Community trust level"},
+        {
+            "name": "reputation",
+            "index": 8,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.5,
+            "base_depletion": 0.002,
+            "description": "Social reputation",
+        },
+        {
+            "name": "skill",
+            "index": 9,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.3,
+            "base_depletion": 0.001,
+            "description": "Professional skills",
+        },
+        {
+            "name": "spirituality",
+            "index": 10,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.6,
+            "base_depletion": 0.002,
+            "description": "Spiritual wellbeing",
+        },
+        {
+            "name": "community_trust",
+            "index": 11,
+            "tier": "secondary",
+            "range": [0.0, 1.0],
+            "initial": 0.7,
+            "base_depletion": 0.001,
+            "description": "Community trust level",
+        },
     ]
 
     bars_12m = copy.deepcopy(bars_8m)  # Deep copy to avoid modifying original
     bars_12m["bars"].extend(extra_meters)
 
-    with open(config_12m / "bars.yaml", 'w') as f:
+    with open(config_12m / "bars.yaml", "w") as f:
         yaml.safe_dump(bars_12m, f)
 
     return config_12m

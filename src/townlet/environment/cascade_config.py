@@ -81,10 +81,7 @@ class BarsConfig(BaseModel):
         indices = {bar.index for bar in v}
         expected_indices = set(range(meter_count))
         if indices != expected_indices:
-            raise ValueError(
-                f"Bar indices must be contiguous from 0 to {meter_count-1}, "
-                f"got {sorted(indices)}"
-            )
+            raise ValueError(f"Bar indices must be contiguous from 0 to {meter_count-1}, " f"got {sorted(indices)}")
 
         # Check all names are unique
         names = [bar.name for bar in v]
