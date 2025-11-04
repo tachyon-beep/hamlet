@@ -36,14 +36,6 @@ classifiers = [
     "Framework :: Pytest",
     "Typing :: Typed",
 ]
-
-[project.urls]
-Homepage = "https://github.com/tachyon-beep/hamlet"
-Repository = "https://github.com/tachyon-beep/hamlet"
-Documentation = "https://github.com/tachyon-beep/hamlet/tree/main/docs"
-Issues = "https://github.com/tachyon-beep/hamlet/issues"
-Changelog = "https://github.com/tachyon-beep/hamlet/blob/main/CHANGELOG.md"
-
 dependencies = [
     "pettingzoo>=1.24.0",
     "gymnasium>=1.0.0",
@@ -67,6 +59,13 @@ dependencies = [
     "tensorboard>=2.15.0",
     "tensorflow>=2.20.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/tachyon-beep/hamlet"
+Repository = "https://github.com/tachyon-beep/hamlet"
+Documentation = "https://github.com/tachyon-beep/hamlet/tree/main/docs"
+Issues = "https://github.com/tachyon-beep/hamlet/issues"
+Changelog = "https://github.com/tachyon-beep/hamlet/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
