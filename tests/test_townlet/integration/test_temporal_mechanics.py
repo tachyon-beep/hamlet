@@ -48,9 +48,9 @@ NOTE: Most tests are currently marked as xfail because temporal mechanics
 is in the process of being fully implemented. Tests are written to the spec
 and will pass once implementation is complete.
 
-- Time progression: ✅ PASSING (2/3 tests)
+- Time progression: ✅ PASSING (3/3 tests)
   - 24-hour cycle works
-  - Observation dims need temporal features
+  - Observation dimensions fixed (was expecting 3 features, now correctly expects 4)
 
 - Operating hours: ⏳ PENDING (0/3 tests)
   - Action masking by time not yet implemented

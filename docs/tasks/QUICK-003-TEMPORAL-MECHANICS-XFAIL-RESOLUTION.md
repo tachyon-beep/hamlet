@@ -1,10 +1,12 @@
 # QUICK-003: Temporal Mechanics xfail Resolution
 
-**Status**: Planned
+**Status**: In Progress
 **Priority**: Medium
 **Estimated Effort**: 2-4 hours
 **Dependencies**: None
 **Created**: 2025-11-04
+**Started**: 2025-11-04
+**Progress**: 1/14 tests fixed (observation dimensions)
 
 **Keywords**: temporal-mechanics, testing, xfail, L3, operating-hours, multi-tick-interactions
 **Subsystems**: environment, affordance_engine, observation_builder, recording
@@ -17,9 +19,11 @@
 
 ## AI-Friendly Summary (Skim This First!)
 
-**What**: Investigate and implement missing temporal mechanics functionality to resolve 14 xfail tests
-**Why**: Temporal mechanics (L3) is partially implemented but 14 tests are marked as xfail, preventing validation
+**What**: Investigate and implement missing temporal mechanics functionality to resolve 14 xfail tests (1 fixed, 13 remaining)
+**Why**: Temporal mechanics (L3) is partially implemented but 13 tests are marked as xfail, preventing validation
 **Scope**: Complete implementation of time-of-day, operating hours, multi-tick interactions, and early exit mechanics
+
+**UPDATE 2025-11-04**: Fixed `test_observation_dimensions_with_temporal` - was expecting 3 temporal features but implementation provides 4 (added lifetime_progress for forward compatibility). Test now passes.
 
 **Quick Assessment**:
 
