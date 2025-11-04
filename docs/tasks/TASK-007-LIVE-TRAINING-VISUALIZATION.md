@@ -294,9 +294,106 @@ async def _check_and_load_checkpoint(self) -> bool:
                 await asyncio.sleep(0.05)
     ```
   - Add `_broadcast_training_episode()` method:
-    - Send "episode_start" message
-    - Replay steps with configurable delay
-    - Send "episode_end" message
+    ```python
+    async def _broadcast_training_episode(self, episode_data: dict):
+        """Broadcast training episode to all clients.
+
+        Replays episode step-by-step at human-watchable speed.
+        """
+        metadata = episode_data["metadata"]
+        steps = episode_data["steps"]
+
+        # Send episode_start message
+        await self._broadcast_to_clients({
+            "type": "episode_start",
+            "episode_id": metadata["episode_id"],
+            "mode": "live_training",  # Distinguish from inference mode
+            "survival_steps": metadata["survival_steps"],
+            "curriculum_stage": metadata["curriculum_stage"],
+            "epsilon": metadata["epsilon"],
+            "timestamp": episode_data["timestamp"],
+        })
+
+        # Replay steps with configurable delay
+        for step_data in steps:
+            # Convert RecordedStep to state_update format
+            state_update = {
+                "type": "state_update",
+                "mode": "live_training",
+                "step": step_data["step"],
+                "position": step_data["position"],
+                "meters": step_data["meters"],
+                "action": step_data["action"],
+                "reward": step_data["reward"],
+                "intrinsic_reward": step_data["intrinsic_reward"],
+                "done": step_data["done"],
+                "q_values": step_data.get("q_values"),
+                "epsilon": step_data.get("epsilon"),
+                "action_masks": step_data.get("action_masks"),
+                "time_of_day": step_data.get("time_of_day"),
+                "interaction_progress": step_data.get("interaction_progress"),
+            }
+            await self._broadcast_to_clients(state_update)
+
+            # Delay for visualization (configurable speed)
+            await asyncio.sleep(self.step_delay)
+
+        # Send episode_end message
+        await self._broadcast_to_clients({
+            "type": "episode_end",
+            "episode_id": metadata["episode_id"],
+            "survival_steps": metadata["survival_steps"],
+            "total_reward": metadata["total_reward"],
+            "extrinsic_reward": metadata["extrinsic_reward"],
+            "intrinsic_reward": metadata["intrinsic_reward"],
+            "curriculum_stage": metadata["curriculum_stage"],
+        })
+
+        logger.info(f"Broadcasted training episode {metadata['episode_id']}")
+    ```
+
+  **WebSocket Message Schema** (for frontend integration):
+    ```typescript
+    // Episode start
+    {
+      type: "episode_start",
+      episode_id: number,
+      mode: "live_training",
+      survival_steps: number,
+      curriculum_stage: number,
+      epsilon: number,
+      timestamp: number,
+    }
+
+    // Step update (sent for each step)
+    {
+      type: "state_update",
+      mode: "live_training",
+      step: number,
+      position: [number, number],  // (x, y)
+      meters: number[],  // 8 meter values
+      action: number,  // 0-5
+      reward: number,
+      intrinsic_reward: number,
+      done: boolean,
+      q_values?: number[],  // Optional
+      epsilon?: number,  // Optional
+      action_masks?: boolean[],  // Optional
+      time_of_day?: number,  // Optional (temporal mechanics)
+      interaction_progress?: number,  // Optional (multi-tick)
+    }
+
+    // Episode end
+    {
+      type: "episode_end",
+      episode_id: number,
+      survival_steps: number,
+      total_reward: number,
+      extrinsic_reward: number,
+      intrinsic_reward: number,
+      curriculum_stage: number,
+    }
+    ```
 
 **Tests**:
 
