@@ -771,6 +771,7 @@ class VectorizedPopulation(PopulationManager):
         - Replay buffer contents
         - Exploration strategy state
         - Curriculum state
+        - Universe metadata (meter count, names) for validation (TASK-001)
 
         Returns:
             Complete checkpoint state dictionary
@@ -781,6 +782,17 @@ class VectorizedPopulation(PopulationManager):
             "optimizer": self.optimizer.state_dict(),
             "total_steps": self.total_steps,
             "exploration_state": self.exploration.checkpoint_state(),
+        }
+
+        # Universe metadata for compatibility validation (TASK-001)
+        # This allows detecting meter count mismatches when loading checkpoints
+        bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+        checkpoint["universe_metadata"] = {
+            "meter_count": bars_config.meter_count,
+            "meter_names": bars_config.meter_names,
+            "version": bars_config.version,
+            "obs_dim": self.env.observation_dim,
+            "action_dim": 5,  # Hardcoded for now (will be moved to actions.yaml in TASK-000)
         }
 
         # Target network (recurrent mode only)
@@ -802,7 +814,50 @@ class VectorizedPopulation(PopulationManager):
 
         Args:
             checkpoint: State dictionary from get_checkpoint_state()
+
+        Raises:
+            ValueError: If checkpoint universe metadata doesn't match current environment
         """
+        # Validate universe compatibility (TASK-001)
+        if "universe_metadata" in checkpoint:
+            metadata = checkpoint["universe_metadata"]
+            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+            current_meter_count = bars_config.meter_count
+
+            # Validate meter count matches
+            checkpoint_meter_count = metadata.get("meter_count")
+            if checkpoint_meter_count != current_meter_count:
+                raise ValueError(
+                    f"Checkpoint meter count mismatch: checkpoint has {checkpoint_meter_count} meters, "
+                    f"but current environment has {current_meter_count} meters. "
+                    f"Cannot load checkpoint trained on different universe configuration."
+                )
+
+            # Validate obs_dim matches (secondary check)
+            checkpoint_obs_dim = metadata.get("obs_dim")
+            current_obs_dim = self.env.observation_dim
+            if checkpoint_obs_dim != current_obs_dim:
+                import warnings
+
+                warnings.warn(
+                    f"Checkpoint obs_dim mismatch: checkpoint has {checkpoint_obs_dim}, "
+                    f"current env has {current_obs_dim}. This may indicate grid size or "
+                    f"observability mode differences. Proceeding with caution.",
+                    UserWarning,
+                )
+        else:
+            # Legacy checkpoint (no universe_metadata) - assume 8-meter default
+            import warnings
+
+            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+            current_meter_count = bars_config.meter_count
+            warnings.warn(
+                f"Loading legacy checkpoint without universe_metadata. "
+                f"Assuming 8-meter configuration. Current environment has {current_meter_count} meters. "
+                f"If this doesn't match, loading will likely fail.",
+                UserWarning,
+            )
+
         # Restore Q-network
         self.q_network.load_state_dict(checkpoint["q_network"])
 
