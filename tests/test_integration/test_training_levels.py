@@ -357,6 +357,7 @@ def test_all_configs_valid():
         "configs/test/training_level_2.yaml",
         "configs/test/training_level_3.yaml",
         "configs/L0_0_minimal/training.yaml",
+        "configs/L0_5_dual_resource/training.yaml",
         "configs/L1_full_observability/training.yaml",
         "configs/L2_partial_observability/training.yaml",
         "configs/L3_temporal_mechanics/training.yaml",

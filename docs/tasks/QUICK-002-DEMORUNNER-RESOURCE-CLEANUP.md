@@ -42,6 +42,7 @@
 `DemoRunner` creates a SQLite database connection in `__init__()` (line 57) but only closes it in the `finally` block of `run()` (line 719). Tests that instantiate `DemoRunner` for checkpoint operations—without calling `run()`—leak database connections, causing ResourceWarnings during test execution.
 
 **Evidence**:
+
 ```
 ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7c3c277b8310>
 ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7c3bb6fd3f10>
@@ -100,9 +101,9 @@ Add Python context manager protocol (`__enter__`/`__exit__`) to `DemoRunner`. Ex
 
 **Must Handle**:
 
-- **__exit__ called when runner partially initialized**: Use `hasattr()` checks before cleanup
-- **Exception during __init__**: Database may not exist yet, _cleanup() must handle gracefully
-- **Multiple __exit__ calls**: Make _cleanup() idempotent (safe to call multiple times)
+- ****exit** called when runner partially initialized**: Use `hasattr()` checks before cleanup
+- **Exception during **init****: Database may not exist yet, _cleanup() must handle gracefully
+- **Multiple **exit** calls**: Make _cleanup() idempotent (safe to call multiple times)
 
 ---
 
@@ -225,6 +226,7 @@ class TestDemoRunnerResourceManagement:
 ```
 
 **Add import at top of file**:
+
 ```python
 import sqlite3  # Add to imports
 ```
@@ -236,11 +238,13 @@ pytest tests/test_townlet/integration/test_checkpointing.py::TestDemoRunnerResou
 ```
 
 **Expected failures**:
-- `test_runner_closes_database_on_context_exit`: AttributeError: __enter__ not found
+
+- `test_runner_closes_database_on_context_exit`: AttributeError: **enter** not found
 - `test_runner_cleanup_is_idempotent`: AttributeError: _cleanup not found
-- `test_runner_context_manager_propagates_exceptions`: AttributeError: __enter__ not found
+- `test_runner_context_manager_propagates_exceptions`: AttributeError: **enter** not found
 
 **Verification**:
+
 - [ ] All 3 new tests fail with expected errors
 - [ ] Test failures are clear and correct
 
@@ -345,6 +349,7 @@ pytest tests/test_townlet/integration/test_checkpointing.py::TestDemoRunnerResou
 ```
 
 **Verification**:
+
 - [ ] All 3 new tests pass
 - [ ] Existing tests still pass (no regressions)
 
@@ -420,6 +425,7 @@ pytest tests/test_townlet/integration/test_checkpointing.py -W error::ResourceWa
 ```
 
 **Verification**:
+
 - [ ] All updated tests pass
 - [ ] Zero ResourceWarnings
 - [ ] Tests fail with `-W error::ResourceWarning` if warnings present
@@ -453,6 +459,7 @@ pytest tests/test_townlet/integration/test_checkpointing.py -W error::ResourceWa
 ```
 
 **Final Verification**:
+
 - [ ] 22 total tests pass (19 existing + 3 new)
 - [ ] Zero ResourceWarnings
 - [ ] No regressions in other test files
@@ -477,19 +484,22 @@ pytest tests/test_townlet/integration/test_checkpointing.py -W error::ResourceWa
 **Test-Driven Development Flow**:
 
 ✅ **RED Phase**:
+
 - [ ] Write 3 failing tests for context manager behavior
 - [ ] Verify tests fail with expected errors (AttributeError, etc.)
 - [ ] Confirm test failures demonstrate what we're building
 
 ✅ **GREEN Phase**:
+
 - [ ] Implement _cleanup() method
-- [ ] Add __enter__ and __exit__ methods
+- [ ] Add **enter** and **exit** methods
 - [ ] Update run() to use _cleanup()
 - [ ] Verify new tests pass
 - [ ] Update 3 existing tests to use context manager
 - [ ] Verify all 22 tests pass (19 existing + 3 new)
 
 ✅ **REFACTOR Phase**:
+
 - [ ] Review code quality
 - [ ] Ensure proper error handling
 - [ ] Verify zero ResourceWarnings
@@ -502,11 +512,13 @@ pytest tests/test_townlet/integration/test_checkpointing.py -W error::ResourceWa
 **Must Have (TDD Verified)**:
 
 **RED Phase Complete**:
+
 - [ ] 3 new tests written and failing correctly
 - [ ] Test failures demonstrate desired behavior
 - [ ] Tests clearly document requirements
 
 **GREEN Phase Complete**:
+
 - [ ] DemoRunner implements context manager protocol (`__enter__`, `__exit__`)
 - [ ] `_cleanup()` method is idempotent and safe
 - [ ] All 3 new tests pass
@@ -515,6 +527,7 @@ pytest tests/test_townlet/integration/test_checkpointing.py -W error::ResourceWa
 - [ ] No regressions in existing tests
 
 **REFACTOR Phase Complete**:
+
 - [ ] No ResourceWarnings when running test suite
 - [ ] Tests run 100% clean with `-W error::ResourceWarning`
 - [ ] Code quality: proper docstrings, error handling, hasattr() guards
@@ -541,7 +554,7 @@ pytest tests/test_townlet/integration/test_checkpointing.py -W error::ResourceWa
 
 - Use `hasattr()` checks before accessing `self.db`, `self.tb_logger`, `self.recorder`
 - Wrap cleanup operations in try/except to prevent cascade failures
-- Test with partially-initialized runner (e.g., exception during __init__)
+- Test with partially-initialized runner (e.g., exception during **init**)
 
 ---
 
@@ -581,6 +594,7 @@ pytest tests/test_townlet/integration/test_checkpointing.py -W error::ResourceWa
 DemoRunner architecture flaw: resources acquired in `__init__()` but only released in `run()`'s finally block. This violates resource management best practices - acquire/release should be paired symmetrically. Tests that use DemoRunner for checkpoint operations (without calling `run()`) have no way to trigger cleanup.
 
 **EVIDENCE**:
+
 - 5 DemoRunner instances created in test_checkpointing.py
 - None call `run()` - they call `save_checkpoint()` or `load_checkpoint()` directly
 - Database connections remain open until garbage collection

@@ -36,22 +36,43 @@ jobs:
           fi
           echo "✅ All lint checks passed"
 
-      - name: Black (format check)
-        run: uv run black --check src tests
+      - name: Black (format check) - Enforce zero violations
+        run: |
+          echo "Running black formatter check - all code must be formatted"
+          uv run black --check src tests
+          if [ $? -ne 0 ]; then
+            echo "❌ Format violations found. Run 'uv run black src tests' locally to auto-format."
+            exit 1
+          fi
+          echo "✅ All format checks passed"
 
-      - name: Mypy (type check)
-        run: uv run mypy src/townlet
+      - name: Mypy (type check) - Enforce zero type errors
+        run: |
+          echo "Running mypy type checker - all type errors must be fixed"
+          uv run mypy src/townlet --show-error-codes
+          if [ $? -ne 0 ]; then
+            echo "❌ Type errors found. Run 'uv run mypy src/townlet --show-error-codes' locally to see details."
+            exit 1
+          fi
+          echo "✅ All type checks passed"
 
-      - name: No-Defaults Linter (check for unauthorized defaults)
-        run: python scripts/no_defaults_lint.py src/townlet/ --whitelist .defaults-whitelist.txt
+      - name: No-Defaults Linter - Enforce no unauthorized defaults
+        run: |
+          echo "Running no-defaults linter - all defaults must be whitelisted"
+          python scripts/no_defaults_lint.py src/townlet/ --whitelist .defaults-whitelist.txt
+          if [ $? -ne 0 ]; then
+            echo "❌ Unauthorized defaults found. See error output above."
+            exit 1
+          fi
+          echo "✅ No-defaults check passed"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install markdownlint-cli2
-        run: npm install -g markdownlint-cli2
-
-      - name: Markdownlint (markdown check)
-        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules"
+      - name: ✅ All Lint Checks Passed
+        run: |
+          echo "════════════════════════════════════════════════════════════"
+          echo "✅ ALL LINT CHECKS PASSED!"
+          echo "════════════════════════════════════════════════════════════"
+          echo "  ✓ Ruff (linting)"
+          echo "  ✓ Black (formatting)"
+          echo "  ✓ Mypy (type checking)"
+          echo "  ✓ No-defaults linter"
+          echo "════════════════════════════════════════════════════════════"

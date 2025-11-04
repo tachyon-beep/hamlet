@@ -469,7 +469,7 @@ Text viz is **NOT** sufficient for:
 def render_state_text(env):
     """Render environment state as ASCII text."""
     substrate_type = env.substrate_config.type
-    
+
     if substrate_type == "grid":
         topology = env.substrate_config.grid.topology
         if topology == "square":
@@ -493,25 +493,25 @@ def render_2d_square_grid(env):
     """Render 2D square grid as ASCII."""
     width, height = env.substrate.dimensions
     grid = [[" " for _ in range(width)] for _ in range(height)]
-    
+
     # Place affordances
     for aff in env.affordances:
         x, y = aff.position
         grid[y][x] = aff.icon[0].upper()  # "B" for Bed, "H" for Hospital
-    
+
     # Place agents
     for agent in env.agents:
         if agent.alive:
             x, y = agent.position
             grid[y][x] = "A"
-    
+
     # Render with box drawing characters
     lines = ["┌" + "─┬" * (width - 1) + "─┐"]
     for row in grid:
         lines.append("│" + "│".join(row) + "│")
         lines.append("├" + "─┼" * (width - 1) + "─┤")
     lines[-1] = "└" + "─┴" * (width - 1) + "─┘"
-    
+
     return "\n".join(lines)
 ```
 
@@ -536,23 +536,23 @@ def render_3d_cubic_grid(env):
     """Render 3D cubic grid as multiple 2D floor projections."""
     width, height, depth = env.substrate.dimensions
     floors = []
-    
+
     for z in range(depth):
         grid = [[" " for _ in range(width)] for _ in range(height)]
-        
+
         # Place affordances on this floor
         for aff in env.affordances:
             x, y, z_aff = aff.position
             if z_aff == z:
                 grid[y][x] = aff.icon[0].upper()
-        
+
         # Place agents on this floor
         for agent in env.agents:
             if agent.alive:
                 x, y, z_agent = agent.position
                 if z_agent == z:
                     grid[y][x] = "A"
-        
+
         # Render floor
         floor_str = f"Floor {z}:\n"
         floor_str += "┌" + "─┬" * (width - 1) + "─┐\n"
@@ -560,7 +560,7 @@ def render_3d_cubic_grid(env):
             floor_str += "│" + "│".join(row) + "│\n"
         floor_str += "└" + "─┴" * (width - 1) + "─┘"
         floors.append(floor_str)
-    
+
     return "\n\n".join(floors)
 ```
 
@@ -599,13 +599,13 @@ def render_hex_grid(env):
     # Simplified ASCII representation (offset rows)
     # Full implementation would use proper hex ASCII art
     q_max, r_max = env.substrate.dimensions
-    
+
     lines = []
     for r in range(r_max):
         # Offset odd rows for hex layout
         offset = "  " if r % 2 == 1 else ""
         row = offset
-        
+
         for q in range(q_max):
             # Find what's at (q, r)
             cell = " "
@@ -615,10 +615,10 @@ def render_hex_grid(env):
             for agent in env.agents:
                 if agent.alive and agent.position == (q, r):
                     cell = "A"
-            
+
             row += f"[{cell}] "
         lines.append(row)
-    
+
     return "\n".join(lines)
 ```
 
@@ -639,26 +639,26 @@ def render_hex_grid(env):
 def render_graph_substrate(env):
     """Render graph substrate as node list with edges."""
     lines = []
-    
+
     # List nodes
     lines.append("Nodes:")
     for node_id in range(env.substrate.num_nodes):
         # Find what's at this node
         affordances = [aff.type for aff in env.affordances if aff.position == node_id]
         agents = [agent.id for agent in env.agents if agent.alive and agent.position == node_id]
-        
+
         node_desc = f"  {node_id}: "
         if affordances:
             node_desc += f"[{', '.join(affordances)}]"
         if agents:
             node_desc += f" (Agent: {', '.join(agents)})"
         lines.append(node_desc)
-    
+
     # Show edges
     lines.append("\nEdges:")
     for i, j in env.substrate.edges:
         lines.append(f"  {i} ←→ {j}")
-    
+
     return "\n".join(lines)
 ```
 
@@ -670,7 +670,7 @@ Nodes:
   1: [Hospital]
   2: [Job]
   3: [Gym]
-  4: 
+  4:
 
 Edges:
   0 ←→ 1
@@ -689,7 +689,7 @@ def render_aspatial_state(env):
     lines = ["=== ASPATIAL UNIVERSE ==="]
     lines.append("(No spatial positioning)")
     lines.append("")
-    
+
     # Show agent meters
     for agent in env.agents:
         if agent.alive:
@@ -697,13 +697,13 @@ def render_aspatial_state(env):
             for meter_name, value in agent.meters.items():
                 bar = "█" * int(value * 20) + "░" * (20 - int(value * 20))
                 lines.append(f"  {meter_name:12s}: [{bar}] {value:.2f}")
-    
+
     # Show available affordances (no positions)
     lines.append("")
     lines.append("Available affordances:")
     for aff in env.affordances:
         lines.append(f"  - {aff.type}")
-    
+
     return "\n".join(lines)
 ```
 

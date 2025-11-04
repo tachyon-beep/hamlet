@@ -23,9 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from townlet.demo.unified_server import UnifiedServer
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 logger = logging.getLogger(__name__)
 
 
@@ -84,9 +82,7 @@ Note:
         help="Port for inference WebSocket server (default: 8766)",
     )
 
-    parser.add_argument(
-        "--debug", action="store_true", help="Enable debug-level logging for troubleshooting"
-    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug-level logging for troubleshooting")
 
     return parser.parse_args()
 
@@ -112,9 +108,7 @@ def main():
         config_file = config_input
         if not config_file.exists():
             logger.error(f"Config file not found: {config_file}")
-            logger.error(
-                "Provide a valid config path (directory with training.yaml or legacy YAML file)."
-            )
+            logger.error("Provide a valid config path (directory with training.yaml or legacy YAML file).")
             sys.exit(1)
         config_dir = config_file.parent
 
@@ -123,9 +117,10 @@ def main():
     if total_episodes is None:
         try:
             import yaml
+
             with open(config_file) as f:
                 config = yaml.safe_load(f)
-                total_episodes = config.get('training', {}).get('max_episodes', None)
+                total_episodes = config.get("training", {}).get("max_episodes", None)
                 if total_episodes is None:
                     logger.error("No total_episodes provided and training.max_episodes not found in config")
                     sys.exit(1)

@@ -16,7 +16,7 @@
             :lifetime-progress="store.lifetimeProgress"
             :agent-age="store.agentAge"
           />
-          
+
           <!-- ✅ Projected reward bar (below meters) - always shown when connected -->
           <ProjectedRewardBar
             v-if="isConnected"

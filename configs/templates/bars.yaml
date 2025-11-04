@@ -3,7 +3,7 @@
 #
 # Hierarchy (following SDW structure):
 # - PIVOTAL: Death conditions (health, energy)
-# - PRIMARY: Major needs that strongly affect pivotal (satiation, fitness, mood)  
+# - PRIMARY: Major needs that strongly affect pivotal (satiation, fitness, mood)
 # - SECONDARY: Quality of life needs (hygiene, social)
 # - RESOURCE: Enables actions but doesn't cascade (money)
 #
@@ -15,7 +15,7 @@ description: "Default meter configuration for Hamlet Level 1.5 (8 meters)"
 
 bars:
   # PIVOTAL METERS: Death if <= 0
-  
+
   - name: "energy"
     index: 0
     tier: "pivotal"
@@ -23,7 +23,7 @@ bars:
     initial: 1.0
     base_depletion: 0.005  # 0.5% per step
     description: "Can you move? Death if depleted. Affected by satiation (fundamental) and mood (specialized)."
-    
+
   - name: "health"
     index: 6
     tier: "pivotal"
@@ -31,9 +31,9 @@ bars:
     initial: 1.0
     base_depletion: 0.0  # No base depletion - entirely handled by fitness modulation (see cascades.yaml)
     description: "Are you alive? Death if depleted. Affected by satiation (fundamental) and fitness (modulation)."
-  
+
   # PRIMARY METERS: Strong effects on pivotal meters
-  
+
   - name: "satiation"
     index: 2
     tier: "primary"
@@ -42,7 +42,7 @@ bars:
     base_depletion: 0.004  # 0.4% per step
     description: "Hunger level. FUNDAMENTAL need - affects BOTH pivotal meters when low."
     key_insight: "Food first! Low satiation causes both health decline AND energy exhaustion."
-    
+
   - name: "fitness"
     index: 7
     tier: "primary"
@@ -51,7 +51,7 @@ bars:
     base_depletion: 0.002  # 0.2% per step
     description: "Physical fitness. Modulates health depletion rate (0.5x at 100%, 3.0x at 0%)."
     special: "Uses multiplicative modulation, not threshold cascade."
-    
+
   - name: "mood"
     index: 4
     tier: "primary"
@@ -59,9 +59,9 @@ bars:
     initial: 1.0
     base_depletion: 0.001  # 0.1% per step
     description: "Mental well-being. Affects energy when low (depression → exhaustion)."
-  
+
   # SECONDARY METERS: Quality of life (affect primary meters)
-  
+
   - name: "hygiene"
     index: 1
     tier: "secondary"
@@ -70,7 +70,7 @@ bars:
     base_depletion: 0.003  # 0.3% per step
     description: "Cleanliness. Affects appetite (satiation), exercise ability (fitness), and mood."
     cascade_pattern: "Strong → Primary, Weak → Pivotal"
-    
+
   - name: "social"
     index: 5
     tier: "secondary"
@@ -79,9 +79,9 @@ bars:
     base_depletion: 0.006  # 0.6% per step (decays fastest!)
     description: "Social connection. Strongly affects mood (loneliness → depression)."
     cascade_pattern: "Strong → Mood, Weak → Energy"
-  
+
   # RESOURCE METERS: Enables affordances
-  
+
   - name: "money"
     index: 3
     tier: "resource"
@@ -96,7 +96,7 @@ terminal_conditions:
     operator: "<="
     value: 0.0
     description: "Agent dies if health depletes to zero"
-    
+
   - meter: "energy"
     operator: "<="
     value: 0.0

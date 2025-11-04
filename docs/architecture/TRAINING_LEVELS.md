@@ -6,8 +6,8 @@ This document defines the progression of complexity levels in the Hamlet RL envi
 
 ## Level 1: Full Observability Baseline
 
-**Status:** ✅ Implemented  
-**Config:** `configs/level_1_full_observability.yaml`  
+**Status:** ✅ Implemented
+**Config:** `configs/level_1_full_observability.yaml`
 **Network:** SimpleQNetwork (MLP)
 
 ### Capabilities
@@ -37,8 +37,8 @@ This document defines the progression of complexity levels in the Hamlet RL envi
 
 ## Level 2: Partial Observability (POMDP)
 
-**Status:** ✅ Implemented  
-**Config:** `configs/level_2_pomdp.yaml`  
+**Status:** ✅ Implemented
+**Config:** `configs/level_2_pomdp.yaml`
 **Network:** RecurrentSpatialQNetwork (CNN + LSTM)
 
 ### Capabilities
@@ -87,8 +87,8 @@ Uses **DRQN (Deep Recurrent Q-Network)** with target network to handle temporal 
 
 ## Level 3: Temporal Mechanics
 
-**Status:** ✅ Implemented  
-**Config:** `configs/level_3_temporal.yaml`  
+**Status:** ✅ Implemented
+**Config:** `configs/level_3_temporal.yaml`
 **Network:** RecurrentSpatialQNetwork (CNN + LSTM)
 
 ### Capabilities
@@ -133,8 +133,8 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 
 ## Level 4: Multi-Zone Environment (Future)
 
-**Status:** 🎯 Planned (Phase 6)  
-**Config:** `configs/level_4_multi_zone.yaml` (not yet created)  
+**Status:** 🎯 Planned (Phase 6)
+**Config:** `configs/level_4_multi_zone.yaml` (not yet created)
 **Network:** Hierarchical RL architecture
 
 ### Planned Capabilities
@@ -171,8 +171,8 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 
 ## Level 5: Multi-Agent Competition (Future)
 
-**Status:** 🎯 Planned (Phase 6)  
-**Config:** `configs/level_5_multi_agent.yaml` (not yet created)  
+**Status:** 🎯 Planned (Phase 6)
+**Config:** `configs/level_5_multi_agent.yaml` (not yet created)
 **Network:** RecurrentSpatialQNetwork + Theory of Mind module
 
 ### Planned Capabilities
@@ -210,8 +210,8 @@ Observation includes `time_of_day` (0-23) and `interaction_progress` (0-5) for c
 
 ## Level 6: Emergent Communication (Future)
 
-**Status:** 🎯 Planned (Phase 7)  
-**Config:** `configs/level_6_communication.yaml` (not yet created)  
+**Status:** 🎯 Planned (Phase 7)
+**Config:** `configs/level_6_communication.yaml` (not yet created)
 **Network:** RecurrentSpatialQNetwork + Communication Channel
 
 ### Planned Capabilities

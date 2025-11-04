@@ -69,6 +69,7 @@ Maximum line length is **140 characters** (not 79 or 88).
 ## Common Fixes
 
 ### Unused Imports (F401)
+
 ```python
 # ❌ Bad
 import json
@@ -79,6 +80,7 @@ import json
 ```
 
 ### Modern Type Hints (UP006, UP045)
+
 ```python
 # ❌ Bad
 from typing import List, Optional
@@ -91,6 +93,7 @@ def process(items: list[int]) -> str | None:
 ```
 
 ### Unused Variables (F841)
+
 ```python
 # ❌ Bad
 result = some_function()  # Never used
@@ -100,6 +103,7 @@ _result = some_function()  # Intentionally unused
 ```
 
 ### Line Too Long (E501)
+
 ```python
 # ❌ Bad
 logger.info(f"Very long message with {many} {variables} that exceeds the 140 character limit")

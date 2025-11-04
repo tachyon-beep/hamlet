@@ -26,16 +26,16 @@ modulations:
     source: "fitness"
     target: "health"
     type: "depletion_multiplier"
-    
+
     # Formula: multiplier = base + (range * (1.0 - fitness))
     # fitness=100% (1.0) → multiplier = 0.5x (healthy!)
     # fitness=50% (0.5) → multiplier = 1.75x (moderate)
     # fitness=0% (0.0) → multiplier = 3.0x (unhealthy!)
     base_multiplier: 0.5
     range: 2.5  # 0.5 + 2.5 = 3.0 max multiplier
-    
+
     baseline_depletion: 0.001  # From bars.yaml health.base_depletion
-    
+
     note: "This creates smooth fitness gradient - unfit agents get sick faster"
 
 # Threshold-based cascades (our validated math)
@@ -47,7 +47,7 @@ modulations:
 cascades:
   # PRIMARY → PIVOTAL (AGGRESSIVE EFFECTS)
   # These are the most important - failure to meet major needs causes death
-  
+
   - name: "satiation_to_health"
     description: "Starvation makes you sick (FUNDAMENTAL need)"
     category: "primary_to_pivotal"
@@ -57,10 +57,10 @@ cascades:
     target_index: 6
     threshold: 0.3  # Below 30%
     strength: 0.004  # 0.4% penalty at threshold, ~0.8% at 0%
-    
+
     teaching_note: "SATIATION IS FUNDAMENTAL - affects BOTH pivotal meters"
     why_it_matters: "Hungry → sick → death. Food must be prioritized."
-    
+
   - name: "satiation_to_energy"
     description: "Hunger makes you exhausted (FUNDAMENTAL need)"
     category: "primary_to_pivotal"
@@ -70,10 +70,10 @@ cascades:
     target_index: 0
     threshold: 0.3
     strength: 0.005  # 0.5% penalty at threshold, ~1.0% at 0%
-    
+
     teaching_note: "SATIATION IS FUNDAMENTAL - affects BOTH pivotal meters"
     why_it_matters: "Hungry → exhausted → death. Food must be prioritized."
-  
+
   - name: "mood_to_energy"
     description: "Depression leads to exhaustion (specialized effect)"
     category: "primary_to_pivotal"
@@ -83,13 +83,13 @@ cascades:
     target_index: 0
     threshold: 0.3
     strength: 0.005  # 0.5% penalty at threshold, ~1.0% at 0%
-    
+
     teaching_note: "Mental health affects physical energy"
     why_it_matters: "Depressed → exhausted → death"
-  
+
   # SECONDARY → PRIMARY (AGGRESSIVE EFFECTS)
   # Quality of life problems cascade to major needs
-  
+
   - name: "hygiene_to_satiation"
     description: "Being dirty reduces appetite"
     category: "secondary_to_primary"
@@ -99,9 +99,9 @@ cascades:
     target_index: 2
     threshold: 0.3
     strength: 0.002  # 0.2% penalty at threshold
-    
+
     teaching_note: "Poor hygiene affects appetite"
-    
+
   - name: "hygiene_to_fitness"
     description: "Being dirty makes exercise harder"
     category: "secondary_to_primary"
@@ -111,9 +111,9 @@ cascades:
     target_index: 7
     threshold: 0.3
     strength: 0.002  # 0.2% penalty at threshold
-    
+
     teaching_note: "Hard to work out when you're grimy"
-  
+
   - name: "hygiene_to_mood"
     description: "Being dirty makes you feel bad"
     category: "secondary_to_primary"
@@ -123,9 +123,9 @@ cascades:
     target_index: 4
     threshold: 0.3
     strength: 0.003  # 0.3% penalty at threshold (stronger than fitness/satiation)
-    
+
     teaching_note: "Poor hygiene affects mental health"
-  
+
   - name: "social_to_mood"
     description: "Loneliness causes depression"
     category: "secondary_to_primary"
@@ -135,13 +135,13 @@ cascades:
     target_index: 4
     threshold: 0.3
     strength: 0.004  # 0.4% penalty at threshold (STRONGEST secondary effect)
-    
+
     teaching_note: "Social isolation strongly affects mental health"
     why_it_matters: "Loneliness is a powerful force"
-  
+
   # SECONDARY → PIVOTAL (WEAK DIRECT EFFECTS)
   # These exist but are minor compared to the cascades through primary meters
-  
+
   - name: "hygiene_to_health"
     description: "Poor hygiene weakly affects health directly"
     category: "secondary_to_pivotal_weak"
@@ -151,9 +151,9 @@ cascades:
     target_index: 6
     threshold: 0.3
     strength: 0.0005  # 0.05% penalty (WEAK - 10x weaker than satiation)
-    
+
     teaching_note: "Mostly cascades through primary meters, weak direct effect"
-  
+
   - name: "hygiene_to_energy"
     description: "Poor hygiene weakly affects energy directly"
     category: "secondary_to_pivotal_weak"
@@ -163,9 +163,9 @@ cascades:
     target_index: 0
     threshold: 0.3
     strength: 0.0005  # 0.05% penalty (WEAK)
-    
+
     teaching_note: "Mostly cascades through primary meters, weak direct effect"
-  
+
   - name: "social_to_energy"
     description: "Loneliness weakly affects energy directly"
     category: "secondary_to_pivotal_weak"
@@ -175,7 +175,7 @@ cascades:
     target_index: 0
     threshold: 0.3
     strength: 0.0008  # 0.08% penalty (WEAK but stronger than hygiene)
-    
+
     teaching_note: "Mostly cascades through mood, weak direct effect"
 
 # Cascade execution order (important for deterministic behavior)

@@ -28,19 +28,19 @@ affordances:
   # ============================================================================
   # ENERGY RESTORATION
   # ============================================================================
-  
+
   - id: "0"
     name: "Bed"
     category: "energy_restoration"
     interaction_type: "dual"  # Supports both instant and multi-tick
-    
+
     # INSTANT MODE (Level 1: enable_temporal_mechanics=False)
     costs:
       - { meter: "money", amount: 0.05 }  # $5 total
     effects:
       - { meter: "energy", amount: 0.50 }  # +50% instantly
       - { meter: "health", amount: 0.02 }  # +2%
-    
+
     # TEMPORAL MODE (Level 2: enable_temporal_mechanics=True)
     required_ticks: 5
     costs_per_tick:
@@ -50,254 +50,254 @@ affordances:
     completion_bonus:
       - { meter: "energy", amount: 0.125 }  # 25% of 50% = 12.5%
       - { meter: "health", amount: 0.02 }
-    
+
     operating_hours: [0, 24]  # Always available
 
   - id: "1"
     name: "LuxuryBed"
     category: "energy_restoration"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.11 }  # $11
-    
+
     effects:
       - { meter: "energy", amount: 0.75 }  # +75%
       - { meter: "health", amount: 0.05 }  # +5%
-    
+
     # Temporal mode (Level 2) - 6 ticks for luxury rest
     required_ticks: 6
     costs_per_tick:
       - { meter: "money", amount: 0.01833 }  # ~$1.83/tick
-    
+
     effects_per_tick:
       - { meter: "energy", amount: 0.09375 }  # 0.75 * 0.75 / 6 = +9.375%/tick
-    
+
     completion_bonus:
       - { meter: "energy", amount: 0.1875 }  # 0.75 * 0.25 = +18.75% final
       - { meter: "health", amount: 0.05 }  # +5% final
-    
+
     operating_hours: [0, 24]
 
   # ============================================================================
   # HYGIENE RESTORATION
   # ============================================================================
-  
+
   - id: "2"
     name: "Shower"
     category: "hygiene"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.03 }  # $3
-    
+
     effects:
       - { meter: "hygiene", amount: 0.40 }  # +40%
-    
+
     # Temporal mode (Level 2) - 3 ticks for thorough cleaning
     required_ticks: 3
     costs_per_tick:
       - { meter: "money", amount: 0.01 }  # $1/tick
-    
+
     effects_per_tick:
       - { meter: "hygiene", amount: 0.10 }  # 0.40 * 0.75 / 3 = +10%/tick
-    
+
     completion_bonus:
       - { meter: "hygiene", amount: 0.10 }  # 0.40 * 0.25 = +10% final
-    
+
     operating_hours: [0, 24]
 
   # ============================================================================
   # SATIATION (FOOD)
   # ============================================================================
-  
+
   - id: "3"
     name: "HomeMeal"
     category: "food"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.03 }  # $3
-    
+
     effects:
       - { meter: "satiation", amount: 0.45 }  # +45%
       - { meter: "health", amount: 0.03 }     # +3%
-    
+
     # Temporal mode (Level 2) - 3 ticks for cooking and eating
     required_ticks: 3
     costs_per_tick:
       - { meter: "money", amount: 0.01 }  # $1/tick
-    
+
     effects_per_tick:
       - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.75 / 3 = +11.25%/tick
-    
+
     completion_bonus:
       - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.25 = +11.25% final
       - { meter: "health", amount: 0.03 }  # +3% final
-    
+
     operating_hours: [0, 24]
 
   - id: "4"
     name: "FastFood"
     category: "food"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.10 }  # $10
-    
+
     effects:
       - { meter: "satiation", amount: 0.45 }  # +45%
       - { meter: "energy", amount: 0.15 }     # +15%
       - { meter: "social", amount: 0.01 }     # +1%
       - { meter: "fitness", amount: -0.03 }   # -3% (penalty!)
       - { meter: "health", amount: -0.02 }    # -2% (penalty!)
-    
+
     # Temporal mode (Level 2) - 2 ticks for quick meal
     required_ticks: 2
     costs_per_tick:
       - { meter: "money", amount: 0.05 }  # $5/tick
-    
+
     effects_per_tick:
       - { meter: "satiation", amount: 0.16875 }  # 0.45 * 0.75 / 2 = +16.875%/tick
       - { meter: "energy", amount: 0.05625 }     # 0.15 * 0.75 / 2 = +5.625%/tick
-    
+
     completion_bonus:
       - { meter: "satiation", amount: 0.1125 }  # 0.45 * 0.25 = +11.25% final
       - { meter: "energy", amount: 0.0375 }     # 0.15 * 0.25 = +3.75% final
       - { meter: "social", amount: 0.01 }       # +1% final
       - { meter: "fitness", amount: -0.03 }     # -3% penalty at end
       - { meter: "health", amount: -0.02 }      # -2% penalty at end
-    
+
     operating_hours: [0, 24]
 
   # ============================================================================
   # HEALTH RESTORATION
   # ============================================================================
-  
+
   - id: "5"
     name: "Doctor"
     category: "health"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.08 }  # $8
-    
+
     effects:
       - { meter: "health", amount: 0.25 }  # +25%
-    
+
     # Temporal mode (Level 2) - 2 ticks for examination
     required_ticks: 2
     costs_per_tick:
       - { meter: "money", amount: 0.04 }  # $4/tick
-    
+
     effects_per_tick:
       - { meter: "health", amount: 0.09375 }  # 0.25 * 0.75 / 2 = +9.375%/tick
-    
+
     completion_bonus:
       - { meter: "health", amount: 0.0625 }  # 0.25 * 0.25 = +6.25% final
-    
+
     operating_hours: [8, 18]  # Business hours (8am-6pm)
 
   - id: "6"
     name: "Hospital"
     category: "health"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.15 }  # $15
-    
+
     effects:
       - { meter: "health", amount: 0.40 }  # +40%
-    
+
     # Temporal mode (Level 2) - 3 ticks for emergency treatment
     required_ticks: 3
     costs_per_tick:
       - { meter: "money", amount: 0.05 }  # $5/tick
-    
+
     effects_per_tick:
       - { meter: "health", amount: 0.10 }  # 0.40 * 0.75 / 3 = +10%/tick
-    
+
     completion_bonus:
       - { meter: "health", amount: 0.10 }  # 0.40 * 0.25 = +10% final
-    
+
     operating_hours: [0, 24]  # Emergency - always open
 
   # ============================================================================
   # MOOD RESTORATION
   # ============================================================================
-  
+
   - id: "7"
     name: "Therapist"
     category: "mood"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.15 }  # $15
-    
+
     effects:
       - { meter: "mood", amount: 0.40 }  # +40%
-    
+
     # Temporal mode (Level 2) - 3 ticks for therapy session
     required_ticks: 3
     costs_per_tick:
       - { meter: "money", amount: 0.05 }  # $5/tick
-    
+
     effects_per_tick:
       - { meter: "mood", amount: 0.10 }  # 0.40 * 0.75 / 3 = +10%/tick
-    
+
     completion_bonus:
       - { meter: "mood", amount: 0.10 }  # 0.40 * 0.25 = +10% final
-    
+
     operating_hours: [8, 18]  # Business hours
 
   - id: "8"
     name: "Recreation"
     category: "mood"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.06 }  # $6
-    
+
     effects:
       - { meter: "mood", amount: 0.25 }    # +25%
       - { meter: "energy", amount: 0.12 }  # +12%
-    
+
     # Temporal mode (Level 2) - 2 ticks for recreational activity
     required_ticks: 2
     costs_per_tick:
       - { meter: "money", amount: 0.03 }  # $3/tick
-    
+
     effects_per_tick:
       - { meter: "mood", amount: 0.09375 }    # 0.25 * 0.75 / 2 = +9.375%/tick
       - { meter: "energy", amount: 0.045 }    # 0.12 * 0.75 / 2 = +4.5%/tick
-    
+
     completion_bonus:
       - { meter: "mood", amount: 0.0625 }   # 0.25 * 0.25 = +6.25% final
       - { meter: "energy", amount: 0.03 }   # 0.12 * 0.25 = +3% final
-    
+
     operating_hours: [8, 22]  # 8am-10pm
 
   # ============================================================================
   # SOCIAL
   # ============================================================================
-  
+
   - id: "9"
     name: "Bar"
     category: "social"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.15 }  # $15
-    
+
     effects:
       - { meter: "social", amount: 0.50 }    # +50% (BEST social!)
       - { meter: "mood", amount: 0.25 }      # +25%
@@ -305,17 +305,17 @@ affordances:
       - { meter: "energy", amount: -0.20 }   # -20% (drunk/tired)
       - { meter: "hygiene", amount: -0.15 }  # -15% (messy)
       - { meter: "health", amount: -0.05 }   # -5% (hangover)
-    
+
     # Temporal mode (Level 2) - 2 ticks for full night out
     required_ticks: 2
     costs_per_tick:
       - { meter: "money", amount: 0.075 }  # $7.50/tick
-    
+
     effects_per_tick:
       - { meter: "social", amount: 0.1875 }   # 0.50 * 0.75 / 2 = +18.75%/tick
       - { meter: "mood", amount: 0.09375 }    # 0.25 * 0.75 / 2 = +9.375%/tick
       - { meter: "satiation", amount: 0.1125 }  # 0.30 * 0.75 / 2 = +11.25%/tick
-    
+
     completion_bonus:
       - { meter: "social", amount: 0.125 }   # 0.50 * 0.25 = +12.5% final
       - { meter: "mood", amount: 0.0625 }    # 0.25 * 0.25 = +6.25% final
@@ -323,150 +323,150 @@ affordances:
       - { meter: "energy", amount: -0.20 }   # -20% (drunk/tired) - at end
       - { meter: "hygiene", amount: -0.15 }  # -15% (messy) - at end
       - { meter: "health", amount: -0.05 }   # -5% (hangover) - at end
-    
+
     operating_hours: [18, 28]  # 6pm-4am (wraparound format: 18 to 28=4am next day)
 
   # ============================================================================
   # INCOME GENERATION
   # ============================================================================
-  
+
   - id: "10"
     name: "Job"
     category: "income"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs: []  # FREE (you get paid!)
-    
+
     effects:
       - { meter: "money", amount: 0.225 }   # +$22.50
       - { meter: "energy", amount: -0.15 }  # -15%
       - { meter: "social", amount: 0.02 }   # +2%
       - { meter: "health", amount: -0.03 }  # -3%
-    
+
     # Temporal mode (Level 2) - 4 ticks for a full shift
     required_ticks: 4
     costs_per_tick: []  # FREE
-    
+
     effects_per_tick:
       - { meter: "money", amount: 0.05625 }  # 0.225 * 0.75 / 4 = +$5.625/tick
-    
+
     completion_bonus:
       - { meter: "money", amount: 0.05625 }  # 0.225 * 0.25 = +$5.625 final (total = $28.125)
       - { meter: "energy", amount: -0.15 }  # -15% at end of shift
       - { meter: "social", amount: 0.02 }   # +2% at end
       - { meter: "health", amount: -0.03 }  # -3% at end
-    
+
     operating_hours: [8, 18]  # Business hours
 
   - id: "11"
     name: "Labor"
     category: "income"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs: []  # FREE (you get paid!)
-    
+
     effects:
       - { meter: "money", amount: 0.150 }    # +$30
       - { meter: "energy", amount: -0.20 }  # -20%
       - { meter: "fitness", amount: -0.05 } # -5%
       - { meter: "health", amount: -0.05 }  # -5%
       - { meter: "social", amount: 0.01 }   # +1%
-    
+
     # Temporal mode (Level 2) - 4 ticks for hard labor
     required_ticks: 4
     costs_per_tick: []  # FREE
-    
+
     effects_per_tick:
       - { meter: "money", amount: 0.075 }  # 0.30 * 0.75 / 4 = +$7.50/tick
-    
+
     completion_bonus:
       - { meter: "money", amount: 0.075 }    # 0.30 * 0.25 = +$7.50 final (total = $37.50)
       - { meter: "energy", amount: -0.20 }  # -20% at end
       - { meter: "fitness", amount: -0.05 } # -5% at end
       - { meter: "health", amount: -0.05 }  # -5% at end
       - { meter: "social", amount: 0.01 }   # +1% at end
-    
+
     operating_hours: [8, 18]  # Business hours
 
   # ============================================================================
   # FITNESS
   # ============================================================================
-  
+
   - id: "12"
     name: "Gym"
     category: "fitness"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs:
       - { meter: "money", amount: 0.08 }  # $8
-    
+
     effects:
       - { meter: "fitness", amount: 0.30 }  # +30%
       - { meter: "energy", amount: -0.08 }  # -8%
-    
+
     # Temporal mode (Level 2) - 3 ticks for workout
     required_ticks: 3
     costs_per_tick:
       - { meter: "money", amount: 0.02667 }  # ~$2.67/tick
-    
+
     effects_per_tick:
       - { meter: "fitness", amount: 0.075 }  # 0.30 * 0.75 / 3 = +7.5%/tick
-    
+
     completion_bonus:
       - { meter: "fitness", amount: 0.075 }  # 0.30 * 0.25 = +7.5% final
       - { meter: "energy", amount: -0.08 }  # -8% at end
-    
+
     operating_hours: [6, 22]  # 6am-10pm
 
   - id: "13"
     name: "Park"
     category: "fitness"
     interaction_type: "dual"
-    
+
     # Instant mode (Level 1)
     costs: []  # FREE!
-    
+
     effects:
       - { meter: "fitness", amount: 0.20 }  # +20%
       - { meter: "social", amount: 0.15 }   # +15%
       - { meter: "mood", amount: 0.15 }     # +15%
       - { meter: "energy", amount: -0.15 }  # -15%
-    
+
     # Temporal mode (Level 2) - 3 ticks for outdoor activity
     required_ticks: 3
     costs_per_tick: []  # FREE!
-    
+
     effects_per_tick:
       - { meter: "fitness", amount: 0.05 }  # 0.20 * 0.75 / 3 = +5%/tick
       - { meter: "social", amount: 0.0375 }  # 0.15 * 0.75 / 3 = +3.75%/tick
       - { meter: "mood", amount: 0.0375 }    # 0.15 * 0.75 / 3 = +3.75%/tick
-    
+
     completion_bonus:
       - { meter: "fitness", amount: 0.05 }  # 0.20 * 0.25 = +5% final
       - { meter: "social", amount: 0.0375 }  # 0.15 * 0.25 = +3.75% final
       - { meter: "mood", amount: 0.0375 }    # 0.15 * 0.25 = +3.75% final
       - { meter: "energy", amount: -0.15 }  # -15% at end
-    
+
     operating_hours: [6, 22]  # 6am-10pm
 
   # ============================================================================
   # COFFEE SHOP (Not in hardcoded yet - commented out)
   # ============================================================================
-  
+
   # - id: 14
   #   name: "CoffeeShop"
   #   category: "energy"
   #   interaction_type: "instant"
-  #   
+  #
   #   costs:
   #     - { meter: "money", amount: 0.04 }  # $4
-  #   
+  #
   #   effects:
   #     - { meter: "energy", amount: 0.20 }  # +20%
   #     - { meter: "mood", amount: 0.10 }    # +10%
   #     - { meter: "social", amount: 0.05 }  # +5%
-  #   
+  #
   #   operating_hours: [6, 20]  # 6am-8pm

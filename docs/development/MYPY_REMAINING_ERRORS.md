@@ -1,115 +1,110 @@
-# Remaining MyPy Type Errors
+# MyPy Type Errors - COMPLETED ✅
 
 ## Summary
 
-**Total Remaining**: 30 errors across 2 files
-**Completed**: 31 errors fixed (51% done - HALFWAY THERE!)
+**Total Remaining**: 0 errors
+**Completed**: 61 errors fixed (100% done - ALL MYPY ERRORS RESOLVED!)
 
-## Files Fixed ✅
-- `database.py` (3 errors) - SQL parameter typing
-- `replay.py` (4 errors) - Import stubs, database typing
-- `recorder.py` (4 errors) - Import stubs, position tuple casting
-- `video_export.py` (5 errors) - None checks, method name
-- `vectorized.py` (15 errors) - Union types, Tensor typing, return annotations
-  - Fixed replay buffer Union narrowing with isinstance()
-  - Fixed RecurrentSpatialQNetwork casting for method calls
-  - Fixed Tensor vs float type annotations
-  - Fixed return type annotations
-  - Renamed RND loss variable to avoid shadowing
+## All Files Fixed ✅
 
-## Remaining Errors by File
+1. **`database.py`** (3 errors) - SQL parameter typing
+2. **`replay.py`** (4 errors) - Import stubs, database typing
+3. **`recorder.py`** (4 errors) - Import stubs, position tuple casting
+4. **`video_export.py`** (5 errors) - None checks, method name
+5. **`vectorized.py`** (15 errors) - Union types, Tensor typing, return annotations
+   - Fixed replay buffer Union narrowing with isinstance()
+   - Fixed RecurrentSpatialQNetwork casting for method calls
+   - Fixed Tensor vs float type annotations
+   - Fixed return type annotations
+   - Renamed RND loss variable to avoid shadowing
+   - **BONUS**: Discovered and fixed RND loss tracking bug (TDD)
+6. **`unified_server.py`** (9 errors) - Path None checks, missing attributes
+   - Fixed checkpoint_dir None checks with assertions
+   - Removed non-existent frontend_port and open_browser attributes
+   - Added dynamic port extraction from npm output
+7. **`live_inference.py`** (21 errors) - None checks, type annotations
+   - Fixed config_path type annotation (Path | None)
+   - Added affordance_interactions type annotation (dict[str, int])
+   - Added assertions for env and population in state broadcast
+   - Replaced AFFORDANCE_CONFIGS with affordance_engine.get_required_ticks()
+   - Added None check for replay metadata
 
-### 1. `vectorized.py` (14 errors) - PRIORITY: HIGH
+## Fix Patterns Applied
 
-**Union Type Issues** (8 errors):
-- Lines 518, 634: `SequentialReplayBuffer` missing `push()` / `sample()`
-- Line 548: `ReplayBuffer` missing `sample_sequences()`
-- Need to narrow union types with `isinstance()` checks
+### 1. Type Narrowing with isinstance()
 
-**Tensor Type Issues** (6 errors):
-- Lines 452, 559, 570, 631: `"Tensor" not callable`
-- Lines 599, 642: Assigning Tensor to float variable
-- Lines 606, 614, 647, 652: Calling `.item()` / `.backward()` on float
-
-**Fix Strategy**:
 ```python
-# Union narrowing example
+# For Union replay buffer types
 if isinstance(self.replay_buffer, SequentialReplayBuffer):
     batch = self.replay_buffer.sample_sequences(batch_size)
 else:
-    batch = self.replay_buffer.sample(batch_size)
-
-# Tensor typing example
-loss: torch.Tensor = F.mse_loss(...)  # Not float!
-loss_value: float = loss.item()  # Then extract float
+    standard_buffer = cast(ReplayBuffer, self.replay_buffer)
+    standard_buffer.push(...)
 ```
 
-### 2. `live_inference.py` (25 errors) - PRIORITY: MEDIUM
+### 2. Assertions for Non-None Guarantees
 
-**None Check Needed** (20+ errors):
-- Lines 319, 660, 663, 682, 686, 721, 738-739, 762, 768, 772, 779-780, 783
-- `VectorizedPopulation | None` and `VectorizedHamletEnv | None` accessed without guards
-
-**Missing Attributes** (3 errors):
-- Line 770: `AFFORDANCE_CONFIGS` doesn't exist in module
-- Lines 836-839: Dict indexing without None check
-
-**Fix Strategy**:
 ```python
-# Add assertions or guards
-if self.population is None or self.env is None:
-    raise RuntimeError("System not initialized")
-
-# Then access safely
-q_network = self.population.q_network
-positions = self.env.positions
+# When initialization guarantees non-None values
+assert self.env is not None, "Environment must be initialized"
+assert self.population is not None, "Population must be initialized"
+# Now mypy knows they're not None
 ```
 
-### 2. `unified_server.py` (9 errors) - PRIORITY: MEDIUM (server code)
+### 3. Explicit Tensor Type Annotations
 
-**None Checks Needed** (4 errors):
-- Lines 350, 392, 479: `Path | None` accessed without check
-- Line 490: Incompatible float assignment
-
-**Missing Attributes** (2 errors):
-- Lines 482, 490, 493, 495-496: `frontend_port` attribute doesn't exist
-
-**Fix Strategy**:
 ```python
-# Add type narrowing
-if self.checkpoint_dir is None:
-    raise ValueError("Checkpoint directory required")
-
-# Use correct attribute name (likely `self._frontend_port` or similar)
+# Distinguish Tensor from float
+loss: torch.Tensor = F.mse_loss(q_pred, q_target)
+loss_value: float = loss.item()  # Extract scalar
 ```
 
-## Recommended Fix Order
+### 4. Type Casting for Method Access
 
-1. **✅ DONE: vectorized.py** (Core training code - HIGH priority)
-   - ✅ Fixed all 15 errors
-   - Time taken: ~25 mins
+```python
+# Access methods on Union types
+if self.is_recurrent:
+    recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
+    q_values, new_hidden = recurrent_network(obs)
+    recurrent_network.set_hidden_state(new_hidden)
+```
 
-2. **live_inference.py** (Demo/visualization - NOW HIGHEST priority)
-   - Add initialization checks at start of methods
-   - Add None guards throughout
-   - Estimated time: 20-30 mins
+### 5. None Checks Before Indexing
 
-3. **unified_server.py** (Server code - MEDIUM priority)
-   - Fix attribute names
-   - Add path checks
-   - Estimated time: 10-15 mins
+```python
+# For dict/list that could be None
+metadata = self.replay_manager.get_metadata()
+if metadata is None:
+    return {"error": "No metadata"}
+# Now safe to index
+survival_steps = metadata["survival_steps"]
+```
 
-## Total Estimated Time Remaining: ~45 mins
+### 6. Type Annotations for Inferred Collections
 
-## Commands
+```python
+# Add explicit types for dicts/lists
+self.affordance_interactions: dict[str, int] = {}
+self.config_path: Path | None = None
+```
+
+## Verification
 
 ```bash
-# Check specific file
-uv run mypy src/townlet/population/vectorized.py
+# Final verification - ALL PASSING! ✅
+$ uv run mypy src/townlet --show-error-codes
+Success: no issues found in 44 source files
 
-# Check all with detailed output
-uv run mypy src/townlet --show-error-codes
-
-# Run after fixing
-uv run mypy src/townlet && echo "✅ All type checks passing!"
+# Check specific file if needed
+$ uv run mypy src/townlet/demo/live_inference.py
+Success: no issues found in 1 source file
 ```
+
+## Key Achievements
+
+1. **100% mypy coverage** - All 61 errors across 7 files resolved
+2. **Bug discovery** - Found and fixed RND loss tracking bug using TDD
+3. **Type safety** - Improved code robustness with proper type narrowing
+4. **Pattern library** - Documented 6 reusable fix patterns for future work
+
+**Total time**: ~2 hours (vectorized: 25min, unified_server: 15min, live_inference: 30min, testing: 20min, documentation: 30min)

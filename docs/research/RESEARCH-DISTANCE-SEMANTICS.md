@@ -250,8 +250,8 @@ class SquareGridSubstrate(SpatialSubstrate):
 class HexagonalGridSubstrate(SpatialSubstrate):
     def is_adjacent(self, pos1: torch.Tensor, pos2: torch.Tensor) -> torch.Tensor:
         # Hex: All 6 neighbors are adjacent
-        hex_distance = (torch.abs(pos1[:, 0] - pos2[:, 0]) + 
-                       torch.abs(pos1[:, 1] - pos2[:, 1]) + 
+        hex_distance = (torch.abs(pos1[:, 0] - pos2[:, 0]) +
+                       torch.abs(pos1[:, 1] - pos2[:, 1]) +
                        torch.abs(pos1[:, 0] + pos1[:, 1] - pos2[:, 0] - pos2[:, 1])) / 2
         return hex_distance <= 1
 
@@ -457,7 +457,7 @@ class SpatialSubstrate(ABC):
     @abstractmethod
     def is_adjacent(self, pos1: torch.Tensor, pos2: torch.Tensor) -> torch.Tensor:
         """Check if positions are adjacent (can interact).
-        
+
         Returns:
             bool tensor [batch_size]: True if pos1 can interact with pos2
         """
@@ -465,10 +465,10 @@ class SpatialSubstrate(ABC):
 
     def compute_distance(self, pos1: torch.Tensor, pos2: torch.Tensor) -> torch.Tensor:
         """Compute distance between positions (optional, for advanced use).
-        
+
         Default implementation: adjacency-based (0 if adjacent, inf otherwise).
         Substrates can override for continuous distance metrics.
-        
+
         Returns:
             float tensor [batch_size]: Distance from pos1 to pos2
         """
@@ -561,12 +561,12 @@ def get_action_masks(self):
     for affordance_name, affordance_pos in self.affordances.items():
         # Check adjacency (substrate-aware)
         adjacent = self.substrate.is_adjacent(self.positions, affordance_pos)
-        
+
         # Check operating hours (temporal mechanics)
         if self.enable_temporal_mechanics:
             if not self.affordance_engine.is_affordance_open(affordance_name, self.time_of_day):
                 adjacent = torch.zeros_like(adjacent)  # Closed = not adjacent
-        
+
         can_interact |= adjacent
 
     action_masks[:, 4] = can_interact  # INTERACT action
@@ -651,7 +651,7 @@ def get_interaction_range(self, affordance_name: str) -> int:
 # vectorized_env.py
 for affordance_name, affordance_pos in self.affordances.items():
     interaction_range = self.affordance_engine.get_interaction_range(affordance_name)
-    
+
     if interaction_range == 0:
         # Use adjacency check (fast, substrate-aware)
         can_interact = self.substrate.is_adjacent(self.positions, affordance_pos)

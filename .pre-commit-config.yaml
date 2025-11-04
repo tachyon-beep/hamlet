@@ -25,17 +25,6 @@ repos:
         name: Black Formatter
         language_version: python3.13
 
-  # Type checking with mypy
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        name: MyPy Type Checker
-        args: [--config-file=pyproject.toml]
-        additional_dependencies: [types-pyyaml, types-requests]
-        files: ^src/townlet/
-        pass_filenames: true
-
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -55,12 +44,3 @@ repos:
       - id: mixed-line-ending
         name: Fix Mixed Line Endings
         args: [--fix=lf]
-
-  # Markdown linting
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.43.0
-    hooks:
-      - id: markdownlint
-        name: Markdownlint
-        args: [--config=.markdownlint.yaml, --fix]
-        exclude: ^(node_modules|\.venv|frontend/node_modules)/

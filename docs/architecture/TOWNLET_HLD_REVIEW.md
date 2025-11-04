@@ -1,8 +1,8 @@
 # Townlet v2.5: Complete Peer Review & Implementation Guide
 
-**Document Version**: 1.0  
-**Date**: 3 November 2025  
-**Status**: Master Reference Document  
+**Document Version**: 1.0
+**Date**: 3 November 2025
+**Status**: Master Reference Document
 **Author**: Principal Technical Advisor (AI) + Lead Architect Review
 
 ---
@@ -286,10 +286,10 @@ For every piece of information the agent might receive, ask:
 IF curriculum_level in [L0, L1]:
     # Pedagogical exception - scaffolding to teach basics
     allowed = True  # give map, full observability
-    
+
 ELSE:
     question = "Can a human observer perceive this?"
-    
+
     IF answer == YES:
         allowed = True
         examples:
@@ -297,7 +297,7 @@ ELSE:
             - "Can I see this person looks tired?" → public_cues
             - "Can I hear my family member's signal?" → family_comm_channel
             - "Can I tell the time?" → time_of_day
-    
+
     IF answer == NO:
         allowed = False
         examples:
@@ -392,16 +392,16 @@ reward = 0.0
 
 if action == "sleep":
     reward += 0.1  # "good job sleeping!"
-    
+
 if action == "eat":
     reward += 0.1  # "good job eating!"
-    
+
 if action == "work":
     reward += 0.05  # "good job working!"
-    
+
 if bars['money'] > prev_money:
     reward += 0.1  # "yay you earned money!"
-    
+
 if bars['energy'] > prev_energy:
     reward += 0.05  # "yay you rested!"
 ```
@@ -537,7 +537,7 @@ bars:
     tier: "pivotal"
     initial: 1.0
     base_depletion: 0.005  # -0.5% per tick
-    
+
   - name: "health"
     index: 6
     tier: "pivotal"
@@ -566,7 +566,7 @@ affordances:
     effects_per_tick:
       - { meter: "energy", amount: 0.25 }
     operating_hours: [0, 24]  # always open
-    
+
   - id: "job"
     interaction_type: "multi_tick"
     required_ticks: 8
@@ -626,7 +626,7 @@ modules:
       type: "GRU"
       hidden_dim: 512
     optimizer: { type: "Adam", lr: 0.0001 }
-    
+
   world_model:
     core_network:
       type: "MLP"
@@ -639,13 +639,13 @@ modules:
 steps:
   - name: "perception"
     node: "@modules.perception_encoder"
-    
+
   - name: "policy"
     node: "@modules.hierarchical_policy"
-    
+
   - name: "panic"
     node: "@modules.panic_controller"
-    
+
   - name: "ethics"
     node: "@modules.EthicsFilter"
 ```
@@ -669,7 +669,7 @@ def step(self, action):
     if action == "sleep":
         self.energy += 0.25  # magic number
         self.hygiene -= 0.03  # another magic number
-    
+
     if self.hunger < 0.2:  # arbitrary threshold
         self.health -= 0.01 * (0.2 - self.hunger)  # arbitrary formula
 ```
@@ -691,10 +691,10 @@ affordance_engine = AffordanceEngine.from_yaml("affordances.yaml")
 def step(self, action):
     # Apply affordance effects (from YAML)
     affordance_engine.apply(agent, action)
-    
+
     # Apply cascades (from YAML)
     cascade_engine.apply(agent.bars)
-    
+
     # Clamp bars
     agent.bars = np.clip(agent.bars, 0.0, 1.0)
 ```
@@ -816,12 +816,12 @@ checkpoint/
 def verify_checkpoint(checkpoint_dir, signing_key):
     manifest = read(checkpoint_dir / 'manifest.txt')
     signature = read(checkpoint_dir / 'signature.txt')
-    
+
     expected_sig = hmac(signing_key, manifest)
-    
+
     if signature != expected_sig:
         raise CheckpointTamperedError("Signature invalid")
-    
+
     # Also verify each file matches manifest checksums
     verify_manifest(checkpoint_dir, manifest)
 ```
@@ -847,7 +847,7 @@ Agent state at tick 1847:
 Cognitive_topology.yaml (Layer 1) at that tick:
   panic_thresholds:
     health: 0.25  ← triggered
-  
+
 Telemetry line 1847:
   candidate_action: "work"  # policy wanted to continue working
   panic_override: True
@@ -868,8 +868,8 @@ Outcome:
   - Agent survived (would have died at 0% health)
 
 Conclusion:
-  Panic controller correctly triggered emergency response when health fell below 
-  configured threshold. Action was expensive but legal and life-saving. This is 
+  Panic controller correctly triggered emergency response when health fell below
+  configured threshold. Action was expensive but legal and life-saving. This is
   intended behavior per Layer 1 configuration.
 ```
 
@@ -930,7 +930,7 @@ terminal_conditions:
     operator: "<="
     value: 0.0
     description: "Death by exhaustion"
-    
+
   - meter: "health"
     operator: "<="
     value: 0.0
@@ -1166,10 +1166,10 @@ def compute_terminal_reward(bars, money, ticks_survived, max_age, outcome):
     - Quality of life at the end (wellbeing)
     - Financial security (wealth)
     """
-    
+
     # Component 1: Lifespan completion
     lifespan_score = ticks_survived / max_age
-    
+
     # Component 2: Wellbeing at terminal state
     wellbeing_bars = [
         bars['health'],
@@ -1179,17 +1179,17 @@ def compute_terminal_reward(bars, money, ticks_survived, max_age, outcome):
         bars['hygiene']
     ]
     wellbeing_score = mean(wellbeing_bars)
-    
+
     # Component 3: Wealth (diminishing returns)
     wealth_score = sqrt(money)  # or linear, log - configurable
-    
+
     # Weighted combination
     raw_score = (
         config.retirement.weights.lifespan * lifespan_score +
         config.retirement.weights.wellbeing * wellbeing_score +
         config.retirement.weights.wealth * wealth_score
     )
-    
+
     # Apply outcome multiplier
     if outcome == "retirement":  # age >= 1.0
         return raw_score
@@ -1202,15 +1202,15 @@ def compute_terminal_reward(bars, money, ticks_survived, max_age, outcome):
 ```yaml
 retirement:
   max_age_ticks: 1200
-  
+
   weights:
     lifespan: 0.5   # 50% - did you complete your life?
     wellbeing: 0.3  # 30% - were you healthy/happy at the end?
     wealth: 0.2     # 20% - did you have financial security?
-  
+
   wealth_curve: "sqrt"  # diminishing returns on money
   early_death_multiplier: 0.1  # 90% penalty for dying early
-  
+
   wellbeing_bars:
     - health
     - energy
@@ -1389,12 +1389,12 @@ From `bars.yaml`:
   range: [0.0, 1.0]
   initial: 0.0
   base_depletion: 0.0  # doesn't passively decay
-  
+
   terminal_condition:
     operator: ">="
     value: 1.0
     outcome: "retirement"
-    
+
   description: "Life progression toward retirement"
 ```
 
@@ -1406,11 +1406,11 @@ In the environment step function:
 def step(self, action):
     # Execute action, apply affordances, cascades, etc
     # ...
-    
+
     # Advance age
     age_increment = 1.0 / self.config.retirement.max_age_ticks
     self.bars['age'] += age_increment
-    
+
     # Check terminal conditions
     if self.bars['age'] >= 1.0:
         done = True
@@ -1489,7 +1489,7 @@ retirement:
     lifespan: 0.3   # completing life matters less
     wellbeing: 0.1  # quality of life matters less
     wealth: 0.6     # money is 60% of score
-  
+
   wealth_curve: "linear"  # every dollar matters equally
 ```
 
@@ -1515,7 +1515,7 @@ retirement:
     lifespan: 0.5   # survival to retirement is primary
     wellbeing: 0.3  # quality of life matters
     wealth: 0.2     # financial security matters
-  
+
   wealth_curve: "sqrt"  # diminishing returns
 ```
 
@@ -1540,7 +1540,7 @@ retirement:
     lifespan: 0.2   # making it to old age is less important
     wellbeing: 0.7  # quality of life is 70% of score
     wealth: 0.1     # money barely matters
-  
+
   wealth_curve: "sqrt"
 ```
 
@@ -1599,7 +1599,7 @@ Action: Bed
   Tick 0: energy = 0.3, health = 0.8, r = 0.24
   Tick 1: energy = 0.55 (direct effect +0.25)
   Tick 1: r = 0.55 × 0.8 = 0.44
-  
+
   Learning signal: r increased immediately
   Lesson: "Bed → energy ↑ → reward ↑"
   Credit assignment: trivial (1 tick delay)
@@ -1620,7 +1620,7 @@ Action: Skip Fridge (save $4)
   Tick 11-30: health drops 0.010 per tick (cascade strength)
   Tick 30: health = 0.60 (lost 0.20 health)
   Tick 30: r drops from 0.60 to 0.45 (energy also dropped)
-  
+
   Learning signal: r decreased gradually, 30 ticks after decision
   Lesson: "Not eating → health decay → reward decay"
   Credit assignment: moderate difficulty (30 tick delay)
@@ -1641,24 +1641,24 @@ Strategy: Work → Save Money → Use Money Later
     - Direct effect: money ↑ (0.0 → 0.8)
     - Direct cost: energy ↓, mood ↓
     - Immediate r: drops (working is tiring)
-  
+
   Tick 80: Stop working, have $80 saved
-  
+
   Tick 81-120: Use savings on recovery
     - Fridge (cost $4) → satiation maintained
     - Bed (free) → energy recovered
     - Shower (cost $2) → hygiene maintained
     - Recreation (cost $5) → mood recovered
-  
+
   Tick 120-200: Maintain high bars without working
     - Energy high (from rest)
     - Health high (from food + prevented cascades)
     - Mood high (from recreation)
     - r stays high for 80 ticks
-  
+
   Terminal: High lifespan, high wellbeing, moderate wealth
   Terminal reward: 0.75
-  
+
   Learning signal: short-term pain (working) enables long-term gain (comfortable life)
   Lesson: "Money is instrumentally valuable for survival"
   Credit assignment: hard (80-200 tick delayed benefit)
@@ -1683,7 +1683,7 @@ Observation: Job has operating_hours [9, 18]
     - Energy wasted on commute
     - Can't work, money doesn't increase
     - Result: death by starvation
-  
+
   Learned strategy: Plan work around operating hours
     - Wake up at 7am
     - Arrive at Job at 7:45am
@@ -1692,7 +1692,7 @@ Observation: Job has operating_hours [9, 18]
     - INTERACT for full 8-hour shift
     - Earn $80 efficiently
     - Result: survival with savings
-  
+
   Learning signal: terminal reward is much higher with temporal planning
   Lesson: "Schedule matters as much as action choice"
   Credit assignment: very hard (must connect schedule across entire episode)
@@ -1716,16 +1716,16 @@ Scenario: Two agents need the same Job (capacity=1)
     - Agent B: wasted energy commuting, earns $0
     - Agent B: can't buy food
     - Agent B: dies of starvation
-  
+
   Learned strategy: Agent B predicts Agent A's behavior
     - Module C (Social Model): sees Agent A "looks_poor" + "moving toward Job"
     - Predicts: Agent A will work this shift
     - Module D (Policy): selects alternate goal: go to Labor instead
     - Agent B: earns $48 at Labor (less than Job, but > $0)
     - Agent B: survives
-  
+
   Terminal: Agent B gets lower score than Agent A, but > early death penalty
-  
+
   Learning signal: social reasoning prevents catastrophic failure
   Lesson: "Predict competitors, choose non-contested resources"
   Credit assignment: extremely hard (requires correlating cues → intent → resource contention → terminal outcome)
@@ -2031,7 +2031,7 @@ max_age_ticks: 500  # longer episodes now survivable
 
 ```yaml
 grid_size: [5, 5]  # still small, fully visible
-affordances: ["Bed", "Job", "Fridge", "Shower", "Bar", "Recreation", 
+affordances: ["Bed", "Job", "Fridge", "Shower", "Bar", "Recreation",
               "Doctor", "Hospital", "Gym", "Labor", "Park", ...]  # all 15
 observability: "full"
 initial_money: 0.50
@@ -2251,7 +2251,7 @@ observation = {
     'position': [x, y],
     'visible_grid': [...],
     'time_of_day': 14,
-    
+
     # ← NEW: social information
     'other_agents_in_window': {
         'positions': [[4, 5], [6, 3]],  # where they are
@@ -2278,10 +2278,10 @@ observation = {
 cues:
   - id: "looks_tired"
     trigger: { bar: "energy", operator: "<", threshold: 0.3 }
-    
+
   - id: "looks_poor"
     trigger: { bar: "money", operator: "<", threshold: 0.2 }
-    
+
   - id: "at_job"
     trigger: { current_affordance: "Job" }
 ```
@@ -2321,17 +2321,17 @@ cues:
    ```python
    # Meta-controller:
    my_goal = "EARN_MONEY"
-   
+
    # Evaluate options:
    option_1 = "go_to_job"
    world_model_prediction = "Agent B will also go to Job (85% confidence)"
    world_model_prediction += "I will lose contention (Agent B is closer)"
    expected_reward = -100  # early death if I can't earn money
-   
+
    option_2 = "go_to_labor"
    world_model_prediction = "Labor is uncontested"
    expected_reward = +15  # earn less money, but > $0
-   
+
    # Choose option 2
    final_action = "navigate_to_labor"
    ```
@@ -2451,11 +2451,11 @@ observation = {
     'visible_grid': [...],
     'time_of_day': 14,
     'other_agents_in_window': {...},  # same as L6/L7
-    
+
     # ← NEW: family communication
     'family_comm_channel': [123, 0, 0],  # int64 signals from family members
     'family_id': 'family_42',
-    
+
     # ❌ NO semantic dictionary provided
     # ❌ NO pre-shared meaning of signals
 }
@@ -2753,15 +2753,15 @@ for dy in range(-vision_range, vision_range + 1):  # -2 to +2
     for dx in range(-vision_range, vision_range + 1):
         world_x = agent_pos[0] + dx
         world_y = agent_pos[1] + dy
-        
+
         # Check bounds
         if 0 <= world_x < grid_size and 0 <= world_y < grid_size:
             # Check if affordance exists at (world_x, world_y)
             has_affordance = any(
-                aff_pos == [world_x, world_y] 
+                aff_pos == [world_x, world_y]
                 for aff_pos in affordances.values()
             )
-            
+
             if has_affordance:
                 local_idx = (dy + vision_range) * window_size + (dx + vision_range)
                 local_grid[local_idx] = 1.0
@@ -2834,7 +2834,7 @@ observation = torch.cat([
     time_sin,            # [num_agents, 1]
     time_cos,            # [num_agents, 1]
     progress,            # [num_agents, 1]
-    
+
     # NEW: Social features
     other_agent_positions,  # [num_agents, max_visible * 2]
     other_agent_cues,       # [num_agents, max_visible * num_cue_types]
@@ -2857,11 +2857,11 @@ other_positions = [
     # Agent 1 (relative position)
     1.0,   # dx = +1 (agent is at 5, 4)
     -2.0,  # dy = -2 (agent is at 4, 2)
-    
+
     # Agent 2 (relative position)
     -1.0,  # dx = -1 (agent is at 3, 4)
     0.0,   # dy =  0 (agent is at 3, 4)
-    
+
     # Padding (no more agents visible)
     0.0, 0.0,  # agent 3 (not present)
     0.0, 0.0,  # agent 4 (not present)
@@ -2875,24 +2875,24 @@ other_positions = [
 def get_visible_agents(observer_pos, all_agents, vision_range, max_visible):
     """Find other agents within vision_range of observer."""
     visible = []
-    
+
     for agent in all_agents:
         if agent.id == observer.id:
             continue  # Don't observe self
-        
+
         distance = manhattan_distance(observer_pos, agent.position)
         if distance <= vision_range:
             relative_pos = agent.position - observer_pos
             visible.append(relative_pos)
-    
+
     # Sort by distance (closest first)
     visible.sort(key=lambda pos: abs(pos[0]) + abs(pos[1]))
-    
+
     # Take top max_visible, pad if needed
     visible = visible[:max_visible]
     while len(visible) < max_visible:
         visible.append([0.0, 0.0])
-    
+
     return torch.tensor(visible).flatten()
 ```
 
@@ -2920,7 +2920,7 @@ other_cues = [
     1,  # at_job
     0,  # at_hospital
     0,  # at_bar
-    
+
     # Agent 2 cues (emits: looks_sick, looks_poor, at_hospital)
     0,  # looks_tired
     0,  # looks_energetic
@@ -2934,7 +2934,7 @@ other_cues = [
     0,  # at_job
     1,  # at_hospital
     0,  # at_bar
-    
+
     # Agents 3-5 (padding, all zeros)
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  # agent 3
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  # agent 4
@@ -3003,7 +3003,7 @@ if self.curriculum_level >= 6:
     # Get visible agents
     visible_positions = self._get_visible_agent_positions(positions)
     visible_cues = self._get_visible_agent_cues(positions)
-    
+
     obs = torch.cat([obs, visible_positions, visible_cues], dim=1)
 ```
 
@@ -3027,7 +3027,7 @@ observation = torch.cat([
     progress,                # [num_agents, 1]
     other_agent_positions,   # [num_agents, max_visible * 2]
     other_agent_cues,        # [num_agents, max_visible * num_cue_types]
-    
+
     # NEW: Family communication
     family_comm_channel,     # [num_agents, max_family_size]
     family_member_ids,       # [num_agents, max_family_size]  (optional)
@@ -3171,11 +3171,11 @@ observation:
   grid_size: 8
   vision_range: 2  # 5×5 window
   num_affordance_types: 15
-  
+
   # Social features (L6+)
   max_visible_agents: 5
   num_cue_types: 12  # full cue set for L7
-  
+
   # Family features (L8)
   max_family_size: 3  # typical: 2 parents + 1 child
   include_family_ids: false  # start without
@@ -3218,7 +3218,7 @@ observation:
 def __init__(self, ..., curriculum_level=0):
     # ... existing fields ...
     self.curriculum_level = curriculum_level
-    
+
     if curriculum_level >= 6:
         self.max_visible_agents = config.get('max_visible_agents', 5)
         self.cue_engine = CueEngine(config.cues)
@@ -3233,41 +3233,41 @@ def _get_visible_agent_positions(
     all_agent_positions: torch.Tensor,
 ) -> torch.Tensor:
     """Get relative positions of visible agents.
-    
+
     Returns:
         [num_agents, max_visible_agents * 2]
     """
     batch_size = observer_positions.shape[0]
     output = torch.zeros(
-        batch_size, 
-        self.max_visible_agents * 2, 
+        batch_size,
+        self.max_visible_agents * 2,
         device=self.device
     )
-    
+
     for agent_idx in range(batch_size):
         observer_pos = observer_positions[agent_idx]
         visible = []
-        
+
         # Find agents within vision_range
         for other_idx in range(batch_size):
             if other_idx == agent_idx:
                 continue
-            
+
             other_pos = all_agent_positions[other_idx]
             distance = torch.abs(observer_pos - other_pos).sum()
-            
+
             if distance <= self.vision_range:
                 relative_pos = other_pos - observer_pos
                 visible.append((distance, relative_pos))
-        
+
         # Sort by distance, take top max_visible
         visible.sort(key=lambda x: x[0])
         visible = visible[:self.max_visible_agents]
-        
+
         # Fill output tensor
         for i, (_, rel_pos) in enumerate(visible):
             output[agent_idx, i*2:(i+1)*2] = rel_pos
-    
+
     return output
 
 def _get_visible_agent_cues(
@@ -3277,7 +3277,7 @@ def _get_visible_agent_cues(
     all_agent_cues: list[list[str]],  # from cue_engine
 ) -> torch.Tensor:
     """Get cues of visible agents.
-    
+
     Returns:
         [num_agents, max_visible_agents * num_cue_types]
     """
@@ -3287,34 +3287,34 @@ def _get_visible_agent_cues(
         self.max_visible_agents * self.num_cue_types,
         device=self.device
     )
-    
+
     for agent_idx in range(batch_size):
         observer_pos = observer_positions[agent_idx]
         visible = []
-        
+
         # Find agents within vision_range (same as positions)
         for other_idx in range(batch_size):
             if other_idx == agent_idx:
                 continue
-            
+
             other_pos = all_agent_positions[other_idx]
             distance = torch.abs(observer_pos - other_pos).sum()
-            
+
             if distance <= self.vision_range:
                 cues = all_agent_cues[other_idx]  # list of cue strings
                 visible.append((distance, other_idx, cues))
-        
+
         # Sort by distance, take top max_visible
         visible.sort(key=lambda x: x[0])
         visible = visible[:self.max_visible_agents]
-        
+
         # Encode cues as binary vector
         for i, (_, other_idx, cues) in enumerate(visible):
             for cue_str in cues:
                 cue_idx = self.cue_engine.cue_to_index[cue_str]
                 flat_idx = i * self.num_cue_types + cue_idx
                 output[agent_idx, flat_idx] = 1.0
-    
+
     return output
 ```
 
@@ -3324,7 +3324,7 @@ def _get_visible_agent_cues(
 def build_observations(self, ...):
     # Build base observation (L0-5)
     obs = ...  # existing code
-    
+
     # Add social features (L6+)
     if self.curriculum_level >= 6:
         positions_social = self._get_visible_agent_positions(
@@ -3334,14 +3334,14 @@ def build_observations(self, ...):
             positions, positions, all_agent_cues
         )
         obs = torch.cat([obs, positions_social, cues_social], dim=1)
-    
+
     # Add family comm (L8)
     if self.curriculum_level >= 8:
         family_signals = self._get_family_comm_channel(
             agent_ids, family_data
         )
         obs = torch.cat([obs, family_signals], dim=1)
-    
+
     return obs
 ```
 
@@ -3390,7 +3390,7 @@ def _get_family_comm_channel(
     family_data: dict,
 ) -> torch.Tensor:
     """Get signals from family members.
-    
+
     Returns:
         [num_agents, max_family_size]
     """
@@ -3399,24 +3399,24 @@ def _get_family_comm_channel(
         self.max_family_size,
         device=self.device
     )
-    
+
     for agent_idx, agent_id in enumerate(agent_ids):
         family_id = self.agents[agent_idx].family_id
-        
+
         if family_id is None:
             continue  # not in a family, leave as zeros
-        
+
         family_members = self.agents[agent_idx].family_members
-        
+
         for i, member_id in enumerate(family_members):
             if i >= self.max_family_size:
                 break
-            
+
             # Get member's current signal
             signal = self.agents[member_id].current_signal
             normalized = signal / 1000.0
             output[agent_idx, i] = normalized
-    
+
     return output
 ```
 
@@ -3646,7 +3646,7 @@ def compute_public_cues(agent, cue_config):
     Evaluate all cue triggers, emit top-k by priority.
     """
     active_cues = []
-    
+
     # Evaluate each cue definition
     for cue_def in cue_config.cues:
         if evaluate_trigger(agent, cue_def.trigger):
@@ -3655,18 +3655,18 @@ def compute_public_cues(agent, cue_config):
                 'priority': cue_def.priority,
                 'visibility': cue_def.visibility
             })
-    
+
     # Filter by visibility (L6-7: public only, L8: public + family)
     if not agent.in_family or not config.family_channel_enabled:
         active_cues = [c for c in active_cues if c['visibility'] == 'public']
-    
+
     # Sort by priority (high first)
     active_cues.sort(key=lambda c: -c['priority'])
-    
+
     # Take top max_cues_broadcast
     max_cues = cue_config.visibility_rules.max_cues_broadcast
     emitted = active_cues[:max_cues]
-    
+
     return [c['id'] for c in emitted]  # return just the IDs
 ```
 
@@ -3722,7 +3722,7 @@ cues:
       threshold: 0.3
     visibility: "public"
     priority: 2
-    
+
   - id: "looks_energetic"
     description: "Visible vitality, alert"
     trigger:
@@ -3732,7 +3732,7 @@ cues:
       threshold: 0.8
     visibility: "public"
     priority: 1
-  
+
   # Health-based (physical condition)
   - id: "looks_sick"
     description: "Pale, coughing, limping"
@@ -3743,7 +3743,7 @@ cues:
       threshold: 0.3
     visibility: "public"
     priority: 4  # highly salient
-    
+
   - id: "looks_healthy"
     description: "Robust, good color"
     trigger:
@@ -3753,7 +3753,7 @@ cues:
       threshold: 0.8
     visibility: "public"
     priority: 1
-  
+
   # Mood-based (emotional state)
   - id: "looks_sad"
     description: "Downcast, withdrawn"
@@ -3764,7 +3764,7 @@ cues:
       threshold: 0.4
     visibility: "public"
     priority: 3
-    
+
   - id: "looks_happy"
     description: "Smiling, animated"
     trigger:
@@ -3774,7 +3774,7 @@ cues:
       threshold: 0.7
     visibility: "public"
     priority: 2
-  
+
   # Wealth-based (socioeconomic signals)
   - id: "looks_poor"
     description: "Shabby clothing, worn items"
@@ -3785,7 +3785,7 @@ cues:
       threshold: 0.2
     visibility: "public"
     priority: 1
-    
+
   - id: "looks_wealthy"
     description: "Well-dressed, quality items"
     trigger:
@@ -3795,7 +3795,7 @@ cues:
       threshold: 0.8
     visibility: "public"
     priority: 1
-  
+
   # Location-based (intent signals)
   - id: "at_job"
     description: "Located at workplace"
@@ -3804,7 +3804,7 @@ cues:
       current_affordance: "Job"
     visibility: "public"
     priority: 2
-    
+
   - id: "at_hospital"
     description: "Located at hospital (medical need)"
     trigger:
@@ -3812,7 +3812,7 @@ cues:
       current_affordance: "Hospital"
     visibility: "public"
     priority: 3
-    
+
   - id: "at_bar"
     description: "Located at bar (socializing)"
     trigger:
@@ -3820,7 +3820,7 @@ cues:
       current_affordance: "Bar"
     visibility: "public"
     priority: 2
-    
+
   - id: "at_home"
     description: "Located at bed/residence"
     trigger:
@@ -3828,7 +3828,7 @@ cues:
       current_affordance: "Bed"
     visibility: "public"
     priority: 1
-  
+
   # Hygiene-based (social acceptability)
   - id: "looks_dirty"
     description: "Unkempt, odorous"
@@ -3865,19 +3865,19 @@ for episode in training_dataset:
             # Ground truth (privileged - training only)
             true_bars = episode.agents[agent_id].bars
             true_goal = episode.agents[agent_id].current_goal
-            
+
             # Observable inputs (available at inference)
             emitted_cues = episode.agents[agent_id].public_cues
             # e.g., ['looks_tired', 'at_job']
-            
+
             # Supervised learning
             predicted_bars = social_model.predict_state(emitted_cues)
             predicted_goal = social_model.predict_goal(emitted_cues)
-            
+
             # Losses
             state_loss = mse(predicted_bars, true_bars)
             goal_loss = cross_entropy(predicted_goal, true_goal)
-            
+
             # Backward pass
             total_loss = state_loss + goal_loss
             total_loss.backward()
@@ -3907,7 +3907,7 @@ observation = {
 for i, cues in enumerate(observation['other_agents_in_window']['public_cues']):
     predicted_state = social_model.predict_state(cues)
     # Output: {energy: 0.28, health: 0.75, ...}
-    
+
     predicted_goal = social_model.predict_goal(cues)
     # Output: {SURVIVAL: 0.15, THRIVING: 0.70, SOCIAL: 0.15}
 ```
@@ -4038,7 +4038,7 @@ cues:
   - id: "looks_poor"
     visibility: "public"  # poverty is visible
     priority: 3
-    
+
   - id: "looks_wealthy"
     visibility: "private"  # wealth is concealable
     priority: 1
@@ -4076,25 +4076,25 @@ townlet train --config configs/asymmetric/ --seed 42
 # In environment step() function
 def step(self, actions):
     # ... execute actions, apply affordances, cascades ...
-    
+
     # Compute public cues for all agents
     for agent_id, agent in enumerate(self.agents):
         agent.public_cues = self.cue_engine.compute_cues(
             agent=agent,
             cue_config=self.config.cues
         )
-    
+
     # Build observations
     for agent_id in range(self.num_agents):
         # Get other agents in visibility window
         visible_agents = self.get_agents_in_window(agent_id, radius=5)
-        
+
         # Extract their public cues
         other_cues = [
             self.agents[other_id].public_cues
             for other_id in visible_agents
         ]
-        
+
         observations[agent_id] = {
             'bars': self.agents[agent_id].bars,
             'position': self.agents[agent_id].position,
@@ -4113,19 +4113,19 @@ def forward(self, observation):
     # Extract public cues from observation
     other_cues = observation['other_agents_in_window']['public_cues']
     # List[List[str]], e.g. [['looks_tired', 'at_job'], ['looks_sick']]
-    
+
     # Embed each cue string
-    cue_embeddings = [self.cue_embedding(cue) for cue_list in other_cues 
+    cue_embeddings = [self.cue_embedding(cue) for cue_list in other_cues
                       for cue in cue_list]
     # Learned embedding: "looks_tired" → 128-dim vector
-    
+
     # Process through GRU (for temporal patterns)
     h_t = self.gru(cue_embeddings, h_prev)
-    
+
     # Predict state and goal
     predicted_bars = self.state_head(h_t)  # → [energy, health, ...]
     predicted_goal_dist = self.goal_head(h_t)  # → [P(SURVIVAL), P(THRIVING), ...]
-    
+
     return predicted_bars, predicted_goal_dist
 ```
 
@@ -4140,12 +4140,12 @@ def validate_cues_config(cues_yaml):
         assert 'trigger' in cue
         assert 'visibility' in cue
         assert 'priority' in cue
-        
+
         # Validate trigger
         if cue['trigger']['type'] == 'bar_threshold':
             assert cue['trigger']['bar'] in VALID_BARS
             assert 0.0 <= cue['trigger']['threshold'] <= 1.0
-        
+
         # Validate priority
         assert 1 <= cue['priority'] <= 5
 ```
@@ -4193,8 +4193,8 @@ These are showstoppers. They must be fixed before any production deployment, bef
 
 ### 6.1 BLOCKER 1: EthicsFilter Architecture Ambiguity (GOVERNANCE)
 
-**Severity**: CRITICAL  
-**Affected systems**: Brain as Code, checkpoints, governance claims  
+**Severity**: CRITICAL
+**Affected systems**: Brain as Code, checkpoints, governance claims
 **Risk if unfixed**: Audit failure, safety cannot be proven
 
 #### The Problem
@@ -4244,7 +4244,7 @@ class EthicsFilter:
     Deterministic rule enforcement. No learning. No weights.
     This is the governance boundary.
     """
-    
+
     def __init__(self, config: Layer1Config):
         """
         Load ethics rules from Layer 1 (cognitive_topology.yaml).
@@ -4252,18 +4252,18 @@ class EthicsFilter:
         """
         self.forbid_actions = set(config.compliance.forbid_actions)
         self.penalize_actions = {
-            p['action']: p['penalty'] 
+            p['action']: p['penalty']
             for p in config.compliance.penalize_actions
         }
         # NO self.parameters(), NO self.optimizer
-        
-    def filter(self, 
-               candidate_action: int, 
+
+    def filter(self,
+               candidate_action: int,
                action_names: List[str],
                agent_state: dict) -> dict:
         """
         Apply compliance rules to candidate action.
-        
+
         Returns:
             {
                 'final_action': int,
@@ -4273,7 +4273,7 @@ class EthicsFilter:
             }
         """
         action_name = action_names[candidate_action]
-        
+
         # Hard veto (forbid_actions)
         if action_name in self.forbid_actions:
             return {
@@ -4282,17 +4282,17 @@ class EthicsFilter:
                 'veto_reason': f'{action_name} forbidden by Layer 1 compliance.forbid_actions',
                 'shaping_penalty': 0.0
             }
-        
+
         # Soft penalty (penalize_actions)
         penalty = self.penalize_actions.get(action_name, 0.0)
-        
+
         return {
             'final_action': candidate_action,
             'veto_applied': False,
             'veto_reason': None,
             'shaping_penalty': penalty  # RL can use this in reward calculation
         }
-    
+
     def _substitute_safe_action(self, action_names: List[str]) -> int:
         """
         When vetoing, substitute with a safe fallback.
@@ -4315,7 +4315,7 @@ class EthicsFilter:
 ```yaml
 steps:
   # ... earlier steps ...
-  
+
   - name: "panic_adjustment"
     node: "@modules.panic_controller"
     inputs:
@@ -4324,7 +4324,7 @@ steps:
     outputs:
       - "panic_action"
       - "panic_reason"
-  
+
   - name: "final_action"
     node: "@controllers.ethics_filter"  # ← NOT @modules (not learned)
     inputs:
@@ -4398,7 +4398,7 @@ EthicsFilter is intentionally **not learned** to maintain governance auditabilit
 - Rule-based safety is deterministic ("cannot do bad things by construction")
 - Governance requires the latter
 
-**Trade-off**: 
+**Trade-off**:
 - Pro: Provable safety, auditable
 - Con: Cannot adapt to novel situations not covered by rules
 - Mitigation: Rules can be updated in Layer 1 for new deployments
@@ -4408,13 +4408,13 @@ EthicsFilter is intentionally **not learned** to maintain governance auditabilit
 
 After fixing, you should be able to answer audit questions:
 
-**Q**: "Can this agent steal?"  
+**Q**: "Can this agent steal?"
 **A**: "No. See `cognitive_topology.yaml` line 47: `forbid_actions: ['steal']`. EthicsFilter (line 123 of `ethics_filter.py`) checks this list and substitutes WAIT if steal is attempted. This is deterministic Python code, not learned behavior. We can prove it by inspection."
 
-**Q**: "What if panic overrides normal behavior?"  
+**Q**: "What if panic overrides normal behavior?"
 **A**: "Panic can escalate actions for survival (see `execution_graph.yaml` line 82), but EthicsFilter runs after panic (line 95) and has final authority. Even if panic proposes 'steal', EthicsFilter will veto it."
 
-**Q**: "Could training change this?"  
+**Q**: "Could training change this?"
 **A**: "No. EthicsFilter has no learnable parameters. See `weights.pt` contents: EthicsFilter is not included. Only the policy, world model, and perception are trained."
 
 **WEP** that deterministic EthicsFilter is the correct choice: very high (~98%).
@@ -4423,8 +4423,8 @@ After fixing, you should be able to answer audit questions:
 
 ### 6.2 BLOCKER 2: World Model Training vs Curriculum Changes (CORRECTNESS)
 
-**Severity**: HIGH  
-**Affected systems**: Module B (World Model), curriculum, reproducibility  
+**Severity**: HIGH
+**Affected systems**: Module B (World Model), curriculum, reproducibility
 **Risk if unfixed**: Agents learn outdated world dynamics, experiments are confounded
 
 #### The Problem
@@ -4444,7 +4444,7 @@ But you also allow curriculum to change these mid-run (Section 13.2):
 
 ```python
 # Agent trained on baseline world
-world_model.predict(action='go_to_fridge') 
+world_model.predict(action='go_to_fridge')
   → predicted_cost: -0.04  # expects $4
 
 # Curriculum changes to austerity
@@ -4518,7 +4518,7 @@ modules:
       - belief_state  # from Module A
       - candidate_action
       - world_config_hash  # ← NEW: lets model know which world
-    
+
     core_network:
       type: "MLP"
       layers: [256, 256]
@@ -4531,18 +4531,18 @@ modules:
 # config.yaml
 curriculum:
   enabled: true
-  
+
   stages:
     - stage_id: "baseline"
       duration_ticks: 50000
       world_config: "universe_baseline.yaml"
-      
+
     - stage_id: "austerity"
       duration_ticks: 50000
       world_config: "universe_austerity.yaml"  # ← DIFFERENT FILE
       fork_required: true  # ← EXPLICIT MARKER
       note: "Affordance costs changed, world model must adapt"
-    
+
     - stage_id: "boom"
       duration_ticks: 50000
       world_config: "universe_boom.yaml"
@@ -4556,18 +4556,18 @@ def launch_curriculum_stage(stage_config):
     if stage_config.fork_required:
         # This is a new world, requires new run
         new_run_id = f"{base_name}_stage_{stage_config.stage_id}_{timestamp}"
-        
+
         # Snapshot new world config
         snapshot_dir = f"runs/{new_run_id}/config_snapshot/"
         copy_yaml(stage_config.world_config, snapshot_dir)
-        
+
         # Recompute cognitive hash (world changed)
         new_hash = compute_cognitive_hash(snapshot_dir)
-        
+
         # Load weights from previous stage (transfer learning)
         if stage_config.get('resume_from'):
             load_weights(prev_checkpoint)
-        
+
         # But this is a NEW MIND in a NEW WORLD
         log.info(f"Forked to new run: {new_run_id}, hash: {new_hash}")
     else:
@@ -4584,19 +4584,19 @@ If you want to keep the same run_id across curriculum changes, you could retrain
 def on_curriculum_stage_change(new_world_config):
     # Collect new ground truth logs (100-1000 episodes)
     logs = collect_logs_in_new_world(new_world_config, num_episodes=1000)
-    
+
     # Retrain Module B only (freeze other modules)
     for module in ['perception', 'social_model', 'policy']:
         freeze(module)
-    
+
     # Fine-tune world model
     for epoch in range(50):
         train_world_model(logs)
-    
+
     # Unfreeze everything
     for module in all_modules:
         unfreeze(module)
-    
+
     # Continue training
 ```
 
@@ -4662,8 +4662,8 @@ modules:
 
 ### 6.3 BLOCKER 3: Checkpoint Integrity (SECURITY)
 
-**Severity**: HIGH  
-**Affected systems**: Checkpoints, resume, provenance, audit  
+**Severity**: HIGH
+**Affected systems**: Checkpoints, resume, provenance, audit
 **Risk if unfixed**: Tampering is undetectable, provenance is worthless
 
 #### The Problem
@@ -4725,18 +4725,18 @@ class SecureCheckpointWriter:
     """
     Writes checkpoints with HMAC signatures for tamper detection.
     """
-    
+
     def __init__(self, signing_key: bytes):
         """
         Args:
             signing_key: Secret key for HMAC (stored securely, not in repo)
         """
         self.signing_key = signing_key
-    
+
     def write_checkpoint(self, checkpoint_dir: Path, payload: dict):
         """
         Write checkpoint with all components + signature.
-        
+
         Args:
             checkpoint_dir: Where to write checkpoint
             payload: {
@@ -4749,40 +4749,40 @@ class SecureCheckpointWriter:
         """
         # Create directory
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Write all standard files
         torch.save(payload['weights'], checkpoint_dir / 'weights.pt')
         torch.save(payload['optimizers'], checkpoint_dir / 'optimizers.pt')
         json.dump(payload['rng_state'], open(checkpoint_dir / 'rng_state.json', 'w'))
-        
+
         # Write config snapshot
         snapshot_dir = checkpoint_dir / 'config_snapshot'
         snapshot_dir.mkdir(exist_ok=True)
         for filename, content in payload['config_snapshot'].items():
             (snapshot_dir / filename).write_text(content)
-        
+
         # Write cognitive hash
         (checkpoint_dir / 'cognitive_hash.txt').write_text(payload['cognitive_hash'])
-        
+
         # Compute manifest (checksums of all files)
         manifest = self._compute_manifest(checkpoint_dir)
         (checkpoint_dir / 'manifest.txt').write_text(manifest)
-        
+
         # Sign the manifest
         signature = hmac.new(
             self.signing_key,
             manifest.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
-        
+
         (checkpoint_dir / 'signature.txt').write_text(signature)
-        
+
         print(f"✓ Checkpoint written and signed: {checkpoint_dir}")
-    
+
     def _compute_manifest(self, checkpoint_dir: Path) -> str:
         """
         Compute SHA256 checksum for each file in checkpoint.
-        
+
         Returns:
             Manifest string: "filename: checksum\n" for each file
         """
@@ -4797,26 +4797,26 @@ class SecureCheckpointWriter:
             'config_snapshot/agent_architecture.yaml',
             'config_snapshot/execution_graph.yaml',
         ]
-        
+
         manifest_lines = []
         for rel_path in files_to_check:
             file_path = checkpoint_dir / rel_path
             if not file_path.exists():
                 raise ValueError(f"Missing file: {rel_path}")
-            
+
             # Compute SHA256
             file_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
             manifest_lines.append(f"{rel_path}: {file_hash}")
-        
+
         return "\n".join(manifest_lines)
-    
+
     def verify_checkpoint(self, checkpoint_dir: Path) -> bool:
         """
         Verify checkpoint hasn't been tampered with.
-        
+
         Returns:
             True if valid, raises exception if invalid
-        
+
         Raises:
             CheckpointTamperedError: If signature doesn't match
             CheckpointCorruptedError: If files are missing or checksums wrong
@@ -4824,20 +4824,20 @@ class SecureCheckpointWriter:
         # Read manifest and signature
         manifest_path = checkpoint_dir / 'manifest.txt'
         signature_path = checkpoint_dir / 'signature.txt'
-        
+
         if not manifest_path.exists() or not signature_path.exists():
             raise CheckpointTamperedError("Missing manifest or signature")
-        
+
         manifest = manifest_path.read_text()
         signature = signature_path.read_text().strip()
-        
+
         # Verify signature
         expected_signature = hmac.new(
             self.signing_key,
             manifest.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
-        
+
         if signature != expected_signature:
             raise CheckpointTamperedError(
                 f"Signature mismatch in {checkpoint_dir}\n"
@@ -4845,24 +4845,24 @@ class SecureCheckpointWriter:
                 f"Got: {signature}\n"
                 "Checkpoint may have been tampered with."
             )
-        
+
         # Verify each file's checksum matches manifest
         for line in manifest.strip().split('\n'):
             rel_path, expected_hash = line.split(': ')
             file_path = checkpoint_dir / rel_path
-            
+
             if not file_path.exists():
                 raise CheckpointCorruptedError(f"Missing file: {rel_path}")
-            
+
             actual_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
-            
+
             if actual_hash != expected_hash:
                 raise CheckpointCorruptedError(
                     f"Checksum mismatch: {rel_path}\n"
                     f"Expected: {expected_hash}\n"
                     f"Got: {actual_hash}"
                 )
-        
+
         print(f"✓ Checkpoint verified: {checkpoint_dir}")
         return True
 
@@ -4915,20 +4915,20 @@ except CheckpointTamperedError as e:
 def load_signing_key() -> bytes:
     """
     Load HMAC signing key from secure location.
-    
+
     Options:
     1. Environment variable (for CI/production)
     2. Encrypted keyfile (for development)
     3. Hardware security module (for deployment)
     """
     key_source = os.getenv('TOWNLET_SIGNING_KEY_SOURCE', 'keyfile')
-    
+
     if key_source == 'env':
         key_hex = os.getenv('TOWNLET_SIGNING_KEY')
         if not key_hex:
             raise ValueError("TOWNLET_SIGNING_KEY not set")
         return bytes.fromhex(key_hex)
-    
+
     elif key_source == 'keyfile':
         keyfile = Path.home() / '.townlet' / 'signing_key.bin'
         if not keyfile.exists():
@@ -4939,7 +4939,7 @@ def load_signing_key() -> bytes:
             keyfile.chmod(0o600)  # read/write by owner only
             print(f"Generated new signing key: {keyfile}")
         return keyfile.read_bytes()
-    
+
     else:
         raise ValueError(f"Unknown key source: {key_source}")
 ```
@@ -5042,10 +5042,10 @@ def test_checkpoint_detects_tampering():
     """Blocker 3: Checkpoint signatures must work."""
     signer = SecureCheckpointWriter(test_key)
     signer.write_checkpoint(checkpoint_dir, payload)
-    
+
     # Tamper with file
     (checkpoint_dir / 'config_snapshot/cognitive_topology.yaml').write_text("# hacked")
-    
+
     # Verification should fail
     with pytest.raises(CheckpointTamperedError):
         signer.verify_checkpoint(checkpoint_dir)
@@ -5054,13 +5054,13 @@ def test_world_config_hash_in_observation():
     """Blocker 2: World config changes must be observable."""
     env = VectorizedTownletEnv(config)
     obs = env.reset()
-    
+
     assert 'world_config_hash' in obs
-    
+
     # Change world config (fork)
     env.load_new_config(austerity_config)
     obs2 = env.step(action)
-    
+
     assert obs['world_config_hash'] != obs2['world_config_hash']
 ```
 
@@ -5084,8 +5084,8 @@ These are not bugs or blockers — they're underspecified behaviors that need ex
 
 ### 7.1 Multi-Agent Contention Resolution
 
-**Status**: UNDERSPECIFIED  
-**Affects**: L6-L8 (multi-agent levels)  
+**Status**: UNDERSPECIFIED
+**Affects**: L6-L8 (multi-agent levels)
 **Current state**: High-Level Design mentions "deterministic tie-breaking" but doesn't specify the algorithm
 
 #### The Problem
@@ -5131,35 +5131,35 @@ agent_5.action = INTERACT  # also at Job position (6,6)
 def resolve_contention(self, affordance_id: str, tick: int):
     """
     Resolve contention for capacity-1 affordances.
-    
+
     Returns:
         winner_id: agent_id that gets access
         losers: list of agent_ids that were blocked
     """
     affordance = self.affordances[affordance_id]
-    
+
     # Find all agents trying to INTERACT with this affordance
     candidates = []
     for agent_id, agent in enumerate(self.agents):
         if agent.current_action == Action.INTERACT:
             if agent.position == affordance.position:
                 candidates.append(agent_id)
-    
+
     if len(candidates) <= affordance.capacity:
         # No contention, everyone succeeds
         return candidates, []
-    
+
     # Contention: rank by distance, then agent_id
     def rank_key(agent_id):
         agent = self.agents[agent_id]
         distance = manhattan_distance(agent.position, affordance.position)
         return (distance, agent_id)  # tuple sorts by distance first, then ID
-    
+
     candidates.sort(key=rank_key)
-    
+
     winners = candidates[:affordance.capacity]
     losers = candidates[affordance.capacity:]
-    
+
     # Log contention for telemetry
     self.log_contention(
         tick=tick,
@@ -5167,7 +5167,7 @@ def resolve_contention(self, affordance_id: str, tick: int):
         winners=winners,
         losers=losers
     )
-    
+
     return winners, losers
 
 def manhattan_distance(pos1, pos2):
@@ -5222,21 +5222,21 @@ agent_7.position = (2, 8)  # distance = 1
 for loser_id in losers:
     # Action fails, agent stays in current position
     self.agents[loser_id].interaction_failed = True
-    
+
     # Agent receives observation flag
     self.observations[loser_id]['action_failed'] = True
     self.observations[loser_id]['failure_reason'] = 'contention'
-    
+
     # Agent can learn: "I tried Job, it was occupied"
     # Next time: check for other agents before attempting
 ```
 
 **Why this rule**:
 
-✅ **Deterministic**: Same positions → same outcome  
-✅ **Intuitive**: Closer agents win (realistic spatial reasoning)  
-✅ **Fair**: When equidistant, lowest ID wins (arbitrary but consistent)  
-✅ **Learnable**: Agents can predict outcomes and plan around contention  
+✅ **Deterministic**: Same positions → same outcome
+✅ **Intuitive**: Closer agents win (realistic spatial reasoning)
+✅ **Fair**: When equidistant, lowest ID wins (arbitrary but consistent)
+✅ **Learnable**: Agents can predict outcomes and plan around contention
 
 **Alternative considered: First-come-first-served**
 
@@ -5264,7 +5264,7 @@ affordances:
   - id: "job"
     # ... other fields ...
     capacity: 1
-    
+
     # Contention resolution (when capacity is exceeded):
     # 1. Closest agent(s) win (Manhattan distance)
     # 2. Tie-breaker: lowest agent_id
@@ -5333,8 +5333,8 @@ When multiple agents compete for limited-capacity affordances:
 
 ### 7.2 Family Lifecycle State Machine
 
-**Status**: UNDERSPECIFIED  
-**Affects**: L8 (family communication), population genetics  
+**Status**: UNDERSPECIFIED
+**Affects**: L8 (family communication), population genetics
 **Current state**: High-Level Design mentions families but doesn't specify all transitions
 
 #### The Problem
@@ -5403,13 +5403,13 @@ TRANSITIONS = {
     NO_FAMILY: {
         'meet_partner': MARRIED_NO_CHILD,  # eligibility check passes
     },
-    
+
     # From MARRIED_NO_CHILD (married, no kids yet)
     MARRIED_NO_CHILD: {
         'breed': MARRIED_WITH_CHILD,  # child spawned
         'partner_dies': NO_FAMILY,    # back to solo (can remarry)
     },
-    
+
     # From MARRIED_WITH_CHILD (locked, raising child)
     MARRIED_WITH_CHILD: {
         'child_leaves': MARRIED_NO_CHILD,   # child matured, can breed again
@@ -5417,20 +5417,20 @@ TRANSITIONS = {
         'one_parent_dies': SINGLE_PARENT,   # now single parent with child
         'both_parents_die': ORPHAN,         # child becomes orphan
     },
-    
+
     # From SINGLE_PARENT (one parent, one child)
     SINGLE_PARENT: {
         'child_leaves': NO_FAMILY,   # back to solo, can remarry
         'child_dies': NO_FAMILY,     # back to solo, can remarry
         'parent_dies': ORPHAN,       # child becomes orphan
     },
-    
+
     # From ORPHAN (child with no parents)
     ORPHAN: {
         'reach_adulthood': NO_FAMILY,  # mature, become independent
         'die': None,                   # removed from population
     },
-    
+
     # From DIVORCED (was in family, child left, now solo)
     DIVORCED: {
         'meet_partner': MARRIED_NO_CHILD,  # can remarry
@@ -5453,24 +5453,24 @@ def check_breeding_eligibility(agent_a, agent_b, population):
     # Must be married to each other
     if agent_a.family_id != agent_b.family_id:
         return False, "not in same family"
-    
+
     # Must be in MARRIED_NO_CHILD state
     if agent_a.family_state != FamilyState.MARRIED_NO_CHILD:
         return False, f"agent_a state is {agent_a.family_state}"
     if agent_b.family_state != FamilyState.MARRIED_NO_CHILD:
         return False, f"agent_b state is {agent_b.family_state}"
-    
+
     # Population cap
     if len(population) >= population.max_size:
         return False, "population at capacity"
-    
+
     # Maturity check
     maturity_age = 0.2  # agents must be at least 20% through life
     if agent_a.bars['age'] < maturity_age:
         return False, "agent_a too young"
     if agent_b.bars['age'] < maturity_age:
         return False, "agent_b too young"
-    
+
     # High-performer check (for meritocratic mode)
     if population.breeding_mode == "meritocratic":
         performance_threshold = 0.6  # top 60% of population
@@ -5478,7 +5478,7 @@ def check_breeding_eligibility(agent_a, agent_b, population):
             return False, "agent_a performance below threshold"
         if not is_high_performer(agent_b, population):
             return False, "agent_b performance below threshold"
-    
+
     return True, "eligible"
 ```
 
@@ -5491,17 +5491,17 @@ def check_child_maturity(child_agent):
     - age > 0.3 (30% through life)
     OR
     - terminal score > 0.5 on their first "test episode"
-    
+
     This creates graduation mechanics.
     """
     if child_agent.bars['age'] > 0.3:
         return True, "reached maturity age"
-    
+
     # Optional: competency-based graduation
     if hasattr(child_agent, 'test_score'):
         if child_agent.test_score > 0.5:
             return True, "passed competency test"
-    
+
     return False, None
 ```
 
@@ -5516,23 +5516,23 @@ def check_remarriage_eligibility(agent_a, agent_b):
     3. Not related (no parent-child relationship)
     """
     valid_states = {FamilyState.NO_FAMILY, FamilyState.DIVORCED}
-    
+
     if agent_a.family_state not in valid_states:
         return False, f"agent_a state is {agent_a.family_state}"
     if agent_b.family_state not in valid_states:
         return False, f"agent_b state is {agent_b.family_state}"
-    
+
     # Maturity check
     maturity_age = 0.2
     if agent_a.bars['age'] < maturity_age:
         return False, "agent_a too young"
     if agent_b.bars['age'] < maturity_age:
         return False, "agent_b too young"
-    
+
     # Prevent incest (parent can't marry their child)
     if agent_a.agent_id in agent_b.lineage or agent_b.agent_id in agent_a.lineage:
         return False, "agents are related"
-    
+
     return True, "eligible"
 ```
 
@@ -5715,21 +5715,21 @@ With these rules:
 ```yaml
 population_genetics:
   enabled: true
-  
+
   population:
     initial_size: 100
     max_size: 100
     breeding_mode: "meritocratic"  # or "random", "arranged"
-  
+
   family_rules:
     maturity_age: 0.3      # when child can leave family
     min_breeding_age: 0.2  # parents must be this old
     one_child_policy: true # lock breeding while child exists
-    
+
   remarriage:
     enabled: true
     prevent_incest: true
-    
+
   death_replacement:
     enabled: true
     cull_policy: "worst_performers"  # replace deaths by removing worst agents
@@ -5741,8 +5741,8 @@ population_genetics:
 
 ### 7.3 Child Initialization
 
-**Status**: UNDERSPECIFIED  
-**Affects**: L8 (inheritance), population genetics  
+**Status**: UNDERSPECIFIED
+**Affects**: L8 (inheritance), population genetics
 **Current state**: Mentioned but weights/DNA initialization not specified
 
 #### The Problem
@@ -5785,7 +5785,7 @@ When a new child is spawned from two parents:
 def initialize_child(parent_a, parent_b, config):
     """
     Initialize child agent from two parents.
-    
+
     Returns:
         child_agent: new agent with inherited weights and DNA
     """
@@ -5793,19 +5793,19 @@ def initialize_child(parent_a, parent_b, config):
         agent_id=generate_agent_id(),
         config=config
     )
-    
+
     # 1. DNA crossover + mutation
     child_agent.dna = crossover_dna(
         parent_a.dna,
         parent_b.dna,
         crossover_rate=config.genetics.crossover_rate
     )
-    
+
     child_agent.dna = mutate_dna(
         child_agent.dna,
         mutation_rate=config.genetics.mutation_rate
     )
-    
+
     # 2. Weights initialization (configurable)
     if config.genetics.weight_init == "crossover":
         # Average parents' weights
@@ -5813,39 +5813,39 @@ def initialize_child(parent_a, parent_b, config):
             parent_a.weights,
             parent_b.weights
         )
-    
+
     elif config.genetics.weight_init == "clone_best":
         # Clone better parent
         better_parent = parent_a if parent_a.lifetime_reward > parent_b.lifetime_reward else parent_b
         child_agent.weights = copy.deepcopy(better_parent.weights)
-    
+
     elif config.genetics.weight_init == "pretrained":
         # Start from L7 curriculum baseline
         checkpoint = load_checkpoint(config.genetics.pretrained_path)
         child_agent.weights = checkpoint['weights']
-    
+
     elif config.genetics.weight_init == "random":
         # Start from scratch (no inheritance)
         child_agent.weights = initialize_random_weights()
-    
+
     # 3. Training mode
     if config.genetics.child_training == "frozen":
         # Weights are inherited but not updated
         for param in child_agent.parameters():
             param.requires_grad = False
-    
+
     elif config.genetics.child_training == "finetune":
         # Start with inherited weights, continue training with lower LR
         for param in child_agent.parameters():
             param.requires_grad = True
         child_agent.learning_rate = config.genetics.finetune_lr  # e.g., 0.1× parent LR
-    
+
     elif config.genetics.child_training == "full":
         # Start with inherited weights, train normally
         for param in child_agent.parameters():
             param.requires_grad = True
         child_agent.learning_rate = config.genetics.learning_rate
-    
+
     return child_agent
 ```
 
@@ -5855,7 +5855,7 @@ def initialize_child(parent_a, parent_b, config):
 def crossover_dna(dna_a, dna_b, crossover_rate=0.5):
     """
     Combine two parent DNAs with genetic crossover.
-    
+
     DNA structure (from cognitive_topology.yaml):
     {
         'personality': {
@@ -5875,12 +5875,12 @@ def crossover_dna(dna_a, dna_b, crossover_rate=0.5):
     }
     """
     child_dna = {}
-    
+
     for key in dna_a.keys():
         if isinstance(dna_a[key], dict):
             # Recurse for nested dicts
             child_dna[key] = crossover_dna(dna_a[key], dna_b[key], crossover_rate)
-        
+
         elif isinstance(dna_a[key], float):
             # Crossover continuous values
             if random.random() < crossover_rate:
@@ -5889,7 +5889,7 @@ def crossover_dna(dna_a, dna_b, crossover_rate=0.5):
             else:
                 # Take from parent_b
                 child_dna[key] = dna_b[key]
-        
+
         elif isinstance(dna_a[key], list):
             # For lists (like forbid_actions), take union or intersection
             if key == 'forbid_actions':
@@ -5898,7 +5898,7 @@ def crossover_dna(dna_a, dna_b, crossover_rate=0.5):
             else:
                 # For other lists, random choice
                 child_dna[key] = dna_a[key] if random.random() < 0.5 else dna_b[key]
-    
+
     return child_dna
 ```
 
@@ -5908,27 +5908,27 @@ def crossover_dna(dna_a, dna_b, crossover_rate=0.5):
 def mutate_dna(dna, mutation_rate=0.05):
     """
     Apply random mutations to DNA.
-    
+
     For each gene:
     - With probability mutation_rate, perturb the value
     - Perturbation is small (±10% for continuous values)
     """
     mutated = copy.deepcopy(dna)
-    
+
     for key, value in mutated.items():
         if isinstance(value, dict):
             # Recurse for nested dicts
             mutated[key] = mutate_dna(value, mutation_rate)
-        
+
         elif isinstance(value, float):
             if random.random() < mutation_rate:
                 # Add Gaussian noise (σ = 0.1 of current value)
                 noise = random.gauss(0, 0.1 * abs(value))
                 mutated[key] = np.clip(value + noise, 0.0, 1.0)
-        
+
         # Lists (like forbid_actions) don't mutate by default
         # Could add/remove actions with very low probability if desired
-    
+
     return mutated
 ```
 
@@ -5938,19 +5938,19 @@ def mutate_dna(dna, mutation_rate=0.05):
 def average_weights(weights_a, weights_b):
     """
     Average two sets of neural network weights.
-    
+
     Returns:
         averaged_weights: parameter-wise mean
     """
     averaged = {}
-    
+
     for name in weights_a.keys():
         if isinstance(weights_a[name], torch.Tensor):
             averaged[name] = (weights_a[name] + weights_b[name]) / 2.0
         else:
             # For non-tensor values, pick randomly
             averaged[name] = weights_a[name] if random.random() < 0.5 else weights_b[name]
-    
+
     return averaged
 ```
 
@@ -5963,11 +5963,11 @@ genetics:
   # DNA inheritance
   crossover_rate: 0.5      # 50% genes from each parent
   mutation_rate: 0.05      # 5% chance per gene
-  
+
   # Weight initialization
   weight_init: "crossover"  # options: crossover, clone_best, pretrained, random
   pretrained_path: "checkpoints/L7_baseline/step_10000/"  # if using pretrained
-  
+
   # Training mode
   child_training: "finetune"  # options: frozen, finetune, full
   finetune_lr: 0.0001         # learning rate for children (if finetune)
@@ -6134,21 +6134,21 @@ See: `population_genetics.yaml`
 def test_contention_is_deterministic():
     """Same positions → same winner."""
     env = VectorizedTownletEnv(config)
-    
+
     # Scenario: two agents, one affordance
     agents = [
         Agent(position=(6, 5)),  # agent_0
         Agent(position=(5, 6))   # agent_1
     ]
-    
+
     affordance = Affordance(id="job", position=(6, 6), capacity=1)
-    
+
     # Both try INTERACT
     actions = [Action.INTERACT, Action.INTERACT]
-    
+
     # Resolve 100 times (should be identical)
     winners = [env.resolve_contention("job", tick=i)[0] for i in range(100)]
-    
+
     # All should be same winner
     assert len(set(winners)) == 1  # only one unique winner across all runs
     assert winners[0] == [0]  # agent_0 wins (equidistant, lower ID)
@@ -6156,36 +6156,36 @@ def test_contention_is_deterministic():
 def test_family_state_transitions():
     """Verify all state machine transitions."""
     family = Family(parent_a, parent_b)
-    
+
     # Initial state
     assert family.state == FamilyState.MARRIED_NO_CHILD
-    
+
     # Breed
     child = family.spawn_child()
     assert family.state == FamilyState.MARRIED_WITH_CHILD
-    
+
     # Child leaves
     child.age = 0.4  # past maturity
     family.process_maturity()
     assert family.state == FamilyState.MARRIED_NO_CHILD
-    
+
     # One parent dies
     parent_a.health = 0
     family.process_deaths()
     assert family.state == FamilyState.SINGLE_PARENT
-    
+
     # [test remaining transitions...]
 
 def test_child_inherits_dna():
     """Child DNA is crossover of parents."""
     parent_a = Agent(dna={'greed': 0.8, 'curiosity': 0.3})
     parent_b = Agent(dna={'greed': 0.4, 'curiosity': 0.7})
-    
+
     child = initialize_child(parent_a, parent_b, config)
-    
+
     # Child's greed should be one of parent values (or mutated nearby)
     assert child.dna['greed'] in [0.8, 0.4] or abs(child.dna['greed'] - 0.8) < 0.2
-    
+
     # Crossover should mix traits
     # (Test with multiple children to check distribution)
 ```
@@ -6237,32 +6237,32 @@ population:
   initial_size: 100
   max_size: 100  # constant population
   replacement_policy: "cull_worst"  # when someone dies, remove worst performer
-  
+
 family_formation:
   mode: "meritocratic"
   eligibility:
     min_age: 0.2  # must be 20% through life
     performance_threshold: 0.6  # top 60% of population
     family_state: ["NO_FAMILY", "DIVORCED"]
-  
+
   pairing_strategy: "complementary_dna"  # match compatible personalities
-  
+
 breeding:
   one_child_policy: true
   child_leaves_at_age: 0.3  # child matures at 30% through life
-  
+
 child_initialization:
   weight_init: "crossover"  # average parents' neural weights
   training_mode: "finetune"  # continue learning from inherited weights
-  
+
   dna_inheritance:
     crossover_rate: 0.5  # 50% genes from each parent
     mutation_rate: 0.05  # 5% chance per gene
-    
+
 death_and_replacement:
   natural_death_age: 1.0  # retirement
   early_death: ["energy <= 0", "health <= 0"]
-  
+
   on_death:
     - remove_from_population
     - identify_worst_performer  # by lifetime reward
@@ -6305,11 +6305,11 @@ for family in families:
         # Child leaves home
         family.child.family_id = None
         family.child.family_state = NO_FAMILY
-        
+
         # Parents can breed again
         family.parent_a.family_state = MARRIED_NO_CHILD
         family.parent_b.family_state = MARRIED_NO_CHILD
-        
+
 # If parent dies while child is young
 parent_a.health = 0  # death
 family.state = SINGLE_PARENT
@@ -6379,23 +6379,23 @@ The meritocratic baseline is just one configuration. Alternative modes enable di
 
 family_formation:
   mode: "dynasty"
-  
+
 breeding:
   one_child_policy: false  # ← KEY CHANGE: multiple children allowed
   primogeniture: true      # first child is heir
-  
+
 inheritance:
   on_parent_death:
     transfer_wealth: true   # child gets parents' money
     transfer_affordances: false  # (for future: private property)
     keep_family_id: true    # dynasty persists across generations
-  
+
   heir_selection: "oldest"  # or "most_successful"
-  
+
 child_initialization:
   weight_init: "clone_best"  # ← inherit best parent's full policy
   training_mode: "frozen"    # ← no learning, pure genetic selection
-  
+
   dna_inheritance:
     crossover_rate: 0.7   # more parental influence
     mutation_rate: 0.02   # less mutation (preserve dynasty traits)
@@ -6448,11 +6448,11 @@ child.money += parent_a.money  # inherits wealth
 family_formation:
   mode: "polygamous"
   max_families_per_agent: 2  # can be in 2 families at once
-  
+
 breeding:
   one_child_policy: true  # per family
   # Agent can have 2 children (one per family) simultaneously
-  
+
 child_initialization:
   weight_init: "crossover"
   training_mode: "full"  # children learn independently
@@ -6504,12 +6504,12 @@ agent_a.family_comm_channels = {
 
 family_formation:
   mode: "arranged"
-  
+
   pairing_strategy: "maximize_diversity"
   diversity_metric:
     - personality_distance  # pair high-greed with low-greed
     - skill_complementarity  # pair good-at-X with good-at-Y
-  
+
   eligibility:
     min_age: 0.2
     performance_threshold: 0.4  # ← lower bar (60% → 40%)
@@ -6522,27 +6522,27 @@ family_formation:
 def select_complementary_pair(eligible_agents):
     """
     Find pair with maximum genetic distance.
-    
-    Diversity score = 
-        |greed_a - greed_b| + 
-        |curiosity_a - curiosity_b| + 
+
+    Diversity score =
+        |greed_a - greed_b| +
+        |curiosity_a - curiosity_b| +
         |neuroticism_a - neuroticism_b| +
         |agreeableness_a - agreeableness_b|
     """
     max_diversity = -inf
     best_pair = None
-    
+
     for agent_a in eligible_agents:
         for agent_b in eligible_agents:
             if agent_a == agent_b:
                 continue
-            
+
             diversity = compute_dna_distance(agent_a.dna, agent_b.dna)
-            
+
             if diversity > max_diversity:
                 max_diversity = diversity
                 best_pair = (agent_a, agent_b)
-    
+
     return best_pair
 
 def compute_dna_distance(dna_a, dna_b):
@@ -6723,11 +6723,11 @@ class Family:
         self.child = None
         self.state = FamilyState.MARRIED_NO_CHILD
         self.creation_tick = current_tick
-        
+
     def can_breed(self) -> bool:
         """Check if family can spawn a child."""
         return self.state == FamilyState.MARRIED_NO_CHILD
-    
+
     def spawn_child(self, config) -> Agent:
         """Create child from parents."""
         child = initialize_child(
@@ -6738,7 +6738,7 @@ class Family:
         self.child = child
         self.state = FamilyState.MARRIED_WITH_CHILD
         return child
-    
+
     def process_maturity(self):
         """Check if child has matured."""
         if self.child and self.child.age > config.child_leaves_at_age:
@@ -6746,7 +6746,7 @@ class Family:
             self.child.family_state = FamilyState.NO_FAMILY
             self.child = None
             self.state = FamilyState.MARRIED_NO_CHILD
-    
+
     def process_deaths(self):
         """Handle parent or child death."""
         if self.parent_a.health <= 0:
@@ -6764,7 +6764,7 @@ class Family:
 
 class BreedingSelector:
     """Selects which agents form families and breed."""
-    
+
     def select_breeding_pairs(
         self,
         population: list[Agent],
@@ -6773,24 +6773,24 @@ class BreedingSelector:
     ) -> list[tuple[Agent, Agent]]:
         """
         Select compatible pairs for breeding.
-        
+
         Args:
             population: All agents
             mode: "meritocratic", "arranged", "polygamous"
             config: Genetics configuration
-        
+
         Returns:
             List of (agent_a, agent_b) pairs to form families
         """
         eligible = self.filter_eligible(population, config)
-        
+
         if mode == "meritocratic":
             return self._select_meritocratic(eligible, config)
         elif mode == "arranged":
             return self._select_arranged(eligible, config)
         elif mode == "polygamous":
             return self._select_polygamous(eligible, config)
-    
+
     def filter_eligible(self, population, config):
         """Filter agents who can breed."""
         eligible = []
@@ -6798,55 +6798,55 @@ class BreedingSelector:
             # Check age
             if agent.bars['age'] < config.min_breeding_age:
                 continue
-            
+
             # Check family state
             if agent.family_state not in [FamilyState.NO_FAMILY, FamilyState.DIVORCED]:
                 continue
-            
+
             # Check performance (if meritocratic)
             if config.mode == "meritocratic":
                 if agent.lifetime_reward < self.performance_threshold:
                     continue
-            
+
             eligible.append(agent)
-        
+
         return eligible
-    
+
     def _select_meritocratic(self, eligible, config):
         """Pair highest performers."""
         # Sort by lifetime reward
         eligible.sort(key=lambda a: -a.lifetime_reward)
-        
+
         pairs = []
         for i in range(0, len(eligible) - 1, 2):
             pairs.append((eligible[i], eligible[i+1]))
-        
+
         return pairs
-    
+
     def _select_arranged(self, eligible, config):
         """Pair maximally diverse agents."""
         pairs = []
         remaining = set(eligible)
-        
+
         while len(remaining) >= 2:
             # Find most diverse pair
             best_pair = None
             max_diversity = -float('inf')
-            
+
             for agent_a in remaining:
                 for agent_b in remaining:
                     if agent_a == agent_b:
                         continue
-                    
+
                     diversity = compute_dna_distance(agent_a.dna, agent_b.dna)
                     if diversity > max_diversity:
                         max_diversity = diversity
                         best_pair = (agent_a, agent_b)
-            
+
             pairs.append(best_pair)
             remaining.remove(best_pair[0])
             remaining.remove(best_pair[1])
-        
+
         return pairs
 ```
 
@@ -6855,7 +6855,7 @@ class BreedingSelector:
 
 class PopulationController:
     """Maintains population size and composition."""
-    
+
     def maintain_population_cap(
         self,
         population: list[Agent],
@@ -6864,7 +6864,7 @@ class PopulationController:
     ):
         """
         If population exceeds cap, remove worst performers.
-        
+
         Args:
             population: Current population
             max_size: Maximum allowed population
@@ -6872,32 +6872,32 @@ class PopulationController:
         """
         if len(population) <= max_size:
             return  # under cap, nothing to do
-        
+
         excess = len(population) - max_size
-        
+
         if replacement_policy == "cull_worst":
             # Sort by lifetime reward, remove bottom N
             population.sort(key=lambda a: a.lifetime_reward)
             to_remove = population[:excess]
-        
+
         elif replacement_policy == "oldest":
             # Remove agents closest to natural death
             population.sort(key=lambda a: -a.bars['age'])
             to_remove = population[:excess]
-        
+
         elif replacement_policy == "random":
             import random
             to_remove = random.sample(population, excess)
-        
+
         for agent in to_remove:
             self.remove_agent(agent, population)
-    
+
     def remove_agent(self, agent, population):
         """Remove agent and update family structures."""
         # If agent is in a family, update family state
         if agent.family_id:
             family = self.families[agent.family_id]
-            
+
             if agent in [family.parent_a, family.parent_b]:
                 # Parent died
                 family.process_deaths()
@@ -6905,7 +6905,7 @@ class PopulationController:
                 # Child died
                 family.child = None
                 family.state = FamilyState.MARRIED_NO_CHILD
-        
+
         # Remove from population
         population.remove(agent)
 ```
@@ -6921,21 +6921,21 @@ class PopulationController:
 population_genetics:
   enabled: true
   mode: "meritocratic"
-  
+
   population:
     initial_size: 100
     max_size: 100
     replacement_policy: "cull_worst"
-  
+
   family_formation:
     min_age: 0.2
     performance_threshold: 0.6
     pairing_strategy: "highest_performers"
-  
+
   breeding:
     one_child_policy: true
     child_leaves_at_age: 0.3
-  
+
   child_initialization:
     weight_init: "crossover"
     training_mode: "finetune"
@@ -6950,12 +6950,12 @@ population_genetics:
 population_genetics:
   enabled: true
   mode: "dynasty"
-  
+
   inheritance:
     transfer_wealth: true
     primogeniture: true
     keep_family_id: true
-  
+
   child_initialization:
     weight_init: "clone_best"
     training_mode: "frozen"
@@ -6970,7 +6970,7 @@ population_genetics:
 population_genetics:
   enabled: true
   mode: "arranged"
-  
+
   family_formation:
     performance_threshold: 0.4  # lower bar
     pairing_strategy: "maximize_diversity"
@@ -6996,10 +6996,10 @@ Townlet is not about towns. It's about **bars, cascades, and affordances**.
 
 bars:
   - state variables that change over time
-  
+
 cascades:
   - how neglecting one bar affects others
-  
+
 affordances:
   - actions that change bars
   - with costs, effects, and constraints
@@ -7038,37 +7038,37 @@ bars:
     description: "Gross Domestic Product"
     initial: 1.0
     base_depletion: 0.0  # modulated by policies
-    
+
   - name: "inflation"
     description: "Price level change rate"
     initial: 0.02  # 2% baseline
     base_depletion: 0.0
-    
+
   - name: "unemployment"
     description: "Labor market slack"
     initial: 0.05  # 5% baseline
     base_depletion: 0.0
-    
+
   - name: "debt"
     description: "Government debt as % of GDP"
     initial: 0.60  # 60% debt/GDP ratio
     base_depletion: 0.01  # grows slightly (deficit spending)
-    
+
   - name: "consumer_confidence"
     description: "Economic sentiment"
     initial: 0.70
     base_depletion: -0.002  # slowly improves by default
-    
+
   - name: "asset_prices"
     description: "Stock/housing market levels"
     initial: 1.0
     base_depletion: 0.0
-    
+
   - name: "exchange_rate"
     description: "Currency value (higher = stronger)"
     initial: 1.0
     base_depletion: 0.0
-    
+
   - name: "credit_availability"
     description: "Ease of borrowing"
     initial: 0.70
@@ -7085,38 +7085,38 @@ cascades:
     target: "consumer_confidence"
     threshold: 0.04  # >4% inflation
     strength: 0.020  # -2% confidence per tick
-    
+
   - name: "low_confidence_reduces_gdp"
     source: "consumer_confidence"
     target: "gdp"
     threshold: 0.50  # <50% confidence
     strength: 0.010  # -1% GDP per tick
-    
+
   - name: "high_unemployment_lowers_confidence"
     source: "unemployment"
     target: "consumer_confidence"
     threshold: 0.08  # >8% unemployment
     strength: 0.015
-    
+
   - name: "recession_increases_unemployment"
     source: "gdp"
     target: "unemployment"
     threshold: 0.95  # GDP <95% of baseline
     strength: 0.005
     operator: "<"
-    
+
   - name: "high_debt_limits_spending"
     source: "debt"
     target: "gdp"
     threshold: 0.90  # >90% debt/GDP
     strength: 0.008
-    
+
   - name: "loose_credit_inflates_assets"
     source: "credit_availability"
     target: "asset_prices"
     threshold: 0.80  # very loose credit
     strength: 0.010
-    
+
   - name: "asset_bubble_pops"
     source: "asset_prices"
     target: "consumer_confidence"
@@ -7140,7 +7140,7 @@ affordances:
       - { meter: "unemployment", amount: 0.01 }    # slight job loss
       - { meter: "exchange_rate", amount: 0.05 }   # strengthen currency
     cooldown: 3  # can't raise rates every tick
-    
+
   - id: "lower_interest_rates"
     description: "Federal Reserve decreases rates"
     interaction_type: "instant"
@@ -7151,7 +7151,7 @@ affordances:
       - { meter: "unemployment", amount: -0.01 }   # more jobs
       - { meter: "exchange_rate", amount: -0.05 }  # weaken currency
     cooldown: 3
-    
+
   - id: "government_spending"
     description: "Fiscal stimulus"
     interaction_type: "instant"
@@ -7161,7 +7161,7 @@ affordances:
       - { meter: "gdp", amount: 0.03 }
       - { meter: "unemployment", amount: -0.02 }
       - { meter: "consumer_confidence", amount: 0.02 }
-    
+
   - id: "austerity"
     description: "Reduce government spending"
     interaction_type: "instant"
@@ -7170,7 +7170,7 @@ affordances:
       - { meter: "gdp", amount: -0.02 }   # contractionary
       - { meter: "unemployment", amount: 0.02 }
       - { meter: "consumer_confidence", amount: -0.01 }
-    
+
   - id: "quantitative_easing"
     description: "Central bank buys assets"
     interaction_type: "multi_tick"
@@ -7179,7 +7179,7 @@ affordances:
       - { meter: "asset_prices", amount: 0.03 }
       - { meter: "credit_availability", amount: 0.02 }
       - { meter: "inflation", amount: 0.005 }
-    
+
   - id: "wait"
     description: "Do nothing (let market stabilize)"
     interaction_type: "instant"
@@ -7227,29 +7227,29 @@ bars:
   - name: "vegetation"
     initial: 0.80
     base_depletion: -0.01  # grows naturally
-    
+
   - name: "herbivore_pop"
     initial: 0.50
     base_depletion: 0.005  # slight natural decline (hunger)
-    
+
   - name: "predator_pop"
     initial: 0.30
     base_depletion: 0.010  # higher natural decline
-    
+
   # Environmental factors
   - name: "water_availability"
     initial: 1.0
     base_depletion: 0.002  # droughts
-    
+
   - name: "soil_quality"
     initial: 0.80
     base_depletion: 0.001  # degradation
-    
+
   # Agent-specific (if modeling individual animals)
   - name: "energy"  # for the agent (e.g., a predator)
     initial: 0.70
     base_depletion: 0.010
-    
+
   - name: "health"
     initial: 1.0
     base_depletion: 0.0
@@ -7265,34 +7265,34 @@ cascades:
     target: "vegetation"
     threshold: 0.40  # if herbivores > 40% of capacity
     strength: 0.020  # they consume vegetation
-    
+
   - name: "overgrazing_damages_soil"
     source: "vegetation"
     target: "soil_quality"
     threshold: 0.30  # if vegetation < 30%
     strength: 0.005
     operator: "<"
-    
+
   - name: "poor_soil_limits_vegetation"
     source: "soil_quality"
     target: "vegetation"
     threshold: 0.50
     strength: 0.010
     operator: "<"
-    
+
   - name: "predators_eat_herbivores"
     source: "predator_pop"
     target: "herbivore_pop"
     threshold: 0.25
     strength: 0.015
-    
+
   - name: "low_herbivores_starve_predators"
     source: "herbivore_pop"
     target: "predator_pop"
     threshold: 0.20
     strength: 0.020
     operator: "<"
-    
+
   - name: "drought_kills_vegetation"
     source: "water_availability"
     target: "vegetation"
@@ -7317,7 +7317,7 @@ affordances:
       - { meter: "energy", amount: 0.30 }  # gain from kill (final tick)
       - { meter: "herbivore_pop", amount: -0.02 }  # reduce prey population
     success_probability: 0.60  # hunts can fail
-    
+
   - id: "graze"  # for herbivore agent
     description: "Eat vegetation"
     interaction_type: "instant"
@@ -7325,7 +7325,7 @@ affordances:
       - { meter: "vegetation", amount: -0.03 }
     effects:
       - { meter: "energy", amount: 0.20 }
-    
+
   - id: "rest"
     description: "Rest and recover"
     interaction_type: "multi_tick"
@@ -7333,7 +7333,7 @@ affordances:
     effects_per_tick:
       - { meter: "energy", amount: 0.10 }
       - { meter: "health", amount: 0.05 }
-    
+
   - id: "migrate"
     description: "Move to better territory"
     interaction_type: "instant"
@@ -7386,31 +7386,31 @@ bars:
   - name: "anxiety"
     initial: 0.60
     base_depletion: 0.005  # increases over time
-    
+
   - name: "depression"
     initial: 0.50
     base_depletion: 0.003
-    
+
   - name: "sleep_quality"
     initial: 0.60
     base_depletion: -0.002  # improves slightly naturally
-    
+
   - name: "medication_level"
     initial: 0.0
     base_depletion: 0.01  # medication wears off
-    
+
   - name: "therapy_progress"
     initial: 0.0
     base_depletion: 0.0  # cumulative, doesn't decay
-    
+
   - name: "social_support"
     initial: 0.50
     base_depletion: 0.002  # relationships require maintenance
-    
+
   - name: "physical_health"
     initial: 0.80
     base_depletion: 0.001
-    
+
   - name: "daily_functioning"
     initial: 0.70
     base_depletion: 0.0  # modulated by other bars
@@ -7426,33 +7426,33 @@ cascades:
     target: "sleep_quality"
     threshold: 0.60
     strength: 0.015
-    
+
   - name: "poor_sleep_worsens_depression"
     source: "sleep_quality"
     target: "depression"
     threshold: 0.40
     strength: 0.010
     operator: "<"
-    
+
   - name: "depression_reduces_social"
     source: "depression"
     target: "social_support"
     threshold: 0.50
     strength: 0.012
-    
+
   - name: "low_social_worsens_depression"
     source: "social_support"
     target: "depression"
     threshold: 0.30
     strength: 0.015
     operator: "<"
-    
+
   - name: "anxiety_impairs_function"
     source: "anxiety"
     target: "daily_functioning"
     threshold: 0.70
     strength: 0.020
-    
+
   - name: "exercise_improves_mood"
     source: "physical_health"
     target: "depression"
@@ -7477,7 +7477,7 @@ affordances:
       - { meter: "anxiety", amount: -0.05 }
       - { meter: "depression", amount: -0.03 }
     cooldown: 24  # weekly sessions
-    
+
   - id: "medication"
     description: "Take prescribed medication"
     interaction_type: "instant"
@@ -7486,7 +7486,7 @@ affordances:
       - { meter: "anxiety", amount: -0.10 }  # fast relief
     side_effects:
       - { meter: "sleep_quality", amount: -0.05 }  # some meds affect sleep
-    
+
   - id: "exercise"
     description: "Physical activity"
     interaction_type: "multi_tick"
@@ -7497,7 +7497,7 @@ affordances:
       - { meter: "physical_health", amount: 0.10 }
       - { meter: "depression", amount: -0.05 }
       - { meter: "sleep_quality", amount: 0.05 }
-    
+
   - id: "social_activity"
     description: "Spend time with friends"
     interaction_type: "multi_tick"
@@ -7507,7 +7507,7 @@ affordances:
     effects:
       - { meter: "social_support", amount: 0.15 }
       - { meter: "depression", amount: -0.08 }
-    
+
   - id: "rest"
     description: "Rest and recover"
     interaction_type: "instant"
@@ -7557,27 +7557,27 @@ bars:
   - name: "inventory_level"
     initial: 0.60
     base_depletion: 0.02  # daily sales
-    
+
   - name: "customer_satisfaction"
     initial: 0.80
     base_depletion: 0.0
-    
+
   - name: "cash_reserves"
     initial: 1.0
     base_depletion: 0.01  # operating costs
-    
+
   - name: "supplier_reliability"
     initial: 0.70
     base_depletion: 0.001
-    
+
   - name: "shipping_capacity"
     initial: 0.80
     base_depletion: 0.0
-    
+
   - name: "warehouse_capacity"
     initial: 0.90
     base_depletion: 0.0
-    
+
   - name: "demand_forecast"
     initial: 0.50  # medium demand
     base_depletion: 0.0  # fluctuates
@@ -7593,14 +7593,14 @@ cascades:
     threshold: 0.20  # low stock
     strength: 0.030
     operator: "<"
-    
+
   - name: "low_satisfaction_reduces_demand"
     source: "customer_satisfaction"
     target: "demand_forecast"
     threshold: 0.50
     strength: 0.010
     operator: "<"
-    
+
   - name: "overstock_ties_up_cash"
     source: "inventory_level"
     target: "cash_reserves"
@@ -7620,14 +7620,14 @@ affordances:
     effects:
       - { meter: "inventory_level", amount: 0.40 }  # after lead time
     lead_time: 5  # 5 ticks delay
-    
+
   - id: "expedited_shipping"
     costs:
       - { meter: "cash_reserves", amount: 0.50 }  # expensive
     effects:
       - { meter: "inventory_level", amount: 0.40 }
     lead_time: 1  # fast delivery
-    
+
   - id: "promote_sale"
     costs:
       - { meter: "cash_reserves", amount: 0.10 }
@@ -7869,7 +7869,7 @@ The human observer test generalizes across domains.
 space:
   type: "continuous"
   bounds: [[0, 10], [0, 10]]  # 2D continuous
-  
+
 affordances:
   - id: "job"
     position: [3.5, 7.2]  # continuous coordinates
@@ -7988,7 +7988,7 @@ python -m pytest tests/test_ethics_filter.py
 # Expected: Vetoes are deterministic (same input → same output)
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Low (straightforward refactor)
 
 ---
@@ -8011,7 +8011,7 @@ python -m pytest tests/test_checkpoint_security.py
 # Expected: Tampering raises CheckpointTamperedError
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Low (standard cryptographic pattern)
 
 ---
@@ -8033,7 +8033,7 @@ python -m pytest tests/test_world_config_hash.py
 # Expected: Hash stable across runs with same config
 ```
 
-**Estimated time**: 1 day  
+**Estimated time**: 1 day
 **Risk**: Low (hash computation is straightforward)
 
 ---
@@ -8070,7 +8070,7 @@ python -m pytest tests/test_contention.py
 # Expected: Loser receives action_failed=True
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Low (clear specification)
 
 ---
@@ -8093,7 +8093,7 @@ python -m pytest tests/test_family_lifecycle.py
 # Expected: Death updates family state correctly
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Medium (complex state machine, many edge cases)
 
 ---
@@ -8116,7 +8116,7 @@ python -m pytest tests/test_child_initialization.py
 # Expected: Weight inheritance works for all modes
 ```
 
-**Estimated time**: 1 day  
+**Estimated time**: 1 day
 **Risk**: Low (clear algorithms)
 
 ---
@@ -8153,7 +8153,7 @@ python -m pytest tests/test_cue_engine.py
 # Expected: Priority ordering works
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Low (clear specification in Section 5)
 
 ---
@@ -8184,7 +8184,7 @@ python -m pytest tests/test_social_observations.py
 # Expected: Padding works correctly
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Medium (careful indexing, padding edge cases)
 
 ---
@@ -8203,7 +8203,7 @@ python -m pytest tests/test_social_observations.py
 # Expected: Module C outputs prediction (even if untrained)
 ```
 
-**Estimated time**: 1 day  
+**Estimated time**: 1 day
 **Risk**: Low (architecture already defined, just connecting)
 
 ---
@@ -8240,7 +8240,7 @@ python -m pytest tests/test_communication_action.py
 # Expected: Signal persists across ticks until changed
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Low (straightforward state management)
 
 ---
@@ -8266,7 +8266,7 @@ python -m pytest tests/test_family_observations.py
 # Expected: Non-family agents receive zeros
 ```
 
-**Estimated time**: 2 days  
+**Estimated time**: 2 days
 **Risk**: Low (similar to social observations)
 
 ---
@@ -8287,7 +8287,7 @@ python scripts/run_episode.py --level L8 --num_agents 3 --families 1
 # Expected: SET_COMM_CHANNEL actions in telemetry
 ```
 
-**Estimated time**: 1 day  
+**Estimated time**: 1 day
 **Risk**: Low (integration test)
 
 ---
@@ -8332,7 +8332,7 @@ python scripts/run_family_episode.py
 - L3: 80%+ retirement rate, mean score > 0.65
 ```
 
-**Estimated time**: 1 week (parallel training on GPU)  
+**Estimated time**: 1 week (parallel training on GPU)
 **Risk**: Medium (may need hyperparameter tuning)
 
 ---
@@ -8354,7 +8354,7 @@ python scripts/run_family_episode.py
 - L5: Uses WAIT strategically (arrive early, wait for open)
 ```
 
-**Estimated time**: 1 week  
+**Estimated time**: 1 week
 **Risk**: High (LSTM training is finicky, may need architecture tuning)
 
 ---
@@ -8376,7 +8376,7 @@ python scripts/run_family_episode.py
 - Cue embeddings are learned (not random)
 ```
 
-**Estimated time**: 1 week  
+**Estimated time**: 1 week
 **Risk**: Medium (depends on data quality)
 
 ---
@@ -8398,7 +8398,7 @@ python scripts/run_family_episode.py
 - L7: Retirement rate matches L5 (no performance degradation)
 ```
 
-**Estimated time**: 1 week  
+**Estimated time**: 1 week
 **Risk**: High (social reasoning is complex, may need architecture changes)
 
 ---
@@ -8422,7 +8422,7 @@ python scripts/run_family_episode.py
 - Family coordination gain > 10% over solo agents
 ```
 
-**Estimated time**: 2 weeks (long training, extensive analysis)  
+**Estimated time**: 2 weeks (long training, extensive analysis)
 **Risk**: Very High (emergent communication may not emerge reliably)
 
 ---
@@ -8443,7 +8443,7 @@ python scripts/run_family_episode.py
 - Training time: curriculum < 2× scratch training
 ```
 
-**Estimated time**: 1 week  
+**Estimated time**: 1 week
 **Risk**: Medium (may not see curriculum benefit)
 
 ---
@@ -8466,7 +8466,7 @@ python scripts/run_family_episode.py
 - Code + configs are reproducible
 ```
 
-**Estimated time**: 1 week  
+**Estimated time**: 1 week
 **Risk**: Low (exploratory, no specific target)
 
 ---
@@ -8494,7 +8494,7 @@ python scripts/run_family_episode.py
 - Examples cover L0-L8 + all genetics modes
 ```
 
-**Estimated time**: 2 weeks  
+**Estimated time**: 2 weeks
 **Risk**: Low (tedious but straightforward)
 
 ---
@@ -8519,7 +8519,7 @@ townlet validate --config configs/my_world/
 - Templates cover 80% of use cases
 ```
 
-**Estimated time**: 1 week  
+**Estimated time**: 1 week
 **Risk**: Low
 
 ---
@@ -8540,7 +8540,7 @@ townlet validate --config configs/my_world/
 - No critical bugs in issue tracker
 ```
 
-**Estimated time**: 1 week  
+**Estimated time**: 1 week
 **Risk**: Medium (achieving good coverage is time-consuming)
 
 ---
@@ -8564,7 +8564,7 @@ townlet validate --config configs/my_world/
 - Featured in RL newsletter/podcast
 ```
 
-**Estimated time**: Ongoing  
+**Estimated time**: Ongoing
 **Risk**: High (adoption is unpredictable)
 
 ---
@@ -8721,7 +8721,7 @@ townlet validate --config configs/my_world/
 
 #### Risk 1: LSTM Training Fails (L4-L5)
 
-**Probability**: Medium (~40%)  
+**Probability**: Medium (~40%)
 **Impact**: High (blocks L6-L8)
 
 **Mitigation**:
@@ -8735,7 +8735,7 @@ townlet validate --config configs/my_world/
 
 #### Risk 2: Emergent Communication Doesn't Emerge (L8)
 
-**Probability**: High (~60%)  
+**Probability**: High (~60%)
 **Impact**: Medium (L8 is research frontier, not core platform)
 
 **Mitigation**:
@@ -8749,7 +8749,7 @@ townlet validate --config configs/my_world/
 
 #### Risk 3: Multi-Agent Training is Unstable (L6-L7)
 
-**Probability**: Medium (~50%)  
+**Probability**: Medium (~50%)
 **Impact**: High (blocks social reasoning)
 
 **Mitigation**:
@@ -8763,7 +8763,7 @@ townlet validate --config configs/my_world/
 
 #### Risk 4: Performance Degradation Across Curriculum
 
-**Probability**: Low (~20%)  
+**Probability**: Low (~20%)
 **Impact**: Medium (curriculum value unclear)
 
 **Mitigation**:
@@ -8776,7 +8776,7 @@ townlet validate --config configs/my_world/
 
 #### Risk 5: Adoption Fails (Post-Release)
 
-**Probability**: Medium (~50%)  
+**Probability**: Medium (~50%)
 **Impact**: Low (research value exists regardless)
 
 **Mitigation**:
@@ -8927,22 +8927,22 @@ If NO to any:
 
 #### Cut Order (if 4 months becomes 3 months)
 
-**Week 1**: No cuts (blockers are critical)  
-**Week 2**: No cuts (specs are foundational)  
-**Week 3**: Cut L7 (keep L6 with sparse cues)  
-**Week 4**: Cut L8 entirely (defer to future work)  
-**Month 2**: No cuts (training is essential)  
-**Month 3**: Cut L8 training, simplify experiments to 1 pilot  
-**Month 4**: Cut video tutorials, reduce test coverage to 60%  
+**Week 1**: No cuts (blockers are critical)
+**Week 2**: No cuts (specs are foundational)
+**Week 3**: Cut L7 (keep L6 with sparse cues)
+**Week 4**: Cut L8 entirely (defer to future work)
+**Month 2**: No cuts (training is essential)
+**Month 3**: Cut L8 training, simplify experiments to 1 pilot
+**Month 4**: Cut video tutorials, reduce test coverage to 60%
 
 **Result**: 3-month plan focuses on L0-L6, solid foundation for future work
 
 #### Cut Order (if 4 months becomes 2 months)
 
-**Week 1-2**: Combine (fix blockers + critical specs only)  
-**Week 3-4**: Skip social obs, keep L0-L5 only  
-**Month 2**: Train L0-L5 only  
-**Month 3-4**: Documentation + release (L0-L5 only)  
+**Week 1-2**: Combine (fix blockers + critical specs only)
+**Week 3-4**: Skip social obs, keep L0-L5 only
+**Month 2**: Train L0-L5 only
+**Month 3-4**: Documentation + release (L0-L5 only)
 
 **Result**: 2-month plan is "Townlet Core" (single-agent, no social)
 
@@ -9128,10 +9128,10 @@ If NO to any:
 
 ---
 
-**Critical path**: Blockers → Specs → Training → Release  
-**Buffer**: 2 weeks (can absorb delays in Month 2-3)  
-**Total time**: 4 months to v1.0.0  
-**Total cost**: ~$1,000 compute + 4 months salary  
+**Critical path**: Blockers → Specs → Training → Release
+**Buffer**: 2 weeks (can absorb delays in Month 2-3)
+**Total time**: 4 months to v1.0.0
+**Total cost**: ~$1,000 compute + 4 months salary
 
 **Next action**: Start Week 1, Monday, with EthicsFilter refactor.
 
@@ -9209,7 +9209,7 @@ terminal_bonus = quality_of_life_at_retirement  # long-horizon planning
 Most multi-agent RL simulators:
 
 - **Hardcode physics** in Python → impossible to compare across experiments
-- **Give agents omniscience** → unrealistic policies that break on deployment  
+- **Give agents omniscience** → unrealistic policies that break on deployment
 - **Use dense reward shaping** → agents follow breadcrumbs, don't discover strategies
 - **Black-box checkpoints** → can't audit "which brain did what"
 
@@ -9484,7 +9484,7 @@ family_comm_channel = [0.123, 0.456, 0.0]  # what family members broadcast
 ### Core Docs
 
 - **[Quick Start](docs/QUICKSTART.md)** — 10-minute tutorial
-- **[Tutorial](docs/TUTORIAL.md)** — 30-minute walkthrough  
+- **[Tutorial](docs/TUTORIAL.md)** — 30-minute walkthrough
 - **[Configuration Reference](docs/configuration.md)** — Complete YAML spec
 - **[Curriculum Guide](docs/curriculum.md)** — L0-L8 progression
 - **[API Reference](docs/API_REFERENCE.md)** — Python API

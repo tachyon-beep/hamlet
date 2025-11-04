@@ -18,6 +18,7 @@ Implement variable-size meter system to support 1-32 meters instead of hardcoded
 ## Problem Statement
 
 The current implementation had 35+ locations with hardcoded assumptions about 8 meters:
+
 - `BarsConfig` validation required exactly 8 meters
 - Tensor allocations used `torch.zeros(8)`
 - Observation dimension calculations used `+ 8` for meters
@@ -28,6 +29,7 @@ The current implementation had 35+ locations with hardcoded assumptions about 8 
 - Recurrent networks hardcoded `num_meters=8`
 
 This prevented:
+
 - Creating minimal universes (e.g., 4 meters for pedagogy)
 - Creating extended universes (e.g., 12+ meters for research)
 - Transfer learning across different meter configurations
@@ -36,6 +38,7 @@ This prevented:
 ## Objectives
 
 ### Primary Goals
+
 - [x] Update config schema to accept 1-32 meters
 - [x] Implement dynamic tensor sizing in engine layer
 - [x] Calculate observation dimensions dynamically
@@ -43,6 +46,7 @@ This prevented:
 - [x] Fix all hardcoded meter indices (action masking, costs, recurrent networks)
 
 ### Success Criteria
+
 - [x] BarsConfig validates 1-32 meters (was: exactly 8)
 - [x] All tensors sized dynamically based on `meter_count`
 - [x] Observation dimension computed from `meter_count`
@@ -57,11 +61,13 @@ This prevented:
 **PR #1**: https://github.com/tachyon-beep/hamlet/pull/1
 
 ### Implementation Summary
+
 - **Total Tests**: 35 (all passing)
 - **Files Modified**: 12 (6 source, 6 test/docs)
 - **Commits**: 9 (TDD RED-GREEN-REFACTOR + Codex fixes)
 
 ### Key Changes
+
 1. Config schema accepts 1-32 meters
 2. Dynamic tensor sizing throughout
 3. Checkpoint metadata validation
@@ -72,7 +78,9 @@ This prevented:
 8. Comprehensive test coverage (35 tests)
 
 ### Codex Review Fixes (Post-Implementation)
+
 Three critical bugs discovered and fixed:
+
 1. **Action masking** (a75e5e5): Used hardcoded energy/health indices → IndexError on 4-meter configs
 2. **Action costs** (de4dd24): Used hardcoded 8-element cost tensors → RuntimeError on 4-meter configs
 3. **Recurrent networks** (6c5b32d): Used hardcoded `num_meters=8` → Wrong features parsed from observations
@@ -96,6 +104,7 @@ pytest tests/test_townlet/unit/environment/test_variable_meters.py \
 ```
 
 **Test Breakdown:**
+
 - 12 config validation tests
 - 11 engine dynamic sizing tests
 - 4 checkpoint metadata tests

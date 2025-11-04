@@ -441,7 +441,6 @@ class UnifiedServer:
         """
         try:
             import subprocess
-            import webbrowser
 
             # Find frontend directory (project root / frontend)
             frontend_dir = Path(__file__).parent.parent.parent.parent / "frontend"
@@ -494,6 +493,7 @@ class UnifiedServer:
                     # Extract port from output like "Local:   http://localhost:5173/"
                     if "Local:" in line and "localhost:" in line:
                         import re
+
                         port_match = re.search(r"localhost:(\d+)", line)
                         if port_match:
                             detected_port = int(port_match.group(1))

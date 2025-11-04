@@ -33,6 +33,7 @@ Wildcards:
     * matches anything
     ** matches path components (for modules)
 """
+
 import argparse
 import ast
 import fnmatch
@@ -180,25 +181,25 @@ class NoDefaultsVisitor(ast.NodeVisitor):
         return False
 
     # Track class context
-    def visit_ClassDef(self, node: ast.ClassDef):
+    def visit_ClassDef(self, node: ast.ClassDef):  # noqa: N802
         self.class_stack.append(node.name)
         self.generic_visit(node)
         self.class_stack.pop()
 
     # Track function context
-    def visit_FunctionDef(self, node: ast.FunctionDef):
+    def visit_FunctionDef(self, node: ast.FunctionDef):  # noqa: N802
         self.function_stack.append(node.name)
         self._check_args_defaults(node, "DEF001")
         self.generic_visit(node)
         self.function_stack.pop()
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):  # noqa: N802
         self.function_stack.append(node.name)
         self._check_args_defaults(node, "DEF001")
         self.generic_visit(node)
         self.function_stack.pop()
 
-    def visit_Lambda(self, node: ast.Lambda):
+    def visit_Lambda(self, node: ast.Lambda):  # noqa: N802
         args = node.args
         if (args.defaults and any(d is not None for d in args.defaults)) or (
             args.kw_defaults and any(d is not None for d in args.kw_defaults)
@@ -215,12 +216,12 @@ class NoDefaultsVisitor(ast.NodeVisitor):
             self._report(node, rule_id, f"Function '{node.name}' has parameter default(s)")
 
     # Track assignment targets for variable names
-    def visit_Assign(self, node: ast.Assign):
+    def visit_Assign(self, node: ast.Assign):  # noqa: N802
         var_name = self._extract_target_name(node.targets[0]) if node.targets else None
         self._check_assignment_value(node.value, var_name)
         self.generic_visit(node)
 
-    def visit_AnnAssign(self, node: ast.AnnAssign):
+    def visit_AnnAssign(self, node: ast.AnnAssign):  # noqa: N802
         var_name = self._extract_target_name(node.target)
         if node.value is not None:
             self._check_assignment_value(node.value, var_name)
@@ -232,7 +233,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
             return target.id
         elif isinstance(target, ast.Attribute):
             return target.attr
-        elif isinstance(target, (ast.Tuple, ast.List)):
+        elif isinstance(target, ast.Tuple | ast.List):
             # Handle tuple/list unpacking: a, b = foo()
             names = []
             for elt in target.elts:
@@ -251,7 +252,7 @@ class NoDefaultsVisitor(ast.NodeVisitor):
         if isinstance(value, ast.IfExp):
             self._report(value, "ASG002", "Ternary expression used as a default (x = a if cond else b)", var_name)
 
-    def visit_Call(self, node: ast.Call):
+    def visit_Call(self, node: ast.Call):  # noqa: N802
         # dict.get(key, default) / dict.setdefault(key, default)
         if isinstance(node.func, ast.Attribute) and node.func.attr in {"get", "setdefault"}:
             if len(node.args) >= 2:

@@ -156,9 +156,7 @@ def validate_values_match_code(bars_config: dict, cascades_config: dict) -> list
         if name in bars:
             actual = bars[name]["base_depletion"]
             if actual != expected_depletion:
-                errors.append(
-                    f"Bar {name}: Expected base_depletion={expected_depletion}, got {actual}"
-                )
+                errors.append(f"Bar {name}: Expected base_depletion={expected_depletion}, got {actual}")
 
     # Check cascade strengths from meter_dynamics.py
     expected_strengths = {
@@ -179,9 +177,7 @@ def validate_values_match_code(bars_config: dict, cascades_config: dict) -> list
         if name in cascades:
             actual = cascades[name]["strength"]
             if actual != expected_strength:
-                errors.append(
-                    f"Cascade {name}: Expected strength={expected_strength}, got {actual}"
-                )
+                errors.append(f"Cascade {name}: Expected strength={expected_strength}, got {actual}")
 
     return errors
 

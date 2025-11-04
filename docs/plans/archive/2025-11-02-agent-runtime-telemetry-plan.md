@@ -1,7 +1,7 @@
 # Agent Runtime Registry & Telemetry Separation Plan
 
-**Date:** 2025-11-02  
-**Owner:** Codex (with handoff to Hamlet core team)  
+**Date:** 2025-11-02
+**Owner:** Codex (with handoff to Hamlet core team)
 **Goal:** Eliminate tensor→JSON regressions by formalising per-agent runtime state, snapshotting, and reward baseline ownership while setting the groundwork for multi-agent ops telemetry.
 
 ---
@@ -98,23 +98,23 @@ Assumption: existing population tests simulate single-agent scenarios; we will e
 
 ## 4. Risks & Mitigations
 
-- **Risk:** Test gaps for live inference (currently 0% coverage).  
+- **Risk:** Test gaps for live inference (currently 0% coverage).
   **Mitigation:** Introduce helper-level tests decoupled from websockets; rely on dependency injection for broadcaster.
 
-- **Risk:** Multi-agent tensor handling may surface device mismatch bugs.  
+- **Risk:** Multi-agent tensor handling may surface device mismatch bugs.
   **Mitigation:** Parametrise registry tests across CPU/GPU (skip GPU if unavailable).
 
-- **Risk:** Downstream consumers (frontend, logging) may assume scalar payloads.  
+- **Risk:** Downstream consumers (frontend, logging) may assume scalar payloads.
   **Mitigation:** Versioned schema, communication, and sample payloads before deployment.
 
 ---
 
 ## 5. Validation Checklist
 
-- [ ] All new tests pass in CPU CI lane.  
-- [ ] Optional CUDA lane (if available) validates registry tensor device logic.  
-- [ ] Live inference no longer accesses tensors directly; smoke-test UI.  
-- [ ] Reward shaping regression test confirms identical outputs pre/post refactor.  
+- [ ] All new tests pass in CPU CI lane.
+- [ ] Optional CUDA lane (if available) validates registry tensor device logic.
+- [ ] Live inference no longer accesses tensors directly; smoke-test UI.
+- [ ] Reward shaping regression test confirms identical outputs pre/post refactor.
 - [ ] Documentation updated.
 
 ---

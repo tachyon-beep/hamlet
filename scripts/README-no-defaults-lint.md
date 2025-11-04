@@ -7,6 +7,7 @@ Enforces the "no default variables unless whitelisted" rule for HAMLET's UNIVERS
 **No-Defaults Principle**: All behavioral parameters must be explicitly specified in config files. No implicit defaults allowed.
 
 **Why**:
+
 - Operator accountability (must understand each parameter)
 - Transparency (no hidden behavior)
 - Reproducibility (config is complete specification)
@@ -98,6 +99,7 @@ src/townlet/training/state.py::BatchedAgentState::description:CALL003
 ```
 
 **Benefits**:
+
 - **Stable**: Won't break when code moves or line numbers change
 - **Semantic**: Whitelist by intent (whole classes/modules)
 - **Maintainable**: 20 patterns vs 278 line numbers
@@ -116,11 +118,13 @@ src/townlet/environment/config.py:42:DEF001
 ### Whitelist Guidelines
 
 **DO whitelist**:
+
 - Truly optional features (e.g., `cues: CuesConfig | None = None`)
 - Metadata only (e.g., `description: str | None = None`)
 - Computed values (e.g., `observation_dim: int` calculated at compile time)
 
 **DON'T whitelist**:
+
 - Behavioral parameters (epsilon_decay, learning_rate, etc.)
 - Config lookups with fallbacks (`config.get("key", default)`)
 - Hidden magic values
@@ -172,6 +176,7 @@ class HamletConfig(BaseModel):
 ```
 
 Whitelist entry:
+
 ```
 src/townlet/config/hamlet_config.py:15:DEF001  # Optional cues for headless training
 ```
@@ -183,6 +188,7 @@ src/townlet/config/hamlet_config.py:15:DEF001  # Optional cues for headless trai
 If you're migrating existing code:
 
 1. **Use structural patterns** (much better than line-based):
+
    ```bash
    # See violations with AST context
    python scripts/no_defaults_lint.py src/townlet/ --show-context
@@ -198,22 +204,26 @@ If you're migrating existing code:
    - Eventually remove all whitelists
 
 3. **Legacy: Generate line-based whitelist** (not recommended):
+
    ```bash
    python scripts/no_defaults_lint.py src/townlet/ 2>&1 | \
      grep -E "^src/.*:[0-9]+:[0-9]+:" | \
      awk -F: '{print $1":"$2":"$4}' > .defaults-whitelist-lines.txt
    ```
+
    Note: Line-based patterns break when code moves!
 
 ### "Whitelist not working"
 
 **For structural patterns**:
+
 - Use `--show-context` to see the AST path
 - Check pattern syntax: `filepath::class::function:rule_id`
 - Wildcards: `*` matches within level, `**` matches path components
 - Pattern is case-sensitive
 
 **For line-based patterns** (legacy):
+
 - Filepath matches exactly (use absolute or relative consistently)
 - Line number is correct (fragile - changes when code moves!)
 - Rule ID matches (case-sensitive)
@@ -224,6 +234,7 @@ If you're migrating existing code:
 ### "False positives"
 
 If the linter detects something that shouldn't be flagged:
+
 - Add to whitelist with clear justification comment
 - Or modify the linter rules if it's a systemic issue
 
