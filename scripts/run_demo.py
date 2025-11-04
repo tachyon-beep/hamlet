@@ -12,9 +12,9 @@ Date: November 2, 2025
 """
 
 import argparse
+import logging
 import signal
 import sys
-import logging
 from pathlib import Path
 
 # Add src to path for imports

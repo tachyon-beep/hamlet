@@ -33,12 +33,11 @@ Wildcards:
     * matches anything
     ** matches path components (for modules)
 """
-import ast
-import sys
-import pathlib
 import argparse
+import ast
 import fnmatch
-from typing import List, Tuple, Optional, Set
+import pathlib
+import sys
 from dataclasses import dataclass
 
 Rule = tuple[str, int, int, str]  # (rule_id, lineno, col, message)

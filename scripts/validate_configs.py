@@ -9,8 +9,9 @@ Tests:
 4. No schema violations
 """
 
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 def load_yaml(filepath: Path) -> dict:
