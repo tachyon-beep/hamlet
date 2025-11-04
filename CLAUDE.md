@@ -2,14 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## ⚠️ CRITICAL: Active System
-
-**TOWNLET is the ONLY active training system.**
-
-**DO NOT edit code in `src/hamlet/` directories** - it contains obsolete legacy code that will be deleted. The only exception is `src/hamlet/demo/runner.py` which is the temporary entry point until centralization is complete.
-
-**Active system location**: `src/townlet/`
-
 ## Project Overview
 
 HAMLET is a pedagogical Deep Reinforcement Learning (DRL) environment where agents learn to survive by managing multiple competing needs (energy, hygiene, satiation, money, health, fitness, mood, social). The primary mission is to "trick students into learning graduate-level RL by making them think they're just playing The Sims."
@@ -17,6 +9,53 @@ HAMLET is a pedagogical Deep Reinforcement Learning (DRL) environment where agen
 **Current Implementation**: **Townlet** - GPU-native vectorized training system with adversarial curriculum and intrinsic exploration.
 
 **Key insight**: The project deliberately produces "interesting failures" (like reward hacking) as teaching moments rather than bugs to fix.
+
+## AI-Friendly Documentation
+
+**All documentation files in `docs/` use structured frontmatter to help AI assistants understand content before reading the entire file.**
+
+This pattern saves tokens and improves context efficiency:
+
+**Architecture Documents** (`docs/architecture/`):
+
+- Include YAML frontmatter with: Document Type, Status, Version, Audience, Technical Level
+- Provide **AI-Friendly Summary** section with:
+  - What the document describes (1-2 sentences)
+  - Why it exists (problem it solves)
+  - Who should read it (Must/Should/Optional by role)
+  - Reading strategy (Quick scan / Partial read / Deep study)
+- Define scope boundaries (In scope / Out of scope / Boundaries)
+- List related documents and reading order
+
+**Example frontmatter structure**:
+
+```markdown
+# 1. Executive Summary
+
+**Document Type**: Overview (Executive Summary)
+**Status**: Draft
+**Version**: 2.5
+**Audience**: Researchers, Educators, Policy Analysts, Engineers
+**Technical Level**: Executive to Intermediate
+
+## AI-Friendly Summary (Skim This First!)
+
+**What This Document Describes**: High-level overview of Townlet v2.5 architecture...
+**Why This Document Exists**: Provides entry point for understanding the system...
+**Who Should Read This**:
+- **Must Read**: Anyone new to the project
+- **Should Read**: Engineers implementing features
+- **Optional**: Advanced researchers focusing on specific modules
+```
+
+**Best Practice for AI Assistants**:
+
+1. **Read frontmatter FIRST** before diving into full content
+2. Use the "AI-Friendly Summary" to decide relevance
+3. Follow the "Reading Strategy" guidance for token efficiency
+4. Check "Related Documents" for prerequisites
+
+This approach helps you avoid reading 2000+ line files when only specific sections are relevant.
 
 ## Development Commands
 
@@ -147,12 +186,14 @@ runner.load_checkpoint()
 ```
 
 **Why this matters:**
+
 - `DemoRunner.__init__()` opens database connections and TensorBoard writers
 - These resources are **only** closed in `run()`'s finally block
 - If you never call `run()`, resources leak until garbage collection
 - Context manager ensures cleanup happens deterministically
 
 **When to use each pattern:**
+
 - **Context manager** (`with`): Checkpoint loading, analysis, testing
 - **Direct run()**: Full training sessions
 
@@ -180,59 +221,6 @@ src/townlet/
     ├── replay_buffer.py     # ReplayBuffer (experience replay)
     └── (runner.py coming)   # DemoRunner (main entry point - currently in hamlet/demo/)
 ```
-
-### Core Components
-
-**1. Environment (`src/townlet/environment/`)**
-
-- `vectorized_env.py`: GPU-native vectorized environments
-  - Batches multiple agents for parallel training
-  - 8×8 grid with 14 affordances
-  - 8 meters: energy, hygiene, satiation, money, mood, social, health, fitness
-  - Supports full observability (Level 1.5) and partial observability (Level 2 POMDP)
-  - **Partial observability**: 5×5 local vision window, agent must build mental map
-
-**2. Agent Networks (`src/townlet/agent/`)**
-
-- `SimpleQNetwork`: MLP for full observability (~26K params)
-- `RecurrentSpatialQNetwork`: CNN + LSTM for partial observability (~600K params)
-  - Vision encoder: 5×5 local window → 128 features
-  - Position encoder: (x, y) → 32 features
-  - Meter encoder: 8 meters → 32 features
-  - LSTM: 192 input → 256 hidden (memory for POMDP)
-  - Q-head: 256 → 128 → 5 actions
-
-**3. Population (`src/townlet/population/`)**
-
-- `VectorizedPopulation`: Coordinates batched agent training
-  - Shared Q-network across agents
-  - Experience replay buffer
-  - Curriculum-guided training
-  - Intrinsic + extrinsic rewards
-  - Handles both standard and recurrent networks
-
-**4. Curriculum (`src/townlet/curriculum/`)**
-
-- `AdversarialCurriculum`: Adaptive difficulty scaling
-  - 5 stages: 50 → 100 → 200 → 350 → 500 steps
-  - Advances on 70% survival rate + minimum entropy
-  - Retreats on <30% survival rate
-  - Prevents premature advancement (min 1000 episodes per stage)
-
-**5. Exploration (`src/townlet/exploration/`)**
-
-- `AdaptiveIntrinsicExploration`: RND + variance-based annealing
-  - Random Network Distillation for novelty rewards
-  - Anneals intrinsic weight when agent performs consistently (low variance + high survival)
-  - Prevents premature annealing: requires survival >50 steps AND variance <100
-
-**6. Training Entry Point (CURRENT LOCATION)**
-
-- `src/townlet/demo/runner.py`: Main training orchestrator
-  - ⚠️ Will be moved to `src/townlet/training/runner.py` during centralization
-  - Coordinates: VectorizedHamletEnv, VectorizedPopulation, AdversarialCurriculum, AdaptiveIntrinsicExploration
-  - Saves checkpoints, tracks metrics in SQLite database
-  - Run with: `python -m townlet.demo.runner` (requires PYTHONPATH=src)
 
 ### State Representation
 
@@ -264,33 +252,23 @@ src/townlet/
 
 **Action space**: 5 discrete actions (UP=0, DOWN=1, LEFT=2, RIGHT=3, INTERACT=4)
 
-- Note: Action space is currently **hardcoded** but will be moved to YAML (see `docs/TASK-000-UAC-ACTION-SPACE.md`)
-
 ### Reward Structure
 
-**Per-Step Survival Rewards** (Current System):
+**Framework Capability**: The Townlet Framework allows operators to define custom reward functions using any combination of bars (meters) and mathematical operations via UAC configuration. This enables domain-specific reward shaping without code changes.
 
-- **Alive agents**: +1.0 reward per step
-- **Dead agents**: 0.0 reward (episode ends)
-- **NO proximity shaping** (agents must explore and interact to survive)
-- **No death penalty**: L0 is unstable by design - agents learn that interacting with bed extends survival
-- **Rationale**: Provides dense learning signal for Q-learning, functionally equivalent to accumulating survival time
-- Baseline parameter retained for API compatibility but unused in calculations
+**Reference Implementation (Townlet Town)**:
 
-**Intrinsic Rewards**:
+- **Per-step reward**: `r_t = bars[energy] * bars[health]` (multiplicative)
+- **Dead agents**: 0.0 reward (episode ends when any bar reaches 0)
+- **NO proximity shaping**: Agents must explore and interact to survive (no reward for being near affordances)
+- **Sparse reward design**: Multiplicative formula forces long-horizon credit assignment
+- **Rationale**: Product of critical bars creates sparse reward signal requiring agents to maintain multiple needs simultaneously
 
-- RND (Random Network Distillation) for novelty
+**Intrinsic Rewards** (Framework Feature):
+
+- RND (Random Network Distillation) for novelty-seeking
 - Adaptive annealing based on performance consistency
 - Combined with extrinsic rewards: `total = extrinsic + intrinsic * weight`
-
-### Training Checkpoints
-
-Checkpoints saved periodically contain:
-
-- Q-network state dict
-- Optimizer state dict
-- Exploration state (RND networks, intrinsic weight, survival history)
-- Episode number, timestamp
 
 ---
 
@@ -495,76 +473,6 @@ Tests focus on:
 
 ---
 
-## Known Behaviors (Not Bugs!)
-
-### Reward Hacking: "Proximity Exploitation" (FIXED)
-
-**Historical issue** (Level 1): Agents would stand near affordances to collect proximity rewards without interacting.
-
-**Fix** (Level 1.5+): Proximity shaping disabled entirely in townlet. Agents must interact to survive.
-
-**Pedagogical value**: Demonstrates specification gaming and reward hacking.
-
----
-
-## Common Pitfalls
-
-1. **DO NOT edit `src/hamlet/` code** (except `demo/runner.py` temporarily)
-2. **Recurrent networks need batch_size reset**: After training batch, reset hidden state to `num_agents`
-3. **Partial observability changes obs_dim**: Auto-detect from environment, don't hardcode
-4. **Intrinsic weight annealing**: Needs both low variance AND high survival (>50 steps)
-5. **Entry point**: Use `python -m townlet.demo.runner` (requires PYTHONPATH=src, will move to townlet.training)
-
----
-
-## UNIVERSE_AS_CODE: Config-Driven Design
-
-**Core Principle**: "Everything configurable. Schema enforced mercilessly."
-
-HAMLET follows UNIVERSE_AS_CODE philosophy where all game mechanics are defined in YAML configuration files, not hardcoded in Python. This makes the system:
-
-- **Domain-agnostic**: Could model villages, factories, trading bots, or any other universe
-- **Experimentable**: Operators can test new mechanics without code changes
-- **Pedagogical**: Students learn RL concepts by editing config files
-
-### Active Development Tasks
-
-See `docs/` for detailed tasking statements:
-
-**TASK-000: UAC Action Space** - Move hardcoded action space to actions.yaml
-
-- Current: Action space (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT) is hardcoded
-- Goal: Define actions, movement deltas, energy costs in YAML
-- Benefits: Support diagonal movement, rest actions, alternative universes
-
-**TASK-001: UAC Contracts (Schema Enforcement)** - DTO-based config validation
-
-- Current: Configs validated at runtime with `.get()` defaults
-- Goal: Pydantic DTOs for compile-time validation with **no-defaults principle**
-- Benefits: Catch config errors before training starts, operator accountability
-
-**TASK-002: Universe Compilation Pipeline** - Cross-file validation
-
-- Current: Each YAML file validated independently
-- Goal: 7-stage compilation with dependency ordering (bars → actions → cascades → affordances → cues → training)
-- Benefits: Catch dangling references, missing INTERACT action, spatial impossibilities
-
-### Future: BRAIN_AS_CODE (Longer Term)
-
-**Agent architecture and policy configuration will also be moved to YAML** ("BRAIN_AS_CODE"), compiled at launch:
-
-- Network architecture (layer sizes, activation functions)
-- Q-learning hyperparameters (learning rate, gamma, replay buffer size)
-- Exploration strategy (epsilon-greedy, RND, UCB, etc.)
-- Training schedule (epsilon decay, target update frequency)
-
-This will enable:
-
-- Experimenting with different architectures without code changes
-- A/B testing exploration strategies across curriculum levels
-- Reproducing exact agent configurations from config files
-- Domain-specific architectures (e.g., LSTM for POMDP, MLP for full obs) defined in configs
-
 ### No-Defaults Principle
 
 **All behavioral parameters must be explicitly specified in config files.** No implicit defaults allowed.
@@ -574,17 +482,6 @@ This will enable:
 **Exemptions**: Only truly optional features (cues.yaml for visualization), metadata (descriptions), and computed values (observation_dim).
 
 **Enforcement**: Pydantic DTOs require all fields. Missing field → clear compilation error with example.
-
-## Future Development Priorities
-
-1. **UNIVERSE_AS_CODE Implementation**:
-   - TASK-000: Move action space to YAML
-   - TASK-001: Add DTO-based schema validation with no-defaults
-   - TASK-002: Implement universe compilation pipeline
-2. **Centralize to townlet**: Move `runner.py`, `database.py`, etc. from `hamlet/demo/` to `townlet/`
-3. **Delete obsolete hamlet code**: Remove `src/hamlet/environment/`, `src/hamlet/agent/`, `src/hamlet/training/`
-4. **Level 3 Multi-zone**: Hierarchical RL with home/work zones
-5. **Sequential replay buffer**: Episode sequences for better recurrent training
 
 ---
 
@@ -599,16 +496,3 @@ When in doubt:
 - Document unexpected behaviors rather than immediately fixing them
 - Remember: The goal is to teach RL intuitively, not build production-ready agents
 - **Work only in `src/townlet/`** - hamlet is obsolete legacy code
-
----
-
-## Centralization Roadmap
-
-See `PLAN_TOWNLET_CENTRALIZATION.md` for detailed plan to:
-
-1. Move all active components to `src/townlet/`
-2. Update entry point to `python -m townlet.training.runner`
-3. Delete obsolete `src/hamlet/` code
-4. Update all documentation
-
-**Current status**: Entry point still in `hamlet/demo/runner.py`, but all implementation in townlet.
