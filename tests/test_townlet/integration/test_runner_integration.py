@@ -123,7 +123,12 @@ class TestRunnerOrchestration:
 environment:
   grid_size: 8
   partial_observability: false
+  vision_range: 8
+  enable_temporal_mechanics: false
   enabled_affordances: []  # No affordances = agents die quickly
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 population:
   num_agents: 1
@@ -208,7 +213,12 @@ training:
 environment:
   grid_size: 8
   partial_observability: false
+  vision_range: 8
+  enable_temporal_mechanics: false
   enabled_affordances: []  # No affordances = fast death
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 population:
   num_agents: 1
@@ -290,7 +300,12 @@ training:
 environment:
   grid_size: 8
   partial_observability: false
+  vision_range: 8
+  enable_temporal_mechanics: false
   enabled_affordances: []  # No affordances = fast death
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 population:
   num_agents: 1
@@ -397,7 +412,12 @@ class TestRunnerAffordanceTransitions:
 environment:
   grid_size: 3
   partial_observability: false
+  vision_range: 3
+  enable_temporal_mechanics: false
   enabled_affordances: ["Bed"]  # Single affordance to test self-loops
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 population:
   num_agents: 1

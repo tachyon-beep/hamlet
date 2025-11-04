@@ -92,6 +92,7 @@ class TestVectorizedEnvDynamicSizing:
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_4meter,
             num_agents=1,
+            grid_size=8,
             device=cpu_device,
             partial_observability=False,  # Full observability
             enabled_affordances=["Bed", "Hospital", "HomeMeal", "Job"],
@@ -112,6 +113,7 @@ class TestVectorizedEnvDynamicSizing:
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_12meter,
             num_agents=1,
+            grid_size=8,
             device=cpu_device,
             partial_observability=False,  # Full observability
             enabled_affordances=["Bed"],
@@ -132,6 +134,7 @@ class TestVectorizedEnvDynamicSizing:
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_4meter,
             num_agents=1,
+            grid_size=8,
             device=cpu_device,
             partial_observability=True,  # POMDP
             vision_range=2,  # 5×5 window
@@ -151,6 +154,7 @@ class TestVectorizedEnvDynamicSizing:
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_12meter,
             num_agents=1,
+            grid_size=8,
             device=cpu_device,
             partial_observability=True,  # POMDP
             vision_range=2,  # 5×5 window
