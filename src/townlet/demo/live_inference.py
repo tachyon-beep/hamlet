@@ -153,6 +153,47 @@ class LiveInferenceServer:
             return {"schema_version": TELEMETRY_SCHEMA_VERSION, "episode_index": None, "agents": []}
         return build_agent_telemetry_payload(self.population, episode_index=self.current_episode)
 
+    def _build_substrate_metadata(self) -> dict[str, Any]:
+        """Build substrate metadata for WebSocket messages.
+
+        Returns:
+            Dict with substrate type, dimensions, and topology.
+            Used by frontend to dispatch correct renderer.
+
+        Example:
+            Grid2D: {"type": "grid2d", "position_dim": 2, "width": 8, "height": 8, "topology": "square"}
+            Aspatial: {"type": "aspatial", "position_dim": 0}
+        """
+        if not self.env:
+            return {"type": "unknown", "position_dim": 0}
+
+        substrate = self.env.substrate
+
+        # Derive substrate type from class name (Grid2DSubstrate -> "grid2d")
+        substrate_type = type(substrate).__name__.lower().replace("substrate", "")
+
+        metadata = {
+            "type": substrate_type,
+            "position_dim": substrate.position_dim,
+        }
+
+        # Add grid-specific metadata
+        if substrate_type == "grid2d":
+            metadata["topology"] = "square"  # Grid2D is always square topology
+            metadata["width"] = substrate.width
+            metadata["height"] = substrate.height
+            metadata["boundary"] = substrate.boundary
+            metadata["distance_metric"] = substrate.distance_metric
+        elif substrate_type == "grid3d":
+            metadata["topology"] = "cubic"  # Grid3D is always cubic topology
+            metadata["width"] = substrate.width
+            metadata["height"] = substrate.height
+            metadata["depth"] = substrate.depth
+            metadata["boundary"] = substrate.boundary
+            metadata["distance_metric"] = substrate.distance_metric
+
+        return metadata
+
     async def startup(self):
         """Initialize environment and start checkpoint monitoring."""
         logger.info("Starting live inference server")
@@ -192,6 +233,7 @@ class LiveInferenceServer:
         move_energy_cost = 0.005
         wait_energy_cost = 0.001
         interact_energy_cost = 0.0
+        agent_lifespan = 1000  # Default lifespan for inference mode
 
         if self.config:
             env_cfg = self.config.get("environment", {})
@@ -216,6 +258,7 @@ class LiveInferenceServer:
                 "energy_interact_depletion",
                 env_cfg.get("interact_energy_cost", interact_energy_cost),
             )
+            agent_lifespan = env_cfg.get("agent_lifespan", agent_lifespan)
 
             logger.info(
                 f"Environment config: grid={grid_size}, "
@@ -238,6 +281,7 @@ class LiveInferenceServer:
             move_energy_cost=move_energy_cost,
             wait_energy_cost=wait_energy_cost,
             interact_energy_cost=interact_energy_cost,
+            agent_lifespan=agent_lifespan,
             config_pack_path=self.config_dir,
         )
 
@@ -363,7 +407,7 @@ class LiveInferenceServer:
         self.clients.add(websocket)
         logger.info(f"Client connected. Total clients: {len(self.clients)}")
 
-        # Send connection message
+        # Send connection message with substrate metadata
         await websocket.send_json(
             {
                 "type": "connected",
@@ -375,6 +419,7 @@ class LiveInferenceServer:
                 "total_episodes": self.total_episodes,
                 "epsilon": self.current_epsilon,
                 "auto_checkpoint_mode": self.auto_checkpoint_mode,
+                "substrate": self._build_substrate_metadata(),
             }
         )
 
@@ -537,7 +582,7 @@ class LiveInferenceServer:
         current_stage = int(agent_snapshot["curriculum_stage"])
         epsilon_snapshot = float(agent_snapshot["epsilon"])
 
-        # Send episode start with curriculum info
+        # Send episode start with curriculum info and substrate metadata
         await self._broadcast_to_clients(
             {
                 "type": "episode_start",
@@ -549,6 +594,7 @@ class LiveInferenceServer:
                 "curriculum_stage": current_stage,
                 "curriculum_multiplier": float(current_multiplier),
                 "telemetry": episode_telemetry,
+                "substrate": self._build_substrate_metadata(),
             }
         )
 
@@ -737,10 +783,7 @@ class LiveInferenceServer:
             "total_episodes": self.total_episodes,  # For training progress bar
             # DEBUG
             "_debug_total_episodes": self.total_episodes,
-            "substrate": {
-                "type": type(self.env.substrate).__name__,  # "Grid2DSubstrate", "AspatialSubstrate", etc.
-                "position_dim": self.env.substrate.position_dim,
-            },
+            "substrate": self._build_substrate_metadata(),
             "grid": self._build_grid_data(agent_pos, last_action, affordances),
             "agent_meters": {"agent_0": {"meters": meters}},  # MeterPanel expects agent_0.meters nested structure
             "q_values": q_values_list,  # Q-values for all 6 actions
@@ -1009,13 +1052,14 @@ class LiveInferenceServer:
         meter_names = ["energy", "hygiene", "satiation", "money", "health", "fitness", "mood", "social"]
         agent_meters = {"agent_0": {"meters": {name: val for name, val in zip(meter_names, meters_tuple)}}}
 
-        # Build state update
+        # Build state update with substrate metadata
         state_update = {
             "type": "state_update",
             "mode": "replay",
             "episode_id": metadata["episode_id"],
             "step": step_data["step"],
             "cumulative_reward": step_data["reward"] * step_data["step"],  # Approximation
+            "substrate": self._build_substrate_metadata(),
             "grid": grid_state,
             "agent_meters": agent_meters,
             "replay_metadata": {
