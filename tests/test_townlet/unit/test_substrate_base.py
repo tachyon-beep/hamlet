@@ -3,6 +3,7 @@
 import pytest
 import torch
 
+from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.base import SpatialSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -75,3 +76,45 @@ def test_grid2d_is_on_position():
     on_target = substrate.is_on_position(agent_positions, target_position)
 
     assert torch.equal(on_target, torch.tensor([True, False, True]))
+
+
+def test_aspatial_substrate_creation():
+    """AspatialSubstrate should represent no positioning."""
+    substrate = AspatialSubstrate()
+
+    assert substrate.position_dim == 0  # No position!
+    assert substrate.get_observation_dim() == 0  # No position encoding
+
+
+def test_aspatial_initialize_positions():
+    """Aspatial should return empty position tensors."""
+    substrate = AspatialSubstrate()
+
+    positions = substrate.initialize_positions(num_agents=10, device=torch.device("cpu"))
+
+    assert positions.shape == (10, 0)  # Empty position vectors
+
+
+def test_aspatial_compute_distance():
+    """Aspatial should return zero distance (no spatial meaning)."""
+    substrate = AspatialSubstrate()
+
+    pos1 = torch.zeros((5, 0))  # 5 agents with no position
+    pos2 = torch.zeros((0,))  # Target with no position
+
+    distances = substrate.compute_distance(pos1, pos2)
+
+    assert distances.shape == (5,)
+    assert torch.all(distances == 0)  # All distances are zero
+
+
+def test_aspatial_is_on_position():
+    """Aspatial should always return True (no positioning concept)."""
+    substrate = AspatialSubstrate()
+
+    agent_positions = torch.zeros((10, 0))
+    target_position = torch.zeros((0,))
+
+    on_target = substrate.is_on_position(agent_positions, target_position)
+
+    assert torch.all(on_target)  # All agents are "everywhere"

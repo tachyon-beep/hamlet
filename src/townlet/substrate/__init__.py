@@ -5,7 +5,8 @@ for agent positioning and navigation. This is an OPTIONAL component - aspatial
 universes (pure resource management) are perfectly valid.
 """
 
+from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.base import SpatialSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 
-__all__ = ["SpatialSubstrate", "Grid2DSubstrate"]
+__all__ = ["SpatialSubstrate", "Grid2DSubstrate", "AspatialSubstrate"]
