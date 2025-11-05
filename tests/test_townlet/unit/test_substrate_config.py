@@ -206,3 +206,46 @@ def test_continuous_config_observation_encoding_default():
         # observation_encoding NOT provided
     )
     assert config.observation_encoding == "relative"
+
+
+def test_gridnd_config_includes_topology_field():
+    """GridNDConfig should include topology field with default 'hypercube'."""
+    from townlet.substrate.config import GridNDConfig
+
+    config = GridNDConfig(
+        dimension_sizes=[5, 5, 5, 5],
+        boundary="clamp",
+        distance_metric="manhattan",
+        observation_encoding="relative",
+    )
+    assert hasattr(config, "topology")
+    assert config.topology == "hypercube"
+
+
+def test_gridnd_config_topology_can_be_overridden():
+    """GridNDConfig should allow explicit topology specification."""
+    from townlet.substrate.config import GridNDConfig
+
+    config = GridNDConfig(
+        dimension_sizes=[5, 5, 5, 5],
+        boundary="clamp",
+        distance_metric="manhattan",
+        observation_encoding="relative",
+        topology="hypercube",
+    )
+    assert config.topology == "hypercube"
+
+
+def test_gridnd_config_validates_yaml_with_topology():
+    """GridNDConfig should parse YAML with topology field."""
+    from townlet.substrate.config import GridNDConfig
+
+    yaml_data = {
+        "dimension_sizes": [5, 5, 5, 5],
+        "boundary": "clamp",
+        "distance_metric": "manhattan",
+        "observation_encoding": "relative",
+        "topology": "hypercube",
+    }
+    config = GridNDConfig(**yaml_data)
+    assert config.topology == "hypercube"

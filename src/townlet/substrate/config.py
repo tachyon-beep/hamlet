@@ -78,6 +78,12 @@ class GridNDConfig(BaseModel):
         description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + sizes), absolute (raw coordinates)",
     )
 
+    # NEW: Topology field (always 'hypercube' for now, explicit in config)
+    topology: Literal["hypercube"] = Field(
+        default="hypercube",
+        description="Grid topology (hypercube for N-dimensional Cartesian grid)",
+    )
+
     @model_validator(mode="after")
     def validate_dimension_sizes(self) -> "GridNDConfig":
         """Validate dimension count and sizes."""
