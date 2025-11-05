@@ -6,5 +6,6 @@ universes (pure resource management) are perfectly valid.
 """
 
 from townlet.substrate.base import SpatialSubstrate
+from townlet.substrate.grid2d import Grid2DSubstrate
 
-__all__ = ["SpatialSubstrate"]
+__all__ = ["SpatialSubstrate", "Grid2DSubstrate"]
