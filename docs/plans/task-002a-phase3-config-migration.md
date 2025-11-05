@@ -1,40 +1,19 @@
-# TASK-002A Phase 6: Config Migration (Create substrate.yaml Files) - Implementation Plan
+# TASK-002A Phase 3: Config Migration (Create substrate.yaml Files) - Implementation Plan
 
 **Date**: 2025-11-05
 **Status**: Ready for Implementation
 **Dependencies**: Phases 1-2 Complete (Substrate classes and schema exist)
-**Blocks**: Phase 3 (Environment Integration - MUST wait for Phase 6)
+**Blocks**: Phase 3 (Environment Integration - MUST wait for Phase 3)
 **Estimated Effort**: 3.5-4.5 hours
-
----
-
-⚠️ **CRITICAL PHASE ORDERING** ⚠️
-
-**THIS PHASE MUST COMPLETE BEFORE PHASE 3**
-
-Phase 3 will enforce substrate.yaml requirement in VectorizedEnv. If Phase 3 runs first, all existing configs will break immediately with "substrate.yaml not found" errors.
-
-**Correct execution order:**
-1. ✅ Phase 1: Create substrate abstraction (SpatialSubstrate interface)
-2. ✅ Phase 2: Create substrate configuration schema (SubstrateConfig DTOs)
-3. **→ Phase 6: Create substrate.yaml files for all configs** ← THIS PHASE
-4. → Phase 3: Enforce substrate.yaml loading in VectorizedEnv ← THEN THIS
-5. → Phase 4: Refactor position management
-6. → Phase 5: Update observation builder
-
-**Why this ordering:**
-- Phase 6 creates substrate.yaml files WITHOUT changing any code
-- Phase 3 changes VectorizedEnv to REQUIRE substrate.yaml
-- If we do Phase 3 first → immediate breakage
-- If we do Phase 6 first → files ready when Phase 3 needs them
 
 ---
 
 ⚠️ **BREAKING CHANGES NOTICE** ⚠️
 
-Phase 6 introduces breaking changes to config pack structure.
+Phase 3 introduces breaking changes to config pack structure.
 
 **Impact:**
+
 - All config packs MUST include substrate.yaml (after Phase 3)
 - Config packs without substrate.yaml will fail with clear error message
 - No backward compatibility for missing substrate.yaml
@@ -49,11 +28,12 @@ This phase creates substrate.yaml for all existing configs. New configs created 
 
 ## Executive Summary
 
-Phase 6 creates `substrate.yaml` files for all 7 existing config packs, enabling configurable spatial substrates without modifying Python code.
+Phase 3 creates `substrate.yaml` files for all 7 existing config packs, enabling configurable spatial substrates without modifying Python code.
 
 **Key Finding**: All current configs use **identical spatial behavior** - only grid size differs. Migration is mechanical (copy template, edit dimensions).
 
 **Scope**: 7 config packs requiring substrate.yaml:
+
 - L0_0_minimal (3×3 grid)
 - L0_5_dual_resource (7×7 grid)
 - L1_full_observability (8×8 grid)
@@ -63,11 +43,13 @@ Phase 6 creates `substrate.yaml` files for all 7 existing config packs, enabling
 - test (8×8 grid for CI)
 
 **Current Hardcoded Behavior** (to be made explicit):
+
 - Topology: Square 2D grid
 - Boundary: Clamp (hard walls, no wraparound)
 - Distance: Manhattan (L1 norm)
 
 **Deliverables**:
+
 1. 7 × substrate.yaml files (one per config pack)
 2. Unit tests for schema validation
 3. Integration tests for behavioral equivalence
@@ -75,20 +57,22 @@ Phase 6 creates `substrate.yaml` files for all 7 existing config packs, enabling
 5. CLAUDE.md documentation updates
 
 **Critical Success Factors**:
+
 - All substrate.yaml files pass schema validation
 - Observation dimensions unchanged (behavioral equivalence)
 - Tests verify configs load correctly
-- Phase 3 can proceed immediately after Phase 6
+- Phase 3 can proceed immediately after Phase 3
 
 ---
 
-## Phase 6 Task Breakdown
+## Phase 3 Task Breakdown
 
-### Task 6.1: Create Test Infrastructure
+### Task 3.1: Create Test Infrastructure
 
 **Purpose**: Establish test framework for validating substrate.yaml files
 
 **Files**:
+
 - `tests/test_townlet/unit/test_substrate_configs.py` (NEW)
 - `tests/test_townlet/integration/test_substrate_migration.py` (NEW)
 
@@ -217,6 +201,7 @@ def test_substrate_config_file_exists():
 ```
 
 **Run test**:
+
 ```bash
 cd /home/john/hamlet
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
@@ -328,6 +313,7 @@ def test_env_substrate_distance_metric():
 ```
 
 **Run test**:
+
 ```bash
 uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v
 ```
@@ -341,12 +327,13 @@ uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v
 #### Step 3: Commit test infrastructure
 
 **Command**:
+
 ```bash
 cd /home/john/hamlet
 git add tests/test_townlet/unit/test_substrate_configs.py tests/test_townlet/integration/test_substrate_migration.py
 git commit -m "test: add substrate.yaml validation tests
 
-Added test infrastructure for Phase 6 config migration:
+Added test infrastructure for Phase 3 config migration:
 
 1. Unit tests (test_substrate_configs.py):
    - Schema validation for all 7 config packs
@@ -361,20 +348,21 @@ Added test infrastructure for Phase 6 config migration:
    - Distance metric validation
 
 Tests currently FAIL (substrate.yaml files don't exist yet).
-Will pass after Tasks 6.2-6.8 complete.
+Will pass after Tasks 3.2-3.8 complete.
 
-Part of TASK-002A Phase 6 (Config Migration)."
+Part of TASK-002A Phase 3 (Config Migration)."
 ```
 
 **Expected**: Clean commit with failing tests (red phase of TDD)
 
 ---
 
-### Task 6.2: Create L0_0_minimal Config
+### Task 3.2: Create L0_0_minimal Config
 
 **Purpose**: Migrate smallest config (3×3 grid) as proof-of-concept
 
 **Files**:
+
 - `configs/L0_0_minimal/substrate.yaml` (NEW)
 
 **Estimated Time**: 20 minutes
@@ -445,6 +433,7 @@ grid:
 #### Step 2: Verify schema validation
 
 **Command**:
+
 ```bash
 cd /home/john/hamlet
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
@@ -458,6 +447,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 3: Verify file exists check
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_file_exists -v
 ```
@@ -469,6 +459,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 4: Commit L0_0_minimal substrate
 
 **Command**:
+
 ```bash
 git add configs/L0_0_minimal/substrate.yaml
 git commit -m "config: add substrate.yaml for L0_0_minimal
@@ -484,7 +475,7 @@ Behavioral equivalence:
 - Observation dim: 36 (9 grid + 8 meters + 15 affordances + 4 temporal)
 - Matches legacy hardcoded grid_size=3
 
-Part of TASK-002A Phase 6 (Config Migration).
+Part of TASK-002A Phase 3 (Config Migration).
 First config migrated (6 remaining)."
 ```
 
@@ -492,11 +483,12 @@ First config migrated (6 remaining)."
 
 ---
 
-### Task 6.3: Create L0_5_dual_resource Config
+### Task 3.3: Create L0_5_dual_resource Config
 
 **Purpose**: Migrate medium-sized config (7×7 grid)
 
 **Files**:
+
 - `configs/L0_5_dual_resource/substrate.yaml` (NEW)
 
 **Estimated Time**: 15 minutes
@@ -548,6 +540,7 @@ grid:
 #### Step 2: Verify schema validation
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_schema_valid[L0_5_dual_resource-7-7-49] -v
 ```
@@ -559,6 +552,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 3: Commit L0_5_dual_resource substrate
 
 **Command**:
+
 ```bash
 git add configs/L0_5_dual_resource/substrate.yaml
 git commit -m "config: add substrate.yaml for L0_5_dual_resource
@@ -574,7 +568,7 @@ Behavioral equivalence:
 - Observation dim: 76 (49 grid + 8 meters + 15 affordances + 4 temporal)
 - Matches legacy hardcoded grid_size=7
 
-Part of TASK-002A Phase 6 (Config Migration).
+Part of TASK-002A Phase 3 (Config Migration).
 2/7 configs complete."
 ```
 
@@ -582,11 +576,12 @@ Part of TASK-002A Phase 6 (Config Migration).
 
 ---
 
-### Task 6.4: Create L1_full_observability Config
+### Task 3.4: Create L1_full_observability Config
 
 **Purpose**: Migrate standard 8×8 config (full observability baseline)
 
 **Files**:
+
 - `configs/L1_full_observability/substrate.yaml` (NEW)
 
 **Estimated Time**: 15 minutes
@@ -639,6 +634,7 @@ grid:
 #### Step 2: Verify schema validation
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_schema_valid[L1_full_observability-8-8-64] -v
 ```
@@ -650,6 +646,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 3: Commit L1_full_observability substrate
 
 **Command**:
+
 ```bash
 git add configs/L1_full_observability/substrate.yaml
 git commit -m "config: add substrate.yaml for L1_full_observability
@@ -665,7 +662,7 @@ Behavioral equivalence:
 - Observation dim: 91 (64 grid + 8 meters + 15 affordances + 4 temporal)
 - Matches legacy hardcoded grid_size=8
 
-Part of TASK-002A Phase 6 (Config Migration).
+Part of TASK-002A Phase 3 (Config Migration).
 3/7 configs complete."
 ```
 
@@ -673,11 +670,12 @@ Part of TASK-002A Phase 6 (Config Migration).
 
 ---
 
-### Task 6.5: Create L2_partial_observability Config
+### Task 3.5: Create L2_partial_observability Config
 
 **Purpose**: Migrate POMDP config (8×8 grid with local vision)
 
 **Files**:
+
 - `configs/L2_partial_observability/substrate.yaml` (NEW)
 
 **Estimated Time**: 15 minutes
@@ -733,6 +731,7 @@ grid:
 #### Step 2: Verify schema validation
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_schema_valid[L2_partial_observability-8-8-64] -v
 ```
@@ -744,6 +743,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 3: Commit L2_partial_observability substrate
 
 **Command**:
+
 ```bash
 git add configs/L2_partial_observability/substrate.yaml
 git commit -m "config: add substrate.yaml for L2_partial_observability
@@ -760,7 +760,7 @@ Behavioral equivalence:
 - Local window (5×5) handled by vision_range in training.yaml
 - Matches legacy hardcoded grid_size=8
 
-Part of TASK-002A Phase 6 (Config Migration).
+Part of TASK-002A Phase 3 (Config Migration).
 4/7 configs complete."
 ```
 
@@ -768,11 +768,12 @@ Part of TASK-002A Phase 6 (Config Migration).
 
 ---
 
-### Task 6.6: Create L3_temporal_mechanics Config
+### Task 3.6: Create L3_temporal_mechanics Config
 
 **Purpose**: Migrate temporal mechanics config (8×8 grid with time-based features)
 
 **Files**:
+
 - `configs/L3_temporal_mechanics/substrate.yaml` (NEW)
 
 **Estimated Time**: 15 minutes
@@ -827,6 +828,7 @@ grid:
 #### Step 2: Verify schema validation
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_schema_valid[L3_temporal_mechanics-8-8-64] -v
 ```
@@ -838,6 +840,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 3: Commit L3_temporal_mechanics substrate
 
 **Command**:
+
 ```bash
 git add configs/L3_temporal_mechanics/substrate.yaml
 git commit -m "config: add substrate.yaml for L3_temporal_mechanics
@@ -854,7 +857,7 @@ Behavioral equivalence:
 - Temporal mechanics (24-tick cycle) handled by training.yaml
 - Matches legacy hardcoded grid_size=8
 
-Part of TASK-002A Phase 6 (Config Migration).
+Part of TASK-002A Phase 3 (Config Migration).
 5/7 configs complete."
 ```
 
@@ -862,11 +865,12 @@ Part of TASK-002A Phase 6 (Config Migration).
 
 ---
 
-### Task 6.7: Create test Config
+### Task 3.7: Create test Config
 
 **Purpose**: Migrate integration test config (8×8 grid, lite version)
 
 **Files**:
+
 - `configs/test/substrate.yaml` (NEW)
 
 **Estimated Time**: 15 minutes
@@ -918,6 +922,7 @@ grid:
 #### Step 2: Verify schema validation
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_schema_valid[test-8-8-64] -v
 ```
@@ -929,6 +934,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 3: Verify all file existence checks pass
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_file_exists -v
 ```
@@ -940,6 +946,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 4: Commit test substrate
 
 **Command**:
+
 ```bash
 git add configs/test/substrate.yaml
 git commit -m "config: add substrate.yaml for integration testing
@@ -956,7 +963,7 @@ Behavioral equivalence:
 - Used in CI for regression testing
 - Matches legacy hardcoded grid_size=8
 
-Part of TASK-002A Phase 6 (Config Migration).
+Part of TASK-002A Phase 3 (Config Migration).
 6/7 configs complete (templates remaining)."
 ```
 
@@ -964,11 +971,12 @@ Part of TASK-002A Phase 6 (Config Migration).
 
 ---
 
-### Task 6.8: Create templates Config
+### Task 3.8: Create templates Config
 
 **Purpose**: Create well-documented template for operators creating new configs
 
 **Files**:
+
 - `configs/templates/substrate.yaml` (NEW)
 
 **Estimated Time**: 30 minutes (extra time for comprehensive documentation)
@@ -1113,6 +1121,7 @@ grid:
 #### Step 2: Verify schema validation
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_config_schema_valid[templates-8-8-64] -v
 ```
@@ -1124,6 +1133,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py::test_substrate_
 #### Step 3: Run all substrate config tests
 
 **Command**:
+
 ```bash
 uv run pytest tests/test_townlet/unit/test_substrate_configs.py -v
 ```
@@ -1135,6 +1145,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py -v
 #### Step 4: Commit templates substrate
 
 **Command**:
+
 ```bash
 git add configs/templates/substrate.yaml
 git commit -m "config: add substrate.yaml template with comprehensive documentation
@@ -1152,7 +1163,7 @@ Documentation includes:
 - Example configurations for common use cases
 - Pedagogical notes on spatial abstractions
 
-Part of TASK-002A Phase 6 (Config Migration).
+Part of TASK-002A Phase 3 (Config Migration).
 7/7 configs complete! ✅"
 ```
 
@@ -1160,11 +1171,12 @@ Part of TASK-002A Phase 6 (Config Migration).
 
 ---
 
-### Task 6.9: Create Example Substrate Configs
+### Task 3.9: Create Example Substrate Configs
 
 **Purpose**: Provide reference examples for alternative substrate configurations
 
 **Files**:
+
 - `docs/examples/substrate-toroidal-grid.yaml` (NEW)
 - `docs/examples/substrate-aspatial.yaml` (NEW)
 - `docs/examples/substrate-euclidean-distance.yaml` (NEW)
@@ -1177,6 +1189,7 @@ Part of TASK-002A Phase 6 (Config Migration).
 #### Step 1: Create examples directory
 
 **Command**:
+
 ```bash
 cd /home/john/hamlet
 mkdir -p docs/examples
@@ -1445,7 +1458,9 @@ Observation dimension varies by substrate type and grid size:
 
 **Grid substrate**:
 ```
+
 obs_dim = (width × height) + 8 meters + 15 affordances + 4 temporal
+
 ```
 
 Examples:
@@ -1455,7 +1470,9 @@ Examples:
 
 **Aspatial substrate**:
 ```
+
 obs_dim = 0 + 8 meters + 15 affordances + 4 temporal = 27 dims
+
 ```
 
 ## When to Use Each Substrate
@@ -1514,6 +1531,7 @@ See `configs/templates/substrate.yaml` for comprehensive parameter documentation
 #### Step 6: Commit example substrate configs
 
 **Command**:
+
 ```bash
 cd /home/john/hamlet
 git add docs/examples/
@@ -1541,18 +1559,19 @@ Created reference examples for alternative substrate configurations:
 
 Operators can reference these examples when creating custom configs.
 
-Part of TASK-002A Phase 6 (Config Migration)."
+Part of TASK-002A Phase 3 (Config Migration)."
 ```
 
 **Expected**: Clean commit with examples
 
 ---
 
-### Task 6.10: Update Documentation
+### Task 3.10: Update Documentation
 
 **Purpose**: Update CLAUDE.md and project documentation with substrate.yaml structure
 
 **Files**:
+
 - `CLAUDE.md` (MODIFY)
 - `docs/TASK-002A-configurable-spatial-substrates.md` (MODIFY - update status)
 
@@ -1567,35 +1586,41 @@ Part of TASK-002A Phase 6 (Config Migration)."
 **Modify**: `CLAUDE.md`
 
 **Find** (around line 700):
+
 ```markdown
 ### Config Pack Structure (UNIVERSE_AS_CODE)
 
 Each config pack directory contains:
 
 ```
+
 configs/L0_0_minimal/
 ├── bars.yaml         # Meter definitions (energy, health, money, etc.)
 ├── cascades.yaml     # Meter relationships (low satiation → drains energy)
 ├── affordances.yaml  # Interaction definitions (Bed, Hospital, Job, etc.)
 ├── cues.yaml         # UI metadata for visualization
 └── training.yaml     # Hyperparameters and enabled affordances
+
 ```
 ```
 
 **Replace with**:
+
 ```markdown
 ### Config Pack Structure (UNIVERSE_AS_CODE)
 
 Each config pack directory contains:
 
 ```
+
 configs/L0_0_minimal/
-├── substrate.yaml    # Spatial substrate definition (NEW in Phase 6)
+├── substrate.yaml    # Spatial substrate definition (NEW in Phase 3)
 ├── bars.yaml         # Meter definitions (energy, health, money, etc.)
 ├── cascades.yaml     # Meter relationships (low satiation → drains energy)
 ├── affordances.yaml  # Interaction definitions (Bed, Hospital, Job, etc.)
 ├── cues.yaml         # UI metadata for visualization
 └── training.yaml     # Hyperparameters and enabled affordances
+
 ```
 
 **Key principle**: Everything configurable via YAML (UNIVERSE_AS_CODE). The system loads and validates these files at startup.
@@ -1616,7 +1641,7 @@ configs/L0_0_minimal/
 ```markdown
 ### substrate.yaml Structure
 
-**NEW in TASK-002A Phase 6**: Defines spatial substrate (coordinate system, topology, boundaries).
+**NEW in TASK-002A Phase 3**: Defines spatial substrate (coordinate system, topology, boundaries).
 
 **Purpose**: Makes spatial parameters explicit (no hidden defaults per PDR-002).
 
@@ -1636,15 +1661,18 @@ grid:
 ```
 
 **Behavioral Impact**:
+
 - `width × height`: Grid size (affects observation dimension)
 - `boundary`: Movement at edges (clamp=walls, wrap=Pac-Man, bounce=reflection)
 - `distance_metric`: Proximity calculations (manhattan=cardinal, euclidean=diagonal-aware)
 
 **Observation Dimension**:
+
 - Grid substrate: `obs_dim = (width × height) + 8 meters + 15 affordances + 4 temporal`
 - Aspatial substrate: `obs_dim = 0 + 8 meters + 15 affordances + 4 temporal = 27 dims`
 
 **Examples**:
+
 - Standard grid (L1): 8×8, clamp, manhattan → 91 dims
 - Toroidal grid: 8×8, wrap, manhattan → 91 dims (same obs, different behavior)
 - Aspatial: No positioning → 27 dims
@@ -1652,6 +1680,7 @@ grid:
 **Key Insight**: Substrate is OPTIONAL. Aspatial universes (pure state machines) reveal that meters are the true universe - positioning is just an overlay.
 
 **See also**: `docs/examples/substrate-comparison.md` for behavioral comparisons.
+
 ```
 
 **Expected**: substrate.yaml documentation added to CLAUDE.md
@@ -1676,6 +1705,7 @@ environment:
 ```
 
 **Replace with**:
+
 ```markdown
 ### Config Structure (training.yaml)
 
@@ -1686,7 +1716,8 @@ environment:
   vision_range: 2               # 5×5 window when partial_observability=true
 ```
 
-**Historical note**: `environment.grid_size` was removed in Phase 6 (TASK-002A). Grid dimensions now specified in `substrate.yaml` as `grid.width` and `grid.height` for explicit configuration per UNIVERSE_AS_CODE principle.
+**Historical note**: `environment.grid_size` was removed in Phase 3 (TASK-002A). Grid dimensions now specified in `substrate.yaml` as `grid.width` and `grid.height` for explicit configuration per UNIVERSE_AS_CODE principle.
+
 ```
 
 **Expected**: training.yaml documentation updated to reflect grid_size migration
@@ -1695,7 +1726,7 @@ environment:
 
 #### Step 4: Update TASK-002A status
 
-**Action**: Mark Phase 6 as complete in task document
+**Action**: Mark Phase 3 as complete in task document
 
 **Modify**: `docs/TASK-002A-configurable-spatial-substrates.md`
 
@@ -1706,22 +1737,24 @@ environment:
 - [ ] Phase 3: Environment Integration
 - [ ] Phase 4: Position Management Refactoring
 - [ ] Phase 5: Observation Builder Update
-- [ ] Phase 6: Config Migration
+- [ ] Phase 3: Config Migration
 ```
 
 **Replace with**:
+
 ```markdown
 - [x] Phase 1: Abstract Substrate Interface
 - [x] Phase 2: Substrate Configuration Schema
 - [ ] Phase 3: Environment Integration
 - [ ] Phase 4: Position Management Refactoring
 - [ ] Phase 5: Observation Builder Update
-- [x] Phase 6: Config Migration ← **COMPLETED**
+- [x] Phase 3: Config Migration ← **COMPLETED**
 ```
 
-**Add completion notes** (at end of Phase 6 section):
+**Add completion notes** (at end of Phase 3 section):
+
 ```markdown
-### Phase 6 Completion Notes
+### Phase 3 Completion Notes
 
 **Completed**: 2025-11-05
 **Effort**: 4 hours (as estimated)
@@ -1739,7 +1772,7 @@ environment:
 - All configs use clamp boundary + manhattan distance (as expected) ✅
 
 **Phase 3 Readiness**:
-Phase 6 complete. Phase 3 (Environment Integration) can now proceed.
+Phase 3 complete. Phase 3 (Environment Integration) can now proceed.
 Phase 3 will enforce substrate.yaml requirement in VectorizedEnv.
 ```
 
@@ -1750,10 +1783,11 @@ Phase 3 will enforce substrate.yaml requirement in VectorizedEnv.
 #### Step 5: Commit documentation updates
 
 **Command**:
+
 ```bash
 cd /home/john/hamlet
 git add CLAUDE.md docs/TASK-002A-configurable-spatial-substrates.md
-git commit -m "docs: update CLAUDE.md and task status for Phase 6 completion
+git commit -m "docs: update CLAUDE.md and task status for Phase 3 completion
 
 Updated project documentation to reflect substrate.yaml addition:
 
@@ -1765,21 +1799,21 @@ CLAUDE.md changes:
 - Noted grid_size migration from training.yaml to substrate.yaml
 
 TASK-002A updates:
-- Marked Phase 6 as complete
+- Marked Phase 3 as complete
 - Added completion notes with deliverables
 - Verified behavioral equivalence
 - Confirmed Phase 3 readiness
 
-Phase 6 complete. Ready for Phase 3 (Environment Integration).
+Phase 3 complete. Ready for Phase 3 (Environment Integration).
 
-Part of TASK-002A Phase 6 (Config Migration)."
+Part of TASK-002A Phase 3 (Config Migration)."
 ```
 
 **Expected**: Clean commit with documentation updates
 
 ---
 
-### Task 6.11: Validation and Smoke Testing
+### Task 3.11: Validation and Smoke Testing
 
 **Purpose**: Verify all substrate.yaml files are valid and configs still work
 
@@ -1792,6 +1826,7 @@ Part of TASK-002A Phase 6 (Config Migration)."
 #### Step 1: Run all unit tests
 
 **Command**:
+
 ```bash
 cd /home/john/hamlet
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
@@ -1801,6 +1836,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_configs.py -v
 **Expected**: ALL PASS (7/7 configs valid)
 
 **Verification checklist**:
+
 - [x] Schema validation passes for all configs
 - [x] Behavioral equivalence verified (clamp + manhattan)
 - [x] No-defaults principle enforced
@@ -1937,12 +1973,14 @@ if __name__ == "__main__":
 ```
 
 **Run script**:
+
 ```bash
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 python scripts/validate_substrate_configs.py
 ```
 
 **Expected**:
+
 ```
 Validating substrate.yaml configs...
 
@@ -1962,6 +2000,7 @@ Validating substrate.yaml configs...
 #### Step 3: Commit validation script
 
 **Command**:
+
 ```bash
 git add scripts/validate_substrate_configs.py
 git commit -m "chore: add substrate config validation script
@@ -1978,7 +2017,7 @@ Usage:
 
 Operators can run before training to catch config errors early.
 
-Part of TASK-002A Phase 6 (Config Migration)."
+Part of TASK-002A Phase 3 (Config Migration)."
 ```
 
 **Expected**: Clean commit with validation tool
@@ -2002,7 +2041,7 @@ Part of TASK-002A Phase 6 (Config Migration)."
 
 **Prerequisites**:
 - Phase 3 complete (VectorizedEnv loads substrate.yaml)
-- All substrate.yaml files created (Phase 6)
+- All substrate.yaml files created (Phase 3)
 
 ---
 
@@ -2070,18 +2109,22 @@ After smoke testing, verify:
 ## Troubleshooting
 
 **Error: "substrate.yaml not found"**
+
 - Verify substrate.yaml exists in config pack directory
-- Check Phase 6 completed for all configs
+- Check Phase 3 completed for all configs
 
 **Error: "Invalid substrate schema"**
+
 - Run validation script: `python scripts/validate_substrate_configs.py`
 - Check substrate.yaml against schema (Phase 2)
 
 **Error: "Observation dimension mismatch"**
+
 - Verify grid dimensions match expected: width × height
-- Check training.yaml doesn't override grid_size (removed in Phase 6)
+- Check training.yaml doesn't override grid_size (removed in Phase 3)
 
 **Error: "Training crashes during episode"**
+
 - Check boundary behavior (clamp/wrap/bounce)
 - Verify distance metric (manhattan/euclidean/chebyshev)
 - Review Phase 3 integration (position management)
@@ -2091,13 +2134,15 @@ After smoke testing, verify:
 ## Success Criteria
 
 Smoke test succeeds if:
+
 1. All 5 curriculum configs train for 50 episodes without errors
 2. Test config completes full 200 episodes
 3. Observation dimensions match expected values
 4. Survival steps increase (agents learning)
 5. Checkpoints save and load successfully
 
-If all criteria met: Phase 6 migration successful! ✅
+If all criteria met: Phase 3 migration successful! ✅
+
 ```
 
 **Expected**: Smoke test procedure documented
@@ -2120,14 +2165,14 @@ Documented smoke testing procedure for substrate.yaml migration:
 
 Run after Phase 3 completion to verify configs train correctly.
 
-Part of TASK-002A Phase 6 (Config Migration)."
+Part of TASK-002A Phase 3 (Config Migration)."
 ```
 
 **Expected**: Clean commit with test procedure
 
 ---
 
-### Task 6.12: Phase 6 Completion Summary
+### Task 3.12: Phase 3 Completion Summary
 
 **Purpose**: Final verification and completion documentation
 
@@ -2140,6 +2185,7 @@ Part of TASK-002A Phase 6 (Config Migration)."
 #### Step 1: Run final validation
 
 **Commands**:
+
 ```bash
 cd /home/john/hamlet
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
@@ -2175,7 +2221,7 @@ test -f "docs/testing/substrate-smoke-test.md" && echo "✅ Smoke test doc exist
 echo ""
 
 echo "========================================"
-echo "Phase 6 validation complete!"
+echo "Phase 3 validation complete!"
 echo "========================================"
 ```
 
@@ -2183,14 +2229,14 @@ echo "========================================"
 
 ---
 
-#### Step 2: Generate Phase 6 completion report
+#### Step 2: Generate Phase 3 completion report
 
 **Action**: Summarize deliverables and verify success criteria
 
 **Create**: `docs/completion/phase6-completion-report.md`
 
 ```markdown
-# TASK-002A Phase 6 Completion Report
+# TASK-002A Phase 3 Completion Report
 
 **Date**: 2025-11-05
 **Phase**: 6 (Config Migration - Create substrate.yaml Files)
@@ -2237,7 +2283,7 @@ echo "========================================"
 ### 4. Documentation
 
 - ✅ CLAUDE.md updated (config structure, substrate.yaml schema)
-- ✅ TASK-002A status updated (Phase 6 marked complete)
+- ✅ TASK-002A status updated (Phase 3 marked complete)
 - ✅ Smoke test procedure documented
 - ✅ Validation script created
 
@@ -2268,6 +2314,7 @@ $ python scripts/validate_substrate_configs.py
 ```
 
 ### ✅ Behavioral equivalence verified
+
 | Config | Expected Obs Dim | Actual Obs Dim | Match |
 |--------|-----------------|----------------|-------|
 | L0_0_minimal | 36 (9+8+15+4) | 36 | ✅ |
@@ -2275,6 +2322,7 @@ $ python scripts/validate_substrate_configs.py
 | L1/L2/L3/test | 91 (64+8+15+4) | 91 | ✅ |
 
 ### ✅ All unit tests pass
+
 ```bash
 $ uv run pytest tests/test_townlet/unit/test_substrate_configs.py -v
 test_substrate_config_schema_valid[L0_0_minimal-3-3-9] PASSED
@@ -2292,30 +2340,34 @@ test_substrate_config_file_exists PASSED
 ```
 
 ### ✅ Example configs created (3 examples + comparison doc)
+
 - Toroidal grid (wraparound)
 - Aspatial (no positioning)
 - Euclidean distance (diagonal-aware)
 - Comparison documentation
 
 ### ✅ Documentation updated
+
 - CLAUDE.md: Config structure, substrate.yaml schema
-- TASK-002A: Phase 6 marked complete
+- TASK-002A: Phase 3 marked complete
 - Smoke test procedure documented
 
 ---
 
 ## Phase 3 Readiness
 
-**Phase 6 COMPLETE. Phase 3 can now proceed.**
+**Phase 3 COMPLETE. Phase 3 can now proceed.**
 
 **Rationale**:
+
 - All substrate.yaml files created ✅
 - Schema validation passing ✅
 - Behavioral equivalence verified ✅
 - Tests ready for Phase 3 integration ✅
 
 **Phase 3 will**:
-1. Load substrate.yaml in VectorizedEnv.__init__()
+
+1. Load substrate.yaml in VectorizedEnv.**init**()
 2. Enforce substrate.yaml requirement (breaking change)
 3. Replace hardcoded grid_size with substrate.width/height
 4. Enable configurable boundaries and distance metrics
@@ -2327,16 +2379,19 @@ test_substrate_config_file_exists PASSED
 ## Breaking Changes Summary
 
 **Config Pack Structure**:
-- **BEFORE Phase 6**: No substrate.yaml (spatial behavior hardcoded)
-- **AFTER Phase 6**: substrate.yaml required (explicit configuration)
+
+- **BEFORE Phase 3**: No substrate.yaml (spatial behavior hardcoded)
+- **AFTER Phase 3**: substrate.yaml required (explicit configuration)
 
 **Impact**:
+
 - Operators creating new configs MUST include substrate.yaml
-- Existing configs updated in Phase 6 (no operator action needed)
+- Existing configs updated in Phase 3 (no operator action needed)
 - Clear error message if substrate.yaml missing (after Phase 3)
 
 **Migration Path**:
-- Existing configs: Already migrated (Phase 6) ✅
+
+- Existing configs: Already migrated (Phase 3) ✅
 - New configs: Use `configs/templates/substrate.yaml` as starting point
 
 ---
@@ -2344,17 +2399,20 @@ test_substrate_config_file_exists PASSED
 ## Lessons Learned
 
 ### What Went Well
+
 1. **All configs use identical behavior** - Migration was mechanical (copy template, edit dimensions)
 2. **Test-driven approach** - Writing tests first caught issues early
 3. **Comprehensive documentation** - Template and examples make operator onboarding easy
 4. **Validation tooling** - Script provides fast pre-training validation
 
 ### Challenges
-1. **Phase ordering critical** - Phase 6 MUST precede Phase 3 to avoid breakage
+
+1. **Phase ordering critical** - Phase 3 MUST precede Phase 3 to avoid breakage
 2. **Documentation volume** - Template required extensive comments for operator clarity
 3. **Behavioral equivalence testing** - Verifying obs_dim calculations manually was tedious
 
 ### Recommendations for Future Phases
+
 1. **Maintain test-first approach** - Write failing tests before implementation
 2. **Document examples early** - Examples clarify intent and prevent misunderstandings
 3. **Validation scripts essential** - Pre-training validation saves debugging time
@@ -2365,12 +2423,14 @@ test_substrate_config_file_exists PASSED
 ## Next Steps
 
 ### Immediate (Phase 3)
-1. Integrate substrate loading in VectorizedEnv.__init__()
+
+1. Integrate substrate loading in VectorizedEnv.**init**()
 2. Replace hardcoded grid_size with substrate.width/height
 3. Add substrate.yaml requirement validation
 4. Run integration tests (should pass after Phase 3)
 
 ### Future (Phase 4-5)
+
 1. Refactor position management to use substrate.position_dim
 2. Update observation builder for substrate-aware encoding
 3. Run smoke tests (50 episodes per config)
@@ -2380,7 +2440,7 @@ test_substrate_config_file_exists PASSED
 
 ## Conclusion
 
-**Phase 6 complete.** All substrate.yaml files created, validated, and documented.
+**Phase 3 complete.** All substrate.yaml files created, validated, and documented.
 
 **Phase 3 ready to proceed.** No blockers.
 
@@ -2388,24 +2448,25 @@ test_substrate_config_file_exists PASSED
 
 ---
 
-**Signed off**: Phase 6 Implementation Complete ✅
+**Signed off**: Phase 3 Implementation Complete ✅
 **Date**: 2025-11-05
 **Next Phase**: Phase 3 (Environment Integration)
+
 ```
 
 **Expected**: Comprehensive completion report
 
 ---
 
-#### Step 3: Final commit - Phase 6 complete
+#### Step 3: Final commit - Phase 3 complete
 
 **Command**:
 ```bash
 cd /home/john/hamlet
 git add docs/completion/phase6-completion-report.md
-git commit -m "docs: Phase 6 completion report
+git commit -m "docs: Phase 3 completion report
 
-Phase 6 (Config Migration) complete:
+Phase 3 (Config Migration) complete:
 
 Deliverables:
 - 7/7 substrate.yaml files created (L0 through test)
@@ -2429,30 +2490,31 @@ Phase 3 readiness:
 Breaking changes: Config packs now require substrate.yaml (after Phase 3).
 Migration path: Use configs/templates/substrate.yaml for new configs.
 
-TASK-002A Phase 6 COMPLETE."
+TASK-002A Phase 3 COMPLETE."
 ```
 
 **Expected**: Final commit, phase complete
 
 ---
 
-## Phase 6 Summary
+## Phase 3 Summary
 
 ### Total Effort: 4 hours (as estimated)
 
 **Task Breakdown**:
-- Task 6.1: Test infrastructure (45 min)
-- Task 6.2: L0_0_minimal (20 min)
-- Task 6.3: L0_5_dual_resource (15 min)
-- Task 6.4: L1_full_observability (15 min)
-- Task 6.5: L2_partial_observability (15 min)
-- Task 6.6: L3_temporal_mechanics (15 min)
-- Task 6.7: test config (15 min)
-- Task 6.8: templates (30 min)
-- Task 6.9: Example configs (30 min)
-- Task 6.10: Documentation (30 min)
-- Task 6.11: Validation (30 min)
-- Task 6.12: Completion (15 min)
+
+- Task 3.1: Test infrastructure (45 min)
+- Task 3.2: L0_0_minimal (20 min)
+- Task 3.3: L0_5_dual_resource (15 min)
+- Task 3.4: L1_full_observability (15 min)
+- Task 3.5: L2_partial_observability (15 min)
+- Task 3.6: L3_temporal_mechanics (15 min)
+- Task 3.7: test config (15 min)
+- Task 3.8: templates (30 min)
+- Task 3.9: Example configs (30 min)
+- Task 3.10: Documentation (30 min)
+- Task 3.11: Validation (30 min)
+- Task 3.12: Completion (15 min)
 
 **Total**: ~4 hours
 
@@ -2461,6 +2523,7 @@ TASK-002A Phase 6 COMPLETE."
 ### Deliverables Checklist
 
 **Config Files**:
+
 - [x] L0_0_minimal/substrate.yaml (3×3 grid)
 - [x] L0_5_dual_resource/substrate.yaml (7×7 grid)
 - [x] L1_full_observability/substrate.yaml (8×8 grid)
@@ -2470,12 +2533,14 @@ TASK-002A Phase 6 COMPLETE."
 - [x] test/substrate.yaml (8×8 grid for CI)
 
 **Test Infrastructure**:
+
 - [x] Unit tests (test_substrate_configs.py)
 - [x] Integration tests (test_substrate_migration.py)
 - [x] Validation script (validate_substrate_configs.py)
 - [x] Smoke test procedure (substrate-smoke-test.md)
 
 **Examples and Documentation**:
+
 - [x] Toroidal grid example
 - [x] Aspatial example
 - [x] Euclidean distance example
@@ -2485,6 +2550,7 @@ TASK-002A Phase 6 COMPLETE."
 - [x] Completion report
 
 **Verification**:
+
 - [x] All configs pass schema validation
 - [x] All unit tests pass (16/16)
 - [x] Behavioral equivalence verified
@@ -2494,13 +2560,14 @@ TASK-002A Phase 6 COMPLETE."
 
 ### Success Criteria
 
-**✅ Phase 6 is COMPLETE when**:
+**✅ Phase 3 is COMPLETE when**:
+
 1. All 7 config packs have substrate.yaml ✅
 2. All substrate.yaml files pass schema validation ✅
 3. Template substrate.yaml is well-documented ✅
 4. CLAUDE.md updated with substrate.yaml structure ✅
 5. Example documentation created ✅
-6. Ready for Phase 3 (no blockers) ✅
+3. Ready for Phase 3 (no blockers) ✅
 
 ---
 
@@ -2508,13 +2575,14 @@ TASK-002A Phase 6 COMPLETE."
 
 **READY TO PROCEED**
 
-Phase 6 created all substrate.yaml files WITHOUT changing Python code.
+Phase 3 created all substrate.yaml files WITHOUT changing Python code.
 Phase 3 will now integrate substrate loading in VectorizedEnv.
 
 **Correct execution order maintained**:
+
 1. ✅ Phase 1: Substrate abstraction
 2. ✅ Phase 2: Config schema
-3. ✅ **Phase 6: Config migration** ← JUST COMPLETED
+3. ✅ **Phase 3: Config migration** ← JUST COMPLETED
 4. → **Phase 3: Environment integration** ← PROCEED NEXT
 
 **No blockers. Phase 3 can proceed immediately.**
@@ -2524,19 +2592,22 @@ Phase 3 will now integrate substrate loading in VectorizedEnv.
 ### Breaking Changes Notice (Final)
 
 **After Phase 3 completes**:
+
 - VectorizedEnv will REQUIRE substrate.yaml
 - Config packs without substrate.yaml will fail with clear error
 - No backward compatibility (authorized by user)
 
 **Migration path**:
-- Existing configs: Already migrated (Phase 6) ✅
+
+- Existing configs: Already migrated (Phase 3) ✅
 - New configs: Copy `configs/templates/substrate.yaml` and customize
 
 **Error message** (Phase 3):
+
 ```
 FileNotFoundError: substrate.yaml not found in configs/my_config/
 
-Config packs must include substrate.yaml (added in TASK-002A Phase 6).
+Config packs must include substrate.yaml (added in TASK-002A Phase 3).
 Copy configs/templates/substrate.yaml as starting point.
 
 See docs/examples/substrate-comparison.md for examples.
@@ -2598,4 +2669,4 @@ tests/
 
 ---
 
-**END OF PHASE 6 IMPLEMENTATION PLAN**
+**END OF Phase 3 IMPLEMENTATION PLAN**
