@@ -30,6 +30,12 @@ class GridConfig(BaseModel):
     boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(description="Boundary handling mode")
     distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(default="manhattan", description="Distance calculation method")
 
+    # NEW: Phase 5C addition
+    observation_encoding: Literal["relative", "scaled", "absolute"] = Field(
+        default="relative",
+        description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + ranges), absolute (raw coordinates)",
+    )
+
     @model_validator(mode="after")
     def validate_cubic_requires_depth(self) -> "GridConfig":
         """Cubic topology requires depth parameter."""
@@ -71,6 +77,12 @@ class ContinuousConfig(BaseModel):
     interaction_radius: float = Field(gt=0, description="Distance threshold for affordance interaction")
 
     distance_metric: Literal["euclidean", "manhattan"] = Field(default="euclidean", description="Distance calculation method")
+
+    # NEW: Phase 5C addition
+    observation_encoding: Literal["relative", "scaled", "absolute"] = Field(
+        default="relative",
+        description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + ranges), absolute (raw coordinates)",
+    )
 
     @model_validator(mode="after")
     def validate_bounds_match_dimensions(self) -> "ContinuousConfig":

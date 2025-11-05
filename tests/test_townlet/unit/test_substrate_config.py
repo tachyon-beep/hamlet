@@ -126,3 +126,83 @@ def test_factory_build_aspatial():
 
     assert isinstance(substrate, AspatialSubstrate)
     assert substrate.position_dim == 0
+
+
+# Phase 5C: observation_encoding tests
+def test_grid_config_observation_encoding_valid():
+    """Test Grid config accepts valid observation_encoding values."""
+    from townlet.substrate.config import GridConfig
+
+    for encoding in ["relative", "scaled", "absolute"]:
+        config = GridConfig(
+            topology="square",
+            width=8,
+            height=8,
+            boundary="clamp",
+            distance_metric="manhattan",
+            observation_encoding=encoding,
+        )
+        assert config.observation_encoding == encoding
+
+
+def test_grid_config_observation_encoding_default():
+    """Test Grid config defaults to relative for backward compatibility."""
+    from townlet.substrate.config import GridConfig
+
+    config = GridConfig(
+        topology="square",
+        width=8,
+        height=8,
+        boundary="clamp",
+        distance_metric="manhattan",
+        # observation_encoding NOT provided
+    )
+    assert config.observation_encoding == "relative"
+
+
+def test_grid_config_observation_encoding_invalid():
+    """Test Grid config rejects invalid observation_encoding."""
+    from townlet.substrate.config import GridConfig
+
+    with pytest.raises(ValueError, match="observation_encoding"):
+        GridConfig(
+            topology="square",
+            width=8,
+            height=8,
+            boundary="clamp",
+            distance_metric="manhattan",
+            observation_encoding="invalid",  # Not in Literal
+        )
+
+
+def test_continuous_config_observation_encoding_valid():
+    """Test Continuous config accepts valid observation_encoding values."""
+    from townlet.substrate.config import ContinuousConfig
+
+    for encoding in ["relative", "scaled", "absolute"]:
+        config = ContinuousConfig(
+            dimensions=2,
+            bounds=[(0.0, 10.0), (0.0, 10.0)],
+            boundary="clamp",
+            movement_delta=0.5,
+            interaction_radius=1.0,
+            distance_metric="euclidean",
+            observation_encoding=encoding,
+        )
+        assert config.observation_encoding == encoding
+
+
+def test_continuous_config_observation_encoding_default():
+    """Test Continuous config defaults to relative for backward compatibility."""
+    from townlet.substrate.config import ContinuousConfig
+
+    config = ContinuousConfig(
+        dimensions=2,
+        bounds=[(0.0, 10.0), (0.0, 10.0)],
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=1.0,
+        distance_metric="euclidean",
+        # observation_encoding NOT provided
+    )
+    assert config.observation_encoding == "relative"
