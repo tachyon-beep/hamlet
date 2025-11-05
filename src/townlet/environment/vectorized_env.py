@@ -74,8 +74,35 @@ class VectorizedHamletEnv:
         if not self.config_pack_path.exists():
             raise FileNotFoundError(f"Config pack directory not found: {self.config_pack_path}")
 
+        # BREAKING CHANGE: substrate.yaml is now REQUIRED
+        substrate_config_path = self.config_pack_path / "substrate.yaml"
+        if not substrate_config_path.exists():
+            raise FileNotFoundError(
+                f"substrate.yaml is required but not found in {self.config_pack_path}.\n\n"
+                f"All config packs must define their spatial substrate.\n\n"
+                f"Quick fix:\n"
+                f"  1. Copy template: cp configs/templates/substrate.yaml {self.config_pack_path}/\n"
+                f"  2. Edit substrate.yaml to match your grid_size from training.yaml\n"
+                f"  3. See CLAUDE.md 'Configuration System' for details\n\n"
+                f"This is a breaking change from TASK-002A. Previous configs without\n"
+                f"substrate.yaml will no longer work. See CHANGELOG.md for migration guide."
+            )
+
+        from townlet.substrate.config import load_substrate_config
+        from townlet.substrate.factory import SubstrateFactory
+
+        substrate_config = load_substrate_config(substrate_config_path)
+        self.substrate = SubstrateFactory.build(substrate_config, device=device)
+
+        # Update grid_size from substrate (for backward compatibility with other code)
+        # For aspatial substrates, keep parameter value; for grid substrates, use substrate
+        self.grid_size = grid_size  # Default to parameter (for aspatial or backward compat)
+        if hasattr(self.substrate, "width") and hasattr(self.substrate, "height"):
+            if self.substrate.width != self.substrate.height:
+                raise ValueError(f"Non-square grids not yet supported: " f"{self.substrate.width}×{self.substrate.height}")
+            self.grid_size = self.substrate.width  # Override with substrate for grid
+
         self.num_agents = num_agents
-        self.grid_size = grid_size
         self.device = device
         self.partial_observability = partial_observability
         self.vision_range = vision_range
