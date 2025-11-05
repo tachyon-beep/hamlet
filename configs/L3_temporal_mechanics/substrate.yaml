@@ -1,0 +1,32 @@
+# Substrate Configuration for Level 3: Temporal Mechanics
+#
+# Same 8×8 grid as L2, with added temporal mechanics (operating hours,
+# multi-tick interactions). Spatial substrate unchanged - temporal features
+# controlled in training.yaml via enable_temporal_mechanics=true.
+#
+# Level 3 characteristics:
+# - Same grid as L2 (8×8, 64 cells)
+# - 24-tick day/night cycle
+# - Operating hours (Job 9am-5pm, Bar 6pm-2am)
+# - Multi-tick interactions (75% linear + 25% completion bonus)
+# - Time-based action masking
+
+version: "1.0"
+
+description: "8×8 square grid with hard boundaries for Level 3 temporal mechanics training"
+
+type: "grid"
+
+grid:
+  topology: "square"
+
+  # Grid dimensions: 8×8 (64 total cells)
+  # Same spatial substrate as L1/L2 for curriculum progression
+  width: 8
+  height: 8
+
+  # Boundary behavior: "clamp" (hard walls)
+  boundary: "clamp"
+
+  # Distance metric: "manhattan" (L1 norm)
+  distance_metric: "manhattan"

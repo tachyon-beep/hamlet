@@ -1,0 +1,30 @@
+# Substrate Configuration for Level 1: Full Observability Baseline
+#
+# Standard 8×8 grid with all 14 affordances. Agent sees complete grid
+# (full observability). Baseline for comparing POMDP performance.
+#
+# Level 1 characteristics:
+# - All affordances deployed (14 total)
+# - Complete grid visibility (no POMDP)
+# - Standard MLP Q-network (~26K params)
+# - Baseline survival metrics for curriculum progression
+
+version: "1.0"
+
+description: "8×8 square grid with hard boundaries for Level 1 full observability baseline"
+
+type: "grid"
+
+grid:
+  topology: "square"
+
+  # Grid dimensions: 8×8 (64 total cells)
+  # Standard size for full affordance deployment
+  width: 8
+  height: 8
+
+  # Boundary behavior: "clamp" (hard walls)
+  boundary: "clamp"
+
+  # Distance metric: "manhattan" (L1 norm)
+  distance_metric: "manhattan"
