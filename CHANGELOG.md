@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 2025-11-06 - Action Space Size Property (C1/C2 Fixes)
+
+**Critical Fixes for Phase 5C Readiness:**
+
+### Added
+- `action_space_size` property to `SpatialSubstrate` base class
+  - Formula: `2*position_dim + 2` for spatial substrates (includes WAIT action)
+  - Returns 2 for aspatial substrates (INTERACT + WAIT)
+  - Enables dynamic action space sizing for N-dimensional substrates
+
+### Changed
+- `VectorizedHamletEnv` now uses `substrate.action_space_size` instead of hardcoded if-else chain
+  - Removed 15 lines of hardcoded action space logic
+  - Behavior unchanged for existing substrates
+  - Prepares for Phase 5C N-dimensional substrates
+
+### Fixed
+- Corrected action_space_size formula from `2N+1` to `2N+2` during implementation
+  - Original plan missed WAIT action (only counted INTERACT)
+  - Verified against `action_labels.py` which shows WAIT exists in all action spaces
+
+### Tests
+- Added 11 unit tests for `action_space_size` property and environment integration
+- All 901 integration tests pass (behavior unchanged)
+
+**Technical Details:**
+- Grid2D: 6 actions (UP/DOWN/LEFT/RIGHT/INTERACT/WAIT)
+- Grid3D: 8 actions (±X/±Y/±Z/INTERACT/WAIT)
+- Continuous1D: 4 actions (±X/INTERACT/WAIT)
+- Continuous2D: 6 actions (±X/±Y/INTERACT/WAIT)
+- Continuous3D: 8 actions (±X/±Y/±Z/INTERACT/WAIT)
+- Aspatial: 2 actions (INTERACT/WAIT)
+
+**Why:** Required prerequisite for Phase 5C (N-dimensional substrates with 2N+2 action spaces)
+
+---
+
 ### Added (TASK-002A - Configurable Spatial Substrates, Phase 1-5)
 
 **Status**: ✅ Phase 5 Complete (on branch `task-002a-configurable-spatial-substrates`)
