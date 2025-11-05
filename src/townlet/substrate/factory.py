@@ -21,7 +21,11 @@ class SubstrateFactory:
 
         Args:
             config: Validated substrate configuration
-            device: PyTorch device (cuda/cpu) for tensor operations
+            device: PyTorch device (cuda/cpu) - NOTE: Device is specified per-operation
+                   (e.g., initialize_positions), not at substrate construction time.
+                   Substrates are device-agnostic; they create tensors on the device
+                   specified when calling methods. This parameter is reserved for
+                   future use.
 
         Returns:
             Concrete SpatialSubstrate implementation
@@ -32,6 +36,7 @@ class SubstrateFactory:
         Example:
             >>> config = load_substrate_config(Path("substrate.yaml"))
             >>> substrate = SubstrateFactory.build(config, torch.device("cuda"))
+            >>> # Device specified here, not at construction:
             >>> positions = substrate.initialize_positions(num_agents=100, device=device)
         """
         if config.type == "grid":

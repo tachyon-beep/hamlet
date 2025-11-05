@@ -46,11 +46,12 @@ def test_grid2d_config_invalid_dimensions():
 
 def test_aspatial_config_valid():
     """Valid aspatial config should parse successfully."""
-    config_data = {"enabled": True}
+    config_data = {}  # No fields needed for aspatial
 
     config = AspatialSubstrateConfig(**config_data)
 
-    assert config.enabled is True
+    # Just verify it parses successfully (no fields to check)
+    assert config is not None
 
 
 def test_substrate_config_grid2d():
@@ -117,7 +118,7 @@ def test_factory_build_aspatial():
         "version": "1.0",
         "description": "Test aspatial",
         "type": "aspatial",
-        "aspatial": {"enabled": True},
+        "aspatial": {},  # Empty dict (no fields needed)
     }
 
     config = SubstrateConfig(**config_data)

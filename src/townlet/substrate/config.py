@@ -26,20 +26,18 @@ class Grid2DSubstrateConfig(BaseModel):
     topology: Literal["square"] = Field(description="Grid topology (must be 'square' for 2D)")
     width: int = Field(gt=0, description="Grid width (number of columns)")
     height: int = Field(gt=0, description="Grid height (number of rows)")
-    boundary: Literal["clamp", "wrap", "bounce"] = Field(description="Boundary handling mode")
+    boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(description="Boundary handling mode")
     distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(description="Distance metric for spatial queries")
 
 
 class AspatialSubstrateConfig(BaseModel):
     """Configuration for aspatial substrate (no positioning).
 
-    This is the simplest config - just enable flag.
+    This is the simplest config - presence indicates aspatial mode is enabled.
+    No additional configuration needed for aspatial substrates.
     """
 
-    enabled: bool = Field(
-        default=True,
-        description="Enable aspatial mode (no spatial positioning)",
-    )
+    pass  # No configuration fields needed
 
 
 class SubstrateConfig(BaseModel):

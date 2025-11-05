@@ -18,9 +18,10 @@ class Grid2DSubstrate(SpatialSubstrate):
     - x increases rightward, y increases downward
 
     Supported boundaries:
-    - clamp: Hard walls (default, current behavior)
+    - clamp: Hard walls (clamp to grid edge, current behavior)
     - wrap: Toroidal wraparound (Pac-Man style)
-    - bounce: Sticky walls (agent stays in place when hitting boundary)
+    - bounce: Elastic reflection (agent reflects back from boundary)
+    - sticky: Sticky walls (agent stays in place when hitting boundary)
 
     Supported distance metrics:
     - manhattan: |x1-x2| + |y1-y2| (default, current behavior)
@@ -32,21 +33,21 @@ class Grid2DSubstrate(SpatialSubstrate):
         self,
         width: int,
         height: int,
-        boundary: Literal["clamp", "wrap", "bounce"] = "clamp",
-        distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = "manhattan",
+        boundary: Literal["clamp", "wrap", "bounce", "sticky"],
+        distance_metric: Literal["manhattan", "euclidean", "chebyshev"],
     ):
         """Initialize 2D grid substrate.
 
         Args:
             width: Grid width (number of columns)
             height: Grid height (number of rows)
-            boundary: Boundary mode ("clamp", "wrap", "bounce")
+            boundary: Boundary mode ("clamp", "wrap", "bounce", "sticky")
             distance_metric: Distance metric ("manhattan", "euclidean", "chebyshev")
         """
         if width <= 0 or height <= 0:
             raise ValueError(f"Grid dimensions must be positive: width={width}, height={height}")
 
-        if boundary not in ("clamp", "wrap", "bounce"):
+        if boundary not in ("clamp", "wrap", "bounce", "sticky"):
             raise ValueError(f"Unknown boundary mode: {boundary}")
 
         if distance_metric not in ("manhattan", "euclidean", "chebyshev"):
@@ -91,7 +92,24 @@ class Grid2DSubstrate(SpatialSubstrate):
             new_positions[:, 1] = new_positions[:, 1] % self.height
 
         elif self.boundary == "bounce":
-            # Sticky walls: if out of bounds, stay in place (treat boundary as sticky)
+            # Elastic reflection: agent reflects back from boundaries
+            # Negative positions: reflect to positive (mirror across 0)
+            # Positions >= max: reflect back from upper boundary
+
+            # Handle x-axis bouncing
+            x_neg = new_positions[:, 0] < 0
+            x_over = new_positions[:, 0] >= self.width
+            new_positions[x_neg, 0] = torch.abs(new_positions[x_neg, 0])
+            new_positions[x_over, 0] = 2 * (self.width - 1) - new_positions[x_over, 0]
+
+            # Handle y-axis bouncing
+            y_neg = new_positions[:, 1] < 0
+            y_over = new_positions[:, 1] >= self.height
+            new_positions[y_neg, 1] = torch.abs(new_positions[y_neg, 1])
+            new_positions[y_over, 1] = 2 * (self.height - 1) - new_positions[y_over, 1]
+
+        elif self.boundary == "sticky":
+            # Sticky walls: if out of bounds, stay in place
             out_of_bounds_x = (new_positions[:, 0] < 0) | (new_positions[:, 0] >= self.width)
             out_of_bounds_y = (new_positions[:, 1] < 0) | (new_positions[:, 1] >= self.height)
 
