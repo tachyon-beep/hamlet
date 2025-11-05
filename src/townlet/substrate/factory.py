@@ -50,6 +50,7 @@ class SubstrateFactory:
                     height=config.grid.height,
                     boundary=config.grid.boundary,
                     distance_metric=config.grid.distance_metric,
+                    observation_encoding=config.grid.observation_encoding,  # NEW: Phase 5C
                 )
             elif config.grid.topology == "cubic":
                 if config.grid.depth is None:
@@ -60,6 +61,7 @@ class SubstrateFactory:
                     depth=config.grid.depth,
                     boundary=config.grid.boundary,
                     distance_metric=config.grid.distance_metric,
+                    observation_encoding=config.grid.observation_encoding,  # NEW: Phase 5C
                 )
             else:
                 raise ValueError(f"Unknown grid topology: {config.grid.topology}")
@@ -76,6 +78,7 @@ class SubstrateFactory:
                     movement_delta=config.continuous.movement_delta,
                     interaction_radius=config.continuous.interaction_radius,
                     distance_metric=config.continuous.distance_metric,
+                    observation_encoding=config.continuous.observation_encoding,  # NEW: Phase 5C
                 )
 
             elif config.continuous.dimensions == 2:
@@ -89,6 +92,7 @@ class SubstrateFactory:
                     movement_delta=config.continuous.movement_delta,
                     interaction_radius=config.continuous.interaction_radius,
                     distance_metric=config.continuous.distance_metric,
+                    observation_encoding=config.continuous.observation_encoding,  # NEW: Phase 5C
                 )
 
             elif config.continuous.dimensions == 3:
@@ -104,6 +108,7 @@ class SubstrateFactory:
                     movement_delta=config.continuous.movement_delta,
                     interaction_radius=config.continuous.interaction_radius,
                     distance_metric=config.continuous.distance_metric,
+                    observation_encoding=config.continuous.observation_encoding,  # NEW: Phase 5C
                 )
             else:
                 raise ValueError(f"Unsupported continuous dimensions: {config.continuous.dimensions}")
