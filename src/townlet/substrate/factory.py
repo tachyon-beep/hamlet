@@ -6,8 +6,10 @@ from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.base import SpatialSubstrate
 from townlet.substrate.config import SubstrateConfig
 from townlet.substrate.continuous import Continuous1DSubstrate, Continuous2DSubstrate, Continuous3DSubstrate
+from townlet.substrate.continuousnd import ContinuousNDSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
+from townlet.substrate.gridnd import GridNDSubstrate
 
 
 class SubstrateFactory:
@@ -112,6 +114,28 @@ class SubstrateFactory:
                 )
             else:
                 raise ValueError(f"Unsupported continuous dimensions: {config.continuous.dimensions}")
+
+        elif config.type == "gridnd":
+            assert config.gridnd is not None  # Validated by pydantic
+
+            return GridNDSubstrate(
+                dimension_sizes=config.gridnd.dimension_sizes,
+                boundary=config.gridnd.boundary,
+                distance_metric=config.gridnd.distance_metric,
+                observation_encoding=config.gridnd.observation_encoding,
+            )
+
+        elif config.type == "continuousnd":
+            assert config.continuous is not None  # Validated by pydantic
+
+            return ContinuousNDSubstrate(
+                bounds=config.continuous.bounds,
+                boundary=config.continuous.boundary,
+                movement_delta=config.continuous.movement_delta,
+                interaction_radius=config.continuous.interaction_radius,
+                distance_metric=config.continuous.distance_metric,
+                observation_encoding=config.continuous.observation_encoding,
+            )
 
         elif config.type == "aspatial":
             assert config.aspatial is not None  # Validated by pydantic
