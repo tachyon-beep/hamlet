@@ -131,7 +131,6 @@ cascades:
 
 # Expected computed values (for assertion documentation)
 expected_values:
-  baseline_survival_steps: 166  # 1.0 / (0.005 + 0.001) = 166.67 steps
 
   obs_dim_full_observability: 72    # 8x8 grid (64) + 8 meters
   obs_dim_partial_observability: 35  # 5x5 vision (25) + position (2) + 8 meters

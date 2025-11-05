@@ -31,9 +31,9 @@ def epsilon_greedy_action_selection(
         actions: [batch] selected action indices (long)
 
     Example:
-        >>> q_values = torch.randn(4, 5)  # 4 agents, 5 actions
+        >>> q_values = torch.randn(4, 6)  # 4 agents, 6 actions
         >>> epsilons = torch.tensor([0.1, 0.5, 0.0, 1.0])
-        >>> action_masks = torch.ones(4, 5, dtype=torch.bool)
+        >>> action_masks = torch.ones(4, 6, dtype=torch.bool)
         >>> actions = epsilon_greedy_action_selection(q_values, epsilons, action_masks)
         >>> actions.shape
         torch.Size([4])

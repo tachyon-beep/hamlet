@@ -504,7 +504,7 @@ class LiveInferenceServer:
         self.env.reset()
         self.population.reset()
 
-        # Get initial curriculum decision to set baseline and track stage
+        # Get initial curriculum decision to track stage
         from townlet.training.state import BatchedAgentState
 
         temp_state = BatchedAgentState(
@@ -522,21 +522,18 @@ class LiveInferenceServer:
         current_stage = curriculum_decisions[0].difficulty_level
         current_multiplier = curriculum_decisions[0].depletion_multiplier
 
-        # Align baseline handling with training loop
+        # Sync curriculum metrics to runtime registry
         self.population.current_curriculum_decisions = curriculum_decisions
-        baselines = self.population._update_reward_baseline()
-        self.population._sync_curriculum_metrics(baselines)
+        self.population._sync_curriculum_metrics()
         episode_telemetry = self._build_agent_telemetry()
         agent_snapshot = (
             episode_telemetry["agents"][0]
             if episode_telemetry["agents"]
             else {
-                "baseline_survival_steps": 0.0,
                 "curriculum_stage": 1,
                 "epsilon": self.current_epsilon,
             }
         )
-        baseline_survival = float(agent_snapshot["baseline_survival_steps"])
         current_stage = int(agent_snapshot["curriculum_stage"])
         epsilon_snapshot = float(agent_snapshot["epsilon"])
 
@@ -551,7 +548,6 @@ class LiveInferenceServer:
                 "epsilon": epsilon_snapshot,
                 "curriculum_stage": current_stage,
                 "curriculum_multiplier": float(current_multiplier),
-                "baseline_survival": baseline_survival,
                 "telemetry": episode_telemetry,
             }
         )
@@ -593,10 +589,7 @@ class LiveInferenceServer:
             if self.is_running:
                 await asyncio.sleep(self.step_delay)
 
-        # Episode complete - calculate performance vs baseline
-        performance_vs_baseline = float(self.current_step) - baseline_survival
-
-        # Use actual cumulative reward earned during episode (not baseline-relative)
+        # Episode complete - use actual cumulative reward earned during episode
         final_cumulative_reward = cumulative_reward
         final_telemetry = self._build_agent_telemetry()
         final_agent_snapshot = final_telemetry["agents"][0] if final_telemetry["agents"] else agent_snapshot
@@ -638,8 +631,6 @@ class LiveInferenceServer:
                 "checkpoint_episode": self.current_checkpoint_episode,
                 "total_episodes": self.total_episodes,
                 "epsilon": final_epsilon,
-                "baseline_survival": baseline_survival,
-                "performance_vs_baseline": performance_vs_baseline,
                 "curriculum_stage": final_stage,
                 "telemetry": final_telemetry,
                 "affordance_stats": affordance_stats,  # Include affordance usage for death certificate
@@ -649,11 +640,7 @@ class LiveInferenceServer:
             }
         )
 
-        logger.info(
-            f"Episode {self.current_episode} complete: {self.current_step} steps, "
-            f"reward: {final_cumulative_reward:.2f}, baseline: {baseline_survival:.1f}, "
-            f"vs baseline: {performance_vs_baseline:+.1f}"
-        )
+        logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, " f"reward: {final_cumulative_reward:.2f}")
 
     async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor, step_reward: float = 1.0):
         """Broadcast current state to all clients."""
@@ -722,10 +709,9 @@ class LiveInferenceServer:
             {"name": name, "count": count} for name, count in sorted(self.affordance_interactions.items(), key=lambda x: x[1], reverse=True)
         ]
 
-        # Calculate projected reward based on current progress
-        baseline_tensor = self.population.runtime_registry.get_baseline_tensor()
-        baseline_survival = float(baseline_tensor[0].item())
-        projected_reward = float(self.current_step) - baseline_survival
+        # TODO: Remove projected_reward from frontend (baseline tracking removed in PDR-002)
+        # Legacy field - set to 0.0 for backwards compatibility with frontend
+        projected_reward = 0.0
 
         # Build state update message
         update = {
@@ -733,7 +719,7 @@ class LiveInferenceServer:
             "step": self.current_step,
             "cumulative_reward": cumulative_reward,
             "step_reward": step_reward,  # Reward for this specific step (0-1 range)
-            "projected_reward": projected_reward,  # Current steps - baseline (real-time learning signal)
+            "projected_reward": projected_reward,  # Legacy field (always 0.0, baseline tracking removed)
             "epsilon": self.current_epsilon,  # Current exploration rate
             "checkpoint_episode": self.current_checkpoint_episode,  # For training progress bar
             "total_episodes": self.total_episodes,  # For training progress bar
@@ -757,7 +743,6 @@ class LiveInferenceServer:
             "q_values": q_values_list,  # Q-values for all 6 actions
             "action_masks": action_masks,  # Which actions are valid [6] bool list
             "affordance_stats": affordance_stats,  # Interaction counts sorted by frequency
-            "baseline_survival": baseline_survival,  # For UI display
             "telemetry": self._build_agent_telemetry(),
         }
 

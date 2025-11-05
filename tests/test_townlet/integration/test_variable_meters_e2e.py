@@ -38,7 +38,7 @@ class TestVariableMetersEndToEnd:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
             replay_buffer_capacity=100,
             batch_size=32,
@@ -73,7 +73,7 @@ class TestVariableMetersEndToEnd:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
             replay_buffer_capacity=100,
             batch_size=32,
@@ -109,7 +109,7 @@ class TestVariableMetersEndToEnd:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -142,7 +142,7 @@ class TestVariableMetersEndToEnd:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -168,7 +168,7 @@ class TestVariableMetersEndToEnd:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -187,7 +187,7 @@ class TestVariableMetersEndToEnd:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="simple",
         )
 
@@ -321,7 +321,7 @@ class TestVariableMetersEndToEnd:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter_pomdp.observation_dim,
-            action_dim=5,
+            action_dim=6,
             network_type="recurrent",  # Use recurrent network
             replay_buffer_capacity=100,
             batch_size=32,
@@ -348,7 +348,7 @@ class TestVariableMetersEndToEnd:
         # This tests that the network's num_meters matches the environment's meter count
         with torch.no_grad():
             q_values, hidden = population.q_network(obs)  # Recurrent networks return (q_values, hidden_state)
-            assert q_values.shape == (1, 5), f"Q-values should be [1, 5], got {q_values.shape}"
+            assert q_values.shape == (1, 6), f"Q-values should be [1, 6], got {q_values.shape}"
 
         # Note: We don't test environment steps here because AffordanceEngine has hardcoded meter indices
         # (separate bug to be fixed later - not part of recurrent network fix)

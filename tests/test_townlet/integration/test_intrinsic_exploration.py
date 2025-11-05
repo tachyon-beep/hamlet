@@ -52,6 +52,7 @@ class TestRNDIntrinsicRewards:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create adaptive intrinsic exploration
@@ -123,6 +124,7 @@ class TestRNDIntrinsicRewards:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create adaptive intrinsic exploration with known weight
@@ -205,6 +207,7 @@ class TestRNDIntrinsicRewards:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create adaptive intrinsic exploration
@@ -295,6 +298,7 @@ class TestAdaptiveAnnealing:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create adaptive intrinsic exploration with fast annealing for testing
@@ -355,6 +359,7 @@ class TestAdaptiveAnnealing:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create exploration
@@ -408,6 +413,7 @@ class TestAdaptiveAnnealing:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create exploration with strict variance threshold

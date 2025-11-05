@@ -9,7 +9,7 @@ This models human interoception - we're aware of our internal state
 
 Previous approaches:
 - Flat per-step (+1.0 alive): No gradient for optimal resource timing
-- Episodic (steps - baseline): Too sparse for minimal environments
+- Episodic rewards: Too sparse for minimal environments
 """
 
 import torch
@@ -34,21 +34,22 @@ class RewardStrategy:
 
     Humans don't need to die to learn "low energy is bad" - we feel tired.
     This reward structure gives agents the same immediate awareness.
-
-    Note: baseline_steps parameter is retained for API compatibility but
-    is no longer used in reward calculation.
     """
 
-    def __init__(self, device: torch.device, num_agents: int = 1, meter_count: int = 8, energy_idx: int = 0, health_idx: int = 6):
+    def __init__(self, device: torch.device, num_agents: int, meter_count: int, energy_idx: int = 0, health_idx: int = 6):
         """
         Initialize reward strategy.
 
         Args:
             device: torch device for tensor operations
-            num_agents: number of agents for vectorized baseline (P2.1)
+            num_agents: number of agents
             meter_count: number of meters in the universe (TASK-001)
-            energy_idx: index of energy meter (default 0)
-            health_idx: index of health meter (default 6)
+            energy_idx: index of energy meter (default 0 - semantic fallback to first meter)
+            health_idx: index of health meter (default 6 - semantic fallback to 6th meter)
+
+        Note (PDR-002):
+            num_agents and meter_count must be explicitly provided (no UAC defaults).
+            energy_idx and health_idx have semantic defaults (fallback meter indices).
         """
         self.device = device
         self.num_agents = num_agents
@@ -60,7 +61,6 @@ class RewardStrategy:
         self,
         step_counts: torch.Tensor,
         dones: torch.Tensor,
-        baseline_steps: torch.Tensor | float | list[float],
         meters: torch.Tensor,
     ) -> torch.Tensor:
         """
@@ -71,8 +71,6 @@ class RewardStrategy:
         Args:
             step_counts: [num_agents] current step count for each agent
             dones: [num_agents] whether each agent is dead
-            baseline_steps: Baseline survival expectation (retained for API
-                           compatibility, not used in interoception rewards)
             meters: [num_agents, meter_count] meter values already normalized to [0,1]
                    (energy at energy_idx, health at health_idx)
 
@@ -92,7 +90,6 @@ class RewardStrategy:
         health = meters[:, self.health_idx].clamp(min=0.0, max=1.0)  # Clamp to [0, 1]
 
         # Interoception-aware reward: health × energy
-        # (baseline_steps parameter retained for API compatibility but unused)
         rewards = torch.where(
             dones,
             0.0,  # Dead: no reward

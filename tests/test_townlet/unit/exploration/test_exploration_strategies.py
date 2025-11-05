@@ -38,7 +38,7 @@ class TestEpsilonGreedyActionSelection:
     def test_random_actions_without_masks(self, exploration):
         """Random action selection should work without masks."""
         batch_size = 10
-        num_actions = 5
+        num_actions = 6
         q_values = torch.randn(batch_size, num_actions)
 
         # Create state with epsilon=1.0 (always explore)
@@ -65,7 +65,7 @@ class TestEpsilonGreedyActionSelection:
     def test_random_actions_with_masks(self, exploration):
         """Random action selection should respect masks."""
         batch_size = 5
-        num_actions = 5
+        num_actions = 6
         q_values = torch.randn(batch_size, num_actions)
 
         # Create masks that only allow action 0 and 1
@@ -96,7 +96,7 @@ class TestEpsilonGreedyActionSelection:
     def test_greedy_without_masks(self, exploration):
         """Greedy selection should work without masks."""
         batch_size = 3
-        num_actions = 5
+        num_actions = 6
 
         # Create Q-values where action 2 is clearly best
         q_values = torch.zeros(batch_size, num_actions)
@@ -198,7 +198,7 @@ class TestEpsilonGreedyUpdate:
         # Create fake batch
         batch = {
             "observations": torch.randn(10, 20),
-            "actions": torch.randint(0, 5, (10,)),
+            "actions": torch.randint(0, 6, (10,)),
             "rewards": torch.randn(10),
         }
 
@@ -371,7 +371,7 @@ class TestRNDBufferAccumulation:
         """update() should handle missing 'observations' gracefully."""
         rnd = RNDExploration(obs_dim=10, device=torch.device("cpu"))
 
-        batch = {"actions": torch.randint(0, 5, (3,))}
+        batch = {"actions": torch.randint(0, 6, (3,))}
         rnd.update(batch)  # Should not crash
 
         # Buffer should still be empty

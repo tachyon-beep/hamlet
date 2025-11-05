@@ -42,7 +42,7 @@ class TestReplayBufferCapacityProperties:
             current_batch = min(batch_size, num_pushes - pushes_done)
 
             obs = torch.randn(current_batch, obs_dim)
-            actions = torch.randint(0, 5, (current_batch,))
+            actions = torch.randint(0, 6, (current_batch,))
             rewards_ext = torch.randn(current_batch)
             rewards_int = torch.randn(current_batch)
             next_obs = torch.randn(current_batch, obs_dim)
@@ -139,7 +139,7 @@ class TestReplayBufferSamplingProperties:
         while transitions_pushed < effective_fill:
             batch = min(10, effective_fill - transitions_pushed)
             obs = torch.randn(batch, obs_dim)
-            actions = torch.randint(0, 5, (batch,))
+            actions = torch.randint(0, 6, (batch,))
             rewards_ext = torch.randn(batch)
             rewards_int = torch.randn(batch)
             next_obs = torch.randn(batch, obs_dim)
@@ -244,7 +244,7 @@ class TestReplayBufferSamplingProperties:
             if operation == "push":
                 # Push transitions
                 obs = torch.randn(count, obs_dim)
-                actions = torch.randint(0, 5, (count,))
+                actions = torch.randint(0, 6, (count,))
                 rewards_ext = torch.randn(count)
                 rewards_int = torch.randn(count)
                 next_obs = torch.randn(count, obs_dim)
@@ -291,7 +291,7 @@ class TestReplayBufferSerializationProperties:
         # Fill buffer with known data
         num_to_push = min(num_transitions, capacity)
         obs = torch.randn(num_to_push, obs_dim)
-        actions = torch.randint(0, 5, (num_to_push,))
+        actions = torch.randint(0, 6, (num_to_push,))
         rewards_ext = torch.randn(num_to_push)
         rewards_int = torch.randn(num_to_push)
         next_obs = torch.randn(num_to_push, obs_dim)

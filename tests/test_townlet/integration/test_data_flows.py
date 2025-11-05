@@ -50,6 +50,7 @@ class TestObservationPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Reset environment to build observations
@@ -116,6 +117,7 @@ class TestObservationPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Reset environment
@@ -214,6 +216,7 @@ class TestRewardPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -277,6 +280,7 @@ class TestRewardPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create adaptive intrinsic exploration with known weight
@@ -361,6 +365,7 @@ class TestRewardPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create adaptive intrinsic exploration
@@ -452,6 +457,7 @@ class TestActionPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -520,6 +526,7 @@ class TestActionPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with full random exploration to test masking thoroughly
@@ -590,6 +597,7 @@ class TestActionPipeline:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population

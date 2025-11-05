@@ -97,6 +97,7 @@ class TestConfigPackLoading:
             move_energy_cost=env_cfg_update["energy_move_depletion"],
             wait_energy_cost=env_cfg_update["energy_wait_depletion"],
             interact_energy_cost=env_cfg_update["energy_interact_depletion"],
+            agent_lifespan=1000,
             config_pack_path=temp_config_pack,
         )
 
@@ -108,42 +109,6 @@ class TestConfigPackLoading:
         assert env.move_energy_cost == pytest.approx(0.02, rel=1e-6)
         assert env.wait_energy_cost == pytest.approx(0.015, rel=1e-6)
         assert env.interact_energy_cost == pytest.approx(0.001, rel=1e-6)
-
-        # Verify baseline survival calculation uses minimum action cost
-        min_cost = min(env.move_energy_cost, env.wait_energy_cost, env.interact_energy_cost)
-        expected_baseline = 1.0 / (energy_base + min_cost)
-        assert env.calculate_baseline_survival() == pytest.approx(expected_baseline, rel=1e-6)
-
-    def test_baseline_uses_minimum_action_cost(self, temp_config_pack: Path):
-        """Baseline should always be computed with the cheapest per-step action cost."""
-        training_path = temp_config_pack / "training.yaml"
-        training_config = yaml.safe_load(training_path.read_text())
-
-        env_cfg = training_config.setdefault("environment", {})
-        env_cfg["energy_move_depletion"] = 0.02
-        env_cfg["energy_wait_depletion"] = 0.012  # Must remain less than move cost
-        env_cfg["energy_interact_depletion"] = 0.05  # Highest cost
-        training_path.write_text(yaml.safe_dump(training_config))
-
-        env_cfg_update = training_config["environment"]
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=env_cfg_update.get("grid_size", 8),
-            partial_observability=env_cfg_update.get("partial_observability", False),
-            vision_range=env_cfg_update.get("vision_range", 2),
-            enable_temporal_mechanics=env_cfg_update.get("enable_temporal_mechanics", False),
-            move_energy_cost=env_cfg_update["energy_move_depletion"],
-            wait_energy_cost=env_cfg_update["energy_wait_depletion"],
-            interact_energy_cost=env_cfg_update["energy_interact_depletion"],
-            config_pack_path=temp_config_pack,
-        )
-
-        energy_base = env.meter_dynamics.cascade_engine.get_base_depletion("energy")
-        min_cost = min(env.move_energy_cost, env.wait_energy_cost, env.interact_energy_cost)
-        assert min_cost == env.wait_energy_cost  # WAIT is the cheapest action in this scenario
-
-        expected_baseline = 1.0 / (energy_base + min_cost)
-        assert env.calculate_baseline_survival() == pytest.approx(expected_baseline, rel=1e-6)
 
 
 # =============================================================================
@@ -993,9 +958,16 @@ class TestTrainingHyperparameters:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
+            partial_observability=False,
             device=cpu_device,
             enabled_affordances=["Bed"],
             config_pack_path=test_config_pack_path,
+            vision_range=5,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
 
         curriculum = AdversarialCurriculum(
@@ -1224,15 +1196,20 @@ class TestMaxEpisodesConfiguration:
 
         assert runner.max_episodes == 500
 
-    def test_defaults_to_10000_when_not_in_config(self, tmp_path: Path):
-        """When max_episodes is not in config, should default to 10000."""
+    def test_raises_error_when_max_episodes_missing(self, tmp_path: Path):
+        """PDR-002: When max_episodes is missing, should raise clear error (no-defaults principle)."""
         config_dir = tmp_path / "config"
         config_dir.mkdir()
 
         training_config = {
             "environment": {
                 "grid_size": 5,
+                "partial_observability": False,
+                "vision_range": 5,
                 "enabled_affordances": ["Bed"],
+                "energy_move_depletion": 0.005,
+                "energy_wait_depletion": 0.003,
+                "energy_interact_depletion": 0.0029,
             },
             "population": {
                 "num_agents": 1,
@@ -1256,7 +1233,13 @@ class TestMaxEpisodesConfiguration:
             },
             "training": {
                 "device": "cpu",
-                # No max_episodes specified
+                "train_frequency": 4,
+                "target_update_frequency": 100,
+                "max_grad_norm": 10.0,
+                "epsilon_start": 1.0,
+                "epsilon_decay": 0.99,
+                "epsilon_min": 0.01,
+                # No max_episodes specified - should raise error
             },
         }
 
@@ -1269,14 +1252,14 @@ class TestMaxEpisodesConfiguration:
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
 
-        runner = DemoRunner(
-            config_dir=config_dir,
-            db_path=tmp_path / "test.db",
-            checkpoint_dir=tmp_path / "checkpoints",
-            max_episodes=None,
-        )
-
-        assert runner.max_episodes == 10000
+        # Verify PDR-002 fail-fast behavior
+        with pytest.raises(ValueError, match="Missing required parameter 'max_episodes'"):
+            DemoRunner(
+                config_dir=config_dir,
+                db_path=tmp_path / "test.db",
+                checkpoint_dir=tmp_path / "checkpoints",
+                max_episodes=None,
+            )
 
     def test_stable_test_config_reads_200_episodes(self):
         """Integration test: configs/test should read 200 episodes (stable test config)."""

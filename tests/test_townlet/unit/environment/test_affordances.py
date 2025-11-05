@@ -764,6 +764,11 @@ class TestAffordanceEquivalence:
             enable_temporal_mechanics=False,
             config_pack_path=config_path,
             device=cpu_device,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
 
         # Multi-tick mode environment
@@ -774,6 +779,11 @@ class TestAffordanceEquivalence:
             enable_temporal_mechanics=True,
             config_pack_path=config_path,
             device=cpu_device,
+            vision_range=8,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
         )
 
         # Test Bed interaction equivalence

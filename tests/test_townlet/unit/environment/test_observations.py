@@ -551,6 +551,7 @@ class TestObservationUpdates:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         env.reset()
@@ -584,6 +585,7 @@ class TestObservationUpdates:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         env.reset()
@@ -633,6 +635,11 @@ class TestObservationUpdates:
             partial_observability=False,
             agent_lifespan=100,
             config_pack_path=test_config_pack_path,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
         )
 
         env.reset()
@@ -821,9 +828,14 @@ class TestMultiAgentObservations:
         env = VectorizedHamletEnv(
             num_agents=3,
             grid_size=8,
-            device=torch.device("cpu"),
             partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
             agent_lifespan=100,
+            device=torch.device("cpu"),
             config_pack_path=test_config_pack_path,
         )
 
@@ -863,10 +875,14 @@ class TestDimensionConsistency:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=8,
-            device=torch.device("cpu"),
             partial_observability=True,
             vision_range=2,
             enable_temporal_mechanics=True,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            device=torch.device("cpu"),
             config_pack_path=test_config_pack_path,
         )
 

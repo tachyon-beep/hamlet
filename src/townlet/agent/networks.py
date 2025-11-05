@@ -11,7 +11,19 @@ import torch.nn as nn
 class SimpleQNetwork(nn.Module):
     """Simple MLP Q-network with LayerNorm."""
 
-    def __init__(self, obs_dim: int, action_dim: int, hidden_dim: int = 128):
+    def __init__(self, obs_dim: int, action_dim: int, hidden_dim: int):
+        """
+        Initialize simple MLP Q-network.
+
+        Args:
+            obs_dim: Observation dimension
+            action_dim: Number of actions
+            hidden_dim: Hidden layer dimension (typically 128-256)
+
+        Note (PDR-002):
+            All network architecture parameters must be explicitly specified.
+            No BAC (BRAIN_AS_CODE) defaults allowed.
+        """
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
@@ -56,12 +68,12 @@ class RecurrentSpatialQNetwork(nn.Module):
 
     def __init__(
         self,
-        action_dim: int = 5,
-        window_size: int = 5,
-        num_meters: int = 8,
-        num_affordance_types: int = 15,
-        enable_temporal_features: bool = False,
-        hidden_dim: int = 256,
+        action_dim: int,
+        window_size: int,
+        num_meters: int,
+        num_affordance_types: int,
+        enable_temporal_features: bool,
+        hidden_dim: int,
     ):
         """
         Initialize recurrent spatial Q-network.
@@ -69,10 +81,17 @@ class RecurrentSpatialQNetwork(nn.Module):
         Args:
             action_dim: Number of actions
             window_size: Size of local vision window (5 for 5×5)
-            num_meters: Number of meter values (8)
-            num_affordance_types: Number of affordance types (15 by default)
-            enable_temporal_features: Whether to expect temporal features (time_of_day, interaction_progress)
-            hidden_dim: LSTM hidden dimension (256)
+            num_meters: Number of meter values
+            num_affordance_types: Number of affordance types
+            enable_temporal_features: Whether to expect temporal features
+            hidden_dim: LSTM hidden dimension (typically 256)
+
+        Note (PDR-002):
+            All network architecture parameters must be explicitly specified.
+            No BAC (BRAIN_AS_CODE) defaults allowed.
+
+        Future (BRAIN_AS_CODE):
+            These parameters should come from network config YAML.
         """
         super().__init__()
         self.action_dim = action_dim
@@ -215,13 +234,13 @@ class RecurrentSpatialQNetwork(nn.Module):
 
         return q_values, new_hidden
 
-    def reset_hidden_state(self, batch_size: int = 1, device: torch.device | None = None) -> None:
+    def reset_hidden_state(self, batch_size: int, device: torch.device | None = None) -> None:
         """
         Reset LSTM hidden state (call at episode start).
 
         Args:
             batch_size: Batch size for hidden state
-            device: Device for tensors
+            device: Device for tensors (default: cpu). Infrastructure default - PDR-002 exemption.
         """
         if device is None:
             device = torch.device("cpu")

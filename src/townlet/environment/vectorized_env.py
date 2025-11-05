@@ -33,16 +33,16 @@ class VectorizedHamletEnv:
     def __init__(
         self,
         num_agents: int,
-        grid_size: int = 8,
+        grid_size: int,
+        partial_observability: bool,
+        vision_range: int,
+        enable_temporal_mechanics: bool,
+        move_energy_cost: float,
+        wait_energy_cost: float,
+        interact_energy_cost: float,
+        agent_lifespan: int,
         device: torch.device = torch.device("cpu"),
-        partial_observability: bool = False,
-        vision_range: int = 2,
-        enable_temporal_mechanics: bool = False,
         enabled_affordances: list[str] | None = None,
-        move_energy_cost: float = 0.005,
-        wait_energy_cost: float = 0.001,
-        interact_energy_cost: float = 0.0,
-        agent_lifespan: int = 1000,
         config_pack_path: Path | None = None,
     ):
         """
@@ -51,15 +51,21 @@ class VectorizedHamletEnv:
         Args:
             num_agents: Number of parallel agents
             grid_size: Grid dimension (grid_size × grid_size)
-            device: PyTorch device (cpu or cuda)
+            device: PyTorch device (default: cpu). Infrastructure default - PDR-002 exemption.
             partial_observability: If True, agent sees only local window (POMDP)
             vision_range: Radius of vision window (2 = 5×5 window)
             enable_temporal_mechanics: Enable time-based mechanics and multi-tick interactions
-            enabled_affordances: List of affordance names to enable (None = all affordances)
-            move_energy_cost: Energy cost per movement action (default 0.005 = 0.5%)
-            wait_energy_cost: Energy cost per WAIT action (default 0.001 = 0.1%)
-            interact_energy_cost: Energy cost per INTERACT action (default 0.0 = free)
-            agent_lifespan: Maximum lifetime in steps (default 1000) - provides retirement incentive
+            enabled_affordances: List of affordance names to enable (None = all affordances). Semantic default.
+            move_energy_cost: Energy cost per movement action
+            wait_energy_cost: Energy cost per WAIT action
+            interact_energy_cost: Energy cost per INTERACT action
+            agent_lifespan: Maximum lifetime in steps (provides retirement incentive)
+            config_pack_path: Path to config pack (default: configs/test). Infrastructure fallback - PDR-002 exemption.
+
+        Note (PDR-002 Compliance):
+            - device and config_pack_path have infrastructure defaults (exempted from no-defaults principle)
+            - enabled_affordances=None is a semantic default (None means "all affordances enabled")
+            - All other parameters are UAC behavioral parameters and MUST be explicitly provided
         """
         project_root = Path(__file__).parent.parent.parent.parent
         default_pack = project_root / "configs" / "test"
@@ -147,7 +153,7 @@ class VectorizedHamletEnv:
             affordance_names=self.affordance_names,
         )
 
-        # Initialize reward strategy (P2.1: per-agent baseline support, TASK-001: variable meters)
+        # Initialize reward strategy (TASK-001: variable meters)
         # Get meter indices from bars_config for dynamic action costs and death detection
         meter_name_to_index = bars_config.meter_name_to_index
         self.energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
@@ -160,7 +166,6 @@ class VectorizedHamletEnv:
             device=device, num_agents=num_agents, meter_count=meter_count, energy_idx=self.energy_idx, health_idx=self.health_idx
         )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
-        self._cached_baseline_tensor = torch.full((num_agents,), 100.0, dtype=torch.float32, device=device)
 
         # Initialize meter dynamics
         self.meter_dynamics = MeterDynamics(
@@ -200,16 +205,8 @@ class VectorizedHamletEnv:
         self.randomize_affordance_positions()
 
     def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
-        """Attach runtime registry for telemetry-aware reward baselines."""
-        if registry.get_baseline_tensor().shape != (self.num_agents,):
-            raise ValueError(f"Registry baseline shape {registry.get_baseline_tensor().shape} does not match num_agents={self.num_agents}")
-
+        """Attach runtime registry for telemetry tracking."""
         self.runtime_registry = registry
-
-        # Initialise registry with current cached baseline if empty (fresh attach).
-        baseline_tensor = registry.get_baseline_tensor()
-        if torch.allclose(baseline_tensor, torch.zeros_like(baseline_tensor)):
-            registry.set_baselines(self._cached_baseline_tensor.clone())
 
     def reset(self) -> torch.Tensor:
         """
@@ -356,7 +353,7 @@ class VectorizedHamletEnv:
         # Agents that reach their lifespan retire with a bonus reward
         retired = self.step_counts >= self.agent_lifespan
 
-        # 6. Calculate rewards (steps lived - baseline)
+        # 6. Calculate rewards (interoception-aware)
         rewards = self._calculate_shaped_rewards()
         rewards = torch.where(retired, rewards + 1.0, rewards)  # +1 retirement bonus
         self.dones = torch.logical_or(self.dones, retired)
@@ -585,12 +582,6 @@ class VectorizedHamletEnv:
 
         return successful_interactions
 
-    def _get_current_baseline_tensor(self) -> torch.Tensor:
-        """Return current baseline tensor from registry or cached fallback."""
-        if self.runtime_registry is not None:
-            return self.runtime_registry.get_baseline_tensor()
-        return self._cached_baseline_tensor
-
     def _calculate_shaped_rewards(self) -> torch.Tensor:
         """
         Calculate interoception-aware rewards.
@@ -600,80 +591,11 @@ class VectorizedHamletEnv:
         Returns:
             rewards: [num_agents]
         """
-        baseline_tensor = self._get_current_baseline_tensor()
         return self.reward_strategy.calculate_rewards(
             step_counts=self.step_counts,
             dones=self.dones,
-            baseline_steps=baseline_tensor,
             meters=self.meters,  # Pass meters for interoception-aware rewards
         )
-
-    def calculate_baseline_survival(self, depletion_multiplier: float = 1.0) -> float:
-        """
-        Calculate baseline survival steps (R) for random-walking agent.
-
-        This is the expected survival time if agent does nothing but move randomly
-        until death (no affordance interactions).
-
-        Args:
-            depletion_multiplier: Curriculum difficulty multiplier
-
-        Returns:
-            baseline_steps: Expected survival time in steps
-        """
-        # Energy is the most restrictive death condition
-        # Base depletion comes from the active config pack (bars.yaml)
-        cascade_engine = self.meter_dynamics.cascade_engine
-        energy_base_depletion = cascade_engine.get_base_depletion("energy")
-
-        # Longest survival assumes the agent repeatedly takes the cheapest non-affordance action.
-        min_action_cost = min(self.move_energy_cost, self.wait_energy_cost, self.interact_energy_cost)
-
-        total_energy_depletion_per_step = (energy_base_depletion * depletion_multiplier) + min_action_cost
-
-        # Starting energy: 1.0
-        # Steps until death: 1.0 / depletion_per_step
-        baseline_steps = 1.0 / total_energy_depletion_per_step
-
-        return baseline_steps
-
-    def update_baseline_for_curriculum(self, depletion_multipliers: torch.Tensor | float):
-        """
-        Update reward baseline when curriculum stage changes.
-
-        P2.1: Now supports per-agent baselines for multi-agent curriculum.
-
-        Args:
-            depletion_multipliers: Curriculum difficulty multiplier(s)
-                - torch.Tensor[num_agents]: Per-agent multipliers
-                - float: Shared multiplier (broadcasts to all agents)
-        """
-        if isinstance(depletion_multipliers, torch.Tensor):
-            multipliers = depletion_multipliers.to(self.device, dtype=torch.float32)
-            baselines = torch.stack(
-                [
-                    torch.tensor(
-                        self.calculate_baseline_survival(multiplier.item()),
-                        dtype=torch.float32,
-                        device=self.device,
-                    )
-                    for multiplier in multipliers
-                ]
-            )
-        else:
-            baseline_value = self.calculate_baseline_survival(float(depletion_multipliers))
-            baselines = torch.full(
-                (self.num_agents,),
-                float(baseline_value),
-                dtype=torch.float32,
-                device=self.device,
-            )
-
-        self._cached_baseline_tensor = baselines
-        if self.runtime_registry is not None:
-            self.runtime_registry.set_baselines(baselines.clone())
-
-        return baselines
 
     def get_affordance_positions(self) -> dict:
         """Get current affordance positions (P1.1 checkpointing).

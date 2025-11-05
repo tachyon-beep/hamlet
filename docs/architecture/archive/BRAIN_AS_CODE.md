@@ -384,8 +384,6 @@ This snapshot is now the source of truth for this run.
 After launch, changing anything in configs/L99_Inventing_ASI/ does not mutate this run.
 This is critical for reproducible science and audit.
 
-WEP: very likely (~90 percent) this layout is robust and minimal.
-
 5. Checkpoints
 
 Every checkpoint in a run MUST include:

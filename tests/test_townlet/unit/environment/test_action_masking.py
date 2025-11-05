@@ -514,10 +514,15 @@ class TestWaitAction:
             VectorizedHamletEnv(
                 num_agents=1,
                 grid_size=8,
+                partial_observability=False,
                 device=device,
                 move_energy_cost=0.005,
                 wait_energy_cost=0.01,  # More expensive than movement
                 config_pack_path=test_config_pack_path,
+                vision_range=8,
+                enable_temporal_mechanics=False,
+                interact_energy_cost=0.0,
+                agent_lifespan=1000,
             )
 
 

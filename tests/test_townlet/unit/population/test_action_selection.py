@@ -41,13 +41,18 @@ class TestGreedyActionSelection:
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
-            device=torch.device("cpu"),
             partial_observability=False,
+            vision_range=5,
             enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            device=torch.device("cpu"),
         )
 
         obs_dim = env.observation_dim
-        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6)
+        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6, hidden_dim=128)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(epsilon=0.1)
@@ -145,9 +150,14 @@ class TestEpsilonGreedyActionSelection:
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
-            device=torch.device("cpu"),
             partial_observability=False,
+            vision_range=5,
             enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            device=torch.device("cpu"),
         )
 
         obs_dim = env.observation_dim
@@ -250,10 +260,14 @@ class TestRecurrentNetworkActionSelection:
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
-            device=torch.device("cpu"),
             partial_observability=True,
             vision_range=2,
             enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            device=torch.device("cpu"),
         )
 
         obs_dim = env.observation_dim
@@ -327,9 +341,14 @@ class TestActionSelectionEdgeCases:
         return VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
-            device=torch.device("cpu"),
             partial_observability=False,
+            vision_range=5,
             enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            device=torch.device("cpu"),
         )
 
     def test_single_agent_at_corner(self, minimal_env):
@@ -369,9 +388,14 @@ class TestActionSelectionEdgeCases:
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
-            device=torch.device("cpu"),
             partial_observability=False,
+            vision_range=5,
             enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            device=torch.device("cpu"),
         )
 
         env.reset()  # Initialize environment

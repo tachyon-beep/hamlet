@@ -51,7 +51,7 @@ class TestReplayLoading:
                     step=i,
                     position=(3 + i % 2, 4),
                     meters=(1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3),
-                    action=i % 5,
+                    action=i % 6,
                     reward=1.0,
                     intrinsic_reward=0.1,
                     done=(i == 49),

@@ -89,7 +89,7 @@ class TestReplayBufferStorage:
         """Buffer should store batch of transitions correctly."""
         batch_size = 4
         obs = torch.randn(batch_size, 5)
-        actions = torch.randint(0, 5, (batch_size,))
+        actions = torch.randint(0, 6, (batch_size,))
         rewards_ext = torch.randn(batch_size)
         rewards_int = torch.randn(batch_size)
         next_obs = torch.randn(batch_size, 5)
@@ -208,7 +208,7 @@ class TestReplayBufferCircularLogic:
         # Add 15 transitions (3× capacity)
         for i in range(15):
             obs = torch.tensor([[float(i)]])
-            actions = torch.tensor([i % 5])  # Actions wrap
+            actions = torch.tensor([i % 6])  # Actions wrap
             rewards_ext = torch.tensor([float(i)])
             rewards_int = torch.tensor([float(i) * 0.1])
             next_obs = torch.tensor([[float(i + 1)]])
@@ -238,7 +238,7 @@ class TestReplayBufferSampling:
 
         for i in range(20):
             obs = torch.tensor([[float(i), float(i * 2)]])
-            actions = torch.tensor([i % 5])
+            actions = torch.tensor([i % 6])
             rewards_ext = torch.tensor([float(i)])
             rewards_int = torch.tensor([float(i) * 0.1])
             next_obs = torch.tensor([[float(i + 1), float((i + 1) * 2)]])
@@ -457,7 +457,7 @@ class TestReplayBufferEdgeCases:
 
         batch_size = 256
         obs = torch.randn(batch_size, 10)
-        actions = torch.randint(0, 5, (batch_size,))
+        actions = torch.randint(0, 6, (batch_size,))
         rewards_ext = torch.randn(batch_size)
         rewards_int = torch.randn(batch_size)
         next_obs = torch.randn(batch_size, 10)

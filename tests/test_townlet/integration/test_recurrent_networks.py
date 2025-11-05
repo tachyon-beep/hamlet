@@ -36,15 +36,18 @@ class TestLSTMHiddenStatePersistence:
         experience, demonstrating that memory is being built up.
         """
         # Create small POMDP environment for fast testing
+        # Use VERY low energy costs to ensure agent survives 10 steps
+        # (cascade effects from satiation/mood could kill agent otherwise)
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
             partial_observability=True,
             vision_range=2,  # 5×5 window
             enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
+            move_energy_cost=0.0001,  # Reduced from 0.005 to prevent death
+            wait_energy_cost=0.00001,  # Reduced from 0.001 to prevent death
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -75,14 +78,24 @@ class TestLSTMHiddenStatePersistence:
         # Reset environment and population
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         # Capture initial hidden state
         recurrent_network = population.q_network
         h0, c0 = recurrent_network.get_hidden_state()
         hidden_states = [(h0.clone(), c0.clone())]
 
-        # Run 10 steps
-        for _ in range(10):
-            population.step_population(env)
+        # Run 10 steps and verify agent survives
+        for step_num in range(10):
+            state = population.step_population(env)
+            # Ensure agent didn't die (would reset hidden state and break test)
+            assert not state.dones[0], (
+                f"Agent died at step {step_num + 1}/10. "
+                f"Energy: {env.meters[0, 0]:.3f}, Health: {env.meters[0, 6]:.3f}. "
+                "This test requires agent to survive 10 steps to verify hidden state persistence. "
+                "If this fails, energy costs may need to be reduced further."
+            )
             h, c = recurrent_network.get_hidden_state()
             hidden_states.append((h.clone(), c.clone()))
 
@@ -112,6 +125,7 @@ class TestLSTMHiddenStatePersistence:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -174,6 +188,7 @@ class TestLSTMHiddenStatePersistence:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -198,6 +213,9 @@ class TestLSTMHiddenStatePersistence:
 
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         # Run 50 steps (no death expected)
         for _ in range(50):
             population.step_population(env)
@@ -219,15 +237,17 @@ class TestLSTMHiddenStatePersistence:
         Hidden state shape should be [1, num_agents, 256] throughout episode.
         """
         # Create environment with 2 agents
+        # Use VERY low energy costs to ensure agents survive 10 steps
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
             partial_observability=True,
             vision_range=2,
             enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
+            move_energy_cost=0.0001,  # Reduced from 0.005 to prevent death
+            wait_energy_cost=0.00001,  # Reduced from 0.001 to prevent death
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -251,6 +271,9 @@ class TestLSTMHiddenStatePersistence:
         )
 
         population.reset()
+
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
 
         # Verify initial shape
         recurrent_network = population.q_network
@@ -291,6 +314,7 @@ class TestLSTMBatchTraining:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
@@ -316,6 +340,9 @@ class TestLSTMBatchTraining:
         )
 
         population.reset()
+
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
 
         # Verify initial shape (episode batch size = num_agents)
         recurrent_network = population.q_network
@@ -562,13 +589,14 @@ class TestLSTMForwardPass:
             move_energy_cost=0.005,
             wait_energy_cost=0.001,
             interact_energy_cost=0.0,
+            agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
         )
 
         # Create recurrent network
         network = RecurrentSpatialQNetwork(
-            action_dim=5,
+            action_dim=6,
             window_size=5,
             num_meters=8,
             num_affordance_types=env.num_affordance_types,
@@ -591,7 +619,7 @@ class TestLSTMForwardPass:
         q_values, new_hidden = network(obs)
 
         # Verify Q-values shape
-        assert q_values.shape == (1, 5), f"Expected Q-values shape (1, 5), got {q_values.shape}"
+        assert q_values.shape == (1, 6), f"Expected Q-values shape (1, 6), got {q_values.shape}"
 
         # Verify hidden state shape
         h, c = new_hidden

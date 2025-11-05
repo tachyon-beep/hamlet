@@ -388,7 +388,7 @@ class AdversarialCurriculum(CurriculumManager):
             q_values: [batch_size, num_actions] Q-values
 
         Returns:
-            [batch_size] entropy values (0 = deterministic, ~1.6 = uniform for 5 actions)
+            [batch_size] entropy values (0 = deterministic, ~1.79 = uniform for 6 actions)
         """
         # Convert Q-values to probabilities (softmax with temperature=1)
         probs = torch.softmax(q_values, dim=-1)
@@ -397,7 +397,7 @@ class AdversarialCurriculum(CurriculumManager):
         log_probs = torch.log(probs + 1e-10)  # Add epsilon for numerical stability
         entropy = -torch.sum(probs * log_probs, dim=-1)
 
-        # Normalize to [0, 1] range (max entropy for 5 actions = log(5) ≈ 1.609)
+        # Normalize to [0, 1] range (max entropy for 6 actions = log(6) ≈ 1.792)
         num_actions = torch.tensor(q_values.shape[-1], dtype=torch.float32, device=q_values.device)
         normalized_entropy = entropy / torch.log(num_actions)
 

@@ -55,6 +55,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with feedforward network
@@ -82,6 +83,9 @@ class TestEpisodeLifecycle:
 
         # Reset environment and population
         population.reset()
+
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
 
         # Verify initial observation shape
         assert population.current_obs.shape == (1, env.observation_dim)
@@ -135,11 +139,12 @@ class TestEpisodeLifecycle:
             partial_observability=True,
             vision_range=2,  # 5×5 vision window
             enable_temporal_mechanics=False,
-            move_energy_cost=0.0001,  # Minimal cost to prevent death during test
-            wait_energy_cost=0.00005,  # Must be less than move_energy_cost
+            move_energy_cost=0.00001,  # Ultra-minimal to prevent cascade-induced death (satiation→energy/health)
+            wait_energy_cost=0.000001,  # Must be less than move_energy_cost
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population with recurrent network
@@ -168,6 +173,10 @@ class TestEpisodeLifecycle:
         # Reset environment and population
         population.reset()
 
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        # (cascade effects like satiation→energy/health can kill agent even with minimal costs)
+        env.meters.fill_(1.0)
+
         # Capture initial hidden state
         recurrent_network = population.q_network
         h0, c0 = recurrent_network.get_hidden_state()
@@ -190,6 +199,11 @@ class TestEpisodeLifecycle:
                 episode_done = True
 
             step_count += 1
+
+        # Verify agent survived (death resets hidden state to zeros, causing false failures)
+        assert not episode_done, (
+            f"Agent died after {step_count} steps (cascade effects). " "Death resets hidden state to zeros, invalidating test."
+        )
 
         # Verify hidden state evolved during episode
         h_final, c_final = recurrent_network.get_hidden_state()
@@ -223,6 +237,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -294,6 +309,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -357,22 +373,25 @@ class TestEpisodeLifecycle:
 
         Note: This test uses minimal depletion to prevent death.
         """
-        # Create small environment with minimal depletion
+        # Create small environment with ultra-minimal depletion
+        # Use ULTRA-low energy costs to ensure agents survive 10 steps
+        # Even with meters at 1.0, cascade effects (satiation→energy/health) can kill agents over time
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
             partial_observability=False,
             vision_range=5,
             enable_temporal_mechanics=False,
-            move_energy_cost=0.001,  # Minimal depletion to prevent death
-            wait_energy_cost=0.0001,  # Must be less than move_energy_cost
+            move_energy_cost=0.00001,  # Ultra-minimal to prevent cascade-induced death
+            wait_energy_cost=0.000001,  # Must be less than move_energy_cost
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
-        max_steps = 30
+        max_steps = 10  # Reduced from 30 to avoid cascade death while still testing max_steps termination
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(
             epsilon=0.1,
@@ -398,7 +417,10 @@ class TestEpisodeLifecycle:
         # Reset environment and population
         population.reset()
 
-        # Run for exactly max_steps
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
+        # Run for exactly max_steps and verify agents survive
         step_count = 0
         final_state = None
 
@@ -407,9 +429,15 @@ class TestEpisodeLifecycle:
             step_count += 1
             final_state = agent_state
 
-            # If any agent dies, break (shouldn't happen with zero depletion)
+            # Ensure agents don't die (would cause test to fail)
             if agent_state.dones.any():
-                break
+                dead_agent_idx = agent_state.dones.nonzero(as_tuple=True)[0][0].item()
+                assert False, (
+                    f"Agent {dead_agent_idx} died at step {step + 1}/{max_steps}. "
+                    f"Energy: {env.meters[dead_agent_idx, 0]:.3f}, Health: {env.meters[dead_agent_idx, 6]:.3f}. "
+                    f"This test requires agents to survive {max_steps} steps to verify max_steps termination. "
+                    "If this fails, reduce max_steps further or disable cascades."
+                )
 
         # Verify episode ran to max_steps
         assert step_count == max_steps, f"Episode should run exactly {max_steps} steps"
@@ -445,6 +473,7 @@ class TestEpisodeLifecycle:
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
+            agent_lifespan=1000,
         )
 
         # Create population
@@ -472,6 +501,10 @@ class TestEpisodeLifecycle:
 
         # Reset environment and population
         population.reset()
+
+        # Initialize all meters to 1.0 to prevent cascade-induced death during test
+        env.meters.fill_(1.0)
+
         initial_obs = population.current_obs.clone()
 
         # Track data cycle over 10 steps
