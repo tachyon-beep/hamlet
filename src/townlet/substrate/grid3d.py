@@ -44,7 +44,8 @@ class Grid3DSubstrate(SpatialSubstrate):
         depth: int,
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = "manhattan",
-        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",  # NEW: Phase 5C
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
+        topology: Literal["cubic"] = "cubic",  # NEW: Grid3D is always cubic topology
     ):
         """Initialize 3D cubic grid.
 
@@ -55,6 +56,7 @@ class Grid3DSubstrate(SpatialSubstrate):
             boundary: Boundary mode
             distance_metric: Distance calculation method
             observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
+            topology: Grid topology ("cubic" for 3D Cartesian grid)
         """
         if width <= 0 or height <= 0 or depth <= 0:
             raise ValueError(f"Grid dimensions must be positive: {width}×{height}×{depth}\nExample: width: 8, height: 8, depth: 3")
@@ -68,7 +70,8 @@ class Grid3DSubstrate(SpatialSubstrate):
         self.depth = depth
         self.boundary = boundary
         self.distance_metric = distance_metric
-        self.observation_encoding = observation_encoding  # NEW
+        self.observation_encoding = observation_encoding
+        self.topology = topology  # NEW: Store topology
 
     @property
     def coordinate_semantics(self) -> dict:
