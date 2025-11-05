@@ -66,6 +66,24 @@ jobs:
           fi
           echo "✅ No-defaults check passed"
 
+      - name: Substrate Config Validator - Validate substrate.yaml files
+        run: |
+          echo "Running substrate config validator - all substrate.yaml files must be valid"
+          python scripts/validate_substrates.py --ci --json substrate-validation.json
+          if [ $? -ne 0 ]; then
+            echo "❌ Substrate validation failed. See error output above."
+            exit 1
+          fi
+          echo "✅ Substrate validation passed"
+
+      - name: Upload substrate validation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: substrate-validation-results
+          path: substrate-validation.json
+          retention-days: 30
+
       - name: ✅ All Lint Checks Passed
         run: |
           echo "════════════════════════════════════════════════════════════"
@@ -75,4 +93,5 @@ jobs:
           echo "  ✓ Black (formatting)"
           echo "  ✓ Mypy (type checking)"
           echo "  ✓ No-defaults linter"
+          echo "  ✓ Substrate config validator"
           echo "════════════════════════════════════════════════════════════"

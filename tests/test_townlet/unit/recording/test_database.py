@@ -26,7 +26,7 @@ class TestDatabaseRecording:
             assert result is not None
             assert result[0] == "episode_recordings"
 
-            db.conn.close()
+            db.close()
 
     def test_insert_recording(self):
         """insert_recording should add recording metadata to database."""
@@ -74,7 +74,7 @@ class TestDatabaseRecording:
             assert row["file_size_bytes"] == 50000
             assert row["compressed_size_bytes"] == 15000
 
-            db.conn.close()
+            db.close()
 
     def test_get_recording(self):
         """get_recording should retrieve recording by episode_id."""
@@ -116,7 +116,7 @@ class TestDatabaseRecording:
             assert recording["file_path"] == "recordings/episode_000200.msgpack.lz4"
             assert recording["recording_reason"] == "stage_transition"
 
-            db.conn.close()
+            db.close()
 
     def test_get_recording_not_found(self):
         """get_recording should return None if episode not found."""
@@ -129,7 +129,7 @@ class TestDatabaseRecording:
             recording = db.get_recording(999)
             assert recording is None
 
-            db.conn.close()
+            db.close()
 
     def test_list_recordings_all(self):
         """list_recordings should return all recordings."""
@@ -172,7 +172,7 @@ class TestDatabaseRecording:
             assert recordings[0]["episode_id"] == 400
             assert recordings[4]["episode_id"] == 0
 
-            db.conn.close()
+            db.close()
 
     def test_list_recordings_filter_by_stage(self):
         """list_recordings should filter by curriculum stage."""
@@ -215,7 +215,7 @@ class TestDatabaseRecording:
             assert len(recordings) == 2
             assert all(r["curriculum_stage"] == 2 for r in recordings)
 
-            db.conn.close()
+            db.close()
 
     def test_list_recordings_filter_by_reason(self):
         """list_recordings should filter by recording reason."""
@@ -257,7 +257,7 @@ class TestDatabaseRecording:
             assert len(recordings) == 1
             assert recordings[0]["recording_reason"] == "stage_transition"
 
-            db.conn.close()
+            db.close()
 
     def test_list_recordings_filter_by_reward_range(self):
         """list_recordings should filter by reward range."""
@@ -302,7 +302,7 @@ class TestDatabaseRecording:
             assert 300.0 in rewards
             assert 400.0 in rewards
 
-            db.conn.close()
+            db.close()
 
     def test_list_recordings_limit(self):
         """list_recordings should respect limit parameter."""
@@ -345,7 +345,7 @@ class TestDatabaseRecording:
             assert recordings[0]["episode_id"] == 19
             assert recordings[9]["episode_id"] == 10
 
-            db.conn.close()
+            db.close()
 
 
 class TestAffordanceTransitions:
@@ -386,7 +386,7 @@ class TestAffordanceTransitions:
             assert rows[2]["to_affordance"] == "Bed"
             assert rows[2]["visit_count"] == 2
 
-            db.conn.close()
+            db.close()
 
     def test_insert_affordance_visits_empty(self):
         """Empty transitions should not crash."""
@@ -404,7 +404,7 @@ class TestAffordanceTransitions:
             result = cursor.fetchone()
             assert result["count"] == 0
 
-            db.conn.close()
+            db.close()
 
     def test_insert_affordance_visits_self_loop(self):
         """Self-loops (Bed→Bed) should be recorded."""
@@ -427,4 +427,4 @@ class TestAffordanceTransitions:
             assert rows[0]["to_affordance"] == "Bed"
             assert rows[0]["visit_count"] == 5
 
-            db.conn.close()
+            db.close()

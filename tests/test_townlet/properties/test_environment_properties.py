@@ -24,24 +24,26 @@ class TestEnvironmentBoundaryProperties:
     """Property tests for environment boundaries and constraints."""
 
     @given(
-        grid_size=st.integers(min_value=5, max_value=12),  # Min 5 to fit affordances
         action_sequence=st.lists(st.integers(min_value=0, max_value=5), min_size=1, max_size=50),
     )
     @settings(max_examples=50)  # Reduce examples for faster tests
-    def test_agents_never_leave_grid_bounds(self, grid_size, action_sequence):
+    def test_agents_never_leave_grid_bounds(self, action_sequence):
         """Property: Agent positions always in [0, grid_size) after ANY action sequence.
 
         This tests the fundamental spatial constraint that agents cannot move
         outside the grid boundaries, regardless of action sequence.
+
+        NOTE: After TASK-002A, grid_size comes from substrate.yaml (8×8),
+              not from the grid_size parameter.
         """
         # Create environment
-        # Note: grid_size >= 5 required to fit test config's 14 affordances + agent
+        # grid_size loaded from substrate.yaml (8×8)
         project_root = Path(__file__).parent.parent.parent.parent
         config_pack = project_root / "configs" / "test"
 
         env = VectorizedHamletEnv(
             num_agents=1,
-            grid_size=grid_size,
+            grid_size=8,  # NOTE: Ignored! Actual grid_size comes from substrate.yaml
             partial_observability=False,
             vision_range=8,
             enable_temporal_mechanics=False,
@@ -57,6 +59,9 @@ class TestEnvironmentBoundaryProperties:
         obs = env.reset()
         assert obs.shape[0] == 1  # Single agent
 
+        # Get actual grid_size from substrate (not parameter)
+        actual_grid_size = env.grid_size  # Loaded from substrate.yaml
+
         # Execute action sequence
         for action in action_sequence:
             obs, rewards, dones, info = env.step(torch.tensor([action]))
@@ -64,9 +69,9 @@ class TestEnvironmentBoundaryProperties:
             # PROPERTY: Positions always in bounds
             positions = env.positions
             assert torch.all(positions[:, 0] >= 0), f"X position {positions[0, 0]} < 0"
-            assert torch.all(positions[:, 0] < grid_size), f"X position {positions[0, 0]} >= {grid_size}"
+            assert torch.all(positions[:, 0] < actual_grid_size), f"X position {positions[0, 0]} >= {actual_grid_size}"
             assert torch.all(positions[:, 1] >= 0), f"Y position {positions[0, 1]} < 0"
-            assert torch.all(positions[:, 1] < grid_size), f"Y position {positions[0, 1]} >= {grid_size}"
+            assert torch.all(positions[:, 1] < actual_grid_size), f"Y position {positions[0, 1]} >= {actual_grid_size}"
 
             # Stop if agent dies (no more actions possible)
             if dones[0]:

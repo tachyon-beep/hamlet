@@ -672,10 +672,15 @@ class VectorizedHamletEnv:
         """
         import random
 
+        # Skip if no affordances to randomize
+        num_affordances = len(self.affordances)
+        if num_affordances == 0:
+            return  # Nothing to randomize
+
         # Get all valid positions from substrate
         all_positions = self.substrate.get_all_positions()
 
-        # Guard for aspatial substrates
+        # Guard for aspatial substrates with affordances
         if len(all_positions) == 0:
             raise ValueError(
                 "Cannot randomize affordance positions in aspatial substrate. "
@@ -683,7 +688,6 @@ class VectorizedHamletEnv:
             )
 
         # Validate that grid has enough cells for all affordances (need +1 for agent)
-        num_affordances = len(self.affordances)
         total_cells = len(all_positions)
         if num_affordances >= total_cells:
             raise ValueError(

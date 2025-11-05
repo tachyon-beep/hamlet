@@ -44,17 +44,16 @@ training:
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
-        # Initialize runner
-        runner = DemoRunner(
+        # Initialize runner (use context manager to ensure cleanup)
+        with DemoRunner(
             config_dir=config_dir,
             db_path=db_path,
             checkpoint_dir=checkpoint_dir,
             max_episodes=2,
-        )
-
-        # Verify recorder attribute exists and starts as None
-        assert hasattr(runner, "recorder")
-        assert runner.recorder is None
+        ) as runner:
+            # Verify recorder attribute exists and starts as None
+            assert hasattr(runner, "recorder")
+            assert runner.recorder is None
 
     def test_runner_config_has_recording_field(self, tmp_path):
         """Runner should load recording config when present."""
@@ -93,18 +92,17 @@ recording:
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
-        # Initialize runner
-        runner = DemoRunner(
+        # Initialize runner (use context manager to ensure cleanup)
+        with DemoRunner(
             config_dir=config_dir,
             db_path=db_path,
             checkpoint_dir=checkpoint_dir,
             max_episodes=2,
-        )
-
-        # Verify recording config is loaded
-        assert "recording" in runner.config
-        assert runner.config["recording"]["enabled"] is True
-        assert runner.config["recording"]["output_dir"] == "recordings"
+        ) as runner:
+            # Verify recording config is loaded
+            assert "recording" in runner.config
+            assert runner.config["recording"]["enabled"] is True
+            assert runner.config["recording"]["output_dir"] == "recordings"
 
 
 class TestRunnerOrchestration:
@@ -166,10 +164,10 @@ training:
         config_dir.mkdir()
         (config_dir / "training.yaml").write_text(config_content)
 
-        # Copy test config pack files (bars, cascades, affordances, cues)
+        # Copy test config pack files (bars, cascades, affordances, cues, substrate)
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -259,7 +257,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -346,7 +344,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -458,7 +456,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -685,7 +683,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -763,7 +761,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -842,7 +840,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():

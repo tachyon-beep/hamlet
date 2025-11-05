@@ -93,6 +93,9 @@ uv run pytest tests/test_townlet/integration/test_substrate_position_init.py -v
 
 # Verify all substrate methods are integrated
 grep -n "substrate.initialize_positions\|substrate.apply_movement\|substrate.get_all_positions" src/townlet/environment/vectorized_env.py
+
+# Run substrate validation (quick check)
+python scripts/validate_substrates.py --level quick
 ```
 
 **Expected**:
@@ -101,6 +104,7 @@ grep -n "substrate.initialize_positions\|substrate.apply_movement\|substrate.get
   - `initialize_positions()` at line 246
   - `apply_movement()` at line 431
   - `get_all_positions()` at line 676
+- Substrate validation passes (all configs valid)
 
 **Phase 5 Completion Checklist** (must all be TRUE):
 - [ ] Position initialization uses `substrate.initialize_positions()`

@@ -92,6 +92,9 @@ class TestReplayLoading:
             assert recording["episode_id"] == 100
             assert recording["survival_steps"] == 50
 
+            # Close database to prevent resource warnings
+            db.close()
+
     def test_decompress_and_deserialize_replay(self):
         """Should decompress and deserialize replay data."""
         import time

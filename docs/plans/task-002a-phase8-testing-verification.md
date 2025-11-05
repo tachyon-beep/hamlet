@@ -78,11 +78,15 @@ uv run pytest tests/test_townlet/integration/test_live_inference_websocket.py -v
 
 # Verify all substrate methods integrated
 grep -n "substrate\." src/townlet/environment/vectorized_env.py | head -20
+
+# Run comprehensive substrate validation (thorough)
+python scripts/validate_substrates.py --level thorough --verbose
 ```
 
 **Expected**:
 - All integration tests PASS
 - Substrate methods visible in environment code
+- Thorough validation passes (100-step smoke tests)
 
 **Phases 5-7 Completion Checklist** (must all be TRUE):
 - [ ] Phase 5: Position management uses substrate (initialize, apply_movement, get_all_positions)

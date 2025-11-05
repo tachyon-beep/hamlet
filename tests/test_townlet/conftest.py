@@ -802,6 +802,37 @@ def task001_env_12meter(cpu_device: torch.device, task001_config_12meter: Path) 
 
 
 # =============================================================================
+# DATABASE FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def demo_database(tmp_path: Path):
+    """Create a DemoDatabase with automatic cleanup.
+
+    This fixture ensures database connections are properly closed after each test,
+    preventing ResourceWarnings from unclosed sqlite3 connections.
+
+    Args:
+        tmp_path: pytest's temporary directory
+
+    Yields:
+        DemoDatabase instance
+
+    Example:
+        def test_something(demo_database):
+            demo_database.insert_episode(...)
+            # Database automatically closed after test
+    """
+    from townlet.demo.database import DemoDatabase
+
+    db_path = tmp_path / "test.db"
+    db = DemoDatabase(db_path)
+    yield db
+    db.close()
+
+
+# =============================================================================
 # UTILITY FIXTURES
 # =============================================================================
 

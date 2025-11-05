@@ -69,11 +69,15 @@ uv run pytest tests/test_townlet/integration/test_observation_builder.py -v
 
 # Verify observation encoding methods exist
 grep -n "def get_observation_dim\|def encode_observation\|def encode_partial_observation" src/townlet/substrate/base.py
+
+# Run substrate validation (standard check)
+python scripts/validate_substrates.py --level standard
 ```
 
 **Expected**:
 - All Phase 6 integration tests PASS
 - Grep shows all 3 observation methods in substrate interface
+- Substrate validation passes (runtime integration works)
 
 **Phase 6 Completion Checklist** (must all be TRUE):
 - [ ] `get_observation_dim()` method exists in substrate interface

@@ -224,7 +224,7 @@ class TestVideoExport:
                     reward=1.0,
                     intrinsic_reward=0.0,
                     done=(i == 9),
-                    q_values=(0.1, 0.2, 0.3, 0.4, 0.5),
+                    q_values=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6),  # 6 actions: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
                 )
                 for i in range(10)
             ]
@@ -250,6 +250,9 @@ class TestVideoExport:
                 file_size=len(serialized),
                 compressed_size=len(compressed),
             )
+
+            # Close database to prevent resource warnings
+            db.close()
 
             # Export video
             output_path = tmpdir_path / "episode_500.mp4"

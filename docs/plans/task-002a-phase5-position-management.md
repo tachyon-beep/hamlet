@@ -103,6 +103,7 @@ uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v
 - [x] `substrate.get_all_positions()` is called in `randomize_affordance_positions()` (line 676)
 - [x] Aspatial guard exists in `randomize_affordance_positions()` (lines 679-683)
 - [ ] All integration tests pass (FIX REQUIRED: 3 failing tests)
+- [ ] Substrate validation passes: `python scripts/validate_substrates.py --level quick`
 
 **If checklist fails**: STOP - Phase 4 is incomplete. Do not proceed with Phase 5.
 

@@ -245,8 +245,8 @@ class TestMaskedLossIntegration:
             if agent_state.dones[0]:
                 break
 
-        # Verify all positions are within bounds
-        grid_size = 5
+        # Verify all positions are within bounds (8×8 grid from substrate.yaml)
+        grid_size = 8  # Loaded from substrate.yaml, not from grid_size parameter
         for pos in positions:
             x, y = pos[0].item(), pos[1].item()
             assert 0 <= x < grid_size, f"X position should be in [0, {grid_size}), got {x}"
