@@ -256,10 +256,17 @@ class DemoRunner:
 
         # P1.1 Phase 2: Use population's complete checkpoint state
         checkpoint = {
-            "version": 2,  # P1.1: Checkpoint format version for future migration
+            "version": 3,  # Phase 5: Version 3 includes substrate metadata
             "episode": self.current_episode,
             "timestamp": time.time(),
         }
+
+        # Phase 5: Add substrate metadata for validation
+        if self.env:
+            checkpoint["substrate_metadata"] = {
+                "position_dim": self.env.substrate.position_dim,
+                "substrate_type": type(self.env.substrate).__name__,
+            }
 
         # Add full population state (includes q_network, optimizer, replay_buffer, etc.)
         if self.population:

@@ -724,6 +724,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
+                    config_pack_path=Path("configs/L1_full_observability"),
                 )
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner1.curriculum.initialize_population(1)
@@ -762,6 +763,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
+                    config_pack_path=Path("configs/L1_full_observability"),
                 )
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner2.curriculum.initialize_population(1)
@@ -819,6 +821,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
+                    config_pack_path=Path("configs/L1_full_observability"),
                 )
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner1.curriculum.initialize_population(1)
@@ -870,6 +873,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
+                    config_pack_path=Path("configs/L1_full_observability"),
                 )
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner2.curriculum.initialize_population(1)

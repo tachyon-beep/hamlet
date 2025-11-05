@@ -184,7 +184,15 @@ class TestObservationBuilderProperties:
         The one-hot grid encoding should always be exactly grid_size × grid_size,
         regardless of agent positions or affordance placements.
         """
+        from townlet.substrate.grid2d import Grid2DSubstrate
+
         device = torch.device("cpu")
+        substrate = Grid2DSubstrate(
+            width=grid_size,
+            height=grid_size,
+            boundary="clamp",
+            distance_metric="manhattan",
+        )
         builder = ObservationBuilder(
             num_agents=num_agents,
             grid_size=grid_size,
@@ -194,6 +202,7 @@ class TestObservationBuilderProperties:
             enable_temporal_mechanics=False,
             num_affordance_types=3,
             affordance_names=["Bed", "Hospital", "Job"],
+            substrate=substrate,
         )
 
         # Create random positions and meters
@@ -223,9 +232,17 @@ class TestObservationBuilderProperties:
         The time_of_day is encoded as [sin(angle), cos(angle)] which should
         always satisfy the Pythagorean identity.
         """
+        from townlet.substrate.grid2d import Grid2DSubstrate
+
         device = torch.device("cpu")
         num_agents = 1
 
+        substrate = Grid2DSubstrate(
+            width=8,
+            height=8,
+            boundary="clamp",
+            distance_metric="manhattan",
+        )
         builder = ObservationBuilder(
             num_agents=num_agents,
             grid_size=8,
@@ -235,6 +252,7 @@ class TestObservationBuilderProperties:
             enable_temporal_mechanics=True,
             num_affordance_types=3,
             affordance_names=["Bed", "Hospital", "Job"],
+            substrate=substrate,
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -276,9 +294,17 @@ class TestObservationBuilderProperties:
         window_size = 2 * vision_range + 1
         assume(grid_size >= window_size)
 
+        from townlet.substrate.grid2d import Grid2DSubstrate
+
         device = torch.device("cpu")
         num_agents = 4
 
+        substrate = Grid2DSubstrate(
+            width=grid_size,
+            height=grid_size,
+            boundary="clamp",
+            distance_metric="manhattan",
+        )
         builder = ObservationBuilder(
             num_agents=num_agents,
             grid_size=grid_size,
@@ -288,6 +314,7 @@ class TestObservationBuilderProperties:
             enable_temporal_mechanics=False,
             num_affordance_types=3,
             affordance_names=["Bed", "Hospital", "Job"],
+            substrate=substrate,
         )
 
         # Test corner positions (most likely to cause boundary issues)
