@@ -679,6 +679,150 @@ Tests focus on:
 
 ---
 
+## Frontend Visualization (Multi-Substrate Support)
+
+**Location**: `frontend/src/components/`
+
+The frontend supports **two rendering modes** based on substrate type:
+
+### Spatial Mode (Grid2D Substrates)
+
+**Component**: `Grid.vue` (SVG-based 2D grid)
+
+**Features**:
+- Grid cells rendered as SVG rectangles
+- Agents positioned at (x, y) coordinates
+- Affordances displayed as icons at grid positions
+- Heat map overlay (position visit frequency)
+- Agent trails (last 3 positions)
+- Novelty heatmap (RND exploration)
+
+**WebSocket Contract**:
+```json
+{
+  "substrate": {
+    "type": "grid2d",
+    "position_dim": 2,
+    "width": 8,
+    "height": 8
+  },
+  "grid": {
+    "agents": [{"id": "agent_0", "x": 3, "y": 5}],
+    "affordances": [{"type": "Bed", "x": 2, "y": 1}]
+  }
+}
+```
+
+---
+
+### Aspatial Mode (Aspatial Substrates)
+
+**Component**: `AspatialView.vue` (Meters-only dashboard)
+
+**Features**:
+- Large meter bars with color coding (critical/warning/healthy)
+- Affordance list (no positions, just availability)
+- Recent actions log (temporal context without spatial context)
+- No heat map (position-based feature)
+- No agent trails (position-based feature)
+
+**WebSocket Contract**:
+```json
+{
+  "substrate": {
+    "type": "aspatial",
+    "position_dim": 0
+  },
+  "grid": {
+    "agents": [{"id": "agent_0"}],
+    "affordances": [{"type": "Bed"}]
+  }
+}
+```
+
+**Rationale**:
+Aspatial universes have no concept of "position" - rendering a fake grid would:
+1. Be pedagogically harmful (teaches incorrect intuitions)
+2. Mislead operators about agent behavior
+3. Imply spatial relationships that don't exist
+
+Instead, aspatial mode focuses on **meters** (primary learning signal) and **interaction history** (temporal, not spatial).
+
+---
+
+### Substrate Detection
+
+**Logic** (in `App.vue`):
+```vue
+<Grid v-if="store.substrateType === 'grid2d'" ... />
+<AspatialView v-else-if="store.substrateType === 'aspatial'" ... />
+```
+
+**Fallback** (for legacy checkpoints without substrate metadata):
+```javascript
+const substrate = message.substrate || {
+  type: "grid2d",  // Assume legacy spatial behavior
+  position_dim: 2,
+  width: message.grid.width,
+  height: message.grid.height
+}
+```
+
+---
+
+### Running Frontend
+
+**Prerequisites**:
+1. Live inference server running (provides WebSocket endpoint)
+2. Node.js and npm installed
+
+**Commands**:
+```bash
+# Terminal 1: Start inference server (from worktree with checkpoints)
+cd /home/john/hamlet/.worktrees/substrate-abstraction
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+python -m townlet.demo.live_inference checkpoints 8766 0.2 10000 configs/L1_full_observability
+
+# Terminal 2: Start frontend (from main repo)
+cd /home/john/hamlet/frontend
+npm run dev
+
+# Open http://localhost:5173
+```
+
+**Port Configuration**:
+- Frontend dev server: `localhost:5173` (Vite default)
+- WebSocket endpoint: `localhost:8766` (live_inference default)
+- Frontend auto-connects to WebSocket on component mount
+
+---
+
+### Customizing Visualization
+
+**Affordance Icons** (`frontend/src/utils/constants.js`):
+```javascript
+export const AFFORDANCE_ICONS = {
+  Bed: '🛏️',
+  Hospital: '🏥',
+  Job: '💼',
+  // ... add custom icons here
+}
+```
+
+**Meter Colors** (`frontend/src/styles/tokens.js`):
+```javascript
+'--color-success': '#22c55e',  // Healthy meters
+'--color-warning': '#f59e0b',  // Warning meters
+'--color-error': '#ef4444',    // Critical meters
+```
+
+**Grid Cell Size** (`frontend/src/utils/constants.js`):
+```javascript
+export const CELL_SIZE = 75  // Pixels per grid cell
+```
+
+---
+
 ## Development Philosophy
 
 > "Trick students into learning graduate-level RL by making them think they're just playing The Sims."
