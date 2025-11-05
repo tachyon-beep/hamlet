@@ -648,7 +648,11 @@ class LiveInferenceServer:
         assert self.env is not None, "Environment must be initialized before broadcasting state"
         assert self.population is not None, "Population must be initialized before broadcasting state"
 
-        # Get agent position (unpack for frontend compatibility)
+        # Get agent position (substrate-agnostic)
+        # agent_pos is a list of length substrate.position_dim
+        # - 2D: [x, y]
+        # - 3D: [x, y, z]
+        # - Aspatial: []
         agent_pos = self.env.positions[0].cpu().tolist()
 
         # Get action masks (which actions are valid)
@@ -673,17 +677,25 @@ class LiveInferenceServer:
         for meter_name, idx in meter_indices.items():
             meters[meter_name] = self.env.meters[0, idx].item()
 
-        # Get affordances (unpack position for frontend compatibility)
+        # Get affordances (substrate-agnostic position handling)
         affordances = []
         for name, pos in self.env.affordances.items():
             pos_list = pos.cpu().tolist()
-            affordances.append(
-                {
-                    "type": name,  # Frontend expects 'type' not 'name'
-                    "x": pos_list[0],
-                    "y": pos_list[1],
-                }
-            )
+            affordance_data = {"type": name}  # Frontend expects 'type' not 'name'
+
+            # Add position data based on substrate dimensionality
+            if self.env.substrate.position_dim == 2:
+                # 2D grid: use x, y
+                affordance_data["x"] = pos_list[0]
+                affordance_data["y"] = pos_list[1]
+            elif self.env.substrate.position_dim == 3:
+                # 3D grid: use x, y, z
+                affordance_data["x"] = pos_list[0]
+                affordance_data["y"] = pos_list[1]
+                affordance_data["z"] = pos_list[2]
+            # Aspatial (position_dim=0): no position data needed
+
+            affordances.append(affordance_data)
 
         # Convert Q-values to list for JSON serialization (supports legacy 5-action checkpoints)
         q_values_list = q_values.cpu().tolist()
@@ -725,20 +737,11 @@ class LiveInferenceServer:
             "total_episodes": self.total_episodes,  # For training progress bar
             # DEBUG
             "_debug_total_episodes": self.total_episodes,
-            "grid": {
-                "width": self.env.grid_size,
-                "height": self.env.grid_size,
-                "agents": [
-                    {
-                        "id": "agent_0",
-                        "x": agent_pos[0],  # Frontend expects x, y not position
-                        "y": agent_pos[1],
-                        "color": "#4CAF50",  # Green color for agent
-                        "last_action": last_action,
-                    }
-                ],
-                "affordances": affordances,
+            "substrate": {
+                "type": type(self.env.substrate).__name__,  # "Grid2DSubstrate", "AspatialSubstrate", etc.
+                "position_dim": self.env.substrate.position_dim,
             },
+            "grid": self._build_grid_data(agent_pos, last_action, affordances),
             "agent_meters": {"agent_0": {"meters": meters}},  # MeterPanel expects agent_0.meters nested structure
             "q_values": q_values_list,  # Q-values for all 6 actions
             "action_masks": action_masks,  # Which actions are valid [6] bool list
@@ -775,6 +778,51 @@ class LiveInferenceServer:
             }
 
         await self._broadcast_to_clients(update)
+
+    def _build_grid_data(self, agent_pos: list, last_action: int, affordances: list) -> dict:
+        """Build grid data based on substrate type.
+
+        Args:
+            agent_pos: Agent position (list of length substrate.position_dim)
+            last_action: Last action taken
+            affordances: List of affordance dicts with positions
+
+        Returns:
+            Grid data dict for frontend rendering
+        """
+        from townlet.substrate.aspatial import AspatialSubstrate
+        from townlet.substrate.grid2d import Grid2DSubstrate
+
+        if isinstance(self.env.substrate, Grid2DSubstrate):
+            # 2D grid rendering (current implementation)
+            return {
+                "type": "grid2d",
+                "width": self.env.substrate.width,
+                "height": self.env.substrate.height,
+                "agents": [
+                    {
+                        "id": "agent_0",
+                        "x": agent_pos[0],
+                        "y": agent_pos[1],
+                        "color": "#4CAF50",
+                        "last_action": last_action,
+                    }
+                ],
+                "affordances": affordances,
+            }
+        elif isinstance(self.env.substrate, AspatialSubstrate):
+            # Aspatial rendering (meters-only, no grid)
+            return {
+                "type": "aspatial",
+                # No position data for aspatial substrate
+            }
+        else:
+            # Future: Grid3DSubstrate, GraphSubstrate, etc.
+            return {
+                "type": "unknown",
+                "substrate_type": type(self.env.substrate).__name__,
+                "message": "Rendering for this substrate type not yet implemented",
+            }
 
     async def _broadcast_to_clients(self, message: dict):
         """Broadcast message to all connected clients."""
