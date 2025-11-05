@@ -619,47 +619,76 @@ class VectorizedHamletEnv:
         )
 
     def get_affordance_positions(self) -> dict:
-        """Get current affordance positions (P1.1 checkpointing).
+        """Get current affordance positions (substrate-agnostic checkpointing).
 
         Returns:
-            Dictionary with 'positions' and 'ordering' keys:
-            - 'positions': Dict mapping affordance names to [x, y] positions
+            Dictionary with 'positions', 'ordering', and 'position_dim' keys:
+            - 'positions': Dict mapping affordance names to position lists
             - 'ordering': List of affordance names in consistent order
+            - 'position_dim': Dimensionality for validation (0=aspatial, 2=2D, 3=3D)
         """
         positions = {}
         for name, pos_tensor in self.affordances.items():
-            # Convert tensor position to list (for JSON serialization)
+            # Convert tensor to list (handles any dimensionality)
             pos = pos_tensor.cpu().tolist()
-            positions[name] = [int(pos[0]), int(pos[1])]
 
-        # Include affordance ordering for consistent observation encoding
+            # Ensure pos is a list (even for 0-dimensional positions)
+            if isinstance(pos, int | float):
+                pos = [pos]
+            elif self.substrate.position_dim == 0:
+                pos = []
+
+            positions[name] = [int(x) for x in pos] if pos else []
+
         return {
             "positions": positions,
             "ordering": self.affordance_names,
+            "position_dim": self.substrate.position_dim,  # For validation
         }
 
     def set_affordance_positions(self, checkpoint_data: dict) -> None:
-        """Set affordance positions from checkpoint (P1.1 checkpointing).
+        """Set affordance positions from checkpoint (Phase 4+ only).
+
+        BREAKING CHANGE: Only loads Phase 4+ checkpoints with position_dim field.
+        Legacy checkpoints will not load.
 
         Args:
-            checkpoint_data: Dictionary with 'positions' and optionally 'ordering':
-                - If 'ordering' provided, rebuild affordances dict in that order
-                - Otherwise, use current affordance_names (backwards compatible)
-        """
-        # Handle backwards compatibility: checkpoint might be old format (just positions dict)
-        if "positions" in checkpoint_data:
-            positions = checkpoint_data["positions"]
-            ordering = checkpoint_data.get("ordering", self.affordance_names)
-        else:
-            # Old format: checkpoint_data is the positions dict directly
-            positions = checkpoint_data
-            ordering = self.affordance_names
+            checkpoint_data: Dictionary with 'positions', 'ordering', and 'position_dim'
 
-        # Restore ordering first (critical for consistent observation encoding)
+        Raises:
+            ValueError: If checkpoint missing position_dim or incompatible with substrate
+        """
+        # Validate position_dim exists (no default fallback)
+        if "position_dim" not in checkpoint_data:
+            raise ValueError(
+                "Checkpoint missing 'position_dim' field.\n"
+                "This is a legacy checkpoint (pre-Phase 4).\n"
+                "\n"
+                "BREAKING CHANGE: Phase 4 changed checkpoint format.\n"
+                "Legacy checkpoints (Version 2) are no longer compatible.\n"
+                "\n"
+                "Action required:\n"
+                "  1. Delete old checkpoint directories: checkpoints_level*/\n"
+                "  2. Retrain models from scratch with Phase 4+ code\n"
+                "\n"
+                "If you need to preserve old models, checkout pre-Phase 4 git commit."
+            )
+
+        # Validate compatibility (no backward compatibility)
+        checkpoint_position_dim = checkpoint_data["position_dim"]
+        if checkpoint_position_dim != self.substrate.position_dim:
+            raise ValueError(
+                f"Checkpoint position_dim mismatch: checkpoint has {checkpoint_position_dim}D, "
+                f"but current substrate requires {self.substrate.position_dim}D."
+            )
+
+        # Simple loading (no backward compat branches)
+        positions = checkpoint_data["positions"]
+        ordering = checkpoint_data["ordering"]
+
         self.affordance_names = ordering
         self.num_affordance_types = len(self.affordance_names)
 
-        # Rebuild affordances dict in correct order
         for name, pos in positions.items():
             if name in self.affordances:
                 self.affordances[name] = torch.tensor(pos, device=self.device, dtype=torch.long)
