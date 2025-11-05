@@ -325,9 +325,13 @@ def aspatial_env(device: torch.device) -> VectorizedHamletEnv:
 
     return VectorizedHamletEnv(
         num_agents=1,
+        grid_size=1,  # Ignored for aspatial, but required by constructor
+        partial_observability=False,
+        vision_range=1,
+        enable_temporal_mechanics=False,
         device=device,
         config_pack_path=aspatial_config_path,
-        move_energy_cost=0.0,  # No movement in aspatial
+        move_energy_cost=0.005,  # Must be > wait_energy_cost (validation requirement)
         wait_energy_cost=0.001,
         interact_energy_cost=0.0,
         agent_lifespan=1000,
@@ -440,19 +444,17 @@ def epsilon_greedy_exploration(device: torch.device) -> EpsilonGreedyExploration
     """Create an epsilon-greedy exploration strategy.
 
     Configuration:
-        - Epsilon start: 1.0
+        - Epsilon: 1.0
         - Epsilon min: 0.1
         - Epsilon decay: 0.99
-        - Device: CUDA if available, else CPU
 
     Returns:
         EpsilonGreedyExploration instance
     """
     return EpsilonGreedyExploration(
-        epsilon_start=1.0,
+        epsilon=1.0,
         epsilon_min=0.1,
         epsilon_decay=0.99,
-        device=device,
     )
 
 
