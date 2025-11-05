@@ -108,3 +108,140 @@ def test_substrate_config_file_exists():
     for config_name in production_configs:
         substrate_path = Path("configs") / config_name / "substrate.yaml"
         assert substrate_path.exists(), f"Missing substrate.yaml for {config_name}"
+
+
+# Edge Case Tests (Priority 2 from code review)
+
+
+def test_substrate_config_invalid_boundary():
+    """Invalid boundary mode should raise ValidationError."""
+    invalid_yaml = """
+version: "1.0"
+description: "Test invalid boundary"
+type: "grid"
+grid:
+  topology: "square"
+  width: 8
+  height: 8
+  boundary: "invalid_mode"
+  distance_metric: "manhattan"
+"""
+    invalid_path = Path("/tmp/invalid_boundary_substrate.yaml")
+    invalid_path.write_text(invalid_yaml)
+
+    # Should raise Pydantic ValidationError for invalid literal value
+    with pytest.raises(ValueError) as exc_info:
+        load_substrate_config(invalid_path)
+
+    # Error message should indicate invalid boundary value
+    error_msg = str(exc_info.value).lower()
+    assert "boundary" in error_msg or "invalid" in error_msg
+
+    # Cleanup
+    invalid_path.unlink()
+
+
+def test_substrate_config_invalid_distance_metric():
+    """Invalid distance metric should raise ValidationError."""
+    invalid_yaml = """
+version: "1.0"
+description: "Test invalid distance metric"
+type: "grid"
+grid:
+  topology: "square"
+  width: 8
+  height: 8
+  boundary: "clamp"
+  distance_metric: "invalid_metric"
+"""
+    invalid_path = Path("/tmp/invalid_distance_substrate.yaml")
+    invalid_path.write_text(invalid_yaml)
+
+    # Should raise Pydantic ValidationError for invalid literal value
+    with pytest.raises(ValueError) as exc_info:
+        load_substrate_config(invalid_path)
+
+    # Error message should indicate invalid distance_metric value
+    error_msg = str(exc_info.value).lower()
+    assert "distance_metric" in error_msg or "invalid" in error_msg
+
+    # Cleanup
+    invalid_path.unlink()
+
+
+def test_substrate_config_non_square_grid():
+    """Non-square grids (width ≠ height) should be valid."""
+    non_square_yaml = """
+version: "1.0"
+description: "Non-square grid test"
+type: "grid"
+grid:
+  topology: "square"
+  width: 10
+  height: 5
+  boundary: "clamp"
+  distance_metric: "manhattan"
+"""
+    non_square_path = Path("/tmp/non_square_substrate.yaml")
+    non_square_path.write_text(non_square_yaml)
+
+    # Should load successfully (non-square grids are valid)
+    config = load_substrate_config(non_square_path)
+
+    assert config.grid.width == 10
+    assert config.grid.height == 5
+    assert config.grid.width != config.grid.height  # Verify non-square
+
+    # Cleanup
+    non_square_path.unlink()
+
+
+def test_substrate_config_aspatial_loading():
+    """Aspatial config should load correctly end-to-end."""
+    import torch
+
+    from townlet.substrate.factory import SubstrateFactory
+
+    # Load example aspatial config
+    aspatial_path = Path("docs/examples/substrate-aspatial.yaml")
+    config = load_substrate_config(aspatial_path)
+
+    # Verify config structure
+    assert config.type == "aspatial"
+    assert config.aspatial is not None
+    assert config.grid is None
+
+    # Verify factory can build substrate
+    substrate = SubstrateFactory.build(config, device=torch.device("cpu"))
+
+    # Verify substrate behavior
+    assert substrate.position_dim == 0
+    assert substrate.get_observation_dim() == 0
+
+
+@pytest.mark.parametrize(
+    "example_name",
+    [
+        "substrate-aspatial.yaml",
+        "substrate-euclidean-distance.yaml",
+        "substrate-toroidal-grid.yaml",
+    ],
+)
+def test_example_configs_valid(example_name):
+    """Example configs should load and validate correctly."""
+    example_path = Path("docs/examples") / example_name
+
+    # Should load without errors
+    config = load_substrate_config(example_path)
+
+    # All examples should have valid version and description
+    assert config.version == "1.0"
+    assert config.description
+
+    # Verify config type matches filename
+    if "aspatial" in example_name:
+        assert config.type == "aspatial"
+        assert config.aspatial is not None
+    else:
+        assert config.type == "grid"
+        assert config.grid is not None
