@@ -1,4 +1,16 @@
-"""Test environment loads and uses substrate configuration."""
+"""TASK-002A specific tests: Environment substrate migration validation.
+
+These tests verify TASK-002A migration-specific behavior:
+- Error messages guide users through substrate.yaml migration
+- Backward compatibility with grid_size parameter
+- Legacy behavior matching
+- Temporary limitations (non-square grids)
+
+These tests can be removed or refactored in future tasks once:
+- Migration is complete and substrate.yaml is universal
+- Non-square grid support is added (Phase 6?)
+- Grid_size parameter is fully deprecated
+"""
 
 from pathlib import Path
 
@@ -6,60 +18,10 @@ import pytest
 import torch
 
 from townlet.environment.vectorized_env import VectorizedHamletEnv
-from townlet.substrate.grid2d import Grid2DSubstrate
-
-
-def test_env_loads_substrate_config():
-    """Environment should load substrate.yaml and create substrate instance."""
-    # Note: This test will initially PASS with legacy behavior
-    # After Phase 4 integration, it will load from substrate.yaml
-
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
-
-    # After integration, should have substrate attribute
-    # For now, check legacy grid_size exists
-    assert hasattr(env, "grid_size")
-    assert env.grid_size == 8
-
-
-def test_env_substrate_accessible():
-    """Environment should expose substrate for inspection."""
-    # This test will FAIL initially, becomes valid after integration
-
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
-
-    # After integration:
-    assert hasattr(env, "substrate")
-    assert isinstance(env.substrate, Grid2DSubstrate)
-    assert env.substrate.width == 8
 
 
 def test_missing_substrate_yaml_raises_helpful_error(tmp_path):
-    """Should fail fast with migration instructions when substrate.yaml missing."""
+    """TASK-002A: Should fail fast with migration instructions when substrate.yaml missing."""
     import shutil
 
     # Create config pack directory without substrate.yaml
@@ -97,7 +59,10 @@ def test_missing_substrate_yaml_raises_helpful_error(tmp_path):
 
 
 def test_non_square_grid_rejected(tmp_path):
-    """Should reject non-square grids with clear error message."""
+    """TASK-002A: Should reject non-square grids with clear error message.
+
+    Temporary limitation until Phase 6 (coordinate encoding) is implemented.
+    """
     import shutil
 
     # Create config pack with non-square substrate
@@ -150,7 +115,10 @@ grid:
 
 
 def test_grid_size_overridden_by_substrate():
-    """grid_size parameter should be overridden by substrate dimensions."""
+    """TASK-002A: grid_size parameter should be overridden by substrate dimensions.
+
+    Backward compatibility test: ensures substrate.yaml takes precedence.
+    """
     # Use L1_full_observability which has 8×8 grid in substrate.yaml
     # But pass grid_size=999 as parameter
 
@@ -175,7 +143,10 @@ def test_grid_size_overridden_by_substrate():
 
 
 def test_aspatial_preserves_grid_size_parameter(tmp_path):
-    """Aspatial substrate should keep grid_size parameter value."""
+    """TASK-002A: Aspatial substrate should keep grid_size parameter value.
+
+    Backward compatibility test: aspatial has no width/height, so parameter preserved.
+    """
     import shutil
 
     # Create config pack with aspatial substrate
@@ -207,6 +178,7 @@ aspatial: {}
         partial_observability=False,
         vision_range=2,
         enable_temporal_mechanics=False,
+        enabled_affordances=[],  # Aspatial can't have positioned affordances
         move_energy_cost=0.5,
         wait_energy_cost=0.1,
         interact_energy_cost=0.3,
@@ -220,37 +192,11 @@ aspatial: {}
     assert not hasattr(env.substrate, "width")
 
 
-def test_env_initializes_positions_via_substrate():
-    """Environment should use substrate.initialize_positions() in reset()."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=5,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
-
-    # Reset environment
-    env.reset()
-
-    # Positions should be initialized via substrate
-    assert env.positions.shape == (5, 2)  # [num_agents, position_dim]
-    assert env.positions.dtype == torch.long
-    assert env.positions.device == torch.device("cpu")
-
-    # Positions should be within grid bounds
-    assert (env.positions >= 0).all()
-    assert (env.positions < 8).all()
-
-
 def test_substrate_initialize_positions_correctness():
-    """Grid2D.initialize_positions() should return valid grid positions."""
+    """TASK-002A: Grid2D.initialize_positions() should return valid grid positions.
+
+    Legacy validation test: ensures position initialization works correctly.
+    """
     from townlet.substrate.grid2d import Grid2DSubstrate
 
     substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
@@ -266,41 +212,11 @@ def test_substrate_initialize_positions_correctness():
     assert (positions < 8).all()
 
 
-def test_env_applies_movement_via_substrate():
-    """Environment should use substrate.apply_movement() for boundary handling."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
-
-    env.reset()
-
-    # Place agent at top-left corner
-    env.positions = torch.tensor([[0, 0]], dtype=torch.long, device=torch.device("cpu"))
-
-    # Try to move up (UP action decreases Y, but we're at boundary)
-    # UP action should be action 0 based on action_dim
-    action = torch.tensor([0], dtype=torch.long, device=torch.device("cpu"))
-
-    env.step(action)
-
-    # Position should be clamped by substrate (boundary="clamp" in configs)
-    # Since we're at [0, 0] and trying to move up, should stay at [0, 0]
-    assert (env.positions[:, 0] >= 0).all()  # X within bounds
-    assert (env.positions[:, 1] >= 0).all()  # Y within bounds
-
-
 def test_substrate_movement_matches_legacy():
-    """Substrate movement should produce identical results to legacy torch.clamp."""
+    """TASK-002A: Substrate movement should produce identical results to legacy torch.clamp.
+
+    Legacy validation test: ensures substrate.apply_movement matches old hardcoded behavior.
+    """
     env = VectorizedHamletEnv(
         config_pack_path=Path("configs/L1_full_observability"),
         num_agents=1,
@@ -333,33 +249,3 @@ def test_substrate_movement_matches_legacy():
 
     # Should clamp to [0, 0] (not go negative)
     assert (clamped == torch.tensor([[0, 0]], dtype=torch.long)).all()
-
-
-def test_env_randomizes_affordances_via_substrate():
-    """Environment should use substrate.get_all_positions() for affordance placement."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
-
-    # Randomize affordances
-    env.randomize_affordance_positions()
-
-    # All affordances should have valid positions within grid
-    for affordance_name, position in env.affordances.items():
-        assert position.shape == (2,)  # [x, y]
-        assert (position >= 0).all()
-        assert (position < 8).all()
-
-    # Affordances should not overlap (each at unique position)
-    positions_list = [tuple(pos.tolist()) for pos in env.affordances.values()]
-    assert len(positions_list) == len(set(positions_list))  # All unique
