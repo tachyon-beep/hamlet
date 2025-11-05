@@ -162,7 +162,7 @@ class VectorizedHamletEnv:
         else:
             # Level 1: full grid one-hot + meters + current affordance type
             # Grid one-hot + meter_count meters + affordance type (N+1 for "none")
-            self.observation_dim = grid_size * grid_size + meter_count + (self.num_affordance_types + 1)
+            self.observation_dim = self.grid_size * self.grid_size + meter_count + (self.num_affordance_types + 1)
 
         # Always add temporal features for forward compatibility (4 features)
         # time_sin, time_cos, interaction_progress, lifetime_progress
@@ -171,7 +171,7 @@ class VectorizedHamletEnv:
         # Initialize observation builder
         self.observation_builder = ObservationBuilder(
             num_agents=num_agents,
-            grid_size=grid_size,
+            grid_size=self.grid_size,
             device=device,
             partial_observability=partial_observability,
             vision_range=vision_range,
