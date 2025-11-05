@@ -1,5 +1,7 @@
 # TASK-002A Phase 8: Testing & Verification - Implementation Plan
 
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
 **Date**: 2025-11-05
 **Status**: Ready for Implementation
 **Dependencies**: Phases 0-7 Complete

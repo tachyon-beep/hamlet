@@ -1,15 +1,17 @@
-# TASK-002A Phase 5: Observation Builder Integration - Implementation Plan
+# TASK-002A Phase 6: Observation Builder Integration - Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Date**: 2025-11-05
 **Status**: Ready for Implementation
-**Dependencies**: Phases 0-4 Complete
+**Dependencies**: Phases 0-5 Complete
 **Estimated Effort**: 16-20 hours
 
 ---
 
 ⚠️ **BREAKING CHANGES NOTICE** ⚠️
 
-Phase 5 introduces breaking changes to observation dimensions.
+Phase 6 introduces breaking changes to observation dimensions.
 
 **Impact:**
 - Observation dimensions will change when using coordinate encoding
@@ -35,13 +37,13 @@ This change is essential for TASK-002A's goal of supporting configurable spatial
 
 Operators must delete old checkpoints when changing substrate type or grid size that triggers encoding change.
 
-See Task 5.8 for documentation updates.
+See Task 6.8 for documentation updates.
 
 ---
 
 ## Executive Summary
 
-Phase 5 integrates substrate-based observation encoding into `VectorizedHamletEnv` and `ObservationBuilder`, replacing hardcoded grid encoding logic. This involves **4 core integration points** across **3 main files**, with **moderate risk** due to observation dimension changes.
+Phase 6 integrates substrate-based observation encoding into `VectorizedHamletEnv` and `ObservationBuilder`, replacing hardcoded grid encoding logic. This involves **4 core integration points** across **3 main files**, with **moderate risk** due to observation dimension changes.
 
 **Key Finding**: Current system has hardcoded position encoding in two places:
 1. **Full observability**: One-hot grid encoding (64 dims for 8×8) in `observation_builder.py`
@@ -51,22 +53,22 @@ Both must be replaced with substrate methods to support Grid2D (one-hot or coord
 
 **Critical Insight**: L2 POMDP **already uses coordinate encoding successfully** (normalized x, y), proving that networks can learn spatial reasoning from coordinates instead of one-hot. This validates the substrate approach for all grid types.
 
-**New Substrate Methods Required** (from Task 5.1):
+**New Substrate Methods Required** (from Task 6.1):
 1. `get_observation_dim(partial_observability, vision_range) -> int` - Query obs dimension
 2. `encode_observation(agent_positions, affordance_positions) -> Tensor` - Full obs encoding
-3. `encode_partial_observation(positions, affordances, vision_range) -> Tensor` - POMDP encoding (already added in Phase 4, but needs affordance overlay)
+3. `encode_partial_observation(positions, affordances, vision_range) -> Tensor` - POMDP encoding (already added in Phase 5, but needs affordance overlay)
 
-**Updated Signature** (from Phase 4 Task 4.1):
-- Phase 4 added basic `encode_partial_observation()` without affordance overlay
-- Phase 5 enhances it to handle affordance positions within local window
+**Updated Signature** (from Phase 5 Task 6.1):
+- Phase 5 added basic `encode_partial_observation()` without affordance overlay
+- Phase 6 enhances it to handle affordance positions within local window
 
 ---
 
-## Phase 5 Task Breakdown
+## Phase 6 Task Breakdown
 
-### Task 5.1: Add Substrate Observation Methods
+### Task 6.1: Add Substrate Observation Methods
 
-**Purpose**: Extend substrate interface with observation encoding methods needed for Phase 5
+**Purpose**: Extend substrate interface with observation encoding methods needed for Phase 6
 
 **Files**:
 - `src/townlet/substrate/base.py`
@@ -539,7 +541,7 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ---
 
-### Task 5.2: Update VectorizedHamletEnv obs_dim Calculation
+### Task 6.2: Update VectorizedHamletEnv obs_dim Calculation
 
 **Purpose**: Replace hardcoded obs_dim formulas with `substrate.get_observation_dim()`
 
@@ -771,7 +773,7 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ---
 
-### Task 5.3: Refactor ObservationBuilder Constructor
+### Task 6.3: Refactor ObservationBuilder Constructor
 
 **Purpose**: Replace `grid_size` parameter with `substrate` reference
 
@@ -999,7 +1001,7 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ---
 
-### Task 5.4: Refactor Full Observability Encoding
+### Task 6.4: Refactor Full Observability Encoding
 
 **Purpose**: Replace hardcoded grid encoding with `substrate.encode_observation()`
 
@@ -1191,7 +1193,7 @@ cd /home/john/hamlet
 grep -n "self.grid_size" src/townlet/environment/observation_builder.py
 ```
 
-**Expected**: Should find references only in `_build_partial_observations()` (will fix in Task 5.5)
+**Expected**: Should find references only in `_build_partial_observations()` (will fix in Task 6.5)
 
 ---
 
@@ -1250,7 +1252,7 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ---
 
-### Task 5.5: Refactor Partial Observability Encoding (POMDP)
+### Task 6.5: Refactor Partial Observability Encoding (POMDP)
 
 **Purpose**: Replace manual window extraction with `substrate.encode_partial_observation()`
 
@@ -1622,7 +1624,7 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ---
 
-### Task 5.6: Update RecurrentSpatialQNetwork
+### Task 6.6: Update RecurrentSpatialQNetwork
 
 **Purpose**: Add `position_dim` parameter to support 3D substrates (position_dim=3)
 
@@ -2024,7 +2026,7 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ---
 
-### Task 5.7: Update Test Suite
+### Task 6.7: Update Test Suite
 
 **Purpose**: Update all tests to use substrate-based observation encoding
 
@@ -2225,7 +2227,7 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ---
 
-### Task 5.8: Documentation
+### Task 6.8: Documentation
 
 **Purpose**: Update CLAUDE.md and create research summary
 
@@ -2388,7 +2390,7 @@ Phase 5 successfully integrated substrate-based observation encoding into Vector
 
 ## Implementation Details
 
-### Task 5.1: Substrate Observation Methods (4 hours)
+### Task 6.1: Substrate Observation Methods (4 hours)
 
 Added three methods to substrate interface:
 
@@ -2410,7 +2412,7 @@ Added three methods to substrate interface:
 
 Implemented in Grid2DSubstrate and AspatialSubstrate.
 
-### Task 5.2: VectorizedHamletEnv obs_dim (2 hours)
+### Task 6.2: VectorizedHamletEnv obs_dim (2 hours)
 
 Replaced hardcoded formulas:
 
@@ -2427,7 +2429,7 @@ obs_dim = substrate_obs_dim + meter_count + affordances + temporal
 
 Added logging for dimension breakdown.
 
-### Task 5.3: ObservationBuilder Constructor (1 hour)
+### Task 6.3: ObservationBuilder Constructor (1 hour)
 
 Changed signature:
 
@@ -2436,7 +2438,7 @@ After: `ObservationBuilder(num_agents, substrate, ...)`
 
 Updated call sites in VectorizedHamletEnv and test fixtures.
 
-### Task 5.4: Full Observability Encoding (2 hours)
+### Task 6.4: Full Observability Encoding (2 hours)
 
 Replaced manual grid encoding:
 
@@ -2445,7 +2447,7 @@ After: 1 line `substrate.encode_observation(positions, affordances)`
 
 Works with one-hot, coordinates, or aspatial.
 
-### Task 5.5: POMDP Encoding (3 hours)
+### Task 6.5: POMDP Encoding (3 hours)
 
 Replaced manual window extraction:
 
@@ -2454,7 +2456,7 @@ After: 1 line `substrate.encode_partial_observation(positions, affordances, visi
 
 Position normalization still uses isinstance checks (can be improved in future).
 
-### Task 5.6: RecurrentSpatialQNetwork (2 hours)
+### Task 6.6: RecurrentSpatialQNetwork (2 hours)
 
 Added position_dim parameter:
 
@@ -2463,7 +2465,7 @@ After: Dynamic `position_dim` from substrate (0, 2, or 3)
 
 Updated forward() to use `self.position_dim` for slicing.
 
-### Task 5.7: Test Suite (4 hours)
+### Task 6.7: Test Suite (4 hours)
 
 Updated all tests:
 - Unit tests: Pass substrate instead of grid_size
@@ -2472,7 +2474,7 @@ Updated all tests:
 
 All tests pass.
 
-### Task 5.8: Documentation (1 hour)
+### Task 6.8: Documentation (1 hour)
 
 Updated CLAUDE.md:
 - State representation section with substrate encoding strategies
@@ -2605,44 +2607,44 @@ Part of TASK-002A Phase 5 (Observation Builder Integration)."
 
 ### Core Implementation
 
-- [ ] Task 5.1: Add substrate observation methods (4 hours)
+- [ ] Task 6.1: Add substrate observation methods (4 hours)
   - [ ] get_observation_dim() in Grid2DSubstrate, AspatialSubstrate
   - [ ] encode_observation() with affordance overlay
   - [ ] Tests pass
 
-- [ ] Task 5.2: Update VectorizedHamletEnv obs_dim (2 hours)
+- [ ] Task 6.2: Update VectorizedHamletEnv obs_dim (2 hours)
   - [ ] Replace hardcoded formulas with substrate.get_observation_dim()
   - [ ] Add dimension breakdown logging
   - [ ] Tests pass
 
-- [ ] Task 5.3: Refactor ObservationBuilder constructor (1 hour)
+- [ ] Task 6.3: Refactor ObservationBuilder constructor (1 hour)
   - [ ] Replace grid_size with substrate parameter
   - [ ] Update call sites and test fixtures
   - [ ] Tests pass
 
-- [ ] Task 5.4: Refactor full observability encoding (2 hours)
+- [ ] Task 6.4: Refactor full observability encoding (2 hours)
   - [ ] Use substrate.encode_observation()
   - [ ] Remove hardcoded grid encoding
   - [ ] Tests pass
 
-- [ ] Task 5.5: Refactor POMDP encoding (3 hours)
+- [ ] Task 6.5: Refactor POMDP encoding (3 hours)
   - [ ] Use substrate.encode_partial_observation()
   - [ ] Remove manual window extraction
   - [ ] Tests pass
 
-- [ ] Task 5.6: Update RecurrentSpatialQNetwork (2 hours)
+- [ ] Task 6.6: Update RecurrentSpatialQNetwork (2 hours)
   - [ ] Add position_dim parameter
   - [ ] Update forward() for dynamic slicing
   - [ ] Update call sites
   - [ ] Tests pass
 
-- [ ] Task 5.7: Update test suite (4 hours)
+- [ ] Task 6.7: Update test suite (4 hours)
   - [ ] Update observation unit tests
   - [ ] Update integration tests
   - [ ] Add substrate consistency tests
   - [ ] All tests pass
 
-- [ ] Task 5.8: Documentation (1 hour)
+- [ ] Task 6.8: Documentation (1 hour)
   - [ ] Update CLAUDE.md state representation section
   - [ ] Add breaking changes warning
   - [ ] Create Phase 5 summary document

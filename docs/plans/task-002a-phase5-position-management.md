@@ -1,20 +1,22 @@
-# TASK-002A Phase 4: Position Management Refactoring - Implementation Plan
+# TASK-002A Phase 5: Position Management Refactoring - Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Date**: 2025-11-05
 **Status**: Ready for Implementation
-**Dependencies**: Phases 0-3 Complete
+**Dependencies**: Phases 0-4 Complete
 **Estimated Effort**: 26 hours (revised down from 32h with breaking changes authorization)
 
 ---
 
 ⚠️ **BREAKING CHANGES NOTICE** ⚠️
 
-Phase 4 introduces breaking changes to the checkpoint format.
+Phase 5 introduces breaking changes to the checkpoint format.
 
 **Impact:**
 - Existing checkpoints (Version 2) will NOT load
 - Training must restart from scratch
-- All checkpoint directories should be deleted before Phase 4
+- All checkpoint directories should be deleted before Phase 5
 
 **Rationale:**
 Backward compatibility was explicitly deprioritized to simplify implementation
@@ -24,13 +26,13 @@ changes to position representation that are incompatible with the legacy format.
 **Migration Path:**
 None. Delete old checkpoints and retrain.
 
-See Task 4.11 for user communication strategy.
+See Task 5.11 for user communication strategy.
 
 ---
 
 ## Executive Summary
 
-Phase 4 refactors all position management code to use the substrate abstraction created in Phases 0-3. This involves **9 integration points** across **5 core files**, with **moderate risk** due to checkpoint format changes.
+Phase 5 refactors all position management code to use the substrate abstraction created in Phases 0-4. This involves **9 integration points** across **5 core files**, with **moderate risk** due to checkpoint format changes.
 
 **Key Finding**: Position tensors are hardcoded as `[num_agents, 2]` in 15+ locations. All must be changed to `[num_agents, substrate.position_dim]` to support 3D grids (position_dim=3) and aspatial universes (position_dim=0).
 
@@ -45,11 +47,11 @@ Phase 4 refactors all position management code to use the substrate abstraction 
 
 ---
 
-## Phase 4 Task Breakdown
+## Phase 5 Task Breakdown
 
-### Task 4.1: Add New Substrate Methods
+### Task 5.1: Add New Substrate Methods
 
-**Purpose**: Extend substrate interface with methods needed for Phase 4 integration
+**Purpose**: Extend substrate interface with methods needed for Phase 5 integration
 
 **Files**:
 - `src/townlet/substrate/base.py`
@@ -57,6 +59,28 @@ Phase 4 refactors all position management code to use the substrate abstraction 
 - `src/townlet/substrate/aspatial.py`
 
 **Estimated Time**: 2 hours
+
+---
+
+#### Step 0: Verify Phase 4 Integration Complete
+
+**Action**: Run integration tests to verify substrate is wired up
+
+**Command**:
+```bash
+cd /home/john/hamlet
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v
+```
+
+**Expected**: ALL tests PASS (no skipped tests)
+
+**If tests fail or are skipped**: Phase 4 integration is incomplete. The other agent should complete Phase 4 before proceeding with Phase 5. Phase 5 assumes:
+1. `substrate.initialize_positions()` is called in `VectorizedEnv.reset()`
+2. `substrate.apply_movement()` is called in `VectorizedEnv._execute_actions()`
+3. Substrate methods are fully integrated (not just loaded)
+
+**If all tests pass**: Proceed to Step 1.
 
 ---
 
@@ -444,14 +468,14 @@ Extended substrate interface with two new methods for Phase 4:
 Implemented in Grid2DSubstrate and AspatialSubstrate.
 All tests pass.
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with new substrate methods
 
 ---
 
-### Task 4.2: Refactor Position Initialization
+### Task 5.2: Refactor Position Initialization
 
 **Purpose**: Replace hardcoded `torch.zeros((num_agents, 2))` with `substrate.initialize_positions()`
 
@@ -663,14 +687,14 @@ Temporal mechanics:
 
 Supports 2D (position_dim=2), 3D (position_dim=3), aspatial (position_dim=0).
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with refactored initialization
 
 ---
 
-### Task 4.3: Refactor Movement Logic
+### Task 5.3: Refactor Movement Logic
 
 **Purpose**: Replace hardcoded movement deltas and boundary clamping with `substrate.apply_movement()`
 
@@ -886,14 +910,14 @@ Temporal mechanics:
 
 NOTE: Movement deltas still hardcoded - will be moved to actions.yaml in TASK-000.
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with refactored movement
 
 ---
 
-### Task 4.4: Refactor Distance Calculations
+### Task 5.4: Refactor Distance Calculations
 
 **Purpose**: Replace `torch.abs(...).sum(dim=1)` with `substrate.is_on_position()`
 
@@ -1150,14 +1174,14 @@ Benefits:
 
 ObservationBuilder now receives substrate reference during initialization.
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with refactored distance checks
 
 ---
 
-### Task 4.5: Update Checkpoint Serialization
+### Task 5.5: Update Checkpoint Serialization
 
 **Purpose**: Add `position_dim` to checkpoint format for substrate validation (BREAKING CHANGE)
 
@@ -1438,14 +1462,14 @@ Rationale:
 - Single code path (easier to maintain)
 - Substrate abstraction requires fundamental changes
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with breaking change notice
 
 ---
 
-### Task 4.5B: Pre-flight Checkpoint Validation (NEW)
+### Task 5.5B: Pre-flight Checkpoint Validation (NEW)
 
 **Purpose**: Detect old checkpoints on startup and fail fast with helpful error
 
@@ -1669,14 +1693,14 @@ Benefits:
 - Fails fast with helpful guidance
 - Users don't waste time starting training with incompatible checkpoints
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with pre-flight validation
 
 ---
 
-### Task 4.6: Update Observation Encoding
+### Task 5.6: Update Observation Encoding
 
 **Purpose**: Replace hardcoded grid encoding with `substrate.encode_observation()`
 
@@ -1957,14 +1981,14 @@ Benefits:
 - 3D: substrate handles 3D grid encoding
 - Normalized positions use substrate.position_dim (0 for aspatial)
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with observation refactoring
 
 ---
 
-### Task 4.7: Update Affordance Randomization
+### Task 5.7: Update Affordance Randomization
 
 **Purpose**: Replace hardcoded 2D position generation with `substrate.get_all_positions()`
 
@@ -2140,14 +2164,14 @@ Benefits:
 - Capacity check uses substrate's total positions (not hardcoded grid_size²)
 - Aspatial substrates: affordances have empty position tensors
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with randomization refactoring
 
 ---
 
-### Task 4.8: Update Visualization
+### Task 5.8: Update Visualization
 
 **Purpose**: Send substrate type to frontend for rendering selection
 
@@ -2423,14 +2447,14 @@ Benefits:
 
 Frontend changes deferred to Phase 7 (see docs/notes/frontend-substrate-rendering.md).
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with visualization updates
 
 ---
 
-### Task 4.9: Update Recording System
+### Task 5.9: Update Recording System
 
 **Purpose**: Handle variable-length position tuples in recordings (BREAKING CHANGE)
 
@@ -2624,14 +2648,14 @@ Recording format:
 
 Backward compatible: old recordings with 2D positions still valid.
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with recording updates
 
 ---
 
-### Task 4.10: Update Test Suite
+### Task 5.10: Update Test Suite
 
 **Purpose**: Fix hardcoded position shape assertions and add parameterized tests
 
@@ -2886,14 +2910,14 @@ conftest.py:
 
 All tests pass with 2D grid substrate.
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with test updates
 
 ---
 
-### Task 4.11: Documentation Updates (NEW)
+### Task 5.11: Documentation Updates (NEW)
 
 **Purpose**: Communicate breaking changes to users
 
@@ -3089,7 +3113,7 @@ User communication strategy:
 - Justification (substrate abstraction)
 - Escape hatch (checkout old commit)
 
-Part of TASK-002A Phase 4 (Position Management Refactoring)."
+Part of TASK-002A Phase 5 (Position Management Refactoring)."
 ```
 
 **Expected**: Clean commit with documentation updates
@@ -3100,18 +3124,18 @@ Part of TASK-002A Phase 4 (Position Management Refactoring)."
 
 ### Functional Requirements
 
-- [x] Task 4.1: New substrate methods (`get_all_positions`, `encode_partial_observation`)
-- [x] Task 4.2: Position initialization uses `substrate.initialize_positions()`
-- [x] Task 4.3: Movement uses `substrate.apply_movement()`
-- [x] Task 4.4: Distance checks use `substrate.is_on_position()`
-- [x] Task 4.5: Checkpoint format includes `position_dim` (BREAKING CHANGE - version 3)
-- [x] Task 4.5B: Pre-flight validation detects old checkpoints (NEW)
-- [x] Task 4.6: Observations use substrate encoding methods
-- [x] Task 4.7: Affordance randomization uses `substrate.get_all_positions()`
-- [x] Task 4.8: Visualization sends substrate metadata to frontend
-- [x] Task 4.9: Recording system handles variable-length positions
-- [x] Task 4.10: Test suite updated for substrate-agnostic assertions
-- [x] Task 4.11: Documentation updates for breaking changes (NEW)
+- [x] Task 5.1: New substrate methods (`get_all_positions`, `encode_partial_observation`)
+- [x] Task 5.2: Position initialization uses `substrate.initialize_positions()`
+- [x] Task 5.3: Movement uses `substrate.apply_movement()`
+- [x] Task 5.4: Distance checks use `substrate.is_on_position()`
+- [x] Task 5.5: Checkpoint format includes `position_dim` (BREAKING CHANGE - version 3)
+- [x] Task 5.5B: Pre-flight validation detects old checkpoints (NEW)
+- [x] Task 5.6: Observations use substrate encoding methods
+- [x] Task 5.7: Affordance randomization uses `substrate.get_all_positions()`
+- [x] Task 5.8: Visualization sends substrate metadata to frontend
+- [x] Task 5.9: Recording system handles variable-length positions
+- [x] Task 5.10: Test suite updated for substrate-agnostic assertions
+- [x] Task 5.11: Documentation updates for breaking changes (NEW)
 
 ### Integration Points Verified
 
@@ -3172,18 +3196,18 @@ Part of TASK-002A Phase 4 (Position Management Refactoring)."
 **Estimated Effort**: 26 hours (revised down from 32h with breaking changes authorization)
 
 **Effort Breakdown**:
-- Task 4.1: 2h (New substrate methods)
-- Task 4.2: 2h (Position initialization)
-- Task 4.3: 3h (Movement logic)
-- Task 4.4: 3h (Distance calculations)
-- Task 4.5: 1.5h (Checkpoint serialization - simplified)
-- Task 4.5B: 1h (Pre-flight validation - NEW)
-- Task 4.6: 5h (Observation encoding)
-- Task 4.7: 2h (Affordance randomization)
-- Task 4.8: 2h (Visualization)
-- Task 4.9: 1.5h (Recording system - simplified)
-- Task 4.10: 3.5h (Test suite - simplified)
-- Task 4.11: 0.5h (Documentation - NEW)
+- Task 5.1: 2h (New substrate methods)
+- Task 5.2: 2h (Position initialization)
+- Task 5.3: 3h (Movement logic)
+- Task 5.4: 3h (Distance calculations)
+- Task 5.5: 1.5h (Checkpoint serialization - simplified)
+- Task 5.5B: 1h (Pre-flight validation - NEW)
+- Task 5.6: 5h (Observation encoding)
+- Task 5.7: 2h (Affordance randomization)
+- Task 5.8: 2h (Visualization)
+- Task 5.9: 1.5h (Recording system - simplified)
+- Task 5.10: 3.5h (Test suite - simplified)
+- Task 5.11: 0.5h (Documentation - NEW)
 - Contingency: 3h (reduced from 4h)
 
 **Key Achievements**:
