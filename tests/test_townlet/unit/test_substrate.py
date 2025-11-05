@@ -24,7 +24,8 @@ def test_grid2d_substrate_creation():
     substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
 
     assert substrate.position_dim == 2
-    assert substrate.get_observation_dim() == 64  # 8×8
+    # NEW Phase 5C: default encoding is "relative" (normalized coordinates)
+    assert substrate.get_observation_dim() == 2  # (x, y) normalized
 
 
 def test_grid2d_initialize_positions():
@@ -157,47 +158,40 @@ def test_grid2d_compute_distance_chebyshev():
 
 
 def test_grid2d_encode_observation():
-    """Grid2D should encode grid with affordances and agent positions."""
+    """Grid2D should encode positions as normalized coordinates (relative encoding)."""
     substrate = Grid2DSubstrate(width=3, height=3, boundary="clamp", distance_metric="manhattan")
 
     # Agent at [1, 1]
     positions = torch.tensor([[1, 1]], dtype=torch.long)
 
-    # Affordance at [2, 2]
+    # Affordance at [2, 2] (currently unused in relative encoding)
     affordances = {"Bed": torch.tensor([2, 2], dtype=torch.long)}
 
     encoding = substrate.encode_observation(positions, affordances)
 
-    # Should be [1, 9] shape (1 agent, 3×3=9 cells)
-    assert encoding.shape == (1, 9)
+    # NEW Phase 5C: Should be [1, 2] shape (1 agent, (x, y) normalized)
+    assert encoding.shape == (1, 2)
 
-    # Agent position (1,1) -> flat index 1*3+1=4 should be 1.0
-    assert encoding[0, 4] == 1.0
-
-    # Affordance position (2,2) -> flat index 2*3+2=8 should be 1.0
-    assert encoding[0, 8] == 1.0
-
-    # All other cells should be 0.0
-    mask = torch.ones(9, dtype=torch.bool)
-    mask[4] = False
-    mask[8] = False
-    assert torch.all(encoding[0, mask] == 0.0)
+    # Agent position (1,1) normalized: x=1/2=0.5, y=1/2=0.5 (divide by width-1, height-1)
+    expected = torch.tensor([[0.5, 0.5]])
+    assert torch.allclose(encoding, expected)
 
 
 def test_grid2d_encode_observation_overlap():
-    """Grid2D should handle agent on affordance (overlap = 2.0)."""
+    """Grid2D with relative encoding returns normalized position regardless of affordances."""
     substrate = Grid2DSubstrate(width=3, height=3, boundary="clamp", distance_metric="manhattan")
 
     # Agent at [1, 1]
     positions = torch.tensor([[1, 1]], dtype=torch.long)
 
-    # Affordance also at [1, 1] (same position)
+    # Affordance also at [1, 1] (same position, currently unused in relative encoding)
     affordances = {"Bed": torch.tensor([1, 1], dtype=torch.long)}
 
     encoding = substrate.encode_observation(positions, affordances)
 
-    # Overlapping position should be 2.0 (affordance 1.0 + agent 1.0)
-    assert encoding[0, 4] == 2.0
+    # NEW Phase 5C: Relative encoding returns normalized coordinates [0.5, 0.5]
+    expected = torch.tensor([[0.5, 0.5]])
+    assert torch.allclose(encoding, expected)
 
 
 def test_grid2d_get_valid_neighbors():

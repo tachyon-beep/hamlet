@@ -35,6 +35,7 @@ class Grid2DSubstrate(SpatialSubstrate):
         height: int,
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         distance_metric: Literal["manhattan", "euclidean", "chebyshev"],
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",  # NEW: Phase 5C
     ):
         """Initialize 2D grid substrate.
 
@@ -43,6 +44,7 @@ class Grid2DSubstrate(SpatialSubstrate):
             height: Grid height (number of rows)
             boundary: Boundary mode ("clamp", "wrap", "bounce", "sticky")
             distance_metric: Distance metric ("manhattan", "euclidean", "chebyshev")
+            observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
         """
         if width <= 0 or height <= 0:
             raise ValueError(f"Grid dimensions must be positive: width={width}, height={height}")
@@ -57,6 +59,7 @@ class Grid2DSubstrate(SpatialSubstrate):
         self.height = height
         self.boundary = boundary
         self.distance_metric = distance_metric
+        self.observation_encoding = observation_encoding  # NEW
 
     @property
     def position_dim(self) -> int:
@@ -146,38 +149,122 @@ class Grid2DSubstrate(SpatialSubstrate):
             # L∞ distance: max(|x1-x2|, |y1-y2|)
             return torch.abs(pos1 - pos2).max(dim=-1)[0]
 
+    def _encode_relative(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as normalized coordinates [0, 1].
+
+        Args:
+            positions: Agent positions [num_agents, 2]
+            affordances: Affordance positions (currently unused)
+
+        Returns:
+            [num_agents, 2] normalized positions
+        """
+        num_agents = positions.shape[0]
+        device = positions.device
+
+        normalized = torch.zeros((num_agents, 2), dtype=torch.float32, device=device)
+        normalized[:, 0] = positions[:, 0].float() / max(self.width - 1, 1)
+        normalized[:, 1] = positions[:, 1].float() / max(self.height - 1, 1)
+
+        return normalized
+
+    def _encode_scaled(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as normalized coordinates + range metadata.
+
+        Args:
+            positions: Agent positions [num_agents, 2]
+            affordances: Affordance positions (currently unused)
+
+        Returns:
+            [num_agents, 4] normalized positions + range sizes
+            First 2 dims: normalized [0, 1]
+            Last 2 dims: (width, height)
+        """
+        num_agents = positions.shape[0]
+        device = positions.device
+
+        # Get normalized positions
+        relative = self._encode_relative(positions, affordances)
+
+        # Add range metadata
+        ranges = (
+            torch.tensor(
+                [float(self.width), float(self.height)],
+                dtype=torch.float32,
+                device=device,
+            )
+            .unsqueeze(0)
+            .expand(num_agents, -1)
+        )
+
+        return torch.cat([relative, ranges], dim=1)
+
+    def _encode_absolute(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as raw unnormalized coordinates.
+
+        Args:
+            positions: Agent positions [num_agents, 2]
+            affordances: Affordance positions (currently unused)
+
+        Returns:
+            [num_agents, 2] raw coordinates (as float)
+        """
+        return positions.float()
+
     def encode_observation(
         self,
         positions: torch.Tensor,
         affordances: dict[str, torch.Tensor],
     ) -> torch.Tensor:
-        """Encode positions as one-hot grid cells.
+        """Encode agent positions and affordances into observation space.
 
-        Creates a grid_size × grid_size one-hot encoding where:
-        - Affordances are marked with 1.0
-        - Agent position adds 1.0 (so agent on affordance = 2.0)
+        Args:
+            positions: Agent positions [num_agents, 2]
+            affordances: Dict mapping affordance names to positions [2]
+
+        Returns:
+            Encoded observations with dimensions based on encoding mode:
+            - relative: [num_agents, 2]
+            - scaled: [num_agents, 4]
+            - absolute: [num_agents, 2]
         """
-        num_agents = positions.shape[0]
-        device = positions.device
-
-        # Initialize grid encoding [num_agents, width * height]
-        grid_encoding = torch.zeros(num_agents, self.width * self.height, device=device)
-
-        # Mark affordance positions
-        for affordance_pos in affordances.values():
-            affordance_flat_idx = affordance_pos[1] * self.width + affordance_pos[0]
-            grid_encoding[:, affordance_flat_idx] = 1.0
-
-        # Mark agent positions (add 1.0, so overlaps become 2.0)
-        flat_indices = positions[:, 1] * self.width + positions[:, 0]
-        ones = torch.ones(num_agents, 1, device=device)
-        grid_encoding.scatter_add_(1, flat_indices.unsqueeze(1), ones)
-
-        return grid_encoding
+        if self.observation_encoding == "relative":
+            return self._encode_relative(positions, affordances)
+        elif self.observation_encoding == "scaled":
+            return self._encode_scaled(positions, affordances)
+        elif self.observation_encoding == "absolute":
+            return self._encode_absolute(positions, affordances)
+        else:
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. " f"Must be 'relative', 'scaled', or 'absolute'.")
 
     def get_observation_dim(self) -> int:
-        """Grid observation is width × height (flattened)."""
-        return self.width * self.height
+        """Return dimensionality of position encoding.
+
+        Returns:
+            - relative: 2 (normalized x, y)
+            - scaled: 4 (normalized x, y, width, height)
+            - absolute: 2 (raw x, y)
+        """
+        if self.observation_encoding == "relative":
+            return 2
+        elif self.observation_encoding == "scaled":
+            return 4
+        elif self.observation_encoding == "absolute":
+            return 2
+        else:
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
     def get_valid_neighbors(
         self,
