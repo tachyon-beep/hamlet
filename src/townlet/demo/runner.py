@@ -83,6 +83,9 @@ class DemoRunner:
         # Create directories
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+        # Pre-flight check: detect old checkpoints (Phase 4 breaking change)
+        self._validate_checkpoint_compatibility()
+
         # Initialize database
         self.db = DemoDatabase(self.db_path)
 
@@ -139,6 +142,51 @@ class DemoRunner:
             # Running in a worker thread (e.g., unified server)
             # Signal handling will be done by the orchestrator
             pass
+
+    def _validate_checkpoint_compatibility(self) -> None:
+        """Validate checkpoint directory doesn't contain old checkpoints.
+
+        BREAKING CHANGE: Phase 4 changed checkpoint format.
+        Old checkpoints (Version 2) will not load.
+
+        Raises:
+            ValueError: If old checkpoints detected
+        """
+        if not self.checkpoint_dir.exists():
+            return  # No checkpoints yet (fresh start)
+
+        checkpoint_files = list(self.checkpoint_dir.glob("*.pt"))
+        if not checkpoint_files:
+            return  # Empty directory (fresh start)
+
+        # Check first checkpoint for substrate_metadata
+        first_checkpoint_path = checkpoint_files[0]
+
+        try:
+            checkpoint = torch.load(first_checkpoint_path, weights_only=False)
+
+            # Phase 4+ checkpoints have substrate_metadata
+            if "substrate_metadata" not in checkpoint:
+                raise ValueError(
+                    f"Old checkpoints detected in {self.checkpoint_dir}.\n"
+                    "\n"
+                    "BREAKING CHANGE: Phase 4 changed checkpoint format.\n"
+                    "Legacy checkpoints (Version 2) are no longer compatible.\n"
+                    "\n"
+                    "Action required:\n"
+                    f"  1. Delete checkpoint directory: {self.checkpoint_dir}\n"
+                    "  2. Retrain model from scratch with Phase 4+ code\n"
+                    "\n"
+                    "If you need to preserve old models, checkout pre-Phase 4 git commit.\n"
+                    "\n"
+                    f"Detected old checkpoint: {first_checkpoint_path.name}"
+                )
+        except Exception as e:
+            # If we can't load checkpoint, let the normal loading code handle it
+            # (might be corrupted, wrong format, etc.)
+            if "Old checkpoints detected" in str(e):
+                raise  # Re-raise our validation error
+            # Otherwise ignore (will fail later during actual load)
 
     def _handle_shutdown(self, signum, frame):
         """Handle shutdown signal gracefully."""
