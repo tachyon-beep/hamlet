@@ -1,12 +1,13 @@
 # TASK-002A Phase 10: Graph Substrate + Infrastructure - Implementation Plan
 
-**Date**: 2025-11-05 (Updated: 2025-11-05 post-risk-assessment)
+**Date**: 2025-11-05 (Updated: 2025-11-05 post-peer-review-2)
 **Status**: Ready for Implementation (After Phase 9 Complete + Pre-Work)
-**Dependencies**: Phase 9 Complete (Hex + 1D Substrates) + Position Extraction Design (4-6h pre-work)
-**Estimated Effort**: 90-120 hours total (revised from 68-92h after risk assessment)
+**Dependencies**: Phase 9 Complete (Hex + 1D Substrates) + Position Extraction Implementation (8-12h pre-work)
+**Estimated Effort**: 94-128 hours total (revised from 90-120h after peer review 2)
 **Supersedes**: Original Phase 5D Task 3 (Graph substrate split out due to infrastructure complexity)
 
-**⚠️ PRE-WORK REQUIRED**: Design position extraction method BEFORE starting (see Pre-Work section below)
+**⚠️ PRE-WORK REQUIRED**: Implement position extraction algorithm BEFORE starting (see Pre-Work section below)
+**⚠️ ALGORITHM SPECIFIED**: See docs/research/POSITION-EXTRACTION-ALGORITHM-SPEC.md for complete specification
 
 ---
 
@@ -42,38 +43,120 @@ The peer review identified that Graph substrate requires significant infrastruct
 
 ---
 
-## PRE-WORK: Position Extraction Design (4-6 hours) - REQUIRED BEFORE Task 10.0
+## PRE-WORK: Position Extraction Implementation (8-12 hours) - REQUIRED BEFORE Task 10.0
 
-**⚠️ CRITICAL**: Risk assessment identified this as missing from original plan. Must complete BEFORE starting infrastructure tasks.
+**⚠️ CRITICAL P0 BLOCKING**: Second peer review identified this as THE biggest blocker. Must complete BEFORE starting infrastructure tasks.
+
+**⚠️ ALGORITHM NOW SPECIFIED**: Complete specification available at `docs/research/POSITION-EXTRACTION-ALGORITHM-SPEC.md`
 
 ### Overview
 
-Design and implement method to extract agent position from flattened observation state. Required for replay buffer to store next-state valid actions.
+Implement method to extract agent position from flattened observation state. Required for replay buffer to store next-state valid actions for masked Q-learning.
 
 **Problem**: State is flattened observation vector containing:
-- Grid encoding (varies by substrate: 1D scalar, 2D grid, Hex axial coords)
+- Grid encoding (varies by substrate: 1D one-hot, 2D flattened grid, Hex axial coords, Graph node ID)
 - Meters (8 values)
 - Affordance encoding (15 values)
 - Temporal extras (4 values)
 
-**Need**: Extract position component to call `substrate.get_valid_actions(position)`
+**Need**: Extract position component to call `substrate.get_valid_actions(position)` when storing transitions.
 
-**Solution Options**:
-1. Add `ObservationBuilder.extract_position(state, substrate_type)` method
-2. Store position separately in transition (simpler but breaks schema)
-3. Reverse-engineer from grid encoding (complex, error-prone)
+**Solution**: Add `ObservationBuilder.extract_position()` method that reverses the grid encoding.
 
-**Recommendation**: Option 1 - Add extraction method to ObservationBuilder
+### Algorithm Summary (see spec doc for full details)
+
+**Key insight**: Grid encoding is ALWAYS at the start of observation vector. Use `torch.argmax()` on grid encoding portion, then convert flat index to substrate-specific coordinates.
+
+**Substrate-specific conversions**:
+- **1D Grid**: `position = argmax(obs[:length])` → scalar
+- **2D Grid**: `flat_idx = argmax(obs[:width*height])` → `(x, y) = (flat_idx % width, flat_idx // width)`
+- **3D Grid**: Similar flattening logic → `(x, y, z)`
+- **Hex Grid**: `flat_idx = argmax(obs[:num_positions])` → lookup in `index_to_axial` mapping → `(q, r)`
+- **Graph**: `node_id = argmax(obs[:num_nodes])` → scalar
+- **ND Grid**: Row-major unflattening → `[x₀, x₁, ..., xₙ₋₁]`
+
+### Implementation Steps
+
+**Step 1: Add extraction method to ObservationBuilder** (4-6h)
+
+**Modify**: `src/townlet/environment/observation.py`
+
+Add public method:
+```python
+def extract_position(self, observation: torch.Tensor) -> torch.Tensor:
+    """Extract agent position from observation vector.
+
+    Returns position tensor compatible with substrate.get_valid_actions().
+    See POSITION-EXTRACTION-ALGORITHM-SPEC.md for algorithm details.
+    """
+    # Dispatch to substrate-specific extraction
+    if self.substrate_type == 'Grid1DSubstrate':
+        return self._extract_position_1d(observation)
+    elif self.substrate_type == 'Grid2DSubstrate':
+        return self._extract_position_2d(observation)
+    # ... etc for all 6 substrate types
+```
+
+Add 6 private extraction methods (one per substrate type).
+
+**Step 2: Update HexSubstrate with index mappings** (1-2h)
+
+**Modify**: `src/townlet/substrate/hex.py`
+
+Add required mappings:
+```python
+class HexSubstrate:
+    def __init__(self, radius: int, boundary: str = "clamp"):
+        # ... existing init
+
+        # Precompute index ↔ (q, r) mappings (REQUIRED for position extraction)
+        self.axial_to_index: dict[tuple[int, int], int] = {}
+        self.index_to_axial: dict[int, tuple[int, int]] = {}
+
+        # Build mappings for all valid hex positions
+        # ... (see spec doc for full implementation)
+```
+
+**Step 3: Comprehensive round-trip testing** (3-4h)
+
+**Create**: `tests/test_townlet/unit/test_position_extraction.py`
+
+Test EVERY substrate type:
+```python
+def test_round_trip_1d():
+    """1D: encode position → build observation → extract → matches original."""
+    # Test multiple positions
+    # ... (see spec doc for 15+ comprehensive tests)
+```
+
+Test coverage:
+- Round-trip tests (encode → extract → equals original) for ALL 6 substrate types
+- Tests with realistic observations (non-zero meters/affordances)
+- Batched extraction tests
+- Edge cases (boundaries, all positions in substrate)
 
 **Deliverables**:
-- Design document: position encoding/extraction format
+- ✅ Complete algorithm specification (DONE: POSITION-EXTRACTION-ALGORITHM-SPEC.md)
 - `ObservationBuilder.extract_position()` method
-- Unit tests for ALL substrate types (1D, 2D, 3D, Hex, ND, Graph)
-- Validation: round-trip encode→extract returns original position
+- 6 substrate-specific extraction methods
+- HexSubstrate index mappings
+- 15+ unit tests (all passing)
+- Round-trip validation for ALL substrate types
 
-**Estimate**: 4-6 hours (2h design, 2-3h implementation, 1h testing)
+**Estimate**: 8-12 hours (REVISED from 4-6h after peer review 2)
+- Algorithm implementation: 4-6h
+- Hex substrate mappings: 1-2h
+- Comprehensive testing: 3-4h
 
-**⚠️ BLOCKING**: Cannot implement replay buffer schema changes without this.
+**Why More Time?**
+- Peer review 2 found original estimate SEVERELY underestimated
+- Algorithm was completely unspecified (now specified in detail)
+- Need hex substrate changes (index mappings)
+- Need comprehensive testing (15+ tests, not just basic validation)
+- Need batched extraction support
+
+**⚠️ BLOCKING**: Cannot implement Task 10.0 Step 0.3 (replay buffer schema) without this.
+**⚠️ REFERENCE**: See `docs/research/POSITION-EXTRACTION-ALGORITHM-SPEC.md` for complete algorithm specification with code examples.
 
 ---
 
@@ -1867,12 +1950,13 @@ Part of TASK-002A Phase 10 (Graph Substrate + Infrastructure - COMPLETE)."
 
 ---
 
-## Phase 10 Completion Checklist - REVISED POST-RISK-ASSESSMENT
+## Phase 10 Completion Checklist - REVISED POST-PEER-REVIEW-2
 
-### Pre-Work (4-6 hours) - ADDED
-- [ ] Position extraction design (2h)
-- [ ] Position extraction implementation (2-3h)
-- [ ] Position extraction testing (1h)
+### Pre-Work (8-12 hours) - REVISED from 4-6h
+- [ ] Algorithm specification (DONE: POSITION-EXTRACTION-ALGORITHM-SPEC.md)
+- [ ] Position extraction implementation (4-6h)
+- [ ] Hex substrate index mappings (1-2h)
+- [ ] Comprehensive round-trip testing (3-4h)
 
 ### Infrastructure (14-18 hours) - REVISED from 7-10h
 - [ ] Step 0.0: Feature flag for action masking (30min) - ADDED
@@ -1900,7 +1984,12 @@ Part of TASK-002A Phase 10 (Graph Substrate + Infrastructure - COMPLETE)."
 - [ ] Step 3.1: Update CLAUDE.md (1h)
 - [ ] Step 3.2: Commit docs (30min)
 
-**Total Estimated Effort**: 90-120 hours (REVISED from 68-92h)
+**Total Estimated Effort**: 94-128 hours (REVISED from 90-120h after peer review 2)
+- Pre-work: 8-12h (was 4-6h)
+- Infrastructure: 14-18h
+- Graph: 44-58h
+- Frontend: 10-14h
+- Documentation: 2-3h
 
 ---
 
@@ -1950,16 +2039,20 @@ Phase 10 is complete when:
 
 ---
 
-**Phase 10 Status**: Ready for Implementation (After Phase 9 + Pre-Work)
-**Recommended Order**: Pre-Work → Infrastructure → Graph → Frontend → Docs
-**Total Effort**: 90-120 hours (risk assessment revised estimate, up from 68-92h)
-**Dependencies**: Phase 9 must be complete first + Position Extraction Design (4-6h)
+**Phase 10 Status**: Ready for Implementation (After Phase 9 + Pre-Work Complete)
+**Recommended Order**: Pre-Work (8-12h) → Infrastructure → Graph → Frontend → Docs
+**Total Effort**: 94-128 hours (peer review 2 revised estimate, up from 90-120h)
+**Dependencies**: Phase 9 complete + Position Extraction Implementation (8-12h, ALGORITHM NOW SPECIFIED)
 **Risk Level**: MEDIUM-HIGH (complex action masking, breaking changes, frontend work)
 
 **Revision History**:
-- Original estimate: 40-60h (naive, underestimated action masking)
-- Peer review: 68-92h (identified action masking complexity)
+- Original estimate: 40-60h (naive, severely underestimated action masking)
+- Peer review 1: 68-92h (identified action masking complexity)
 - Risk assessment: 90-120h (identified missing tasks, debugging tools, testing gaps)
+- Peer review 2: 94-128h (position extraction algorithm severely underestimated)
+
+**Key Blocker RESOLVED**: Position extraction algorithm now fully specified in
+`docs/research/POSITION-EXTRACTION-ALGORITHM-SPEC.md` (600+ lines, complete implementation guide)
 
 **Next Steps After Phase 10**:
 - Phase 11: Multi-zone environments
