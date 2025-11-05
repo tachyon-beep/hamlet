@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (TASK-002A - Configurable Spatial Substrates, Phase 1-5)
 
-**Status**: Phase 5 In Progress (on branch `task-002a-configurable-spatial-substrates`)
+**Status**: ✅ Phase 5 Complete (on branch `task-002a-configurable-spatial-substrates`)
 
-- **Substrate Abstraction System** (Phases 1-4 Complete):
+- **Substrate Abstraction System** (Phases 1-4):
   - Abstract `SpatialSubstrate` interface for polymorphic position management
   - `Grid2DSubstrate`: 2D square grids with configurable boundaries (clamp, wrap, bounce, sticky)
   - `Grid3DSubstrate`: 3D cubic grids for multi-floor environments (8×8×3 tested)
@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Substrate factory for building from `substrate.yaml` configuration
   - Pydantic schema validation for substrate configuration
 
-- **Environment Integration** (Phase 4 Complete):
+- **Environment Integration** (Phase 4):
   - VectorizedHamletEnv loads substrate from `substrate.yaml`
   - All position operations use substrate methods:
     - `substrate.initialize_positions()` - random agent/affordance placement
@@ -29,21 +29,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `substrate.get_all_positions()` - position enumeration for affordances
   - Observation encoding uses substrate for position representation
 
-- **Observation Encoding** (Phase 5 Partial):
+- **Observation Encoding** (Phase 5):
   - **Substrate-Based Encoding**:
     - `substrate.encode_observation()` for full observability
     - `substrate.encode_partial_observation()` for POMDP local windows
     - `substrate.get_observation_dim()` for network architecture sizing
+    - ObservationBuilder uses substrate for all position encoding
   - **Coordinate Encoding** (enables 3D/large grids):
     - 3D (8×8×3): 512 dims → 3 dims via normalized coordinates
     - Replaces one-hot encoding for grids >8×8 (prevents dimension explosion)
     - Enables transfer learning (same network works on different grid sizes)
+  - **Variable-Dimensionality Support**:
+    - 2D positions: (x, y) encoding
+    - 3D positions: (x, y, z) encoding
+    - Aspatial: no position encoding (position_dim=0)
 
 - **Checkpoint Format V3** (Phase 5):
-  - Added `position_dim` field for substrate validation
+  - Added `substrate_metadata` field with `position_dim` and `substrate_type`
   - Validates position dimensionality on load (2D vs 3D vs aspatial)
   - Pre-flight validation detects legacy checkpoints on startup
   - Clear error messages guide users to delete old checkpoints
+  - DemoRunner saves Version 3 checkpoints with full substrate context
+
+- **Recording System** (Phase 5 Task 5.9):
+  - Variable-length position recording: `tuple[int, ...]` type hints
+  - Handles 2D (x, y), 3D (x, y, z), and aspatial () positions
+  - EpisodeRecorder converts positions dynamically based on dimensionality
+  - RecordedStep and EpisodeMetadata support flexible position tuples
+  - Affordance layout recording with variable-dimension positions
+  - 3 new tests for substrate-aware recording
+
+- **Visualization System** (Phase 5 Task 5.8):
+  - Live inference server sends substrate metadata to frontend
+  - `_build_grid_data()` method routes by substrate type
+  - WebSocket state updates include substrate type and position_dim
+  - Affordance position handling for variable dimensions (x, y, z)
+  - Frontend can detect substrate and route to appropriate renderer
+  - Aspatial rendering support (meters-only, no grid)
+
+- **Test Suite Updates** (Phase 5 Task 5.10):
+  - All tests updated for substrate-agnostic position assertions
+  - Checkpoint tests use config_pack_path for substrate loading
+  - Property tests instantiate Grid2DSubstrate for ObservationBuilder
+  - 826/827 tests passing (99.88% pass rate)
+  - All substrate-specific tests passing (core, migration, integration)
 
 - **Configuration System** (Phase 3):
   - Added `substrate.yaml` to all curriculum levels (L0, L0.5, L1, L2, L3)
@@ -58,13 +87,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (TASK-002A)
 
-- **BREAKING:** Checkpoint format Version 2 → Version 3 (position_dim field added)
+- **BREAKING:** Checkpoint format Version 2 → Version 3 (substrate_metadata field added)
 - **BREAKING:** Legacy checkpoints no longer supported without migration
+- **BREAKING:** ObservationBuilder now requires substrate parameter
 - All position operations now use substrate methods (removed hardcoded 2D grid assumptions)
 - Observation dimensions now substrate-aware:
   - Full observability: `substrate.get_observation_dim()` (was `grid_size²`)
   - Partial observability: uses `substrate.position_dim` (was hardcoded `2`)
   - Enables aspatial universes with `position_dim=0`
+- Recording system now handles variable-length positions (2D, 3D, aspatial)
+- Visualization system routes by substrate type for rendering
+- Type hints updated to support flexible position tuples: `tuple[int, ...]`
 
 ### Removed (TASK-002A)
 
@@ -72,6 +105,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backward compatibility with Version 2 checkpoints
 - Manual grid iteration for affordance randomization (55+ lines)
 - Hardcoded grid encoding in observation builder
+
+### Testing (TASK-002A)
+
+- **Comprehensive Test Coverage**:
+  - 826/827 tests passing (99.88% pass rate)
+  - 14 substrate-specific tests (core, migration, integration)
+  - 3 recording system tests for variable-length positions
+  - 6 property tests validating substrate-agnostic invariants
+  - 23 checkpoint tests with Version 3 format validation
+  - All integration tests updated for substrate abstraction
+- **Test Categories**:
+  - Core substrate functionality (Grid2D, Grid3D, Aspatial)
+  - Distance metrics (Manhattan, Euclidean, Chebyshev)
+  - Boundary conditions (clamp, wrap, bounce, sticky)
+  - Observation encoding (full/partial, 2D/3D/aspatial)
+  - Checkpoint save/load with substrate validation
+  - Recording and visualization with variable dimensions
 
 ---
 
