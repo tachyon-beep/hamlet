@@ -49,22 +49,39 @@ Phase 5 refactors all position management code to use the substrate abstraction 
 
 ## Phase 5 Task Breakdown
 
-### Task 5.1: Add New Substrate Methods
+### Task 5.1: Add New Substrate Methods ✅ COMPLETED IN PHASE 4
 
-**Purpose**: Extend substrate interface with methods needed for Phase 5 integration
+**Status**: ✅ **This work was completed in Phase 4**
 
-**Files**:
-- `src/townlet/substrate/base.py`
-- `src/townlet/substrate/grid2d.py`
-- `src/townlet/substrate/aspatial.py`
+**What was implemented**:
+- ✅ `get_all_positions()` added to `SpatialSubstrate` interface (base.py:169)
+- ✅ `get_all_positions()` implemented in `Grid2DSubstrate` (grid2d.py)
+- ✅ `get_all_positions()` implemented in `AspatialSubstrate` (aspatial.py)
+- ✅ Method integrated in `vectorized_env.py:676` for affordance randomization
+- ✅ Aspatial guard added in `randomize_affordance_positions()` (lines 679-683)
 
-**Estimated Time**: 2 hours
+**Verification**:
+```bash
+# Verify get_all_positions exists in substrate implementations
+grep -n "def get_all_positions" src/townlet/substrate/*.py
+
+# Verify usage in environment
+grep -n "substrate.get_all_positions" src/townlet/environment/vectorized_env.py
+```
+
+**Expected output**:
+```
+src/townlet/substrate/aspatial.py: def get_all_positions(self) -> list[list[int]]:
+src/townlet/substrate/base.py: def get_all_positions(self) -> list[list[int]]:
+src/townlet/substrate/grid2d.py: def get_all_positions(self) -> list[list[int]]:
+src/townlet/environment/vectorized_env.py:676: all_positions = self.substrate.get_all_positions()
+```
 
 ---
 
-#### Step 0: Verify Phase 4 Integration Complete
+#### Step 0: Verify Phase 4 Integration Complete (REQUIRED BEFORE CONTINUING)
 
-**Action**: Run integration tests to verify substrate is wired up
+**Action**: Run integration tests to verify substrate is wired up correctly
 
 **Command**:
 ```bash
@@ -73,18 +90,27 @@ export PYTHONPATH=$(pwd)/src:$PYTHONPATH
 uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v
 ```
 
-**Expected**: ALL tests PASS (no skipped tests)
+**Expected**: ALL tests PASS (12/12 passing - research found 9/12 passing with 3 test bugs)
 
-**If tests fail or are skipped**: Phase 4 integration is incomplete. The other agent should complete Phase 4 before proceeding with Phase 5. Phase 5 assumes:
-1. `substrate.initialize_positions()` is called in `VectorizedEnv.reset()`
-2. `substrate.apply_movement()` is called in `VectorizedEnv._execute_actions()`
-3. Substrate methods are fully integrated (not just loaded)
+**If tests fail**: Fix failing tests before proceeding. Known issues from research:
+1. `test_env_observation_dim_unchanged[L0_0_minimal-36]` - Test bug (config mismatch)
+2. `test_env_observation_dim_unchanged[L0_5_dual_resource-76]` - Test bug (grid_size override)
+3. `test_aspatial_preserves_grid_size_parameter` - Aspatial affordance randomization guard needed
 
-**If all tests pass**: Proceed to Step 1.
+**Phase 4 Integration Checklist** (must all be TRUE):
+- [x] `substrate.initialize_positions()` is called in `VectorizedEnv.reset()` (line 246)
+- [x] `substrate.apply_movement()` is called in `VectorizedEnv._execute_actions()` (line 431)
+- [x] `substrate.get_all_positions()` is called in `randomize_affordance_positions()` (line 676)
+- [x] Aspatial guard exists in `randomize_affordance_positions()` (lines 679-683)
+- [ ] All integration tests pass (FIX REQUIRED: 3 failing tests)
+
+**If checklist fails**: STOP - Phase 4 is incomplete. Do not proceed with Phase 5.
+
+**Remaining Steps**: All steps (1-11) of Task 5.1 were completed in Phase 4. Skip to Task 5.2.
 
 ---
 
-#### Step 1: Write test for get_all_positions()
+#### ~~Step 1: Write test for get_all_positions()~~ ✅ COMPLETED IN PHASE 4
 
 **Action**: Add tests for new substrate method
 
@@ -473,9 +499,34 @@ Part of TASK-002A Phase 5 (Position Management Refactoring)."
 
 **Expected**: Clean commit with new substrate methods
 
+~~Steps 1-11 of Task 5.1 were all completed in Phase 4.~~ ✅
+
 ---
 
-### Task 5.2: Refactor Position Initialization
+### Task 5.2: Refactor Position Initialization ✅ COMPLETED IN PHASE 4
+
+**Status**: ✅ **This work was completed in Phase 4**
+
+**What was implemented**:
+- ✅ `substrate.initialize_positions()` is called in `VectorizedEnv.reset()` (line 246)
+- ✅ Position tensor shape changed from hardcoded `[num_agents, 2]` to `[num_agents, substrate.position_dim]`
+- ✅ Works for Grid2D (position_dim=2) and Aspatial (position_dim=0)
+
+**Verification**:
+```bash
+grep -n "substrate.initialize_positions" src/townlet/environment/vectorized_env.py
+```
+
+**Expected output**:
+```
+246:        self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
+```
+
+**Note**: All steps of Task 5.2 were completed in Phase 4. Skip to Task 5.3.
+
+---
+
+### ~~Task 5.2: Refactor Position Initialization~~ (COMPLETED IN PHASE 4 - KEEPING FOR REFERENCE)
 
 **Purpose**: Replace hardcoded `torch.zeros((num_agents, 2))` with `substrate.initialize_positions()`
 
@@ -694,14 +745,37 @@ Part of TASK-002A Phase 5 (Position Management Refactoring)."
 
 ---
 
-### Task 5.3: Refactor Movement Logic
+### Task 5.3: Refactor Movement Logic ✅ COMPLETED IN PHASE 4
+
+**Status**: ✅ **This work was completed in Phase 4**
+
+**What was implemented**:
+- ✅ `substrate.apply_movement()` is called in `VectorizedEnv._execute_actions()` (line 431)
+- ✅ Movement deltas handled by substrate (supports clamp, wrap, bounce, sticky boundaries)
+- ✅ Position updates respect substrate-specific boundary handling
+
+**Verification**:
+```bash
+grep -n "substrate.apply_movement" src/townlet/environment/vectorized_env.py
+```
+
+**Expected output**:
+```
+431:        self.positions = self.substrate.apply_movement(self.positions, movement_deltas)
+```
+
+**Note**: All steps of Task 5.3 were completed in Phase 4. Skip to Task 5.4.
+
+---
+
+### ~~Task 5.3: Refactor Movement Logic~~ (COMPLETED IN PHASE 4 - KEEPING FOR REFERENCE)
 
 **Purpose**: Replace hardcoded movement deltas and boundary clamping with `substrate.apply_movement()`
 
 **Files**:
 - `src/townlet/environment/vectorized_env.py`
 
-**Estimated Time**: 3 hours
+**Estimated Time**: 3 hours (ACTUAL: Done in Phase 4)
 
 ---
 
@@ -1988,14 +2062,39 @@ Part of TASK-002A Phase 5 (Position Management Refactoring)."
 
 ---
 
-### Task 5.7: Update Affordance Randomization
+### Task 5.7: Update Affordance Randomization ✅ COMPLETED IN PHASE 4
+
+**Status**: ✅ **This work was completed in Phase 4**
+
+**What was implemented**:
+- ✅ `substrate.get_all_positions()` is called in `randomize_affordance_positions()` (line 676)
+- ✅ Aspatial guard added to prevent randomization when position_dim=0 (lines 679-683)
+- ✅ Affordances placed at random positions from substrate's valid position list
+- ✅ Validation ensures grid has enough cells for all affordances
+
+**Verification**:
+```bash
+grep -n "substrate.get_all_positions\|Cannot randomize affordance positions in aspatial" src/townlet/environment/vectorized_env.py
+```
+
+**Expected output**:
+```
+676:        all_positions = self.substrate.get_all_positions()
+680:                "Cannot randomize affordance positions in aspatial substrate. "
+```
+
+**Note**: All steps of Task 5.7 were completed in Phase 4. Skip to Task 5.8.
+
+---
+
+### ~~Task 5.7: Update Affordance Randomization~~ (COMPLETED IN PHASE 4 - KEEPING FOR REFERENCE)
 
 **Purpose**: Replace hardcoded 2D position generation with `substrate.get_all_positions()`
 
 **Files**:
 - `src/townlet/environment/vectorized_env.py`
 
-**Estimated Time**: 2 hours
+**Estimated Time**: 2 hours (ACTUAL: Done in Phase 4)
 
 ---
 

@@ -79,6 +79,42 @@ Both must be replaced with substrate methods to support Grid2D (one-hot or coord
 
 ---
 
+#### Step 0: Verify Phase 5 Complete (REQUIRED BEFORE CONTINUING)
+
+**Action**: Run Phase 5 integration tests to verify position management is complete
+
+**Command**:
+```bash
+cd /home/john/hamlet
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+
+# Verify Phase 5 integration tests pass
+uv run pytest tests/test_townlet/integration/test_substrate_position_init.py -v
+
+# Verify all substrate methods are integrated
+grep -n "substrate.initialize_positions\|substrate.apply_movement\|substrate.get_all_positions" src/townlet/environment/vectorized_env.py
+```
+
+**Expected**:
+- All Phase 5 integration tests PASS
+- Grep shows all 3 methods are being used:
+  - `initialize_positions()` at line 246
+  - `apply_movement()` at line 431
+  - `get_all_positions()` at line 676
+
+**Phase 5 Completion Checklist** (must all be TRUE):
+- [ ] Position initialization uses `substrate.initialize_positions()`
+- [ ] Movement logic uses `substrate.apply_movement()`
+- [ ] Affordance randomization uses `substrate.get_all_positions()`
+- [ ] Aspatial guard exists in affordance randomization
+- [ ] All position management integration tests pass
+
+**If checklist fails**: STOP - Phase 5 is incomplete. Complete Phase 5 before starting Phase 6.
+
+**If all checks pass**: Proceed to Step 1.
+
+---
+
 #### Step 1: Write test for get_observation_dim()
 
 **Action**: Add tests for observation dimension query

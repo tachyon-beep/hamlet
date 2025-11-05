@@ -55,6 +55,39 @@ Phase 7 adds multi-substrate rendering support to the frontend. Currently the UI
 
 ---
 
+#### Step 0: Verify Phase 6 Complete (REQUIRED BEFORE CONTINUING)
+
+**Action**: Run Phase 6 integration tests to verify observation builder is complete
+
+**Command**:
+```bash
+cd /home/john/hamlet
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+
+# Verify Phase 6 integration tests pass
+uv run pytest tests/test_townlet/integration/test_observation_builder.py -v
+
+# Verify observation encoding methods exist
+grep -n "def get_observation_dim\|def encode_observation\|def encode_partial_observation" src/townlet/substrate/base.py
+```
+
+**Expected**:
+- All Phase 6 integration tests PASS
+- Grep shows all 3 observation methods in substrate interface
+
+**Phase 6 Completion Checklist** (must all be TRUE):
+- [ ] `get_observation_dim()` method exists in substrate interface
+- [ ] `encode_observation()` method exists in substrate interface
+- [ ] `encode_partial_observation()` method exists in substrate interface
+- [ ] ObservationBuilder uses substrate methods (not hardcoded grid encoding)
+- [ ] All observation builder integration tests pass
+
+**If checklist fails**: STOP - Phase 6 is incomplete. Complete Phase 6 before starting Phase 7.
+
+**If all checks pass**: Proceed to Step 1.
+
+---
+
 #### Step 1: Write test for substrate metadata in connected message
 
 **Action**: Add test for WebSocket handshake

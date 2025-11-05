@@ -58,6 +58,45 @@ Phase 8 ensures substrate abstraction is **correct**, **complete**, and **perfor
 
 ---
 
+#### Step 0: Verify Phases 5-7 Complete (REQUIRED BEFORE CONTINUING)
+
+**Action**: Run full integration test suite to verify all phases are complete
+
+**Command**:
+```bash
+cd /home/john/hamlet
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+
+# Verify Phase 5 (Position Management)
+uv run pytest tests/test_townlet/integration/test_substrate_position_init.py -v
+
+# Verify Phase 6 (Observation Builder)
+uv run pytest tests/test_townlet/integration/test_observation_builder.py -v
+
+# Verify Phase 7 (Frontend - if tests exist)
+uv run pytest tests/test_townlet/integration/test_live_inference_websocket.py -v
+
+# Verify all substrate methods integrated
+grep -n "substrate\." src/townlet/environment/vectorized_env.py | head -20
+```
+
+**Expected**:
+- All integration tests PASS
+- Substrate methods visible in environment code
+
+**Phases 5-7 Completion Checklist** (must all be TRUE):
+- [ ] Phase 5: Position management uses substrate (initialize, apply_movement, get_all_positions)
+- [ ] Phase 6: Observation encoding uses substrate (get_observation_dim, encode_observation)
+- [ ] Phase 7: Frontend receives substrate metadata via WebSocket
+- [ ] All integration tests pass (Phases 5, 6, 7)
+- [ ] No regressions in existing functionality
+
+**If checklist fails**: STOP - Previous phases incomplete. Fix before Phase 8 testing.
+
+**If all checks pass**: Proceed to Step 1.
+
+---
+
 #### Step 1: Create aspatial config pack directory structure
 
 **Action**: Create minimal aspatial config for testing
