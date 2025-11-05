@@ -44,6 +44,7 @@ class Grid3DSubstrate(SpatialSubstrate):
         depth: int,
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = "manhattan",
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",  # NEW: Phase 5C
     ):
         """Initialize 3D cubic grid.
 
@@ -53,6 +54,7 @@ class Grid3DSubstrate(SpatialSubstrate):
             depth: Number of cells in Z dimension (floors/layers)
             boundary: Boundary mode
             distance_metric: Distance calculation method
+            observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
         """
         if width <= 0 or height <= 0 or depth <= 0:
             raise ValueError(f"Grid dimensions must be positive: {width}×{height}×{depth}\nExample: width: 8, height: 8, depth: 3")
@@ -66,6 +68,7 @@ class Grid3DSubstrate(SpatialSubstrate):
         self.depth = depth
         self.boundary = boundary
         self.distance_metric = distance_metric
+        self.observation_encoding = observation_encoding  # NEW
 
     @property
     def coordinate_semantics(self) -> dict:
@@ -131,38 +134,123 @@ class Grid3DSubstrate(SpatialSubstrate):
         """Check if agents are on target position (exact match in 3D)."""
         return (positions == target_position).all(dim=-1)
 
-    def encode_observation(self, positions: torch.Tensor, affordances: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Normalize 3D positions to [0, 1] for each dimension.
+    def _encode_relative(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as normalized coordinates [0, 1].
 
         Args:
             positions: Agent positions [num_agents, 3]
-            affordances: Dict of affordance positions (not used for Grid3D encoding)
+            affordances: Affordance positions (currently unused)
 
-        Returns [num_agents, 3] tensor (constant size regardless of grid dimensions).
-
-        This avoids dimension explosion from one-hot encoding:
-        - One-hot: 8×8×3 = 192 dims
-        - Normalized: 3 dims
-
-        Network must learn spatial relationships (no explicit topology),
-        but representation is more flexible and scales to large grids.
+        Returns:
+            [num_agents, 3] normalized positions
         """
         num_agents = positions.shape[0]
-        normalized = torch.zeros((num_agents, 3), dtype=torch.float32, device=positions.device)
+        device = positions.device
 
+        normalized = torch.zeros((num_agents, 3), dtype=torch.float32, device=device)
         normalized[:, 0] = positions[:, 0].float() / max(self.width - 1, 1)
         normalized[:, 1] = positions[:, 1].float() / max(self.height - 1, 1)
         normalized[:, 2] = positions[:, 2].float() / max(self.depth - 1, 1)
 
         return normalized
 
-    def get_observation_dim(self) -> int:
-        """Grid3D observation is normalized coordinates (constant 3 dims).
+    def _encode_scaled(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as normalized coordinates + range metadata.
 
-        Unlike Grid2D which uses one-hot encoding (width × height dims),
-        Grid3D uses normalized coordinates to avoid dimension explosion.
+        Args:
+            positions: Agent positions [num_agents, 3]
+            affordances: Affordance positions (currently unused)
+
+        Returns:
+            [num_agents, 6] normalized positions + range sizes
+            First 3 dims: normalized [0, 1]
+            Last 3 dims: (width, height, depth)
         """
-        return 3
+        num_agents = positions.shape[0]
+        device = positions.device
+
+        # Get normalized positions
+        relative = self._encode_relative(positions, affordances)
+
+        # Add range metadata
+        ranges = (
+            torch.tensor(
+                [float(self.width), float(self.height), float(self.depth)],
+                dtype=torch.float32,
+                device=device,
+            )
+            .unsqueeze(0)
+            .expand(num_agents, -1)
+        )
+
+        return torch.cat([relative, ranges], dim=1)
+
+    def _encode_absolute(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as raw unnormalized coordinates.
+
+        Args:
+            positions: Agent positions [num_agents, 3]
+            affordances: Affordance positions (currently unused)
+
+        Returns:
+            [num_agents, 3] raw coordinates (as float)
+        """
+        return positions.float()
+
+    def encode_observation(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode agent positions and affordances into observation space.
+
+        Args:
+            positions: Agent positions [num_agents, 3]
+            affordances: Dict mapping affordance names to positions [3]
+
+        Returns:
+            Encoded observations with dimensions based on encoding mode:
+            - relative: [num_agents, 3]
+            - scaled: [num_agents, 6]
+            - absolute: [num_agents, 3]
+        """
+        if self.observation_encoding == "relative":
+            return self._encode_relative(positions, affordances)
+        elif self.observation_encoding == "scaled":
+            return self._encode_scaled(positions, affordances)
+        elif self.observation_encoding == "absolute":
+            return self._encode_absolute(positions, affordances)
+        else:
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. " f"Must be 'relative', 'scaled', or 'absolute'.")
+
+    def get_observation_dim(self) -> int:
+        """Return dimensionality of position encoding.
+
+        Returns:
+            - relative: 3 (normalized x, y, z)
+            - scaled: 6 (normalized x, y, z, width, height, depth)
+            - absolute: 3 (raw x, y, z)
+        """
+        if self.observation_encoding == "relative":
+            return 3
+        elif self.observation_encoding == "scaled":
+            return 6
+        elif self.observation_encoding == "absolute":
+            return 3
+        else:
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
     def get_all_positions(self) -> list[list[int]]:
         """Get all valid positions in 3D grid."""
