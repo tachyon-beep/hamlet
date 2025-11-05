@@ -228,31 +228,63 @@ src/townlet/
 
 **Fixed Affordance Vocabulary**: All curriculum levels observe the same 14 affordances (for transfer learning and observation stability), even if not all are deployed.
 
+**Observation Encoding Modes** (Phase 6):
+
+Substrates support three configurable observation encoding modes via `observation_encoding` in substrate.yaml:
+
+1. **"relative"** (default): Normalized coordinates [0, 1]
+   - Best for: Transfer learning across grid sizes, POMDP (required)
+   - Grid2D: 2 dims (normalized x, y)
+   - Grid3D: 3 dims (normalized x, y, z)
+   - Continuous: N dims (normalized to bounds)
+
+2. **"scaled"**: Normalized coordinates + range metadata
+   - Best for: Size-aware strategies (agent learns grid size matters)
+   - Grid2D: 4 dims (normalized x, y, width, height)
+   - Grid3D: 6 dims (normalized x, y, z, width, height, depth)
+   - Continuous: 2N dims (normalized coords + bounds)
+
+3. **"absolute"**: Raw unnormalized coordinates
+   - Best for: Physical simulation, coordinate-space reasoning
+   - Grid2D: 2 dims (raw x, y as floats)
+   - Continuous: N dims (raw coordinates)
+
 **Full Observability**:
 
-- Grid encoding: grid_size × grid_size one-hot
+- Position encoding: substrate-specific (2 dims for Grid2D "relative", 4 dims for "scaled")
 - Meters: 8 normalized values (energy, health, satiation, money, mood, social, fitness, hygiene)
 - Affordance at position: 15 one-hot (14 affordances + "none")
-- Temporal extras: 4 values (time_of_day, retirement_age, interaction_progress, interaction_ticks)
+- Temporal extras: 4 values (time_sin, time_cos, interaction_progress, lifetime_progress)
 
-**Observation dimensions by level**:
+**Observation dimensions by level** (with "relative" encoding):
 
-- **L0_0_minimal**: 36 dims (3×3 grid=9 + 8 meters + 15 affordances + 4 extras)
-- **L0_5_dual_resource**: 76 dims (7×7 grid=49 + 8 meters + 15 affordances + 4 extras)
-- **L1_full_observability**: 91 dims (8×8 grid=64 + 8 meters + 15 affordances + 4 extras)
+- **L0_0_minimal**: 29 dims (2 coords + 8 meters + 15 affordances + 4 temporal)
+- **L0_5_dual_resource**: 29 dims (same - all use Grid2D with relative encoding)
+- **L1_full_observability**: 29 dims (same - grid size doesn't affect coords)
+- **L3_temporal_mechanics**: 29 dims (same)
+
+**Key insight**: With coordinate encoding, observation dim is **constant** across all grid sizes. This enables true transfer learning - a model trained on 3×3 grid works on 8×8 grid without architecture changes.
 
 **Partial Observability (Level 2 POMDP)**:
 
 - Local grid: 5×5 window (25 dims) - agent only sees local region
-- Position: normalized (x, y) (2 dims) - where am I on the grid?
+- Position: normalized (x, y) (2 dims) - substrate.normalize_positions()
 - Meters: 8 normalized values (8 dims)
 - Affordance at position: 15 one-hot (15 dims)
 - Temporal extras: 4 values (4 dims)
 - **Total**: 54 dimensions
+- **Requirement**: POMDP always uses "relative" encoding (normalized positions)
 
-**Key insight**: Observation dim varies by grid size, but affordance encoding is **constant** (always 14 affordances + "none"). This enables transfer learning - a model trained on L0 can be promoted to L1 without architecture changes.
+**POMDP Limitations**:
+- Grid3D: vision_range ≤ 2 (5×5×5 = 125 cells max)
+- GridND (N≥4): Not supported (window size = (2*range+1)^N becomes impractical)
+- Must use observation_encoding="relative" (other modes rejected)
 
-**Action space**: 5 discrete actions (UP=0, DOWN=1, LEFT=2, RIGHT=3, INTERACT=4)
+**Action space**: Dynamic based on substrate.position_dim
+- Grid2D: 6 actions (UP/DOWN/LEFT/RIGHT/INTERACT/WAIT)
+- Grid3D: 8 actions (±X/±Y/±Z/INTERACT/WAIT)
+- Continuous1D: 4 actions (LEFT/RIGHT/INTERACT/WAIT)
+- Formula: 2 * position_dim + 2
 
 ### Reward Structure
 

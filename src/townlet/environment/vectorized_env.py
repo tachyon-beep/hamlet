@@ -188,6 +188,27 @@ class VectorizedHamletEnv:
                 f"observation_encoding instead. See substrate configuration docs for details."
             )
 
+        # Validate Grid3D POMDP vision range (prevent memory explosion)
+        if partial_observability and self.substrate.position_dim == 3:
+            window_volume = (2 * vision_range + 1) ** 3
+            if window_volume > 125:  # 5×5×5 = 125 is the threshold
+                raise ValueError(
+                    f"Grid3D POMDP with vision_range={vision_range} requires {window_volume} cells "
+                    f"(window size {2*vision_range+1}×{2*vision_range+1}×{2*vision_range+1}), which is excessive. "
+                    f"Use vision_range ≤ 2 (5×5×5 = 125 cells) for Grid3D partial observability, "
+                    f"or disable partial_observability."
+                )
+
+        # Validate observation_encoding compatibility with POMDP
+        if partial_observability and hasattr(self.substrate, "observation_encoding"):
+            if self.substrate.observation_encoding != "relative":
+                raise ValueError(
+                    f"Partial observability (POMDP) requires observation_encoding='relative', "
+                    f"but substrate is configured with observation_encoding='{self.substrate.observation_encoding}'. "
+                    f"POMDP uses normalized positions for recurrent network position encoder. "
+                    f"Set observation_encoding='relative' in substrate.yaml or disable partial_observability."
+                )
+
         # Observation dimensions depend on observability mode
         if partial_observability:
             # Level 2 POMDP: local window + position + meters + current affordance type
