@@ -37,7 +37,7 @@ class TestGridNDFactoryFromConfig:
         assert substrate.distance_metric == "manhattan"
         assert substrate.observation_encoding == "relative"
         assert substrate.position_dim == 4
-        assert substrate.action_space_size == 2 * 4 + 1  # 9 actions
+        assert substrate.action_space_size == 2 * 4 + 2  # 10 actions
 
     def test_gridnd_5d_with_different_sizes(self):
         """Test creating 5D GridND with varying dimension sizes."""
@@ -61,7 +61,7 @@ class TestGridNDFactoryFromConfig:
         assert substrate.distance_metric == "euclidean"
         assert substrate.observation_encoding == "scaled"
         assert substrate.position_dim == 5
-        assert substrate.action_space_size == 11  # 2*5 + 1
+        assert substrate.action_space_size == 12  # 2*5 + 2
 
     def test_gridnd_10d_absolute_encoding(self):
         """Test 10D GridND with absolute observation encoding."""
@@ -191,7 +191,7 @@ class TestContinuousNDFactoryFromConfig:
         assert substrate.interaction_radius == 1.0
         assert substrate.distance_metric == "euclidean"
         assert substrate.observation_encoding == "relative"
-        assert substrate.action_space_size == 9  # 2*4 + 1
+        assert substrate.action_space_size == 10  # 2*4 + 2
 
     def test_continuousnd_6d_different_bounds(self):
         """Test 6D ContinuousND with different bounds per dimension."""
@@ -451,7 +451,7 @@ class TestFactoryEdgeCases:
         substrate = SubstrateFactory.build(config, torch.device("cpu"))
 
         assert substrate.position_dim == 100
-        assert substrate.action_space_size == 201  # 2*100 + 1
+        assert substrate.action_space_size == 202  # 2*100 + 2
 
     def test_continuousnd_max_dimensions(self):
         """Test ContinuousND with maximum allowed dimensions (100D)."""

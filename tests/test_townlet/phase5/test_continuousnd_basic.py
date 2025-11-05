@@ -19,7 +19,7 @@ def test_continuousnd_4d_initialization():
 
     assert substrate.position_dim == 4
     assert substrate.position_dtype == torch.float32
-    assert substrate.action_space_size == 9  # 2*4 + 1
+    assert substrate.action_space_size == 10  # 2*4 + 2
     assert substrate.get_observation_dim() == 4  # Normalized coordinates
 
 
@@ -76,7 +76,7 @@ def test_continuousnd_warns_at_10_dimensions():
             observation_encoding="relative",
         )
 
-    assert substrate.action_space_size == 21  # 2*10 + 1
+    assert substrate.action_space_size == 22  # 2*10 + 2
 
 
 def test_continuousnd_exceeds_100_dimensions():

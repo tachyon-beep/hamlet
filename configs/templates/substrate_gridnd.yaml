@@ -42,9 +42,9 @@ gridnd:
   #   - Warning triggered at N≥10 (action space becomes large)
   #
   # Action space impact:
-  #   - 4D grid: 9 actions (8 movement + 1 interact)
-  #   - 7D grid: 15 actions (14 movement + 1 interact)
-  #   - 10D grid: 21 actions (20 movement + 1 interact) [WARNING]
+  #   - 4D grid: 10 actions (8 movement + 1 interact + 1 wait)
+  #   - 7D grid: 16 actions (14 movement + 1 interact + 1 wait)
+  #   - 10D grid: 22 actions (20 movement + 1 interact + 1 wait) [WARNING]
   #
   # Total cells = product of all dimension sizes:
   #   - Be mindful of combinatorial explosion
@@ -116,7 +116,7 @@ gridnd:
 #   distance_metric: manhattan
 #   observation_encoding: relative
 #   Use for: Introduction to high-dimensional RL, 4D navigation
-#   Action space: 9 actions (8 movement + 1 interact)
+#   Action space: 10 actions (8 movement + 1 interact + 1 wait)
 #   Observation: 4 dims (normalized coordinates)
 #   Total cells: 625 (manageable)
 
@@ -126,7 +126,7 @@ gridnd:
 #   distance_metric: manhattan
 #   observation_encoding: relative
 #   Use for: High-dimensional exploration, transfer learning research
-#   Action space: 15 actions (14 movement + 1 interact)
+#   Action space: 16 actions (14 movement + 1 interact + 1 wait)
 #   Observation: 7 dims (normalized coordinates)
 #   Total cells: 2,187 (moderate)
 
@@ -136,7 +136,7 @@ gridnd:
 #   distance_metric: manhattan
 #   observation_encoding: scaled
 #   Use for: Extreme high-dimensional RL research
-#   Action space: 21 actions (20 movement + 1 interact) [WARNING: Large action space]
+#   Action space: 22 actions (20 movement + 1 interact + 1 wait) [WARNING: Large action space]
 #   Observation: 20 dims (10 normalized + 10 sizes)
 #   Total cells: 59,049 (large)
 
@@ -156,7 +156,7 @@ gridnd:
 #   distance_metric: chebyshev
 #   observation_encoding: relative
 #   Use for: Infinite N-dimensional space feel, topology research
-#   Action space: 11 actions
+#   Action space: 12 actions (10 movement + 1 interact + 1 wait)
 #   Observation: 5 dims
 #   Total cells: 3,125
 
@@ -178,10 +178,10 @@ gridnd:
 # 5. Do distance metrics (manhattan/euclidean/chebyshev) affect convergence?
 
 # Action Space:
-# N-dimensional grids use simplified action space (2N + 1 actions):
+# N-dimensional grids use standard spatial action space (2N + 2 actions):
 #   - For each dimension i: MOVE_Di_NEGATIVE (action 2i), MOVE_Di_POSITIVE (action 2i+1)
 #   - INTERACT (action 2N): Interact with nearby affordance
-#   - No separate WAIT action (simplified to reduce action space)
+#   - WAIT (action 2N+1): Wait in place (lower energy cost than movement)
 #
 # Example (7D grid, 15 actions):
 #   Action 0:  MOVE_D0_NEGATIVE  (move -1 in dimension 0)
@@ -192,6 +192,7 @@ gridnd:
 #   Action 12: MOVE_D6_NEGATIVE  (move -1 in dimension 6)
 #   Action 13: MOVE_D6_POSITIVE  (move +1 in dimension 6)
 #   Action 14: INTERACT          (interact with affordance)
+#   Action 15: WAIT              (wait in place, lower energy cost)
 
 # Observation Encoding Details:
 # Position observations depend on encoding mode:
@@ -235,7 +236,7 @@ gridnd:
 # Performance Considerations:
 # High-dimensional grids have computational challenges:
 #   - Observation: N position dims (relative) or 2N dims (scaled)
-#   - Action space: 2N + 1 actions (grows linearly with N)
+#   - Action space: 2N + 2 actions (grows linearly with N)
 #   - Exploration: O(n^N) cells where n = avg dimension size (exponential!)
 #   - Training time: Expect significantly longer convergence for N≥7
 #   - Memory: Large replay buffers for high-dimensional observations

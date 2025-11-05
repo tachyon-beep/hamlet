@@ -38,7 +38,7 @@ class TestGridNDIntegration:
 
         assert isinstance(substrate, GridNDSubstrate)
         assert substrate.position_dim == 4
-        assert substrate.action_space_size == 9  # 2*4 + 1
+        assert substrate.action_space_size == 10  # 2*4 + 2
         assert substrate.get_observation_dim() == 4
 
     def test_gridnd_with_observation_builder(self):
@@ -228,32 +228,32 @@ class TestGridNDIntegration:
 
     def test_gridnd_action_space_adaptation(self):
         """Verify action space size adapts to dimensionality."""
-        # 4D: 2*4 + 1 = 9
+        # 4D: 2*4 + 2 = 10
         substrate_4d = GridNDSubstrate(
             dimension_sizes=[5, 5, 5, 5],
             boundary="clamp",
             distance_metric="manhattan",
             observation_encoding="relative",
         )
-        assert substrate_4d.action_space_size == 9
+        assert substrate_4d.action_space_size == 10
 
-        # 6D: 2*6 + 1 = 13
+        # 6D: 2*6 + 2 = 14
         substrate_6d = GridNDSubstrate(
             dimension_sizes=[5, 5, 5, 5, 5, 5],
             boundary="clamp",
             distance_metric="manhattan",
             observation_encoding="relative",
         )
-        assert substrate_6d.action_space_size == 13
+        assert substrate_6d.action_space_size == 14
 
-        # 8D: 2*8 + 1 = 17
+        # 8D: 2*8 + 2 = 18
         substrate_8d = GridNDSubstrate(
             dimension_sizes=[4, 4, 4, 4, 4, 4, 4, 4],
             boundary="clamp",
             distance_metric="manhattan",
             observation_encoding="relative",
         )
-        assert substrate_8d.action_space_size == 17
+        assert substrate_8d.action_space_size == 18
 
 
 class TestContinuousNDIntegration:
@@ -280,7 +280,7 @@ class TestContinuousNDIntegration:
 
         assert isinstance(substrate, ContinuousNDSubstrate)
         assert substrate.position_dim == 4
-        assert substrate.action_space_size == 9  # 2*4 + 1
+        assert substrate.action_space_size == 10  # 2*4 + 2
         assert substrate.get_observation_dim() == 4
 
     def test_continuousnd_with_observation_builder(self):
@@ -486,7 +486,7 @@ class TestContinuousNDIntegration:
 
     def test_continuousnd_action_space_adaptation(self):
         """Verify action space size adapts to dimensionality."""
-        # 4D: 2*4 + 1 = 9
+        # 4D: 2*4 + 2 = 10
         substrate_4d = ContinuousNDSubstrate(
             bounds=[(0.0, 10.0)] * 4,
             boundary="clamp",
@@ -495,9 +495,9 @@ class TestContinuousNDIntegration:
             distance_metric="euclidean",
             observation_encoding="relative",
         )
-        assert substrate_4d.action_space_size == 9
+        assert substrate_4d.action_space_size == 10
 
-        # 6D: 2*6 + 1 = 13
+        # 6D: 2*6 + 2 = 14
         substrate_6d = ContinuousNDSubstrate(
             bounds=[(0.0, 10.0)] * 6,
             boundary="clamp",
@@ -506,9 +506,9 @@ class TestContinuousNDIntegration:
             distance_metric="euclidean",
             observation_encoding="relative",
         )
-        assert substrate_6d.action_space_size == 13
+        assert substrate_6d.action_space_size == 14
 
-        # 8D: 2*8 + 1 = 17
+        # 8D: 2*8 + 2 = 18
         substrate_8d = ContinuousNDSubstrate(
             bounds=[(0.0, 10.0)] * 8,
             boundary="clamp",
@@ -517,7 +517,7 @@ class TestContinuousNDIntegration:
             distance_metric="euclidean",
             observation_encoding="relative",
         )
-        assert substrate_8d.action_space_size == 17
+        assert substrate_8d.action_space_size == 18
 
     def test_continuousnd_random_initialization(self):
         """Test random position initialization respects bounds."""

@@ -44,9 +44,9 @@ continuous:
   #   - Warning triggered at N≥10 (action space becomes large)
   #
   # Action space impact:
-  #   - 4D space: 9 actions (8 movement + 1 interact)
-  #   - 7D space: 15 actions (14 movement + 1 interact)
-  #   - 10D space: 21 actions (20 movement + 1 interact) [WARNING]
+  #   - 4D space: 10 actions (8 movement + 1 interact + 1 wait)
+  #   - 7D space: 16 actions (14 movement + 1 interact + 1 wait)
+  #   - 10D space: 22 actions (20 movement + 1 interact + 1 wait) [WARNING]
   #
   # Coordinate system:
   #   - Positions are continuous floats (torch.float32)
@@ -78,7 +78,7 @@ continuous:
   # Unit: Same as bounds (e.g., if bounds in meters, delta in meters)
   #
   # Action semantics:
-  #   - Agent chooses discrete actions from 2N+1 options
+  #   - Agent chooses discrete actions from 2N+2 options
   #   - Each movement action moves agent by ±movement_delta in one dimension
   #   - Example (4D): MOVE_D0_POSITIVE moves (+delta, 0, 0, 0)
   #   - Example (4D): MOVE_D2_NEGATIVE moves (0, 0, -delta, 0)
@@ -158,7 +158,7 @@ continuous:
 #   distance_metric: euclidean
 #   observation_encoding: relative
 #   Use for: Introduction to high-dimensional continuous control
-#   Action space: 9 actions (8 movement + 1 interact)
+#   Action space: 10 actions (8 movement + 1 interact + 1 wait) (8 movement + 1 interact)
 #   Observation: 4 dims (normalized coordinates)
 
 # Example 2: 7D Continuous Space (Moderate Dimensionality)
@@ -169,7 +169,7 @@ continuous:
 #   distance_metric: euclidean
 #   observation_encoding: scaled
 #   Use for: High-dimensional exploration, robotics simulation
-#   Action space: 15 actions (14 movement + 1 interact)
+#   Action space: 16 actions (14 movement + 1 interact + 1 wait) (14 movement + 1 interact)
 #   Observation: 14 dims (7 normalized + 7 ranges)
 
 # Example 3: 10D Continuous Space (Large Dimensionality - WARNING)
@@ -191,7 +191,7 @@ continuous:
 #   distance_metric: manhattan
 #   observation_encoding: scaled
 #   Use for: Exploring dimension range impact on learning
-#   Action space: 9 actions
+#   Action space: 10 actions (8 movement + 1 interact + 1 wait)
 #   Observation: 8 dims (4 normalized + 4 ranges)
 
 # Example 5: Centered 5D (Origin-Centered Bounds)
@@ -202,7 +202,7 @@ continuous:
 #   distance_metric: euclidean
 #   observation_encoding: absolute
 #   Use for: Zero-centered state spaces, toroidal continuous topology
-#   Action space: 11 actions
+#   Action space: 12 actions (10 movement + 1 interact + 1 wait)
 #   Observation: 5 dims (raw coordinates)
 
 # Example 6: Fine-Grained 4D (Precision Control)
@@ -213,7 +213,7 @@ continuous:
 #   distance_metric: euclidean
 #   observation_encoding: relative
 #   Use for: Fine motor control, precision navigation
-#   Action space: 9 actions
+#   Action space: 10 actions (8 movement + 1 interact + 1 wait)
 #   Observation: 4 dims (normalized coordinates)
 
 # Pedagogical Value:

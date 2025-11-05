@@ -18,7 +18,7 @@ def test_continuousnd_7d_initialization():
     )
 
     assert substrate.position_dim == 7
-    assert substrate.action_space_size == 15  # 2*7 + 1
+    assert substrate.action_space_size == 16  # 2*7 + 2
     assert substrate.get_observation_dim() == 7  # relative encoding
 
 
@@ -101,7 +101,7 @@ def test_continuousnd_10d_initialization_with_warning():
         )
 
     assert substrate.position_dim == 10
-    assert substrate.action_space_size == 21  # 2*10 + 1
+    assert substrate.action_space_size == 22  # 2*10 + 2
 
 
 def test_continuousnd_10d_movement():
@@ -263,7 +263,7 @@ def test_continuousnd_100d_max_dimensions():
     )
 
     assert substrate.position_dim == 100
-    assert substrate.action_space_size == 201  # 2*100 + 1
+    assert substrate.action_space_size == 202  # 2*100 + 2
     assert substrate.get_observation_dim() == 100
 
     # Test initialization

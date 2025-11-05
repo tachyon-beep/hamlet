@@ -64,7 +64,7 @@ class GridNDSubstrate(SpatialSubstrate):
         # Warn at N≥10 (action space grows large)
         if num_dims >= 10:
             warnings.warn(
-                f"GridND with {num_dims} dimensions has {2*num_dims+1} actions. "
+                f"GridND with {num_dims} dimensions has {2*num_dims+2} actions. "
                 f"Large action spaces may be challenging to train. "
                 f"Verify this is intentional for your research.",
                 UserWarning,
@@ -103,17 +103,19 @@ class GridNDSubstrate(SpatialSubstrate):
 
     @property
     def action_space_size(self) -> int:
-        """Return number of discrete actions: 2N + 1.
+        """Return number of discrete actions: 2N + 2.
 
-        GridND uses a simplified action space compared to Grid2D/3D:
+        GridND uses the standard spatial substrate action space:
         - 2N movement actions (±1 per dimension)
         - 1 INTERACT action
-        - No separate WAIT action (agent can choose not to move)
+        - 1 WAIT action (lower energy cost than movement)
+
+        This matches Grid2D/3D for consistency and environment compatibility.
 
         Returns:
-            2*N + 1 where N = position_dim
+            2*N + 2 where N = position_dim
         """
-        return 2 * self.position_dim + 1
+        return 2 * self.position_dim + 2
 
     # Implementation methods
     def initialize_positions(self, num_agents: int, device: torch.device) -> torch.Tensor:

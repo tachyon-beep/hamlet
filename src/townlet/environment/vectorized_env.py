@@ -178,6 +178,16 @@ class VectorizedHamletEnv:
         self.affordance_names = all_affordance_names
         self.num_affordance_types = len(all_affordance_names)
 
+        # Validate partial observability support
+        if partial_observability and self.substrate.position_dim >= 4:
+            raise ValueError(
+                f"Partial observability (POMDP) is not supported for {self.substrate.position_dim}D substrates. "
+                f"Local window size would be (2*{vision_range}+1)^{self.substrate.position_dim} = "
+                f"{(2*vision_range+1)**self.substrate.position_dim} cells, which is impractical. "
+                f"Use full observability (partial_observability=False) with 'relative' or 'scaled' "
+                f"observation_encoding instead. See substrate configuration docs for details."
+            )
+
         # Observation dimensions depend on observability mode
         if partial_observability:
             # Level 2 POMDP: local window + position + meters + current affordance type

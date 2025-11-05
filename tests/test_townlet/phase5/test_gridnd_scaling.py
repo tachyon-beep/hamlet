@@ -16,7 +16,7 @@ def test_gridnd_7d_initialization():
     )
 
     assert substrate.position_dim == 7
-    assert substrate.action_space_size == 15  # 2*7 + 1
+    assert substrate.action_space_size == 16  # 2*7 + 2
 
     # Test position initialization
     positions = substrate.initialize_positions(100, torch.device("cpu"))
@@ -36,7 +36,7 @@ def test_gridnd_10d_initialization_with_warning():
         )
 
     assert substrate.position_dim == 10
-    assert substrate.action_space_size == 21  # 2*10 + 1
+    assert substrate.action_space_size == 22  # 2*10 + 2
 
     # Test position initialization
     positions = substrate.initialize_positions(100, torch.device("cpu"))
