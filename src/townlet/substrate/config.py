@@ -70,7 +70,7 @@ class SubstrateConfig(BaseModel):
             raise ValueError("type='grid' requires grid configuration. " "Add grid: { topology: 'square', width: 8, height: 8, ... }")
 
         if self.type == "aspatial" and self.aspatial is None:
-            raise ValueError("type='aspatial' requires aspatial configuration. " "Add aspatial: { enabled: true }")
+            raise ValueError("type='aspatial' requires aspatial configuration. " "Add aspatial: {}")
 
         # Ensure only one config is provided
         if self.type == "grid" and self.aspatial is not None:
