@@ -1,0 +1,20 @@
+# Example: Toroidal Grid (Pac-Man Style Wraparound)
+#
+# This substrate demonstrates "wrap" boundary behavior where agents
+# wrap around edges to the opposite side (like Pac-Man).
+#
+# Behavioral differences from standard "clamp" boundary:
+#   - No hard walls - agent can exit left edge and appear on right edge
+#   - Shortest path may cross edges (wrap distance < straight distance)
+#   - Infinite grid feel (no "corners" or "edges")
+
+version: "1.0"
+description: "8×8 toroidal grid (Pac-Man style wraparound) for comparison with clamp boundary"
+type: "grid"
+
+grid:
+  topology: "square"
+  width: 8
+  height: 8
+  boundary: "wrap"  # ← Different! Agents wrap around edges
+  distance_metric: "manhattan"

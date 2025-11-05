@@ -314,6 +314,7 @@ Each config pack directory contains:
 
 ```
 configs/L0_0_minimal/
+├── substrate.yaml    # Spatial substrate (grid size, topology, boundaries, distance metrics)
 ├── bars.yaml         # Meter definitions (energy, health, money, etc.)
 ├── cascades.yaml     # Meter relationships (low satiation → drains energy)
 ├── affordances.yaml  # Interaction definitions (Bed, Hospital, Job, etc.)
@@ -324,6 +325,45 @@ configs/L0_0_minimal/
 **Key principle**: Everything configurable via YAML (UNIVERSE_AS_CODE). The system loads and validates these files at startup.
 
 **Important**: All curriculum levels use the **same affordance vocabulary** (14 affordances) for observation stability. Only deployment varies via `enabled_affordances` in training.yaml.
+
+### Substrate Configuration (substrate.yaml)
+
+Defines the spatial substrate (coordinate system, topology, boundaries, distance metrics).
+
+**Example (Standard Grid)**:
+```yaml
+version: "1.0"
+description: "8×8 square grid with hard boundaries"
+type: "grid"
+
+grid:
+  topology: "square"       # 2D Cartesian grid
+  width: 8                 # Number of columns
+  height: 8                # Number of rows
+  boundary: "clamp"        # Hard walls (clamp, wrap, bounce, sticky)
+  distance_metric: "manhattan"  # L1 norm (manhattan, euclidean, chebyshev)
+```
+
+**Boundary Modes**:
+- `clamp`: Hard walls (agent position clamped to edges)
+- `wrap`: Toroidal wraparound (Pac-Man style)
+- `bounce`: Elastic reflection (agent bounces back from boundary)
+- `sticky`: Sticky walls (agent stays in place when hitting boundary)
+
+**Distance Metrics**:
+- `manhattan`: L1 norm, |x1-x2| + |y1-y2| (matches 4-directional movement)
+- `euclidean`: L2 norm, sqrt((x1-x2)² + (y1-y2)²) (straight-line distance)
+- `chebyshev`: L∞ norm, max(|x1-x2|, |y1-y2|) (8-directional movement)
+
+**Aspatial Mode** (no positioning):
+```yaml
+version: "1.0"
+description: "Aspatial universe (pure resource management)"
+type: "aspatial"
+aspatial: {}
+```
+
+See `configs/templates/substrate.yaml` for comprehensive documentation and examples.
 
 ### Config Structure (training.yaml)
 

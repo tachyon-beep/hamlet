@@ -1,0 +1,20 @@
+# Example: Euclidean Distance (Diagonal-Aware Proximity)
+#
+# This substrate demonstrates "euclidean" distance metric where proximity
+# calculations consider diagonal distance (L2 norm, straight-line).
+#
+# Behavioral differences from standard "manhattan" distance:
+#   - Diagonal positions are CLOSER than manhattan distance
+#   - Proximity calculations more realistic (as the crow flies)
+#   - May not match movement mechanics (if only 4-directional movement)
+
+version: "1.0"
+description: "8×8 grid with Euclidean distance (diagonal-aware proximity)"
+type: "grid"
+
+grid:
+  topology: "square"
+  width: 8
+  height: 8
+  boundary: "clamp"
+  distance_metric: "euclidean"  # ← Different! L2 norm instead of L1
