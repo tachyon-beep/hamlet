@@ -1,0 +1,267 @@
+# N-Dimensional Grid Substrate Configuration - TEMPLATE (N≥4 dimensions)
+#
+# Copy this file into your config pack directory and customize the values.
+#
+# UNIVERSE_AS_CODE Principle:
+# All spatial parameters must be explicitly specified. No hidden defaults allowed.
+# This ensures reproducible configs and operator awareness of all behavioral parameters.
+#
+# Config Pack Structure:
+# Every config pack should include these files:
+#   - substrate.yaml    (this file - spatial substrate definition)
+#   - bars.yaml         (meter definitions: energy, health, satiation, etc.)
+#   - cascades.yaml     (cascade physics: meter interactions)
+#   - affordances.yaml  (interaction definitions: Bed, Job, Hospital, etc.)
+#   - training.yaml     (training hyperparameters and network config)
+#   - cues.yaml         (optional - UI metadata for visualization)
+
+version: "1.0"
+
+# Human-readable description of this N-dimensional grid configuration
+description: "7D hypercube grid for high-dimensional RL research"
+
+# Substrate type: "gridnd" for 4D-100D discrete hypercube grids
+# For 2D/3D grids, use "grid" or "grid3d" for better ergonomics
+type: "gridnd"
+
+# GridND substrate configuration (REQUIRED for type="gridnd")
+gridnd:
+  # Dimension sizes: Size of each dimension in the N-dimensional hypercube
+  # Format: List of integers [d0_size, d1_size, ..., dN_size]
+  # Length determines dimensionality (4 to 100 dimensions supported)
+  #
+  # Example interpretations:
+  #   - [5, 5, 5, 5]: 4D hypercube, 5 cells per dimension (625 total cells)
+  #   - [3, 3, 3, 3, 3, 3, 3]: 7D hypercube, 3 cells per dimension (2,187 total cells)
+  #   - [10, 10, 10, 10]: 4D hypercube, 10 cells per dimension (10,000 total cells)
+  #
+  # Validation:
+  #   - Minimum 4 dimensions required (use Grid2D/3D for lower dimensions)
+  #   - Maximum 100 dimensions allowed
+  #   - Each dimension size must be positive integer
+  #   - Warning triggered at N≥10 (action space becomes large)
+  #
+  # Action space impact:
+  #   - 4D grid: 9 actions (8 movement + 1 interact)
+  #   - 7D grid: 15 actions (14 movement + 1 interact)
+  #   - 10D grid: 21 actions (20 movement + 1 interact) [WARNING]
+  #
+  # Total cells = product of all dimension sizes:
+  #   - Be mindful of combinatorial explosion
+  #   - Example: [10, 10, 10, 10, 10] = 100,000 cells (manageable)
+  #   - Example: [10, 10, 10, 10, 10, 10, 10] = 10 million cells (large)
+  dimension_sizes: [5, 5, 5, 5, 5, 5, 5]  # 7D hypercube, 78,125 total cells
+
+  # Boundary behavior: What happens when agent tries to move outside grid
+  # Options:
+  #   - "clamp": Hard walls - position clamped to grid edges (agent stays at edge)
+  #   - "wrap": Toroidal wraparound - agent wraps to opposite edge (Pac-Man style)
+  #   - "bounce": Elastic reflection - agent bounces back from boundary
+  #   - "sticky": Sticky walls - agent stays in place when hitting boundary
+  #
+  # Behavioral implications in N dimensions:
+  #   - "clamp": Agent learns boundaries exist in all N dimensions
+  #   - "wrap": Toroidal N-dimensional space (wraps around all dimensions)
+  #   - "bounce": Agent reflects back when hitting any dimensional boundary
+  #   - "sticky": Agent must choose to move away from boundaries
+  #
+  # Most research levels use "clamp" for clear spatial boundaries.
+  boundary: "clamp"
+
+  # Distance metric: How to measure distance in N-dimensional space
+  # Options:
+  #   - "manhattan": L1 norm, sum of absolute differences across all dimensions
+  #   - "euclidean": L2 norm, sqrt(sum of squared differences) - straight-line distance
+  #   - "chebyshev": L∞ norm, max of absolute differences across all dimensions
+  #
+  # Behavioral implications:
+  #   - "manhattan": Only axis-aligned movement, diagonal = sum of steps
+  #                  Example (4D): [0,0,0,0] to [1,1,1,1] = 4 steps
+  #                  Natural for discrete grids with 2N-directional movement
+  #   - "euclidean": Considers diagonal shortcuts across dimensions
+  #                  Example (4D): [0,0,0,0] to [1,1,1,1] = 2.0 steps
+  #                  More geometric, but doesn't match movement mechanics
+  #   - "chebyshev": Diagonal movement in N dimensions = 1 step
+  #                  Example (4D): [0,0,0,0] to [1,1,1,1] = 1 step
+  #                  Natural for games with N-directional diagonal movement
+  #
+  # Most research levels use "manhattan" to match axis-aligned movement.
+  distance_metric: "manhattan"
+
+  # Observation encoding: How to encode agent position in observation space
+  # Options:
+  #   - "relative": Normalized coordinates [0,1] per dimension (N dimensions)
+  #   - "scaled": Normalized + dimension sizes (2N dimensions)
+  #   - "absolute": Raw unnormalized coordinates (N dimensions)
+  #
+  # Behavioral implications:
+  #   - "relative": Network input is grid-size independent (transfer learning friendly)
+  #                 Agent sees normalized positions [0,1] for each dimension
+  #                 Example (7D): 7 observation dims [x0, x1, x2, x3, x4, x5, x6]
+  #   - "scaled": Includes grid size metadata - useful for size-dependent strategies
+  #               Agent sees normalized positions + dimension sizes
+  #               Example (7D): 14 observation dims [x0...x6, size0...size6]
+  #   - "absolute": Raw coordinates - network learns size-specific patterns
+  #                 Agent sees raw (d0, d1, ..., dN) as floats
+  #                 Example (7D): 7 observation dims [raw_x0...raw_x6]
+  #
+  # Default: "relative" for consistency and transfer learning across grid sizes
+  observation_encoding: "relative"
+
+# Examples and Pedagogical Notes:
+
+# Example 1: 4D Hypercube (Minimal High-Dimensional Grid)
+#   dimension_sizes: [5, 5, 5, 5]
+#   boundary: clamp
+#   distance_metric: manhattan
+#   observation_encoding: relative
+#   Use for: Introduction to high-dimensional RL, 4D navigation
+#   Action space: 9 actions (8 movement + 1 interact)
+#   Observation: 4 dims (normalized coordinates)
+#   Total cells: 625 (manageable)
+
+# Example 2: 7D Hypercube (Moderate Dimensionality)
+#   dimension_sizes: [3, 3, 3, 3, 3, 3, 3]
+#   boundary: clamp
+#   distance_metric: manhattan
+#   observation_encoding: relative
+#   Use for: High-dimensional exploration, transfer learning research
+#   Action space: 15 actions (14 movement + 1 interact)
+#   Observation: 7 dims (normalized coordinates)
+#   Total cells: 2,187 (moderate)
+
+# Example 3: 10D Hypercube (Large Dimensionality - WARNING)
+#   dimension_sizes: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+#   boundary: clamp
+#   distance_metric: manhattan
+#   observation_encoding: scaled
+#   Use for: Extreme high-dimensional RL research
+#   Action space: 21 actions (20 movement + 1 interact) [WARNING: Large action space]
+#   Observation: 20 dims (10 normalized + 10 sizes)
+#   Total cells: 59,049 (large)
+
+# Example 4: Asymmetric 4D (Different Sizes Per Dimension)
+#   dimension_sizes: [10, 8, 6, 4]
+#   boundary: clamp
+#   distance_metric: euclidean
+#   observation_encoding: scaled
+#   Use for: Exploring dimension size impact on learning
+#   Action space: 9 actions
+#   Observation: 8 dims (4 normalized + 4 sizes)
+#   Total cells: 1,920
+
+# Example 5: Toroidal 5D (Wraparound)
+#   dimension_sizes: [5, 5, 5, 5, 5]
+#   boundary: wrap
+#   distance_metric: chebyshev
+#   observation_encoding: relative
+#   Use for: Infinite N-dimensional space feel, topology research
+#   Action space: 11 actions
+#   Observation: 5 dims
+#   Total cells: 3,125
+
+# Pedagogical Value:
+# N-dimensional grids (N≥4) are pure abstractions - no physical analog exists:
+#   - Tests agent's ability to generalize spatial reasoning beyond 3D
+#   - Reveals whether RL algorithms scale to high-dimensional state spaces
+#   - Challenges human intuition (we can't visualize 4D+ spaces)
+#   - Ideal for research on dimensionality's impact on learning
+#
+# Key insight: Students realize that "navigation" is just state space search.
+# The 4D grid is conceptually identical to 2D grid, just with more axes.
+
+# Experimental Design Questions:
+# 1. How does learning speed scale with dimensionality? (4D vs 7D vs 10D)
+# 2. Does observation encoding matter for high-dimensional spaces?
+# 3. Can agents trained on 4D grids transfer to 7D grids?
+# 4. How does action space size (2N+1) impact sample efficiency?
+# 5. Do distance metrics (manhattan/euclidean/chebyshev) affect convergence?
+
+# Action Space:
+# N-dimensional grids use simplified action space (2N + 1 actions):
+#   - For each dimension i: MOVE_Di_NEGATIVE (action 2i), MOVE_Di_POSITIVE (action 2i+1)
+#   - INTERACT (action 2N): Interact with nearby affordance
+#   - No separate WAIT action (simplified to reduce action space)
+#
+# Example (7D grid, 15 actions):
+#   Action 0:  MOVE_D0_NEGATIVE  (move -1 in dimension 0)
+#   Action 1:  MOVE_D0_POSITIVE  (move +1 in dimension 0)
+#   Action 2:  MOVE_D1_NEGATIVE  (move -1 in dimension 1)
+#   Action 3:  MOVE_D1_POSITIVE  (move +1 in dimension 1)
+#   ...
+#   Action 12: MOVE_D6_NEGATIVE  (move -1 in dimension 6)
+#   Action 13: MOVE_D6_POSITIVE  (move +1 in dimension 6)
+#   Action 14: INTERACT          (interact with affordance)
+
+# Observation Encoding Details:
+# Position observations depend on encoding mode:
+#
+# "relative" (7D example):
+#   Position [2, 3, 1, 4, 0, 2, 1] on [5,5,5,5,5,5,5] grid
+#   → Observation: [0.5, 0.75, 0.25, 1.0, 0.0, 0.5, 0.25]
+#   (each dimension normalized to [0, 1])
+#
+# "scaled" (7D example):
+#   Position [2, 3, 1, 4, 0, 2, 1] on [5,5,5,5,5,5,5] grid
+#   → Observation: [0.5, 0.75, 0.25, 1.0, 0.0, 0.5, 0.25, 5, 5, 5, 5, 5, 5, 5]
+#   (normalized positions + grid sizes)
+#
+# "absolute" (7D example):
+#   Position [2, 3, 1, 4, 0, 2, 1] on [5,5,5,5,5,5,5] grid
+#   → Observation: [2.0, 3.0, 1.0, 4.0, 0.0, 2.0, 1.0]
+#   (raw coordinates as floats)
+
+# Affordance Placement:
+# N-dimensional grids support enumerable positions:
+#   - All positions can be enumerated using Cartesian product of dimension ranges
+#   - Affordances placed by shuffling all positions and assigning sequentially
+#   - Warning: Large grids (e.g., 10D with size 10) have billions of cells
+#   - System limits: get_all_positions() errors if >10 million cells
+#   - System warns if >100,000 cells (slow enumeration)
+#
+# For large grids, consider using random sampling instead of exhaustive enumeration.
+
+# Partial Observability (POMDP):
+# NOT SUPPORTED for N≥4 dimensions:
+#   - Local window size grows exponentially: (2*vision_range+1)^N
+#   - Example (4D, vision_range=2): 5^4 = 625 cells per window
+#   - Example (7D, vision_range=2): 5^7 = 78,125 cells per window (impractical!)
+#
+# If you need partial observability for high-dimensional spaces:
+#   - Use full observability with "relative" observation_encoding
+#   - Add noise to observations to simulate uncertainty
+#   - Use smaller vision_range values for 2D/3D substrates
+
+# Performance Considerations:
+# High-dimensional grids have computational challenges:
+#   - Observation: N position dims (relative) or 2N dims (scaled)
+#   - Action space: 2N + 1 actions (grows linearly with N)
+#   - Exploration: O(n^N) cells where n = avg dimension size (exponential!)
+#   - Training time: Expect significantly longer convergence for N≥7
+#   - Memory: Large replay buffers for high-dimensional observations
+#
+# Recommendations:
+#   - Start with 4D grids to validate setup
+#   - Use small dimension sizes (3-5) for N≥7
+#   - Consider "relative" encoding for transfer learning experiments
+#   - Monitor action entropy to detect exploration issues
+
+# Visualization Challenges:
+# N-dimensional grids (N≥4) cannot be directly visualized:
+#   - Humans cannot visualize 4D+ spaces
+#   - Frontend can show 2D/3D projections or slices
+#   - Consider dimensionality reduction (PCA, t-SNE) for visualization
+#   - Display metrics: distance to affordances, exploration coverage
+#
+# This limitation is pedagogical: Forces students to rely on quantitative
+# metrics rather than visual inspection. Mirrors real-world RL challenges
+# where state spaces are abstract and high-dimensional.
+
+# Why GridND Exists:
+# GridND enables research questions about dimensionality itself:
+#   - How do RL algorithms scale to high-dimensional spaces?
+#   - Is there a dimensionality "sweet spot" for sample efficiency?
+#   - Can agents learn dimension-agnostic navigation strategies?
+#   - Do curse of dimensionality effects dominate learning?
+#
+# These questions are fundamental to understanding RL's limits and capabilities.

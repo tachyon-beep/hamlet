@@ -1,0 +1,361 @@
+# N-Dimensional Continuous Substrate Configuration - TEMPLATE (N≥4 dimensions)
+#
+# Copy this file into your config pack directory and customize the values.
+#
+# UNIVERSE_AS_CODE Principle:
+# All spatial parameters must be explicitly specified. No hidden defaults allowed.
+# This ensures reproducible configs and operator awareness of all behavioral parameters.
+#
+# Config Pack Structure:
+# Every config pack should include these files:
+#   - substrate.yaml    (this file - spatial substrate definition)
+#   - bars.yaml         (meter definitions: energy, health, satiation, etc.)
+#   - cascades.yaml     (cascade physics: meter interactions)
+#   - affordances.yaml  (interaction definitions: Bed, Job, Hospital, etc.)
+#   - training.yaml     (training hyperparameters and network config)
+#   - cues.yaml         (optional - UI metadata for visualization)
+
+version: "1.0"
+
+# Human-readable description of this N-dimensional continuous space
+description: "4D continuous space for abstract high-dimensional control"
+
+# Substrate type: "continuousnd" for 4D-100D continuous spaces with float coordinates
+# For 1D/2D/3D continuous spaces, use "continuous" for better ergonomics
+type: "continuousnd"
+
+# ContinuousND substrate configuration (REQUIRED for type="continuousnd")
+# Note: Both "continuous" and "continuousnd" types use the "continuous" config field
+continuous:
+  # Bounds: Min/max values for each dimension in continuous space
+  # Format: List of [min, max] tuples, one per dimension
+  # Length determines dimensionality (4 to 100 dimensions supported)
+  #
+  # Example interpretations:
+  #   - [[0, 10], [0, 10], [0, 10], [0, 10]]: 4D hypercube, 10 units per side
+  #   - [[-5, 5], [-5, 5], [-5, 5], [-5, 5]]: 4D hypercube centered at origin
+  #   - [[0, 20], [0, 15], [0, 10], [0, 5]]: 4D space with different ranges
+  #
+  # Validation:
+  #   - Minimum 4 dimensions required (use Continuous1D/2D/3D for lower dimensions)
+  #   - Maximum 100 dimensions allowed
+  #   - Each dimension: min < max (strict inequality)
+  #   - Range must be ≥ interaction_radius (space large enough for interaction)
+  #   - Warning triggered at N≥10 (action space becomes large)
+  #
+  # Action space impact:
+  #   - 4D space: 9 actions (8 movement + 1 interact)
+  #   - 7D space: 15 actions (14 movement + 1 interact)
+  #   - 10D space: 21 actions (20 movement + 1 interact) [WARNING]
+  #
+  # Coordinate system:
+  #   - Positions are continuous floats (torch.float32)
+  #   - Infinite positions within bounds (unlike discrete grids)
+  #   - Agent can occupy any position [d0, d1, ..., dN] where min ≤ di ≤ max
+  bounds:
+    - [0.0, 10.0]  # Dimension 0: 0 to 10 units
+    - [0.0, 10.0]  # Dimension 1: 0 to 10 units
+    - [0.0, 10.0]  # Dimension 2: 0 to 10 units
+    - [0.0, 10.0]  # Dimension 3: 0 to 10 units
+
+  # Boundary behavior: What happens when agent tries to move outside bounds
+  # Options:
+  #   - "clamp": Hard walls - position clamped to bounds (agent stops at edge)
+  #   - "wrap": Toroidal wraparound - agent wraps to opposite edge (Pac-Man style)
+  #   - "bounce": Elastic reflection - agent bounces back from boundary
+  #   - "sticky": Sticky walls - agent stays in place when hitting boundary
+  #
+  # Behavioral implications in N dimensions:
+  #   - "clamp": Agent learns boundaries exist in all N dimensions
+  #   - "wrap": Toroidal N-dimensional space (wraps around all dimensions)
+  #   - "bounce": Agent reflects back when hitting any dimensional boundary
+  #   - "sticky": Agent must choose to move away from boundaries
+  #
+  # Most research levels use "clamp" for clear spatial boundaries.
+  boundary: "clamp"
+
+  # Movement delta: How far agent moves per discrete action step
+  # Unit: Same as bounds (e.g., if bounds in meters, delta in meters)
+  #
+  # Action semantics:
+  #   - Agent chooses discrete actions from 2N+1 options
+  #   - Each movement action moves agent by ±movement_delta in one dimension
+  #   - Example (4D): MOVE_D0_POSITIVE moves (+delta, 0, 0, 0)
+  #   - Example (4D): MOVE_D2_NEGATIVE moves (0, 0, -delta, 0)
+  #
+  # Behavioral implications:
+  #   - Smaller delta = more precise control, longer navigation time
+  #   - Larger delta = coarser control, faster navigation
+  #   - Typical range: 0.1 to 1.0 units per action
+  #
+  # Validation: System warns if movement_delta > interaction_radius
+  movement_delta: 0.5
+
+  # Interaction radius: Maximum distance for proximity-based interaction
+  # Unit: Same as bounds and movement_delta
+  #
+  # Interaction semantics:
+  #   - Agent can interact with affordances within this radius
+  #   - Distance measured using distance_metric (euclidean, manhattan, chebyshev)
+  #   - Proximity-based (not exact position match like grids)
+  #
+  # Behavioral implications:
+  #   - Smaller radius = agent must position precisely in N-dimensional space (harder)
+  #   - Larger radius = agent can interact from farther away (easier)
+  #   - Typical range: 0.5 to 2.0 units
+  #   - Should be ≥ movement_delta to avoid "stepping over" affordances
+  #
+  # Validation: System warns if interaction_radius < movement_delta
+  interaction_radius: 0.8
+
+  # Distance metric: How to measure distance in N-dimensional continuous space
+  # Options:
+  #   - "euclidean": L2 norm, sqrt(sum of squared differences) - straight-line distance
+  #   - "manhattan": L1 norm, sum of absolute differences
+  #   - "chebyshev": L∞ norm, max of absolute differences
+  #
+  # Behavioral implications:
+  #   - "euclidean": Natural for continuous space, considers N-dimensional diagonal distance
+  #                  Example (4D): [0,0,0,0] to [1,1,1,1] = sqrt(4) = 2.0
+  #                  Most common for continuous substrates (default)
+  #   - "manhattan": Sum of axis-aligned distances
+  #                  Example (4D): [0,0,0,0] to [1,1,1,1] = 4.0
+  #                  Matches grid-like movement patterns
+  #   - "chebyshev": Max distance along any single dimension
+  #                  Example (4D): [0,0,0,0] to [1,1,1,1] = 1.0
+  #                  Diagonal movement in N dimensions
+  #
+  # Most continuous levels use "euclidean" for realistic distance measurement.
+  distance_metric: "euclidean"
+
+  # Observation encoding: How to encode agent position in observation space
+  # Options:
+  #   - "relative": Normalized coordinates [0,1] per dimension (N dimensions)
+  #   - "scaled": Normalized + range metadata (2N dimensions)
+  #   - "absolute": Raw unnormalized coordinates (N dimensions)
+  #
+  # Behavioral implications:
+  #   - "relative": Network input is bounds-independent (transfer learning friendly)
+  #                 Agent sees normalized positions [0,1] for each dimension
+  #                 Example (4D): 4 observation dims [x0, x1, x2, x3]
+  #   - "scaled": Includes range metadata - useful for size-dependent strategies
+  #               Agent sees normalized positions + range sizes
+  #               Example (4D): 8 observation dims [x0...x3, range0...range3]
+  #   - "absolute": Raw coordinates - network learns bounds-specific patterns
+  #                 Agent sees raw (d0, d1, ..., dN) as floats
+  #                 Example (4D): 4 observation dims [raw_x0...raw_x3]
+  #
+  # Default: "relative" for consistency and transfer learning across different bounds
+  observation_encoding: "relative"
+
+# Examples and Pedagogical Notes:
+
+# Example 1: 4D Hypercube (Minimal High-Dimensional Continuous Space)
+#   bounds: [[0, 10], [0, 10], [0, 10], [0, 10]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   distance_metric: euclidean
+#   observation_encoding: relative
+#   Use for: Introduction to high-dimensional continuous control
+#   Action space: 9 actions (8 movement + 1 interact)
+#   Observation: 4 dims (normalized coordinates)
+
+# Example 2: 7D Continuous Space (Moderate Dimensionality)
+#   bounds: [[0, 10], [0, 10], [0, 10], [0, 10], [0, 10], [0, 10], [0, 10]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 1.0
+#   distance_metric: euclidean
+#   observation_encoding: scaled
+#   Use for: High-dimensional exploration, robotics simulation
+#   Action space: 15 actions (14 movement + 1 interact)
+#   Observation: 14 dims (7 normalized + 7 ranges)
+
+# Example 3: 10D Continuous Space (Large Dimensionality - WARNING)
+#   bounds: [[0, 10]] * 10
+#   boundary: clamp
+#   movement_delta: 1.0
+#   interaction_radius: 1.5
+#   distance_metric: euclidean
+#   observation_encoding: relative
+#   Use for: Extreme high-dimensional continuous control research
+#   Action space: 21 actions (20 movement + 1 interact) [WARNING: Large action space]
+#   Observation: 10 dims (normalized coordinates)
+
+# Example 4: Asymmetric 4D (Different Ranges Per Dimension)
+#   bounds: [[0, 20], [0, 15], [0, 10], [0, 5]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 1.0
+#   distance_metric: manhattan
+#   observation_encoding: scaled
+#   Use for: Exploring dimension range impact on learning
+#   Action space: 9 actions
+#   Observation: 8 dims (4 normalized + 4 ranges)
+
+# Example 5: Centered 5D (Origin-Centered Bounds)
+#   bounds: [[-5, 5], [-5, 5], [-5, 5], [-5, 5], [-5, 5]]
+#   boundary: wrap
+#   movement_delta: 0.5
+#   interaction_radius: 1.0
+#   distance_metric: euclidean
+#   observation_encoding: absolute
+#   Use for: Zero-centered state spaces, toroidal continuous topology
+#   Action space: 11 actions
+#   Observation: 5 dims (raw coordinates)
+
+# Example 6: Fine-Grained 4D (Precision Control)
+#   bounds: [[0, 10], [0, 10], [0, 10], [0, 10]]
+#   boundary: clamp
+#   movement_delta: 0.1
+#   interaction_radius: 0.3
+#   distance_metric: euclidean
+#   observation_encoding: relative
+#   Use for: Fine motor control, precision navigation
+#   Action space: 9 actions
+#   Observation: 4 dims (normalized coordinates)
+
+# Pedagogical Value:
+# N-dimensional continuous spaces (N≥4) combine two abstractions:
+#   1. High dimensionality (N≥4): Beyond human visualization
+#   2. Continuous positions: Infinite state space within bounds
+#
+# This double abstraction teaches:
+#   - State space can be both high-dimensional AND continuous
+#   - Discrete actions can control continuous positions
+#   - Distance metrics matter for proximity-based interaction
+#   - Transfer learning across different bounds/ranges
+#
+# Key insight: "Continuous control" doesn't require continuous actions.
+# Agents learn to navigate continuous space using discrete action choices.
+
+# Experimental Design Questions:
+# 1. How does learning speed scale with dimensionality? (4D vs 7D vs 10D)
+# 2. Does observation encoding affect convergence for continuous spaces?
+# 3. Can agents trained on 4D continuous spaces transfer to 7D?
+# 4. How does movement_delta/interaction_radius ratio impact learning?
+# 5. Do distance metrics (euclidean/manhattan/chebyshev) matter for continuous spaces?
+# 6. Is continuous control harder than discrete grids at same dimensionality?
+
+# Action Space:
+# N-dimensional continuous spaces use simplified action space (2N + 1 actions):
+#   - For each dimension i: MOVE_Di_NEGATIVE (action 2i), MOVE_Di_POSITIVE (action 2i+1)
+#   - INTERACT (action 2N): Interact with nearby affordance
+#   - No separate WAIT action (simplified to reduce action space)
+#
+# Movement semantics:
+#   - Each MOVE action displaces agent by ±movement_delta in one dimension
+#   - Other dimensions remain unchanged
+#   - Position updated continuously (float32), then boundary handling applied
+#
+# Example (4D space, 9 actions):
+#   Action 0:  MOVE_D0_NEGATIVE  (delta = [-movement_delta, 0, 0, 0])
+#   Action 1:  MOVE_D0_POSITIVE  (delta = [+movement_delta, 0, 0, 0])
+#   Action 2:  MOVE_D1_NEGATIVE  (delta = [0, -movement_delta, 0, 0])
+#   Action 3:  MOVE_D1_POSITIVE  (delta = [0, +movement_delta, 0, 0])
+#   Action 4:  MOVE_D2_NEGATIVE  (delta = [0, 0, -movement_delta, 0])
+#   Action 5:  MOVE_D2_POSITIVE  (delta = [0, 0, +movement_delta, 0])
+#   Action 6:  MOVE_D3_NEGATIVE  (delta = [0, 0, 0, -movement_delta])
+#   Action 7:  MOVE_D3_POSITIVE  (delta = [0, 0, 0, +movement_delta])
+#   Action 8:  INTERACT          (interact with affordance within radius)
+
+# Observation Encoding Details:
+# Position observations depend on encoding mode:
+#
+# "relative" (4D example):
+#   Position [5.0, 7.5, 2.5, 8.0] in bounds [[0,10], [0,10], [0,10], [0,10]]
+#   → Observation: [0.5, 0.75, 0.25, 0.8]
+#   (each dimension normalized to [0, 1])
+#
+# "scaled" (4D example):
+#   Position [5.0, 7.5, 2.5, 8.0] in bounds [[0,10], [0,10], [0,10], [0,10]]
+#   → Observation: [0.5, 0.75, 0.25, 0.8, 10.0, 10.0, 10.0, 10.0]
+#   (normalized positions + range sizes)
+#
+# "absolute" (4D example):
+#   Position [5.0, 7.5, 2.5, 8.0] in bounds [[0,10], [0,10], [0,10], [0,10]]
+#   → Observation: [5.0, 7.5, 2.5, 8.0]
+#   (raw coordinates as floats)
+
+# Affordance Placement:
+# N-dimensional continuous spaces have infinite positions:
+#   - Affordances placed via random uniform sampling within bounds
+#   - Each affordance randomly sampled: [rand(min, max) for each dimension]
+#   - Positions change every episode (unless explicitly fixed)
+#   - No enumerable positions (unlike discrete grids)
+#
+# Agents must learn to:
+#   - Search continuous space efficiently
+#   - Generalize to unseen affordance positions
+#   - Navigate using relative positioning (not memorization)
+
+# Interaction Semantics:
+# Continuous spaces use proximity-based interaction:
+#   - Agent interacts if distance(agent_pos, affordance_pos) ≤ interaction_radius
+#   - Distance computed using configured distance_metric
+#   - Agent doesn't need exact position match (unlike discrete grids)
+#
+# Example (4D, euclidean metric, interaction_radius=1.0):
+#   Agent at [5.0, 5.0, 5.0, 5.0]
+#   Affordance at [5.5, 5.3, 4.8, 5.2]
+#   Distance = sqrt((0.5)² + (0.3)² + (0.2)² + (0.2)²) = 0.66
+#   0.66 ≤ 1.0 → Interaction succeeds!
+
+# Partial Observability (POMDP):
+# NOT SUPPORTED for N≥4 dimensions:
+#   - Continuous spaces have infinite positions in any local window
+#   - No discrete grid to window into
+#   - Local window volume grows exponentially with N
+#
+# If you need partial observability for high-dimensional continuous spaces:
+#   - Use full observability with "relative" observation_encoding
+#   - Add Gaussian noise to observations to simulate uncertainty
+#   - Limit agent's observation to subset of dimensions (dimension masking)
+
+# Performance Considerations:
+# High-dimensional continuous spaces have computational challenges:
+#   - Observation: N position dims (relative) or 2N dims (scaled)
+#   - Action space: 2N + 1 actions (grows linearly with N)
+#   - Exploration: Infinite positions within bounds (continuous exploration)
+#   - Training time: Expect significantly longer convergence for N≥7
+#   - Memory: Continuous positions require float32 storage vs long for grids
+#
+# Recommendations:
+#   - Start with 4D spaces to validate setup
+#   - Use moderate movement_delta (0.5-1.0) for reasonable step sizes
+#   - Set interaction_radius ≥ movement_delta to avoid stepping over affordances
+#   - Consider "relative" encoding for transfer learning experiments
+#   - Monitor exploration coverage (distance to unexplored regions)
+
+# Visualization Challenges:
+# N-dimensional continuous spaces (N≥4) cannot be directly visualized:
+#   - Humans cannot visualize 4D+ spaces
+#   - Continuous positions add additional complexity (infinite points)
+#   - Frontend can show 2D/3D projections or dimension slices
+#   - Consider trajectory plots in 2D projections (PCA, t-SNE)
+#   - Display metrics: distance to affordances, exploration heatmaps
+#
+# Pedagogical value: Forces students to think abstractly about state spaces.
+# Mirrors real-world robotics where state is high-dimensional sensor data.
+
+# Why ContinuousND Exists:
+# ContinuousND enables research questions about continuous control in high dimensions:
+#   - How do discrete actions scale for controlling continuous high-D spaces?
+#   - Is continuous control harder than discrete grids at same dimensionality?
+#   - Can agents learn dimension-agnostic navigation in continuous spaces?
+#   - How does interaction_radius affect learning in high-D continuous spaces?
+#   - Do distance metrics matter more for continuous than discrete substrates?
+#
+# These questions bridge the gap between discrete grids and continuous control,
+# revealing fundamental principles about RL in high-dimensional spaces.
+
+# Comparison to GridND:
+# ContinuousND vs GridND at same dimensionality (e.g., 7D):
+#   - ContinuousND: Infinite positions (float32), proximity interaction
+#   - GridND: Finite positions (long), exact position interaction
+#   - Both: Same action space size (2N+1), same boundary modes
+#   - Question: Which is easier for agents to learn? (Empirical question!)
+#
+# Running experiments on both substrates at same dimensionality reveals
+# whether discreteness or continuity matters more for learning efficiency.

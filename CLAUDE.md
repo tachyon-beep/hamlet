@@ -332,7 +332,15 @@ configs/L0_0_minimal/
 
 Defines the spatial substrate (coordinate system, topology, boundaries, distance metrics).
 
-**Example (Standard Grid)**:
+**Available Substrate Types**:
+- `grid`: 2D discrete grid (Grid2DSubstrate)
+- `grid3d`: 3D discrete grid (Grid3DSubstrate)
+- `gridnd`: 4D-100D discrete grid (GridNDSubstrate)
+- `continuous`: 1D/2D/3D continuous space (Continuous1D/2D/3DSubstrate)
+- `continuousnd`: 4D-100D continuous space (ContinuousNDSubstrate)
+- `aspatial`: No positioning, pure resource management
+
+**Example (Standard 2D Grid)**:
 ```yaml
 version: "1.0"
 description: "8×8 square grid with hard boundaries"
@@ -344,6 +352,39 @@ grid:
   height: 8                # Number of rows
   boundary: "clamp"        # Hard walls (clamp, wrap, bounce, sticky)
   distance_metric: "manhattan"  # L1 norm (manhattan, euclidean, chebyshev)
+  observation_encoding: "relative"  # Position encoding (relative, scaled, absolute)
+```
+
+**Example (7D Hypercube Grid)**:
+```yaml
+version: "1.0"
+description: "7D hypercube grid for high-dimensional RL research"
+type: "gridnd"
+
+gridnd:
+  dimension_sizes: [5, 5, 5, 5, 5, 5, 5]  # 7D grid, 5 cells per dimension
+  boundary: "clamp"
+  distance_metric: "manhattan"
+  observation_encoding: "relative"  # 7 dims (normalized coords)
+```
+
+**Example (4D Continuous Space)**:
+```yaml
+version: "1.0"
+description: "4D continuous space for abstract state experiments"
+type: "continuousnd"
+
+continuousnd:
+  bounds:
+    - [0.0, 10.0]  # Dimension 0: [0, 10]
+    - [0.0, 10.0]  # Dimension 1: [0, 10]
+    - [0.0, 10.0]  # Dimension 2: [0, 10]
+    - [0.0, 10.0]  # Dimension 3: [0, 10]
+  boundary: "clamp"
+  movement_delta: 0.5
+  interaction_radius: 0.8
+  distance_metric: "euclidean"
+  observation_encoding: "relative"  # 4 dims (normalized coords)
 ```
 
 **Boundary Modes**:
@@ -357,6 +398,34 @@ grid:
 - `euclidean`: L2 norm, sqrt((x1-x2)² + (y1-y2)²) (straight-line distance)
 - `chebyshev`: L∞ norm, max(|x1-x2|, |y1-y2|) (8-directional movement)
 
+**Observation Encoding Modes** (Phase 5C):
+- `relative`: Normalized coordinates [0,1] per dimension (N dims)
+  - Grid-size independent, enables transfer learning
+  - Example: 7D grid → 7 observation dims
+- `scaled`: Normalized + dimension sizes (2N dims)
+  - Includes metadata about grid/space dimensions
+  - Example: 7D grid → 14 observation dims (7 normalized + 7 sizes)
+- `absolute`: Raw unnormalized coordinates (N dims)
+  - Network learns size-specific patterns
+  - Example: 7D grid → 7 observation dims (raw coords)
+
+**Action Space Formula**:
+- **N-dimensional substrates**: 2N + 1 actions
+  - GridND: 2N movement actions (±1 per dimension) + INTERACT
+  - ContinuousND: 2N movement actions (±movement_delta per dimension) + INTERACT
+  - Example: 7D grid → 15 actions (14 movement + 1 interact)
+- **Low-dimensional substrates**: Varies by dimensionality
+  - 2D grid: 6 actions (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+  - 3D grid: 8 actions (add FORWARD, BACKWARD)
+  - 1D continuous: 4 actions (LEFT, RIGHT, INTERACT, WAIT)
+
+**High-Dimensional Substrate Warnings**:
+- N≥10 dimensions triggers warning (action space ≥21 grows large)
+- Partial observability (POMDP) not supported for N≥4
+  - 4D with vision_range=2: 5⁴ = 625 cells
+  - 7D with vision_range=2: 5⁷ = 78,125 cells (impractical)
+  - Use full observability with coordinate encoding instead
+
 **Aspatial Mode** (no positioning):
 ```yaml
 version: "1.0"
@@ -365,7 +434,13 @@ type: "aspatial"
 aspatial: {}
 ```
 
-See `configs/templates/substrate.yaml` for comprehensive documentation and examples.
+**Template Configs**:
+- `configs/templates/substrate.yaml` - Standard 2D grid
+- `configs/templates/substrate_continuous_1d.yaml` - 1D continuous line
+- `configs/templates/substrate_continuous_2d.yaml` - 2D continuous plane
+- `configs/templates/substrate_continuous_3d.yaml` - 3D continuous volume
+- `configs/templates/substrate_gridnd.yaml` - 4D-100D discrete grids
+- `configs/templates/substrate_continuousnd.yaml` - 4D-100D continuous spaces
 
 ### Action Labels Configuration (action_labels.yaml) - OPTIONAL
 
