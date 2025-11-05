@@ -8,11 +8,20 @@ from pathlib import Path
 
 import pytest
 import torch
+import yaml
 
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 # Phase 4 complete - integration tests enabled
 # pytestmark = pytest.mark.skip(reason="Phase 4 (Environment Integration) not yet complete")
+
+
+def load_enabled_affordances(config_pack_path: Path) -> list[str]:
+    """Load enabled_affordances from training.yaml."""
+    training_yaml = config_pack_path / "training.yaml"
+    with open(training_yaml) as f:
+        config = yaml.safe_load(f)
+    return config["environment"]["enabled_affordances"]
 
 
 @pytest.mark.parametrize(
@@ -27,13 +36,17 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 )
 def test_env_observation_dim_unchanged(config_name, expected_obs_dim):
     """Environment with substrate.yaml should produce same obs dims as legacy."""
+    config_path = Path("configs") / config_name
+    enabled_affordances = load_enabled_affordances(config_path)
+
     env = VectorizedHamletEnv(
-        config_pack_path=Path("configs") / config_name,
+        config_pack_path=config_path,
         num_agents=1,
         grid_size=8,
         partial_observability=False,
         vision_range=2,
         enable_temporal_mechanics=False,
+        enabled_affordances=enabled_affordances,
         move_energy_cost=0.5,
         wait_energy_cost=0.1,
         interact_energy_cost=0.3,
@@ -61,13 +74,17 @@ def test_env_observation_dim_unchanged(config_name, expected_obs_dim):
 )
 def test_env_substrate_dimensions(config_name, expected_grid_size):
     """Environment substrate should have correct grid dimensions."""
+    config_path = Path("configs") / config_name
+    enabled_affordances = load_enabled_affordances(config_path)
+
     env = VectorizedHamletEnv(
-        config_pack_path=Path("configs") / config_name,
+        config_pack_path=config_path,
         num_agents=1,
         grid_size=8,
         partial_observability=False,
         vision_range=2,
         enable_temporal_mechanics=False,
+        enabled_affordances=enabled_affordances,
         move_energy_cost=0.5,
         wait_energy_cost=0.1,
         interact_energy_cost=0.3,
