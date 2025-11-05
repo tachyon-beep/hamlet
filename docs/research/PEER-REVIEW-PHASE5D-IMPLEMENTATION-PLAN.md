@@ -980,3 +980,61 @@ The Phase 5D implementation plan is **well-structured** with excellent test-driv
 **Peer Review Status**: ⚠️ **MAJOR REVISIONS REQUIRED**
 **Confidence in Review**: High (based on code inspection and complexity analysis)
 **Recommended Next Steps**: Revise plan with infrastructure tasks, OR scope to Phase 5D-Lite
+
+---
+
+## Addendum: Resolution (2025-11-05)
+
+### Decision: Split Accepted ✅
+
+The peer review recommendation to split Phase 5D was **ACCEPTED** and implemented as:
+
+**Phase 9: Simple Alternative Topologies (Hex + 1D)** - 13-17 hours
+- Hexagonal Grid (10-12h)
+- 1D Grid (5-7h, revised from 2-4h)
+- No infrastructure changes required
+- Ready for immediate implementation
+
+**Phase 10: Graph Substrate + Infrastructure** - 68-92 hours
+- Task 10.0: Infrastructure Prerequisites (7-10h) - **P0 BLOCKING**
+  - Action mapping refactoring (3-4h)
+  - Q-network dynamic sizing (2-3h)
+  - Replay buffer schema changes (2-3h)
+- Task 10.1: Graph-Based Substrate (36-48h, revised from 18-24h)
+- Task 10.2: Frontend Visualization (8-12h, NEW)
+- Task 10.3: Documentation (2-3h)
+
+**Rationale for Rebranding to Phase 9/10**:
+
+Original plan used "Phase 5D" but phases 6-8 are planned/reserved for other features, so:
+- Phase 9 = Simple topologies (after Phase 5C completion)
+- Phase 10 = Complex graph topology with infrastructure
+
+**Key Changes from Original Plan**:
+1. ✅ Split into two phases (9 and 10)
+2. ✅ Added explicit infrastructure task (10.0) with 7-10h budget
+3. ✅ Doubled Graph estimate to 36-48h (was 18-24h)
+4. ✅ Added frontend visualization task (8-12h, was omitted)
+5. ✅ Revised 1D estimate to 5-7h (was 2-4h)
+6. ✅ Kept Hex estimate at 10-12h (was 8-10h)
+
+**Total Effort**:
+- Phase 9: 13-17 hours (simple, no blockers)
+- Phase 10: 68-92 hours (complex, infrastructure-heavy)
+- **Combined**: 81-109 hours (vs original 30-40h estimate)
+
+**Risk Mitigation**:
+- Phase 9 can proceed immediately (no infrastructure dependencies)
+- Phase 10 infrastructure prerequisites are now explicit and P0-prioritized
+- Frontend work properly budgeted
+- Effort estimates realistic based on complexity analysis
+
+**Implementation Status**:
+- Phase 9 Plan: `docs/plans/task-002a-phase9-hex-1d-topologies.md` (✅ Created)
+- Phase 10 Plan: `docs/plans/task-002a-phase10-graph-substrate.md` (✅ Created)
+- Both plans ready for implementation
+
+---
+
+**Final Status**: ✅ **RESOLVED - Split Implemented**
+**Peer Review Outcome**: Recommendations accepted and incorporated into Phase 9/10 plans
