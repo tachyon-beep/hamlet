@@ -41,8 +41,11 @@ grid:
   # Current implementation: Non-square grids (width ≠ height) are supported
   # but uncommon. Most curriculum levels use square grids.
   #
-  # Observation dimension impact: grid encoding uses width × height dimensions
-  # Example: 8×8 grid = 64 dims, 3×3 grid = 9 dims
+  # NEW Phase 5C - Observation dimension impact depends on observation_encoding:
+  #   - "relative": 2 dims (normalized x, y) regardless of grid size
+  #   - "scaled": 4 dims (normalized x, y + width, height)
+  #   - "absolute": 2 dims (raw x, y as floats)
+  # OLD Phase 5A/5B: one-hot encoding used width × height dimensions
   width: 8
   height: 8
 
@@ -81,6 +84,24 @@ grid:
   #
   # Most curriculum levels use "manhattan" to match 4-directional movement.
   distance_metric: "manhattan"
+
+  # NEW Phase 5C: Observation encoding mode
+  # Options:
+  #   - "relative": Normalized coordinates [0,1] (2 dims for 2D, 3 dims for 3D)
+  #   - "scaled": Normalized + grid size metadata (4 dims for 2D, 6 dims for 3D)
+  #   - "absolute": Raw unnormalized coordinates (2 dims for 2D, 3 dims for 3D)
+  #
+  # Behavioral implications:
+  #   - "relative": Network input is grid-size independent (transfer learning friendly)
+  #                 Agent sees normalized [0,1] positions
+  #   - "scaled": Includes grid size info - useful for size-dependent strategies
+  #               Agent sees normalized positions + (width, height)
+  #   - "absolute": Raw coordinates - network learns size-specific patterns
+  #                 Agent sees raw (x, y) as floats
+  #
+  # Default: "relative" for consistency and transfer learning
+  # BREAKING CHANGE from Phase 5A/5B: Old configs used one-hot encoding (width×height dims)
+  observation_encoding: "relative"
 
 # Aspatial substrate configuration (REQUIRED if type="aspatial", omit if type="grid")
 #

@@ -47,3 +47,4 @@ grid:
   #   - "euclidean": L2 norm, sqrt((x1-x2)² + (y1-y2)²)
   #   - "chebyshev": L∞ norm, max(|x1-x2|, |y1-y2|)
   distance_metric: "manhattan"
+  observation_encoding: "relative"  # NEW Phase 5C: normalized coordinates

@@ -27,3 +27,4 @@ grid:
 
   # Distance metric: "manhattan" (L1 norm)
   distance_metric: "manhattan"
+  observation_encoding: "relative"  # NEW Phase 5C: normalized coordinates
