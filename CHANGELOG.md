@@ -169,43 +169,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-### Added (PDR-002 - No-Defaults Enforcement)
+### Added (QUICK-003 - PDR-002 No-Defaults Whitelist Cleanup)
 
-**Status**: Partial Implementation (2025-11-05)
+**Status**: ✅ Complete (merged to main 2025-11-05, completed alongside QUICK-002)
 
-- **No-Defaults Principle**:
-  - Removed UAC (UNIVERSE_AS_CODE) defaults from environment initialization
-  - Removed BAC (BRAIN_AS_CODE) defaults from network architectures
-  - All behavioral parameters must be explicitly specified in configs
+- **No-Defaults Principle Implementation**:
+  - Removed all UAC (UNIVERSE_AS_CODE) defaults from environment initialization
+  - Removed all BAC (BRAIN_AS_CODE) defaults from network architectures
+  - All behavioral parameters must now be explicitly specified in configs
+  - 100% PDR-002 compliance achieved
 
 - **Removed Defaults** (environment):
-  - VectorizedHamletEnv: grid_size, partial_observability, vision_range, enable_temporal_mechanics, energy costs, agent_lifespan
+  - VectorizedHamletEnv: grid_size, partial_observability, vision_range, enable_temporal_mechanics, energy costs, agent_lifespan (8 UAC defaults removed)
 
 - **Removed Defaults** (networks):
   - SimpleQNetwork: hidden_dim (was 128)
-  - RecurrentSpatialQNetwork: action_dim, window_size, num_meters, num_affordance_types, enable_temporal_features, hidden_dim
+  - RecurrentSpatialQNetwork: action_dim, window_size, num_meters, num_affordance_types, enable_temporal_features, hidden_dim (6 BAC defaults removed)
+  - RecurrentSpatialQNetwork.reset_hidden_state: batch_size default removed
 
-- **Retained Infrastructure Defaults**:
+- **Removed Defaults** (reward):
+  - RewardStrategy: num_agents, meter_count defaults removed
+
+- **Retained Infrastructure Defaults** (whitelisted):
   - device=torch.device("cpu") (infrastructure fallback)
   - config_pack_path=None (infrastructure fallback)
-  - enabled_affordances=None (semantic: "all affordances")
+  - enabled_affordances=None (semantic: "all affordances" - not a hidden default)
 
 - **Compliance Artifacts**:
-  - Created `.defaults-whitelist-compliant.txt` (146 acceptable infrastructure defaults)
+  - Created `.defaults-whitelist-compliant.txt` (165 lines, infrastructure-only defaults)
+  - Replaced old whitelist (85% UAC/BAC violations) with compliant version (0% violations)
   - Updated 7 fixtures in conftest.py with explicit parameters
   - Updated 6 integration tests with explicit parameters
 
-### Documentation (PDR-002)
+### Documentation (QUICK-003)
 
-- Added PDR-002 compliance documentation to docstrings
+- Added PDR-002 compliance documentation to all affected docstrings
 - Created PLAN-QUICK-003-PHASE-{1,2,3,4}.md execution plans
-- Moved QUICK-002 to `docs/tasks/completed/`
+- Moved QUICK-002 and QUICK-003 to `docs/tasks/completed/`
+- Updated whitelist documentation with compliant patterns
 
-### Changed (PDR-002)
+### Changed (QUICK-003)
 
-- All production configs must be complete (no silent fallback to code defaults)
-- Config validation fails fast with clear error messages
+- **BREAKING**: All production configs must be complete (no silent fallback to code defaults)
+- Config validation fails fast with clear error messages on missing UAC/BAC parameters
 - isinstance() calls updated to use PEP 604 union syntax (X | Y)
+- All UAC/BAC parameters must be explicit in config files (self-documenting configs)
 
 ---
 
