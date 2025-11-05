@@ -1,0 +1,19 @@
+version: "2.0"
+description: "Minimal cascades for aspatial testing"
+math_type: "gradient_penalty"
+
+modulations: []
+
+cascades:
+  - name: "low_mood_hits_energy"
+    category: "secondary_to_pivotal"
+    description: "Low mood drains energy"
+    source: "mood"
+    source_index: 3
+    target: "energy"
+    target_index: 0
+    threshold: 0.2
+    strength: 0.01
+
+execution_order:
+  - "secondary_to_pivotal"

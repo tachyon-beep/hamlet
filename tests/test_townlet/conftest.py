@@ -237,6 +237,108 @@ def multi_agent_env(test_config_pack_path: Path, device: torch.device) -> Vector
 
 
 # =============================================================================
+# TASK-002A: SUBSTRATE-PARAMETERIZED FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def grid2d_3x3_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+    """Small 3×3 Grid2D environment for fast tests.
+
+    Configuration:
+        - 1 agent
+        - 3×3 grid
+        - Full observability
+        - No temporal mechanics
+        - Device: CUDA if available, else CPU
+
+    Use for: Fast unit tests that don't need full 8×8 grid
+
+    Returns:
+        VectorizedHamletEnv with 3×3 Grid2D substrate
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=3,
+        partial_observability=False,
+        vision_range=3,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+        config_pack_path=test_config_pack_path,
+        device=device,
+    )
+
+
+@pytest.fixture
+def grid2d_8x8_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+    """Standard 8×8 Grid2D environment (same as basic_env, explicit name).
+
+    Configuration:
+        - 1 agent
+        - 8×8 grid
+        - Full observability
+        - No temporal mechanics
+        - Device: CUDA if available, else CPU
+
+    Use for: Tests requiring standard grid size (legacy compatibility)
+
+    Returns:
+        VectorizedHamletEnv with 8×8 Grid2D substrate
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=8,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+        config_pack_path=test_config_pack_path,
+        device=device,
+    )
+
+
+@pytest.fixture
+def aspatial_env(device: torch.device) -> VectorizedHamletEnv:
+    """Aspatial environment (no grid, meters only).
+
+    Configuration:
+        - 1 agent
+        - No spatial substrate (aspatial)
+        - 4 meters: energy, health, money, mood
+        - 4 affordances: Bed, Hospital, HomeMeal, Job
+        - Device: CUDA if available, else CPU
+
+    Use for: Testing aspatial substrate behavior (no positions, no movement)
+
+    Returns:
+        VectorizedHamletEnv with Aspatial substrate
+    """
+    # Use aspatial config pack created in Task 8.1
+    repo_root = Path(__file__).parent.parent.parent
+    aspatial_config_path = repo_root / "configs" / "aspatial_test"
+
+    return VectorizedHamletEnv(
+        num_agents=1,
+        device=device,
+        config_pack_path=aspatial_config_path,
+        move_energy_cost=0.0,  # No movement in aspatial
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+    )
+
+
+# Parameterization helper for multi-substrate tests
+SUBSTRATE_FIXTURES = ["grid2d_3x3_env", "grid2d_8x8_env", "aspatial_env"]
+
+
+# =============================================================================
 # NETWORK FIXTURES
 # =============================================================================
 
