@@ -1,0 +1,49 @@
+# Substrate Configuration for Level 0: Minimal
+#
+# Defines the spatial substrate (coordinate system, topology, boundaries)
+# for the training environment.
+#
+# Level 0 uses a tiny 3×3 grid for fast pedagogical learning:
+# - Minimal exploration space (9 cells)
+# - Agent learns temporal credit assignment (spacing > spamming)
+# - Simple enough to converge in ~100 episodes
+#
+# UNIVERSE_AS_CODE: All spatial parameters explicit (no hidden defaults).
+
+version: "1.0"
+
+description: "3×3 square grid with hard boundaries for Level 0 pedagogical training"
+
+type: "grid"
+
+grid:
+  # Square 2D grid topology (standard Cartesian coordinate system)
+  # Alternative topologies: (none implemented yet, reserved for future)
+  topology: "square"
+
+  # Grid dimensions: 3×3 (9 total cells)
+  # Provides minimal space for single affordance (Bed) with navigation
+  width: 3
+  height: 3
+
+  # Boundary behavior: "clamp" (hard walls, agents cannot move outside grid)
+  # When agent tries to move outside: position clamped to grid edges
+  #
+  # Alternatives (not used in L0):
+  #   - "wrap": Toroidal wraparound (Pac-Man style)
+  #   - "bounce": Elastic reflection (agent reflects back from boundary)
+  #   - "sticky": Sticky walls (agent stays in place when hitting boundary)
+  boundary: "clamp"
+
+  # Distance metric: "manhattan" (L1 norm, |x1-x2| + |y1-y2|)
+  # Used for proximity calculations and spatial reasoning
+  #
+  # Manhattan distance characteristics:
+  #   - Only cardinal movement (no diagonal shortcuts)
+  #   - Distance [0,0] to [2,2] = 4 steps (not 2.83)
+  #   - Matches grid movement mechanics
+  #
+  # Alternatives (not used in L0):
+  #   - "euclidean": L2 norm, sqrt((x1-x2)² + (y1-y2)²)
+  #   - "chebyshev": L∞ norm, max(|x1-x2|, |y1-y2|)
+  distance_metric: "manhattan"
