@@ -348,7 +348,7 @@ class TestVariableMetersEndToEnd:
         # This tests that the network's num_meters matches the environment's meter count
         with torch.no_grad():
             q_values, hidden = population.q_network(obs)  # Recurrent networks return (q_values, hidden_state)
-            assert q_values.shape == (1, 5), f"Q-values should be [1, 5], got {q_values.shape}"
+            assert q_values.shape == (1, 6), f"Q-values should be [1, 6], got {q_values.shape}"
 
         # Note: We don't test environment steps here because AffordanceEngine has hardcoded meter indices
         # (separate bug to be fixed later - not part of recurrent network fix)

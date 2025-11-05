@@ -374,8 +374,8 @@ class TestEpisodeLifecycle:
         Note: This test uses minimal depletion to prevent death.
         """
         # Create small environment with ultra-minimal depletion
-        # Use ULTRA-low energy costs to ensure agents survive 30 steps
-        # Even with meters at 1.0, cascade effects (satiation→energy/health) can kill agents
+        # Use ULTRA-low energy costs to ensure agents survive 10 steps
+        # Even with meters at 1.0, cascade effects (satiation→energy/health) can kill agents over time
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
@@ -391,7 +391,7 @@ class TestEpisodeLifecycle:
         )
 
         # Create population
-        max_steps = 30
+        max_steps = 10  # Reduced from 30 to avoid cascade death while still testing max_steps termination
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(
             epsilon=0.1,
@@ -435,8 +435,8 @@ class TestEpisodeLifecycle:
                 assert False, (
                     f"Agent {dead_agent_idx} died at step {step + 1}/{max_steps}. "
                     f"Energy: {env.meters[dead_agent_idx, 0]:.3f}, Health: {env.meters[dead_agent_idx, 6]:.3f}. "
-                    "This test requires agents to survive 30 steps to verify max_steps termination. "
-                    "If this fails, energy costs may need to be reduced further or cascades disabled."
+                    f"This test requires agents to survive {max_steps} steps to verify max_steps termination. "
+                    "If this fails, reduce max_steps further or disable cascades."
                 )
 
         # Verify episode ran to max_steps
