@@ -333,3 +333,33 @@ def test_substrate_movement_matches_legacy():
 
     # Should clamp to [0, 0] (not go negative)
     assert (clamped == torch.tensor([[0, 0]], dtype=torch.long)).all()
+
+
+def test_env_randomizes_affordances_via_substrate():
+    """Environment should use substrate.get_all_positions() for affordance placement."""
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.5,
+        wait_energy_cost=0.1,
+        interact_energy_cost=0.3,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+    # Randomize affordances
+    env.randomize_affordance_positions()
+
+    # All affordances should have valid positions within grid
+    for affordance_name, position in env.affordances.items():
+        assert position.shape == (2,)  # [x, y]
+        assert (position >= 0).all()
+        assert (position < 8).all()
+
+    # Affordances should not overlap (each at unique position)
+    positions_list = [tuple(pos.tolist()) for pos in env.affordances.values()]
+    assert len(positions_list) == len(set(positions_list))  # All unique
