@@ -1,10 +1,12 @@
 # TASK-002A Phase 10: Graph Substrate + Infrastructure - Implementation Plan
 
-**Date**: 2025-11-05
-**Status**: Ready for Implementation (After Phase 9 Complete)
-**Dependencies**: Phase 9 Complete (Hex + 1D Substrates)
-**Estimated Effort**: 68-92 hours total
+**Date**: 2025-11-05 (Updated: 2025-11-05 post-risk-assessment)
+**Status**: Ready for Implementation (After Phase 9 Complete + Pre-Work)
+**Dependencies**: Phase 9 Complete (Hex + 1D Substrates) + Position Extraction Design (4-6h pre-work)
+**Estimated Effort**: 90-120 hours total (revised from 68-92h after risk assessment)
 **Supersedes**: Original Phase 5D Task 3 (Graph substrate split out due to infrastructure complexity)
+
+**⚠️ PRE-WORK REQUIRED**: Design position extraction method BEFORE starting (see Pre-Work section below)
 
 ---
 
@@ -17,10 +19,12 @@ Phase 10 adds **Graph-Based substrate** (the most complex spatial topology) alon
 The peer review identified that Graph substrate requires significant infrastructure changes that would block simpler topologies:
 
 **Infrastructure Prerequisites (P0 - BLOCKING):**
-1. **Action Mapping Refactoring** (3-4h) - Current code hardcoded for 2D/4-direction
-2. **Q-Network Dynamic Sizing** (2-3h) - Fixed action_dim=5 won't work for variable spaces
-3. **Replay Buffer Schema Changes** (2-3h) - Needs valid_actions for masked Q-targets
-4. **Frontend Visualization** (8-12h) - Graph rendering + action masking display
+0. **Feature Flag for Action Masking** (30min) - Rollback strategy (ADDED POST-RISK-ASSESSMENT)
+1. **Action Mapping Refactoring** (4-5h) - Current code hardcoded for 2D/4-direction (revised +1h)
+2. **Q-Network Dynamic Sizing** (3-4h) - Fixed action_dim=5 won't work (revised +1h for checkpoints)
+3. **Replay Buffer Schema Changes** (7-11h) - Needs valid_actions + position extraction (REVISED from 2-3h)
+4. **Infrastructure Testing** (2-3h) - Test with ALL substrates (ADDED POST-RISK-ASSESSMENT)
+5. **Checkpoint Versioning** (2h) - Migration path for old checkpoints (ADDED POST-RISK-ASSESSMENT)
 
 **Without these changes**, Graph substrate CANNOT work. Phase 9 (Hex + 1D) doesn't need them.
 
@@ -38,17 +42,141 @@ The peer review identified that Graph substrate requires significant infrastruct
 
 ---
 
-## Task 10.0: Infrastructure Prerequisites (7-10 hours) - BLOCKING
+## PRE-WORK: Position Extraction Design (4-6 hours) - REQUIRED BEFORE Task 10.0
+
+**⚠️ CRITICAL**: Risk assessment identified this as missing from original plan. Must complete BEFORE starting infrastructure tasks.
 
 ### Overview
 
-These changes are **P0 BLOCKING** for Graph substrate but also benefit Phase 9 topologies. Must be completed first.
+Design and implement method to extract agent position from flattened observation state. Required for replay buffer to store next-state valid actions.
+
+**Problem**: State is flattened observation vector containing:
+- Grid encoding (varies by substrate: 1D scalar, 2D grid, Hex axial coords)
+- Meters (8 values)
+- Affordance encoding (15 values)
+- Temporal extras (4 values)
+
+**Need**: Extract position component to call `substrate.get_valid_actions(position)`
+
+**Solution Options**:
+1. Add `ObservationBuilder.extract_position(state, substrate_type)` method
+2. Store position separately in transition (simpler but breaks schema)
+3. Reverse-engineer from grid encoding (complex, error-prone)
+
+**Recommendation**: Option 1 - Add extraction method to ObservationBuilder
+
+**Deliverables**:
+- Design document: position encoding/extraction format
+- `ObservationBuilder.extract_position()` method
+- Unit tests for ALL substrate types (1D, 2D, 3D, Hex, ND, Graph)
+- Validation: round-trip encode→extract returns original position
+
+**Estimate**: 4-6 hours (2h design, 2-3h implementation, 1h testing)
+
+**⚠️ BLOCKING**: Cannot implement replay buffer schema changes without this.
+
+---
+
+## Task 10.0: Infrastructure Prerequisites (14-18 hours) - BLOCKING (REVISED from 7-10h)
+
+### Overview
+
+These changes are **P0 BLOCKING** for Graph substrate. Infrastructure also benefits Phase 9 if done first (optional sequencing).
+
+**Revised Estimate Rationale** (post-risk-assessment):
+- Replay buffer complexity severely underestimated (2-3h → 7-11h)
+- Added missing tasks (feature flag, testing, versioning)
+- Added buffer for testing across ALL substrates
+- Total: 7-10h → 14-18h
 
 **Files to Modify**:
 - `src/townlet/environment/vectorized_env.py` (action mapping refactor)
 - `src/townlet/agent/networks.py` (dynamic Q-network sizing)
 - `src/townlet/training/replay_buffer.py` (schema change)
 - `src/townlet/population/vectorized.py` (use dynamic action_dim)
+
+---
+
+### Step 0.0: Feature flag for action masking (30 minutes) - ADDED POST-RISK-ASSESSMENT
+
+**Problem**: Action masking infrastructure changes are breaking. Need rollback strategy.
+
+**Solution**: Add feature flag to enable/disable action masking.
+
+**Modify**: `src/townlet/training/config.py`
+
+Add feature flag to training config:
+
+```python
+@dataclass
+class TrainingConfig:
+    """Training configuration."""
+    # ... existing fields
+
+    # Action masking (optional, defaults to False for backward compatibility)
+    enable_action_masking: bool = False
+
+    def __post_init__(self):
+        # Validate action masking requirements
+        if self.enable_action_masking:
+            # Action masking requires specific substrate types
+            logger.info("Action masking enabled - substrate must support get_valid_actions()")
+```
+
+**Modify**: `src/townlet/population/vectorized.py`
+
+Check flag before using masking:
+
+```python
+def select_actions(self, observations, epsilon=0.0):
+    """Select actions with optional action masking."""
+    with torch.no_grad():
+        q_values = self.q_network(observations)
+
+        # Apply action masking if enabled AND substrate supports it
+        if self.config.enable_action_masking and hasattr(self.substrate, 'get_valid_actions'):
+            valid_masks = self._get_action_masks()
+            q_values[~valid_masks] = -float('inf')
+
+        # ... rest of action selection
+```
+
+**Add to config**:
+
+```yaml
+# configs/L1_graph_subway/training.yaml
+training:
+  enable_action_masking: true  # REQUIRED for graph substrate
+```
+
+**Rationale**: If action masking breaks, set flag to `false` and system falls back to standard RL.
+
+**Commit**:
+```bash
+git add src/townlet/training/config.py \
+        src/townlet/population/vectorized.py \
+        configs/L1_graph_subway/training.yaml
+
+git commit -m "feat(training): add feature flag for action masking
+
+Adds enable_action_masking flag for gradual rollout.
+
+**Problem**:
+- Action masking is complex infrastructure change
+- Need rollback strategy if issues found
+
+**Solution**:
+- Feature flag in training config
+- Defaults to False (backward compatible)
+- Graph substrate requires True
+
+**Rationale**:
+- Safe deployment of breaking changes
+- Easy rollback if needed
+- Existing configs unaffected
+
+Part of TASK-002A Phase 10 Task 0 (Infrastructure Prerequisites)."
+```
 
 ---
 
@@ -284,7 +412,16 @@ Part of TASK-002A Phase 10 Task 0 (Infrastructure Prerequisites)."
 
 ---
 
-### Step 0.3: Replay buffer schema change (2-3 hours)
+### Step 0.3: Replay buffer schema change (7-11 hours) - REVISED from 2-3h
+
+**⚠️ COMPLEXITY UNDERESTIMATED**: Risk assessment identified this as 7-11h (not 2-3h).
+
+**Why More Complex Than Expected:**
+1. **Position extraction** (3-4h) - Must extract position from flattened state to get valid actions
+2. **Schema migration** (1-2h) - Update Transition dataclass, handle old checkpoints
+3. **Storage logic** (2-3h) - Store next-state valid actions during transition recording
+4. **Q-target computation** (1-2h) - Apply masking during target computation
+5. **Testing** (1-2h) - Verify masking works correctly across substrates
 
 **Problem**: Replay buffer doesn't store next-state valid actions:
 
@@ -452,19 +589,274 @@ Part of TASK-002A Phase 10 Task 0 (Infrastructure Prerequisites)."
 
 ---
 
-## Task 10.1: Graph-Based Substrate (36-48 hours)
+### Step 0.4: Infrastructure testing (2-3 hours) - ADDED POST-RISK-ASSESSMENT
+
+**Problem**: Infrastructure changes affect ALL substrates, not just Graph. Need regression testing.
+
+**Purpose**: Verify action mapping, Q-network sizing, and replay buffer work with ALL substrates.
+
+**Create**: `tests/test_townlet/integration/test_infrastructure_all_substrates.py`
+
+```python
+"""Test infrastructure changes across all substrate types."""
+import torch
+from townlet.substrate.grid1d import Grid1DSubstrate
+from townlet.substrate.grid2d import Grid2DSubstrate
+from townlet.substrate.grid3d import Grid3DSubstrate
+from townlet.substrate.hex import HexSubstrate
+from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.population.vectorized import VectorizedPopulation
+
+
+def test_action_mapping_all_substrates():
+    """Action mapping should work for 1D, 2D, 3D, Hex."""
+    substrates = [
+        Grid1DSubstrate(length=10),
+        Grid2DSubstrate(width=8, height=8),
+        Grid3DSubstrate(width=5, height=5, depth=5),
+        HexSubstrate(radius=4),
+    ]
+
+    for substrate in substrates:
+        env = VectorizedHamletEnv(substrate=substrate, num_agents=4, ...)
+
+        # Reset and step
+        obs = env.reset()
+        actions = torch.randint(0, substrate.action_space_size, (4,))
+        next_obs, rewards, dones = env.step(actions)
+
+        # Should not crash
+        assert next_obs.shape[0] == 4
+
+
+def test_qnetwork_sizing_all_substrates():
+    """Q-network should size correctly for all substrates."""
+    substrates = [
+        (Grid1DSubstrate(length=10), 3),   # 1D: 3 actions
+        (Grid2DSubstrate(width=8, height=8), 5),  # 2D: 5 actions
+        (Grid3DSubstrate(width=5, height=5, depth=5), 7),  # 3D: 7 actions
+        (HexSubstrate(radius=4), 7),  # Hex: 7 actions (6 dirs + INTERACT)
+    ]
+
+    for substrate, expected_actions in substrates:
+        pop = VectorizedPopulation(substrate=substrate, ...)
+
+        # Verify Q-network output layer size
+        assert pop.q_network.q_head[-1].out_features == expected_actions
+
+
+def test_replay_buffer_backward_compatibility():
+    """Replay buffer should work with old transitions (no valid_actions)."""
+    from townlet.training.replay_buffer import ReplayBuffer, Transition
+
+    buffer = ReplayBuffer(capacity=100)
+
+    # Old-style transition (no valid_actions)
+    old_transition = Transition(
+        state=torch.randn(10),
+        action=0,
+        reward=1.0,
+        next_state=torch.randn(10),
+        done=False,
+        valid_actions=None,  # Old style!
+    )
+
+    buffer.add(old_transition)
+
+    # Should not crash
+    batch = buffer.sample(1)
+    assert batch is not None
+```
+
+**Run tests**:
+```bash
+uv run pytest tests/test_townlet/integration/test_infrastructure_all_substrates.py -v
+```
+
+**Expected**: ALL tests PASS (verifies no regressions)
+
+**Commit**:
+```bash
+git add tests/test_townlet/integration/test_infrastructure_all_substrates.py
+
+git commit -m "test(infrastructure): verify changes work across all substrates
+
+Regression testing for infrastructure changes.
+
+**Purpose**:
+- Verify action mapping works (1D, 2D, 3D, Hex)
+- Verify Q-network sizing correct (all substrates)
+- Verify replay buffer backward compatible
+
+**Testing**:
+- 3 integration tests covering all substrate types
+- Catches regressions from infrastructure changes
+
+Part of TASK-002A Phase 10 Task 0 (Infrastructure Prerequisites)."
+```
+
+---
+
+### Step 0.5: Checkpoint versioning (2 hours) - ADDED POST-RISK-ASSESSMENT
+
+**Problem**: Replay buffer schema change breaks old checkpoints (missing valid_actions field).
+
+**Solution**: Add checkpoint versioning and migration path.
+
+**Modify**: `src/townlet/training/state.py`
+
+Add checkpoint version:
+
+```python
+@dataclass
+class PopulationCheckpoint:
+    """Population checkpoint with versioning."""
+    version: int = 2  # NEW! Incremented for schema change
+
+    q_network_state: dict
+    target_network_state: dict
+    optimizer_state: dict
+    replay_buffer: list[Transition]
+    episode: int
+    total_steps: int
+    epsilon: float
+
+
+def migrate_checkpoint_v1_to_v2(checkpoint: dict) -> PopulationCheckpoint:
+    """Migrate old checkpoint (v1) to new schema (v2).
+
+    Changes:
+    - Adds version field (default 2)
+    - Adds valid_actions=None to old transitions
+    """
+    # Check if already v2
+    if 'version' in checkpoint and checkpoint['version'] == 2:
+        return checkpoint
+
+    # Migrate v1 → v2: Add valid_actions to transitions
+    replay_buffer = checkpoint.get('replay_buffer', [])
+
+    for transition in replay_buffer:
+        if not hasattr(transition, 'valid_actions'):
+            # Old transition - add field
+            transition.valid_actions = None
+
+    # Add version
+    checkpoint['version'] = 2
+
+    return PopulationCheckpoint(**checkpoint)
+```
+
+**Modify**: `src/townlet/demo/runner.py`
+
+Add migration on checkpoint load:
+
+```python
+def load_checkpoint(self, checkpoint_path: str):
+    """Load checkpoint with automatic migration."""
+    checkpoint_dict = torch.load(checkpoint_path)
+
+    # Migrate if needed
+    if 'version' not in checkpoint_dict or checkpoint_dict['version'] < 2:
+        logger.info(f"Migrating checkpoint from v1 to v2: {checkpoint_path}")
+        checkpoint_dict = migrate_checkpoint_v1_to_v2(checkpoint_dict)
+
+    # Load migrated checkpoint
+    self.population.load_checkpoint(checkpoint_dict)
+```
+
+**Add test**:
+
+```python
+def test_checkpoint_migration_v1_to_v2():
+    """Old checkpoints should migrate to new schema."""
+    from townlet.training.state import migrate_checkpoint_v1_to_v2, Transition
+
+    # Old checkpoint (v1 - no version field, no valid_actions)
+    old_checkpoint = {
+        'q_network_state': {},
+        'target_network_state': {},
+        'optimizer_state': {},
+        'replay_buffer': [
+            Transition(
+                state=torch.randn(10),
+                action=0,
+                reward=1.0,
+                next_state=torch.randn(10),
+                done=False,
+                # NO valid_actions field!
+            )
+        ],
+        'episode': 100,
+        'total_steps': 5000,
+        'epsilon': 0.1,
+    }
+
+    # Migrate
+    new_checkpoint = migrate_checkpoint_v1_to_v2(old_checkpoint)
+
+    # Verify version added
+    assert new_checkpoint.version == 2
+
+    # Verify valid_actions added (None for backward compatibility)
+    for transition in new_checkpoint.replay_buffer:
+        assert hasattr(transition, 'valid_actions')
+        assert transition.valid_actions is None
+```
+
+**Run test**:
+```bash
+uv run pytest tests/test_townlet/unit/test_checkpoint_versioning.py -v
+```
+
+**Expected**: PASS
+
+**Commit**:
+```bash
+git add src/townlet/training/state.py \
+        src/townlet/demo/runner.py \
+        tests/test_townlet/unit/test_checkpoint_versioning.py
+
+git commit -m "feat(training): add checkpoint versioning and migration
+
+Checkpoint versioning prevents breaking old saved models.
+
+**Problem**:
+- Replay buffer schema change breaks old checkpoints
+- Missing valid_actions field causes deserialization errors
+
+**Solution**:
+- Add version field to PopulationCheckpoint (v2)
+- Automatic migration v1→v2 on checkpoint load
+- Backward compatible (old transitions get valid_actions=None)
+
+**Testing**:
+- Added test_checkpoint_versioning.py
+- Verified v1 checkpoints migrate correctly
+
+Part of TASK-002A Phase 10 Task 0 (Infrastructure Prerequisites)."
+```
+
+---
+
+## Task 10.1: Graph-Based Substrate (44-58 hours) - REVISED from 36-48h
 
 ### Overview
 
 Most complex topology - graph nodes connected by edges. Requires **action masking infrastructure** (variable action spaces). Enables graph RL, non-Euclidean reasoning.
 
-**Revised Effort Estimate**: 36-48 hours (vs original 18-24h)
+**Revised Effort Estimate**: 44-58 hours (revised from 36-48h after risk assessment)
 
-**Why Doubled?**
-- Peer review identified action masking complexity severely underestimated
-- Variable action spaces require careful testing (15+ tests needed)
-- Integration with masked replay buffer + Q-learning (4-6h alone)
-- Config system needs graph edge parsing (more complex than expected)
+**Why Increased Again?**
+- **Peer review** (68-92h total): Doubled from original 18-24h to 36-48h
+- **Risk assessment** (90-120h total): Added debugging tools +8-10h
+  - Action masking debugging severely underestimated (6-8h → 10-14h)
+  - Need Step 1.4b: Debugging tools for action masking (4-6h)
+  - Final integration testing expanded (4-6h → 6-8h)
+
+**Breakdown of Increase**:
+- Peer review: +18-24h (identified action masking complexity)
+- Risk assessment: +8-10h (identified missing debugging tools)
 
 **Files to Create**:
 - `src/townlet/substrate/graph.py` (new, ~312 lines)
@@ -634,6 +1026,8 @@ Part of TASK-002A Phase 10 Task 1 (Graph Substrate)."
 
 **This is the most complex step** - requires changes across multiple files.
 
+**Note**: This implements the core integration. Step 1.4b adds debugging tools (4-6h additional).
+
 **Modify**: `src/townlet/environment/vectorized_env.py`
 
 Add `get_valid_action_masks()` method:
@@ -764,6 +1158,243 @@ Part of TASK-002A Phase 10 Task 1 (Graph Substrate)."
 
 ---
 
+### Step 1.4b: Action masking debugging tools (4-6 hours) - ADDED POST-RISK-ASSESSMENT
+
+**Problem**: Action masking bugs are silent failures. Agent selects invalid action → environment crashes, but unclear why.
+
+**Solution**: Add debugging tools to diagnose action masking issues.
+
+**Purpose**: Reduce debugging time when action masking fails (estimated 4-6h saved in Step 1.6).
+
+**Create**: `src/townlet/debug/action_masking.py`
+
+```python
+"""Debugging utilities for action masking."""
+import torch
+from townlet.substrate.base import SpatialSubstrate
+from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+
+class ActionMaskingValidator:
+    """Validates action masking correctness."""
+
+    def __init__(self, env: VectorizedHamletEnv):
+        self.env = env
+        self.substrate = env.substrate
+
+    def validate_masks(self, verbose: bool = False) -> dict:
+        """Validate action masks for all agents.
+
+        Returns:
+            dict with validation results:
+            - all_valid: bool (True if all masks correct)
+            - errors: list of error messages
+            - warnings: list of warnings
+        """
+        errors = []
+        warnings = []
+
+        masks = self.env.get_valid_action_masks()  # [num_agents, action_dim]
+
+        for i in range(self.env.num_agents):
+            position = self.env.positions[i]
+            mask = masks[i]
+
+            # Get expected valid actions from substrate
+            expected_valid = self.substrate.get_valid_actions(position)
+
+            # Convert mask to list of valid actions
+            actual_valid = torch.where(mask)[0].tolist()
+
+            # Compare
+            if set(actual_valid) != set(expected_valid):
+                errors.append(
+                    f"Agent {i} at {position.tolist()}: "
+                    f"expected {expected_valid}, got {actual_valid}"
+                )
+
+            # Check for always-invalid INTERACT (common bug)
+            interact_action = self.substrate.action_space_size - 1
+            if interact_action not in actual_valid:
+                warnings.append(
+                    f"Agent {i}: INTERACT action always invalid (likely bug)"
+                )
+
+            if verbose:
+                print(f"Agent {i} @ {position.tolist()}: valid={actual_valid}")
+
+        return {
+            'all_valid': len(errors) == 0,
+            'errors': errors,
+            'warnings': warnings,
+        }
+
+    def trace_invalid_action(self, agent_id: int, action: int) -> str:
+        """Generate detailed trace when agent selects invalid action.
+
+        Args:
+            agent_id: Agent index
+            action: Action that was selected
+
+        Returns:
+            Detailed error message for debugging
+        """
+        position = self.env.positions[agent_id]
+        mask = self.env.get_valid_action_masks()[agent_id]
+        valid_actions = torch.where(mask)[0].tolist()
+        expected_valid = self.substrate.get_valid_actions(position)
+
+        q_values = self.env.population.q_network(
+            self.env.get_observation(agent_id).unsqueeze(0)
+        )[0]
+
+        trace = f"""
+=== INVALID ACTION SELECTED ===
+Agent: {agent_id}
+Position: {position.tolist()}
+Action: {action}
+
+Expected valid actions (from substrate): {expected_valid}
+Actual mask (from environment): {valid_actions}
+Mask mismatch: {set(expected_valid) != set(valid_actions)}
+
+Q-values:
+{q_values.tolist()}
+
+Q-values after masking:
+{(q_values * mask + ~mask * -float('inf')).tolist()}
+
+Selected action Q-value: {q_values[action].item():.3f}
+Action is valid: {mask[action].item()}
+
+Possible causes:
+1. Environment mask wrong (check get_valid_action_masks())
+2. Substrate get_valid_actions() wrong
+3. Epsilon-greedy not respecting mask
+4. Q-network output shape mismatch
+"""
+        return trace
+
+
+def validate_action_selection_step(
+    env: VectorizedHamletEnv,
+    actions: torch.Tensor,
+    masks: torch.Tensor,
+) -> None:
+    """Assert all selected actions are valid (for testing).
+
+    Raises:
+        AssertionError: If any agent selected invalid action
+    """
+    validator = ActionMaskingValidator(env)
+
+    for i in range(len(actions)):
+        action = actions[i].item()
+        valid_actions = torch.where(masks[i])[0].tolist()
+
+        if action not in valid_actions:
+            trace = validator.trace_invalid_action(i, action)
+            raise AssertionError(f"Invalid action selected!\n{trace}")
+```
+
+**Add to training loop** (optional, for debugging):
+
+```python
+# In src/townlet/demo/runner.py (optional debugging mode)
+def run_with_validation(self):
+    """Run training with action masking validation (DEBUG MODE)."""
+    from townlet.debug.action_masking import ActionMaskingValidator
+
+    validator = ActionMaskingValidator(self.env)
+
+    for episode in range(self.max_episodes):
+        obs = self.env.reset()
+
+        # Validate masks after reset
+        result = validator.validate_masks(verbose=False)
+        if not result['all_valid']:
+            logger.error(f"Episode {episode}: Invalid masks! {result['errors']}")
+
+        for step in range(self.max_steps_per_episode):
+            masks = self.env.get_valid_action_masks()
+            actions = self.population.select_actions(obs, masks, epsilon=self.epsilon)
+
+            # Validate actions before step
+            for i in range(len(actions)):
+                if actions[i].item() not in torch.where(masks[i])[0].tolist():
+                    trace = validator.trace_invalid_action(i, actions[i].item())
+                    raise RuntimeError(f"Invalid action!\n{trace}")
+
+            obs, rewards, dones = self.env.step(actions)
+```
+
+**Add tests**:
+
+```python
+def test_action_masking_validator():
+    """Validator should catch mask errors."""
+    from townlet.substrate.graph import GraphSubstrate
+    from townlet.environment.vectorized_env import VectorizedHamletEnv
+    from townlet.debug.action_masking import ActionMaskingValidator
+
+    edges = [(0, 1), (1, 2), (2, 0)]
+    substrate = GraphSubstrate(num_nodes=3, edges=edges, directed=False)
+    env = VectorizedHamletEnv(substrate=substrate, num_agents=4, ...)
+
+    validator = ActionMaskingValidator(env)
+
+    # Should validate correctly
+    result = validator.validate_masks()
+    assert result['all_valid']
+    assert len(result['errors']) == 0
+
+
+def test_trace_invalid_action():
+    """Trace should provide detailed debugging info."""
+    from townlet.debug.action_masking import ActionMaskingValidator
+
+    # ... setup env ...
+
+    validator = ActionMaskingValidator(env)
+
+    # Simulate invalid action
+    trace = validator.trace_invalid_action(agent_id=0, action=99)
+
+    # Should contain key debugging info
+    assert 'Position:' in trace
+    assert 'Q-values:' in trace
+    assert 'Possible causes:' in trace
+```
+
+**Commit**:
+```bash
+git add src/townlet/debug/action_masking.py \
+        tests/test_townlet/unit/test_action_masking_debug.py
+
+git commit -m "feat(debug): add action masking debugging tools
+
+Debugging tools reduce time spent diagnosing masking issues.
+
+**Problem**:
+- Action masking bugs are silent failures
+- Hard to diagnose why agent selects invalid action
+- Integration debugging can take 4-6h without tools
+
+**Solution**:
+- ActionMaskingValidator class
+- validate_masks() - check all agent masks correct
+- trace_invalid_action() - detailed trace when bugs occur
+- Validation assertions for testing
+
+**Rationale**:
+- Risk assessment identified debugging as underestimated
+- These tools save 4-6h during Step 1.6 integration testing
+
+Part of TASK-002A Phase 10 Task 1 (Graph Substrate)."
+```
+
+---
+
 ### Step 1.5: Config support + config pack (4-6 hours)
 
 **Modify**: `src/townlet/substrate/config.py`
@@ -865,7 +1496,21 @@ Part of TASK-002A Phase 10 Task 1 (Graph Substrate)."
 
 ---
 
-### Step 1.6: Integration tests + final commit (4-6 hours)
+### Step 1.6: Integration tests + final commit (6-8 hours) - REVISED from 4-6h
+
+**⚠️ COMPLEXITY INCREASED**: Risk assessment identified more integration testing needed.
+
+**Why More Time?**
+- **Debugging tools** (Step 1.4b) save time BUT expose more bugs to fix
+- **Cross-substrate testing**: Must verify Graph doesn't break Hex/1D
+- **Action masking edge cases**: Zero-degree nodes, self-loops, disconnected graphs
+- **Performance testing**: Graph operations on large graphs (100+ nodes)
+
+**Time allocation**:
+- Integration tests: 3-4h
+- Cross-substrate regression: 1-2h
+- Edge case debugging: 1-2h
+- Performance validation: 1h
 
 **Create**: `tests/test_townlet/integration/test_graph_training.py`
 
@@ -917,11 +1562,17 @@ Part of TASK-002A Phase 10 Task 1 (Graph Substrate - COMPLETE)."
 
 ---
 
-## Task 10.2: Frontend Visualization (8-12 hours)
+## Task 10.2: Frontend Visualization (10-14 hours) - REVISED from 8-12h
 
 ### Overview
 
-**CRITICAL OMISSION from original plan.** Frontend needs:
+**CRITICAL OMISSION from original plan.** Risk assessment revised estimate to account for:
+- Layout complexity: Force-directed layout more complex than circular
+- Action masking overlay: Interactive debugging UI (+2h)
+- WebSocket protocol changes: Send graph topology data (+1h)
+- Testing and debugging: Graph rendering bugs harder to diagnose
+
+Frontend needs:
 1. Graph rendering (nodes + edges)
 2. Action masking visualization
 3. Agent movement on graph
@@ -937,7 +1588,9 @@ Part of TASK-002A Phase 10 Task 1 (Graph Substrate - COMPLETE)."
 
 ---
 
-### Step 2.1: Graph rendering component (4-5 hours)
+### Step 2.1: Graph rendering component (5-6 hours) - REVISED from 4-5h
+
+**Complexity increased**: Force-directed layout harder than circular layout (+1h)
 
 **Create**: `frontend/src/components/GraphVisualization.vue`
 
@@ -1045,7 +1698,9 @@ export default {
 
 ---
 
-### Step 2.2: Action masking overlay (2-3 hours)
+### Step 2.2: Action masking overlay (3-4 hours) - REVISED from 2-3h
+
+**Complexity increased**: Interactive debugging UI more complex than static overlay (+1h)
 
 **Create**: `frontend/src/components/ActionMaskingOverlay.vue`
 
@@ -1087,7 +1742,9 @@ export default {
 
 ---
 
-### Step 2.3: Integration + testing (2-4 hours)
+### Step 2.3: Integration + testing (2-4 hours) - UNCHANGED
+
+**No change**: Original estimate sufficient
 
 **Modify**: `frontend/src/App.vue`
 
@@ -1210,70 +1867,99 @@ Part of TASK-002A Phase 10 (Graph Substrate + Infrastructure - COMPLETE)."
 
 ---
 
-## Phase 10 Completion Checklist
+## Phase 10 Completion Checklist - REVISED POST-RISK-ASSESSMENT
 
-### Infrastructure (7-10 hours)
+### Pre-Work (4-6 hours) - ADDED
+- [ ] Position extraction design (2h)
+- [ ] Position extraction implementation (2-3h)
+- [ ] Position extraction testing (1h)
+
+### Infrastructure (14-18 hours) - REVISED from 7-10h
+- [ ] Step 0.0: Feature flag for action masking (30min) - ADDED
 - [ ] Step 0.1: Action mapping refactor (3-4h)
 - [ ] Step 0.2: Q-network dynamic sizing (2-3h)
-- [ ] Step 0.3: Replay buffer schema (2-3h)
+- [ ] Step 0.3: Replay buffer schema (7-11h) - REVISED from 2-3h
+- [ ] Step 0.4: Infrastructure testing (2-3h) - ADDED
+- [ ] Step 0.5: Checkpoint versioning (2h) - ADDED
 
-### Graph Substrate (36-48 hours)
+### Graph Substrate (44-58 hours) - REVISED from 36-48h
 - [ ] Step 1.1: Action masking interface (1h)
 - [ ] Step 1.2: Graph unit tests (3-4h)
 - [ ] Step 1.3: Implement GraphSubstrate (10-14h)
 - [ ] Step 1.4: Action masking integration (6-8h)
+- [ ] Step 1.4b: Action masking debugging tools (4-6h) - ADDED
 - [ ] Step 1.5: Config + config pack (4-6h)
-- [ ] Step 1.6: Integration tests (4-6h)
+- [ ] Step 1.6: Integration tests (6-8h) - REVISED from 4-6h
 
-### Frontend (8-12 hours)
-- [ ] Step 2.1: Graph rendering (4-5h)
-- [ ] Step 2.2: Action masking overlay (2-3h)
+### Frontend (10-14 hours) - REVISED from 8-12h
+- [ ] Step 2.1: Graph rendering (5-6h) - REVISED from 4-5h
+- [ ] Step 2.2: Action masking overlay (3-4h) - REVISED from 2-3h
 - [ ] Step 2.3: Integration + testing (2-4h)
 
 ### Documentation (2-3 hours)
 - [ ] Step 3.1: Update CLAUDE.md (1h)
 - [ ] Step 3.2: Commit docs (30min)
 
-**Total Estimated Effort**: 68-92 hours
+**Total Estimated Effort**: 90-120 hours (REVISED from 68-92h)
 
 ---
 
-## Success Criteria
+## Success Criteria - REVISED POST-RISK-ASSESSMENT
 
 Phase 10 is complete when:
 
+**Pre-Work:**
+- [ ] Position extraction design documented
+- [ ] ObservationBuilder.extract_position() implemented
+- [ ] Round-trip tests pass (encode→extract returns original position)
+- [ ] Works for ALL substrate types (1D, 2D, 3D, Hex, ND, Graph)
+
 **Infrastructure:**
-- [ ] Action mapping delegated to substrates (1D, 2D, 3D all work)
+- [ ] Feature flag for action masking working (backward compatible)
+- [ ] Action mapping delegated to substrates (1D, 2D, 3D, Hex all work)
 - [ ] Q-network sizes dynamically to substrate
 - [ ] Replay buffer stores/retrieves valid actions
+- [ ] Checkpoint versioning implemented (v1→v2 migration works)
 - [ ] All infrastructure tests pass
+- [ ] No regressions in existing substrates
 
 **Graph Substrate:**
 - [ ] All unit tests pass (15/15)
 - [ ] All integration tests pass (3/3)
-- [ ] Action masking working correctly
+- [ ] Action masking working correctly (no invalid actions selected)
+- [ ] Debugging tools validate masks correctly
 - [ ] Training runs on graph substrate
 - [ ] Config pack L1_graph_subway created
+- [ ] Performance acceptable on 100+ node graphs
 
 **Frontend:**
 - [ ] Graph visualization renders correctly
 - [ ] Action masking overlay shows valid/invalid actions
+- [ ] Interactive debugging UI works (click agent → see valid actions)
 - [ ] Agents move along edges visually
 - [ ] Works with live inference server
+- [ ] WebSocket sends graph topology data
 
 **Integration:**
 - [ ] No regressions in Phase 9 substrates (Hex, 1D)
 - [ ] No regressions in existing substrates (2D, 3D, ND)
 - [ ] All topologies coexist peacefully
+- [ ] Feature flag=false works (backward compatibility)
+- [ ] Old checkpoints migrate correctly (v1→v2)
 - [ ] Documentation complete
 
 ---
 
-**Phase 10 Status**: Ready for Implementation (After Phase 9)
-**Recommended Order**: Infrastructure → Graph → Frontend → Docs
-**Total Effort**: 68-92 hours (peer review revised estimate)
-**Dependencies**: Phase 9 must be complete first
-**Risk Level**: MODERATE-HIGH (complex action masking, frontend work)
+**Phase 10 Status**: Ready for Implementation (After Phase 9 + Pre-Work)
+**Recommended Order**: Pre-Work → Infrastructure → Graph → Frontend → Docs
+**Total Effort**: 90-120 hours (risk assessment revised estimate, up from 68-92h)
+**Dependencies**: Phase 9 must be complete first + Position Extraction Design (4-6h)
+**Risk Level**: MEDIUM-HIGH (complex action masking, breaking changes, frontend work)
+
+**Revision History**:
+- Original estimate: 40-60h (naive, underestimated action masking)
+- Peer review: 68-92h (identified action masking complexity)
+- Risk assessment: 90-120h (identified missing tasks, debugging tools, testing gaps)
 
 **Next Steps After Phase 10**:
 - Phase 11: Multi-zone environments

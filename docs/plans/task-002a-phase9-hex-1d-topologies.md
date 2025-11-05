@@ -1,9 +1,9 @@
 # TASK-002A Phase 9: Simple Alternative Topologies (Hex + 1D) - Implementation Plan
 
-**Date**: 2025-11-05
+**Date**: 2025-11-05 (Updated: 2025-11-05 post-risk-assessment)
 **Status**: Ready for Implementation
 **Dependencies**: Phase 5C Complete (N-Dimensional Substrates, Observation Encoding Retrofit)
-**Estimated Effort**: 13-17 hours total
+**Estimated Effort**: 20-26 hours total (revised from 13-17h after risk assessment)
 **Supersedes**: Original Phase 5D plan (split into Phase 9 + Phase 10 due to complexity)
 
 ---
@@ -12,8 +12,10 @@
 
 Phase 9 adds two simple alternative topologies that **do not require infrastructure changes**:
 
-1. **Hexagonal Grid** (10-12 hours) - Uniform distances, axial coordinates, strategy games
-2. **1D Grid** (5-7 hours) - Linear movement, simplest spatial case, pedagogical progression
+1. **1D Grid** (6-8 hours) - Linear movement, simplest spatial case, surfaces 2D assumptions
+2. **Hexagonal Grid** (10-12 hours) - Uniform distances, axial coordinates, strategy games
+3. **Frontend Visualization** (3-4 hours) - Hex rendering + 1D mode (added post-risk-assessment)
+4. **Documentation** (1-2 hours) - CLAUDE.md updates + regression testing
 
 **Why the Split?**
 
@@ -25,19 +27,37 @@ The original Phase 5D plan included Graph-Based substrates (18-24h estimated), w
 
 **Graph substrate deferred to Phase 10** to avoid blocking simple topologies.
 
-**Implementation Order**: Hex → 1D (build confidence with simpler topology first)
+**Implementation Order**: 1D → Hex → Frontend → Docs (revised from Hex→1D after risk assessment)
+
+**Rationale for 1D-First**:
+- 1D is simplest, will surface any hardcoded 2D assumptions early
+- Fixing 2D assumptions benefits Hex implementation
+- Builds confidence before tackling coordinate systems
+- Tests action_dim=3 before action_dim=7
 
 **Key Technical Challenges**:
+- **1D**: Will expose hardcoded 2D assumptions (action mapping, observation dims)
 - **Hex**: Axial coordinate system math (6 neighbors, uniform distances)
-- **1D**: Action mapping edge case (2 directions only, not hardcoded 4)
+- **Frontend**: Hex requires axial→pixel conversion, SVG polygon rendering
 
 **Pedagogical Value**:
+- **1D** (✅): Edge case validator, teaches dimensionality concepts
 - **Hex** (✅✅): Teaches coordinate system design, uniform distance metrics
-- **1D** (✅): Teaches dimensionality concepts, edge case reasoning
+- **Frontend** (✅✅): Essential for debugging and visual pedagogy
 
 ---
 
-## Task 9.1: Hexagonal Grid Substrate (10-12 hours)
+**⚠️ IMPLEMENTATION ORDER**:
+1. **FIRST**: Scroll down to Task 9.1 (1D Grid) - Line ~793
+2. **SECOND**: Return to Task 9.2 (Hex Grid) below
+3. **THIRD**: Task 9.3 (Documentation)
+4. **FOURTH**: Task 9.4 (Frontend Visualization)
+
+**Rationale**: 1D Grid will surface hardcoded 2D assumptions early, providing cleaner architecture for Hex Grid.
+
+---
+
+## Task 9.2: Hexagonal Grid Substrate (10-12 hours) - IMPLEMENT SECOND (see line ~793 for Task 9.1)
 
 ### Overview
 
@@ -54,7 +74,7 @@ Implements 2D hexagonal grid with axial coordinates (q, r). All hexes have unifo
 
 ---
 
-### Step 1.1: Write unit tests for HexGridSubstrate (1 hour)
+### Step 2.1: Write unit tests for HexGridSubstrate (1 hour)
 
 **Purpose**: Test-driven development - write tests first to define behavior
 
@@ -252,7 +272,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_hexgrid.py -v
 
 ---
 
-### Step 1.2: Implement HexGridSubstrate (4-5 hours)
+### Step 2.2: Implement HexGridSubstrate (4-5 hours)
 
 **Purpose**: Implement hex grid with axial coordinates
 
@@ -529,7 +549,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_hexgrid.py -v
 
 ---
 
-### Step 1.3: Add hex config support (1 hour)
+### Step 2.3: Add hex config support (1 hour)
 
 **Modify**: `src/townlet/substrate/config.py`
 
@@ -598,7 +618,7 @@ print(config)
 
 ---
 
-### Step 1.4: Create hex config pack (2 hours)
+### Step 2.4: Create hex config pack (2 hours)
 
 **Purpose**: Example config for hex grid training
 
@@ -637,7 +657,7 @@ print('Config loaded successfully')
 
 ---
 
-### Step 1.5: Integration test (2 hours)
+### Step 2.5: Integration test (2 hours)
 
 **Purpose**: Verify hex substrate works in full training loop
 
@@ -708,7 +728,7 @@ uv run scripts/run_demo.py --config configs/L1_hex_strategy --max-episodes 10
 
 ---
 
-### Step 1.6: Commit hex substrate (30 min)
+### Step 2.6: Commit hex substrate (30 min)
 
 ```bash
 git add src/townlet/substrate/hexgrid.py \
@@ -743,12 +763,12 @@ Implements 2D hexagonal grid with axial coordinates.
 - Demonstrates coordinate system design choices
 - Shows how topology affects distance metrics
 
-Part of TASK-002A Phase 9 Task 1 (Hexagonal Grid)."
+Part of TASK-002A Phase 9 Task 2 (Hexagonal Grid - IMPLEMENT SECOND)."
 ```
 
 ---
 
-## Task 9.2: 1D Grid Substrate (5-7 hours)
+## Task 9.1: 1D Grid Substrate (6-8 hours) - IMPLEMENT FIRST
 
 ### Overview
 
@@ -756,10 +776,12 @@ Simplest spatial substrate - linear 1D grid with scalar positions. Only 2 direct
 
 **Why More Complex Than Expected?**
 
-Original estimate: 2-4 hours. Revised to 5-7 hours due to:
+Original estimate: 2-4 hours. Revised to 6-8 hours after risk assessment due to:
 - Action mapping currently hardcoded for 2D (4 directions)
+- Will expose ANY hardcoded 2D assumptions in environment (VALUABLE cleanup!)
 - Need to add 1D action mapping edge case (2 directions)
-- Replay buffer assumes fixed action dim=5 (needs to handle 3)
+- Q-network needs action_dim=3 (not 5)
+- Budget includes debugging time for surfacing/fixing 2D assumptions
 
 **Files to Create**:
 - `src/townlet/substrate/grid1d.py` (new)
@@ -773,7 +795,7 @@ Original estimate: 2-4 hours. Revised to 5-7 hours due to:
 
 ---
 
-### Step 2.1: Write unit tests for Grid1DSubstrate (1 hour)
+### Step 1.1: Write unit tests for Grid1DSubstrate (1 hour)
 
 **Create**: `tests/test_townlet/unit/test_substrate_grid1d.py`
 
@@ -923,7 +945,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_grid1d.py -v
 
 ---
 
-### Step 2.2: Implement Grid1DSubstrate (2-3 hours)
+### Step 1.2: Implement Grid1DSubstrate (2-3 hours)
 
 **Create**: `src/townlet/substrate/grid1d.py`
 
@@ -1103,7 +1125,7 @@ uv run pytest tests/test_townlet/unit/test_substrate_grid1d.py -v
 
 ---
 
-### Step 2.3: Add config support and create config pack (2 hours)
+### Step 1.3: Add config support and create config pack (2-3 hours)
 
 **Modify**: `src/townlet/substrate/config.py`
 
@@ -1196,7 +1218,7 @@ Implements linear 1D spatial topology with scalar positions.
 - Demonstrates dimensionality concepts
 - Edge case validation (N=1)
 
-Part of TASK-002A Phase 9 Task 2 (1D Grid)."
+Part of TASK-002A Phase 9 Task 1 (1D Grid - IMPLEMENT FIRST)."
 ```
 
 ---
@@ -1233,7 +1255,34 @@ Add section on Phase 9 topologies:
 
 ---
 
-### Step 3.2: Commit documentation (30 min)
+### Step 3.2: Regression testing (1 hour) - ADDED POST-RISK-ASSESSMENT
+
+**Purpose**: Verify that 1D Grid changes didn't break existing substrates
+
+**Action**: Run full test suite to ensure no regressions
+
+**Test existing substrates**:
+```bash
+# Test 2D Grid (baseline)
+uv run pytest tests/test_townlet/unit/test_substrate_grid2d.py -v
+
+# Test 3D Grid
+uv run pytest tests/test_townlet/unit/test_substrate_grid3d.py -v
+
+# Test N-Dimensional
+uv run pytest tests/test_townlet/unit/test_substrate_ndimensional.py -v
+
+# Run quick training test on 2D to ensure no environment breakage
+uv run scripts/run_demo.py --config configs/L1_full_observability --max-episodes 5
+```
+
+**Expected**: All existing substrate tests PASS, 2D training runs without errors
+
+**Why This Matters**: 1D Grid may have required fixes to hardcoded 2D assumptions. This step verifies those fixes didn't break existing functionality.
+
+---
+
+### Step 3.3: Commit documentation (30 min)
 
 ```bash
 git add CLAUDE.md
@@ -1252,52 +1301,210 @@ Part of TASK-002A Phase 9 (Simple Alternative Topologies)."
 
 ---
 
-## Phase 9 Completion Checklist
+## Task 9.4: Frontend Visualization (3-4 hours) - ADDED POST-RISK-ASSESSMENT
 
-### Hex Substrate (10-12 hours)
-- [ ] Step 1.1: Unit tests (1h)
-- [ ] Step 1.2: Implement HexGridSubstrate (4-5h)
-- [ ] Step 1.3: Config support (1h)
-- [ ] Step 1.4: Config pack (2h)
-- [ ] Step 1.5: Integration test (2h)
-- [ ] Step 1.6: Commit (30min)
+**⚠️ CRITICAL ADDITION**: Risk assessment identified frontend visualization as essential for debugging and pedagogy. This task was completely missing from original plan.
 
-### 1D Substrate (5-7 hours)
-- [ ] Step 2.1: Unit tests (1h)
-- [ ] Step 2.2: Implement Grid1DSubstrate (2-3h)
-- [ ] Step 2.3: Config & commit (2h)
+### Overview
 
-### Documentation (1-2 hours)
-- [ ] Step 3.1: Update CLAUDE.md (1h)
-- [ ] Step 3.2: Commit docs (30min)
+Add frontend rendering support for Hex Grid and 1D Grid substrates. Without visualization, debugging coordinate systems is nearly impossible and pedagogical value is lost.
 
-**Total Estimated Effort**: 13-17 hours (vs original 30-40h for Phase 5D)
+**Files to Create**:
+- `frontend/src/components/HexGridVisualization.vue` (new)
+- `frontend/src/components/Grid1DVisualization.vue` (new)
+
+**Files to Modify**:
+- `frontend/src/App.vue` (add substrate type switching)
+- `frontend/src/websocket.js` (handle hex/1D position data)
 
 ---
 
-## Success Criteria
+### Step 4.1: Hex Grid visualization component (2-2.5 hours)
+
+**Purpose**: Render hexagonal grid with axial coordinates
+
+**Create**: `frontend/src/components/HexGridVisualization.vue`
+
+**Key Features**:
+- Axial→pixel coordinate conversion (using Red Blob Games formulas)
+- SVG polygon rendering for hexagons
+- Agent position rendering on hex grid
+- Affordance placement on hexes
+
+**Axial to Pixel Conversion** (flat-top orientation):
+```javascript
+function axialToPixel(q, r, hexSize) {
+  const x = hexSize * (3/2 * q);
+  const y = hexSize * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+  return { x, y };
+}
+
+function hexPolygonPoints(centerX, centerY, size) {
+  const points = [];
+  for (let i = 0; i < 6; i++) {
+    const angleDeg = 60 * i;
+    const angleRad = Math.PI / 180 * angleDeg;
+    points.push({
+      x: centerX + size * Math.cos(angleRad),
+      y: centerY + size * Math.sin(angleRad)
+    });
+  }
+  return points;
+}
+```
+
+**Test**: Load L1_hex_strategy config and verify hex grid renders correctly
+
+---
+
+### Step 4.2: 1D Grid visualization component (1-1.5 hours)
+
+**Purpose**: Render linear 1D grid
+
+**Create**: `frontend/src/components/Grid1DVisualization.vue`
+
+**Key Features**:
+- Linear horizontal layout
+- Agent position as circle on line
+- Affordances as markers on line segments
+- Position labels (0, 1, 2, ..., N-1)
+
+**Simple Layout**:
+```javascript
+function positionToPixel(pos, length, containerWidth) {
+  const spacing = containerWidth / length;
+  return spacing * pos + spacing / 2;
+}
+```
+
+**Test**: Load L0_1D_line config and verify linear grid renders correctly
+
+---
+
+### Step 4.3: Integration and commit (30 min)
+
+**Modify**: `frontend/src/App.vue`
+
+Add substrate type detection:
+```javascript
+computed: {
+  substrateType() {
+    // Detect from config or WebSocket data
+    if (this.config.substrate.type === 'hexgrid') return 'hex';
+    if (this.config.substrate.type === 'grid1d') return '1d';
+    if (this.config.substrate.type === 'grid2d') return '2d';
+    // ... etc
+  }
+}
+```
+
+Conditionally render components:
+```vue
+<HexGridVisualization v-if="substrateType === 'hex'" :agents="agents" />
+<Grid1DVisualization v-if="substrateType === '1d'" :agents="agents" />
+<GridVisualization v-else :agents="agents" />  <!-- 2D fallback -->
+```
+
+**Commit**:
+```bash
+git add frontend/src/components/HexGridVisualization.vue \
+        frontend/src/components/Grid1DVisualization.vue \
+        frontend/src/App.vue \
+        frontend/src/websocket.js
+
+git commit -m "feat(frontend): add Hex Grid and 1D Grid visualization
+
+Essential for debugging and pedagogical value.
+
+**Hex Grid Visualization**:
+- Axial→pixel coordinate conversion
+- SVG polygon rendering for hexagons
+- Supports L1_hex_strategy config pack
+
+**1D Grid Visualization**:
+- Linear horizontal layout
+- Agent position rendering on line
+- Supports L0_1D_line config pack
+
+**Integration**:
+- Automatic substrate type detection
+- Conditional component rendering
+
+Part of TASK-002A Phase 9 Task 4 (Frontend Visualization)."
+```
+
+---
+
+## Phase 9 Completion Checklist (UPDATED POST-RISK-ASSESSMENT)
+
+**⚠️ IMPLEMENT IN ORDER**: Task 9.1 (1D) → 9.2 (Hex) → 9.3 (Docs) → 9.4 (Frontend)
+
+### Task 9.1: 1D Substrate (6-8 hours) - FIRST
+- [ ] Step 1.1: Unit tests (1h)
+- [ ] Step 1.2: Implement Grid1DSubstrate (2-3h)
+- [ ] Step 1.3: Config & commit (2-3h)
+- [ ] Verify: action_dim=3, no 2D hardcodes remaining
+
+### Task 9.2: Hex Substrate (10-12 hours) - SECOND
+- [ ] Step 2.1: Unit tests (1h)
+- [ ] Step 2.2: Implement HexGridSubstrate (4-5h)
+- [ ] Step 2.3: Config support (1h)
+- [ ] Step 2.4: Config pack (2h)
+- [ ] Step 2.5: Integration test (2h)
+- [ ] Step 2.6: Commit (30min)
+
+### Task 9.3: Documentation (2-2.5 hours) - THIRD
+- [ ] Step 3.1: Update CLAUDE.md (1h)
+- [ ] Step 3.2: Regression testing (1h) - NEW
+- [ ] Step 3.3: Commit docs (30min)
+
+### Task 9.4: Frontend Visualization (3-4 hours) - FOURTH (NEW)
+- [ ] Step 4.1: Hex Grid component (2-2.5h)
+- [ ] Step 4.2: 1D Grid component (1-1.5h)
+- [ ] Step 4.3: Integration & commit (30min)
+
+**Total Estimated Effort**: 20-26 hours (revised from 13-17h after risk assessment)
+**Delta from Original**: +7-9 hours (frontend +3-4h, 1D debugging +1-2h, regression +1h, estimates +2-3h)
+
+---
+
+## Success Criteria (UPDATED)
 
 Phase 9 is complete when:
 
-**Hex Substrate:**
+**Task 9.1: 1D Substrate**
+- [ ] All unit tests pass (11 tests)
+- [ ] Training runs on 1D line
+- [ ] Config pack L0_1D_line created
+- [ ] Q-network properly sizes to action_dim=3
+- [ ] No hardcoded 2D assumptions remain in environment
+
+**Task 9.2: Hex Substrate**
 - [ ] All unit tests pass (12 tests)
 - [ ] Integration test passes
 - [ ] Training runs on hex grid
 - [ ] Config pack L1_hex_strategy created
+- [ ] Axial coordinate math validated
 
-**1D Substrate:**
-- [ ] All unit tests pass (11 tests)
-- [ ] Training runs on 1D line
-- [ ] Config pack L0_1D_line created
-
-**Integration:**
-- [ ] No regressions in existing substrates
-- [ ] Both topologies coexist with existing substrates
+**Task 9.3: Documentation**
+- [ ] CLAUDE.md updated with both substrates
+- [ ] Regression tests PASS (2D, 3D, ND still work)
 - [ ] Documentation complete
+
+**Task 9.4: Frontend Visualization**
+- [ ] Hex grid renders correctly with axial coords
+- [ ] 1D grid renders correctly as linear layout
+- [ ] Substrate type detection works
+- [ ] Both visualizations tested with live inference
+
+**Overall Integration:**
+- [ ] No regressions in existing substrates (2D, 3D, ND)
+- [ ] All four topologies coexist peacefully
+- [ ] Full test suite passes
 
 ---
 
 **Phase 9 Status**: Ready for Implementation
-**Recommended Order**: Hex → 1D
-**Total Effort**: 13-17 hours
+**Implementation Order**: 1D → Hex → Docs → Frontend (revised from Hex→1D)
+**Total Effort**: 20-26 hours (revised from 13-17h post-risk-assessment)
 **Next Phase**: Phase 10 (Graph substrate + infrastructure prerequisites)
