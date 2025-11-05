@@ -21,7 +21,7 @@ class ContinuousSubstrate(SpatialSubstrate):
     - etc.
 
     Interaction: Agent must be within `interaction_radius` of affordance
-    - Uses distance metric (euclidean or manhattan)
+    - Uses distance metric (euclidean, manhattan, or chebyshev)
     - Proximity-based, not exact position match
 
     Observation encoding: Normalized coordinates [0, 1] per dimension
@@ -38,7 +38,7 @@ class ContinuousSubstrate(SpatialSubstrate):
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         movement_delta: float,
         interaction_radius: float,
-        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         """Initialize continuous substrate.
@@ -49,7 +49,7 @@ class ContinuousSubstrate(SpatialSubstrate):
             boundary: Boundary handling mode
             movement_delta: Distance discrete actions move agent
             interaction_radius: Distance threshold for affordance interaction
-            distance_metric: Distance calculation method
+            distance_metric: Distance calculation method (euclidean, manhattan, chebyshev)
             observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
         """
         if dimensions not in (1, 2, 3):
@@ -75,7 +75,7 @@ class ContinuousSubstrate(SpatialSubstrate):
         if boundary not in ("clamp", "wrap", "bounce", "sticky"):
             raise ValueError(f"Unknown boundary mode: {boundary}")
 
-        if distance_metric not in ("euclidean", "manhattan"):
+        if distance_metric not in ("euclidean", "manhattan", "chebyshev"):
             raise ValueError(f"Unknown distance metric: {distance_metric}")
 
         if movement_delta <= 0:
@@ -167,11 +167,19 @@ class ContinuousSubstrate(SpatialSubstrate):
         return new_positions
 
     def compute_distance(self, pos1: torch.Tensor, pos2: torch.Tensor) -> torch.Tensor:
-        """Compute distance between positions in continuous space."""
+        """Compute distance between positions in continuous space.
+
+        Supports three distance metrics:
+        - euclidean: L2 norm (straight-line distance)
+        - manhattan: L1 norm (sum of absolute differences)
+        - chebyshev: L∞ norm (max of absolute differences)
+        """
         if self.distance_metric == "euclidean":
             return torch.sqrt(((pos1 - pos2) ** 2).sum(dim=-1))
         elif self.distance_metric == "manhattan":
             return torch.abs(pos1 - pos2).sum(dim=-1)
+        elif self.distance_metric == "chebyshev":
+            return torch.abs(pos1 - pos2).max(dim=-1)[0]
 
     def is_on_position(self, positions: torch.Tensor, target_position: torch.Tensor) -> torch.Tensor:
         """Check if agents are within interaction radius of target.
@@ -339,7 +347,7 @@ class Continuous1DSubstrate(ContinuousSubstrate):
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         movement_delta: float,
         interaction_radius: float,
-        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         super().__init__(
@@ -367,7 +375,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         movement_delta: float,
         interaction_radius: float,
-        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         super().__init__(
@@ -399,7 +407,7 @@ class Continuous3DSubstrate(ContinuousSubstrate):
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         movement_delta: float,
         interaction_radius: float,
-        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         super().__init__(

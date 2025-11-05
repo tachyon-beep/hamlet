@@ -98,12 +98,15 @@ continuous:
   # Options:
   #   - "euclidean": L2 norm, straight-line distance (most common)
   #   - "manhattan": L1 norm, sum of absolute differences
+  #   - "chebyshev": L∞ norm, max of absolute differences (8-directional movement)
   #
   # Behavioral implications:
   #   - "euclidean": Natural for continuous space, considers diagonal distance
   #                  Distance from [0,0] to [1,1] = sqrt(2) ≈ 1.414
   #   - "manhattan": Matches grid-like movement patterns
   #                  Distance from [0,0] to [1,1] = 2.0
+  #   - "chebyshev": Matches 8-directional movement (king's move in chess)
+  #                  Distance from [0,0] to [1,1] = 1.0 (max of |1|, |1|)
   #
   # Most continuous levels use "euclidean" for realistic distance measurement.
   distance_metric: "euclidean"

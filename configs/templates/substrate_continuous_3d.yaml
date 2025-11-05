@@ -99,12 +99,15 @@ continuous:
   # Options:
   #   - "euclidean": L2 norm, straight-line distance in 3D (most common)
   #   - "manhattan": L1 norm, sum of absolute differences along 3 axes
+  #   - "chebyshev": L∞ norm, max of absolute differences (26-directional movement)
   #
   # Behavioral implications:
   #   - "euclidean": Natural for continuous space, considers 3D diagonal distance
   #                  Distance from [0,0,0] to [1,1,1] = sqrt(3) ≈ 1.732
   #   - "manhattan": Matches grid-like movement patterns in 3D
   #                  Distance from [0,0,0] to [1,1,1] = 3.0
+  #   - "chebyshev": Matches 26-directional movement (king's move in 3D chess)
+  #                  Distance from [0,0,0] to [1,1,1] = 1.0 (max of |1|, |1|, |1|)
   #
   # Most continuous levels use "euclidean" for realistic 3D distance measurement.
   distance_metric: "euclidean"
