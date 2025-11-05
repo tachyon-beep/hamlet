@@ -3,13 +3,20 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Date**: 2025-11-05
-**Status**: Ready for Implementation (Revised after code review)
+**Status**: Ready for Implementation (v3 - Critical fixes applied)
 **Dependencies**: Phase 5 Complete (Position Management Refactoring)
-**Estimated Effort**: 18-22 hours (revised from 12-16h)
+**Estimated Effort**: 19-23 hours (revised from 18-22h)
 
 ---
 
 ## Revision History
+
+**v3 (2025-11-05)**: Fixed critical technical issues from code review
+- Fixed `encode_observation()` signature: added `affordances` parameter
+- Fixed method naming: `get_neighbors()` → `get_valid_neighbors()`
+- Added Task 5B.0 Step 2: Add `position_dtype` property to existing substrates
+- Fixed test paths: `test_substrate_migration.py` → `tests/test_townlet/phase5/`
+- Updated effort estimate: 19-23 hours total
 
 **v2 (2025-11-05)**: Incorporated code review feedback + configurable action labels
 - Added Task 5B.0: Phase 5 prerequisite verification
@@ -189,7 +196,7 @@ self.positions = torch.zeros(
 
 ---
 
-#### Step 1: Run Phase 5 integration tests
+#### Step 1: Run Phase 5 integration tests (15 minutes)
 
 **Action**: Verify all Phase 5 tests pass
 
@@ -197,16 +204,97 @@ self.positions = torch.zeros(
 ```bash
 cd /home/john/hamlet
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH
-uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v
+
+# Run Phase 5 substrate tests
+uv run pytest tests/test_townlet/phase5/ -v
+
+# Also check for any substrate integration tests
+uv run pytest tests/test_townlet/integration/ -v -k substrate
 ```
 
 **Expected**: ALL tests PASS
 
 **If tests fail**: Fix Phase 5 issues before proceeding with Phase 5B.
 
+**Effort**: 15 minutes
+
 ---
 
-#### Step 2: Audit vectorized_env.py for hardcoded dimensions
+#### Step 2: Add position_dtype property to existing substrates (30 minutes)
+
+**Goal**: Add position_dtype class attribute to Grid2D and Aspatial substrates (required for Phase 5B)
+
+**Code Review Finding**: The position_dtype property doesn't exist in current codebase yet. Phase 5B assumes it exists.
+
+**Action**: Add position_dtype to existing substrate classes
+
+**Modify**: `src/townlet/substrate/grid2d.py`
+
+```python
+class Grid2DSubstrate(SpatialSubstrate):
+    """2D square grid substrate with integer coordinates.
+
+    ... (existing docstring) ...
+    """
+
+    position_dim = 2
+    position_dtype = torch.long  # ADD THIS LINE
+
+    def __init__(self, ...):
+        # ... rest of class ...
+```
+
+**Modify**: `src/townlet/substrate/aspatial.py`
+
+```python
+class AspatialSubstrate(SpatialSubstrate):
+    """Aspatial substrate with no positioning.
+
+    ... (existing docstring) ...
+    """
+
+    position_dim = 0
+    position_dtype = torch.long  # ADD THIS LINE (any dtype, no positions exist)
+
+    def __init__(self):
+        # ... rest of class ...
+```
+
+**Verification**:
+```bash
+cd /home/john/hamlet
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+
+python -c "
+from townlet.substrate.grid2d import Grid2DSubstrate
+from townlet.substrate.aspatial import AspatialSubstrate
+import torch
+
+# Test Grid2D
+grid = Grid2DSubstrate(width=8, height=8, boundary='clamp')
+assert hasattr(grid, 'position_dtype'), 'Grid2D missing position_dtype'
+assert grid.position_dtype == torch.long, 'Grid2D position_dtype should be torch.long'
+print('✓ Grid2DSubstrate has position_dtype = torch.long')
+
+# Test Aspatial
+aspatial = AspatialSubstrate()
+assert hasattr(aspatial, 'position_dtype'), 'Aspatial missing position_dtype'
+assert aspatial.position_dtype == torch.long, 'Aspatial position_dtype should be torch.long'
+print('✓ AspatialSubstrate has position_dtype = torch.long')
+"
+```
+
+**Expected**:
+```
+✓ Grid2DSubstrate has position_dtype = torch.long
+✓ AspatialSubstrate has position_dtype = torch.long
+```
+
+**Effort**: 30 minutes
+
+---
+
+#### Step 3: Audit vectorized_env.py for hardcoded dimensions (15 minutes)
 
 **Action**: Check for remaining hardcoded position dimensions
 
@@ -223,11 +311,15 @@ grep -n "dtype=torch.long" src/townlet/environment/vectorized_env.py | grep posi
 - No `[num_agents, 2]` in position-related code
 - All position tensors use `substrate.position_dtype`
 
-**If found**: Fix hardcoded dimensions
+**If found**: Proceed to Step 4 to fix
+
+**If not found**: Skip Step 4, proceed to Task 5B.1
+
+**Effort**: 15 minutes
 
 ---
 
-#### Step 3: Fix hardcoded position dimensions (if needed)
+#### Step 4: Fix hardcoded position dimensions (if needed) (1-2 hours)
 
 **Action**: Replace hardcoded dimensions with substrate properties
 
@@ -284,7 +376,13 @@ uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v
 
 ---
 
-**Task 5B.0 Total Effort**: 1-2 hours
+**Task 5B.0 Total Effort**: 2-3 hours (increased from 1-2h to add position_dtype setup)
+
+**Breakdown**:
+- Step 1: Run tests (15 min)
+- Step 2: Add position_dtype property (30 min)
+- Step 3: Audit hardcoded dimensions (15 min)
+- Step 4: Fix hardcoded dimensions if needed (1-2h contingent)
 
 ---
 
@@ -464,8 +562,14 @@ class Grid3DSubstrate(SpatialSubstrate):
         """Check if agents are on target position (exact match in 3D)."""
         return (positions == target_position).all(dim=-1)
 
-    def encode_observation(self, positions: torch.Tensor) -> torch.Tensor:
+    def encode_observation(
+        self, positions: torch.Tensor, affordances: dict[str, torch.Tensor]
+    ) -> torch.Tensor:
         """Normalize 3D positions to [0, 1] for each dimension.
+
+        Args:
+            positions: Agent positions [num_agents, 3]
+            affordances: Dict of affordance positions (not used for Grid3D encoding)
 
         Returns [num_agents, 3] tensor (constant size regardless of grid dimensions).
 
@@ -496,9 +600,21 @@ class Grid3DSubstrate(SpatialSubstrate):
                     positions.append([x, y, z])
         return positions
 
-    def get_neighbors(self, position: list[int]) -> list[list[int]]:
-        """Get 6 cardinal neighbors in 3D (±x, ±y, ±z)."""
-        x, y, z = position
+    def get_valid_neighbors(self, position: torch.Tensor) -> list[torch.Tensor]:
+        """Get 6 cardinal neighbors in 3D (±x, ±y, ±z).
+
+        Args:
+            position: Position tensor [3] or list of [x, y, z]
+
+        Returns:
+            List of neighbor position tensors
+        """
+        # Convert to list if tensor
+        if isinstance(position, torch.Tensor):
+            x, y, z = position.tolist()
+        else:
+            x, y, z = position
+
         neighbors = [
             [x, y - 1, z],  # Negative Y
             [x, y + 1, z],  # Positive Y
@@ -518,7 +634,8 @@ class Grid3DSubstrate(SpatialSubstrate):
                 and 0 <= n[2] < self.depth
             ]
 
-        return neighbors
+        # Convert to tensors
+        return [torch.tensor(n, dtype=torch.long) for n in neighbors]
 ```
 
 **Verification**:
@@ -1031,12 +1148,12 @@ class TestGrid3DPositionChecks:
 class TestGrid3DNeighbors:
     """Tests for neighbor enumeration."""
 
-    def test_get_neighbors_interior(self):
+    def test_get_valid_neighbors_interior(self):
         """Interior position has 6 neighbors."""
         substrate = Grid3DSubstrate(
             width=8, height=8, depth=3, boundary="clamp"
         )
-        neighbors = substrate.get_neighbors([4, 4, 1])
+        neighbors = substrate.get_valid_neighbors(torch.tensor([4, 4, 1]))
 
         assert len(neighbors) == 6
 
@@ -1048,14 +1165,14 @@ class TestGrid3DNeighbors:
             (4, 4, 0),  # Z-
             (4, 4, 2),  # Z+
         }
-        assert {tuple(n) for n in neighbors} == expected
+        assert {tuple(n.tolist()) for n in neighbors} == expected
 
-    def test_get_neighbors_corner_clamp(self):
+    def test_get_valid_neighbors_corner_clamp(self):
         """Corner position with clamp has fewer neighbors."""
         substrate = Grid3DSubstrate(
             width=8, height=8, depth=3, boundary="clamp"
         )
-        neighbors = substrate.get_neighbors([0, 0, 0])
+        neighbors = substrate.get_valid_neighbors(torch.tensor([0, 0, 0]))
 
         # Only 3 neighbors (no negatives)
         assert len(neighbors) == 3
@@ -1065,7 +1182,7 @@ class TestGrid3DNeighbors:
             (1, 0, 0),  # X+
             (0, 0, 1),  # Z+
         }
-        assert {tuple(n) for n in neighbors} == expected
+        assert {tuple(n.tolist()) for n in neighbors} == expected
 
     def test_get_all_positions(self):
         """get_all_positions returns all grid cells."""
@@ -1389,8 +1506,14 @@ class ContinuousSubstrate(SpatialSubstrate):
         distance = self.compute_distance(positions, target_position)
         return distance <= self.interaction_radius
 
-    def encode_observation(self, positions: torch.Tensor) -> torch.Tensor:
+    def encode_observation(
+        self, positions: torch.Tensor, affordances: dict[str, torch.Tensor]
+    ) -> torch.Tensor:
         """Normalize positions to [0, 1] for each dimension.
+
+        Args:
+            positions: Agent positions [num_agents, dimensions]
+            affordances: Dict of affordance positions (not used for Continuous encoding)
 
         Returns [num_agents, dimensions] tensor.
         Matches Grid3D encoding strategy (constant size).
@@ -1417,8 +1540,15 @@ class ContinuousSubstrate(SpatialSubstrate):
             f"See vectorized_env.py randomize_affordance_positions()."
         )
 
-    def get_neighbors(self, position: list[float]) -> list[list[float]]:
-        """Raise error - continuous space has no discrete neighbors."""
+    def get_valid_neighbors(self, position: torch.Tensor) -> list[torch.Tensor]:
+        """Raise error - continuous space has no discrete neighbors.
+
+        Args:
+            position: Position tensor (not used)
+
+        Raises:
+            NotImplementedError: Continuous substrates don't have discrete neighbors
+        """
         raise NotImplementedError(
             f"{self.__class__.__name__} has continuous positions. "
             f"No discrete neighbors exist. "
@@ -2204,7 +2334,7 @@ Add section explaining configurable action labels with presets and examples.
 
 | Task | Description | Estimated Hours |
 |------|-------------|----------------|
-| **5B.0: Prerequisites** | Verify Phase 5 complete, fix hardcoding | **1-2 hours** |
+| **5B.0: Prerequisites** | Verify Phase 5, add position_dtype, fix hardcoding | **2-3 hours** |
 | **5B.1: Grid3D** | 3D cubic grid implementation | **5-7 hours** |
 | Step 1 | Create Grid3DSubstrate (with normalized encoding) | 2.5h |
 | Step 2 | Update config schema | 0.5h |
@@ -2230,9 +2360,12 @@ Add section explaining configurable action labels with presets and examples.
 | Step 6 | Update documentation | 0.25h |
 | **Documentation** | CLAUDE.md updates, templates | **1 hour** |
 | **Contingency** | Buffer for debugging, fixes | **2-3 hours** |
-| **TOTAL** | | **18-22 hours** |
+| **TOTAL** | | **19-23 hours** |
 
-**Revised from**: 12-16 hours (original estimate was too optimistic)
+**Revised from**:
+- v1: 12-16 hours (original estimate was too optimistic)
+- v2: 18-22 hours (after code review feedback)
+- v3: 19-23 hours (after adding position_dtype setup)
 
 ---
 
@@ -2286,7 +2419,8 @@ Add section explaining configurable action labels with presets and examples.
 
 ---
 
-**Document Status**: Implementation Plan Complete (Revised v2)
+**Document Status**: Implementation Plan Complete (v3 - Critical fixes applied)
 **Next Step**: Begin implementation with Task 5B.0
 **Reviewed By**: Code Review Agent (2025-11-05)
+**Critical Fixes Applied**: 2025-11-05
 **Date**: 2025-11-05
