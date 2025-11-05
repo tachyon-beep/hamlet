@@ -367,6 +367,51 @@ aspatial: {}
 
 See `configs/templates/substrate.yaml` for comprehensive documentation and examples.
 
+### Action Labels Configuration (action_labels.yaml) - OPTIONAL
+
+Defines domain-specific terminology for actions. If not specified, defaults to "gaming" preset.
+
+**Key Concept**: Action labels separate **canonical action semantics** (what substrates interpret) from **user-facing labels** (what students see).
+
+**Example (Gaming Preset - Default)**:
+```yaml
+preset: "gaming"
+# Automatically provides: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, FORWARD, BACKWARD
+```
+
+**Example (Custom Submarine Labels)**:
+```yaml
+custom:
+  0: "PORT"       # Move left
+  1: "STARBOARD"  # Move right
+  2: "AFT"        # Move backward
+  3: "FORE"       # Move forward
+  4: "INTERACT"   # Interact with affordance
+  5: "WAIT"       # Hold position
+  6: "SURFACE"    # Move up (3D only)
+  7: "DIVE"       # Move down (3D only)
+```
+
+**Available Presets**:
+- `gaming`: Standard gaming controls (LEFT/RIGHT/UP/DOWN/FORWARD/BACKWARD)
+- `6dof`: Robotics 6-DoF terminology (SWAY_LEFT/RIGHT, HEAVE_UP/DOWN, SURGE_FORWARD/BACKWARD)
+- `cardinal`: Compass directions (NORTH/SOUTH/EAST/WEST/ASCEND/DESCEND)
+- `math`: Explicit axis notation (X_NEG/X_POS, Y_NEG/Y_POS, Z_POS/Z_NEG)
+
+**Dimensionality Filtering**:
+Labels are automatically filtered to match substrate dimensionality:
+- **Aspatial (0D)**: INTERACT, WAIT (2 actions)
+- **1D**: LEFT, RIGHT, INTERACT, WAIT (4 actions)
+- **2D**: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT (6 actions)
+- **3D**: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, FORWARD, BACKWARD (8 actions)
+
+**Pedagogical Value**:
+- Demonstrates that labels are arbitrary, semantics matter
+- Enables domain-appropriate learning (robotics, marine, aviation, gaming)
+- Reveals how different communities label identical mathematical transformations
+
+See `configs/templates/action_labels_*.yaml` for preset examples and custom label guidelines.
+
 ### Config Structure (training.yaml)
 
 ```yaml

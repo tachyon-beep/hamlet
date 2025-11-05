@@ -1,0 +1,23 @@
+# Action Labels Configuration - Gaming Preset
+#
+# Standard gaming controls for intuitive gameplay.
+# Use for: Gaming contexts, general education, beginner-friendly controls
+
+# Preset name: "gaming", "6dof", "cardinal", or "math"
+preset: "gaming"
+
+# Gaming preset labels (reference only - automatically applied):
+#   0: LEFT      - Move left (-X direction)
+#   1: RIGHT     - Move right (+X direction)
+#   2: DOWN      - Move down (-Y direction)
+#   3: UP        - Move up (+Y direction)
+#   4: INTERACT  - Interact with affordance
+#   5: WAIT      - Do nothing (low energy cost)
+#   6: FORWARD   - Move forward (+Z direction, 3D only)
+#   7: BACKWARD  - Move backward (-Z direction, 3D only)
+#
+# Note: Label indices are automatically remapped based on substrate dimensionality:
+#   - Aspatial (0D): {0: INTERACT, 1: WAIT} (2 actions)
+#   - 1D: {0: LEFT, 1: RIGHT, 2: INTERACT, 3: WAIT} (4 actions)
+#   - 2D: {0: UP, 1: DOWN, 2: LEFT, 3: RIGHT, 4: INTERACT, 5: WAIT} (6 actions)
+#   - 3D: {0: UP, 1: DOWN, 2: LEFT, 3: RIGHT, 4: INTERACT, 5: WAIT, 6: FORWARD, 7: BACKWARD} (8 actions)

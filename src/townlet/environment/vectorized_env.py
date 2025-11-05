@@ -94,6 +94,30 @@ class VectorizedHamletEnv:
         substrate_config = load_substrate_config(substrate_config_path)
         self.substrate = SubstrateFactory.build(substrate_config, device=device)
 
+        # Load action labels (optional - defaults to "gaming" preset if not specified)
+        from townlet.environment.action_labels import get_labels
+
+        action_labels_config_path = self.config_pack_path / "action_labels.yaml"
+        if action_labels_config_path.exists():
+            # Load custom action labels from config
+            import yaml
+
+            with open(action_labels_config_path) as f:
+                action_labels_data = yaml.safe_load(f)
+
+            from townlet.substrate.config import ActionLabelConfig
+
+            label_config = ActionLabelConfig(**action_labels_data)
+
+            # Get labels for substrate dimensionality
+            if label_config.preset:
+                self.action_labels = get_labels(preset=label_config.preset, substrate_position_dim=self.substrate.position_dim)
+            else:
+                self.action_labels = get_labels(custom_labels=label_config.custom, substrate_position_dim=self.substrate.position_dim)
+        else:
+            # Default to gaming preset if no action_labels.yaml
+            self.action_labels = get_labels(preset="gaming", substrate_position_dim=self.substrate.position_dim)
+
         # Update grid_size from substrate (for backward compatibility with other code)
         # For aspatial substrates, keep parameter value; for grid substrates, use substrate
         self.grid_size = grid_size  # Default to parameter (for aspatial or backward compat)
@@ -266,6 +290,20 @@ class VectorizedHamletEnv:
     def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
         """Attach runtime registry for telemetry tracking."""
         self.runtime_registry = registry
+
+    def get_action_label_names(self) -> dict[int, str]:
+        """Get action label names for current substrate.
+
+        Returns:
+            Dictionary mapping action indices to user-facing labels.
+
+        Example:
+            >>> env = VectorizedHamletEnv(...)
+            >>> labels = env.get_action_label_names()
+            >>> print(labels)
+            {0: 'UP', 1: 'DOWN', 2: 'LEFT', 3: 'RIGHT', 4: 'INTERACT', 5: 'WAIT'}
+        """
+        return self.action_labels.get_all_labels()
 
     def reset(self) -> torch.Tensor:
         """

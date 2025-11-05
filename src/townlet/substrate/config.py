@@ -117,6 +117,69 @@ class AspatialSubstrateConfig(BaseModel):
     pass  # No configuration fields needed
 
 
+class ActionLabelConfig(BaseModel):
+    """Configuration for action label system (domain-specific terminology).
+
+    Enables configurable action labels to support domain-appropriate terminology
+    (gaming, robotics, navigation, mathematics, custom domains).
+
+    Action labels separate canonical action semantics (what substrates interpret)
+    from user-facing labels (what students/practitioners see).
+
+    Examples:
+        # Gaming preset
+        action_labels:
+          preset: "gaming"  # Uses LEFT/RIGHT/UP/DOWN/FORWARD/BACKWARD
+
+        # Custom submarine labels
+        action_labels:
+          custom:
+            0: "PORT"
+            1: "STARBOARD"
+            2: "AFT"
+            3: "FORE"
+            4: "INTERACT"
+            5: "WAIT"
+            6: "SURFACE"
+            7: "DIVE"
+
+        # Robotics 6-DoF preset
+        action_labels:
+          preset: "6dof"  # Uses SWAY_LEFT/RIGHT, HEAVE_UP/DOWN, SURGE_FORWARD/BACKWARD
+    """
+
+    preset: str | None = Field(None, description="Preset label set (gaming, 6dof, cardinal, math)")
+    custom: dict[int, str] | None = Field(None, description="Custom label mapping (action_index → label)")
+
+    @model_validator(mode="after")
+    def validate_preset_or_custom(self) -> "ActionLabelConfig":
+        """Validate that exactly one of preset or custom is provided."""
+        if self.preset is None and self.custom is None:
+            raise ValueError("Must specify either 'preset' or 'custom' for action labels")
+        if self.preset is not None and self.custom is not None:
+            raise ValueError("Cannot specify both 'preset' and 'custom' - choose one")
+
+        # Validate preset name
+        if self.preset is not None:
+            valid_presets = ["gaming", "6dof", "cardinal", "math"]
+            if self.preset not in valid_presets:
+                raise ValueError(f"Invalid preset '{self.preset}'. Valid presets: {valid_presets}")
+
+        # Validate custom labels (if provided)
+        if self.custom is not None:
+            # Check all keys are integers 0-7
+            for key in self.custom.keys():
+                if not isinstance(key, int) or key < 0 or key > 7:
+                    raise ValueError(f"Custom label keys must be integers 0-7, got: {key}")
+
+            # Check all values are non-empty strings
+            for value in self.custom.values():
+                if not isinstance(value, str) or len(value) == 0:
+                    raise ValueError(f"Custom label values must be non-empty strings, got: {value}")
+
+        return self
+
+
 class SubstrateConfig(BaseModel):
     """Complete substrate configuration.
 

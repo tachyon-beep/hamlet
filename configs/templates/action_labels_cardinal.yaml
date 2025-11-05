@@ -1,0 +1,28 @@
+# Action Labels Configuration - Cardinal Directions Preset
+#
+# Compass directions for navigation contexts (NORTH, SOUTH, EAST, WEST).
+# Use for: Navigation, geography, outdoor contexts, map-based learning
+
+# Preset name: "gaming", "6dof", "cardinal", or "math"
+preset: "cardinal"
+
+# Cardinal preset labels (reference only - automatically applied):
+#   0: WEST      - Move west (negative X direction)
+#   1: EAST      - Move east (positive X direction)
+#   2: SOUTH     - Move south (negative Y direction)
+#   3: NORTH     - Move north (positive Y direction)
+#   4: INTERACT  - Interact with affordance
+#   5: WAIT      - Do nothing (low energy cost)
+#   6: ASCEND    - Move up (positive Z direction, 3D only)
+#   7: DESCEND   - Move down (negative Z direction, 3D only)
+#
+# Note: Label indices are automatically remapped based on substrate dimensionality:
+#   - Aspatial (0D): {0: INTERACT, 1: WAIT} (2 actions)
+#   - 1D: {0: WEST, 1: EAST, 2: INTERACT, 3: WAIT} (4 actions)
+#   - 2D: {0: NORTH, 1: SOUTH, 2: WEST, 3: EAST, 4: INTERACT, 5: WAIT} (6 actions)
+#   - 3D: {0: NORTH, 1: SOUTH, 2: WEST, 3: EAST, 4: INTERACT, 5: WAIT, 6: ASCEND, 7: DESCEND} (8 actions)
+#
+# Pedagogical value:
+#   - Natural for outdoor/navigation contexts
+#   - Familiar to students from map reading
+#   - Clarifies that "UP" can mean north (map) or vertical (3D space)
