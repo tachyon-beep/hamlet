@@ -53,6 +53,7 @@ class SubstrateFactory:
                     boundary=config.grid.boundary,
                     distance_metric=config.grid.distance_metric,
                     observation_encoding=config.grid.observation_encoding,  # NEW: Phase 5C
+                    topology=config.grid.topology,  # NEW: Pass topology from config
                 )
             elif config.grid.topology == "cubic":
                 if config.grid.depth is None:
@@ -64,6 +65,7 @@ class SubstrateFactory:
                     boundary=config.grid.boundary,
                     distance_metric=config.grid.distance_metric,
                     observation_encoding=config.grid.observation_encoding,  # NEW: Phase 5C
+                    topology=config.grid.topology,  # NEW: Pass topology from config
                 )
             else:
                 raise ValueError(f"Unknown grid topology: {config.grid.topology}")
@@ -123,6 +125,7 @@ class SubstrateFactory:
                 boundary=config.gridnd.boundary,
                 distance_metric=config.gridnd.distance_metric,
                 observation_encoding=config.gridnd.observation_encoding,
+                topology=config.gridnd.topology,  # NEW: Pass topology from config
             )
 
         elif config.type == "continuousnd":
