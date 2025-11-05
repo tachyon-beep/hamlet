@@ -210,3 +210,56 @@ class Grid2DSubstrate(SpatialSubstrate):
     def get_all_positions(self) -> list[list[int]]:
         """Return all grid positions."""
         return [[x, y] for x in range(self.width) for y in range(self.height)]
+
+    def encode_partial_observation(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+        vision_range: int,
+    ) -> torch.Tensor:
+        """Encode local window around each agent (POMDP).
+
+        Extracts a local (2*vision_range+1)×(2*vision_range+1) window centered
+        on each agent's position. Affordances within the window are marked.
+
+        Args:
+            positions: [num_agents, 2] agent positions
+            affordances: {name: [2]} affordance positions
+            vision_range: radius of vision (e.g., 2 for 5×5 window)
+
+        Returns:
+            [num_agents, window_size²] local grid encoding
+            where window_size = 2*vision_range + 1
+
+        Note: Handles boundary cases - if agent near edge, out-of-bounds
+        cells are marked as empty.
+        """
+        num_agents = positions.shape[0]
+        device = positions.device
+        window_size = 2 * vision_range + 1
+
+        # Initialize local grids for all agents
+        local_grids = torch.zeros(
+            (num_agents, window_size, window_size),
+            device=device,
+            dtype=torch.float32,
+        )
+
+        # For each agent, extract local window
+        for agent_idx in range(num_agents):
+            agent_x, agent_y = positions[agent_idx]
+
+            # Mark affordances in local window
+            for affordance_pos in affordances.values():
+                aff_x, aff_y = affordance_pos[0].item(), affordance_pos[1].item()
+
+                # Compute relative position in local window
+                rel_x = aff_x - agent_x + vision_range
+                rel_y = aff_y - agent_y + vision_range
+
+                # Check if affordance is within vision window
+                if 0 <= rel_x < window_size and 0 <= rel_y < window_size:
+                    local_grids[agent_idx, rel_y, rel_x] = 1.0
+
+        # Flatten local grids: [num_agents, window_size, window_size] → [num_agents, window_size²]
+        return local_grids.reshape(num_agents, -1)

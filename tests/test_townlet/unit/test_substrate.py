@@ -303,3 +303,74 @@ def test_aspatial_get_all_positions():
     positions = substrate.get_all_positions()
 
     assert positions == []
+
+
+def test_grid2d_encode_partial_observation():
+    """Grid2D should encode local window for POMDP."""
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    # Agent at center of grid
+    positions = torch.tensor([[4, 4]], dtype=torch.long)
+
+    # Affordances
+    affordances = {
+        "Bed": torch.tensor([3, 3], dtype=torch.long),
+        "Hospital": torch.tensor([6, 6], dtype=torch.long),
+        "HomeMeal": torch.tensor([10, 10], dtype=torch.long),  # Out of bounds - should not be in window
+    }
+
+    # 5×5 vision window (vision_range=2 means 2 cells in each direction)
+    local_encoding = substrate.encode_partial_observation(positions, affordances, vision_range=2)
+
+    # Should encode 5×5 = 25 cells around agent
+    assert local_encoding.shape == (1, 25)
+
+    # Bed at (3,3) should be visible (relative position: -1, -1)
+    # In local coords: vision_range + rel_x = 2 + (-1) = 1, same for y
+    # Flattened index: 1*5 + 1 = 6
+    assert local_encoding[0, 6] == 1.0
+
+    # Hospital at (6,6) should be visible (relative position: +2, +2)
+    # In local coords: 2 + 2 = 4, 2 + 2 = 4
+    # Flattened index: 4*5 + 4 = 24
+    assert local_encoding[0, 24] == 1.0
+
+    # Center (agent position) should be empty (no affordance there)
+    # Center is at (2, 2) in local coords
+    # Flattened index: 2*5 + 2 = 12
+    assert local_encoding[0, 12] == 0.0
+
+
+def test_grid2d_encode_partial_observation_edge():
+    """Grid2D should handle edge cases (agent near boundary)."""
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    # Agent at corner
+    positions = torch.tensor([[0, 0]], dtype=torch.long)
+
+    # Affordance within vision
+    affordances = {
+        "Bed": torch.tensor([1, 1], dtype=torch.long),
+    }
+
+    local_encoding = substrate.encode_partial_observation(positions, affordances, vision_range=2)
+
+    # Should still encode 5×5 = 25 cells (out-of-bounds cells are empty)
+    assert local_encoding.shape == (1, 25)
+
+    # Bed at (1,1) relative to (0,0) is (+1, +1)
+    # In local coords: 2 + 1 = 3, 2 + 1 = 3
+    # Flattened index: 3*5 + 3 = 18
+    assert local_encoding[0, 18] == 1.0
+
+
+def test_aspatial_encode_partial_observation():
+    """Aspatial should return empty tensor (no position encoding)."""
+    substrate = AspatialSubstrate()
+
+    positions = torch.zeros((3, 0))  # 3 agents, 0-dimensional positions
+    affordances = {}
+
+    local_encoding = substrate.encode_partial_observation(positions, affordances, vision_range=2)
+
+    assert local_encoding.shape == (3, 0)  # No position encoding

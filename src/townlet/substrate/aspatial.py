@@ -91,3 +91,21 @@ class AspatialSubstrate(SpatialSubstrate):
     def get_all_positions(self) -> list[list[int]]:
         """Return empty list (aspatial has no positions)."""
         return []
+
+    def encode_partial_observation(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+        vision_range: int,
+    ) -> torch.Tensor:
+        """Return empty tensor (aspatial has no position encoding).
+
+        In aspatial universes, there's no concept of "local window" or "vision."
+        All affordances are accessible without positioning.
+
+        Returns:
+            [num_agents, 0] empty tensor
+        """
+        num_agents = positions.shape[0]
+        device = positions.device
+        return torch.zeros((num_agents, 0), device=device)

@@ -178,3 +178,35 @@ class SpatialSubstrate(ABC):
         Used for affordance randomization to ensure valid placement.
         """
         pass
+
+    @abstractmethod
+    def encode_partial_observation(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+        vision_range: int,
+    ) -> torch.Tensor:
+        """Encode local window around agents for partial observability (POMDP).
+
+        Args:
+            positions: [num_agents, position_dim] agent positions
+            affordances: {name: [position_dim]} affordance positions
+            vision_range: radius of vision window (e.g., 2 for 5×5 window)
+
+        Returns:
+            [num_agents, window_size] local grid encoding
+
+            window_size depends on substrate:
+            - Grid2D: (2*vision_range + 1)²  (e.g., 5×5 = 25)
+            - Aspatial: 0 (no position encoding)
+
+        Used for:
+        - Level 2 POMDP observations (5×5 local window)
+        - Partial observability training
+
+        Example:
+            Grid2D with vision_range=2:
+            - Agent at (4, 4) sees cells (2,2) to (6,6)
+            - Encodes 5×5 = 25 cells relative to agent
+        """
+        pass
