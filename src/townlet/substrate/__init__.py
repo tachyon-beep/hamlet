@@ -9,17 +9,21 @@ from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.base import SpatialSubstrate
 from townlet.substrate.config import SubstrateConfig, load_substrate_config
 from townlet.substrate.continuous import Continuous1DSubstrate, Continuous2DSubstrate, Continuous3DSubstrate
+from townlet.substrate.continuousnd import ContinuousNDSubstrate
 from townlet.substrate.factory import SubstrateFactory
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
+from townlet.substrate.gridnd import GridNDSubstrate
 
 __all__ = [
     "SpatialSubstrate",
     "Grid2DSubstrate",
     "Grid3DSubstrate",
+    "GridNDSubstrate",
     "Continuous1DSubstrate",
     "Continuous2DSubstrate",
     "Continuous3DSubstrate",
+    "ContinuousNDSubstrate",
     "AspatialSubstrate",
     "SubstrateConfig",
     "load_substrate_config",
