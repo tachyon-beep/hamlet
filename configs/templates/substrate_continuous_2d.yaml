@@ -1,0 +1,188 @@
+# Continuous 2D Substrate Configuration - TEMPLATE
+#
+# Copy this file into your config pack directory and customize the values.
+#
+# UNIVERSE_AS_CODE Principle:
+# All spatial parameters must be explicitly specified. No hidden defaults allowed.
+# This ensures reproducible configs and operator awareness of all behavioral parameters.
+#
+# Config Pack Structure:
+# Every config pack should include these files:
+#   - substrate.yaml    (this file - spatial substrate definition)
+#   - bars.yaml         (meter definitions: energy, health, satiation, etc.)
+#   - cascades.yaml     (cascade physics: meter interactions)
+#   - affordances.yaml  (interaction definitions: Bed, Job, Hospital, etc.)
+#   - training.yaml     (training hyperparameters and network config)
+#   - cues.yaml         (optional - UI metadata for visualization)
+
+version: "1.0"
+
+# Human-readable description of this continuous substrate configuration
+description: "2D continuous plane substrate (baseline for grid comparison)"
+
+# Substrate type: "continuous" for float-based positioning
+# Continuous substrates use torch.float32 positions instead of integer coordinates
+type: "continuous"
+
+# Continuous substrate configuration (REQUIRED for type="continuous")
+continuous:
+  # Dimensionality: Number of spatial dimensions
+  # Options: 1 (line), 2 (plane), 3 (volume)
+  # 2D is the most common - direct comparison with standard grid substrates
+  dimensions: 2
+
+  # Bounds: Min/max values for each dimension
+  # Format: List of [min, max] tuples, one per dimension
+  # Length must match dimensions (1D = 1 tuple, 2D = 2 tuples, 3D = 3 tuples)
+  #
+  # Example interpretations:
+  #   - [[0.0, 10.0], [0.0, 10.0]]: 10×10 unit square
+  #   - [[0.0, 20.0], [0.0, 15.0]]: 20×15 unit rectangle
+  #   - [[-5.0, 5.0], [-5.0, 5.0]]: 10×10 unit square centered at origin
+  #
+  # Pedagogical note: Use square bounds (same width/height) for fair comparison with grid
+  bounds:
+    - [0.0, 10.0]  # X dimension: 0 to 10 units (width)
+    - [0.0, 10.0]  # Y dimension: 0 to 10 units (height)
+
+  # Boundary behavior: What happens when agent tries to move outside bounds
+  # Options:
+  #   - "clamp": Hard walls - position clamped to bounds (agent stops at edge)
+  #   - "wrap": Toroidal wraparound - agent wraps to opposite edge (Pac-Man style)
+  #   - "bounce": Elastic reflection - agent bounces back from boundary
+  #   - "sticky": Sticky walls - agent stays in place when hitting boundary
+  #
+  # Behavioral implications:
+  #   - "clamp": Agent learns boundaries exist, corners are dead ends
+  #   - "wrap": Infinite plane feel, position wraps around edges
+  #   - "bounce": Agent reflects back, bounces off walls
+  #   - "sticky": Agent must choose to move away from boundaries
+  #
+  # Most levels use "clamp" for clear spatial boundaries.
+  boundary: "clamp"
+
+  # Movement delta: How far agent moves per discrete action step
+  # Unit: Same as bounds (e.g., if bounds in meters, delta in meters)
+  #
+  # Action semantics:
+  #   - Agent chooses discrete actions (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+  #   - Each movement action moves agent by ±movement_delta units
+  #   - Example: movement_delta=0.5 means UP moves (0, +0.5), RIGHT moves (+0.5, 0)
+  #
+  # Behavioral implications:
+  #   - Smaller delta = more precise control, longer navigation time
+  #   - Larger delta = coarser control, faster navigation
+  #   - Typical range: 0.1 to 1.0 units per action
+  #
+  # Pedagogical note: Compare to 8×8 grid substrate (1 cell = 1.25 units if bounds are 10×10)
+  movement_delta: 0.5
+
+  # Interaction radius: Maximum distance for proximity-based interaction
+  # Unit: Same as bounds and movement_delta
+  #
+  # Interaction semantics:
+  #   - Agent can interact with affordances within this radius
+  #   - Distance measured using distance_metric (euclidean or manhattan)
+  #   - Replaces grid's "exact position match" with "proximity detection"
+  #
+  # Behavioral implications:
+  #   - Smaller radius = agent must position precisely (harder)
+  #   - Larger radius = agent can interact from farther away (easier)
+  #   - Typical range: 0.5 to 2.0 units
+  #   - Should be ≥ movement_delta to avoid "stepping over" affordances
+  #
+  # Validation: System warns if interaction_radius < movement_delta
+  interaction_radius: 0.8
+
+  # Distance metric: How to measure distance in continuous space
+  # Options:
+  #   - "euclidean": L2 norm, straight-line distance (most common)
+  #   - "manhattan": L1 norm, sum of absolute differences
+  #
+  # Behavioral implications:
+  #   - "euclidean": Natural for continuous space, considers diagonal distance
+  #                  Distance from [0,0] to [1,1] = sqrt(2) ≈ 1.414
+  #   - "manhattan": Matches grid-like movement patterns
+  #                  Distance from [0,0] to [1,1] = 2.0
+  #
+  # Most continuous levels use "euclidean" for realistic distance measurement.
+  distance_metric: "euclidean"
+
+# Examples and Pedagogical Notes:
+#
+# Standard 2D (Grid Comparison):
+#   dimensions: 2
+#   bounds: [[0.0, 10.0], [0.0, 10.0]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Direct comparison with 8×8 grid substrate
+#
+# Large 2D (Exploration):
+#   dimensions: 2
+#   bounds: [[0.0, 50.0], [0.0, 50.0]]
+#   boundary: clamp
+#   movement_delta: 1.0
+#   interaction_radius: 2.0
+#   Use for: Large-scale navigation, exploration challenges
+#
+# Toroidal 2D (Wraparound):
+#   dimensions: 2
+#   bounds: [[0.0, 10.0], [0.0, 10.0]]
+#   boundary: wrap
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Pac-Man style worlds, infinite plane feel
+#
+# Fine-Grained 2D (Precision):
+#   dimensions: 2
+#   bounds: [[0.0, 10.0], [0.0, 10.0]]
+#   boundary: clamp
+#   movement_delta: 0.1
+#   interaction_radius: 0.3
+#   Use for: Precision navigation challenges, fine motor control
+#
+# Rectangular 2D (Non-Square):
+#   dimensions: 2
+#   bounds: [[0.0, 20.0], [0.0, 10.0]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Asymmetric spaces, room-like environments
+#
+# Pedagogical Value:
+# 2D continuous substrates are the most direct comparison to standard grid substrates.
+# Students learn how continuous space differs from discrete grids:
+#   - Proximity-based interaction vs exact position matching
+#   - Float positions vs integer coordinates
+#   - Smooth movement vs discrete steps
+#
+# Experimental Design:
+# Compare agents trained on:
+#   - 8×8 grid (discrete, manhattan distance, exact position)
+#   - 10×10 continuous (smooth, euclidean distance, proximity)
+# Measure: learning speed, sample efficiency, final performance
+#
+# Action Space:
+# 2D continuous substrates have 6 actions:
+#   - UP (action 0): Move up by movement_delta (0, +delta)
+#   - DOWN (action 1): Move down by movement_delta (0, -delta)
+#   - LEFT (action 2): Move left by movement_delta (-delta, 0)
+#   - RIGHT (action 3): Move right by movement_delta (+delta, 0)
+#   - INTERACT (action 4): Interact with nearby affordance
+#   - WAIT (action 5): Do nothing (still incurs energy cost)
+#
+# Observation Encoding:
+# 2D positions are normalized to [0, 1] for each dimension:
+#   - Position [0.0, 0.0] → observation [0.0, 0.0]
+#   - Position [10.0, 10.0] → observation [1.0, 1.0]
+#   - Position [5.0, 7.5] → observation [0.5, 0.75]
+#
+# This ensures observation dimension (2) is constant regardless of bounds.
+#
+# Affordance Placement:
+# In continuous space, affordances are randomly sampled from bounds:
+#   - Grid: All positions enumerable, shuffle and assign
+#   - Continuous: Infinite positions, random sampling with uniform distribution
+#
+# This means affordance positions change every episode (unless explicitly fixed).

@@ -573,3 +573,287 @@ class TestContinuousConfiguration:
         assert isinstance(substrate, Continuous3DSubstrate)
         assert substrate.position_dim == 3
         assert substrate.position_dtype == torch.float32
+
+
+class TestDtypeIsolation:
+    """Test that Grid (torch.long) and Continuous (torch.float32) don't contaminate each other."""
+
+    def test_continuous_doesnt_contaminate_grid(self):
+        """Verify continuous float32 operations don't affect grid long operations."""
+        from townlet.substrate.grid2d import Grid2DSubstrate
+
+        # Create both substrate types
+        continuous = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="clamp",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+        grid = Grid2DSubstrate(width=10, height=10, boundary="clamp", distance_metric="manhattan")
+
+        # Continuous operations with float32
+        cont_positions = continuous.initialize_positions(num_agents=5, device=torch.device("cpu"))
+        cont_deltas = torch.tensor([[-0.5, 0.5], [0.5, -0.5], [0.0, 0.0], [1.0, 1.0], [-1.0, -1.0]], dtype=torch.float32)
+        cont_result = continuous.apply_movement(cont_positions, cont_deltas)
+
+        # Verify continuous result is float32
+        assert cont_result.dtype == torch.float32
+
+        # Grid operations with long
+        grid_positions = grid.initialize_positions(num_agents=5, device=torch.device("cpu"))
+        grid_deltas = torch.tensor([[-1, 0], [1, 0], [0, 1], [0, -1], [0, 0]], dtype=torch.float32)
+        grid_result = grid.apply_movement(grid_positions, grid_deltas)
+
+        # Verify grid result is still long (not contaminated by continuous float32)
+        assert grid_result.dtype == torch.long
+
+    def test_grid_doesnt_contaminate_continuous(self):
+        """Verify grid long operations don't affect continuous float32 operations."""
+        from townlet.substrate.grid2d import Grid2DSubstrate
+
+        # Create both substrate types
+        grid = Grid2DSubstrate(width=10, height=10, boundary="clamp", distance_metric="manhattan")
+        continuous = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="clamp",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Grid operations with long
+        grid_positions = grid.initialize_positions(num_agents=5, device=torch.device("cpu"))
+        grid_deltas = torch.tensor([[-1, 0], [1, 0], [0, 1], [0, -1], [0, 0]], dtype=torch.float32)
+        grid_result = grid.apply_movement(grid_positions, grid_deltas)
+
+        # Verify grid result is long
+        assert grid_result.dtype == torch.long
+
+        # Continuous operations with float32
+        cont_positions = continuous.initialize_positions(num_agents=5, device=torch.device("cpu"))
+        cont_deltas = torch.tensor([[-0.5, 0.5], [0.5, -0.5], [0.0, 0.0], [1.0, 1.0], [-1.0, -1.0]], dtype=torch.float32)
+        cont_result = continuous.apply_movement(cont_positions, cont_deltas)
+
+        # Verify continuous result is still float32 (not contaminated by grid long)
+        assert cont_result.dtype == torch.float32
+
+    def test_mixed_substrate_environment_dtype_isolation(self):
+        """Verify dtype isolation when grid and continuous substrates exist in same process."""
+        from townlet.substrate.grid2d import Grid2DSubstrate
+        from townlet.substrate.grid3d import Grid3DSubstrate
+
+        # Create multiple substrate types in same process
+        grid2d = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+        grid3d = Grid3DSubstrate(width=8, height=8, depth=3, boundary="clamp", distance_metric="manhattan")
+        continuous1d = Continuous1DSubstrate(min_x=0.0, max_x=10.0, boundary="clamp", movement_delta=0.5, interaction_radius=0.8)
+        continuous2d = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="clamp",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+        continuous3d = Continuous3DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            min_z=0.0,
+            max_z=10.0,
+            boundary="clamp",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Verify position_dtype is correct for each
+        assert grid2d.position_dtype == torch.long
+        assert grid3d.position_dtype == torch.long
+        assert continuous1d.position_dtype == torch.float32
+        assert continuous2d.position_dtype == torch.float32
+        assert continuous3d.position_dtype == torch.float32
+
+        # Verify position initialization respects dtype
+        grid2d_pos = grid2d.initialize_positions(num_agents=3, device=torch.device("cpu"))
+        grid3d_pos = grid3d.initialize_positions(num_agents=3, device=torch.device("cpu"))
+        cont1d_pos = continuous1d.initialize_positions(num_agents=3, device=torch.device("cpu"))
+        cont2d_pos = continuous2d.initialize_positions(num_agents=3, device=torch.device("cpu"))
+        cont3d_pos = continuous3d.initialize_positions(num_agents=3, device=torch.device("cpu"))
+
+        assert grid2d_pos.dtype == torch.long
+        assert grid3d_pos.dtype == torch.long
+        assert cont1d_pos.dtype == torch.float32
+        assert cont2d_pos.dtype == torch.float32
+        assert cont3d_pos.dtype == torch.float32
+
+
+class TestBounceExactPositions:
+    """Test exact bounce positions to verify reflection math correctness."""
+
+    def test_bounce_from_lower_bound_x(self):
+        """Test exact bounce position when hitting lower X bound."""
+        substrate = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="bounce",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Start near lower X bound, move left (will hit boundary)
+        positions = torch.tensor([[0.2, 5.0]], dtype=torch.float32)
+        deltas = torch.tensor([[-1.0, 0.0]], dtype=torch.float32)  # Move left by 0.5 units
+
+        # Expected: X: 0.2 - 0.5 = -0.3 → reflect: abs(-0.3) = 0.3
+        #           Y: 5.0 (unchanged)
+        result = substrate.apply_movement(positions, deltas)
+
+        assert torch.isclose(result[0, 0], torch.tensor(0.3), atol=1e-6)
+        assert torch.isclose(result[0, 1], torch.tensor(5.0), atol=1e-6)
+
+    def test_bounce_from_upper_bound_x(self):
+        """Test exact bounce position when hitting upper X bound."""
+        substrate = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="bounce",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Start near upper X bound, move right (will hit boundary)
+        positions = torch.tensor([[9.8, 5.0]], dtype=torch.float32)
+        deltas = torch.tensor([[1.0, 0.0]], dtype=torch.float32)  # Move right by 0.5 units
+
+        # Expected: X: 9.8 + 0.5 = 10.3 → reflect: 10.0 - (10.3 - 10.0) = 9.7
+        #           Y: 5.0 (unchanged)
+        result = substrate.apply_movement(positions, deltas)
+
+        assert torch.isclose(result[0, 0], torch.tensor(9.7), atol=1e-6)
+        assert torch.isclose(result[0, 1], torch.tensor(5.0), atol=1e-6)
+
+    def test_bounce_from_lower_bound_y(self):
+        """Test exact bounce position when hitting lower Y bound."""
+        substrate = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="bounce",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Start near lower Y bound, move down (will hit boundary)
+        positions = torch.tensor([[5.0, 0.3]], dtype=torch.float32)
+        deltas = torch.tensor([[0.0, -1.0]], dtype=torch.float32)  # Move down by 0.5 units
+
+        # Expected: X: 5.0 (unchanged)
+        #           Y: 0.3 - 0.5 = -0.2 → reflect: abs(-0.2) = 0.2
+        result = substrate.apply_movement(positions, deltas)
+
+        assert torch.isclose(result[0, 0], torch.tensor(5.0), atol=1e-6)
+        assert torch.isclose(result[0, 1], torch.tensor(0.2), atol=1e-6)
+
+    def test_bounce_from_upper_bound_y(self):
+        """Test exact bounce position when hitting upper Y bound."""
+        substrate = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="bounce",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Start near upper Y bound, move up (will hit boundary)
+        positions = torch.tensor([[5.0, 9.7]], dtype=torch.float32)
+        deltas = torch.tensor([[0.0, 1.0]], dtype=torch.float32)  # Move up by 0.5 units
+
+        # Expected: X: 5.0 (unchanged)
+        #           Y: 9.7 + 0.5 = 10.2 → reflect: 10.0 - (10.2 - 10.0) = 9.8
+        result = substrate.apply_movement(positions, deltas)
+
+        assert torch.isclose(result[0, 0], torch.tensor(5.0), atol=1e-6)
+        assert torch.isclose(result[0, 1], torch.tensor(9.8), atol=1e-6)
+
+    def test_bounce_corner_both_bounds(self):
+        """Test bounce when hitting corner (both X and Y bounds)."""
+        substrate = Continuous2DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            boundary="bounce",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Start near lower-left corner, move diagonally (will hit both bounds)
+        positions = torch.tensor([[0.2, 0.3]], dtype=torch.float32)
+        deltas = torch.tensor([[-1.0, -1.0]], dtype=torch.float32)  # Move left-down by 0.5 units each
+
+        # Expected: X: 0.2 - 0.5 = -0.3 → reflect: abs(-0.3) = 0.3
+        #           Y: 0.3 - 0.5 = -0.2 → reflect: abs(-0.2) = 0.2
+        result = substrate.apply_movement(positions, deltas)
+
+        assert torch.isclose(result[0, 0], torch.tensor(0.3), atol=1e-6)
+        assert torch.isclose(result[0, 1], torch.tensor(0.2), atol=1e-6)
+
+    def test_bounce_multiple_reflections_1d(self):
+        """Test bounce with large movement that crosses boundary multiple times."""
+        substrate = Continuous1DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            boundary="bounce",
+            movement_delta=3.0,
+            interaction_radius=0.8,  # Large delta
+        )
+
+        # Start at 1.0, move left by 3.0 units (will bounce off lower bound)
+        positions = torch.tensor([[1.0]], dtype=torch.float32)
+        deltas = torch.tensor([[-1.0]], dtype=torch.float32)  # Move left by 3.0 units
+
+        # Expected: 1.0 - 3.0 = -2.0
+        # First reflection: abs(-2.0) = 2.0 (bounces back into bounds)
+        result = substrate.apply_movement(positions, deltas)
+
+        assert torch.isclose(result[0, 0], torch.tensor(2.0), atol=1e-6)
+
+    def test_bounce_3d_all_dimensions(self):
+        """Test bounce in 3D space with all dimensions reflecting."""
+        substrate = Continuous3DSubstrate(
+            min_x=0.0,
+            max_x=10.0,
+            min_y=0.0,
+            max_y=10.0,
+            min_z=0.0,
+            max_z=10.0,
+            boundary="bounce",
+            movement_delta=0.5,
+            interaction_radius=0.8,
+        )
+
+        # Start near lower bounds on all axes, move negative on all
+        positions = torch.tensor([[0.2, 0.3, 0.4]], dtype=torch.float32)
+        deltas = torch.tensor([[-1.0, -1.0, -1.0]], dtype=torch.float32)
+
+        # Expected: X: 0.2 - 0.5 = -0.3 → reflect: 0.3
+        #           Y: 0.3 - 0.5 = -0.2 → reflect: 0.2
+        #           Z: 0.4 - 0.5 = -0.1 → reflect: 0.1
+        result = substrate.apply_movement(positions, deltas)
+
+        assert torch.isclose(result[0, 0], torch.tensor(0.3), atol=1e-6)
+        assert torch.isclose(result[0, 1], torch.tensor(0.2), atol=1e-6)
+        assert torch.isclose(result[0, 2], torch.tensor(0.1), atol=1e-6)
