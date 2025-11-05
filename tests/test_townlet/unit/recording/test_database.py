@@ -157,7 +157,7 @@ class TestDatabaseRecording:
                 )
                 db.insert_recording(
                     episode_id=i * 100,
-                    file_path=f"recordings/episode_{i*100:06d}.msgpack.lz4",
+                    file_path=f"recordings/episode_{i * 100:06d}.msgpack.lz4",
                     metadata=metadata,
                     reason="periodic",
                     file_size=10000,
@@ -244,7 +244,7 @@ class TestDatabaseRecording:
                 )
                 db.insert_recording(
                     episode_id=i * 100,
-                    file_path=f"recordings/episode_{i*100:06d}.msgpack.lz4",
+                    file_path=f"recordings/episode_{i * 100:06d}.msgpack.lz4",
                     metadata=metadata,
                     reason=reason,
                     file_size=10000,

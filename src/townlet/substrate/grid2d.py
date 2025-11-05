@@ -84,7 +84,8 @@ class Grid2DSubstrate(SpatialSubstrate):
         deltas: torch.Tensor,
     ) -> torch.Tensor:
         """Apply movement deltas with boundary handling."""
-        new_positions = positions + deltas
+        # Cast deltas to long for grid substrates (deltas come in as float32)
+        new_positions = positions + deltas.long()
 
         if self.boundary == "clamp":
             # Hard walls: clamp to valid range
@@ -268,3 +269,7 @@ class Grid2DSubstrate(SpatialSubstrate):
 
         # Flatten local grids: [num_agents, window_size, window_size] → [num_agents, window_size²]
         return local_grids.reshape(num_agents, -1)
+
+    def supports_enumerable_positions(self) -> bool:
+        """Grid substrates have finite enumerable positions."""
+        return True

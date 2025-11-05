@@ -515,9 +515,9 @@ class TestRNDLearningBehavior:
         novel_reward = rnd.compute_intrinsic_rewards(novel_obs).mean().item()
 
         # Novel states should have higher intrinsic reward
-        assert novel_reward > familiar_reward, (
-            f"Novel states should have higher reward: " f"novel={novel_reward:.4f}, familiar={familiar_reward:.4f}"
-        )
+        assert (
+            novel_reward > familiar_reward
+        ), f"Novel states should have higher reward: novel={novel_reward:.4f}, familiar={familiar_reward:.4f}"
 
     def test_fixed_network_never_changes(self):
         """Fixed network weights should remain constant during training."""

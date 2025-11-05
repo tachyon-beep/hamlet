@@ -850,7 +850,7 @@ class DemoRunner:
                         logger.info(
                             f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | "
                             f"Health: {final_meter_values.get('health', 0):.2f} | "
-                            f"Money: ${final_meter_values.get('money', 0)*100:.1f}"
+                            f"Money: ${final_meter_values.get('money', 0) * 100:.1f}"
                         )
                     logger.info(f"Affordances:    {affordance_summary}")
                     logger.info("=" * 80)

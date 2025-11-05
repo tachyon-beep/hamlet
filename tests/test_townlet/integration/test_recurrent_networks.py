@@ -106,8 +106,8 @@ class TestLSTMHiddenStatePersistence:
             h_next, c_next = hidden_states[i + 1]
 
             # Hidden states should be different (memory evolving)
-            assert not torch.allclose(h_curr, h_next, atol=1e-6), f"Hidden state should change between steps {i} and {i+1}"
-            assert not torch.allclose(c_curr, c_next, atol=1e-6), f"Cell state should change between steps {i} and {i+1}"
+            assert not torch.allclose(h_curr, h_next, atol=1e-6), f"Hidden state should change between steps {i} and {i + 1}"
+            assert not torch.allclose(c_curr, c_next, atol=1e-6), f"Cell state should change between steps {i} and {i + 1}"
 
     def test_hidden_state_resets_on_death(self, test_config_pack_path, cpu_device):
         """
@@ -518,9 +518,9 @@ class TestLSTMBatchTraining:
         initial_loss = sum(losses[:10]) / 10
         final_loss = sum(losses[-10:]) / 10
 
-        assert final_loss < initial_loss * 0.5, (
-            f"Loss should decrease during training. " f"Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
-        )
+        assert (
+            final_loss < initial_loss * 0.5
+        ), f"Loss should decrease during training. Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
 
     def test_lstm_memory_persistence_in_training(self, cpu_device):
         """

@@ -640,7 +640,7 @@ class LiveInferenceServer:
             }
         )
 
-        logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, " f"reward: {final_cumulative_reward:.2f}")
+        logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, reward: {final_cumulative_reward:.2f}")
 
     async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor, step_reward: float = 1.0):
         """Broadcast current state to all clients."""

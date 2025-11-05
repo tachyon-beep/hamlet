@@ -5,6 +5,7 @@ import torch
 from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.base import SpatialSubstrate
 from townlet.substrate.config import SubstrateConfig
+from townlet.substrate.continuous import Continuous1DSubstrate, Continuous2DSubstrate, Continuous3DSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
 
@@ -62,6 +63,50 @@ class SubstrateFactory:
                 )
             else:
                 raise ValueError(f"Unknown grid topology: {config.grid.topology}")
+
+        elif config.type == "continuous":
+            assert config.continuous is not None  # Validated by pydantic
+
+            if config.continuous.dimensions == 1:
+                (min_x, max_x) = config.continuous.bounds[0]
+                return Continuous1DSubstrate(
+                    min_x=min_x,
+                    max_x=max_x,
+                    boundary=config.continuous.boundary,
+                    movement_delta=config.continuous.movement_delta,
+                    interaction_radius=config.continuous.interaction_radius,
+                    distance_metric=config.continuous.distance_metric,
+                )
+
+            elif config.continuous.dimensions == 2:
+                (min_x, max_x), (min_y, max_y) = config.continuous.bounds
+                return Continuous2DSubstrate(
+                    min_x=min_x,
+                    max_x=max_x,
+                    min_y=min_y,
+                    max_y=max_y,
+                    boundary=config.continuous.boundary,
+                    movement_delta=config.continuous.movement_delta,
+                    interaction_radius=config.continuous.interaction_radius,
+                    distance_metric=config.continuous.distance_metric,
+                )
+
+            elif config.continuous.dimensions == 3:
+                (min_x, max_x), (min_y, max_y), (min_z, max_z) = config.continuous.bounds
+                return Continuous3DSubstrate(
+                    min_x=min_x,
+                    max_x=max_x,
+                    min_y=min_y,
+                    max_y=max_y,
+                    min_z=min_z,
+                    max_z=max_z,
+                    boundary=config.continuous.boundary,
+                    movement_delta=config.continuous.movement_delta,
+                    interaction_radius=config.continuous.interaction_radius,
+                    distance_metric=config.continuous.distance_metric,
+                )
+            else:
+                raise ValueError(f"Unsupported continuous dimensions: {config.continuous.dimensions}")
 
         elif config.type == "aspatial":
             assert config.aspatial is not None  # Validated by pydantic

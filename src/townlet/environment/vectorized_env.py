@@ -99,7 +99,7 @@ class VectorizedHamletEnv:
         self.grid_size = grid_size  # Default to parameter (for aspatial or backward compat)
         if hasattr(self.substrate, "width") and hasattr(self.substrate, "height"):
             if self.substrate.width != self.substrate.height:
-                raise ValueError(f"Non-square grids not yet supported: " f"{self.substrate.width}×{self.substrate.height}")
+                raise ValueError(f"Non-square grids not yet supported: {self.substrate.width}×{self.substrate.height}")
             self.grid_size = self.substrate.width  # Override with substrate for grid
 
         self.num_agents = num_agents
@@ -221,10 +221,13 @@ class VectorizedHamletEnv:
         )
 
         # Action space size depends on substrate dimensionality
-        # Grid2D: 6 actions (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
-        # Grid3D: 8 actions (+ UP_Z, DOWN_Z)
+        # 1D (Continuous1D): 4 actions (MOVE_X_NEGATIVE, MOVE_X_POSITIVE, INTERACT, WAIT)
+        # 2D (Grid2D, Continuous2D): 6 actions (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+        # 3D (Grid3D, Continuous3D): 8 actions (+ UP_Z, DOWN_Z)
         # Aspatial: 2 actions (INTERACT, WAIT)
-        if self.substrate.position_dim == 2:
+        if self.substrate.position_dim == 1:
+            self.action_dim = 4
+        elif self.substrate.position_dim == 2:
             self.action_dim = 6
         elif self.substrate.position_dim == 3:
             self.action_dim = 8
@@ -354,10 +357,20 @@ class VectorizedHamletEnv:
             action_masks[at_ceiling, 6] = False  # Can't go UP_Z at ceiling
             action_masks[at_floor, 7] = False  # Can't go DOWN_Z at floor
 
-        # Mask INTERACT (action 4) - only valid when on an open affordance
+        # Mask INTERACT - only valid when on an open affordance
         # P1.4: Removed affordability check - agents can attempt INTERACT even when broke
         # Affordability is checked inside interaction handlers; failing to afford just
         # wastes a turn (passive decay) and teaches economic planning
+
+        # Determine INTERACT action index based on substrate dimensionality
+        # 1D: INTERACT = 2, 2D: INTERACT = 4, 3D: INTERACT = 4, Aspatial: INTERACT = 0
+        if self.substrate.position_dim == 1:
+            interact_action_idx = 2
+        elif self.substrate.position_dim == 0:
+            interact_action_idx = 0
+        else:  # 2D or 3D
+            interact_action_idx = 4
+
         on_valid_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
         # Check each affordance using AffordanceEngine
@@ -374,7 +387,7 @@ class VectorizedHamletEnv:
             # Valid if on affordance AND is open (affordability checked in handler)
             on_valid_affordance |= on_this_affordance
 
-        action_masks[:, 4] = on_valid_affordance
+        action_masks[:, interact_action_idx] = on_valid_affordance
 
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking
@@ -456,9 +469,22 @@ class VectorizedHamletEnv:
         old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
 
         # Movement deltas - dynamically sized based on substrate dimensionality
-        # For Grid2D (position_dim=2): 4 directions + interact/wait
-        # For Grid3D (position_dim=3): 6 directions + interact/wait
-        if self.substrate.position_dim == 2:
+        # Always float32 - substrates cast to their dtype as needed
+        # For 1D (Continuous1D): 2 directions (X-/X+) + interact/wait
+        # For 2D (Grid2D, Continuous2D): 4 directions + interact/wait
+        # For 3D (Grid3D, Continuous3D): 6 directions + interact/wait
+        if self.substrate.position_dim == 1:
+            deltas = torch.tensor(
+                [
+                    [-1],  # MOVE_X_NEGATIVE (action 0)
+                    [1],  # MOVE_X_POSITIVE (action 1)
+                    [0],  # INTERACT (no movement, action 2)
+                    [0],  # WAIT (no movement, action 3)
+                ],
+                device=self.device,
+                dtype=torch.float32,  # Always float, substrates cast if needed
+            )
+        elif self.substrate.position_dim == 2:
             deltas = torch.tensor(
                 [
                     [0, -1],  # UP - decreases y, x unchanged
@@ -469,7 +495,7 @@ class VectorizedHamletEnv:
                     [0, 0],  # WAIT (no movement)
                 ],
                 device=self.device,
-                dtype=self.substrate.position_dtype,
+                dtype=torch.float32,  # Always float, substrates cast if needed
             )
         elif self.substrate.position_dim == 3:
             deltas = torch.tensor(
@@ -484,14 +510,15 @@ class VectorizedHamletEnv:
                     [0, 0, -1],  # DOWN_Z - decreases z (new for 3D: action 7)
                 ],
                 device=self.device,
-                dtype=self.substrate.position_dtype,
+                dtype=torch.float32,  # Always float, substrates cast if needed
             )
         elif self.substrate.position_dim == 0:
             # Aspatial: no movement deltas needed, but provide dummy array
-            deltas = torch.zeros((6, 0), device=self.device, dtype=self.substrate.position_dtype)
+            deltas = torch.zeros((6, 0), device=self.device, dtype=torch.float32)
         else:
             raise ValueError(
-                f"Unsupported substrate position_dim: {self.substrate.position_dim}. " f"Expected 0 (aspatial), 2 (Grid2D), or 3 (Grid3D)"
+                f"Unsupported substrate position_dim: {self.substrate.position_dim}. "
+                f"Expected 0 (aspatial), 1 (1D continuous), 2 (Grid2D/Continuous2D), or 3 (Grid3D/Continuous3D)"
             )
 
         # Apply movement with substrate-specific boundary handling
@@ -520,8 +547,17 @@ class VectorizedHamletEnv:
             self.meters[movement_mask] -= movement_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
-        # WAIT action (action 5) - lighter energy cost
-        wait_mask = actions == 5
+        # WAIT action - lighter energy cost
+        # Determine WAIT action index based on substrate dimensionality
+        # 1D: WAIT = 3, 2D: WAIT = 5, 3D: WAIT = 5, Aspatial: WAIT = 1
+        if self.substrate.position_dim == 1:
+            wait_action_idx = 3
+        elif self.substrate.position_dim == 0:
+            wait_action_idx = 1
+        else:  # 2D or 3D
+            wait_action_idx = 5
+
+        wait_mask = actions == wait_action_idx
         if wait_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             wait_costs = torch.zeros(self.meter_count, device=self.device)
@@ -531,8 +567,17 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
+        # Determine INTERACT action index based on substrate dimensionality
+        # 1D: INTERACT = 2, 2D: INTERACT = 4, 3D: INTERACT = 4, Aspatial: INTERACT = 0
+        if self.substrate.position_dim == 1:
+            interact_action_idx = 2
+        elif self.substrate.position_dim == 0:
+            interact_action_idx = 0
+        else:  # 2D or 3D
+            interact_action_idx = 4
+
         successful_interactions = {}
-        interact_mask = actions == 4
+        interact_mask = actions == interact_action_idx
         if interact_mask.any():
             successful_interactions = self._handle_interactions(interact_mask)
 
@@ -763,7 +808,11 @@ class VectorizedHamletEnv:
     def randomize_affordance_positions(self):
         """Randomize affordance positions for generalization testing.
 
-        Ensures no two affordances occupy the same position.
+        Grid substrates: Shuffle all positions
+        Continuous substrates: Random sampling
+        Aspatial: No positions
+
+        Ensures no two affordances occupy the same position (for grid substrates).
         """
         import random
 
@@ -772,28 +821,36 @@ class VectorizedHamletEnv:
         if num_affordances == 0:
             return  # Nothing to randomize
 
-        # Get all valid positions from substrate
-        all_positions = self.substrate.get_all_positions()
+        # Aspatial substrates don't have positions
+        if self.substrate.position_dim == 0:
+            # Aspatial: no positions, affordances don't need placement
+            return
 
-        # Guard for aspatial substrates with affordances
-        if len(all_positions) == 0:
-            raise ValueError(
-                "Cannot randomize affordance positions in aspatial substrate. "
-                "Aspatial universes have no spatial positioning (position_dim=0)."
-            )
+        # Check if substrate supports enumerable positions
+        if hasattr(self.substrate, "supports_enumerable_positions") and self.substrate.supports_enumerable_positions():
+            # Grid substrates: shuffle all positions
+            all_positions = self.substrate.get_all_positions()
 
-        # Validate that grid has enough cells for all affordances (need +1 for agent)
-        total_cells = len(all_positions)
-        if num_affordances >= total_cells:
-            raise ValueError(
-                f"Grid has {total_cells} cells but {num_affordances} affordances + 1 agent need space. "
-                f"Reduce affordances or increase grid_size to at least {int((num_affordances + 1) ** 0.5) + 1}."
-            )
+            # Validate that grid has enough cells for all affordances (need +1 for agent)
+            total_cells = len(all_positions)
+            if num_affordances >= total_cells:
+                raise ValueError(
+                    f"Grid has {total_cells} cells but {num_affordances} affordances + 1 agent need space. "
+                    f"Reduce affordances or increase grid_size to at least {int((num_affordances + 1) ** 0.5) + 1}."
+                )
 
-        # Shuffle and assign to affordances
-        random.shuffle(all_positions)
+            # Shuffle and assign to affordances
+            random.shuffle(all_positions)
 
-        # Assign new positions to affordances
-        for i, affordance_name in enumerate(self.affordances.keys()):
-            new_pos = all_positions[i]
-            self.affordances[affordance_name] = torch.tensor(new_pos, dtype=torch.long, device=self.device)
+            # Assign new positions to affordances
+            for i, affordance_name in enumerate(self.affordances.keys()):
+                new_pos = all_positions[i]
+                self.affordances[affordance_name] = torch.tensor(new_pos, dtype=self.substrate.position_dtype, device=self.device)
+        else:
+            # Continuous/other: random sampling
+            # Use substrate's initialize_positions for random placement
+            affordance_positions_tensor = self.substrate.initialize_positions(num_agents=num_affordances, device=self.device)
+
+            # Assign to affordances
+            for i, affordance_name in enumerate(self.affordances.keys()):
+                self.affordances[affordance_name] = affordance_positions_tensor[i]

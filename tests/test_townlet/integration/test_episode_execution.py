@@ -202,9 +202,9 @@ class TestEpisodeLifecycle:
             step_count += 1
 
         # Verify agent survived (death resets hidden state to zeros, causing false failures)
-        assert not episode_done, (
-            f"Agent died after {step_count} steps (cascade effects). " "Death resets hidden state to zeros, invalidating test."
-        )
+        assert (
+            not episode_done
+        ), f"Agent died after {step_count} steps (cascade effects). Death resets hidden state to zeros, invalidating test."
 
         # Verify hidden state evolved during episode
         h_final, c_final = recurrent_network.get_hidden_state()

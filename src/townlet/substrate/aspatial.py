@@ -114,3 +114,7 @@ class AspatialSubstrate(SpatialSubstrate):
         num_agents = positions.shape[0]
         device = positions.device
         return torch.zeros((num_agents, 0), device=device)
+
+    def supports_enumerable_positions(self) -> bool:
+        """Aspatial substrates have no positions."""
+        return False

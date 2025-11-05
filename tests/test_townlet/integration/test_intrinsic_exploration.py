@@ -326,9 +326,9 @@ class TestAdaptiveAnnealing:
 
         # Verify weight decreased
         final_weight = exploration.get_intrinsic_weight()
-        assert final_weight < initial_weight, (
-            f"Weight should decrease after consistent performance: " f"initial={initial_weight}, final={final_weight}"
-        )
+        assert (
+            final_weight < initial_weight
+        ), f"Weight should decrease after consistent performance: initial={initial_weight}, final={final_weight}"
 
         # Verify weight followed exponential decay
         # After annealing: weight should be around 0.9 (one decay step)
@@ -381,7 +381,7 @@ class TestAdaptiveAnnealing:
 
         # Verify weight did NOT decrease (annealing should not trigger)
         weight = exploration.get_intrinsic_weight()
-        assert abs(weight - 1.0) < 1e-6, f"Weight should NOT decrease for consistent failure: " f"expected 1.0, got {weight}"
+        assert abs(weight - 1.0) < 1e-6, f"Weight should NOT decrease for consistent failure: expected 1.0, got {weight}"
 
         # Now simulate consistent SUCCESS (low variance, high survival)
         for i in range(20):
@@ -390,7 +390,7 @@ class TestAdaptiveAnnealing:
 
         # Verify weight DID decrease (annealing should trigger)
         weight_after = exploration.get_intrinsic_weight()
-        assert weight_after < 1.0, f"Weight should decrease for consistent success: " f"expected < 1.0, got {weight_after}"
+        assert weight_after < 1.0, f"Weight should decrease for consistent success: expected < 1.0, got {weight_after}"
 
     def test_annealing_requires_low_variance(self, cpu_device, test_config_pack_path):
         """Verify annealing requires variance < threshold (prevents annealing during exploration).
@@ -436,9 +436,9 @@ class TestAdaptiveAnnealing:
 
         # Verify weight did NOT decrease (high variance prevents annealing)
         weight_high_variance = exploration.get_intrinsic_weight()
-        assert abs(weight_high_variance - 1.0) < 1e-6, (
-            f"Weight should NOT decrease with high variance: " f"expected 1.0, got {weight_high_variance}"
-        )
+        assert (
+            abs(weight_high_variance - 1.0) < 1e-6
+        ), f"Weight should NOT decrease with high variance: expected 1.0, got {weight_high_variance}"
 
         # Now simulate LOW variance (agent converged)
         # Add 20 more episodes with tight variance around 100
@@ -448,6 +448,6 @@ class TestAdaptiveAnnealing:
 
         # Verify weight DID decrease (low variance + high survival triggers annealing)
         weight_low_variance = exploration.get_intrinsic_weight()
-        assert weight_low_variance < 1.0, (
-            f"Weight should decrease with low variance + high survival: " f"expected < 1.0, got {weight_low_variance}"
-        )
+        assert (
+            weight_low_variance < 1.0
+        ), f"Weight should decrease with low variance + high survival: expected < 1.0, got {weight_low_variance}"

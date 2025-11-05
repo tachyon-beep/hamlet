@@ -373,7 +373,7 @@ training:
         assert episode_count == 5, f"Should have 5 episode records, got {episode_count}"
 
         # Check required fields exist (database schema uses survival_time not survival_steps)
-        cursor.execute("SELECT survival_time, total_reward, curriculum_stage, epsilon " "FROM episodes LIMIT 1")
+        cursor.execute("SELECT survival_time, total_reward, curriculum_stage, epsilon FROM episodes LIMIT 1")
         record = cursor.fetchone()
         assert record is not None, "Episode record should exist"
 
@@ -488,7 +488,7 @@ training:
         assert transition_count > 0, f"Expected at least 1 affordance transition recorded, got {transition_count}"
 
         # Verify transition structure
-        cursor.execute("SELECT episode_id, from_affordance, to_affordance, visit_count " "FROM affordance_visits LIMIT 1")
+        cursor.execute("SELECT episode_id, from_affordance, to_affordance, visit_count FROM affordance_visits LIMIT 1")
         record = cursor.fetchone()
 
         if record is not None:

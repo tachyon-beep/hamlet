@@ -172,15 +172,14 @@ def load_affordance_config(config_path: Path, bars_config: BarsConfig) -> Afford
         for effect in affordance.effects + affordance.effects_per_tick + affordance.completion_bonus:
             if effect.meter not in valid_meters:
                 raise ValueError(
-                    f"Affordance '{affordance.id}' effect references invalid meter '{effect.meter}'. "
-                    f"Valid meters: {sorted(valid_meters)}"
+                    f"Affordance '{affordance.id}' effect references invalid meter '{effect.meter}'. Valid meters: {sorted(valid_meters)}"
                 )
 
         # Check all costs
         for cost in affordance.costs + affordance.costs_per_tick:
             if cost.meter not in valid_meters:
                 raise ValueError(
-                    f"Affordance '{affordance.id}' cost references invalid meter '{cost.meter}'. " f"Valid meters: {sorted(valid_meters)}"
+                    f"Affordance '{affordance.id}' cost references invalid meter '{cost.meter}'. Valid meters: {sorted(valid_meters)}"
                 )
 
     return collection

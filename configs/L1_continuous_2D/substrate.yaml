@@ -1,0 +1,33 @@
+version: "1.0"
+description: "Continuous 2D plane substrate - smooth navigation"
+
+type: "continuous"
+
+continuous:
+  dimensions: 2
+
+  # Bounds for each dimension
+  bounds:
+    - [0.0, 10.0]  # X dimension: 0 to 10 units
+    - [0.0, 10.0]  # Y dimension: 0 to 10 units
+
+  # Boundary handling
+  boundary: "clamp"
+
+  # Movement granularity (how far discrete actions move agent)
+  # Smaller = finer control, Larger = faster movement
+  movement_delta: 0.5
+
+  # Interaction radius (distance threshold for affordance interaction)
+  # Agent must be within this radius to interact
+  # Recommendation: interaction_radius >= movement_delta
+  interaction_radius: 0.8
+
+  # Distance metric
+  distance_metric: "euclidean"
+
+# Use cases:
+# - Robotics simulation (smooth movement)
+# - Continuous control problems
+# - Teaching discrete vs continuous control
+# - Smooth navigation challenges

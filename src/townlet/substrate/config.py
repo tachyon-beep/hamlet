@@ -43,12 +43,68 @@ class GridConfig(BaseModel):
                 "  depth: 3  # Required for 3D\n"
             )
         if self.topology == "square" and self.depth is not None:
-            raise ValueError("Square topology does not use 'depth' parameter. " "Remove 'depth' or use topology: cubic")
+            raise ValueError("Square topology does not use 'depth' parameter. Remove 'depth' or use topology: cubic")
         return self
 
 
 # Backward compatibility alias
 Grid2DSubstrateConfig = GridConfig
+
+
+class ContinuousConfig(BaseModel):
+    """Configuration for continuous substrates.
+
+    Continuous substrates use float-based positions in bounded space.
+    Supports 1D (line), 2D (plane), or 3D (volume) continuous space.
+
+    No-Defaults Principle: All fields required (no implicit defaults).
+    """
+
+    dimensions: int = Field(ge=1, le=3, description="Number of dimensions (1, 2, or 3)")
+
+    bounds: list[tuple[float, float]] = Field(description="Bounds for each dimension [(min, max), ...]")
+
+    boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(description="Boundary handling mode")
+
+    movement_delta: float = Field(gt=0, description="Distance discrete actions move agent")
+
+    interaction_radius: float = Field(gt=0, description="Distance threshold for affordance interaction")
+
+    distance_metric: Literal["euclidean", "manhattan"] = Field(default="euclidean", description="Distance calculation method")
+
+    @model_validator(mode="after")
+    def validate_bounds_match_dimensions(self) -> "ContinuousConfig":
+        """Validate bounds and interaction parameters."""
+        if len(self.bounds) != self.dimensions:
+            raise ValueError(
+                f"Number of bounds ({len(self.bounds)}) must match dimensions ({self.dimensions}). "
+                f"Example for 2D: bounds=[(0.0, 10.0), (0.0, 10.0)]"
+            )
+
+        for i, (min_val, max_val) in enumerate(self.bounds):
+            if min_val >= max_val:
+                raise ValueError(f"Bound {i} invalid: min ({min_val}) must be < max ({max_val})")
+
+            # Check space is large enough for interaction
+            range_size = max_val - min_val
+            if range_size < self.interaction_radius:
+                raise ValueError(
+                    f"Dimension {i} range ({range_size}) < interaction_radius ({self.interaction_radius}). "
+                    f"Space too small for affordance interaction."
+                )
+
+        # Warn if interaction_radius < movement_delta
+        if self.interaction_radius < self.movement_delta:
+            import warnings
+
+            warnings.warn(
+                f"interaction_radius ({self.interaction_radius}) < movement_delta ({self.movement_delta}). "
+                f"Agent may step over affordances without interaction. "
+                f"This may be intentional for challenge, but verify configuration.",
+                UserWarning,
+            )
+
+        return self
 
 
 class AspatialSubstrateConfig(BaseModel):
@@ -72,12 +128,16 @@ class SubstrateConfig(BaseModel):
 
     version: str = Field(description="Config version (e.g., '1.0')")
     description: str = Field(description="Human-readable description")
-    type: Literal["grid", "aspatial"] = Field(description="Substrate type selection")
+    type: Literal["grid", "continuous", "aspatial"] = Field(description="Substrate type selection")
 
     # Substrate-specific configs (only one should be populated)
     grid: GridConfig | None = Field(
         None,
         description="Grid substrate configuration (required if type='grid')",
+    )
+    continuous: ContinuousConfig | None = Field(
+        None,
+        description="Continuous substrate configuration (required if type='continuous')",
     )
     aspatial: AspatialSubstrateConfig | None = Field(
         None,
@@ -88,17 +148,31 @@ class SubstrateConfig(BaseModel):
     def validate_substrate_type_match(self) -> "SubstrateConfig":
         """Ensure substrate config matches declared type."""
         if self.type == "grid" and self.grid is None:
-            raise ValueError("type='grid' requires grid configuration. " "Add grid: { topology: 'square', width: 8, height: 8, ... }")
+            raise ValueError("type='grid' requires grid configuration. Add grid: { topology: 'square', width: 8, height: 8, ... }")
+
+        if self.type == "continuous" and self.continuous is None:
+            raise ValueError(
+                "type='continuous' requires continuous configuration. "
+                "Add continuous: { dimensions: 2, bounds: [(0.0, 10.0), (0.0, 10.0)], ... }"
+            )
 
         if self.type == "aspatial" and self.aspatial is None:
-            raise ValueError("type='aspatial' requires aspatial configuration. " "Add aspatial: {}")
+            raise ValueError("type='aspatial' requires aspatial configuration. Add aspatial: {}")
 
         # Ensure only one config is provided
-        if self.type == "grid" and self.aspatial is not None:
-            raise ValueError("type='grid' should not have aspatial configuration")
+        configs_provided = sum([self.grid is not None, self.continuous is not None, self.aspatial is not None])
 
-        if self.type == "aspatial" and self.grid is not None:
-            raise ValueError("type='aspatial' should not have grid configuration")
+        if configs_provided > 1:
+            raise ValueError("Only one substrate configuration should be provided")
+
+        if self.type == "grid" and (self.continuous is not None or self.aspatial is not None):
+            raise ValueError("type='grid' should not have continuous or aspatial configuration")
+
+        if self.type == "continuous" and (self.grid is not None or self.aspatial is not None):
+            raise ValueError("type='continuous' should not have grid or aspatial configuration")
+
+        if self.type == "aspatial" and (self.grid is not None or self.continuous is not None):
+            raise ValueError("type='aspatial' should not have grid or continuous configuration")
 
         return self
 

@@ -1,0 +1,57 @@
+# L1 Continuous 1D: Pedagogical continuous control
+#
+# Key features:
+# - 1D continuous line (0.0 to 10.0 units)
+# - Discrete actions with continuous movement (movement_delta=0.5)
+# - Proximity-based interaction (interaction_radius=0.8)
+# - Standard MLP Q-Network
+# - Pedagogical: Simplest continuous space
+
+run_metadata:
+  output_subdir: L1_continuous_1D
+
+# Environment configuration
+environment:
+  grid_size: 10  # Not used for continuous (required by runner, will be ignored)
+  partial_observability: false
+  vision_range: 5  # Not used for continuous substrates
+  enabled_affordances: null  # All 14 affordances
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
+
+# Population configuration
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  gamma: 0.99
+  replay_buffer_capacity: 10000
+  network_type: simple
+
+# Curriculum configuration
+curriculum:
+  max_steps_per_episode: 500
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 1000
+
+# Exploration configuration
+exploration:
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 100
+
+# Training configuration
+training:
+  device: cuda
+  max_episodes: 5000
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 64
+  sequence_length: 8
+  max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_decay: 0.995
+  epsilon_min: 0.01

@@ -55,7 +55,7 @@ class Grid3DSubstrate(SpatialSubstrate):
             distance_metric: Distance calculation method
         """
         if width <= 0 or height <= 0 or depth <= 0:
-            raise ValueError(f"Grid dimensions must be positive: {width}×{height}×{depth}\n" f"Example: width: 8, height: 8, depth: 3")
+            raise ValueError(f"Grid dimensions must be positive: {width}×{height}×{depth}\nExample: width: 8, height: 8, depth: 3")
         if boundary not in ("clamp", "wrap", "bounce", "sticky"):
             raise ValueError(f"Unknown boundary mode: {boundary}")
         if distance_metric not in ("manhattan", "euclidean", "chebyshev"):
