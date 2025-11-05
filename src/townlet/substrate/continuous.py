@@ -39,6 +39,7 @@ class ContinuousSubstrate(SpatialSubstrate):
         movement_delta: float,
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         """Initialize continuous substrate.
 
@@ -49,6 +50,7 @@ class ContinuousSubstrate(SpatialSubstrate):
             movement_delta: Distance discrete actions move agent
             interaction_radius: Distance threshold for affordance interaction
             distance_metric: Distance calculation method
+            observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
         """
         if dimensions not in (1, 2, 3):
             raise ValueError(f"Continuous substrates support 1-3 dimensions, got {dimensions}")
@@ -99,6 +101,7 @@ class ContinuousSubstrate(SpatialSubstrate):
         self.movement_delta = movement_delta
         self.interaction_radius = interaction_radius
         self.distance_metric = distance_metric
+        self.observation_encoding = observation_encoding
 
     @property
     def position_dim(self) -> int:
@@ -178,15 +181,19 @@ class ContinuousSubstrate(SpatialSubstrate):
         distance = self.compute_distance(positions, target_position)
         return distance <= self.interaction_radius
 
-    def encode_observation(self, positions: torch.Tensor, affordances: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Normalize positions to [0, 1] for each dimension.
+    def _encode_relative(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as normalized coordinates [0, 1].
 
         Args:
             positions: Agent positions [num_agents, dimensions]
-            affordances: Dict of affordance positions (not used for Continuous encoding)
+            affordances: Affordance positions (currently unused)
 
-        Returns [num_agents, dimensions] tensor.
-        Matches Grid3D encoding strategy (constant size).
+        Returns:
+            [num_agents, dimensions] normalized positions
         """
         num_agents = positions.shape[0]
         normalized = torch.zeros((num_agents, self.dimensions), dtype=torch.float32, device=positions.device)
@@ -198,9 +205,91 @@ class ContinuousSubstrate(SpatialSubstrate):
 
         return normalized
 
+    def _encode_scaled(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as normalized coordinates + range metadata.
+
+        Args:
+            positions: Agent positions [num_agents, dimensions]
+            affordances: Affordance positions (currently unused)
+
+        Returns:
+            [num_agents, dimensions*2] normalized positions + range sizes
+            First N dims: normalized [0, 1]
+            Last N dims: range sizes (max - min) for each dimension
+        """
+        num_agents = positions.shape[0]
+        device = positions.device
+
+        # Get normalized positions
+        relative = self._encode_relative(positions, affordances)
+
+        # Add range metadata
+        ranges = []
+        for min_val, max_val in self.bounds:
+            ranges.append(max_val - min_val)
+
+        ranges_tensor = torch.tensor(ranges, dtype=torch.float32, device=device).unsqueeze(0).expand(num_agents, -1)
+
+        return torch.cat([relative, ranges_tensor], dim=1)
+
+    def _encode_absolute(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Encode positions as raw unnormalized coordinates.
+
+        Args:
+            positions: Agent positions [num_agents, dimensions]
+            affordances: Affordance positions (currently unused)
+
+        Returns:
+            [num_agents, dimensions] raw coordinates (already float)
+        """
+        return positions
+
+    def encode_observation(self, positions: torch.Tensor, affordances: dict[str, torch.Tensor]) -> torch.Tensor:
+        """Encode agent positions and affordances into observation space.
+
+        Args:
+            positions: Agent positions [num_agents, dimensions]
+            affordances: Dict mapping affordance names to positions
+
+        Returns:
+            Encoded observations with dimensions based on encoding mode:
+            - relative: [num_agents, dimensions]
+            - scaled: [num_agents, dimensions*2]
+            - absolute: [num_agents, dimensions]
+        """
+        if self.observation_encoding == "relative":
+            return self._encode_relative(positions, affordances)
+        elif self.observation_encoding == "scaled":
+            return self._encode_scaled(positions, affordances)
+        elif self.observation_encoding == "absolute":
+            return self._encode_absolute(positions, affordances)
+        else:
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. " f"Must be 'relative', 'scaled', or 'absolute'.")
+
     def get_observation_dim(self) -> int:
-        """Return observation dimensionality (number of dimensions)."""
-        return self.dimensions
+        """Return dimensionality of position encoding.
+
+        Returns:
+            - relative: dimensions (normalized positions)
+            - scaled: dimensions * 2 (normalized positions + range sizes)
+            - absolute: dimensions (raw positions)
+        """
+        if self.observation_encoding == "relative":
+            return self.dimensions
+        elif self.observation_encoding == "scaled":
+            return self.dimensions * 2
+        elif self.observation_encoding == "absolute":
+            return self.dimensions
+        else:
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
     def encode_partial_observation(self, positions: torch.Tensor, affordances: dict[str, torch.Tensor], vision_range: int) -> torch.Tensor:
         """Encode partial observation for POMDP support.
@@ -251,6 +340,7 @@ class Continuous1DSubstrate(ContinuousSubstrate):
         movement_delta: float,
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         super().__init__(
             dimensions=1,
@@ -259,6 +349,7 @@ class Continuous1DSubstrate(ContinuousSubstrate):
             movement_delta=movement_delta,
             interaction_radius=interaction_radius,
             distance_metric=distance_metric,
+            observation_encoding=observation_encoding,
         )
         self.min_x = min_x
         self.max_x = max_x
@@ -277,6 +368,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
         movement_delta: float,
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         super().__init__(
             dimensions=2,
@@ -285,6 +377,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
             movement_delta=movement_delta,
             interaction_radius=interaction_radius,
             distance_metric=distance_metric,
+            observation_encoding=observation_encoding,
         )
         self.min_x = min_x
         self.max_x = max_x
@@ -307,6 +400,7 @@ class Continuous3DSubstrate(ContinuousSubstrate):
         movement_delta: float,
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
     ):
         super().__init__(
             dimensions=3,
@@ -315,6 +409,7 @@ class Continuous3DSubstrate(ContinuousSubstrate):
             movement_delta=movement_delta,
             interaction_radius=interaction_radius,
             distance_metric=distance_metric,
+            observation_encoding=observation_encoding,
         )
         self.min_x = min_x
         self.max_x = max_x

@@ -381,14 +381,27 @@ def test_continuous_2d_asymmetric_bounds():
     assert torch.allclose(obs[:, 3], torch.tensor([20.0, 20.0, 20.0]))  # y_range
 
 
-def test_continuous_invalid_encoding_mode():
-    """Test that invalid encoding mode raises error."""
-    with pytest.raises(TypeError):
-        Continuous1DSubstrate(
-            min_x=0.0,
-            max_x=10.0,
-            boundary="clamp",
-            movement_delta=0.5,
-            interaction_radius=1.0,
-            observation_encoding="invalid",  # Should fail type checking
-        )
+def test_continuous_invalid_encoding_mode_runtime():
+    """Test that invalid encoding mode raises error at runtime."""
+    # Type hints don't enforce at runtime, so we test dispatch logic
+    substrate = Continuous1DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=1.0,
+        observation_encoding="relative",
+    )
+
+    # Manually corrupt the encoding to test error handling
+    substrate.observation_encoding = "invalid"  # type: ignore
+
+    positions = torch.tensor([[5.0]])
+
+    # Should raise ValueError when encoding observation
+    with pytest.raises(ValueError, match="Invalid observation_encoding"):
+        substrate.encode_observation(positions, {})
+
+    # Should also raise when getting observation dim
+    with pytest.raises(ValueError, match="Invalid observation_encoding"):
+        substrate.get_observation_dim()
