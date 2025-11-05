@@ -244,21 +244,10 @@ class VectorizedHamletEnv:
             bars_config.meter_name_to_index,
         )
 
-        # Action space size depends on substrate dimensionality
-        # 1D (Continuous1D): 4 actions (MOVE_X_NEGATIVE, MOVE_X_POSITIVE, INTERACT, WAIT)
-        # 2D (Grid2D, Continuous2D): 6 actions (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
-        # 3D (Grid3D, Continuous3D): 8 actions (+ UP_Z, DOWN_Z)
-        # Aspatial: 2 actions (INTERACT, WAIT)
-        if self.substrate.position_dim == 1:
-            self.action_dim = 4
-        elif self.substrate.position_dim == 2:
-            self.action_dim = 6
-        elif self.substrate.position_dim == 3:
-            self.action_dim = 8
-        elif self.substrate.position_dim == 0:
-            self.action_dim = 2
-        else:
-            raise ValueError(f"Unsupported substrate position_dim: {self.substrate.position_dim}")
+        # Action space size is determined by substrate
+        # Substrate reports number of discrete actions via action_space_size property
+        # This enables dynamic action spaces for N-dimensional substrates
+        self.action_dim = self.substrate.action_space_size
 
         # State tensors (initialized in reset)
         self.positions = torch.zeros(
