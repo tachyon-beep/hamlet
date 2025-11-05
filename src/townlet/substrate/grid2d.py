@@ -206,3 +206,7 @@ class Grid2DSubstrate(SpatialSubstrate):
         # For discrete grids, agents must be on exact cell
         distances = self.compute_distance(agent_positions, target_position)
         return distances == 0
+
+    def get_all_positions(self) -> list[list[int]]:
+        """Return all grid positions."""
+        return [[x, y] for x in range(self.width) for y in range(self.height)]

@@ -87,3 +87,7 @@ class AspatialSubstrate(SpatialSubstrate):
         """
         num_agents = agent_positions.shape[0]
         return torch.ones(num_agents, dtype=torch.bool, device=agent_positions.device)
+
+    def get_all_positions(self) -> list[list[int]]:
+        """Return empty list (aspatial has no positions)."""
+        return []

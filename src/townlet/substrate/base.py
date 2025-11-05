@@ -164,3 +164,17 @@ class SpatialSubstrate(ABC):
         For aspatial: always True (no positioning concept)
         """
         pass
+
+    @abstractmethod
+    def get_all_positions(self) -> list[list[int]]:
+        """Return all valid positions in the substrate.
+
+        Returns:
+            List of positions, where each position is [x, y, ...] (position_dim elements).
+            For aspatial substrates, returns empty list.
+            For 2D grids (3×3), returns [[0,0], [0,1], [0,2], [1,0], ...] (9 positions).
+            For 3D grids, would return [[x,y,z], ...].
+
+        Used for affordance randomization to ensure valid placement.
+        """
+        pass

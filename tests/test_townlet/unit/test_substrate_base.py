@@ -277,3 +277,29 @@ def test_aspatial_is_on_position():
     on_target = substrate.is_on_position(agent_positions, target_position)
 
     assert torch.all(on_target)  # All agents are "everywhere"
+
+
+def test_grid2d_get_all_positions():
+    """Grid2D should return all valid grid positions."""
+    substrate = Grid2DSubstrate(width=3, height=2, boundary="clamp", distance_metric="manhattan")
+
+    positions = substrate.get_all_positions()
+
+    # Should return 6 positions (3×2 grid)
+    assert len(positions) == 6
+
+    # Each position should be [x, y] list
+    assert all(len(pos) == 2 for pos in positions)
+
+    # Should cover all grid cells
+    expected = [[0, 0], [0, 1], [1, 0], [1, 1], [2, 0], [2, 1]]
+    assert sorted(positions) == sorted(expected)
+
+
+def test_aspatial_get_all_positions():
+    """Aspatial should return empty list (no positions exist)."""
+    substrate = AspatialSubstrate()
+
+    positions = substrate.get_all_positions()
+
+    assert positions == []
