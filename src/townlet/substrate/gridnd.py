@@ -36,6 +36,7 @@ class GridNDSubstrate(SpatialSubstrate):
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = "manhattan",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
+        topology: Literal["hypercube"] = "hypercube",  # NEW: GridND uses hypercube topology
     ):
         """Initialize N-dimensional grid substrate.
 
@@ -44,6 +45,7 @@ class GridNDSubstrate(SpatialSubstrate):
             boundary: Boundary mode ("clamp", "wrap", "bounce", "sticky")
             distance_metric: Distance metric ("manhattan", "euclidean", "chebyshev")
             observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
+            topology: Grid topology ("hypercube" for N-dimensional Cartesian grid)
 
         Raises:
             ValueError: If dimensions < 4 or any size <= 0
@@ -90,6 +92,7 @@ class GridNDSubstrate(SpatialSubstrate):
         self.boundary = boundary
         self.distance_metric = distance_metric
         self.observation_encoding = observation_encoding
+        self.topology = topology  # NEW: Store topology
 
     @property
     def position_dim(self) -> int:
