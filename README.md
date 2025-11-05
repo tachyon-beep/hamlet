@@ -25,6 +25,8 @@ Hamlet is a GPU-accelerated DRL training environment where agents learn to survi
 
 ## Quick Start
 
+> **Note (Phase 5):** Checkpoint format changed. If you have old checkpoints, delete them: `rm -rf checkpoints_*` or `rm -rf runs/*/checkpoints/`. See [CHANGELOG.md](CHANGELOG.md) for details.
+
 ### Prerequisites
 
 - Python 3.13+

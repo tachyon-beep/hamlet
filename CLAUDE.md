@@ -71,6 +71,8 @@ uv sync --extra dev
 
 ### Training (Townlet System)
 
+**Note:** Phase 5 (TASK-002A) changed checkpoint format. If you have old checkpoints, delete them before training: `rm -rf checkpoints_*`
+
 ```bash
 # Set PYTHONPATH to include src directory
 export PYTHONPATH=$(pwd)/src:$PYTHONPATH

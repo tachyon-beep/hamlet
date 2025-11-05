@@ -7,9 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Added (Phase 5 - TASK-002A)
 
-- **Repository Cleanup (Phase 1-3)**:
+- **Substrate Abstraction**: Polymorphic spatial position management
+  - Abstract `SpatialSubstrate` interface for position operations
+  - `Grid2DSubstrate`: 2D square grids with configurable boundaries (clamp, wrap, bounce, sticky)
+  - `AspatialSubstrate`: Position-less universes (pure state machines)
+  - Distance metrics: Manhattan (L1), Euclidean (L2), Chebyshev (L∞)
+  - Enables future 3D grids, continuous spaces, graph topologies
+- **Checkpoint Format V3**: Added `position_dim` field for substrate validation
+  - Validates position dimensionality on load (2D vs 3D vs aspatial)
+  - Pre-flight validation detects legacy checkpoints on startup
+  - Clear error messages guide users to delete old checkpoints
+- **Substrate-Based Observation Encoding**:
+  - `substrate.encode_observation()` for full observability
+  - `substrate.encode_partial_observation()` for POMDP local windows
+  - `substrate.get_observation_dim()` for network architecture
+  - Removed 55+ lines of hardcoded grid logic
+
+### Changed (Phase 5 - TASK-002A)
+
+- **BREAKING:** Checkpoint format Version 2 → Version 3
+- **BREAKING:** Legacy checkpoints no longer supported (no backward compatibility)
+- All position operations now use substrate methods:
+  - Position initialization: `substrate.initialize_positions()`
+  - Movement application: `substrate.apply_movement()`
+  - Distance calculations: `substrate.is_on_position()`
+  - Affordance randomization: `substrate.get_all_positions()`
+  - Observation encoding: `substrate.encode_observation()` / `encode_partial_observation()`
+- Observation dimensions now substrate-aware:
+  - Full observability: `substrate.get_observation_dim()` (was `grid_size²`)
+  - Partial observability: `substrate.position_dim` (was hardcoded `2`)
+  - Enables aspatial universes with `position_dim=0`
+
+### Removed (Phase 5 - TASK-002A)
+
+- Hardcoded 2D position assumptions throughout codebase
+- Backward compatibility with Version 2 checkpoints
+- Manual grid iteration for affordance randomization
+- Hardcoded grid encoding in observation builder (55+ lines)
+
+---
+
+### Added (Phase 1-3 - Repository Cleanup)
+
+- **Repository Cleanup**:
   - LICENSE file (MIT) with proper copyright notice
   - CHANGELOG.md (this file) following Keep a Changelog format
   - CONTRIBUTING.md with comprehensive development guidelines
