@@ -51,6 +51,17 @@ export const useSimulationStore = defineStore('simulation', () => {
   const affordances = ref([])
   const gridZoom = ref(1.0) // Zoom level for grid scaling (0.5 - 2.0)
 
+  // Substrate metadata (for multi-substrate rendering)
+  const substrateType = ref('grid2d')  // 'grid2d' or 'aspatial'
+  const substratePositionDim = ref(2)  // 2 for grid, 0 for aspatial
+  const substrateMetadata = ref({
+    type: 'grid2d',
+    position_dim: 2,
+    topology: 'square',
+    width: 8,
+    height: 8
+  })
+
   // Agent meters
   const agentMeters = ref({})
 
@@ -232,6 +243,13 @@ export const useSimulationStore = defineStore('simulation', () => {
 
   function handleMessage(message) {
     console.log('Received message:', message.type)
+
+    // Handle substrate metadata (present in connected, episode_start, state_update)
+    if (message.substrate) {
+      substrateType.value = message.substrate.type || 'grid2d'
+      substratePositionDim.value = message.substrate.position_dim || 2
+      substrateMetadata.value = message.substrate
+    }
 
     switch (message.type) {
       case 'connected':
@@ -605,6 +623,9 @@ export const useSimulationStore = defineStore('simulation', () => {
     agents,
     affordances,
     gridZoom,
+    substrateType,
+    substratePositionDim,
+    substrateMetadata,
     agentMeters,
     heatMap,
     episodeHistory,
