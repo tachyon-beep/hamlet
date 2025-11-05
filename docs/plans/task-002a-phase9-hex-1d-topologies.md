@@ -1,9 +1,9 @@
 # TASK-002A Phase 9: Simple Alternative Topologies (Hex + 1D) - Implementation Plan
 
-**Date**: 2025-11-05 (Updated: 2025-11-05 post-risk-assessment)
+**Date**: 2025-11-05 (Updated: 2025-11-05 post-peer-review-2)
 **Status**: Ready for Implementation
 **Dependencies**: Phase 5C Complete (N-Dimensional Substrates, Observation Encoding Retrofit)
-**Estimated Effort**: 20-26 hours total (revised from 13-17h after risk assessment)
+**Estimated Effort**: 22-29 hours total (revised from 20-26h after peer review 2)
 **Supersedes**: Original Phase 5D plan (split into Phase 9 + Phase 10 due to complexity)
 
 ---
@@ -12,10 +12,11 @@
 
 Phase 9 adds two simple alternative topologies that **do not require infrastructure changes**:
 
+0. **2D Assumption Audit** (1-2 hours) - Proactive search for hardcoded 2D assumptions (added post-peer-review-2)
 1. **1D Grid** (6-8 hours) - Linear movement, simplest spatial case, surfaces 2D assumptions
 2. **Hexagonal Grid** (10-12 hours) - Uniform distances, axial coordinates, strategy games
-3. **Frontend Visualization** (3-4 hours) - Hex rendering + 1D mode (added post-risk-assessment)
-4. **Documentation** (1-2 hours) - CLAUDE.md updates + regression testing
+3. **Documentation** (1-2 hours) - CLAUDE.md updates + regression testing
+4. **Frontend Visualization** (4-5 hours) - Hex rendering + 1D mode + WebSocket protocol (revised post-peer-review-2)
 
 **Why the Split?**
 
@@ -48,16 +49,154 @@ The original Phase 5D plan included Graph-Based substrates (18-24h estimated), w
 ---
 
 **⚠️ IMPLEMENTATION ORDER**:
-1. **FIRST**: Scroll down to Task 9.1 (1D Grid) - Line ~793
-2. **SECOND**: Return to Task 9.2 (Hex Grid) below
-3. **THIRD**: Task 9.3 (Documentation)
-4. **FOURTH**: Task 9.4 (Frontend Visualization)
+0. **FIRST**: Task 9.0 (2D Assumption Audit) - 1-2h - DO THIS FIRST (see below)
+1. **SECOND**: Task 9.1 (1D Grid) - Line ~880 - Use audit findings to guide implementation
+2. **THIRD**: Task 9.2 (Hex Grid) - Below
+3. **FOURTH**: Task 9.3 (Documentation)
+4. **FIFTH**: Task 9.4 (Frontend Visualization)
 
-**Rationale**: 1D Grid will surface hardcoded 2D assumptions early, providing cleaner architecture for Hex Grid.
+**Rationale**: Proactive audit prevents reactive debugging. 1D Grid will then surface any missed assumptions.
 
 ---
 
-## Task 9.2: Hexagonal Grid Substrate (10-12 hours) - IMPLEMENT SECOND (see line ~793 for Task 9.1)
+## Task 9.0: Proactive 2D Assumption Audit (1-2 hours) - DO FIRST (ADDED POST-PEER-REVIEW-2)
+
+**⚠️ CRITICAL**: Peer review 2 identified that relying on reactive debugging (waiting for 1D to break) is inefficient. Proactive audit prevents debugging time later.
+
+### Overview
+
+Systematically search codebase for hardcoded 2D assumptions BEFORE implementing 1D substrate. This prevents trial-and-error debugging.
+
+**Common 2D Hardcodes to Find**:
+- Hardcoded `position_dim=2` or `.shape[1]==2` checks
+- Hardcoded action counts (assuming 4 directional actions)
+- Hardcoded grid dimensions (width/height instead of generic dims)
+- Coordinate unpacking that assumes 2D: `x, y = position`
+- Distance calculations assuming Euclidean 2D
+- Observation builders assuming 2D grid encoding
+
+### Step 0.1: Search and document 2D assumptions (1-2 hours)
+
+**Grep for common patterns**:
+
+```bash
+# Search for position dimension assumptions
+grep -r "position_dim.*2" src/townlet/
+grep -r "shape\[1\].*2" src/townlet/
+grep -r "x, y = " src/townlet/
+
+# Search for action space assumptions
+grep -r "action.*4" src/townlet/
+grep -r "UP.*DOWN.*LEFT.*RIGHT" src/townlet/
+
+# Search for grid assumptions
+grep -r "width.*height" src/townlet/
+grep -r "\.width" src/townlet/
+grep -r "\.height" src/townlet/
+
+# Search for 2D coordinate unpacking
+grep -r "position\[0\].*position\[1\]" src/townlet/
+```
+
+**Create audit document**:
+
+**Create**: `docs/research/2D-ASSUMPTIONS-AUDIT.md`
+
+```markdown
+# 2D Assumption Audit
+
+**Date**: [Date]
+**Purpose**: Identify hardcoded 2D assumptions before implementing 1D/Hex substrates
+
+## Found Assumptions
+
+### 1. Action Mapping (CRITICAL - P0)
+
+**File**: `src/townlet/environment/vectorized_env.py`
+**Line**: ~150
+**Code**:
+```python
+def _action_to_deltas(self, actions):
+    deltas = torch.zeros((num_agents, 2))  # ← Hardcoded 2D!
+    deltas[actions == 0, 1] = -1  # UP
+    deltas[actions == 1, 1] = +1  # DOWN
+    deltas[actions == 2, 0] = -1  # LEFT
+    deltas[actions == 3, 0] = +1  # RIGHT
+    return deltas
+```
+**Fix**: Delegate to substrate.apply_action() (substrate knows its dimensions)
+
+### 2. Observation Builder (MEDIUM - P1)
+
+**File**: `src/townlet/environment/observation.py`
+**Line**: ~75
+**Code**:
+```python
+grid_encoding = torch.zeros(width * height)  # ← Assumes 2D grid
+```
+**Fix**: Use substrate.get_observation_size()
+
+[... continue documenting all found assumptions ...]
+
+## Summary
+
+- **CRITICAL (P0)**: X findings - must fix before 1D works
+- **IMPORTANT (P1)**: Y findings - will cause bugs
+- **NICE TO FIX (P2)**: Z findings - code clarity
+
+## Recommended Fixes
+
+1. Refactor action mapping → substrate delegation
+2. Refactor observation builder → substrate-agnostic
+3. Remove width/height from generic code → use position_dim
+```
+
+**Deliverables**:
+- Audit document with all found assumptions categorized by priority
+- List of files to modify before 1D implementation
+- Estimated fix time per assumption
+
+**Rationale**:
+- Proactive audit is faster than reactive debugging
+- Documents architectural debt for future reference
+- Prevents "whack-a-mole" bug fixing during 1D implementation
+
+**Estimated Time**: 1-2 hours
+- Grepping and reading code: 30-45 min
+- Categorizing and documenting: 30-45 min
+- Planning fixes: 15-30 min
+
+**Next Step**: Use audit findings to guide 1D implementation (Task 9.1)
+
+**Commit**:
+```bash
+git add docs/research/2D-ASSUMPTIONS-AUDIT.md
+
+git commit -m "docs(research): audit 2D assumptions before alternative topologies
+
+Proactive audit of hardcoded 2D assumptions in codebase.
+
+**Purpose**:
+- Find 2D hardcodes before implementing 1D/Hex substrates
+- Prevent reactive debugging (more efficient than trial-and-error)
+- Document architectural debt
+
+**Method**:
+- Grep for common patterns (position_dim, action counts, width/height)
+- Categorize by priority (P0/P1/P2)
+- Plan fixes before implementation
+
+**Next Steps**:
+- Use findings to guide 1D substrate implementation
+- Fix P0 issues before 1D will work
+- Fix P1/P2 issues opportunistically
+
+Part of TASK-002A Phase 9 Task 0 (2D Assumption Audit)."
+```
+
+---
+
+## Task 9.2: Hexagonal Grid Substrate (10-12 hours) - IMPLEMENT THIRD (after 1D)
 
 ### Overview
 
@@ -768,7 +907,7 @@ Part of TASK-002A Phase 9 Task 2 (Hexagonal Grid - IMPLEMENT SECOND)."
 
 ---
 
-## Task 9.1: 1D Grid Substrate (6-8 hours) - IMPLEMENT FIRST
+## Task 9.1: 1D Grid Substrate (6-8 hours) - IMPLEMENT SECOND (after 2D audit)
 
 ### Overview
 
@@ -1381,19 +1520,103 @@ function positionToPixel(pos, length, containerWidth) {
 
 ---
 
-### Step 4.3: Integration and commit (30 min)
+### Step 4.3: WebSocket protocol + integration (1 hour) - REVISED from 30min (PEER REVIEW 2)
+
+**⚠️ BLOCKING**: Frontend cannot detect substrate type without proper protocol.
+
+**Problem**: How does frontend know if it should render 1D, 2D, or Hex grid?
+
+**Solution**: Extend topology message from Phase 10 to include substrate type detection.
+
+**Protocol** (extends Phase 10 topology message):
+
+**Topology Message Format**:
+```json
+{
+  "type": "topology",
+  "substrate_type": "grid1d" | "grid2d" | "hexgrid" | "graph",
+  "data": {
+    // 1D Grid:
+    "length": 10
+
+    // 2D Grid:
+    "width": 8,
+    "height": 8
+
+    // Hex Grid:
+    "radius": 4,
+    "orientation": "flat_top"
+
+    // Graph:
+    "num_nodes": 16,
+    "edges": [[0,1], [1,2], ...]
+  }
+}
+```
+
+**Implementation**:
+
+**Modify**: `src/townlet/substrate/base.py`
+
+Update `get_topology_data()` to include substrate type:
+
+```python
+def get_topology_data(self) -> dict:
+    """Get topology data for visualization."""
+    substrate_type = type(self).__name__.lower().replace("substrate", "")
+    return {
+        "substrate_type": substrate_type,
+    }
+```
+
+**Override in each substrate**:
+
+```python
+# Grid1DSubstrate
+def get_topology_data(self) -> dict:
+    return {
+        "substrate_type": "grid1d",
+        "length": self.length,
+    }
+
+# Grid2DSubstrate
+def get_topology_data(self) -> dict:
+    return {
+        "substrate_type": "grid2d",
+        "width": self.width,
+        "height": self.height,
+    }
+
+# HexGridSubstrate
+def get_topology_data(self) -> dict:
+    return {
+        "substrate_type": "hexgrid",
+        "radius": self.radius,
+        "orientation": self.orientation,
+    }
+```
 
 **Modify**: `frontend/src/App.vue`
 
-Add substrate type detection:
+Receive topology on connection:
+
 ```javascript
+data() {
+  return {
+    topology: null,
+    agents: [],
+  };
+},
 computed: {
   substrateType() {
-    // Detect from config or WebSocket data
-    if (this.config.substrate.type === 'hexgrid') return 'hex';
-    if (this.config.substrate.type === 'grid1d') return '1d';
-    if (this.config.substrate.type === 'grid2d') return '2d';
-    // ... etc
+    // Read from topology message (sent on connection)
+    return this.topology?.substrate_type || 'grid2d';  // fallback to 2D
+  }
+},
+methods: {
+  setTopology(topology) {
+    this.topology = topology;
+    console.log('Substrate type:', topology.substrate_type);
   }
 }
 ```
@@ -1435,17 +1658,23 @@ Part of TASK-002A Phase 9 Task 4 (Frontend Visualization)."
 
 ---
 
-## Phase 9 Completion Checklist (UPDATED POST-RISK-ASSESSMENT)
+## Phase 9 Completion Checklist (UPDATED POST-PEER-REVIEW-2)
 
-**⚠️ IMPLEMENT IN ORDER**: Task 9.1 (1D) → 9.2 (Hex) → 9.3 (Docs) → 9.4 (Frontend)
+**⚠️ IMPLEMENT IN ORDER**: Task 9.0 (Audit) → 9.1 (1D) → 9.2 (Hex) → 9.3 (Docs) → 9.4 (Frontend)
 
-### Task 9.1: 1D Substrate (6-8 hours) - FIRST
+### Task 9.0: 2D Assumption Audit (1-2 hours) - FIRST (ADDED POST-PEER-REVIEW-2)
+- [ ] Step 0.1: Search for 2D hardcodes (30-45min)
+- [ ] Create docs/research/2D-ASSUMPTIONS-AUDIT.md
+- [ ] Categorize findings by priority (P0/P1/P2)
+- [ ] Plan fixes before implementation (15-30min)
+
+### Task 9.1: 1D Substrate (6-8 hours) - SECOND
 - [ ] Step 1.1: Unit tests (1h)
 - [ ] Step 1.2: Implement Grid1DSubstrate (2-3h)
 - [ ] Step 1.3: Config & commit (2-3h)
 - [ ] Verify: action_dim=3, no 2D hardcodes remaining
 
-### Task 9.2: Hex Substrate (10-12 hours) - SECOND
+### Task 9.2: Hex Substrate (10-12 hours) - THIRD
 - [ ] Step 2.1: Unit tests (1h)
 - [ ] Step 2.2: Implement HexGridSubstrate (4-5h)
 - [ ] Step 2.3: Config support (1h)
@@ -1453,18 +1682,21 @@ Part of TASK-002A Phase 9 Task 4 (Frontend Visualization)."
 - [ ] Step 2.5: Integration test (2h)
 - [ ] Step 2.6: Commit (30min)
 
-### Task 9.3: Documentation (2-2.5 hours) - THIRD
+### Task 9.3: Documentation (2-2.5 hours) - FOURTH
 - [ ] Step 3.1: Update CLAUDE.md (1h)
-- [ ] Step 3.2: Regression testing (1h) - NEW
+- [ ] Step 3.2: Regression testing (1h)
 - [ ] Step 3.3: Commit docs (30min)
 
-### Task 9.4: Frontend Visualization (3-4 hours) - FOURTH (NEW)
+### Task 9.4: Frontend Visualization (4-5 hours) - FIFTH (REVISED from 3-4h)
 - [ ] Step 4.1: Hex Grid component (2-2.5h)
 - [ ] Step 4.2: 1D Grid component (1-1.5h)
-- [ ] Step 4.3: Integration & commit (30min)
+- [ ] Step 4.3: WebSocket protocol + integration (1h) - REVISED from 30min
 
-**Total Estimated Effort**: 20-26 hours (revised from 13-17h after risk assessment)
-**Delta from Original**: +7-9 hours (frontend +3-4h, 1D debugging +1-2h, regression +1h, estimates +2-3h)
+**Total Estimated Effort**: 22-29 hours (revised from 20-26h after peer review 2)
+**Revision History**:
+- Original: 13-17h
+- Risk assessment: 20-26h (+7-9h: frontend +3-4h, debugging +1-2h, regression +1h, estimates +2-3h)
+- Peer review 2: 22-29h (+2-3h: audit +1-2h, WebSocket protocol +0.5h)
 
 ---
 

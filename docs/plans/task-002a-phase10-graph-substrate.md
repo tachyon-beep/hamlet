@@ -1,9 +1,9 @@
 # TASK-002A Phase 10: Graph Substrate + Infrastructure - Implementation Plan
 
-**Date**: 2025-11-05 (Updated: 2025-11-05 post-peer-review-2)
+**Date**: 2025-11-05 (Updated: 2025-11-05 post-gap-filling)
 **Status**: Ready for Implementation (After Phase 9 Complete + Pre-Work)
 **Dependencies**: Phase 9 Complete (Hex + 1D Substrates) + Position Extraction Implementation (8-12h pre-work)
-**Estimated Effort**: 94-128 hours total (revised from 90-120h after peer review 2)
+**Estimated Effort**: 91-123 hours total (revised from 94-128h after gap-filling)
 **Supersedes**: Original Phase 5D Task 3 (Graph substrate split out due to infrastructure complexity)
 
 **⚠️ PRE-WORK REQUIRED**: Implement position extraction algorithm BEFORE starting (see Pre-Work section below)
@@ -832,11 +832,11 @@ def migrate_checkpoint_v1_to_v2(checkpoint: dict) -> PopulationCheckpoint:
 
 **Modify**: `src/townlet/demo/runner.py`
 
-Add migration on checkpoint load:
+Add migration and validation on checkpoint load:
 
 ```python
 def load_checkpoint(self, checkpoint_path: str):
-    """Load checkpoint with automatic migration."""
+    """Load checkpoint with automatic migration and validation."""
     checkpoint_dict = torch.load(checkpoint_path)
 
     # Migrate if needed
@@ -844,13 +844,82 @@ def load_checkpoint(self, checkpoint_path: str):
         logger.info(f"Migrating checkpoint from v1 to v2: {checkpoint_path}")
         checkpoint_dict = migrate_checkpoint_v1_to_v2(checkpoint_dict)
 
-    # Load migrated checkpoint
+    # Validate action_dim compatibility (ADDED POST-PEER-REVIEW-2)
+    checkpoint_action_dim = self._get_checkpoint_action_dim(checkpoint_dict)
+    current_action_dim = self.substrate.action_space_size
+
+    if checkpoint_action_dim != current_action_dim:
+        raise ValueError(
+            f"Checkpoint action_dim mismatch!\n"
+            f"  Checkpoint was trained with action_dim={checkpoint_action_dim}\n"
+            f"  Current substrate requires action_dim={current_action_dim}\n"
+            f"  Checkpoint: {checkpoint_path}\n"
+            f"  Current substrate: {type(self.substrate).__name__}\n\n"
+            f"Solution: Train a new checkpoint with the current substrate."
+        )
+
+    # Load migrated and validated checkpoint
     self.population.load_checkpoint(checkpoint_dict)
+
+def _get_checkpoint_action_dim(self, checkpoint_dict: dict) -> int:
+    """Extract action_dim from checkpoint Q-network state.
+
+    Args:
+        checkpoint_dict: Loaded checkpoint
+
+    Returns:
+        action_dim: Number of actions in saved Q-network
+    """
+    q_network_state = checkpoint_dict['q_network_state']
+
+    # Action dim is the output size of the Q-network's final layer
+    # Final layer key depends on network type
+    # SimpleQNetwork: 'q_head.2.weight' (Linear layer)
+    # RecurrentSpatialQNetwork: similar pattern
+
+    # Find the last layer (largest index in q_head)
+    q_head_keys = [k for k in q_network_state.keys() if k.startswith('q_head.') and k.endswith('.weight')]
+
+    if not q_head_keys:
+        raise ValueError("Cannot find Q-network head layer in checkpoint")
+
+    # Get final layer weight shape: [out_features, in_features]
+    final_layer_key = max(q_head_keys)  # q_head.N.weight (highest N)
+    final_layer_weight = q_network_state[final_layer_key]
+    action_dim = final_layer_weight.shape[0]  # Output dimension
+
+    return action_dim
 ```
 
-**Add test**:
+**Add tests**:
 
 ```python
+def test_checkpoint_action_dim_validation():
+    """Loading checkpoint with wrong action_dim should raise clear error."""
+    from townlet.demo.runner import DemoRunner
+    from townlet.substrate.grid2d import Grid2DSubstrate
+    from townlet.substrate.graph import GraphSubstrate
+
+    # Create checkpoint trained on 2D grid (action_dim=5)
+    substrate_2d = Grid2DSubstrate(width=8, height=8)
+    runner_2d = DemoRunner(substrate=substrate_2d, ...)
+    # ... train and save checkpoint ...
+    runner_2d.save_checkpoint('checkpoint_2d.pt')
+
+    # Try to load into Graph substrate (action_dim=10)
+    edges = [(0, 1), (1, 2), (2, 3), ...]
+    substrate_graph = GraphSubstrate(num_nodes=16, edges=edges, max_edges=10)
+    runner_graph = DemoRunner(substrate=substrate_graph, ...)
+
+    # Should raise clear error
+    with pytest.raises(ValueError, match="Checkpoint action_dim mismatch"):
+        runner_graph.load_checkpoint('checkpoint_2d.pt')
+
+    # Error message should show:
+    # "Checkpoint was trained with action_dim=5"
+    # "Current substrate requires action_dim=10"
+
+
 def test_checkpoint_migration_v1_to_v2():
     """Old checkpoints should migrate to new schema."""
     from townlet.training.state import migrate_checkpoint_v1_to_v2, Transition
@@ -900,22 +969,30 @@ git add src/townlet/training/state.py \
         src/townlet/demo/runner.py \
         tests/test_townlet/unit/test_checkpoint_versioning.py
 
-git commit -m "feat(training): add checkpoint versioning and migration
+git commit -m "feat(training): add checkpoint versioning, migration, and validation
 
 Checkpoint versioning prevents breaking old saved models.
+Action_dim validation prevents incompatible checkpoint loading.
 
-**Problem**:
+**Problem 1 (Versioning)**:
 - Replay buffer schema change breaks old checkpoints
 - Missing valid_actions field causes deserialization errors
+
+**Problem 2 (Validation - P1 from peer review 2)**:
+- Loading checkpoint trained on 2D (action_dim=5) into Graph (action_dim=10) crashes
+- No validation of action space compatibility
 
 **Solution**:
 - Add version field to PopulationCheckpoint (v2)
 - Automatic migration v1→v2 on checkpoint load
-- Backward compatible (old transitions get valid_actions=None)
+- Validate action_dim before loading (extract from Q-network final layer)
+- Clear error message with actionable guidance
 
 **Testing**:
 - Added test_checkpoint_versioning.py
 - Verified v1 checkpoints migrate correctly
+- Added test_checkpoint_action_dim_validation()
+- Verified mismatch raises clear error
 
 Part of TASK-002A Phase 10 Task 0 (Infrastructure Prerequisites)."
 ```
@@ -1645,21 +1722,26 @@ Part of TASK-002A Phase 10 Task 1 (Graph Substrate - COMPLETE)."
 
 ---
 
-## Task 10.2: Frontend Visualization (10-14 hours) - REVISED from 8-12h
+## Task 10.2: Frontend Visualization (9-12 hours) - REVISED from 8-12h
 
 ### Overview
 
 **CRITICAL OMISSION from original plan.** Risk assessment revised estimate to account for:
-- Layout complexity: Force-directed layout more complex than circular
 - Action masking overlay: Interactive debugging UI (+2h)
-- WebSocket protocol changes: Send graph topology data (+1h)
+- WebSocket protocol changes: Send graph topology data (+1-2h)
 - Testing and debugging: Graph rendering bugs harder to diagnose
 
+**⚠️ LAYOUT ALGORITHM DECISION (from peer review 2)**:
+- **Chosen**: Circular layout (simpler, adequate for MVP)
+- **Rationale**: Sufficient for debugging/pedagogy, faster to implement
+- **Future enhancement**: Force-directed layout can be added later (+3-4h if needed)
+- **Impact**: Keeps frontend estimate at 9-12h (was 10-14h with force-directed ambiguity)
+
 Frontend needs:
-1. Graph rendering (nodes + edges)
-2. Action masking visualization
+1. Graph rendering (nodes + edges with circular layout)
+2. Action masking visualization (interactive debugging UI)
 3. Agent movement on graph
-4. Subway-style layout
+4. WebSocket protocol for graph topology
 
 **Files to Create**:
 - `frontend/src/components/GraphVisualization.vue` (new)
@@ -1668,12 +1750,190 @@ Frontend needs:
 **Files to Modify**:
 - `frontend/src/App.vue` (add graph rendering mode)
 - `frontend/src/websocket.js` (handle graph topology data)
+- `src/townlet/demo/live_inference.py` (send graph topology)
 
 ---
 
-### Step 2.1: Graph rendering component (5-6 hours) - REVISED from 4-5h
+### Step 2.0: WebSocket protocol for graph topology (1-2 hours) - ADDED POST-PEER-REVIEW-2
 
-**Complexity increased**: Force-directed layout harder than circular layout (+1h)
+**⚠️ BLOCKING**: Frontend cannot implement graph rendering without knowing protocol.
+
+**Problem**: Frontend needs graph topology (nodes + edges) to render the graph. When/how is this data sent?
+
+**Solution**: Send graph topology in initial connection message, separate from state updates.
+
+**Protocol Design**:
+
+**Message Types**:
+1. **`topology`** (sent once on connection) - Graph structure (nodes, edges)
+2. **`state`** (sent every step) - Agent positions, meters, rewards (existing)
+
+**Topology Message Format**:
+```json
+{
+  "type": "topology",
+  "substrate_type": "graph",
+  "data": {
+    "num_nodes": 16,
+    "edges": [[0, 1], [1, 2], [2, 3], ...],
+    "directed": false
+  }
+}
+```
+
+**State Message Format** (unchanged):
+```json
+{
+  "type": "state",
+  "agents": [
+    {
+      "id": 0,
+      "position": [7],  // Node ID for graph
+      "meters": {...},
+      "reward": 1.5,
+      ...
+    }
+  ]
+}
+```
+
+**Implementation**:
+
+**Modify**: `src/townlet/demo/live_inference.py`
+
+Add topology send on connection:
+
+```python
+async def handle_client(websocket, path):
+    """Handle WebSocket client connection."""
+    print(f"Client connected: {websocket.remote_address}")
+
+    try:
+        # Send topology data on connection (ONCE)
+        topology_msg = {
+            "type": "topology",
+            "substrate_type": type(substrate).__name__.lower().replace("substrate", ""),
+            "data": substrate.get_topology_data()  # NEW method
+        }
+        await websocket.send(json.dumps(topology_msg))
+
+        # Then send state updates in loop (existing logic)
+        for episode in range(total_episodes):
+            obs = env.reset()
+
+            for step in range(max_steps):
+                # ... existing state update logic ...
+                state_msg = {"type": "state", "agents": [...]}
+                await websocket.send(json.dumps(state_msg))
+```
+
+**Add to substrate base**:
+
+**Modify**: `src/townlet/substrate/base.py`
+
+```python
+class SpatialSubstrate(ABC):
+    # ... existing methods ...
+
+    def get_topology_data(self) -> dict:
+        """Get topology data for visualization (optional).
+
+        Returns topology structure for frontend rendering.
+        Default: minimal data (substrate type).
+        Graph substrates override to return nodes/edges.
+        """
+        return {
+            "substrate_type": type(self).__name__,
+        }
+```
+
+**Override in GraphSubstrate**:
+
+**Modify**: `src/townlet/substrate/graph.py`
+
+```python
+class GraphSubstrate(SpatialSubstrate):
+    # ... existing methods ...
+
+    def get_topology_data(self) -> dict:
+        """Get graph topology for visualization."""
+        return {
+            "num_nodes": self.num_nodes,
+            "edges": self.edges,  # List of [src, dst] pairs
+            "directed": self.directed,
+        }
+```
+
+**Modify**: `frontend/src/websocket.js`
+
+Handle topology message:
+
+```javascript
+let graphTopology = null;
+
+socket.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+
+  if (message.type === 'topology') {
+    // Store topology data (received once on connection)
+    graphTopology = message.data;
+    console.log('Received topology:', graphTopology);
+
+    // Trigger graph layout computation
+    if (graphTopology.substrate_type === 'graph') {
+      app.setGraphTopology(graphTopology);
+    }
+  } else if (message.type === 'state') {
+    // Update agent states (received every step)
+    app.updateAgentStates(message.agents);
+  }
+};
+```
+
+**Rationale**:
+- Topology sent ONCE (doesn't change during episode)
+- State sent every step (changes frequently)
+- Separates static structure from dynamic state
+- Extensible to other substrates (hex could send radius, etc.)
+
+**Testing**:
+```bash
+# Start inference server
+python -m townlet.demo.live_inference checkpoints_graph 8766 0.2 100 configs/L1_graph_subway/training.yaml
+
+# Check browser console - should see:
+# "Received topology: {num_nodes: 16, edges: [[0,1], ...], directed: false}"
+```
+
+**Commit**:
+```bash
+git add src/townlet/demo/live_inference.py \
+        src/townlet/substrate/base.py \
+        src/townlet/substrate/graph.py \
+        frontend/src/websocket.js
+
+git commit -m "feat(websocket): add topology protocol for graph substrate
+
+WebSocket now sends topology data on connection for graph rendering.
+
+**Protocol**:
+- topology message: Sent once on connection (nodes, edges)
+- state message: Sent every step (agent positions, meters)
+
+**Changes**:
+- SpatialSubstrate.get_topology_data() base method
+- GraphSubstrate overrides to return nodes/edges
+- live_inference.py sends topology on connection
+- Frontend handles topology message
+
+Part of TASK-002A Phase 10 Task 2 (Frontend Visualization)."
+```
+
+---
+
+### Step 2.1: Graph rendering component (4-5 hours) - UNCHANGED
+
+**Layout algorithm**: Circular layout (simple, deterministic, adequate for MVP)
 
 **Create**: `frontend/src/components/GraphVisualization.vue`
 
@@ -1752,8 +2012,8 @@ export default {
   },
   methods: {
     computeNodeLayout() {
-      // Force-directed layout or subway-style layout
-      // (Simplified: circular layout for demo)
+      // Circular layout (MVP choice - simple and deterministic)
+      // Nodes arranged in circle, evenly spaced by angle
       const centerX = this.width / 2;
       const centerY = this.height / 2;
       const radius = Math.min(this.width, this.height) / 3;
@@ -1975,8 +2235,9 @@ Part of TASK-002A Phase 10 (Graph Substrate + Infrastructure - COMPLETE)."
 - [ ] Step 1.5: Config + config pack (4-6h)
 - [ ] Step 1.6: Integration tests (6-8h) - REVISED from 4-6h
 
-### Frontend (10-14 hours) - REVISED from 8-12h
-- [ ] Step 2.1: Graph rendering (5-6h) - REVISED from 4-5h
+### Frontend (9-12 hours) - REVISED from 10-14h (circular layout decision)
+- [ ] Step 2.0: WebSocket protocol (1-2h) - ADDED POST-PEER-REVIEW-2
+- [ ] Step 2.1: Graph rendering (4-5h) - circular layout
 - [ ] Step 2.2: Action masking overlay (3-4h) - REVISED from 2-3h
 - [ ] Step 2.3: Integration + testing (2-4h)
 
@@ -1984,12 +2245,19 @@ Part of TASK-002A Phase 10 (Graph Substrate + Infrastructure - COMPLETE)."
 - [ ] Step 3.1: Update CLAUDE.md (1h)
 - [ ] Step 3.2: Commit docs (30min)
 
-**Total Estimated Effort**: 94-128 hours (REVISED from 90-120h after peer review 2)
+**Total Estimated Effort**: 91-123 hours (REVISED from 94-128h after gap-filling)
 - Pre-work: 8-12h (was 4-6h)
 - Infrastructure: 14-18h
 - Graph: 44-58h
-- Frontend: 10-14h
+- Frontend: 9-12h (was 10-14h, circular layout decision)
 - Documentation: 2-3h
+
+**Revision History**:
+- Original: 40-60h (naive estimate)
+- Peer review 1: 68-92h (+28-32h)
+- Risk assessment: 90-120h (+22-28h)
+- Peer review 2: 94-128h (+4-8h, position extraction underestimated)
+- Gap-filling: 91-123h (-3-5h, circular layout decision, removed DB migration)
 
 ---
 
@@ -2041,7 +2309,7 @@ Phase 10 is complete when:
 
 **Phase 10 Status**: Ready for Implementation (After Phase 9 + Pre-Work Complete)
 **Recommended Order**: Pre-Work (8-12h) → Infrastructure → Graph → Frontend → Docs
-**Total Effort**: 94-128 hours (peer review 2 revised estimate, up from 90-120h)
+**Total Effort**: 91-123 hours (gap-filling revised estimate, down from 94-128h)
 **Dependencies**: Phase 9 complete + Position Extraction Implementation (8-12h, ALGORITHM NOW SPECIFIED)
 **Risk Level**: MEDIUM-HIGH (complex action masking, breaking changes, frontend work)
 
@@ -2050,9 +2318,14 @@ Phase 10 is complete when:
 - Peer review 1: 68-92h (identified action masking complexity)
 - Risk assessment: 90-120h (identified missing tasks, debugging tools, testing gaps)
 - Peer review 2: 94-128h (position extraction algorithm severely underestimated)
+- Gap-filling: 91-123h (circular layout decision, removed DB migration, added WebSocket protocol)
 
-**Key Blocker RESOLVED**: Position extraction algorithm now fully specified in
-`docs/research/POSITION-EXTRACTION-ALGORITHM-SPEC.md` (600+ lines, complete implementation guide)
+**All Blockers RESOLVED**:
+- ✅ Position extraction algorithm specified (POSITION-EXTRACTION-ALGORITHM-SPEC.md, 600+ lines)
+- ✅ Graph layout algorithm chosen (circular layout for MVP)
+- ✅ WebSocket protocol specified (topology message on connection)
+- ✅ Checkpoint validation added (action_dim mismatch detection)
+- ✅ Database migration removed (pre-release, can discard DB)
 
 **Next Steps After Phase 10**:
 - Phase 11: Multi-zone environments
