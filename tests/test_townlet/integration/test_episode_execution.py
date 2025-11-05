@@ -373,15 +373,17 @@ class TestEpisodeLifecycle:
 
         Note: This test uses minimal depletion to prevent death.
         """
-        # Create small environment with minimal depletion
+        # Create small environment with ultra-minimal depletion
+        # Use ULTRA-low energy costs to ensure agents survive 30 steps
+        # Even with meters at 1.0, cascade effects (satiation→energy/health) can kill agents
         env = VectorizedHamletEnv(
             num_agents=2,
             grid_size=5,
             partial_observability=False,
             vision_range=5,
             enable_temporal_mechanics=False,
-            move_energy_cost=0.001,  # Minimal depletion to prevent death
-            wait_energy_cost=0.0001,  # Must be less than move_energy_cost
+            move_energy_cost=0.00001,  # Ultra-minimal to prevent cascade-induced death
+            wait_energy_cost=0.000001,  # Must be less than move_energy_cost
             interact_energy_cost=0.0,
             config_pack_path=test_config_pack_path,
             device=cpu_device,
@@ -418,7 +420,7 @@ class TestEpisodeLifecycle:
         # Initialize all meters to 1.0 to prevent cascade-induced death during test
         env.meters.fill_(1.0)
 
-        # Run for exactly max_steps
+        # Run for exactly max_steps and verify agents survive
         step_count = 0
         final_state = None
 
@@ -427,9 +429,15 @@ class TestEpisodeLifecycle:
             step_count += 1
             final_state = agent_state
 
-            # If any agent dies, break (shouldn't happen with zero depletion)
+            # Ensure agents don't die (would cause test to fail)
             if agent_state.dones.any():
-                break
+                dead_agent_idx = agent_state.dones.nonzero(as_tuple=True)[0][0].item()
+                assert False, (
+                    f"Agent {dead_agent_idx} died at step {step + 1}/{max_steps}. "
+                    f"Energy: {env.meters[dead_agent_idx, 0]:.3f}, Health: {env.meters[dead_agent_idx, 6]:.3f}. "
+                    "This test requires agents to survive 30 steps to verify max_steps termination. "
+                    "If this fails, energy costs may need to be reduced further or cascades disabled."
+                )
 
         # Verify episode ran to max_steps
         assert step_count == max_steps, f"Episode should run exactly {max_steps} steps"
