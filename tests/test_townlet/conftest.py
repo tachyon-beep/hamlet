@@ -410,6 +410,72 @@ def vectorized_population(
     )
 
 
+@pytest.fixture
+def non_training_recurrent_population(
+    test_config_pack_path: Path,
+    cpu_device: torch.device,
+) -> VectorizedPopulation:
+    """Create recurrent population with training DISABLED for unit tests.
+
+    This fixture is designed for tests that focus on:
+    - Hidden state management (persistence, reset, shape)
+    - Episode flushing behavior
+    - LSTM forward pass mechanics
+    - Observation processing
+
+    NOT for tests that verify:
+    - Training convergence
+    - Q-network weight updates
+    - Replay buffer sampling during training
+
+    Configuration:
+        - Network type: Recurrent (LSTM)
+        - POMDP: 5×5 vision window
+        - Training: DISABLED (train_frequency=10000)
+        - Sequence length: 8 (production default)
+        - Batch size: 8 (production default)
+        - Device: CPU (for deterministic behavior)
+
+    Returns:
+        VectorizedPopulation instance with training disabled
+    """
+    env = VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=5,
+        partial_observability=True,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+        config_pack_path=test_config_pack_path,
+        device=cpu_device,
+    )
+
+    curriculum = StaticCurriculum()
+    exploration = EpsilonGreedyExploration(
+        epsilon=0.1,
+        epsilon_min=0.1,
+        epsilon_decay=1.0,
+        device=cpu_device,
+    )
+
+    return VectorizedPopulation(
+        env=env,
+        curriculum=curriculum,
+        exploration=exploration,
+        agent_ids=["agent_0"],
+        device=cpu_device,
+        action_dim=6,
+        network_type="recurrent",
+        vision_window_size=5,
+        train_frequency=10000,  # DISABLED: Prevents unintended training in tests
+        sequence_length=8,  # Production default
+        batch_size=8,  # Production default
+    )
+
+
 # =============================================================================
 # TASK-001: VARIABLE METER CONFIG FIXTURES
 # =============================================================================

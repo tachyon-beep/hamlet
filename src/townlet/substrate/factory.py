@@ -6,6 +6,7 @@ from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.base import SpatialSubstrate
 from townlet.substrate.config import SubstrateConfig
 from townlet.substrate.grid2d import Grid2DSubstrate
+from townlet.substrate.grid3d import Grid3DSubstrate
 
 
 class SubstrateFactory:
@@ -42,12 +43,25 @@ class SubstrateFactory:
         if config.type == "grid":
             assert config.grid is not None  # Validated by pydantic
 
-            return Grid2DSubstrate(
-                width=config.grid.width,
-                height=config.grid.height,
-                boundary=config.grid.boundary,
-                distance_metric=config.grid.distance_metric,
-            )
+            if config.grid.topology == "square":
+                return Grid2DSubstrate(
+                    width=config.grid.width,
+                    height=config.grid.height,
+                    boundary=config.grid.boundary,
+                    distance_metric=config.grid.distance_metric,
+                )
+            elif config.grid.topology == "cubic":
+                if config.grid.depth is None:
+                    raise ValueError("Cubic topology requires 'depth' parameter")
+                return Grid3DSubstrate(
+                    width=config.grid.width,
+                    height=config.grid.height,
+                    depth=config.grid.depth,
+                    boundary=config.grid.boundary,
+                    distance_metric=config.grid.distance_metric,
+                )
+            else:
+                raise ValueError(f"Unknown grid topology: {config.grid.topology}")
 
         elif config.type == "aspatial":
             assert config.aspatial is not None  # Validated by pydantic

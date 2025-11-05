@@ -122,7 +122,18 @@ class SequentialReplayBuffer:
         valid_episodes = [ep for ep in self.episodes if len(ep["observations"]) >= seq_len]
 
         if not valid_episodes:
-            raise ValueError(f"Cannot sample: no episodes long enough for seq_len={seq_len} (not enough data)")
+            # Provide detailed error message for debugging
+            episode_lengths = [len(ep["observations"]) for ep in self.episodes]
+            max_length = max(episode_lengths) if episode_lengths else 0
+            raise ValueError(
+                f"Cannot sample: no episodes long enough for seq_len={seq_len}. "
+                f"Buffer has {len(self.episodes)} episodes with lengths: {episode_lengths[:10]}"
+                f"{' (showing first 10)' if len(episode_lengths) > 10 else ''}. "
+                f"Max episode length: {max_length}. "
+                f"Hint: If this occurs in tests that don't intend to test training, "
+                f"disable training with train_frequency=10000 or use the "
+                f"non_training_recurrent_population fixture."
+            )
 
         # Sample batch_size sequences
         sampled_sequences = []

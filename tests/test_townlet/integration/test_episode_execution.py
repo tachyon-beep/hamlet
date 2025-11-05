@@ -168,6 +168,7 @@ class TestEpisodeLifecycle:
             gamma=0.99,
             replay_buffer_capacity=1000,
             batch_size=8,
+            train_frequency=10000,  # Disable training (test focuses on episode execution and hidden state)
         )
 
         # Reset environment and population

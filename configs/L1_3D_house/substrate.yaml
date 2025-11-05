@@ -1,0 +1,12 @@
+version: "1.0"
+description: "3D cubic grid - 3-story house with vertical movement"
+
+type: "grid"
+
+grid:
+  topology: "cubic"
+  width: 8
+  height: 8
+  depth: 3  # Three floors
+  boundary: "clamp"
+  distance_metric: "manhattan"

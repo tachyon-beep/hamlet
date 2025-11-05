@@ -220,7 +220,18 @@ class VectorizedHamletEnv:
             bars_config.meter_name_to_index,
         )
 
-        self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+        # Action space size depends on substrate dimensionality
+        # Grid2D: 6 actions (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+        # Grid3D: 8 actions (+ UP_Z, DOWN_Z)
+        # Aspatial: 2 actions (INTERACT, WAIT)
+        if self.substrate.position_dim == 2:
+            self.action_dim = 6
+        elif self.substrate.position_dim == 3:
+            self.action_dim = 8
+        elif self.substrate.position_dim == 0:
+            self.action_dim = 2
+        else:
+            raise ValueError(f"Unsupported substrate position_dim: {self.substrate.position_dim}")
 
         # State tensors (initialized in reset)
         self.positions = torch.zeros(
@@ -310,24 +321,38 @@ class VectorizedHamletEnv:
         take them off the grid. This saves exploration budget and speeds learning.
 
         Returns:
-            action_masks: [num_agents, 6] bool tensor
+            action_masks: [num_agents, action_dim] bool tensor
                 True = valid action, False = invalid
-                Actions: [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
+                Grid2D (6 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
+                Grid3D (8 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, UP_Z, DOWN_Z]
         """
-        action_masks = torch.ones(self.num_agents, 6, dtype=torch.bool, device=self.device)
+        action_masks = torch.ones(self.num_agents, self.action_dim, dtype=torch.bool, device=self.device)
 
-        # Check boundary constraints
-        # positions[:, 0] = x (column), positions[:, 1] = y (row)
-        at_top = self.positions[:, 1] == 0  # y == 0
-        at_bottom = self.positions[:, 1] == self.grid_size - 1  # y == max
-        at_left = self.positions[:, 0] == 0  # x == 0
-        at_right = self.positions[:, 0] == self.grid_size - 1  # x == max
+        # Check boundary constraints (only for spatial substrates)
+        if self.substrate.position_dim >= 2:
+            # positions[:, 0] = x (column), positions[:, 1] = y (row)
+            at_top = self.positions[:, 1] == 0  # y == 0
+            at_bottom = self.positions[:, 1] == self.grid_size - 1  # y == max
+            at_left = self.positions[:, 0] == 0  # x == 0
+            at_right = self.positions[:, 0] == self.grid_size - 1  # x == max
 
-        # Mask invalid movements
-        action_masks[at_top, 0] = False  # Can't go UP at top edge
-        action_masks[at_bottom, 1] = False  # Can't go DOWN at bottom edge
-        action_masks[at_left, 2] = False  # Can't go LEFT at left edge
-        action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
+            # Mask invalid movements
+            action_masks[at_top, 0] = False  # Can't go UP at top edge
+            action_masks[at_bottom, 1] = False  # Can't go DOWN at bottom edge
+            action_masks[at_left, 2] = False  # Can't go LEFT at left edge
+            action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
+
+        # 3D-specific: mask Z-axis movements at floor/ceiling
+        if self.substrate.position_dim == 3:
+            at_floor = self.positions[:, 2] == 0  # z == 0
+            # Assume depth from substrate
+            if hasattr(self.substrate, "depth"):
+                at_ceiling = self.positions[:, 2] == self.substrate.depth - 1
+            else:
+                at_ceiling = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+
+            action_masks[at_ceiling, 6] = False  # Can't go UP_Z at ceiling
+            action_masks[at_floor, 7] = False  # Can't go DOWN_Z at floor
 
         # Mask INTERACT (action 4) - only valid when on an open affordance
         # P1.4: Removed affordability check - agents can attempt INTERACT even when broke
@@ -430,19 +455,44 @@ class VectorizedHamletEnv:
         # Store old positions for temporal mechanics progress tracking
         old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
 
-        # Movement deltas (x, y) coordinates
-        # x = horizontal (column), y = vertical (row)
-        deltas = torch.tensor(
-            [
-                [0, -1],  # UP - decreases y, x unchanged
-                [0, 1],  # DOWN - increases y, x unchanged
-                [-1, 0],  # LEFT - decreases x, y unchanged
-                [1, 0],  # RIGHT - increases x, y unchanged
-                [0, 0],  # INTERACT (no movement)
-                [0, 0],  # WAIT (no movement)
-            ],
-            device=self.device,
-        )
+        # Movement deltas - dynamically sized based on substrate dimensionality
+        # For Grid2D (position_dim=2): 4 directions + interact/wait
+        # For Grid3D (position_dim=3): 6 directions + interact/wait
+        if self.substrate.position_dim == 2:
+            deltas = torch.tensor(
+                [
+                    [0, -1],  # UP - decreases y, x unchanged
+                    [0, 1],  # DOWN - increases y, x unchanged
+                    [-1, 0],  # LEFT - decreases x, y unchanged
+                    [1, 0],  # RIGHT - increases x, y unchanged
+                    [0, 0],  # INTERACT (no movement)
+                    [0, 0],  # WAIT (no movement)
+                ],
+                device=self.device,
+                dtype=self.substrate.position_dtype,
+            )
+        elif self.substrate.position_dim == 3:
+            deltas = torch.tensor(
+                [
+                    [0, -1, 0],  # UP - decreases y (Grid2D compat: action 0)
+                    [0, 1, 0],  # DOWN - increases y (Grid2D compat: action 1)
+                    [-1, 0, 0],  # LEFT - decreases x (Grid2D compat: action 2)
+                    [1, 0, 0],  # RIGHT - increases x (Grid2D compat: action 3)
+                    [0, 0, 0],  # INTERACT (no movement) (Grid2D compat: action 4)
+                    [0, 0, 0],  # WAIT (no movement) (Grid2D compat: action 5)
+                    [0, 0, 1],  # UP_Z - increases z (new for 3D: action 6)
+                    [0, 0, -1],  # DOWN_Z - decreases z (new for 3D: action 7)
+                ],
+                device=self.device,
+                dtype=self.substrate.position_dtype,
+            )
+        elif self.substrate.position_dim == 0:
+            # Aspatial: no movement deltas needed, but provide dummy array
+            deltas = torch.zeros((6, 0), device=self.device, dtype=self.substrate.position_dtype)
+        else:
+            raise ValueError(
+                f"Unsupported substrate position_dim: {self.substrate.position_dim}. " f"Expected 0 (aspatial), 2 (Grid2D), or 3 (Grid3D)"
+            )
 
         # Apply movement with substrate-specific boundary handling
         movement_deltas = deltas[actions]  # [num_agents, position_dim]

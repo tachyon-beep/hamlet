@@ -17,17 +17,38 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 
-class Grid2DSubstrateConfig(BaseModel):
-    """Configuration for 2D square grid substrate.
+class GridConfig(BaseModel):
+    """Configuration for grid-based substrates (2D square or 3D cubic).
 
     No-Defaults Principle: All fields required (no implicit defaults).
     """
 
-    topology: Literal["square"] = Field(description="Grid topology (must be 'square' for 2D)")
-    width: int = Field(gt=0, description="Grid width (number of columns)")
-    height: int = Field(gt=0, description="Grid height (number of rows)")
+    topology: Literal["square", "cubic"] = Field(description="Grid topology (square=2D, cubic=3D)")
+    width: int = Field(gt=0, description="Grid width (X dimension)")
+    height: int = Field(gt=0, description="Grid height (Y dimension)")
+    depth: int | None = Field(None, gt=0, description="Grid depth (Z dimension) - required for cubic topology")
     boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(description="Boundary handling mode")
-    distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(description="Distance metric for spatial queries")
+    distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(default="manhattan", description="Distance calculation method")
+
+    @model_validator(mode="after")
+    def validate_cubic_requires_depth(self) -> "GridConfig":
+        """Cubic topology requires depth parameter."""
+        if self.topology == "cubic" and self.depth is None:
+            raise ValueError(
+                "Cubic topology requires 'depth' parameter.\n"
+                "Example:\n"
+                "  topology: cubic\n"
+                "  width: 8\n"
+                "  height: 8\n"
+                "  depth: 3  # Required for 3D\n"
+            )
+        if self.topology == "square" and self.depth is not None:
+            raise ValueError("Square topology does not use 'depth' parameter. " "Remove 'depth' or use topology: cubic")
+        return self
+
+
+# Backward compatibility alias
+Grid2DSubstrateConfig = GridConfig
 
 
 class AspatialSubstrateConfig(BaseModel):
@@ -54,7 +75,7 @@ class SubstrateConfig(BaseModel):
     type: Literal["grid", "aspatial"] = Field(description="Substrate type selection")
 
     # Substrate-specific configs (only one should be populated)
-    grid: Grid2DSubstrateConfig | None = Field(
+    grid: GridConfig | None = Field(
         None,
         description="Grid substrate configuration (required if type='grid')",
     )

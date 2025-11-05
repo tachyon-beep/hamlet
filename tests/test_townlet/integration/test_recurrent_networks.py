@@ -73,6 +73,7 @@ class TestLSTMHiddenStatePersistence:
             gamma=0.99,
             replay_buffer_capacity=1000,
             batch_size=8,
+            train_frequency=10000,  # Disable training (test focuses on hidden state persistence)
         )
 
         # Reset environment and population
@@ -150,6 +151,7 @@ class TestLSTMHiddenStatePersistence:
             action_dim=6,  # Match test environment action space
             network_type="recurrent",
             vision_window_size=5,
+            train_frequency=10000,  # Disable training (test focuses on death reset)
         )
 
         population.reset()
@@ -209,6 +211,7 @@ class TestLSTMHiddenStatePersistence:
             action_dim=6,  # Match test environment action space
             network_type="recurrent",
             vision_window_size=5,
+            train_frequency=10000,  # Disable training (test focuses on flush behavior)
         )
 
         population.reset()
@@ -268,6 +271,7 @@ class TestLSTMHiddenStatePersistence:
             action_dim=6,  # Match test environment action space
             network_type="recurrent",
             vision_window_size=5,
+            train_frequency=10000,  # Disable training (test focuses on shape verification)
         )
 
         population.reset()
