@@ -157,12 +157,20 @@ class VectorizedHamletEnv:
         if partial_observability:
             # Level 2 POMDP: local window + position + meters + current affordance type
             window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
-            # Grid + position + meter_count meters + affordance type one-hot (N+1 for "none")
-            self.observation_dim = window_size * window_size + 2 + meter_count + (self.num_affordance_types + 1)
+            # Local window + normalized position + meters + affordance type one-hot (N+1 for "none")
+            # Position dimension is substrate-specific (2 for Grid2D, 0 for Aspatial)
+            self.observation_dim = (
+                window_size * window_size
+                + self.substrate.position_dim  # 2 for Grid2D, 0 for Aspatial
+                + meter_count
+                + (self.num_affordance_types + 1)
+            )
         else:
-            # Level 1: full grid one-hot + meters + current affordance type
-            # Grid one-hot + meter_count meters + affordance type (N+1 for "none")
-            self.observation_dim = self.grid_size * self.grid_size + meter_count + (self.num_affordance_types + 1)
+            # Level 1: full grid encoding + meters + current affordance type
+            # Grid encoding dimension is substrate-specific (width*height for Grid2D, 0 for Aspatial)
+            self.observation_dim = (
+                self.substrate.get_observation_dim() + meter_count + (self.num_affordance_types + 1)  # Substrate-specific grid encoding
+            )
 
         # Always add temporal features for forward compatibility (4 features)
         # time_sin, time_cos, interaction_progress, lifetime_progress

@@ -110,40 +110,28 @@ class ObservationBuilder:
         meters: torch.Tensor,
         affordances: dict[str, torch.Tensor],
     ) -> torch.Tensor:
-        """Build full grid observations (Level 1).
+        """Build full observations using substrate encoding.
 
         Args:
-            positions: Agent positions [num_agents, 2]
+            positions: Agent positions [num_agents, position_dim]
             meters: Agent meter values [num_agents, 8]
             affordances: Dict of affordance_name -> position
 
         Returns:
-            observations: [num_agents, grid_size² + 8 + num_affordance_types + 1 + 3]
-                - grid_size²: Agent position AND affordance positions (0=empty, 1=agent/affordance, 2=both)
+            observations: [num_agents, obs_dim]
+                - substrate encoding: grid positions (substrate-specific)
                 - 8: Agent meter values
                 - num_affordance_types + 1: Current affordance (one-hot)
-                - 3: Temporal features (time_sin, time_cos, interaction_progress) - always included
         """
-        # Grid encoding: mark BOTH agent position AND affordance positions
-        # This gives the agent "full observability" - it can see everything
-        # Grid values: 0 = empty, 1 = agent OR affordance, 2 = agent ON affordance
-        grid_encoding = torch.zeros(self.num_agents, self.grid_size * self.grid_size, device=self.device)
-
-        # Mark affordance positions (value = 1.0) for all agents
-        # All agents see the same affordance layout (broadcast to all agents)
-        for affordance_pos in affordances.values():
-            affordance_flat_idx = affordance_pos[1] * self.grid_size + affordance_pos[0]
-            grid_encoding[:, affordance_flat_idx] = 1.0
-
-        # Mark agent position (add 1.0, so if on affordance it becomes 2.0)
-        flat_indices = positions[:, 1] * self.grid_size + positions[:, 0]
-        grid_encoding.scatter_add_(1, flat_indices.unsqueeze(1), torch.ones(self.num_agents, 1, device=self.device))
+        # Delegate position encoding to substrate
+        # Grid2D: marks agent position AND affordance positions (0=empty, 1=agent/affordance, 2=both)
+        # Aspatial: returns empty tensor (no position encoding)
+        grid_encoding = self.substrate.encode_observation(positions, affordances)
 
         # Get affordance encoding
         affordance_encoding = self._build_affordance_encoding(positions, affordances)
 
         # Concatenate: grid + meters + affordance
-        # Grid shows: where affordances are AND where agent is
         observations = torch.cat([grid_encoding, meters, affordance_encoding], dim=1)
 
         return observations
@@ -154,60 +142,42 @@ class ObservationBuilder:
         meters: torch.Tensor,
         affordances: dict[str, torch.Tensor],
     ) -> torch.Tensor:
-        """Build partial observations (Level 2 POMDP).
+        """Build partial observations (POMDP) using substrate encoding.
 
-        Agent sees only local 5×5 window centered on its position.
+        Agent sees only local window centered on its position.
 
         Args:
-            positions: Agent positions [num_agents, 2]
+            positions: Agent positions [num_agents, position_dim]
             meters: Agent meter values [num_agents, 8]
             affordances: Dict of affordance_name -> position
 
         Returns:
-            observations: [num_agents, window² + 2 + 8 + num_affordance_types + 1]
+            observations: [num_agents, window² + position_dim + 8 + num_affordance_types + 1]
         """
-        window_size = 2 * self.vision_range + 1
-        local_grids = []
+        # Local window encoding from substrate
+        # Grid2D: extracts (2*vision_range+1)×(2*vision_range+1) window around agent
+        # Aspatial: returns empty tensor (no position encoding)
+        local_grids = self.substrate.encode_partial_observation(positions, affordances, vision_range=self.vision_range)
 
-        for agent_idx in range(self.num_agents):
-            agent_pos = positions[agent_idx]
-            local_grid = torch.zeros(window_size * window_size, device=self.device)
-
-            # Extract local window centered on agent
-            for dy in range(-self.vision_range, self.vision_range + 1):
-                for dx in range(-self.vision_range, self.vision_range + 1):
-                    world_x = agent_pos[0] + dx
-                    world_y = agent_pos[1] + dy
-
-                    # Check if position is within grid bounds
-                    if 0 <= world_x < self.grid_size and 0 <= world_y < self.grid_size:
-                        # Check if there's an affordance at this position
-                        has_affordance = False
-                        for affordance_pos in affordances.values():
-                            if affordance_pos[0] == world_x and affordance_pos[1] == world_y:
-                                has_affordance = True
-                                break
-
-                        # Encode in local grid (1 = affordance, 0 = empty/out-of-bounds)
-                        if has_affordance:
-                            local_y = dy + self.vision_range
-                            local_x = dx + self.vision_range
-                            local_idx = local_y * window_size + local_x
-                            local_grid[local_idx] = 1.0
-
-            local_grids.append(local_grid)
-
-        # Stack all local grids
-        local_grids_batch = torch.stack(local_grids)
-
-        # Normalize positions to [0, 1]
-        normalized_positions = positions.float() / (self.grid_size - 1)
+        # Normalized positions (for recurrent network position encoder)
+        # For grid substrates: normalize by grid dimensions
+        # For aspatial: positions are empty, normalized_positions will be empty
+        if hasattr(self.substrate, "width") and hasattr(self.substrate, "height"):
+            # Grid2D substrate: normalize to [0, 1]
+            normalized_positions = positions.float() / torch.tensor(
+                [self.substrate.width - 1, self.substrate.height - 1],
+                device=self.device,
+                dtype=torch.float32,
+            )
+        else:
+            # Aspatial substrate: no position normalization needed
+            normalized_positions = positions.float()
 
         # Get affordance encoding
         affordance_encoding = self._build_affordance_encoding(positions, affordances)
 
         # Concatenate: local_grid + position + meters + affordance
-        observations = torch.cat([local_grids_batch, normalized_positions, meters, affordance_encoding], dim=1)
+        observations = torch.cat([local_grids, normalized_positions, meters, affordance_encoding], dim=1)
 
         return observations
 
