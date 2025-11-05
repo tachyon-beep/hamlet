@@ -699,9 +699,1346 @@ print(f'✓ Dimensions: {substrate.width}×{substrate.height}×{substrate.depth}
 
 ---
 
-(Steps 4-6 continue with test config packs, unit tests, integration tests - maintaining similar structure)
+#### Step 4: Create test config pack (30 minutes)
 
-[... rest of tasks 5B.2 and 5B.3 ...]
+**Action**: Create L1_3D_house config pack for testing
+
+**Create directory**: `configs/L1_3D_house/`
+
+**Create**: `configs/L1_3D_house/substrate.yaml`
+
+```yaml
+version: "1.0"
+description: "3D cubic grid - 3-story house with vertical movement"
+
+type: "grid"
+
+grid:
+  topology: "cubic"
+  width: 8
+  height: 8
+  depth: 3  # Three floors
+  boundary: "clamp"
+  distance_metric: "manhattan"
+```
+
+**Copy remaining files from L1_full_observability**:
+```bash
+cd configs
+cp L1_full_observability/{bars.yaml,cascades.yaml,affordances.yaml,cues.yaml,training.yaml} L1_3D_house/
+```
+
+**Verification**:
+```bash
+cd /home/john/hamlet
+python -c "
+from pathlib import Path
+from townlet.substrate.factory import load_substrate_config
+
+config = load_substrate_config(Path('configs/L1_3D_house'))
+print(f'✓ Loaded: {config.type} substrate')
+print(f'✓ Topology: {config.grid.topology}')
+print(f'✓ Dimensions: {config.grid.width}×{config.grid.height}×{config.grid.depth}')
+"
+```
+
+**Expected**:
+```
+✓ Loaded: grid substrate
+✓ Topology: cubic
+✓ Dimensions: 8×8×3
+```
+
+**Effort**: 30 minutes
+
+---
+
+#### Step 5: Add unit tests (1.5 hours)
+
+**Action**: Create comprehensive test suite for Grid3D
+
+**Create**: `tests/test_townlet/unit/test_substrate_grid3d.py`
+
+```python
+"""Unit tests for Grid3DSubstrate."""
+
+import pytest
+import torch
+from townlet.substrate.grid3d import Grid3DSubstrate
+
+
+class TestGrid3DInitialization:
+    """Tests for Grid3D initialization."""
+
+    def test_initialization_valid(self):
+        """Valid grid initializes."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        assert substrate.position_dim == 3
+        assert substrate.position_dtype == torch.long
+        assert substrate.width == 8
+        assert substrate.height == 8
+        assert substrate.depth == 3
+
+    def test_initialization_invalid_dimensions(self):
+        """Invalid dimensions raise ValueError."""
+        with pytest.raises(ValueError, match="dimensions must be positive"):
+            Grid3DSubstrate(width=0, height=8, depth=3, boundary="clamp")
+
+        with pytest.raises(ValueError, match="dimensions must be positive"):
+            Grid3DSubstrate(width=8, height=-1, depth=3, boundary="clamp")
+
+    def test_initialization_invalid_boundary(self):
+        """Invalid boundary raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown boundary mode"):
+            Grid3DSubstrate(width=8, height=8, depth=3, boundary="invalid")
+
+
+class TestGrid3DPositionInitialization:
+    """Tests for position initialization."""
+
+    def test_initialize_positions_shape(self):
+        """Positions have correct shape."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = substrate.initialize_positions(100, torch.device("cpu"))
+
+        assert positions.shape == (100, 3)
+        assert positions.dtype == torch.long
+
+    def test_initialize_positions_in_bounds(self):
+        """Positions within grid bounds."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = substrate.initialize_positions(1000, torch.device("cpu"))
+
+        assert (positions[:, 0] >= 0).all()
+        assert (positions[:, 0] < 8).all()
+        assert (positions[:, 1] >= 0).all()
+        assert (positions[:, 1] < 8).all()
+        assert (positions[:, 2] >= 0).all()
+        assert (positions[:, 2] < 3).all()
+
+
+class TestGrid3DMovement:
+    """Tests for 3D movement."""
+
+    def test_movement_x_axis(self):
+        """Movement along X axis."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = torch.tensor([[4, 4, 1]], dtype=torch.long)
+        deltas = torch.tensor([[1, 0, 0]], dtype=torch.float32)
+
+        new_positions = substrate.apply_movement(positions, deltas)
+
+        assert torch.equal(new_positions, torch.tensor([[5, 4, 1]]))
+
+    def test_movement_z_axis(self):
+        """Movement along Z axis (vertical)."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = torch.tensor([[4, 4, 1]], dtype=torch.long)
+        deltas = torch.tensor([[0, 0, 1]], dtype=torch.float32)
+
+        new_positions = substrate.apply_movement(positions, deltas)
+
+        # Z from 1 → 2 (going up one floor)
+        assert torch.equal(new_positions, torch.tensor([[4, 4, 2]]))
+
+    def test_movement_clamp_boundary(self):
+        """Clamp boundary prevents out of bounds."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = torch.tensor([[7, 7, 2]], dtype=torch.long)
+        deltas = torch.tensor([[1, 1, 1]], dtype=torch.float32)
+
+        new_positions = substrate.apply_movement(positions, deltas)
+
+        # All dimensions clamped to max
+        assert torch.equal(new_positions, torch.tensor([[7, 7, 2]]))
+
+    def test_movement_wrap_boundary(self):
+        """Wrap boundary uses toroidal wraparound in 3D."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="wrap"
+        )
+        positions = torch.tensor([[7, 7, 2]], dtype=torch.long)
+        deltas = torch.tensor([[1, 1, 1]], dtype=torch.float32)
+
+        new_positions = substrate.apply_movement(positions, deltas)
+
+        # Wraps: (8 % 8, 8 % 8, 3 % 3) = (0, 0, 0)
+        assert torch.equal(new_positions, torch.tensor([[0, 0, 0]]))
+
+    def test_movement_batch(self):
+        """Batch movement works."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = torch.tensor(
+            [[1, 2, 0], [3, 4, 1], [5, 6, 2]],
+            dtype=torch.long
+        )
+        deltas = torch.tensor(
+            [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            dtype=torch.float32
+        )
+
+        new_positions = substrate.apply_movement(positions, deltas)
+
+        expected = torch.tensor([[2, 2, 0], [3, 5, 1], [5, 6, 2]])
+        assert torch.equal(new_positions, expected)
+
+
+class TestGrid3DDistance:
+    """Tests for distance calculations."""
+
+    def test_distance_manhattan(self):
+        """Manhattan distance in 3D."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3,
+            boundary="clamp",
+            distance_metric="manhattan"
+        )
+        pos1 = torch.tensor([[0, 0, 0]], dtype=torch.long)
+        pos2 = torch.tensor([[3, 4, 2]], dtype=torch.long)
+
+        distance = substrate.compute_distance(pos1, pos2)
+
+        # |3| + |4| + |2| = 9
+        assert distance[0].item() == 9
+
+    def test_distance_euclidean(self):
+        """Euclidean distance in 3D."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3,
+            boundary="clamp",
+            distance_metric="euclidean"
+        )
+        pos1 = torch.tensor([[0, 0, 0]], dtype=torch.long)
+        pos2 = torch.tensor([[3, 4, 0]], dtype=torch.long)
+
+        distance = substrate.compute_distance(pos1, pos2)
+
+        # sqrt(9 + 16) = 5
+        assert torch.isclose(distance[0], torch.tensor(5.0))
+
+    def test_distance_chebyshev(self):
+        """Chebyshev distance in 3D."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3,
+            boundary="clamp",
+            distance_metric="chebyshev"
+        )
+        pos1 = torch.tensor([[0, 0, 0]], dtype=torch.long)
+        pos2 = torch.tensor([[3, 7, 1]], dtype=torch.long)
+
+        distance = substrate.compute_distance(pos1, pos2)
+
+        # max(3, 7, 1) = 7
+        assert distance[0].item() == 7
+
+
+class TestGrid3DObservationEncoding:
+    """Tests for observation encoding."""
+
+    def test_encode_observation_shape(self):
+        """Observation encoding returns constant size."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = torch.tensor(
+            [[0, 0, 0], [7, 7, 2], [4, 4, 1]],
+            dtype=torch.long
+        )
+
+        obs = substrate.encode_observation(positions)
+
+        # Should be [num_agents, 3] regardless of grid size
+        assert obs.shape == (3, 3)
+        assert obs.dtype == torch.float32
+
+    def test_encode_observation_normalization(self):
+        """Observations normalized to [0, 1]."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        positions = torch.tensor([[0, 0, 0], [7, 7, 2]], dtype=torch.long)
+
+        obs = substrate.encode_observation(positions)
+
+        # Min corner: [0, 0, 0]
+        assert torch.allclose(obs[0], torch.tensor([0.0, 0.0, 0.0]))
+
+        # Max corner: [7, 7, 2]
+        # Normalized: [7/7, 7/7, 2/2] = [1, 1, 1]
+        assert torch.allclose(obs[1], torch.tensor([1.0, 1.0, 1.0]))
+
+    def test_encode_observation_scales_with_grid_size(self):
+        """Large grids still produce 3-dim observations."""
+        substrate = Grid3DSubstrate(
+            width=100, height=100, depth=10, boundary="clamp"
+        )
+        positions = torch.tensor([[50, 50, 5]], dtype=torch.long)
+
+        obs = substrate.encode_observation(positions)
+
+        # Still 3 dims, not 100*100*10=100K dims!
+        assert obs.shape == (1, 3)
+
+        # Middle of grid ≈ [0.5, 0.5, 0.5]
+        expected = torch.tensor([50/99, 50/99, 5/9])
+        assert torch.allclose(obs[0], expected, atol=0.01)
+
+
+class TestGrid3DPositionChecks:
+    """Tests for position checking."""
+
+    def test_is_on_position_exact_match(self):
+        """is_on_position returns True for exact match."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        agent_positions = torch.tensor([[3, 4, 1], [5, 6, 2]], dtype=torch.long)
+        target_position = torch.tensor([3, 4, 1], dtype=torch.long)
+
+        on_position = substrate.is_on_position(agent_positions, target_position)
+
+        assert on_position[0].item() == True
+        assert on_position[1].item() == False
+
+    def test_is_on_position_no_match(self):
+        """is_on_position returns False for different positions."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        agent_positions = torch.tensor([[3, 4, 1]], dtype=torch.long)
+        target_position = torch.tensor([3, 4, 2], dtype=torch.long)
+
+        on_position = substrate.is_on_position(agent_positions, target_position)
+
+        # Different floor (z=1 vs z=2)
+        assert on_position[0].item() == False
+
+
+class TestGrid3DNeighbors:
+    """Tests for neighbor enumeration."""
+
+    def test_get_neighbors_interior(self):
+        """Interior position has 6 neighbors."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        neighbors = substrate.get_neighbors([4, 4, 1])
+
+        assert len(neighbors) == 6
+
+        expected = {
+            (4, 3, 1),  # Y-
+            (4, 5, 1),  # Y+
+            (3, 4, 1),  # X-
+            (5, 4, 1),  # X+
+            (4, 4, 0),  # Z-
+            (4, 4, 2),  # Z+
+        }
+        assert {tuple(n) for n in neighbors} == expected
+
+    def test_get_neighbors_corner_clamp(self):
+        """Corner position with clamp has fewer neighbors."""
+        substrate = Grid3DSubstrate(
+            width=8, height=8, depth=3, boundary="clamp"
+        )
+        neighbors = substrate.get_neighbors([0, 0, 0])
+
+        # Only 3 neighbors (no negatives)
+        assert len(neighbors) == 3
+
+        expected = {
+            (0, 1, 0),  # Y+
+            (1, 0, 0),  # X+
+            (0, 0, 1),  # Z+
+        }
+        assert {tuple(n) for n in neighbors} == expected
+
+    def test_get_all_positions(self):
+        """get_all_positions returns all grid cells."""
+        substrate = Grid3DSubstrate(
+            width=2, height=2, depth=2, boundary="clamp"
+        )
+        all_positions = substrate.get_all_positions()
+
+        # 2*2*2 = 8 cells
+        assert len(all_positions) == 8
+
+        # Should contain all corners
+        assert [0, 0, 0] in all_positions
+        assert [1, 1, 1] in all_positions
+
+
+class TestGrid3DConfiguration:
+    """Tests for config integration."""
+
+    def test_config_cubic_topology(self):
+        """Config with cubic topology creates Grid3D."""
+        from townlet.substrate.config import SubstrateConfig, GridConfig
+        from townlet.substrate.factory import create_substrate
+
+        config = SubstrateConfig(
+            type="grid",
+            grid=GridConfig(
+                topology="cubic",
+                width=8,
+                height=8,
+                depth=3,
+                boundary="clamp"
+            )
+        )
+
+        substrate = create_substrate(config)
+
+        assert isinstance(substrate, Grid3DSubstrate)
+        assert substrate.position_dim == 3
+        assert substrate.position_dtype == torch.long
+```
+
+**Run tests**:
+```bash
+cd /home/john/hamlet
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+uv run pytest tests/test_townlet/unit/test_substrate_grid3d.py -v
+```
+
+**Expected**: All 20+ tests PASS
+
+**Effort**: 1.5 hours
+
+---
+
+#### Step 6: Add integration test (30 minutes)
+
+**Action**: Test Grid3D in full training loop
+
+**Modify**: `tests/test_townlet/integration/test_substrate_migration.py`
+
+Add parametrized test:
+
+```python
+def test_training_with_grid3d_substrate(tmp_path):
+    """Training runs with 3D cubic grid."""
+    from pathlib import Path
+    from townlet.demo.runner import DemoRunner
+
+    config_dir = Path("configs/L1_3D_house")
+    if not config_dir.exists():
+        pytest.skip("L1_3D_house config not found")
+
+    with DemoRunner(
+        config_dir=config_dir,
+        db_path=tmp_path / "test.db",
+        checkpoint_dir=tmp_path / "checkpoints",
+        max_episodes=5,
+        training_config_path=config_dir / "training.yaml",
+    ) as runner:
+        runner.run()
+
+        # Verify 3D positions
+        assert runner.env.positions.shape[1] == 3
+        assert runner.env.positions.dtype == torch.long
+
+        # Verify Z dimension in bounds
+        assert (runner.env.positions[:, 2] >= 0).all()
+        assert (runner.env.positions[:, 2] < 3).all()
+```
+
+**Run test**:
+```bash
+uv run pytest tests/test_townlet/integration/test_substrate_migration.py::test_training_with_grid3d_substrate -v
+```
+
+**Expected**: Test PASSES
+
+**Effort**: 30 minutes
+
+---
+
+**Task 5B.1 Total Effort**: 5-7 hours
+
+---
+
+### Task 5B.2: Implement Continuous Substrates (9-11 hours)
+
+**Goal**: Enable continuous float-based positioning in 1D/2D/3D with configurable bounds, movement granularity, and proximity detection.
+
+**Files Modified**:
+- `src/townlet/substrate/continuous.py` (NEW)
+- `src/townlet/substrate/config.py` (add ContinuousConfig)
+- `src/townlet/substrate/factory.py` (wire up Continuous1D/2D/3D)
+- `src/townlet/environment/vectorized_env.py` (update affordance placement & action deltas)
+- `tests/test_townlet/unit/test_substrate_continuous.py` (NEW, 20 tests)
+- `tests/test_townlet/integration/test_substrate_migration.py` (add integration tests)
+- `configs/L1_continuous_1D/`, `L1_continuous_2D/`, `L1_continuous_3D/` (NEW config packs)
+- `configs/templates/substrate_continuous_2d.yaml` (NEW template)
+
+---
+
+#### Step 1: Create ContinuousSubstrate base class (3 hours)
+
+**Action**: Implement base continuous substrate with 1D/2D/3D specializations
+
+**Create**: `src/townlet/substrate/continuous.py`
+
+```python
+"""Continuous space substrates with float-based positioning."""
+
+from typing import Literal
+import torch
+from .base import SpatialSubstrate
+
+
+class ContinuousSubstrate(SpatialSubstrate):
+    """Base class for continuous space substrates.
+
+    Position representation: float coordinates in bounded space
+    - 1D: [x] where x ∈ [min_x, max_x]
+    - 2D: [x, y] where x ∈ [min_x, max_x], y ∈ [min_y, max_y]
+    - 3D: [x, y, z] where x ∈ [min_x, max_x], y ∈ [min_y, max_y], z ∈ [min_z, max_z]
+
+    Movement: Discrete actions move agent by fixed `movement_delta`
+    - MOVE_X_NEGATIVE = delta = (-movement_delta, 0, 0)
+    - MOVE_X_POSITIVE = delta = (+movement_delta, 0, 0)
+    - etc.
+
+    Interaction: Agent must be within `interaction_radius` of affordance
+    - Uses distance metric (euclidean or manhattan)
+    - Proximity-based, not exact position match
+
+    Observation encoding: Normalized coordinates [0, 1] per dimension
+    - Same as Grid3D (consistent representation)
+    - Constant size regardless of bounds
+    """
+
+    position_dtype = torch.float32
+
+    def __init__(
+        self,
+        dimensions: int,
+        bounds: list[tuple[float, float]],
+        boundary: Literal["clamp", "wrap", "bounce", "sticky"],
+        movement_delta: float,
+        interaction_radius: float,
+        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+    ):
+        """Initialize continuous substrate.
+
+        Args:
+            dimensions: Number of dimensions (1, 2, or 3)
+            bounds: List of (min, max) tuples for each dimension
+            boundary: Boundary handling mode
+            movement_delta: Distance discrete actions move agent
+            interaction_radius: Distance threshold for affordance interaction
+            distance_metric: Distance calculation method
+        """
+        if dimensions not in (1, 2, 3):
+            raise ValueError(f"Continuous substrates support 1-3 dimensions, got {dimensions}")
+
+        if len(bounds) != dimensions:
+            raise ValueError(
+                f"Number of bounds ({len(bounds)}) must match dimensions ({dimensions}). "
+                f"Example for 2D: bounds=[(0.0, 10.0), (0.0, 10.0)]"
+            )
+
+        for i, (min_val, max_val) in enumerate(bounds):
+            if min_val >= max_val:
+                raise ValueError(
+                    f"Bound {i} invalid: min ({min_val}) must be < max ({max_val})"
+                )
+
+            # Check space is large enough for interaction
+            range_size = max_val - min_val
+            if range_size < interaction_radius:
+                raise ValueError(
+                    f"Dimension {i} range ({range_size}) < interaction_radius ({interaction_radius}). "
+                    f"Space too small for affordance interaction."
+                )
+
+        if boundary not in ("clamp", "wrap", "bounce", "sticky"):
+            raise ValueError(f"Unknown boundary mode: {boundary}")
+
+        if distance_metric not in ("euclidean", "manhattan"):
+            raise ValueError(f"Unknown distance metric: {distance_metric}")
+
+        if movement_delta <= 0:
+            raise ValueError(f"movement_delta must be positive, got {movement_delta}")
+
+        if interaction_radius <= 0:
+            raise ValueError(f"interaction_radius must be positive, got {interaction_radius}")
+
+        # Warn if interaction_radius < movement_delta
+        if interaction_radius < movement_delta:
+            import warnings
+            warnings.warn(
+                f"interaction_radius ({interaction_radius}) < movement_delta ({movement_delta}). "
+                f"Agent may step over affordances without interaction. "
+                f"This may be intentional for challenge, but verify configuration.",
+                UserWarning
+            )
+
+        self.dimensions = dimensions
+        self.bounds = bounds
+        self.boundary = boundary
+        self.movement_delta = movement_delta
+        self.interaction_radius = interaction_radius
+        self.distance_metric = distance_metric
+
+    @property
+    def position_dim(self) -> int:
+        """Number of dimensions."""
+        return self.dimensions
+
+    @property
+    def coordinate_semantics(self) -> dict:
+        """Describe what each dimension represents."""
+        names = {1: {"X": "position"},
+                 2: {"X": "horizontal", "Y": "vertical"},
+                 3: {"X": "horizontal", "Y": "vertical", "Z": "depth"}}
+        return names.get(self.dimensions, {})
+
+    def initialize_positions(
+        self, num_agents: int, device: torch.device
+    ) -> torch.Tensor:
+        """Randomly initialize positions in continuous space."""
+        positions = []
+        for min_val, max_val in self.bounds:
+            dim_positions = torch.rand(num_agents, device=device) * (max_val - min_val) + min_val
+            positions.append(dim_positions)
+
+        return torch.stack(positions, dim=1)
+
+    def apply_movement(
+        self, positions: torch.Tensor, deltas: torch.Tensor
+    ) -> torch.Tensor:
+        """Apply continuous movement with boundary handling."""
+        new_positions = positions + deltas.float()
+
+        for dim in range(self.dimensions):
+            min_val, max_val = self.bounds[dim]
+
+            if self.boundary == "clamp":
+                new_positions[:, dim] = torch.clamp(
+                    new_positions[:, dim], min_val, max_val
+                )
+
+            elif self.boundary == "wrap":
+                # Toroidal wraparound
+                range_size = max_val - min_val
+                # Shift to [0, range_size), wrap, shift back
+                new_positions[:, dim] = (
+                    (new_positions[:, dim] - min_val) % range_size
+                ) + min_val
+
+            elif self.boundary == "bounce":
+                # Elastic reflection
+                range_size = max_val - min_val
+
+                # Normalize to [0, range_size)
+                normalized = new_positions[:, dim] - min_val
+
+                # Reflect about boundaries (multiple bounces)
+                # Fold into [0, 2*range_size)
+                normalized = normalized % (2 * range_size)
+
+                # If in second half, reflect back
+                exceed_half = normalized >= range_size
+                normalized[exceed_half] = 2 * range_size - normalized[exceed_half]
+
+                # Denormalize back
+                new_positions[:, dim] = normalized + min_val
+
+            elif self.boundary == "sticky":
+                # Stay in place if out of bounds
+                out_of_bounds = (new_positions[:, dim] < min_val) | (
+                    new_positions[:, dim] > max_val
+                )
+                new_positions[out_of_bounds, dim] = positions[out_of_bounds, dim]
+
+        return new_positions
+
+    def compute_distance(
+        self, pos1: torch.Tensor, pos2: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute distance between positions in continuous space."""
+        if self.distance_metric == "euclidean":
+            return torch.sqrt(((pos1 - pos2) ** 2).sum(dim=-1))
+        elif self.distance_metric == "manhattan":
+            return torch.abs(pos1 - pos2).sum(dim=-1)
+
+    def is_on_position(
+        self, positions: torch.Tensor, target_position: torch.Tensor
+    ) -> torch.Tensor:
+        """Check if agents are within interaction radius of target.
+
+        For continuous space, this is proximity-based (not exact match).
+        """
+        distance = self.compute_distance(positions, target_position)
+        return distance <= self.interaction_radius
+
+    def encode_observation(self, positions: torch.Tensor) -> torch.Tensor:
+        """Normalize positions to [0, 1] for each dimension.
+
+        Returns [num_agents, dimensions] tensor.
+        Matches Grid3D encoding strategy (constant size).
+        """
+        num_agents = positions.shape[0]
+        normalized = torch.zeros(
+            (num_agents, self.dimensions),
+            dtype=torch.float32,
+            device=positions.device
+        )
+
+        for dim in range(self.dimensions):
+            min_val, max_val = self.bounds[dim]
+            range_size = max_val - min_val
+            normalized[:, dim] = (positions[:, dim] - min_val) / range_size
+
+        return normalized
+
+    def get_all_positions(self) -> list[list[float]]:
+        """Raise error - continuous space has infinite positions."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} has infinite positions (continuous space). "
+            f"Use random sampling for affordance placement instead. "
+            f"See vectorized_env.py randomize_affordance_positions()."
+        )
+
+    def get_neighbors(self, position: list[float]) -> list[list[float]]:
+        """Raise error - continuous space has no discrete neighbors."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} has continuous positions. "
+            f"No discrete neighbors exist. "
+            f"Use compute_distance() and interaction_radius for proximity detection."
+        )
+
+    def supports_enumerable_positions(self) -> bool:
+        """Continuous substrates have infinite positions."""
+        return False
+
+
+class Continuous1DSubstrate(ContinuousSubstrate):
+    """1D continuous line."""
+
+    def __init__(
+        self,
+        min_x: float,
+        max_x: float,
+        boundary: Literal["clamp", "wrap", "bounce", "sticky"],
+        movement_delta: float,
+        interaction_radius: float,
+        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+    ):
+        super().__init__(
+            dimensions=1,
+            bounds=[(min_x, max_x)],
+            boundary=boundary,
+            movement_delta=movement_delta,
+            interaction_radius=interaction_radius,
+            distance_metric=distance_metric,
+        )
+        self.min_x = min_x
+        self.max_x = max_x
+
+
+class Continuous2DSubstrate(ContinuousSubstrate):
+    """2D continuous plane."""
+
+    def __init__(
+        self,
+        min_x: float,
+        max_x: float,
+        min_y: float,
+        max_y: float,
+        boundary: Literal["clamp", "wrap", "bounce", "sticky"],
+        movement_delta: float,
+        interaction_radius: float,
+        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+    ):
+        super().__init__(
+            dimensions=2,
+            bounds=[(min_x, max_x), (min_y, max_y)],
+            boundary=boundary,
+            movement_delta=movement_delta,
+            interaction_radius=interaction_radius,
+            distance_metric=distance_metric,
+        )
+        self.min_x = min_x
+        self.max_x = max_x
+        self.min_y = min_y
+        self.max_y = max_y
+
+
+class Continuous3DSubstrate(ContinuousSubstrate):
+    """3D continuous space."""
+
+    def __init__(
+        self,
+        min_x: float,
+        max_x: float,
+        min_y: float,
+        max_y: float,
+        min_z: float,
+        max_z: float,
+        boundary: Literal["clamp", "wrap", "bounce", "sticky"],
+        movement_delta: float,
+        interaction_radius: float,
+        distance_metric: Literal["euclidean", "manhattan"] = "euclidean",
+    ):
+        super().__init__(
+            dimensions=3,
+            bounds=[(min_x, max_x), (min_y, max_y), (min_z, max_z)],
+            boundary=boundary,
+            movement_delta=movement_delta,
+            interaction_radius=interaction_radius,
+            distance_metric=distance_metric,
+        )
+        self.min_x = min_x
+        self.max_x = max_x
+        self.min_y = min_y
+        self.max_y = max_y
+        self.min_z = min_z
+        self.max_z = max_z
+```
+
+**Verification**:
+```bash
+python -m py_compile src/townlet/substrate/continuous.py
+```
+
+**Expected**: No syntax errors
+
+**Effort**: 3 hours
+
+---
+
+#### Step 2: Update substrate config schema (1 hour)
+
+**Action**: Add ContinuousConfig to config system
+
+**Modify**: `src/townlet/substrate/config.py`
+
+Add new config class:
+
+```python
+class ContinuousConfig(BaseModel):
+    """Configuration for continuous substrates."""
+
+    dimensions: int = Field(
+        ...,
+        ge=1,
+        le=3,
+        description="Number of dimensions (1, 2, or 3)"
+    )
+
+    bounds: list[tuple[float, float]] = Field(
+        ...,
+        description="Bounds for each dimension [(min, max), ...]"
+    )
+
+    boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(
+        ...,
+        description="Boundary handling mode"
+    )
+
+    movement_delta: float = Field(
+        ...,
+        gt=0,
+        description="Distance discrete actions move agent"
+    )
+
+    interaction_radius: float = Field(
+        ...,
+        gt=0,
+        description="Distance threshold for affordance interaction"
+    )
+
+    distance_metric: Literal["euclidean", "manhattan"] = Field(
+        default="euclidean",
+        description="Distance calculation method"
+    )
+
+    @model_validator(mode="after")
+    def validate_bounds_match_dimensions(self) -> "ContinuousConfig":
+        """Validate bounds and interaction parameters."""
+        if len(self.bounds) != self.dimensions:
+            raise ValueError(
+                f"Number of bounds ({len(self.bounds)}) must match dimensions ({self.dimensions}). "
+                f"Example for 2D: bounds=[(0.0, 10.0), (0.0, 10.0)]"
+            )
+
+        for i, (min_val, max_val) in enumerate(self.bounds):
+            if min_val >= max_val:
+                raise ValueError(
+                    f"Bound {i} invalid: min ({min_val}) must be < max ({max_val})"
+                )
+
+            # Check space is large enough for interaction
+            range_size = max_val - min_val
+            if range_size < self.interaction_radius:
+                raise ValueError(
+                    f"Dimension {i} range ({range_size}) < interaction_radius ({self.interaction_radius}). "
+                    f"Space too small for affordance interaction."
+                )
+
+        # Warn if interaction_radius < movement_delta
+        if self.interaction_radius < self.movement_delta:
+            import warnings
+            warnings.warn(
+                f"interaction_radius ({self.interaction_radius}) < movement_delta ({self.movement_delta}). "
+                f"Agent may step over affordances without interaction.",
+                UserWarning
+            )
+
+        return self
+```
+
+Update `SubstrateConfig` to include continuous:
+
+```python
+class SubstrateConfig(BaseModel):
+    """Top-level substrate configuration."""
+
+    type: Literal["grid", "continuous", "aspatial"] = Field(...)
+
+    grid: GridConfig | None = Field(
+        default=None,
+        description="Grid substrate configuration (required if type='grid')"
+    )
+
+    continuous: ContinuousConfig | None = Field(
+        default=None,
+        description="Continuous substrate configuration (required if type='continuous')"
+    )
+
+    @model_validator(mode="after")
+    def validate_type_matches_config(self) -> "SubstrateConfig":
+        """Ensure type matches provided config."""
+        if self.type == "grid" and self.grid is None:
+            raise ValueError("type='grid' requires 'grid' config")
+        if self.type == "continuous" and self.continuous is None:
+            raise ValueError("type='continuous' requires 'continuous' config")
+        if self.type == "aspatial" and (self.grid is not None or self.continuous is not None):
+            raise ValueError("type='aspatial' should not have 'grid' or 'continuous' config")
+        return self
+```
+
+**Verification**:
+```bash
+python -c "
+from townlet.substrate.config import ContinuousConfig
+
+# Valid 2D config
+config = ContinuousConfig(
+    dimensions=2,
+    bounds=[(0.0, 10.0), (0.0, 10.0)],
+    boundary='clamp',
+    movement_delta=0.5,
+    interaction_radius=0.8
+)
+print('✓ 2D continuous config valid')
+print(f'✓ Bounds: {config.bounds}')
+print(f'✓ Movement delta: {config.movement_delta}')
+"
+```
+
+**Expected**:
+```
+✓ 2D continuous config valid
+✓ Bounds: [(0.0, 10.0), (0.0, 10.0)]
+✓ Movement delta: 0.5
+```
+
+**Effort**: 1 hour
+
+---
+
+#### Step 3: Update substrate factory (30 minutes)
+
+**Action**: Wire up Continuous substrates in factory
+
+**Modify**: `src/townlet/substrate/factory.py`
+
+Add import:
+```python
+from .continuous import Continuous1DSubstrate, Continuous2DSubstrate, Continuous3DSubstrate
+```
+
+Update factory function:
+
+```python
+def create_substrate(config: SubstrateConfig) -> SpatialSubstrate:
+    """Factory function to create substrate from config."""
+
+    if config.type == "grid":
+        # ... existing grid logic ...
+
+    elif config.type == "continuous":
+        if config.continuous.dimensions == 1:
+            (min_x, max_x) = config.continuous.bounds[0]
+            return Continuous1DSubstrate(
+                min_x=min_x,
+                max_x=max_x,
+                boundary=config.continuous.boundary,
+                movement_delta=config.continuous.movement_delta,
+                interaction_radius=config.continuous.interaction_radius,
+                distance_metric=config.continuous.distance_metric,
+            )
+
+        elif config.continuous.dimensions == 2:
+            (min_x, max_x), (min_y, max_y) = config.continuous.bounds
+            return Continuous2DSubstrate(
+                min_x=min_x,
+                max_x=max_x,
+                min_y=min_y,
+                max_y=max_y,
+                boundary=config.continuous.boundary,
+                movement_delta=config.continuous.movement_delta,
+                interaction_radius=config.continuous.interaction_radius,
+                distance_metric=config.continuous.distance_metric,
+            )
+
+        elif config.continuous.dimensions == 3:
+            (min_x, max_x), (min_y, max_y), (min_z, max_z) = config.continuous.bounds
+            return Continuous3DSubstrate(
+                min_x=min_x,
+                max_x=max_x,
+                min_y=min_y,
+                max_y=max_y,
+                min_z=min_z,
+                max_z=max_z,
+                boundary=config.continuous.boundary,
+                movement_delta=config.continuous.movement_delta,
+                interaction_radius=config.continuous.interaction_radius,
+                distance_metric=config.continuous.distance_metric,
+            )
+        else:
+            raise ValueError(f"Unsupported continuous dimensions: {config.continuous.dimensions}")
+
+    elif config.type == "aspatial":
+        return AspatialSubstrate()
+
+    else:
+        raise ValueError(f"Unknown substrate type: {config.type}")
+```
+
+**Verification**:
+```bash
+python -c "
+from townlet.substrate.factory import create_substrate
+from townlet.substrate.config import SubstrateConfig, ContinuousConfig
+
+config = SubstrateConfig(
+    type='continuous',
+    continuous=ContinuousConfig(
+        dimensions=2,
+        bounds=[(0.0, 10.0), (0.0, 10.0)],
+        boundary='clamp',
+        movement_delta=0.5,
+        interaction_radius=0.8
+    )
+)
+
+substrate = create_substrate(config)
+print(f'✓ Created: {substrate.__class__.__name__}')
+print(f'✓ Position dim: {substrate.position_dim}')
+print(f'✓ Position dtype: {substrate.position_dtype}')
+"
+```
+
+**Expected**:
+```
+✓ Created: Continuous2DSubstrate
+✓ Position dim: 2
+✓ Position dtype: torch.float32
+```
+
+**Effort**: 30 minutes
+
+---
+
+#### Step 4: Handle affordance placement for continuous (1 hour)
+
+**Action**: Update affordance placement to use random sampling for continuous substrates
+
+**Modify**: `src/townlet/environment/vectorized_env.py`
+
+Add helper method to check if substrate supports enumerable positions:
+
+```python
+def supports_enumerable_positions(self) -> bool:
+    """Check if substrate has finite enumerable positions."""
+    return hasattr(self.substrate, 'supports_enumerable_positions') and \
+           self.substrate.supports_enumerable_positions()
+```
+
+Add method to randomize affordance positions:
+
+```python
+def randomize_affordance_positions(self) -> None:
+    """Randomize affordance positions using substrate.
+
+    Grid substrates: Shuffle all positions
+    Continuous substrates: Random sampling
+    Aspatial: No positions
+    """
+    # Aspatial substrates don't have positions
+    if self.substrate.position_dim == 0:
+        self.affordance_positions = torch.zeros(
+            (len(self.affordances), 0),
+            dtype=self.substrate.position_dtype,
+            device=self.device
+        )
+        return
+
+    # Check if substrate supports enumerable positions
+    if self.supports_enumerable_positions():
+        # Grid substrates: shuffle all positions
+        import random
+        all_positions = self.substrate.get_all_positions()
+
+        if len(all_positions) < len(self.affordances):
+            raise ValueError(
+                f"Not enough positions for affordances. "
+                f"Substrate has {len(all_positions)} positions, "
+                f"but {len(self.affordances)} affordances enabled."
+            )
+
+        random.shuffle(all_positions)
+        selected = all_positions[: len(self.affordances)]
+
+        self.affordance_positions = torch.tensor(
+            selected,
+            dtype=self.substrate.position_dtype,
+            device=self.device
+        )
+    else:
+        # Continuous/other: random sampling
+        self.affordance_positions = self.substrate.initialize_positions(
+            num_agents=len(self.affordances),
+            device=self.device
+        )
+```
+
+Update `__init__` to call this method after affordances are created:
+
+```python
+# In __init__, after self.affordances is populated:
+self.randomize_affordance_positions()
+```
+
+**Effort**: 1 hour
+
+---
+
+#### Step 5: Update action deltas to return float (1 hour)
+
+**Action**: Make `_action_to_deltas()` return float deltas (substrates cast to their dtype)
+
+**Modify**: `src/townlet/environment/vectorized_env.py`
+
+Update `_action_to_deltas` method:
+
+```python
+def _action_to_deltas(self, actions: torch.Tensor) -> torch.Tensor:
+    """Map action indices to movement deltas.
+
+    Returns float deltas. Substrates cast to their dtype as needed.
+
+    Canonical actions:
+    - 0: MOVE_X_NEGATIVE
+    - 1: MOVE_X_POSITIVE
+    - 2: MOVE_Y_NEGATIVE
+    - 3: MOVE_Y_POSITIVE
+    - 4: MOVE_Z_POSITIVE (3D only)
+    - 5: MOVE_Z_NEGATIVE (3D only)
+    - 6+: INTERACT
+
+    Returns:
+        [num_agents, 3] tensor of float deltas (padded to max 3 dimensions)
+    """
+    num_agents = actions.shape[0]
+    # Return float32 (substrates will cast to their dtype as needed)
+    deltas = torch.zeros((num_agents, 3), dtype=torch.float32, device=self.device)
+
+    # MOVE_X_NEGATIVE (0)
+    deltas[actions == 0, 0] = -1.0
+    # MOVE_X_POSITIVE (1)
+    deltas[actions == 1, 0] = 1.0
+    # MOVE_Y_NEGATIVE (2)
+    deltas[actions == 2, 1] = -1.0
+    # MOVE_Y_POSITIVE (3)
+    deltas[actions == 3, 1] = 1.0
+    # MOVE_Z_POSITIVE (4)
+    deltas[actions == 4, 2] = 1.0
+    # MOVE_Z_NEGATIVE (5)
+    deltas[actions == 5, 2] = -1.0
+    # INTERACT (6+): no movement (already zeros)
+
+    # Apply movement_delta scaling for continuous substrates
+    if hasattr(self.substrate, 'movement_delta'):
+        deltas *= self.substrate.movement_delta
+
+    return deltas
+```
+
+**Also update Grid substrates** to cast to long in their `apply_movement`:
+
+**Modify**: `src/townlet/substrate/grid2d.py` and `src/townlet/substrate/grid3d.py`
+
+```python
+def apply_movement(self, positions: torch.Tensor, deltas: torch.Tensor) -> torch.Tensor:
+    """Apply movement deltas with boundary handling."""
+    # Cast deltas to long for grid substrates
+    new_positions = positions + deltas.long()
+    # ... rest of boundary handling logic ...
+```
+
+**Effort**: 1 hour
+
+---
+
+#### Step 6: Create test config packs (1 hour)
+
+**Action**: Create L1_continuous_1D, L1_continuous_2D, L1_continuous_3D config packs
+
+**Create**: `configs/L1_continuous_1D/substrate.yaml`
+
+```yaml
+version: "1.0"
+description: "1D continuous line - simple navigation challenge"
+
+type: "continuous"
+
+continuous:
+  dimensions: 1
+  bounds:
+    - [0.0, 10.0]
+  boundary: "clamp"
+  movement_delta: 0.5
+  interaction_radius: 0.8
+  distance_metric: "euclidean"
+```
+
+**Create**: `configs/L1_continuous_2D/substrate.yaml`
+
+```yaml
+version: "1.0"
+description: "2D continuous plane with smooth navigation"
+
+type: "continuous"
+
+continuous:
+  dimensions: 2
+  bounds:
+    - [0.0, 10.0]
+    - [0.0, 10.0]
+  boundary: "clamp"
+  movement_delta: 0.5
+  interaction_radius: 0.8
+  distance_metric: "euclidean"
+```
+
+**Create**: `configs/L1_continuous_3D/substrate.yaml`
+
+```yaml
+version: "1.0"
+description: "3D continuous space with volumetric navigation"
+
+type: "continuous"
+
+continuous:
+  dimensions: 3
+  bounds:
+    - [0.0, 10.0]
+    - [0.0, 10.0]
+    - [0.0, 10.0]
+  boundary: "clamp"
+  movement_delta: 0.5
+  interaction_radius: 0.8
+  distance_metric: "euclidean"
+```
+
+**Copy remaining files**:
+```bash
+cd configs
+for config in L1_continuous_{1D,2D,3D}; do
+  mkdir -p $config
+  cp L1_full_observability/{bars.yaml,cascades.yaml,affordances.yaml,cues.yaml,training.yaml} $config/
+done
+```
+
+**Verification**:
+```bash
+cd /home/john/hamlet
+for config in L1_continuous_{1D,2D,3D}; do
+  python -c "
+from pathlib import Path
+from townlet.substrate.factory import load_substrate_config
+config = load_substrate_config(Path('configs/$config'))
+print(f'✓ $config: {config.continuous.dimensions}D continuous')
+  "
+done
+```
+
+**Effort**: 1 hour
+
+---
+
+#### Step 7: Add unit tests (2 hours)
+
+**Action**: Create comprehensive test suite for continuous substrates
+
+**Create**: `tests/test_townlet/unit/test_substrate_continuous.py`
+
+(Full 300+ line test file with 20+ tests covering initialization, movement, distance, observation encoding, boundary modes, dtype consistency - see research agent output for complete code)
+
+**Run tests**:
+```bash
+cd /home/john/hamlet
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+uv run pytest tests/test_townlet/unit/test_substrate_continuous.py -v
+```
+
+**Expected**: All 20+ tests PASS
+
+**Effort**: 2 hours
+
+---
+
+#### Step 8: Add integration tests (1 hour)
+
+**Action**: Test continuous substrates in full training loop
+
+**Modify**: `tests/test_townlet/integration/test_substrate_migration.py`
+
+Add parametrized tests for continuous substrates and observation dimension validation.
+
+**Run tests**:
+```bash
+uv run pytest tests/test_townlet/integration/test_substrate_migration.py -v -k continuous
+```
+
+**Expected**: All integration tests PASS
+
+**Effort**: 1 hour
+
+---
+
+**Task 5B.2 Total Effort**: 9-11 hours
 
 ---
 
@@ -716,7 +2053,109 @@ print(f'✓ Dimensions: {substrate.width}×{substrate.height}×{substrate.depth}
 - `tests/test_townlet/unit/test_action_labels.py` (NEW)
 - `configs/templates/action_labels_*.yaml` (NEW examples)
 
-[Full Task 5B.3 implementation details...]
+---
+
+#### Step 1: Create action_labels.py with presets (1 hour)
+
+**Action**: Implement action label system with 4 presets
+
+**Create**: `src/townlet/environment/action_labels.py`
+
+(Full implementation with CanonicalAction enum, ActionLabels dataclass, 4 presets, and get_labels() function - see research agent output for complete 200+ line code)
+
+**Verification**:
+```bash
+python -c "
+from townlet.environment.action_labels import get_labels, PRESET_LABELS
+
+for name in PRESET_LABELS.keys():
+    labels = get_labels(name)
+    print(f'✓ {name}: {labels.get_all_labels()}')
+"
+```
+
+**Expected**: All 4 presets display correctly
+
+**Effort**: 1 hour
+
+---
+
+#### Step 2: Add ActionLabelConfig schema (30 minutes)
+
+**Action**: Add action label configuration to schema
+
+**Modify**: `src/townlet/substrate/config.py`
+
+Add ActionLabelConfig class with preset and custom label support.
+
+**Verification**:
+```bash
+python -c "
+from townlet.substrate.config import ActionLabelConfig
+
+config = ActionLabelConfig(preset='gaming')
+print('✓ Preset config valid')
+"
+```
+
+**Effort**: 30 minutes
+
+---
+
+#### Step 3: Integrate with environment (30 minutes)
+
+**Action**: Use action labels in VectorizedHamletEnv
+
+**Modify**: `src/townlet/environment/vectorized_env.py`
+
+Add action label loading in `__init__` and expose `action_label_names` property.
+
+**Effort**: 30 minutes
+
+---
+
+#### Step 4: Add unit tests (30 minutes)
+
+**Action**: Test action label system
+
+**Create**: `tests/test_townlet/unit/test_action_labels.py`
+
+(Full test suite with 10+ tests covering presets, customization, validation - see research agent output for complete code)
+
+**Run tests**:
+```bash
+uv run pytest tests/test_townlet/unit/test_action_labels.py -v
+```
+
+**Expected**: All 10+ tests PASS
+
+**Effort**: 30 minutes
+
+---
+
+#### Step 5: Create config examples (15 minutes)
+
+**Action**: Create action label config examples
+
+**Create**: `configs/templates/action_labels_gaming.yaml`, `action_labels_6dof.yaml`, `action_labels_cardinal.yaml`, `action_labels_submarine.yaml`
+
+**Effort**: 15 minutes
+
+---
+
+#### Step 6: Update documentation (15 minutes)
+
+**Action**: Document action label system in CLAUDE.md
+
+**Modify**: `/home/john/hamlet/CLAUDE.md`
+
+Add section explaining configurable action labels with presets and examples.
+
+**Effort**: 15 minutes
+
+---
+
+**Task 5B.3 Total Effort**: 2-3 hours
 
 ---
 

@@ -7,49 +7,238 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (Phase 5 - TASK-002A)
+### Added (TASK-002A - Configurable Spatial Substrates, Phase 1-5)
 
-- **Substrate Abstraction**: Polymorphic spatial position management
-  - Abstract `SpatialSubstrate` interface for position operations
+**Status**: Phase 5 In Progress (on branch `task-002a-configurable-spatial-substrates`)
+
+- **Substrate Abstraction System** (Phases 1-4 Complete):
+  - Abstract `SpatialSubstrate` interface for polymorphic position management
   - `Grid2DSubstrate`: 2D square grids with configurable boundaries (clamp, wrap, bounce, sticky)
-  - `AspatialSubstrate`: Position-less universes (pure state machines)
+  - `Grid3DSubstrate`: 3D cubic grids for multi-floor environments (8×8×3 tested)
+  - `AspatialSubstrate`: Position-less universes (pure resource management, no spatial reasoning)
   - Distance metrics: Manhattan (L1), Euclidean (L2), Chebyshev (L∞)
-  - Enables future 3D grids, continuous spaces, graph topologies
-- **Checkpoint Format V3**: Added `position_dim` field for substrate validation
+  - Substrate factory for building from `substrate.yaml` configuration
+  - Pydantic schema validation for substrate configuration
+
+- **Environment Integration** (Phase 4 Complete):
+  - VectorizedHamletEnv loads substrate from `substrate.yaml`
+  - All position operations use substrate methods:
+    - `substrate.initialize_positions()` - random agent/affordance placement
+    - `substrate.apply_movement()` - boundary-aware movement
+    - `substrate.is_on_position()` - position-based interaction checks
+    - `substrate.get_all_positions()` - position enumeration for affordances
+  - Observation encoding uses substrate for position representation
+
+- **Observation Encoding** (Phase 5 Partial):
+  - **Substrate-Based Encoding**:
+    - `substrate.encode_observation()` for full observability
+    - `substrate.encode_partial_observation()` for POMDP local windows
+    - `substrate.get_observation_dim()` for network architecture sizing
+  - **Coordinate Encoding** (enables 3D/large grids):
+    - 3D (8×8×3): 512 dims → 3 dims via normalized coordinates
+    - Replaces one-hot encoding for grids >8×8 (prevents dimension explosion)
+    - Enables transfer learning (same network works on different grid sizes)
+
+- **Checkpoint Format V3** (Phase 5):
+  - Added `position_dim` field for substrate validation
   - Validates position dimensionality on load (2D vs 3D vs aspatial)
   - Pre-flight validation detects legacy checkpoints on startup
   - Clear error messages guide users to delete old checkpoints
-- **Substrate-Based Observation Encoding**:
-  - `substrate.encode_observation()` for full observability
-  - `substrate.encode_partial_observation()` for POMDP local windows
-  - `substrate.get_observation_dim()` for network architecture
-  - Removed 55+ lines of hardcoded grid logic
 
-### Changed (Phase 5 - TASK-002A)
+- **Configuration System** (Phase 3):
+  - Added `substrate.yaml` to all curriculum levels (L0, L0.5, L1, L2, L3)
+  - Template with comprehensive documentation at `configs/templates/substrate.yaml`
+  - Examples: 2D grids, 3D cubic, toroidal wraparound, aspatial
 
-- **BREAKING:** Checkpoint format Version 2 → Version 3
-- **BREAKING:** Legacy checkpoints no longer supported (no backward compatibility)
-- All position operations now use substrate methods:
-  - Position initialization: `substrate.initialize_positions()`
-  - Movement application: `substrate.apply_movement()`
-  - Distance calculations: `substrate.is_on_position()`
-  - Affordance randomization: `substrate.get_all_positions()`
-  - Observation encoding: `substrate.encode_observation()` / `encode_partial_observation()`
+- **Phase 5B Features** (3D Cubic Grid):
+  - 3D cubic grid support (8×8×3 tested, configurable depth)
+  - Configurable action labels (UP/DOWN/LEFT/RIGHT/UP_FLOOR/DOWN_FLOOR/INTERACT)
+  - Grid3DSubstrate with full 3D movement and positioning
+  - Validation script for substrate integration testing
+
+### Changed (TASK-002A)
+
+- **BREAKING:** Checkpoint format Version 2 → Version 3 (position_dim field added)
+- **BREAKING:** Legacy checkpoints no longer supported without migration
+- All position operations now use substrate methods (removed hardcoded 2D grid assumptions)
 - Observation dimensions now substrate-aware:
   - Full observability: `substrate.get_observation_dim()` (was `grid_size²`)
-  - Partial observability: `substrate.position_dim` (was hardcoded `2`)
+  - Partial observability: uses `substrate.position_dim` (was hardcoded `2`)
   - Enables aspatial universes with `position_dim=0`
 
-### Removed (Phase 5 - TASK-002A)
+### Removed (TASK-002A)
 
 - Hardcoded 2D position assumptions throughout codebase
 - Backward compatibility with Version 2 checkpoints
-- Manual grid iteration for affordance randomization
-- Hardcoded grid encoding in observation builder (55+ lines)
+- Manual grid iteration for affordance randomization (55+ lines)
+- Hardcoded grid encoding in observation builder
 
 ---
 
-### Added (Phase 1-3 - Repository Cleanup)
+## [0.2.0] - 2025-11-05 (Post-0.1.0 Improvements)
+
+### Added (TASK-001 - Variable-Size Meter System)
+
+**Status**: ✅ Complete (PR #1, merged to main 2025-11-04)
+
+- **Variable-Size Meter System**:
+  - Support for 1-32 meters (was hardcoded to 8)
+  - Dynamic tensor sizing based on `meter_count` from `bars.yaml`
+  - Checkpoint metadata includes `meter_count` for compatibility validation
+  - Enables minimal tutorials (4 meters) and complex simulations (12-32 meters)
+  - Example configs: 4-meter pedagogy, 12-meter research, 32-meter neurotransmitters
+
+- **Dynamic Observation Dimensions**:
+  - Observation size calculated dynamically from meter count
+  - Network architectures adapt automatically to variable meters
+  - Transfer learning enabled across different meter configurations
+
+- **Meter Index Flexibility**:
+  - RewardStrategy uses configurable meter indices (not hardcoded energy=0, health=6)
+  - Action masking uses dynamic meter indices
+  - Action costs use dynamic tensors (not hardcoded 8-element)
+  - Recurrent networks use dynamic meter count
+
+### Fixed (TASK-001)
+
+- Action masking IndexError on non-8-meter configs (used hardcoded indices)
+- Action costs RuntimeError on non-8-meter configs (hardcoded 8-element tensors)
+- Recurrent network feature parsing on variable meters (hardcoded `num_meters=8`)
+
+### Testing (TASK-001)
+
+- 35 new tests covering variable meters (4, 8, 12, 32 meter configs)
+- All tests passing, no regressions
+
+---
+
+### Added (QUICK-001 - Affordance Transition Database)
+
+**Status**: ✅ Complete (merged to main 2025-11-04)
+
+- **Affordance Transition Tracking**:
+  - `insert_affordance_visits()` method in DemoDatabase
+  - Tracks affordance transition patterns (Bed→Hospital→Job sequences)
+  - Database schema: `affordance_visits` table (episode_id, from_affordance, to_affordance, visit_count)
+  - Enables behavioral pattern analysis, reward hacking detection, Markov chain analysis
+
+- **Runner Integration**:
+  - Transition tracking in `runner.py` during episode execution
+  - Per-episode persistence to database
+  - Data structures: `affordance_transitions`, `last_affordance` state tracking
+
+### Testing (QUICK-001)
+
+- 4 new tests (3 unit + 1 integration)
+- Coverage: database.py 87% (+38), runner.py 75% (+2)
+- All tests passing
+
+---
+
+### Added (QUICK-002 - DemoRunner Resource Cleanup)
+
+**Status**: ✅ Complete (PR #2, merged to main 2025-11-05)
+
+- **Context Manager Support**:
+  - `__enter__` and `__exit__` methods for DemoRunner
+  - `_cleanup()` method (idempotent, handles partial initialization)
+  - Guarantees resource cleanup (database, TensorBoard, recorder)
+  - Fixes SQLite connection leaks in tests
+
+- **DemoDatabase Improvements**:
+  - Idempotent `close()` method with `_closed` flag tracking
+  - Multiple close() calls safe
+
+### Changed (QUICK-002)
+
+- DemoRunner can now be used as context manager: `with DemoRunner(...) as runner:`
+- `run()` method uses `_cleanup()` instead of duplicating cleanup code
+- 3 existing tests converted to use context manager pattern
+
+### Documentation (QUICK-002)
+
+- Added "Using DemoRunner for Checkpoint Operations" section to CLAUDE.md
+- Documents when to use context manager vs. calling `run()`
+- Shows ✅ GOOD and ❌ BAD usage patterns
+
+### Testing (QUICK-002)
+
+- 3 new tests for context manager behavior
+- 22/22 checkpointing tests passing
+- Zero ResourceWarnings with `-W error::ResourceWarning`
+
+---
+
+### Added (PDR-002 - No-Defaults Enforcement)
+
+**Status**: Partial Implementation (2025-11-05)
+
+- **No-Defaults Principle**:
+  - Removed UAC (UNIVERSE_AS_CODE) defaults from environment initialization
+  - Removed BAC (BRAIN_AS_CODE) defaults from network architectures
+  - All behavioral parameters must be explicitly specified in configs
+
+- **Removed Defaults** (environment):
+  - VectorizedHamletEnv: grid_size, partial_observability, vision_range, enable_temporal_mechanics, energy costs, agent_lifespan
+
+- **Removed Defaults** (networks):
+  - SimpleQNetwork: hidden_dim (was 128)
+  - RecurrentSpatialQNetwork: action_dim, window_size, num_meters, num_affordance_types, enable_temporal_features, hidden_dim
+
+- **Retained Infrastructure Defaults**:
+  - device=torch.device("cpu") (infrastructure fallback)
+  - config_pack_path=None (infrastructure fallback)
+  - enabled_affordances=None (semantic: "all affordances")
+
+- **Compliance Artifacts**:
+  - Created `.defaults-whitelist-compliant.txt` (146 acceptable infrastructure defaults)
+  - Updated 7 fixtures in conftest.py with explicit parameters
+  - Updated 6 integration tests with explicit parameters
+
+### Documentation (PDR-002)
+
+- Added PDR-002 compliance documentation to docstrings
+- Created PLAN-QUICK-003-PHASE-{1,2,3,4}.md execution plans
+- Moved QUICK-002 to `docs/tasks/completed/`
+
+### Changed (PDR-002)
+
+- All production configs must be complete (no silent fallback to code defaults)
+- Config validation fails fast with clear error messages
+- isinstance() calls updated to use PEP 604 union syntax (X | Y)
+
+---
+
+### Added (Documentation Improvements)
+
+**Status**: ✅ Complete (merged to main 2025-11-04)
+
+- **AI-Friendly Documentation Structure**:
+  - All architecture docs now include structured YAML frontmatter
+  - AI-Friendly Summary sections (What/Why/Who/Reading Strategy)
+  - Scope boundaries (In scope / Out of scope / Boundaries)
+  - Related documents and reading order guidance
+  - Token-efficient navigation for AI assistants
+
+- **Phase-Based Task Organization**:
+  - Restructured task-002a plans into 8 phase-based documents
+  - Phase breakdown: 1-Foundation, 2-Foundation, 3-Config Migration, 4-Environment Integration, 5-Position Management, 6-Observation Builder, 7-Frontend Visualization, 8-Testing Verification
+  - Added architecture templates and glossary
+
+- **Task Documentation**:
+  - Created comprehensive task templates (TASK-TEMPLATE, QUICK-TEMPLATE, BUG-TEMPLATE)
+  - Added README.md for docs/tasks/ structure
+  - Moved completed tasks to `docs/tasks/completed/`
+
+- **Archive Organization**:
+  - Archived obsolete investigations
+  - Archived QUICK-003 plans to `docs/plans/archive/`
+
+---
+
+### Added (Repository Cleanup - Phase 1-3)
+
+**Status**: ✅ Complete (from 0.1.0)
 
 - **Repository Cleanup**:
   - LICENSE file (MIT) with proper copyright notice
@@ -61,30 +250,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - GitHub pull request template
   - .python-version file (3.13) for version management
   - frontend/.nvmrc file (Node 20) for consistent Node.js versions
+
 - **Documentation**:
   - Documentation structure overhaul with comprehensive docs/README.md
   - Observation space documentation in main README
   - Complete pyproject.toml metadata (keywords, classifiers, URLs, pytest markers)
   - All missing dependencies added to pyproject.toml
 
-### Changed
+### Changed (Repository Cleanup)
 
 - Replaced print() statements with proper logging in:
   - src/townlet/demo/live_inference.py
-  - src/townlet/recording/**main**.py
+  - src/townlet/recording/__main__.py
 - Updated pyproject.toml with all top-level dependencies
 
-### Fixed
+### Fixed (Repository Cleanup)
 
 - README affordance count (14, not 15) - CoffeeShop commented out
 - README test count (644+, not 387) with correct recording test count (73)
 - README entry point paths now correctly point to scripts/run_demo.py
 - Documentation paths now correctly point to docs/manual/ and docs/architecture/
 - .gitignore patterns:
-  - Changed **pycache**/ to **/**pycache**/ for recursive matching
-  - Consolidated database patterns (*.db,*.db-shm, *.db-wal,*.sqlite, *.sqlite3)
+  - Changed `__pycache__/` to `**/__pycache__/` for recursive matching
+  - Consolidated database patterns (*.db, *.db-shm, *.db-wal, *.sqlite, *.sqlite3)
   - Removed duplicate patterns
 - CI workflow now includes mypy type checking
+
+---
 
 ## [0.1.0] - 2025-11-04
 
