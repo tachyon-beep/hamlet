@@ -4,12 +4,14 @@
 **Version**: 4.0
 **Status**: Design Complete (Scheduled After Phase 5B)
 **Dependencies**:
+
 - Phase 5B Complete (3D, Continuous, Configurable Actions)
 **Type**: Research Infrastructure Enhancement
 **Scope**: Configurable Observation Encoding (All Dimensions) + N-Dimensional Substrates
 **Estimated Effort**: TBD (will be determined during implementation planning)
 
 **Revision History:**
+
 - **v4 (2025-11-05)**: Rebranded as Phase 5C (scheduled after Phase 5B)
   - Changed from "Phase X" (unscheduled future work) to "Phase 5C" (next phase)
   - Updated all references throughout document
@@ -44,12 +46,14 @@ This document describes **Phase 5C: Configurable Observation Encoding & N-Dimens
 **Phase 5C Scope:**
 
 **Part 1: Retrofit Observation Encoding** (to existing Phase 5A/5B substrates)
+
 - Add configurable `observation_encoding` parameter to Grid2D, Grid3D, Continuous1D/2D/3D
 - Three options: `relative` (normalized), `scaled` (normalized + range info), `absolute` (raw)
 - Default to `relative` (preserves current behavior, backward compatible)
 - Enables comparative studies across dimensions
 
 **Part 2: N-Dimensional Substrates** (new GridND, ContinuousND classes)
+
 - **Grid substrates**: 4D to arbitrary dimensions (uncapped with warnings at N≥10)
 - **Continuous substrates**: 4D to arbitrary dimensions (uncapped for research flexibility)
 - **Auto-generated action spaces**: 2N+1 discrete actions (±movement per dimension + INTERACT)
@@ -58,6 +62,7 @@ This document describes **Phase 5C: Configurable Observation Encoding & N-Dimens
 - **Configurable observation encoding**: Built-in from day one (consistent with retrofitted substrates)
 
 **Design Philosophy:**
+
 - **Build on Phase 5B discovery**: Phase 5B found normalized encoding works well for Grid3D; Phase 5C extends this
 - **"Sandcastle simplicity, rocket science available"**: Common cases (2D/3D) remain simple; complex cases (7D) don't impose complexity tax
 - **User-defined limits with warnings**: No hard caps, emit warnings at N≥10 (Grid) and N≥100 (Continuous) to guide users
@@ -73,6 +78,7 @@ This document describes **Phase 5C: Configurable Observation Encoding & N-Dimens
 **Primary Goal**: Support abstract state space navigation for RL research.
 
 **Key Use Cases:**
+
 - **Abstract State Space Navigation**: Teach that RL works in ANY state space, not just physical grids
   - Example: 5D space [temperature, pressure, pH, time, cost]
   - Affordances are "stable regions" in parameter space
@@ -92,6 +98,7 @@ This document describes **Phase 5C: Configurable Observation Encoding & N-Dimens
 ### 2. Dimensionality Boundaries
 
 **Grid Substrates (Discrete Lattice):**
+
 - **Range**: 4 ≤ N < ∞ (no hard upper bound)
 - **Rationale**: Discrete action space scales linearly as 2N+1
   - 10D = 20 movement actions + 1 interact = 21 actions (manageable)
@@ -105,6 +112,7 @@ This document describes **Phase 5C: Configurable Observation Encoding & N-Dimens
   - Can add hard caps later based on empirical experience if needed
 
 **Continuous Substrates (Smooth Space):**
+
 - **Range**: 4 ≤ N < ∞ (no hard upper bound)
 - **Rationale**:
   - No combinatorial position explosion (infinite positions anyway)
@@ -115,6 +123,7 @@ This document describes **Phase 5C: Configurable Observation Encoding & N-Dimens
   - Can add guidance/warnings later based on empirical experience
 
 **Why 4D Minimum for Both:**
+
 - 1D/2D/3D have **specialized classes** with standard terminology (Surge/Sway/Heave for 3D)
 - 4D+ uses **generic ND classes** with anonymous dimensions (DIM_0, DIM_1, ...)
 - Clean separation: spatial (1-3D) vs abstract state spaces (4D+)
@@ -124,17 +133,20 @@ This document describes **Phase 5C: Configurable Observation Encoding & N-Dimens
 ### 3. Dimension Naming & Semantics
 
 **Standard Terminology Where It Exists:**
+
 - **1D**: X-axis (position)
 - **2D**: X (horizontal), Y (vertical)
 - **3D**: 6-DoF terminology (Sway/Heave/Surge) from Phase 5B.3
   - X = Sway (lateral), Y = Heave (vertical), Z = Surge (longitudinal)
 
 **Anonymous for 4D+:**
+
 - Dimensions labeled as DIM_0, DIM_1, DIM_2, ..., DIM_N-1
 - Rationale: No universal "standard" for 7D space semantics
 - User adds semantic meaning via action_labels (from Phase 5B.3)
 
 **Example: 7D Abstract State Space**
+
 ```yaml
 # substrate.yaml
 type: "grid"
@@ -165,45 +177,54 @@ action_labels:
 **Three Encoding Options** (configurable per substrate):
 
 #### A) `relative` - Position as Fraction of Bounds (CURRENT PHASE 5B APPROACH)
+
 ```python
 # Output: [num_agents, N] floats in [0,1]^N
 # Example 7D: [0.5, 0.3, 0.1, 0.8, 0.6, 0.4, 0.2]
 ```
+
 - Network learns: "I'm 50% across dimension 0, 30% across dimension 1..."
 - **Use when**: Spatial relationships matter, absolute scale doesn't
 - **Observation size**: N dimensions
 
 #### B) `scaled` - Position + Range Metadata
+
 ```python
 # Output: [num_agents, 2N] floats
 # Example 7D: [0.5, 0.3, 0.1, 0.8, 0.6, 0.4, 0.2,  # normalized positions
 #              100, 50, 14, 24, 10, 5, 3]           # range sizes
 ```
+
 - Network learns: "I'm 50% across a 100-unit range, 30% across a 50-unit range..."
 - **Use when**: Scale matters semantically (temperature vs pH have different meanings)
 - **Observation size**: 2N dimensions
 
 #### C) `absolute` - Raw Unnormalized Coordinates
+
 ```python
 # Output: [num_agents, N] floats (raw values)
 # Example 7D: [50.0, 15.0, 1.4, 19.2, 6.0, 2.0, 0.6]
 ```
+
 - Network learns: "I'm at absolute position [50, 15, 1.4, ...]"
 - **Use when**: Absolute values have semantic meaning
 - **Observation size**: N dimensions
 
 **Configuration:**
+
 ```yaml
 observation_encoding: "relative"  # or "scaled" or "absolute"
 ```
 
 **Design Rationale:**
+
 - `relative` is standard RL (normalized observations)
 - `scaled` preserves metric structure for heterogeneous dimensions
 - `absolute` for domains where raw values matter
 - Configurable → researchers can run ablation studies
 
 **What's Deferred:**
+
 - Per-dimension step sizes (handled by user-defined actions)
 - Affordance proximity encoding (add later if requested)
 - Dimension-specific metadata (units, types, etc.)
@@ -230,12 +251,14 @@ Action Index | Canonical Name     | Delta Vector
 ```
 
 **Example: 7D Space**
+
 - 14 movement actions (2 per dimension)
 - 1 interact action
 - Total: 15 discrete actions
 - Q-network output shape: `[batch_size, 15]`
 
 **Action-to-Delta Mapping:**
+
 ```python
 def _action_to_deltas(self, actions: torch.Tensor) -> torch.Tensor:
     """Map action indices to N-dimensional movement deltas."""
@@ -264,11 +287,13 @@ def _action_to_deltas(self, actions: torch.Tensor) -> torch.Tensor:
 **Encoding Pattern**: Dimension-major ordering (all actions for DIM_0, then all for DIM_1, etc.)
 
 **Integration with Phase 5B.3 Action Labels:**
+
 - System generates canonical actions (DIM_0_POSITIVE, etc.)
 - User optionally defines semantic labels via `action_labels` config
 - Example: `DIM_0_POSITIVE: "TEMPERATURE_UP"`
 
 **Future: User-Defined Actions (Separate Task)**
+
 - Users can define custom step sizes per action
 - Users can define complex movements (teleportation, diagonal, multi-dim)
 - Users can define semantic operations (HEAT moves temperature by +5)
@@ -364,6 +389,7 @@ grid:
 ```
 
 **Topology discrimination:**
+
 - `square` → Grid2DSubstrate (specialized)
 - `cubic` → Grid3DSubstrate (specialized)
 - `hypercube` → GridNDSubstrate (generic N-dimensional)
@@ -478,6 +504,7 @@ class ContinuousNDSubstrate(SpatialSubstrate):
 ```
 
 **Design Rationale:**
+
 - 1D/2D/3D remain specialized (don't pay complexity tax for common cases)
 - 4D+ uses generic ND classes (research-focused, complexity expected)
 - Clean boundary at N=3/4 (spatial vs abstract)
@@ -612,6 +639,7 @@ def compute_distance(self, pos1: torch.Tensor, pos2: torch.Tensor) -> torch.Tens
 **No modifications needed** - existing Phase 5B distance code already works for arbitrary N.
 
 **Deferred:**
+
 - Weighted metrics (e.g., weighted Euclidean where dimensions have different importance)
 - Custom distance functions
 - Rationale: Not essential for basic N-dim functionality, can add when researchers request it
@@ -758,6 +786,7 @@ def supports_enumerable_positions(self) -> bool:
 **Random Placement (from Phase 5B):**
 
 Existing `randomize_affordance_positions()` in vectorized_env.py already handles N-dimensional substrates correctly:
+
 - Grid: Shuffles all enumerable positions
 - Continuous: Random sampling via `substrate.initialize_positions()`
 
@@ -808,10 +837,12 @@ def initialize_positions(self, num_agents: int, device: torch.device) -> torch.T
 **Q-Network Input/Output Shapes:**
 
 For N-dimensional substrate:
+
 - **Action space size**: 2N + 1 discrete actions
 - **Q-network output**: `[batch_size, 2N+1]`
 
 **Observation dimensions:**
+
 - `relative` encoding: N dimensions
 - `scaled` encoding: 2N dimensions
 - `absolute` encoding: N dimensions
@@ -862,11 +893,13 @@ q_network = SimpleQNetwork(
 **Why This Is Part of Phase 5C**: Phase 5B discovered that normalized encoding works well for 3D. Phase 5C makes this approach configurable and extends it to N dimensions. For consistency, we retrofit the configuration to existing 2D/3D substrates in the same phase.
 
 **Current State (Phase 5A/5B):**
+
 - Grid2D, Grid3D: Use **fixed normalized encoding** (equivalent to `relative`)
 - Continuous1D, Continuous2D, Continuous3D: Use **fixed normalized encoding** (equivalent to `relative`)
 - No configuration option for encoding strategy
 
 **Phase 5C Adds Configurability:**
+
 - All substrates support `observation_encoding: "relative" | "scaled" | "absolute"`
 - Consistent interface across 1D/2D/3D/ND substrates
 - Enables comparative studies (e.g., "does `scaled` help in 2D vs 7D?")
@@ -950,6 +983,7 @@ class Grid2DSubstrate(SpatialSubstrate):
 ```
 
 **Substrates to Update:**
+
 - `Grid2DSubstrate` (src/townlet/substrate/grid2d.py)
 - `Grid3DSubstrate` (src/townlet/substrate/grid3d.py)
 - `Continuous1DSubstrate` (src/townlet/substrate/continuous.py)
@@ -972,16 +1006,19 @@ grid:
 ```
 
 **Backward Compatibility:**
+
 - Default value: `observation_encoding: "relative"` (preserves current behavior)
 - Existing configs without this field: Automatically use `relative` (no breaking change)
 - New configs can opt into `scaled` or `absolute`
 
 **Testing Requirements:**
+
 - Add unit tests for all three encodings on Grid2D/3D
 - Add integration tests ensuring existing training runs produce identical results with `relative`
 - Verify observation dimensions change correctly with `scaled`
 
 **Estimated Effort**: 4-6 hours
+
 - Update 5 substrate classes (1h each)
 - Add encoding tests (1-2h)
 - Update config schema and validation (1h)
@@ -991,15 +1028,18 @@ grid:
 ### Benefits
 
 **Consistency:**
+
 - All substrates (1D/2D/3D/ND) use same observation encoding interface
 - Researchers can run ablation studies across all dimensionalities
 
 **Research Value:**
+
 - Compare `relative` vs `scaled` encoding at different N
 - Test if absolute coordinates help in some domains
 - Enables systematic experimentation
 
 **Future-Proof:**
+
 - Clean foundation for additional encoding strategies
 - Uniform interface reduces technical debt
 
@@ -1010,37 +1050,44 @@ grid:
 These features were considered but deferred until researchers request them:
 
 ### 1. Per-Dimension Step Sizes
+
 **What**: Different dimensions move by different amounts
 **Example**: Temperature moves by 1°, pH moves by 0.1
 **Why Defer**: User-defined actions task will handle this (actions define their own deltas)
 
 ### 2. Weighted Distance Metrics
+
 **What**: `weighted_euclidean` where dimensions have different importance
 **Example**: Distance = sqrt(w₁(x₁-x₂)² + w₂(y₁-y₂)² + ...)
 **Why Defer**: Not essential for basic N-dim functionality, `scaled` encoding handles heterogeneous ranges
 
 ### 3. Affordance Proximity in Observations
+
 **What**: Include distance to nearest affordance per dimension
 **Example**: "Closest food is 5 units away in temperature dimension"
 **Why Defer**: Can add as new `observation_encoding` option when requested
 
 ### 4. Per-Dimension Boundary Modes
+
 **What**: Some dimensions wrap, others clamp
 **Example**: Time wraps (24-hour cycle), temperature clamps
 **Why Defer**: Adds config complexity, unclear if useful
 
 ### 5. Continuous Action Spaces (For Very High N)
+
 **What**: Policy outputs continuous N-dimensional vector instead of discrete action index
 **Example**: Actor-critic (PPO/SAC) instead of DQN for N=100+
 **Why Defer**: Requires different training algorithm (separate Phase)
 **Note**: Discrete actions scale well to N=50+, but continuous actions may be better for N>100
 
 ### 6. Dimension-Specific Metadata
+
 **What**: Attach units, types, semantic meaning to each dimension
 **Example**: `{name: "temperature", units: "celsius", type: "continuous"}`
 **Why Defer**: Universe-as-code philosophy prefers minimal substrate, rich action labels
 
 ### 7. Hierarchical Dimensions
+
 **What**: Nested state spaces (e.g., 3D physical space + 4D internal state)
 **Example**: Agent has 3D position + 4D [hunger, thirst, fatigue, mood]
 **Why Defer**: Complex compositional structure, unclear use case
@@ -1052,6 +1099,7 @@ These features were considered but deferred until researchers request them:
 ### Unit Tests
 
 **GridNDSubstrate:**
+
 - Initialization validation (N ≥ 4, warnings at N≥10, N≥20)
 - Position initialization (random in bounds)
 - Movement in each dimension
@@ -1064,6 +1112,7 @@ These features were considered but deferred until researchers request them:
 - `supports_enumerable_positions()` returns True
 
 **ContinuousNDSubstrate:**
+
 - Initialization validation (N ≥ 4, warning at N≥100)
 - Float position initialization
 - Movement with movement_delta
@@ -1076,6 +1125,7 @@ These features were considered but deferred until researchers request them:
 ### Integration Tests
 
 **Full Training Loop:**
+
 - 4D grid training (minimal N)
 - 10D grid training (max N)
 - 7D continuous training (mid-range N)
@@ -1086,6 +1136,7 @@ These features were considered but deferred until researchers request them:
 ### Config Validation Tests
 
 **Schema Validation:**
+
 - Grid: Error if N < 4, warnings at N≥10 and N≥20
 - Continuous: Error if N < 4, warning at N≥100
 - Error if len(bounds) ≠ dimensions
@@ -1097,17 +1148,20 @@ These features were considered but deferred until researchers request them:
 ## Pedagogical Value
 
 **For Students:**
+
 - **Abstraction**: RL isn't just "move around a grid," it's navigation in ANY state space
 - **Dimensionality**: Experience curse of dimensionality firsthand
 - **Generalization**: Do policies trained on 5D transfer to 6D?
 
 **For Researchers:**
+
 - **Multi-Objective RL**: Each dimension is an objective to optimize
 - **Hyperparameter Search**: AutoML experiments in parameter space
 - **Transfer Learning**: Study dimension scaling properties
 - **State Representation**: Does observation encoding matter?
 
 **For Advanced Users:**
+
 - Formal experimentation platform for abstract RL research
 - "Universe as code" enables reproducible high-dimensional experiments
 - Action space design studies (discrete vs continuous thresholds)
@@ -1119,6 +1173,7 @@ These features were considered but deferred until researchers request them:
 When this design is ready for implementation, create a separate implementation plan covering:
 
 **Core Implementation:**
+
 - [ ] **PREREQUISITE**: Complete Phase 5C (observation_encoding retrofit)
 - [ ] Create `GridNDSubstrate` class (N ≥ 4, warnings at N≥10, N≥20)
 - [ ] Create `ContinuousNDSubstrate` class (N ≥ 4, warning at N≥100)
@@ -1131,6 +1186,7 @@ When this design is ready for implementation, create a separate implementation p
 - [ ] Add dimension validation logic with warnings
 
 **Testing:**
+
 - [ ] Unit tests for GridND (20+ tests)
 - [ ] Unit tests for ContinuousND (20+ tests)
 - [ ] Integration tests (4D, 7D, 10D configs)
@@ -1138,12 +1194,14 @@ When this design is ready for implementation, create a separate implementation p
 - [ ] Performance benchmarks (scaling with N)
 
 **Documentation:**
+
 - [ ] CLAUDE.md examples for N-dimensional substrates
 - [ ] Config templates for 4D/7D/10D
 - [ ] Research use case examples
 - [ ] Action space documentation
 
 **Config Packs:**
+
 - [ ] `L1_4D_abstract/` (minimal N-dimensional example)
 - [ ] `L1_7D_multiobjective/` (mid-range abstract state space)
 - [ ] `L1_10D_hyperparameter/` (max discrete dimensions)
@@ -1155,10 +1213,12 @@ When this design is ready for implementation, create a separate implementation p
 **Status**: Design Complete - v4 Rebranded as Phase 5C (Scheduled After Phase 5B)
 **Next Step**: Create implementation plan after Phase 5B completion
 **Dependencies**:
+
 - Phase 5B (3D, Continuous, Configurable Actions) - MUST BE COMPLETE
 **Estimated Effort**: TBD (likely 20-25 hours total for both parts)
 
 **Design Decisions Made (v2):**
+
 - ✅ Grid uncapped (N ≥ 4) with warnings at N≥10, N≥20
 - ✅ Continuous uncapped (N ≥ 4) with warning at N≥100
 - ✅ Three observation encodings (relative/scaled/absolute)
@@ -1171,6 +1231,7 @@ When this design is ready for implementation, create a separate implementation p
 - ✅ Standard distance metrics (manhattan/euclidean/chebyshev)
 
 **Deferred for Future Consideration:**
+
 - Per-dimension step sizes (handled by user-defined actions)
 - Weighted distance metrics
 - Continuous action spaces (separate Phase)
