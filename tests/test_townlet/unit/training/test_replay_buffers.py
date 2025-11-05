@@ -695,7 +695,7 @@ class TestSequenceSampling:
         buffer = SequentialReplayBuffer(capacity=1000, device=torch.device("cpu"))
 
         # Try to sample before storing any episodes
-        with pytest.raises(ValueError, match="not enough data"):
+        with pytest.raises(ValueError, match="Cannot sample"):
             buffer.sample_sequences(batch_size=1, seq_len=5)
 
         # Store short episode
@@ -709,7 +709,7 @@ class TestSequenceSampling:
         buffer.store_episode(episode)
 
         # Try to sample longer sequence than available
-        with pytest.raises(ValueError, match="not enough data"):
+        with pytest.raises(ValueError, match="Cannot sample"):
             buffer.sample_sequences(batch_size=1, seq_len=5)
 
 

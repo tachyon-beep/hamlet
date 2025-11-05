@@ -180,9 +180,10 @@ class TestTimeProgression:
 
         obs = env.reset()
 
-        # Full observability: 64 (grid) + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
+        # Full observability: substrate.get_observation_dim() + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
+        # For Grid2D with "relative" encoding: 2 (coords) + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
         # Temporal features: sin(time), cos(time), normalized interaction progress, lifetime
-        expected_dim = 64 + 8 + (env.num_affordance_types + 1) + 4
+        expected_dim = env.substrate.get_observation_dim() + 8 + (env.num_affordance_types + 1) + 4
         assert obs.shape == (2, expected_dim)
 
         time_sin = obs[0, -4]
@@ -795,8 +796,10 @@ class TestTemporalIntegrations:
         obs = env.reset()
 
         # Temporal features always included for forward compatibility
-        # 64 (grid) + 8 (meters) + 15 (affordance) + 4 (temporal) = 91
-        assert obs.shape == (1, 91)
+        # substrate.get_observation_dim() + 8 (meters) + 15 (affordance) + 4 (temporal)
+        # For Grid2D with "relative" encoding: 2 + 8 + 15 + 4 = 29
+        expected_dim = env.substrate.get_observation_dim() + 8 + 15 + 4
+        assert obs.shape == (1, expected_dim)
 
         # Temporal state is dormant but present
         assert hasattr(env, "time_of_day")

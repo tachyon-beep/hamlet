@@ -89,8 +89,8 @@ class TestVectorizedEnvDynamicSizing:
 
     def test_4meter_observation_dim_full_obs(self, cpu_device, task001_config_4meter):
         """VectorizedHamletEnv should compute correct obs_dim for 4-meter full obs config."""
-        # 4-meter config uses 8×8 grid (copied from test config pack)
-        # Full obs: grid_onehot(64) + meters(4) + affordance_onehot(15) + temporal(4) = 87
+        # 4-meter config uses 8×8 Grid2D with "relative" encoding
+        # Full obs: substrate_obs(2) + meters(4) + affordance_onehot(15) + temporal(4) = 25
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_4meter,
             num_agents=1,
@@ -106,12 +106,15 @@ class TestVectorizedEnvDynamicSizing:
             agent_lifespan=1000,
         )
 
-        assert env.observation_dim == 87, f"Expected obs_dim=87 for 4-meter full obs (64+4+15+4), got {env.observation_dim}"
+        expected_dim = env.substrate.get_observation_dim() + 4 + 15 + 4  # substrate + meters + affordances + temporal
+        assert (
+            env.observation_dim == expected_dim
+        ), f"Expected obs_dim={expected_dim} for 4-meter full obs (2+4+15+4), got {env.observation_dim}"
 
     def test_12meter_observation_dim_full_obs(self, cpu_device, task001_config_12meter):
         """VectorizedHamletEnv should compute correct obs_dim for 12-meter full obs config."""
-        # 12-meter config has 8×8 grid
-        # Full obs: grid_onehot(64) + meters(12) + affordance_onehot(15) + temporal(4) = 95
+        # 12-meter config has 8×8 Grid2D with "relative" encoding
+        # Full obs: substrate_obs(2) + meters(12) + affordance_onehot(15) + temporal(4) = 33
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_12meter,
             num_agents=1,
@@ -128,7 +131,10 @@ class TestVectorizedEnvDynamicSizing:
             # Minimal for testing
         )
 
-        assert env.observation_dim == 95, f"Expected obs_dim=95 for 12-meter full obs (64+12+15+4), got {env.observation_dim}"
+        expected_dim = env.substrate.get_observation_dim() + 12 + 15 + 4  # substrate + meters + affordances + temporal
+        assert (
+            env.observation_dim == expected_dim
+        ), f"Expected obs_dim={expected_dim} for 12-meter full obs (2+12+15+4), got {env.observation_dim}"
 
     def test_4meter_observation_dim_pomdp(self, cpu_device, task001_config_4meter):
         """VectorizedHamletEnv should compute correct obs_dim for 4-meter POMDP config."""

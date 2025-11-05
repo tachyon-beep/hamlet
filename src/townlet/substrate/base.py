@@ -173,6 +173,31 @@ class SpatialSubstrate(ABC):
         pass
 
     @abstractmethod
+    def normalize_positions(self, positions: torch.Tensor) -> torch.Tensor:
+        """Normalize positions to [0, 1] range (always relative encoding).
+
+        This method ALWAYS returns relative encoding (normalized to [0,1]),
+        regardless of the substrate's observation_encoding mode.
+
+        Used by POMDP for position context in recurrent networks, which
+        requires normalized positions regardless of how full observations
+        are encoded.
+
+        Args:
+            positions: [num_agents, position_dim] agent positions
+
+        Returns:
+            [num_agents, position_dim] normalized to [0, 1]
+            For aspatial substrates: [num_agents, 0] (empty)
+
+        Example:
+            Grid2D (8×8): position [3, 4] → [3/7, 4/7] ≈ [0.43, 0.57]
+            Continuous2D: position [5.5, 3.2] on [0,10] → [0.55, 0.32]
+            Aspatial: any position → [] (empty)
+        """
+        pass
+
+    @abstractmethod
     def get_valid_neighbors(
         self,
         position: torch.Tensor,

@@ -179,10 +179,10 @@ class TestObservationBuilderProperties:
     )
     @settings(max_examples=30)
     def test_grid_encoding_has_correct_dimensions(self, grid_size, num_agents):
-        """Property: Full observability grid encoding always has grid_size² dimensions.
+        """Property: Full observability position encoding uses substrate observation dimensions.
 
-        The one-hot grid encoding should always be exactly grid_size × grid_size,
-        regardless of agent positions or affordance placements.
+        With coordinate encoding ("relative" mode), Grid2D substrates always encode
+        position as 2 normalized coordinates, regardless of grid size.
         """
         from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -216,11 +216,12 @@ class TestObservationBuilderProperties:
 
         obs = builder.build_observations(positions=positions, meters=meters, affordances=affordances)
 
-        # PROPERTY: Grid component is exactly grid_size²
-        # Observation structure: [grid | meters | affordance_encoding | temporal]
-        # Grid is first grid_size² dimensions
-        grid_component = obs[:, : grid_size * grid_size]
-        assert grid_component.shape == (num_agents, grid_size * grid_size)
+        # PROPERTY: Position encoding uses substrate's observation dimension (2 for Grid2D)
+        # Observation structure: [position | meters | affordance_encoding | temporal]
+        # Position is first substrate.get_observation_dim() dimensions (2 for Grid2D)
+        position_dim = substrate.get_observation_dim()
+        position_component = obs[:, :position_dim]
+        assert position_component.shape == (num_agents, position_dim)
 
     @given(
         time_of_day=st.integers(min_value=0, max_value=23),

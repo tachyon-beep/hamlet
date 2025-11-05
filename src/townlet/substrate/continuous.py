@@ -299,6 +299,17 @@ class ContinuousSubstrate(SpatialSubstrate):
         else:
             raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
+    def normalize_positions(self, positions: torch.Tensor) -> torch.Tensor:
+        """Normalize positions to [0, 1] range (always relative encoding).
+
+        Args:
+            positions: [num_agents, position_dim] positions
+
+        Returns:
+            [num_agents, position_dim] normalized to [0, 1]
+        """
+        return self._encode_relative(positions, {})
+
     def encode_partial_observation(self, positions: torch.Tensor, affordances: dict[str, torch.Tensor], vision_range: int) -> torch.Tensor:
         """Encode partial observation for POMDP support.
 

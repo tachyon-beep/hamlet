@@ -275,6 +275,17 @@ class GridNDSubstrate(SpatialSubstrate):
         else:
             raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
+    def normalize_positions(self, positions: torch.Tensor) -> torch.Tensor:
+        """Normalize positions to [0, 1] range (always relative encoding).
+
+        Args:
+            positions: [num_agents, position_dim] positions
+
+        Returns:
+            [num_agents, position_dim] normalized to [0, 1]
+        """
+        return self._encode_relative(positions, {})
+
     def get_valid_neighbors(self, position: torch.Tensor) -> list[torch.Tensor]:
         """Get cardinal neighbors in N dimensions (2N neighbors).
 

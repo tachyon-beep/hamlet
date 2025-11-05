@@ -252,6 +252,17 @@ class Grid3DSubstrate(SpatialSubstrate):
         else:
             raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
+    def normalize_positions(self, positions: torch.Tensor) -> torch.Tensor:
+        """Normalize positions to [0, 1] range (always relative encoding).
+
+        Args:
+            positions: [num_agents, 3] grid positions
+
+        Returns:
+            [num_agents, 3] normalized to [0, 1]
+        """
+        return self._encode_relative(positions, {})
+
     def get_all_positions(self) -> list[list[int]]:
         """Get all valid positions in 3D grid."""
         positions = []

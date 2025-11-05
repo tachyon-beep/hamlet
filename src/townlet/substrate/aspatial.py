@@ -73,6 +73,20 @@ class AspatialSubstrate(SpatialSubstrate):
         """Aspatial has zero observation dimensions (no position encoding)."""
         return 0
 
+    def normalize_positions(self, positions: torch.Tensor) -> torch.Tensor:
+        """Normalize positions to [0, 1] range (always relative encoding).
+
+        Args:
+            positions: [num_agents, position_dim] positions
+
+        Returns:
+            [num_agents, position_dim] normalized to [0, 1]
+        """
+        # Aspatial has no positions, return empty tensor
+        num_agents = positions.shape[0]
+        device = positions.device
+        return torch.zeros((num_agents, 0), dtype=torch.float32, device=device)
+
     def get_valid_neighbors(
         self,
         position: torch.Tensor,

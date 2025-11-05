@@ -25,135 +25,38 @@ from townlet.substrate.grid2d import Grid2DSubstrate
 class TestFullObservability:
     """Test observation construction in full observability mode.
 
-    Full observability observations:
-    - Grid encoding: 64 dims (8×8 one-hot, marks agent AND affordances)
+    Full observability observations (Phase 5C - coordinate encoding):
+    - Position encoding: 2 dims (normalized x, y coordinates [0, 1])
     - Meters: 8 dims (normalized meter values)
     - Affordance encoding: 15 dims (14 types + 1 "none")
     - Temporal features: 4 dims (time_sin, time_cos, interaction_progress, lifetime_progress)
-    Total: 64 + 8 + 15 + 4 = 91 dims
+    Total: 2 + 8 + 15 + 4 = 29 dims
     """
 
     def test_dimension_matches_expected_formula(self, basic_env):
-        """Full observability: 64 grid + 8 meters + 15 affordance + 4 temporal = 91."""
+        """Full observability: 2 position + 8 meters + 15 affordance + 4 temporal = 29."""
         obs = basic_env.reset()
 
-        # Expected: 64 (grid) + 8 (meters) + 15 (affordance) + 4 (temporal)
-        expected_dim = 64 + 8 + 15 + 4
+        # Expected: 2 (position) + 8 (meters) + 15 (affordance) + 4 (temporal)
+        expected_dim = 2 + 8 + 15 + 4
         assert obs.shape == (1, expected_dim)
-        assert obs.shape[1] == 91
+        assert obs.shape[1] == 29
 
     def test_observation_dim_property_matches_actual_shape(self, basic_env):
         """env.observation_dim property should match actual observation shape."""
         obs = basic_env.reset()
         assert obs.shape[1] == basic_env.observation_dim
 
-    def test_grid_shows_agent_position(self, basic_env):
-        """Grid encoding marks agent position with value 1.0 (or 2.0 if on affordance)."""
-        obs = basic_env.reset()
-        grid = obs[0, :64]
-
-        # At least one cell should be marked (agent position)
-        assert grid.max() >= 1.0
-
-        # Most cells should be empty (grid has 14 affordances + 1 agent = 15 marked cells)
-        # So at least 64 - 20 = 44 cells should be empty (allowing some margin)
-        assert (grid == 0.0).sum() >= 44
-
-    def test_grid_shows_affordances_at_positions(self, basic_env):
-        """Full observability: grid marks affordance positions with value=1.0."""
-        num_agents = 1
-        grid_size = 8
-        device = torch.device("cpu")
-
-        builder = ObservationBuilder(
-            num_agents=num_agents,
-            grid_size=grid_size,
-            device=device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            num_affordance_types=3,
-            affordance_names=["Bed", "Hospital", "Job"],
-            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
-        )
-
-        # Agent at (0, 0), affordances at (2, 3) and (5, 5)
-        positions = torch.tensor([[0, 0]], device=device)
-        meters = torch.zeros(num_agents, 8, device=device)
-        affordances = {
-            "Bed": torch.tensor([2, 3], device=device),
-            "Hospital": torch.tensor([5, 5], device=device),
-            "Job": torch.tensor([7, 7], device=device),
-        }
-
-        obs = builder.build_observations(
-            positions=positions,
-            meters=meters,
-            affordances=affordances,
-        )
-
-        # Grid is first 64 dimensions (8×8)
-        grid = obs[0, :64]
-
-        # Agent position (0, 0) should be marked
-        agent_idx = 0 * grid_size + 0
-        assert grid[agent_idx] == 1.0
-
-        # Affordance positions should be marked
-        bed_idx = 3 * grid_size + 2
-        assert grid[bed_idx] == 1.0
-
-        hospital_idx = 5 * grid_size + 5
-        assert grid[hospital_idx] == 1.0
-
-        job_idx = 7 * grid_size + 7
-        assert grid[job_idx] == 1.0
-
-        # Empty cell should be 0
-        empty_idx = 4 * grid_size + 4
-        assert grid[empty_idx] == 0.0
-
-    def test_agent_on_affordance_marked_with_value_2(self, basic_env):
-        """When agent is on affordance, grid cell has value=2.0 (agent + affordance)."""
-        num_agents = 1
-        grid_size = 8
-        device = torch.device("cpu")
-
-        builder = ObservationBuilder(
-            num_agents=num_agents,
-            grid_size=grid_size,
-            device=device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            num_affordance_types=1,
-            affordance_names=["Bed"],
-            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
-        )
-
-        # Agent at (2, 3), bed also at (2, 3)
-        positions = torch.tensor([[2, 3]], device=device)
-        meters = torch.zeros(num_agents, 8, device=device)
-        affordances = {"Bed": torch.tensor([2, 3], device=device)}
-
-        obs = builder.build_observations(
-            positions=positions,
-            meters=meters,
-            affordances=affordances,
-        )
-
-        grid = obs[0, :64]
-
-        # Agent is ON the bed, should have value 2.0
-        position_idx = 3 * grid_size + 2
-        assert grid[position_idx] == 2.0
+    # REMOVED: test_grid_shows_agent_position - tested obsolete one-hot grid encoding
+    # REMOVED: test_grid_shows_affordances_at_positions - tested obsolete one-hot grid encoding
+    # REMOVED: test_agent_on_affordance_marked_with_value_2 - tested obsolete one-hot grid encoding
 
     def test_meters_are_included_and_normalized(self, basic_env):
-        """Meter values should be included in observation (8 values after grid)."""
+        """Meter values should be included in observation (8 values after position)."""
         obs = basic_env.reset()
 
-        # Meters are indices 64:72
-        meters = obs[0, 64:72]
+        # Meters are indices 2:10 (after 2-dim position encoding)
+        meters = obs[0, 2:10]
 
         # Should have 8 meter values
         assert meters.shape[0] == 8
@@ -166,8 +69,8 @@ class TestFullObservability:
         """Affordance encoding should be one-hot (15 dims: 14 types + 1 "none")."""
         obs = basic_env.reset()
 
-        # Affordance encoding is indices 72:87
-        affordance = obs[0, 72:87]
+        # Affordance encoding is indices 10:25 (after 2 position + 8 meters)
+        affordance = obs[0, 10:25]
 
         # Should have 15 values (14 affordance types + 1 "none")
         assert affordance.shape[0] == 15
@@ -320,8 +223,8 @@ class TestTemporalFeatures:
         obs = basic_env.reset()
 
         # Observation should still include 4 temporal features at the end
-        # Full obs: 64 grid + 8 meters + 15 affordance + 4 temporal = 91
-        expected_dim = 91
+        # Full obs: 2 position + 8 meters + 15 affordance + 4 temporal = 29
+        expected_dim = 29
         assert obs.shape == (1, expected_dim)
 
         # Last 4 dimensions are temporal features
@@ -544,7 +447,7 @@ class TestObservationUpdates:
     """
 
     def test_movement_updates_grid_position_full_obs(self, test_config_pack_path, cpu_device):
-        """Full observability: moving agent updates grid encoding."""
+        """Full observability: moving agent updates position encoding."""
         from townlet.environment.vectorized_env import VectorizedHamletEnv
 
         # Use CPU device for determinism
@@ -567,15 +470,15 @@ class TestObservationUpdates:
         env.positions[0] = torch.tensor([4, 4], device=cpu_device, dtype=torch.long)
 
         obs1 = env._get_observations()
-        grid1 = obs1[0, :64]
+        position1 = obs1[0, :2]  # First 2 dims are position encoding
 
         # Move UP (guaranteed valid from center)
         actions = torch.tensor([0], device=cpu_device)
         obs2, _, _, _ = env.step(actions)
-        grid2 = obs2[0, :64]
+        position2 = obs2[0, :2]  # First 2 dims are position encoding
 
-        # Grid MUST change (agent moved from (4,4) to (3,4))
-        assert not torch.equal(grid1, grid2), "Grid should update after movement"
+        # Position MUST change (agent moved from (4,4) to (3,4))
+        assert not torch.equal(position1, position2), "Position should update after movement"
 
     def test_movement_updates_vision_window_pomdp(self, test_config_pack_path, cpu_device):
         """POMDP: moving agent updates vision window contents."""
@@ -616,7 +519,7 @@ class TestObservationUpdates:
     def test_meters_update_after_interactions(self, basic_env):
         """Interacting with affordances should change meter values."""
         obs1 = basic_env.reset()
-        meters1 = obs1[0, 64:72]
+        meters1 = obs1[0, 2:10]  # After 2-dim position encoding
 
         # Take several steps to allow interactions
         for _ in range(10):
@@ -624,7 +527,7 @@ class TestObservationUpdates:
             if dones[0]:
                 break
 
-        meters_final = obs[0, 64:72]
+        meters_final = obs[0, 2:10]  # After 2-dim position encoding
 
         # Meters should have changed (energy cost, possible interactions)
         # At minimum, energy should have decreased
@@ -776,6 +679,7 @@ class TestMultiAgentObservations:
         num_agents = 2
         grid_size = 8
         device = torch.device("cpu")
+        num_affordance_types = 1
 
         builder = ObservationBuilder(
             num_agents=num_agents,
@@ -784,7 +688,7 @@ class TestMultiAgentObservations:
             partial_observability=False,
             vision_range=8,
             enable_temporal_mechanics=False,
-            num_affordance_types=1,
+            num_affordance_types=num_affordance_types,
             affordance_names=["Bed"],
             substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
@@ -800,11 +704,13 @@ class TestMultiAgentObservations:
             affordances=affordances,
         )
 
-        # Observations should be identical (except grid may differ due to scatter_add)
-        # Actually, they won't be identical because grid encoding uses scatter_add
-        # which accumulates agent positions. With 2 agents at (0,0), that cell = 3.0
-        # Let's just verify both observations are valid
-        assert obs.shape == (2, 64 + 8 + 2 + 4)  # grid + meters + affordance + temporal
+        # With coordinate encoding, observations should be identical
+        # (2 position + 8 meters + (num_affordance_types + 1) affordance + 4 temporal)
+        # With 1 affordance type: 2 + 8 + 2 + 4 = 16
+        expected_dim = 2 + 8 + (num_affordance_types + 1) + 4
+        assert obs.shape == (2, expected_dim)
+        # Both observations should be identical (same position, same meters, same affordance)
+        assert torch.equal(obs[0], obs[1])
 
     def test_batch_dimension_is_correct(self, multi_agent_env):
         """Multi-agent environment should produce batched observations."""
@@ -872,11 +778,11 @@ class TestDimensionConsistency:
     """
 
     def test_full_observability_with_temporal_mechanics(self, temporal_env):
-        """Full obs + temporal: 64 grid + 8 meters + 15 affordance + 4 temporal = 91."""
+        """Full obs + temporal: 2 position + 8 meters + 15 affordance + 4 temporal = 29."""
         obs = temporal_env.reset()
 
         # Same dimension as without temporal (temporal features always present)
-        expected_dim = 64 + 8 + 15 + 4
+        expected_dim = 2 + 8 + 15 + 4
         assert obs.shape == (1, expected_dim)
 
     def test_pomdp_with_temporal_mechanics(self, test_config_pack_path):
@@ -922,6 +828,7 @@ class TestDimensionConsistency:
         obs = basic_env.reset()
 
         # Affordance encoding is 15 dims (14 types + 1 "none")
-        affordance = obs[0, 72:87]
+        # Indices 10:25 (after 2 position + 8 meters)
+        affordance = obs[0, 10:25]
         assert affordance.shape[0] == basic_env.num_affordance_types + 1
         assert affordance.shape[0] == 15

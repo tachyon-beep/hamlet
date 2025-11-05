@@ -266,6 +266,20 @@ class Grid2DSubstrate(SpatialSubstrate):
         else:
             raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
+    def normalize_positions(self, positions: torch.Tensor) -> torch.Tensor:
+        """Normalize positions to [0, 1] range (always relative encoding).
+
+        Returns normalized coordinates regardless of observation_encoding mode.
+        Used by POMDP for position context in recurrent networks.
+
+        Args:
+            positions: [num_agents, 2] grid positions
+
+        Returns:
+            [num_agents, 2] normalized to [0, 1]
+        """
+        return self._encode_relative(positions, {})
+
     def get_valid_neighbors(
         self,
         position: torch.Tensor,

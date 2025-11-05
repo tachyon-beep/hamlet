@@ -60,9 +60,9 @@ class TestObservationPipeline:
         obs = env.reset()
 
         # Verify observation dimension calculation
-        # Full obs: grid_size² + 8 meters + 15 affordances + 4 temporal
-        # Grid size comes from substrate.yaml (8×8)
-        expected_dim = (8 * 8) + 8 + 15 + 4  # 64 + 8 + 15 + 4 = 91
+        # Full obs: substrate.get_observation_dim() + 8 meters + 15 affordances + 4 temporal
+        # Substrate observation encoding determines dimension (relative=2, scaled=4, absolute=2 for Grid2D)
+        expected_dim = env.substrate.get_observation_dim() + 8 + 15 + 4
         assert obs.shape == (1, expected_dim), f"Observation should be [1, {expected_dim}], got {obs.shape}"
 
         # Verify observation matches environment's reported dimension

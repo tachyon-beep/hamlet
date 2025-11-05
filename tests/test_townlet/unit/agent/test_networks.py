@@ -123,6 +123,7 @@ class TestRecurrentSpatialQNetwork:
         return RecurrentSpatialQNetwork(
             action_dim=6,
             window_size=5,
+            position_dim=2,
             num_meters=8,
             num_affordance_types=15,
             enable_temporal_features=False,
@@ -282,7 +283,13 @@ class TestRecurrentSpatialQNetwork:
         """Network should work with temporal features added (obs dimensions change)."""
         # Base POMDP: 25 (5×5) + 2 (pos) + 8 (meters) + 15 (affordance) = 50
         net_base = RecurrentSpatialQNetwork(
-            action_dim=6, window_size=5, num_meters=8, num_affordance_types=15, enable_temporal_features=False, hidden_dim=256
+            action_dim=6,
+            window_size=5,
+            position_dim=2,
+            num_meters=8,
+            num_affordance_types=15,
+            enable_temporal_features=False,
+            hidden_dim=256,
         )
         obs_base = torch.randn(2, 51)
         q_base, _ = net_base(obs_base)
@@ -292,7 +299,13 @@ class TestRecurrentSpatialQNetwork:
         # But network doesn't know about temporal - it just processes extra dims
         # So we test it handles the expected 50 dims correctly
         net_temporal = RecurrentSpatialQNetwork(
-            action_dim=6, window_size=5, num_meters=8, num_affordance_types=15, enable_temporal_features=False, hidden_dim=256
+            action_dim=6,
+            window_size=5,
+            position_dim=2,
+            num_meters=8,
+            num_affordance_types=15,
+            enable_temporal_features=False,
+            hidden_dim=256,
         )
         obs_temporal = torch.randn(2, 51)
         q_temporal, _ = net_temporal(obs_temporal)
@@ -335,7 +348,13 @@ class TestNetworkComparison:
         """RecurrentSpatialQNetwork should have more parameters (LSTM)."""
         simple_net = SimpleQNetwork(obs_dim=72, action_dim=6, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
-            action_dim=6, window_size=5, num_meters=8, num_affordance_types=15, enable_temporal_features=False, hidden_dim=256
+            action_dim=6,
+            window_size=5,
+            position_dim=2,
+            num_meters=8,
+            num_affordance_types=15,
+            enable_temporal_features=False,
+            hidden_dim=256,
         )
 
         simple_params = sum(p.numel() for p in simple_net.parameters())
@@ -353,7 +372,13 @@ class TestNetworkComparison:
 
         simple_net = SimpleQNetwork(obs_dim=72, action_dim=6, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
-            action_dim=6, window_size=5, num_meters=8, num_affordance_types=15, enable_temporal_features=False, hidden_dim=256
+            action_dim=6,
+            window_size=5,
+            position_dim=2,
+            num_meters=8,
+            num_affordance_types=15,
+            enable_temporal_features=False,
+            hidden_dim=256,
         )
 
         batch_size = 32

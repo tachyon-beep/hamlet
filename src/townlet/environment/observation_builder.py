@@ -160,18 +160,10 @@ class ObservationBuilder:
         local_grids = self.substrate.encode_partial_observation(positions, affordances, vision_range=self.vision_range)
 
         # Normalized positions (for recurrent network position encoder)
-        # For grid substrates: normalize by grid dimensions
-        # For aspatial: positions are empty, normalized_positions will be empty
-        if hasattr(self.substrate, "width") and hasattr(self.substrate, "height"):
-            # Grid2D substrate: normalize to [0, 1]
-            normalized_positions = positions.float() / torch.tensor(
-                [self.substrate.width - 1, self.substrate.height - 1],
-                device=self.device,
-                dtype=torch.float32,
-            )
-        else:
-            # Aspatial substrate: no position normalization needed
-            normalized_positions = positions.float()
+        # Use substrate.normalize_positions() to get [0, 1] normalized coordinates
+        # This works for all substrate types (Grid2D, Grid3D, Continuous, Aspatial)
+        # and is independent of the substrate's observation_encoding mode
+        normalized_positions = self.substrate.normalize_positions(positions)
 
         # Get affordance encoding
         affordance_encoding = self._build_affordance_encoding(positions, affordances)
