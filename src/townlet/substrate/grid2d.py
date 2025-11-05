@@ -35,7 +35,8 @@ class Grid2DSubstrate(SpatialSubstrate):
         height: int,
         boundary: Literal["clamp", "wrap", "bounce", "sticky"],
         distance_metric: Literal["manhattan", "euclidean", "chebyshev"],
-        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",  # NEW: Phase 5C
+        observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
+        topology: Literal["square"] = "square",  # NEW: Grid2D is always square topology
     ):
         """Initialize 2D grid substrate.
 
@@ -45,6 +46,7 @@ class Grid2DSubstrate(SpatialSubstrate):
             boundary: Boundary mode ("clamp", "wrap", "bounce", "sticky")
             distance_metric: Distance metric ("manhattan", "euclidean", "chebyshev")
             observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
+            topology: Grid topology ("square" for 2D Cartesian grid)
         """
         if width <= 0 or height <= 0:
             raise ValueError(f"Grid dimensions must be positive: width={width}, height={height}")
@@ -59,7 +61,8 @@ class Grid2DSubstrate(SpatialSubstrate):
         self.height = height
         self.boundary = boundary
         self.distance_metric = distance_metric
-        self.observation_encoding = observation_encoding  # NEW
+        self.observation_encoding = observation_encoding
+        self.topology = topology  # NEW: Store topology
 
     @property
     def position_dim(self) -> int:
