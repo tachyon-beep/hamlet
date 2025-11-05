@@ -10,3 +10,4 @@ grid:
   depth: 3  # Three floors
   boundary: "clamp"
   distance_metric: "manhattan"
+  observation_encoding: "relative"  # Normalized coordinates [0,1]^3

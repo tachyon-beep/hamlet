@@ -22,6 +22,9 @@ continuous:
   # Distance metric
   distance_metric: "euclidean"
 
+  # Observation encoding strategy
+  observation_encoding: "relative"  # Normalized coordinates [0,1]
+
 # Pedagogical value:
 # - Simplest continuous space (1D line)
 # - Teaches discrete actions in continuous space
