@@ -57,16 +57,79 @@ class GridConfig(BaseModel):
 Grid2DSubstrateConfig = GridConfig
 
 
-class ContinuousConfig(BaseModel):
-    """Configuration for continuous substrates.
+class GridNDConfig(BaseModel):
+    """Configuration for N-dimensional grid substrates (N≥4 dimensions).
 
-    Continuous substrates use float-based positions in bounded space.
-    Supports 1D (line), 2D (plane), or 3D (volume) continuous space.
+    GridND supports 4D to 100D discrete grid substrates. For 2D/3D grids,
+    use GridConfig (with topology="square" or "cubic") for better ergonomics.
 
     No-Defaults Principle: All fields required (no implicit defaults).
     """
 
-    dimensions: int = Field(ge=1, le=3, description="Number of dimensions (1, 2, or 3)")
+    dimension_sizes: list[int] = Field(description="Size of each dimension [d0_size, d1_size, ..., dN_size]")
+
+    boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(description="Boundary handling mode")
+
+    distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(default="manhattan", description="Distance calculation method")
+
+    # NEW: Phase 5C addition
+    observation_encoding: Literal["relative", "scaled", "absolute"] = Field(
+        default="relative",
+        description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + sizes), absolute (raw coordinates)",
+    )
+
+    @model_validator(mode="after")
+    def validate_dimension_sizes(self) -> "GridNDConfig":
+        """Validate dimension count and sizes."""
+        num_dims = len(self.dimension_sizes)
+
+        if num_dims < 4:
+            raise ValueError(
+                f"GridND requires at least 4 dimensions, got {num_dims}.\n"
+                f"For 2D grids, use:\n"
+                f"  type: grid\n"
+                f"  grid:\n"
+                f"    topology: square\n"
+                f"    width: 8\n"
+                f"    height: 8\n"
+                f"For 3D grids, use:\n"
+                f"  type: grid\n"
+                f"  grid:\n"
+                f"    topology: cubic\n"
+                f"    width: 8\n"
+                f"    height: 8\n"
+                f"    depth: 3\n"
+            )
+
+        if num_dims > 100:
+            raise ValueError(
+                f"GridND dimension count ({num_dims}) exceeds limit (100).\n"
+                f"This is likely a configuration error. Verify dimension_sizes is correct."
+            )
+
+        # Validate all dimension sizes are positive
+        for i, size in enumerate(self.dimension_sizes):
+            if size <= 0:
+                raise ValueError(
+                    f"All dimension sizes must be positive. Dimension {i} has size {size}.\n"
+                    f"Example: dimension_sizes: [8, 8, 8, 8]  # All positive"
+                )
+
+        return self
+
+
+class ContinuousConfig(BaseModel):
+    """Configuration for continuous substrates.
+
+    Continuous substrates use float-based positions in bounded space.
+    Supports 1D to 100D continuous space:
+    - 1D-3D: Use Continuous1D/2D/3DSubstrate for better ergonomics
+    - 4D-100D: Use ContinuousNDSubstrate for high-dimensional research
+
+    No-Defaults Principle: All fields required (no implicit defaults).
+    """
+
+    dimensions: int = Field(ge=1, le=100, description="Number of dimensions (1 to 100)")
 
     bounds: list[tuple[float, float]] = Field(description="Bounds for each dimension [(min, max), ...]")
 
@@ -76,7 +139,7 @@ class ContinuousConfig(BaseModel):
 
     interaction_radius: float = Field(gt=0, description="Distance threshold for affordance interaction")
 
-    distance_metric: Literal["euclidean", "manhattan"] = Field(default="euclidean", description="Distance calculation method")
+    distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = Field(default="euclidean", description="Distance calculation method")
 
     # NEW: Phase 5C addition
     observation_encoding: Literal["relative", "scaled", "absolute"] = Field(
@@ -203,16 +266,20 @@ class SubstrateConfig(BaseModel):
 
     version: str = Field(description="Config version (e.g., '1.0')")
     description: str = Field(description="Human-readable description")
-    type: Literal["grid", "continuous", "aspatial"] = Field(description="Substrate type selection")
+    type: Literal["grid", "gridnd", "continuous", "continuousnd", "aspatial"] = Field(description="Substrate type selection")
 
     # Substrate-specific configs (only one should be populated)
     grid: GridConfig | None = Field(
         None,
         description="Grid substrate configuration (required if type='grid')",
     )
+    gridnd: GridNDConfig | None = Field(
+        None,
+        description="GridND substrate configuration (required if type='gridnd')",
+    )
     continuous: ContinuousConfig | None = Field(
         None,
-        description="Continuous substrate configuration (required if type='continuous')",
+        description="Continuous substrate configuration (required if type='continuous' or 'continuousnd')",
     )
     aspatial: AspatialSubstrateConfig | None = Field(
         None,
@@ -225,29 +292,59 @@ class SubstrateConfig(BaseModel):
         if self.type == "grid" and self.grid is None:
             raise ValueError("type='grid' requires grid configuration. Add grid: { topology: 'square', width: 8, height: 8, ... }")
 
+        if self.type == "gridnd" and self.gridnd is None:
+            raise ValueError(
+                "type='gridnd' requires gridnd configuration. "
+                "Add gridnd: { dimension_sizes: [8, 8, 8, 8], boundary: 'clamp', distance_metric: 'manhattan' }"
+            )
+
         if self.type == "continuous" and self.continuous is None:
             raise ValueError(
                 "type='continuous' requires continuous configuration. "
                 "Add continuous: { dimensions: 2, bounds: [(0.0, 10.0), (0.0, 10.0)], ... }"
             )
 
+        if self.type == "continuousnd" and self.continuous is None:
+            raise ValueError(
+                "type='continuousnd' requires continuous configuration. "
+                "Add continuous: { dimensions: 4, bounds: [(0.0, 10.0), (0.0, 10.0), (0.0, 10.0), (0.0, 10.0)], ... }"
+            )
+
         if self.type == "aspatial" and self.aspatial is None:
             raise ValueError("type='aspatial' requires aspatial configuration. Add aspatial: {}")
 
         # Ensure only one config is provided
-        configs_provided = sum([self.grid is not None, self.continuous is not None, self.aspatial is not None])
+        configs_provided = sum([self.grid is not None, self.gridnd is not None, self.continuous is not None, self.aspatial is not None])
 
         if configs_provided > 1:
             raise ValueError("Only one substrate configuration should be provided")
 
-        if self.type == "grid" and (self.continuous is not None or self.aspatial is not None):
-            raise ValueError("type='grid' should not have continuous or aspatial configuration")
+        if self.type == "grid" and (self.gridnd is not None or self.continuous is not None or self.aspatial is not None):
+            raise ValueError("type='grid' should not have gridnd, continuous, or aspatial configuration")
 
-        if self.type == "continuous" and (self.grid is not None or self.aspatial is not None):
-            raise ValueError("type='continuous' should not have grid or aspatial configuration")
+        if self.type == "gridnd" and (self.grid is not None or self.continuous is not None or self.aspatial is not None):
+            raise ValueError("type='gridnd' should not have grid, continuous, or aspatial configuration")
 
-        if self.type == "aspatial" and (self.grid is not None or self.continuous is not None):
-            raise ValueError("type='aspatial' should not have grid or continuous configuration")
+        if self.type in ("continuous", "continuousnd") and (self.grid is not None or self.gridnd is not None or self.aspatial is not None):
+            raise ValueError(f"type='{self.type}' should not have grid, gridnd, or aspatial configuration")
+
+        if self.type == "aspatial" and (self.grid is not None or self.gridnd is not None or self.continuous is not None):
+            raise ValueError("type='aspatial' should not have grid, gridnd, or continuous configuration")
+
+        # Validate dimension count for continuous/continuousnd
+        if self.type == "continuous" and self.continuous is not None:
+            if self.continuous.dimensions < 1 or self.continuous.dimensions > 3:
+                raise ValueError(
+                    f"type='continuous' expects 1-3 dimensions, got {self.continuous.dimensions}. "
+                    f"For 4+ dimensions, use type='continuousnd' instead."
+                )
+
+        if self.type == "continuousnd" and self.continuous is not None:
+            if self.continuous.dimensions < 4:
+                raise ValueError(
+                    f"type='continuousnd' expects 4+ dimensions, got {self.continuous.dimensions}. "
+                    f"For 1-3 dimensions, use type='continuous' instead."
+                )
 
         return self
 
