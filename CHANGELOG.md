@@ -7,158 +7,155 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## 2025-11-06 - Action Space Size Property (C1/C2 Fixes)
+## 2025-11-06 - TASK-002A: Configurable Spatial Substrates (COMPLETE)
 
-**Critical Fixes for Phase 5C Readiness:**
+**Status**: ✅ All 8 Phases Complete (Nov 2024 - Nov 2025)
+**Branch**: `task-002a-configurable-spatial-substrates`
+**Scope**: 15-22h estimated → 81-107h actual (+368-586% growth)
+
+### Summary
+
+Replaced hardcoded 2D grid assumptions with config-driven spatial substrate system supporting 1D-100D spaces. Enables 3D environments, continuous spaces, aspatial universes, and N-dimensional RL research.
+
+**Key Achievements:**
+- 6 substrate types implemented (Grid2D/3D/ND, Continuous1D/2D/3D/ND, Aspatial)
+- 3 observation encoding modes (relative, scaled, absolute)
+- 4 boundary modes (clamp, wrap, bounce, sticky)
+- 1,159 tests passing (77% coverage, 85%+ substrate modules)
+- Transfer learning enabled (train on 3×3, run on 8×8)
 
 ### Added
-- `action_space_size` property to `SpatialSubstrate` base class
-  - Formula: `2*position_dim + 2` for spatial substrates (includes WAIT action)
-  - Returns 2 for aspatial substrates (INTERACT + WAIT)
-  - Enables dynamic action space sizing for N-dimensional substrates
+
+**Substrate Types** (6 total):
+- `Grid2DSubstrate`: 2D discrete grids (original behavior preserved)
+- `Grid3DSubstrate`: 3D cubic grids for multi-floor environments
+- `GridNDSubstrate`: 4D-100D hypercube grids (supports up to 100 dimensions)
+- `Continuous1D/2D/3DSubstrate`: Smooth movement for robotics
+- `ContinuousNDSubstrate`: 4D-100D continuous spaces for abstract RL
+- `AspatialSubstrate`: Position-less universes (pure resource management)
+
+**Configuration System** (Phases 1-3):
+- `substrate.yaml` schema with Pydantic validation
+- `observation_encoding` modes: relative (transfer learning), scaled (size-aware), absolute (physics)
+- Boundary modes: clamp (walls), wrap (toroidal), bounce (elastic), sticky (adhesive)
+- Distance metrics: manhattan (L1), euclidean (L2), chebyshev (L∞)
+- Action labels: 4 presets (gaming, 6dof, cardinal, math) + custom labels
+- Template configs at `configs/templates/substrate*.yaml`
+- All curriculum levels (L0, L0.5, L1, L2, L3) have `substrate.yaml`
+
+**Position Management** (Phases 4-5):
+- Abstract `SpatialSubstrate` interface for polymorphic operations
+- `substrate.initialize_positions()` - random agent/affordance placement
+- `substrate.apply_movement()` - boundary-aware movement
+- `substrate.compute_distance()` - metric-specific distance
+- `substrate.normalize_positions()` - observation encoding
+- `substrate.action_space_size` - dynamic action space (2N+2 for N dimensions)
+- VectorizedHamletEnv fully substrate-agnostic
+
+**Observation Encoding** (Phase 6):
+- Coordinate encoding: 3D (8×8×3) = 512 dims → 3 dims (170× reduction)
+- Substrate-specific `encode_observation()` and `encode_partial_observation()`
+- Enables transfer learning (same network works on different grid sizes)
+- Observation dimension formula: `position_encoding + meters + affordances + temporal`
+- Grid2D (relative): 29 dims (2 coords + 8 meters + 15 affordances + 4 temporal)
+- Aspatial: 13 dims (0 coords + 4 meters + 5 affordances + 4 temporal with test config)
+
+**Frontend Multi-Substrate Rendering** (Phase 7):
+- `AspatialView.vue`: Meters-only dashboard (no fake grid)
+- `Grid.vue`: SVG-based 2D grid with heat maps (existing)
+- WebSocket substrate metadata protocol
+- Substrate type detection and renderer dispatch
+- Live inference server routes by substrate type
+
+**Testing Framework** (Phase 8):
+- Property-based tests (Hypothesis): 8 tests for substrate contracts
+- Integration tests: 8 parameterized tests (Grid2D + Aspatial)
+- Regression tests: 7 tests for backward compatibility
+- **Total**: 1,159 tests passing (23 substrate-specific)
+- **Coverage**: 77% overall, 85%+ substrate modules
+
+**Checkpoint Format V3**:
+- Added `substrate_metadata` with `position_dim` and `substrate_type`
+- Validates substrate compatibility on load
+- Pre-flight validation for legacy checkpoints
+- Migration guide in error messages
 
 ### Changed
-- `VectorizedHamletEnv` now uses `substrate.action_space_size` instead of hardcoded if-else chain
-  - Removed 15 lines of hardcoded action space logic
-  - Behavior unchanged for existing substrates
-  - Prepares for Phase 5C N-dimensional substrates
 
-### Fixed
-- Corrected action_space_size formula from `2N+1` to `2N+2` during implementation
-  - Original plan missed WAIT action (only counted INTERACT)
-  - Verified against `action_labels.py` which shows WAIT exists in all action spaces
+**BREAKING CHANGES:**
+- Checkpoint format Version 2 → Version 3 (substrate metadata required)
+- Legacy checkpoints unsupported (clear migration path)
+- ObservationBuilder requires substrate parameter
+- All position tensors now variable-length: `(num_agents, position_dim)` where `position_dim` ∈ [0, 100]
 
-### Tests
-- Added 11 unit tests for `action_space_size` property and environment integration
-- All 901 integration tests pass (behavior unchanged)
+**Position Management:**
+- Removed 2D hardcoded assumptions (was `positions.shape = (N, 2)`)
+- Now substrate-aware (Grid2D: 2, Grid3D: 3, GridND: N, Aspatial: 0)
+- All movement operations use `substrate.apply_movement()` (was `torch.clamp`)
+- Distance checks use `substrate.compute_distance()` (was hardcoded Manhattan)
 
-**Technical Details:**
-- Grid2D: 6 actions (UP/DOWN/LEFT/RIGHT/INTERACT/WAIT)
-- Grid3D: 8 actions (±X/±Y/±Z/INTERACT/WAIT)
-- Continuous1D: 4 actions (±X/INTERACT/WAIT)
-- Continuous2D: 6 actions (±X/±Y/INTERACT/WAIT)
-- Continuous3D: 8 actions (±X/±Y/±Z/INTERACT/WAIT)
-- Aspatial: 2 actions (INTERACT/WAIT)
+**Observation Encoding:**
+- Full observability: coordinate encoding (was one-hot grid cells)
+- POMDP: substrate-aware local windows (was hardcoded 2D)
+- Dimension calculation: `substrate.position_dim` (was `grid_size²`)
+- Transfer learning enabled: train on 3×3, deploy on 8×8 with same network
 
-**Why:** Required prerequisite for Phase 5C (N-dimensional substrates with 2N+2 action spaces)
+**Action Space:**
+- Dynamic sizing: `substrate.action_space_size` (was hardcoded if-else)
+- Grid2D: 6 actions, Grid3D: 8 actions, GridND: 2N+2 actions
+- Aspatial: 2 actions (INTERACT + WAIT only)
 
----
+**Recording & Visualization:**
+- Variable-length position tuples: `tuple[int, ...]` (was `tuple[int, int]`)
+- Frontend routing by substrate type (was single 2D renderer)
+- WebSocket includes substrate metadata
 
-### Added (TASK-002A - Configurable Spatial Substrates, Phase 1-5)
-
-**Status**: ✅ Phase 5 Complete (on branch `task-002a-configurable-spatial-substrates`)
-
-- **Substrate Abstraction System** (Phases 1-4):
-  - Abstract `SpatialSubstrate` interface for polymorphic position management
-  - `Grid2DSubstrate`: 2D square grids with configurable boundaries (clamp, wrap, bounce, sticky)
-  - `Grid3DSubstrate`: 3D cubic grids for multi-floor environments (8×8×3 tested)
-  - `AspatialSubstrate`: Position-less universes (pure resource management, no spatial reasoning)
-  - Distance metrics: Manhattan (L1), Euclidean (L2), Chebyshev (L∞)
-  - Substrate factory for building from `substrate.yaml` configuration
-  - Pydantic schema validation for substrate configuration
-
-- **Environment Integration** (Phase 4):
-  - VectorizedHamletEnv loads substrate from `substrate.yaml`
-  - All position operations use substrate methods:
-    - `substrate.initialize_positions()` - random agent/affordance placement
-    - `substrate.apply_movement()` - boundary-aware movement
-    - `substrate.is_on_position()` - position-based interaction checks
-    - `substrate.get_all_positions()` - position enumeration for affordances
-  - Observation encoding uses substrate for position representation
-
-- **Observation Encoding** (Phase 5):
-  - **Substrate-Based Encoding**:
-    - `substrate.encode_observation()` for full observability
-    - `substrate.encode_partial_observation()` for POMDP local windows
-    - `substrate.get_observation_dim()` for network architecture sizing
-    - ObservationBuilder uses substrate for all position encoding
-  - **Coordinate Encoding** (enables 3D/large grids):
-    - 3D (8×8×3): 512 dims → 3 dims via normalized coordinates
-    - Replaces one-hot encoding for grids >8×8 (prevents dimension explosion)
-    - Enables transfer learning (same network works on different grid sizes)
-  - **Variable-Dimensionality Support**:
-    - 2D positions: (x, y) encoding
-    - 3D positions: (x, y, z) encoding
-    - Aspatial: no position encoding (position_dim=0)
-
-- **Checkpoint Format V3** (Phase 5):
-  - Added `substrate_metadata` field with `position_dim` and `substrate_type`
-  - Validates position dimensionality on load (2D vs 3D vs aspatial)
-  - Pre-flight validation detects legacy checkpoints on startup
-  - Clear error messages guide users to delete old checkpoints
-  - DemoRunner saves Version 3 checkpoints with full substrate context
-
-- **Recording System** (Phase 5 Task 5.9):
-  - Variable-length position recording: `tuple[int, ...]` type hints
-  - Handles 2D (x, y), 3D (x, y, z), and aspatial () positions
-  - EpisodeRecorder converts positions dynamically based on dimensionality
-  - RecordedStep and EpisodeMetadata support flexible position tuples
-  - Affordance layout recording with variable-dimension positions
-  - 3 new tests for substrate-aware recording
-
-- **Visualization System** (Phase 5 Task 5.8):
-  - Live inference server sends substrate metadata to frontend
-  - `_build_grid_data()` method routes by substrate type
-  - WebSocket state updates include substrate type and position_dim
-  - Affordance position handling for variable dimensions (x, y, z)
-  - Frontend can detect substrate and route to appropriate renderer
-  - Aspatial rendering support (meters-only, no grid)
-
-- **Test Suite Updates** (Phase 5 Task 5.10):
-  - All tests updated for substrate-agnostic position assertions
-  - Checkpoint tests use config_pack_path for substrate loading
-  - Property tests instantiate Grid2DSubstrate for ObservationBuilder
-  - 826/827 tests passing (99.88% pass rate)
-  - All substrate-specific tests passing (core, migration, integration)
-
-- **Configuration System** (Phase 3):
-  - Added `substrate.yaml` to all curriculum levels (L0, L0.5, L1, L2, L3)
-  - Template with comprehensive documentation at `configs/templates/substrate.yaml`
-  - Examples: 2D grids, 3D cubic, toroidal wraparound, aspatial
-
-- **Phase 5B Features** (3D Cubic Grid):
-  - 3D cubic grid support (8×8×3 tested, configurable depth)
-  - Configurable action labels (UP/DOWN/LEFT/RIGHT/UP_FLOOR/DOWN_FLOOR/INTERACT)
-  - Grid3DSubstrate with full 3D movement and positioning
-  - Validation script for substrate integration testing
-
-### Changed (TASK-002A)
-
-- **BREAKING:** Checkpoint format Version 2 → Version 3 (substrate_metadata field added)
-- **BREAKING:** Legacy checkpoints no longer supported without migration
-- **BREAKING:** ObservationBuilder now requires substrate parameter
-- All position operations now use substrate methods (removed hardcoded 2D grid assumptions)
-- Observation dimensions now substrate-aware:
-  - Full observability: `substrate.get_observation_dim()` (was `grid_size²`)
-  - Partial observability: uses `substrate.position_dim` (was hardcoded `2`)
-  - Enables aspatial universes with `position_dim=0`
-- Recording system now handles variable-length positions (2D, 3D, aspatial)
-- Visualization system routes by substrate type for rendering
-- Type hints updated to support flexible position tuples: `tuple[int, ...]`
-
-### Removed (TASK-002A)
+### Removed
 
 - Hardcoded 2D position assumptions throughout codebase
+- Manual grid iteration for affordance randomization (55+ lines → substrate method)
+- One-hot grid encoding for large grids (prevents 3D substrates)
+- 15 lines of action space sizing logic (→ substrate property)
 - Backward compatibility with Version 2 checkpoints
-- Manual grid iteration for affordance randomization (55+ lines)
-- Hardcoded grid encoding in observation builder
 
-### Testing (TASK-002A)
+### Scope Evolution
 
-- **Comprehensive Test Coverage**:
-  - 826/827 tests passing (99.88% pass rate)
-  - 14 substrate-specific tests (core, migration, integration)
-  - 3 recording system tests for variable-length positions
-  - 6 property tests validating substrate-agnostic invariants
-  - 23 checkpoint tests with Version 3 format validation
-  - All integration tests updated for substrate abstraction
-- **Test Categories**:
-  - Core substrate functionality (Grid2D, Grid3D, Aspatial)
-  - Distance metrics (Manhattan, Euclidean, Chebyshev)
-  - Boundary conditions (clamp, wrap, bounce, sticky)
-  - Observation encoding (full/partial, 2D/3D/aspatial)
-  - Checkpoint save/load with substrate validation
-  - Recording and visualization with variable dimensions
+**Original Plan** (Nov 2024): 3 substrate types, 5 phases, 15-22h
+**Revised Plan** (Nov 4): 3 substrate types, 8 phases, 51-65h (+140-195%)
+**Final Implementation**: 6 substrate types, 8 phases, 81-107h (+368-586%)
+
+**Additions Beyond Original Scope:**
+- GridND/ContinuousND (4D-100D support) - generalization was cheap
+- 3 encoding modes (was 1) - research paradigm flexibility
+- Action label system - pedagogical value (semantics are arbitrary)
+- Frontend Phase 7 - aspatial needed different visualization
+- Testing Phase 8 - production quality requirements
+
+**Why Scope Expanded:**
+- Generalization cheap: Grid3D → GridND was 2-3h
+- Research value: robotics, abstract RL, high-dimensional spaces
+- Pedagogical completeness: deep insights about RL representation
+- Production quality: property-based testing, regression coverage
+
+**Was It Worth It?**
+- ✅ Supports 1D-100D substrates (future-proof)
+- ✅ Transfer learning works (practical benefit)
+- ✅ Aspatial reveals insight (positioning optional)
+- ⚠️ N-dimensional rarely used (but cheap to add)
+
+### Testing
+
+**Final Test Results:**
+- 1,159/1,159 tests passing (100%)
+- 23 substrate-specific tests (property-based, integration, regression)
+- 77% code coverage overall
+- 85%+ coverage for substrate modules (grid2d: 92%, continuous: 95%, continuousnd: 96%)
+
+**Test Categories:**
+- Property tests (Hypothesis): substrate contracts, invariants
+- Integration tests: multi-substrate parameterization
+- Regression tests: Grid2D behavioral equivalence
+- Unit tests: already substrate-aware from Phase 6
 
 ---
 
