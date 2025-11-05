@@ -218,3 +218,49 @@ aspatial: {}
     assert env.grid_size == 12  # From parameter (aspatial has no width/height)
     assert env.substrate.position_dim == 0  # Aspatial has no position
     assert not hasattr(env.substrate, "width")
+
+
+def test_env_initializes_positions_via_substrate():
+    """Environment should use substrate.initialize_positions() in reset()."""
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        num_agents=5,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.5,
+        wait_energy_cost=0.1,
+        interact_energy_cost=0.3,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+    # Reset environment
+    env.reset()
+
+    # Positions should be initialized via substrate
+    assert env.positions.shape == (5, 2)  # [num_agents, position_dim]
+    assert env.positions.dtype == torch.long
+    assert env.positions.device == torch.device("cpu")
+
+    # Positions should be within grid bounds
+    assert (env.positions >= 0).all()
+    assert (env.positions < 8).all()
+
+
+def test_substrate_initialize_positions_correctness():
+    """Grid2D.initialize_positions() should return valid grid positions."""
+    from townlet.substrate.grid2d import Grid2DSubstrate
+
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    positions = substrate.initialize_positions(num_agents=10, device=torch.device("cpu"))
+
+    # Correct shape and type
+    assert positions.shape == (10, 2)
+    assert positions.dtype == torch.long
+
+    # Within bounds
+    assert (positions >= 0).all()
+    assert (positions < 8).all()

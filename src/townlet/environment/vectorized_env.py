@@ -242,8 +242,8 @@ class VectorizedHamletEnv:
         Returns:
             observations: [num_agents, observation_dim]
         """
-        # Random starting positions
-        self.positions = torch.randint(0, self.grid_size, (self.num_agents, 2), device=self.device)
+        # Use substrate for position initialization (supports grid and aspatial)
+        self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
 
         # Initial meter values (normalized to [0, 1])
         # [energy, hygiene, satiation, money, mood, social, health, fitness]
