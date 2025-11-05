@@ -264,3 +264,72 @@ def test_substrate_initialize_positions_correctness():
     # Within bounds
     assert (positions >= 0).all()
     assert (positions < 8).all()
+
+
+def test_env_applies_movement_via_substrate():
+    """Environment should use substrate.apply_movement() for boundary handling."""
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.5,
+        wait_energy_cost=0.1,
+        interact_energy_cost=0.3,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+    env.reset()
+
+    # Place agent at top-left corner
+    env.positions = torch.tensor([[0, 0]], dtype=torch.long, device=torch.device("cpu"))
+
+    # Try to move up (UP action decreases Y, but we're at boundary)
+    # UP action should be action 0 based on action_dim
+    action = torch.tensor([0], dtype=torch.long, device=torch.device("cpu"))
+
+    env.step(action)
+
+    # Position should be clamped by substrate (boundary="clamp" in configs)
+    # Since we're at [0, 0] and trying to move up, should stay at [0, 0]
+    assert (env.positions[:, 0] >= 0).all()  # X within bounds
+    assert (env.positions[:, 1] >= 0).all()  # Y within bounds
+
+
+def test_substrate_movement_matches_legacy():
+    """Substrate movement should produce identical results to legacy torch.clamp."""
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.5,
+        wait_energy_cost=0.1,
+        interact_energy_cost=0.3,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+    # Test substrate.apply_movement directly
+    substrate = env.substrate
+    positions = torch.tensor([[3, 3]], dtype=torch.long, device=torch.device("cpu"))
+
+    # Move up (delta [0, -1])
+    deltas = torch.tensor([[0, -1]], dtype=torch.long, device=torch.device("cpu"))
+    new_positions = substrate.apply_movement(positions, deltas)
+
+    # Should move to [3, 2]
+    assert (new_positions == torch.tensor([[3, 2]], dtype=torch.long)).all()
+
+    # Test boundary clamping at edge
+    edge_positions = torch.tensor([[0, 0]], dtype=torch.long, device=torch.device("cpu"))
+    up_left_delta = torch.tensor([[-1, -1]], dtype=torch.long, device=torch.device("cpu"))
+    clamped = substrate.apply_movement(edge_positions, up_left_delta)
+
+    # Should clamp to [0, 0] (not go negative)
+    assert (clamped == torch.tensor([[0, 0]], dtype=torch.long)).all()

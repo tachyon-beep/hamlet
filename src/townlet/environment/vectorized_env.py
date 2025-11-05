@@ -426,14 +426,9 @@ class VectorizedHamletEnv:
             device=self.device,
         )
 
-        # Apply movement
+        # Apply movement with substrate-specific boundary handling
         movement_deltas = deltas[actions]  # [num_agents, 2]
-        new_positions = self.positions + movement_deltas
-
-        # Clamp to grid boundaries
-        new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
-
-        self.positions = new_positions
+        self.positions = self.substrate.apply_movement(self.positions, movement_deltas)
 
         # Reset progress for agents that moved away (temporal mechanics)
         if self.enable_temporal_mechanics and old_positions is not None:
