@@ -38,6 +38,23 @@ class SpatialSubstrate(ABC):
         """
         pass
 
+    @property
+    @abstractmethod
+    def position_dtype(self) -> torch.dtype:
+        """Data type of position tensors.
+
+        Returns:
+            torch.long for discrete grids (integer coordinates)
+            torch.float32 for continuous spaces (float coordinates)
+
+        This enables substrates to mix int and float positioning without dtype errors.
+
+        Example:
+            Grid2D: torch.long (positions are integers)
+            Continuous2D: torch.float32 (positions are floats)
+        """
+        pass
+
     @abstractmethod
     def initialize_positions(self, num_agents: int, device: torch.device) -> torch.Tensor:
         """Initialize random positions for agents.

@@ -146,7 +146,8 @@ class VectorizedHamletEnv:
 
         # DEPLOYED affordances: have positions on grid, can be interacted with
         # Positions will be randomized by randomize_affordance_positions() before first use
-        self.affordances = {name: torch.tensor([0, 0], device=device, dtype=torch.long) for name in affordance_names_to_deploy}
+        default_position = torch.zeros(self.substrate.position_dim, dtype=self.substrate.position_dtype, device=device)
+        self.affordances = {name: default_position.clone() for name in affordance_names_to_deploy}
 
         # OBSERVATION VOCABULARY: Full list from YAML, used for fixed observation encoding
         # This stays constant across all curriculum levels for transfer learning
@@ -222,7 +223,11 @@ class VectorizedHamletEnv:
         self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
 
         # State tensors (initialized in reset)
-        self.positions = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+        self.positions = torch.zeros(
+            (self.num_agents, self.substrate.position_dim),
+            dtype=self.substrate.position_dtype,
+            device=self.device,
+        )
         self.meters = torch.zeros((self.num_agents, meter_count), dtype=torch.float32, device=self.device)
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
@@ -230,7 +235,11 @@ class VectorizedHamletEnv:
         # Temporal mechanics state
         self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
         self.last_interaction_affordance: list[str | None] = [None] * self.num_agents
-        self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+        self.last_interaction_position = torch.zeros(
+            (self.num_agents, self.substrate.position_dim),
+            dtype=self.substrate.position_dtype,
+            device=self.device,
+        )
         self.time_of_day = 0
 
         if not self.enable_temporal_mechanics:
@@ -436,7 +445,7 @@ class VectorizedHamletEnv:
         )
 
         # Apply movement with substrate-specific boundary handling
-        movement_deltas = deltas[actions]  # [num_agents, 2]
+        movement_deltas = deltas[actions]  # [num_agents, position_dim]
         self.positions = self.substrate.apply_movement(self.positions, movement_deltas)
 
         # Reset progress for agents that moved away (temporal mechanics)
@@ -699,7 +708,7 @@ class VectorizedHamletEnv:
 
         for name, pos in positions.items():
             if name in self.affordances:
-                self.affordances[name] = torch.tensor(pos, device=self.device, dtype=torch.long)
+                self.affordances[name] = torch.tensor(pos, device=self.device, dtype=self.substrate.position_dtype)
 
     def randomize_affordance_positions(self):
         """Randomize affordance positions for generalization testing.

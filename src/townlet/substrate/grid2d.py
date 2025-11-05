@@ -63,6 +63,11 @@ class Grid2DSubstrate(SpatialSubstrate):
         """2D grid has 2-dimensional positions."""
         return 2
 
+    @property
+    def position_dtype(self) -> torch.dtype:
+        """Grid positions are integers (discrete cells)."""
+        return torch.long
+
     def initialize_positions(self, num_agents: int, device: torch.device) -> torch.Tensor:
         """Initialize random positions uniformly across the grid."""
         return torch.stack(
