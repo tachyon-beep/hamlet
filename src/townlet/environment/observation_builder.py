@@ -27,6 +27,7 @@ class ObservationBuilder:
         enable_temporal_mechanics: bool,
         num_affordance_types: int,
         affordance_names: list[str],
+        substrate,  # Add substrate parameter
     ):
         """Initialize observation builder.
 
@@ -39,6 +40,7 @@ class ObservationBuilder:
             enable_temporal_mechanics: Add temporal features
             num_affordance_types: Number of affordance types in environment
             affordance_names: Full list of affordance names (observation vocabulary)
+            substrate: Spatial substrate for position operations
         """
         self.num_agents = num_agents
         self.grid_size = grid_size
@@ -48,6 +50,7 @@ class ObservationBuilder:
         self.enable_temporal_mechanics = enable_temporal_mechanics
         self.num_affordance_types = num_affordance_types
         self.affordance_names = affordance_names
+        self.substrate = substrate  # Store substrate reference
 
     def build_observations(
         self,
@@ -237,8 +240,8 @@ class ObservationBuilder:
             # Check if this affordance is DEPLOYED (has position on grid)
             if affordance_name in affordances:
                 affordance_pos = affordances[affordance_name]
-                distances = torch.abs(positions - affordance_pos).sum(dim=1)
-                on_affordance = distances == 0
+                # Check which agents are on affordance (using substrate)
+                on_affordance = self.substrate.is_on_position(positions, affordance_pos)
                 if on_affordance.any():
                     affordance_encoding[on_affordance, -1] = 0.0  # Clear "none"
                     affordance_encoding[on_affordance, affordance_idx] = 1.0

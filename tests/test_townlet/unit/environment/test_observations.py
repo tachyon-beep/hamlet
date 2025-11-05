@@ -19,6 +19,7 @@ import math
 import torch
 
 from townlet.environment.observation_builder import ObservationBuilder
+from townlet.substrate.grid2d import Grid2DSubstrate
 
 
 class TestFullObservability:
@@ -73,6 +74,7 @@ class TestFullObservability:
             enable_temporal_mechanics=False,
             num_affordance_types=3,
             affordance_names=["Bed", "Hospital", "Job"],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         # Agent at (0, 0), affordances at (2, 3) and (5, 5)
@@ -126,6 +128,7 @@ class TestFullObservability:
             enable_temporal_mechanics=False,
             num_affordance_types=1,
             affordance_names=["Bed"],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         # Agent at (2, 3), bed also at (2, 3)
@@ -216,6 +219,7 @@ class TestPartialObservability:
             enable_temporal_mechanics=False,
             num_affordance_types=1,
             affordance_names=["Bed"],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         # Agent at (4, 4), bed at (5, 5) - within 5×5 window
@@ -257,6 +261,7 @@ class TestPartialObservability:
             enable_temporal_mechanics=False,
             num_affordance_types=1,
             affordance_names=["Hospital"],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         # Agent at (0, 0), hospital at (7, 7) - outside 5×5 window
@@ -365,6 +370,7 @@ class TestTemporalFeatures:
                 "SocialClub",
                 "MeditationCenter",
             ],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -447,6 +453,7 @@ class TestTemporalFeatures:
                 "SocialClub",
                 "MeditationCenter",
             ],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -505,6 +512,7 @@ class TestTemporalFeatures:
                 "SocialClub",
                 "MeditationCenter",
             ],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -687,6 +695,7 @@ class TestObservationUpdates:
                 "SocialClub",
                 "MeditationCenter",
             ],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         positions = torch.tensor([[0, 0]], device=device)
@@ -735,6 +744,7 @@ class TestMultiAgentObservations:
             enable_temporal_mechanics=False,
             num_affordance_types=1,
             affordance_names=["Bed"],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         # Agents at different positions, bed near first agent
@@ -776,6 +786,7 @@ class TestMultiAgentObservations:
             enable_temporal_mechanics=False,
             num_affordance_types=1,
             affordance_names=["Bed"],
+            substrate=Grid2DSubstrate(width=grid_size, height=grid_size, boundary="clamp", distance_metric="manhattan"),
         )
 
         # Both agents at same position (0, 0)

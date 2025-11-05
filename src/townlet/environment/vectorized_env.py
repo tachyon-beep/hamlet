@@ -178,6 +178,7 @@ class VectorizedHamletEnv:
             enable_temporal_mechanics=enable_temporal_mechanics,
             num_affordance_types=self.num_affordance_types,
             affordance_names=self.affordance_names,
+            substrate=self.substrate,  # Pass substrate to observation builder
         )
 
         # Initialize reward strategy (TASK-001: variable meters)
@@ -319,8 +320,8 @@ class VectorizedHamletEnv:
 
         # Check each affordance using AffordanceEngine
         for affordance_name, affordance_pos in self.affordances.items():
-            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            on_this_affordance = distances == 0
+            # Check if on affordance for interaction (using substrate)
+            on_this_affordance = self.substrate.is_on_position(self.positions, affordance_pos)
 
             # Check operating hours using AffordanceEngine
             if self.enable_temporal_mechanics:
@@ -488,9 +489,8 @@ class VectorizedHamletEnv:
         successful_interactions = {}
 
         for affordance_name, affordance_pos in self.affordances.items():
-            # Distance to affordance
-            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            at_affordance = (distances == 0) & interact_mask
+            # Check if still on same affordance (using substrate)
+            at_affordance = self.substrate.is_on_position(self.positions, affordance_pos) & interact_mask
 
             if not at_affordance.any():
                 continue
@@ -570,9 +570,8 @@ class VectorizedHamletEnv:
 
         # Check each affordance
         for affordance_name, affordance_pos in self.affordances.items():
-            # Distance to affordance
-            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            at_affordance = (distances == 0) & interact_mask
+            # Check which agents are on this affordance (using substrate)
+            at_affordance = self.substrate.is_on_position(self.positions, affordance_pos) & interact_mask
 
             if not at_affordance.any():
                 continue
