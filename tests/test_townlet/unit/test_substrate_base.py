@@ -78,6 +78,142 @@ def test_grid2d_is_on_position():
     assert torch.equal(on_target, torch.tensor([True, False, True]))
 
 
+def test_grid2d_apply_movement_wrap():
+    """Grid2D with wrap boundary should wrap positions (toroidal)."""
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="wrap")
+
+    # Agent at bottom-right tries to move right-down (should wrap to top-left)
+    positions = torch.tensor([[7, 7]], dtype=torch.long)
+    deltas = torch.tensor([[2, 2]], dtype=torch.long)
+
+    new_positions = substrate.apply_movement(positions, deltas)
+
+    # Should wrap: (7+2) % 8 = 1, (7+2) % 8 = 1
+    assert torch.equal(new_positions, torch.tensor([[1, 1]], dtype=torch.long))
+
+
+def test_grid2d_apply_movement_bounce():
+    """Grid2D with bounce boundary should keep agent in place when hitting wall."""
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="bounce")
+
+    # Agent at edge tries to move out of bounds
+    positions = torch.tensor([[0, 7]], dtype=torch.long)
+    deltas = torch.tensor([[-1, 2]], dtype=torch.long)
+
+    new_positions = substrate.apply_movement(positions, deltas)
+
+    # Should stay in place for out-of-bounds dimensions
+    assert torch.equal(new_positions, torch.tensor([[0, 7]], dtype=torch.long))
+
+
+def test_grid2d_compute_distance_euclidean():
+    """Grid2D should compute Euclidean distance correctly."""
+    substrate = Grid2DSubstrate(width=8, height=8, distance_metric="euclidean")
+
+    pos1 = torch.tensor([[0, 0], [0, 0]], dtype=torch.long)
+    pos2 = torch.tensor([3, 4], dtype=torch.long)  # Single position
+
+    distances = substrate.compute_distance(pos1, pos2)
+
+    # Euclidean: sqrt(3² + 4²) = 5.0 for both agents
+    expected = torch.tensor([5.0, 5.0])
+    assert torch.allclose(distances, expected)
+
+
+def test_grid2d_compute_distance_chebyshev():
+    """Grid2D should compute Chebyshev distance correctly."""
+    substrate = Grid2DSubstrate(width=8, height=8, distance_metric="chebyshev")
+
+    pos1 = torch.tensor([[0, 0], [1, 1]], dtype=torch.long)
+    pos2 = torch.tensor([5, 3], dtype=torch.long)  # Single position
+
+    distances = substrate.compute_distance(pos1, pos2)
+
+    # Chebyshev: max(|0-5|, |0-3|) = 5, max(|1-5|, |1-3|) = 4
+    assert torch.equal(distances, torch.tensor([5, 4], dtype=torch.long))
+
+
+def test_grid2d_encode_observation():
+    """Grid2D should encode grid with affordances and agent positions."""
+    substrate = Grid2DSubstrate(width=3, height=3)
+
+    # Agent at [1, 1]
+    positions = torch.tensor([[1, 1]], dtype=torch.long)
+
+    # Affordance at [2, 2]
+    affordances = {"Bed": torch.tensor([2, 2], dtype=torch.long)}
+
+    encoding = substrate.encode_observation(positions, affordances)
+
+    # Should be [1, 9] shape (1 agent, 3×3=9 cells)
+    assert encoding.shape == (1, 9)
+
+    # Agent position (1,1) -> flat index 1*3+1=4 should be 1.0
+    assert encoding[0, 4] == 1.0
+
+    # Affordance position (2,2) -> flat index 2*3+2=8 should be 1.0
+    assert encoding[0, 8] == 1.0
+
+    # All other cells should be 0.0
+    mask = torch.ones(9, dtype=torch.bool)
+    mask[4] = False
+    mask[8] = False
+    assert torch.all(encoding[0, mask] == 0.0)
+
+
+def test_grid2d_encode_observation_overlap():
+    """Grid2D should handle agent on affordance (overlap = 2.0)."""
+    substrate = Grid2DSubstrate(width=3, height=3)
+
+    # Agent at [1, 1]
+    positions = torch.tensor([[1, 1]], dtype=torch.long)
+
+    # Affordance also at [1, 1] (same position)
+    affordances = {"Bed": torch.tensor([1, 1], dtype=torch.long)}
+
+    encoding = substrate.encode_observation(positions, affordances)
+
+    # Overlapping position should be 2.0 (affordance 1.0 + agent 1.0)
+    assert encoding[0, 4] == 2.0
+
+
+def test_grid2d_get_valid_neighbors():
+    """Grid2D should return valid 4-connected neighbors."""
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp")
+
+    # Test center position (has all 4 neighbors)
+    position = torch.tensor([4, 4], dtype=torch.long)
+    neighbors = substrate.get_valid_neighbors(position)
+
+    assert len(neighbors) == 4
+    expected_neighbors = [
+        torch.tensor([4, 3]),  # UP
+        torch.tensor([4, 5]),  # DOWN
+        torch.tensor([3, 4]),  # LEFT
+        torch.tensor([5, 4]),  # RIGHT
+    ]
+
+    for expected in expected_neighbors:
+        found = any(torch.equal(n, expected) for n in neighbors)
+        assert found, f"Expected neighbor {expected} not found"
+
+
+def test_grid2d_get_valid_neighbors_corner():
+    """Grid2D should filter out-of-bounds neighbors at corners."""
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp")
+
+    # Test top-left corner (only 2 valid neighbors)
+    position = torch.tensor([0, 0], dtype=torch.long)
+    neighbors = substrate.get_valid_neighbors(position)
+
+    assert len(neighbors) == 2  # Only DOWN and RIGHT are valid
+
+    # Verify no negative positions
+    for neighbor in neighbors:
+        assert torch.all(neighbor >= 0)
+        assert neighbor[0] < 8 and neighbor[1] < 8
+
+
 def test_aspatial_substrate_creation():
     """AspatialSubstrate should represent no positioning."""
     substrate = AspatialSubstrate()

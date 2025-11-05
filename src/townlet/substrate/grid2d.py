@@ -1,5 +1,7 @@
 """2D square grid substrate (replicates current HAMLET behavior)."""
 
+from typing import Literal
+
 import torch
 
 from townlet.substrate.base import SpatialSubstrate
@@ -18,7 +20,7 @@ class Grid2DSubstrate(SpatialSubstrate):
     Supported boundaries:
     - clamp: Hard walls (default, current behavior)
     - wrap: Toroidal wraparound (Pac-Man style)
-    - bounce: Elastic reflection
+    - bounce: Sticky walls (agent stays in place when hitting boundary)
 
     Supported distance metrics:
     - manhattan: |x1-x2| + |y1-y2| (default, current behavior)
@@ -30,8 +32,8 @@ class Grid2DSubstrate(SpatialSubstrate):
         self,
         width: int,
         height: int,
-        boundary: str = "clamp",
-        distance_metric: str = "manhattan",
+        boundary: Literal["clamp", "wrap", "bounce"] = "clamp",
+        distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = "manhattan",
     ):
         """Initialize 2D grid substrate.
 
@@ -89,7 +91,7 @@ class Grid2DSubstrate(SpatialSubstrate):
             new_positions[:, 1] = new_positions[:, 1] % self.height
 
         elif self.boundary == "bounce":
-            # Elastic reflection: if out of bounds, stay in place
+            # Sticky walls: if out of bounds, stay in place (treat boundary as sticky)
             out_of_bounds_x = (new_positions[:, 0] < 0) | (new_positions[:, 0] >= self.width)
             out_of_bounds_y = (new_positions[:, 1] < 0) | (new_positions[:, 1] >= self.height)
 
