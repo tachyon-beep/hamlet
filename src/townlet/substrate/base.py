@@ -55,6 +55,34 @@ class SpatialSubstrate(ABC):
         """
         pass
 
+    @property
+    def action_space_size(self) -> int:
+        """Return number of discrete actions supported by this substrate.
+
+        Action spaces are determined by substrate dimensionality:
+        - Spatial substrates: 2 * position_dim + 1 (±movement per dimension + INTERACT)
+        - Aspatial substrates: 1 (INTERACT only, no movement)
+
+        Examples:
+            Grid2D (position_dim=2): 5 actions (UP/DOWN/LEFT/RIGHT/INTERACT)
+            Grid3D (position_dim=3): 7 actions (±X/±Y/±Z/INTERACT)
+            Continuous1D (position_dim=1): 3 actions (±X/INTERACT)
+            Continuous2D (position_dim=2): 5 actions (±X/±Y/INTERACT)
+            Continuous3D (position_dim=3): 7 actions (±X/±Y/±Z/INTERACT)
+            Aspatial (position_dim=0): 1 action (INTERACT only)
+
+        This enables dynamic action space sizing for N-dimensional substrates.
+        VectorizedHamletEnv queries this property instead of hardcoding action counts.
+
+        Returns:
+            Integer count of discrete actions
+        """
+        if self.position_dim == 0:
+            # Aspatial: only INTERACT action (no movement)
+            return 1
+        # Spatial: 2N + 1 (±movement per dimension + INTERACT)
+        return 2 * self.position_dim + 1
+
     @abstractmethod
     def initialize_positions(self, num_agents: int, device: torch.device) -> torch.Tensor:
         """Initialize random positions for agents.
