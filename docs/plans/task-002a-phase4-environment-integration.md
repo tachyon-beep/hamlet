@@ -117,6 +117,34 @@ Part of TASK-002A (Configurable Spatial Substrates)."
 ```
 
 ---
+
+## Phase 4 Remaining Tasks
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+### Context
+
+Phase 4 Task 4.1 (substrate loading) is **COMPLETE** ✅
+
+**What's Complete**:
+- ✅ Substrate loaded in `VectorizedEnv.__init__()` (commit `11baff4`)
+- ✅ Substrate accessible via `env.substrate`
+- ✅ `grid_size` synced from substrate for compatibility
+- ✅ Error message if substrate.yaml missing
+
+**What's Remaining**:
+- ❌ Substrate methods not yet wired up (still using hardcoded operations)
+- ❌ Position initialization (still using `torch.randint`)
+- ❌ Movement/boundaries (still using `torch.clamp`)
+- ❌ Affordance randomization (still using manual grid iteration)
+- ❌ Integration tests (skipped)
+
+**Goal**: Wire up substrate methods so they're actually called (not just loaded).
+
+**Estimated Effort**: 2.75 hours (Tasks 4.0, 4.2-4.5)
+
+---
+
 ### Task 4.0: Add substrate.get_all_positions() Method
 
 **Purpose**: Add method needed by Phase 4 affordance randomization and Phase 5 integration
@@ -243,6 +271,18 @@ Task 4.1 (Substrate Loading) was completed earlier with commits:
 **Files:**
 - Modify: `src/townlet/environment/vectorized_env.py`
 - Modify: `tests/test_townlet/unit/test_env_substrate_loading.py`
+
+**Prerequisite: Verify Test File Exists**
+
+```bash
+ls tests/test_townlet/unit/test_env_substrate_loading.py
+```
+
+**Expected**: File exists (created in Task 4.1)
+
+**If file doesn't exist**: Task 4.1 is incomplete. The test file should have been created with basic substrate loading tests. Check Task 4.1 completion before proceeding.
+
+---
 
 **Step 1: Write test for position initialization**
 
@@ -638,19 +678,41 @@ pytestmark = pytest.mark.skip(reason="Phase 4 (Environment Integration) not yet 
 
 **Step 2: Uncomment test code**
 
-Uncomment all commented-out test code in the file. Replace:
+The file currently has all imports and test bodies commented out. You need to uncomment them.
+
+**Example - Before (commented):**
 ```python
+# import pytest
+# import torch
+# from pathlib import Path
 # from townlet.environment.vectorized_env import VectorizedHamletEnv
+#
+# def test_env_observation_dim_unchanged():
+#     """Test observation dimensions unchanged after substrate integration."""
+#     env = VectorizedHamletEnv(
+#         config_pack_path=Path("configs/L1_full_observability"),
+#         ...
+#     )
+#     assert env.observation_dim == 91
 ```
 
-With:
+**After (uncommented):**
 ```python
-from pathlib import Path
+import pytest
 import torch
+from pathlib import Path
 from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+def test_env_observation_dim_unchanged():
+    """Test observation dimensions unchanged after substrate integration."""
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        ...
+    )
+    assert env.observation_dim == 91
 ```
 
-Uncomment all test bodies (remove `#` from each line).
+**Action**: Remove all `#` from import lines and test function bodies. Every line starting with `#` (except comment strings) should be uncommented.
 
 **Step 3: Run integration tests**
 
@@ -667,18 +729,44 @@ Expected: ALL 4 tests PASS (no failures, no skips)
 3. `test_env_substrate_boundary_behavior`
 4. `test_env_substrate_distance_metric`
 
-**Step 4: Fix any failures**
+**Step 4: Fix any failures (if needed)**
 
-If tests fail:
-1. Check observation dimensions match expected values
-2. Verify substrate methods return correct tensor shapes
-3. Verify boundary behavior matches legacy (clamp)
-4. Verify distance calculations match legacy (manhattan)
+If tests fail, diagnose using these common failure patterns:
 
-Common issues:
-- VectorizedEnv constructor signature changed (add missing parameters)
-- Observation dimension calculation incorrect
-- Substrate not loaded properly
+**1. Observation dimension mismatch**:
+```
+AssertionError: assert 64 == 91
+```
+**Cause**: Observation builder not using substrate encoding (expected - Phase 6 will fix this)
+**Fix**: This is expected behavior. Observation encoding is Phase 6 scope. Integration tests should verify substrate dimensions, not full observation dims.
+
+**2. Position tensor shape mismatch**:
+```
+RuntimeError: Expected shape (5, 2), got (5, 0)
+```
+**Cause**: Aspatial substrate returns position_dim=0. Tests assume Grid2D.
+**Fix**: Add substrate type check in test. Aspatial has no positions (position_dim=0).
+
+**3. Boundary behavior changed**:
+```
+AssertionError: Expected position [0, 0], got [-1, -1]
+```
+**Cause**: Substrate boundary mode not "clamp" (might be "wrap" or "bounce")
+**Fix**: Verify all production configs use `boundary: "clamp"` in substrate.yaml.
+
+**4. AttributeError on substrate methods**:
+```
+AttributeError: 'Grid2DSubstrate' object has no attribute 'apply_movement'
+```
+**Cause**: Task 4.0 (get_all_positions) incomplete or substrate interface missing methods
+**Fix**: Complete Task 4.0 first. Verify substrate interface has all required methods.
+
+**5. Import errors**:
+```
+ImportError: cannot import name 'VectorizedHamletEnv'
+```
+**Cause**: Circular import or syntax error in vectorized_env.py
+**Fix**: Check Tasks 4.2-4.4 implementation. Verify syntax is correct.
 
 **Step 5: Commit**
 
