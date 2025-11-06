@@ -221,13 +221,23 @@ class TestEpsilonGreedyActionSelection:
         # Place agents at top-left corner (UP and LEFT masked)
         env.positions = torch.tensor([[0, 0], [0, 0]], device=env.device)
 
+        # Get dynamic action IDs
+        down_id = 1  # DOWN is always index 1 for Grid2D
+        right_id = 3  # RIGHT is always index 3 for Grid2D
+        interact_id = env.interact_action_idx
+        wait_id = env.wait_action_idx
+        rest_id = env.action_space.get_action_by_name("REST").id
+        meditate_id = env.action_space.get_action_by_name("MEDITATE").id
+
+        # Valid actions: DOWN, RIGHT, INTERACT, WAIT, REST, MEDITATE
+        valid_actions = [down_id, right_id, interact_id, wait_id, rest_id, meditate_id]
+
         # Select with epsilon=1.0 (always random)
         for _ in range(100):
             actions = population.select_epsilon_greedy_actions(env, epsilon=1.0)
 
             # Should never see UP (0) or LEFT (2)
-            # Valid actions: DOWN (1), RIGHT (3), INTERACT (4), WAIT (5)
-            assert all(a in [1, 3, 4, 5] for a in actions.tolist())
+            assert all(a in valid_actions for a in actions.tolist())
 
     def test_epsilon_greedy_mixes_exploration_exploitation(self, simple_setup):
         """With 0 < epsilon < 1, should see mix of greedy and random."""
