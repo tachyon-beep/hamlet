@@ -5,7 +5,9 @@ import torch
 
 from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.base import SpatialSubstrate
+from townlet.substrate.continuous import Continuous1DSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
+from townlet.substrate.grid3d import Grid3DSubstrate
 
 
 def test_substrate_module_exists():
@@ -368,3 +370,79 @@ def test_aspatial_encode_partial_observation():
     local_encoding = substrate.encode_partial_observation(positions, affordances, vision_range=2)
 
     assert local_encoding.shape == (3, 0)  # No position encoding
+
+
+def test_grid3d_encode_partial_observation():
+    """Grid3D should encode local 5×5×5 window for POMDP (125 cells)."""
+    substrate = Grid3DSubstrate(width=8, height=8, depth=8, boundary="clamp", distance_metric="manhattan")
+
+    # Agent at center of grid
+    positions = torch.tensor([[4, 4, 4]], dtype=torch.long)
+
+    # Affordances
+    affordances = {
+        "Bed": torch.tensor([3, 3, 3], dtype=torch.long),  # Within vision (-1, -1, -1)
+        "Hospital": torch.tensor([6, 6, 6], dtype=torch.long),  # Within vision (+2, +2, +2)
+        "HomeMeal": torch.tensor([10, 10, 10], dtype=torch.long),  # Out of bounds
+    }
+
+    # 5×5×5 vision window (vision_range=2 means 2 cells in each direction)
+    local_encoding = substrate.encode_partial_observation(positions, affordances, vision_range=2)
+
+    # Should encode 5×5×5 = 125 cells around agent
+    assert local_encoding.shape == (1, 125)
+
+    # Bed at (3,3,3) should be visible (relative position: -1, -1, -1)
+    # In local coords: vision_range + rel = 2 + (-1) = 1 for all dimensions
+    # Flattened index: 1*5*5 + 1*5 + 1 = 25 + 5 + 1 = 31
+    assert local_encoding[0, 31] == 1.0
+
+    # Hospital at (6,6,6) should be visible (relative position: +2, +2, +2)
+    # In local coords: 2 + 2 = 4 for all dimensions
+    # Flattened index: 4*5*5 + 4*5 + 4 = 100 + 20 + 4 = 124
+    assert local_encoding[0, 124] == 1.0
+
+    # Center (agent position) should be empty
+    # Center is at (2, 2, 2) in local coords
+    # Flattened index: 2*5*5 + 2*5 + 2 = 50 + 10 + 2 = 62
+    assert local_encoding[0, 62] == 0.0
+
+
+def test_grid3d_encode_partial_observation_edge():
+    """Grid3D should handle edge cases (agent near boundary)."""
+    substrate = Grid3DSubstrate(width=8, height=8, depth=8, boundary="clamp", distance_metric="manhattan")
+
+    # Agent at corner
+    positions = torch.tensor([[0, 0, 0]], dtype=torch.long)
+
+    # Affordance within vision
+    affordances = {
+        "Bed": torch.tensor([1, 1, 1], dtype=torch.long),
+    }
+
+    local_encoding = substrate.encode_partial_observation(positions, affordances, vision_range=2)
+
+    # Should still encode 5×5×5 = 125 cells (out-of-bounds cells are empty)
+    assert local_encoding.shape == (1, 125)
+
+    # Bed at (1,1,1) relative to (0,0,0) is (+1, +1, +1)
+    # In local coords: 2 + 1 = 3 for all dimensions
+    # Flattened index: 3*5*5 + 3*5 + 3 = 75 + 15 + 3 = 93
+    assert local_encoding[0, 93] == 1.0
+
+
+def test_continuous1d_encode_partial_observation_raises():
+    """Continuous1D should raise NotImplementedError for POMDP."""
+    substrate = Continuous1DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=1.0,
+    )
+
+    positions = torch.tensor([[5.0]], dtype=torch.float32)  # 1D position
+    affordances = {}
+
+    with pytest.raises(NotImplementedError, match="does not support partial observability"):
+        substrate.encode_partial_observation(positions, affordances, vision_range=2)

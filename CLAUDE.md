@@ -275,10 +275,26 @@ Substrates support three configurable observation encoding modes via `observatio
 - **Total**: 54 dimensions
 - **Requirement**: POMDP always uses "relative" encoding (normalized positions)
 
-**POMDP Limitations**:
-- Grid3D: vision_range ≤ 2 (5×5×5 = 125 cells max)
-- GridND (N≥4): Not supported (window size = (2*range+1)^N becomes impractical)
-- Must use observation_encoding="relative" (other modes rejected)
+**POMDP Limitations** (Partial Observability):
+
+| Substrate | Support Status | Notes | Test Coverage |
+|-----------|---------------|-------|---------------|
+| Grid2D | ✅ **SUPPORTED** | Local 5×5 window (25 cells) | ✅ Unit + Integration |
+| Grid3D | ✅ **SUPPORTED** | vision_range ≤ 2 (5×5×5 = 125 cells max) | ✅ Unit (2 tests) + Validation (3 tests) |
+| Continuous1D/2D/3D | ❌ **NOT SUPPORTED** | Raises NotImplementedError (no discrete grid) | ✅ Unit (1 test) |
+| GridND (N≥4) | ❌ **NOT SUPPORTED** | Environment rejects POMDP (window too large) | ✅ Validation (1 test) |
+| ContinuousND (N≥4) | ❌ **NOT SUPPORTED** | Raises NotImplementedError | ✅ Unit (1 test) |
+| Aspatial | ✅ **SPECIAL CASE** | Returns empty tensor (no position) | ✅ Unit (1 test) |
+
+**Key Requirements**:
+- Must use `observation_encoding="relative"` (normalized positions)
+- Grid3D POMDP enforces vision_range ≤ 2 (larger windows rejected)
+- Continuous substrates: Use full observability instead (POMDP conceptually invalid)
+
+**Test Files**:
+- Unit tests: `tests/test_townlet/unit/substrate/test_interface.py`
+- Integration tests: `tests/test_townlet/integration/test_substrate_observations.py`
+- Validation tests: `tests/test_townlet/unit/environment/test_pomdp_validation.py`
 
 **Action space**: Dynamic based on substrate.position_dim
 - Grid2D: 6 actions (UP/DOWN/LEFT/RIGHT/INTERACT/WAIT)

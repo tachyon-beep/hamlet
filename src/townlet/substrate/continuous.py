@@ -311,14 +311,20 @@ class ContinuousSubstrate(SpatialSubstrate):
         return self._encode_relative(positions, {})
 
     def encode_partial_observation(self, positions: torch.Tensor, affordances: dict[str, torch.Tensor], vision_range: int) -> torch.Tensor:
-        """Encode partial observation for POMDP support.
+        """Partial observability not supported for continuous substrates.
 
-        For continuous space, returns normalized positions (no local window concept).
-        POMDP support for continuous substrates is limited.
+        Continuous spaces have no discrete grid structure for local windows.
+        Use full observability with normalized position encoding instead.
+
+        Raises:
+            NotImplementedError: Continuous substrates do not support POMDP
         """
-        # For continuous space, no discrete grid to window into
-        # Just return normalized positions (same as full observability)
-        return self.encode_observation(positions, affordances)
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support partial observability (POMDP). "
+            f"Continuous spaces have infinite positions in any local region, making local windows "
+            f"conceptually invalid. Use full observability (partial_observability=False) with "
+            f"'relative' or 'scaled' observation_encoding for position-independent learning instead."
+        )
 
     def get_all_positions(self) -> list[list[float]]:
         """Raise error - continuous space has infinite positions."""

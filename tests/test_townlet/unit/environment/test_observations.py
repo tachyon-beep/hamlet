@@ -15,10 +15,14 @@ Tests cover:
 """
 
 import math
+from pathlib import Path
 
+import pytest
 import torch
+import yaml
 
 from townlet.environment.observation_builder import ObservationBuilder
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.substrate.grid2d import Grid2DSubstrate
 
 
@@ -205,6 +209,116 @@ class TestPartialObservability:
         # First 25 dims are the local grid (5×5)
         local_grid = obs[0, :25]
         assert local_grid.shape[0] == 25
+
+
+class TestPartialObservabilityWindowDimensions:
+    """Validate POMDP window sizing across substrates."""
+
+    def test_grid3d_window_dimension_matches_position_dim(self, temp_config_pack: Path, device: torch.device) -> None:
+        """Grid3D should produce W³ local footprint for vision window."""
+        substrate_path = temp_config_pack / "substrate.yaml"
+        cubic_config = {
+            "version": "1.0",
+            "description": "Test cubic substrate for window dimension checks",
+            "type": "grid",
+            "grid": {
+                "topology": "cubic",
+                "width": 5,
+                "height": 5,
+                "depth": 5,
+                "boundary": "clamp",
+                "distance_metric": "manhattan",
+                "observation_encoding": "relative",
+            },
+        }
+        with substrate_path.open("w") as fh:
+            yaml.safe_dump(cubic_config, fh)
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=5,
+            partial_observability=True,
+            vision_range=1,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=100,
+            config_pack_path=temp_config_pack,
+            device=device,
+        )
+
+        obs = env.reset()
+        window_size = 2 * env.vision_range + 1
+        expected_window_dim = window_size**env.substrate.position_dim
+        expected_total_dim = expected_window_dim + env.substrate.position_dim + env.meter_count + (env.num_affordance_types + 1) + 4
+
+        assert env.substrate.position_dim == 3
+        assert env.observation_dim == expected_total_dim
+        assert obs.shape == (env.num_agents, expected_total_dim)
+        assert obs.shape[1] == expected_total_dim
+
+    def test_aspatial_partial_observability_rejected(self, temp_config_pack: Path, device: torch.device) -> None:
+        """Aspatial substrates must reject partial observability."""
+        substrate_path = temp_config_pack / "substrate.yaml"
+        aspatial_config = {
+            "version": "1.0",
+            "description": "Aspatial substrate for validation",
+            "type": "aspatial",
+            "aspatial": {},
+        }
+        with substrate_path.open("w") as fh:
+            yaml.safe_dump(aspatial_config, fh)
+
+        with pytest.raises(ValueError, match="Partial observability \\(POMDP\\) is not supported for aspatial substrates"):
+            VectorizedHamletEnv(
+                num_agents=1,
+                grid_size=1,
+                partial_observability=True,
+                vision_range=1,
+                enable_temporal_mechanics=False,
+                move_energy_cost=0.005,
+                wait_energy_cost=0.001,
+                interact_energy_cost=0.0,
+                agent_lifespan=100,
+                config_pack_path=temp_config_pack,
+                device=device,
+            )
+
+    def test_continuous_partial_observability_rejected(self, temp_config_pack: Path, device: torch.device) -> None:
+        """Continuous substrates must reject partial observability."""
+        substrate_path = temp_config_pack / "substrate.yaml"
+        continuous_config = {
+            "version": "1.0",
+            "description": "Continuous substrate for validation",
+            "type": "continuous",
+            "continuous": {
+                "dimensions": 1,
+                "bounds": [[0.0, 10.0]],
+                "boundary": "clamp",
+                "movement_delta": 1.0,
+                "interaction_radius": 0.5,
+                "distance_metric": "euclidean",
+                "observation_encoding": "relative",
+            },
+        }
+        with substrate_path.open("w") as fh:
+            yaml.safe_dump(continuous_config, fh)
+
+        with pytest.raises(ValueError, match="Partial observability \\(POMDP\\) is not supported for continuous substrates"):
+            VectorizedHamletEnv(
+                num_agents=1,
+                grid_size=1,
+                partial_observability=True,
+                vision_range=1,
+                enable_temporal_mechanics=False,
+                move_energy_cost=0.005,
+                wait_energy_cost=0.001,
+                interact_energy_cost=0.0,
+                agent_lifespan=100,
+                config_pack_path=temp_config_pack,
+                device=device,
+            )
 
 
 class TestTemporalFeatures:

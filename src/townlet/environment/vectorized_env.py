@@ -17,6 +17,7 @@ from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.observation_builder import ObservationBuilder
 from townlet.environment.reward_strategy import RewardStrategy
+from townlet.substrate.continuous import ContinuousSubstrate
 
 if TYPE_CHECKING:
     from townlet.population.runtime_registry import AgentRuntimeRegistry
@@ -179,13 +180,36 @@ class VectorizedHamletEnv:
         self.num_affordance_types = len(all_affordance_names)
 
         # Validate partial observability support
+        if partial_observability and self.substrate.position_dim == 0:
+            raise ValueError(
+                "Partial observability (POMDP) is not supported for aspatial substrates. "
+                "A local vision window requires at least 1 spatial dimension. "
+                "Set partial_observability=False when using an aspatial substrate."
+            )
+        if partial_observability and isinstance(self.substrate, ContinuousSubstrate):
+            raise ValueError(
+                "Partial observability (POMDP) is not supported for continuous substrates. "
+                "Continuous spaces have infinite positions within any local window, making discrete vision grids undefined. "
+                "Use partial_observability=False with 'relative' or 'scaled' observation_encoding instead."
+            )
         if partial_observability and self.substrate.position_dim >= 4:
+            window_size = 2 * vision_range + 1
+            cell_count = window_size**self.substrate.position_dim
             raise ValueError(
                 f"Partial observability (POMDP) is not supported for {self.substrate.position_dim}D substrates. "
-                f"Local window size would be (2*{vision_range}+1)^{self.substrate.position_dim} = "
-                f"{(2*vision_range+1)**self.substrate.position_dim} cells, which is impractical. "
-                f"Use full observability (partial_observability=False) with 'relative' or 'scaled' "
-                f"observation_encoding instead. See substrate configuration docs for details."
+                f"\n\nProblem: Local window size grows EXPONENTIALLY with dimensionality:"
+                f"\n  - 2D: {window_size}×{window_size} = {window_size**2} cells (practical)"
+                f"\n  - 3D: {window_size}×{window_size}×{window_size} = {window_size**3} cells (supported up to vision_range=2)"
+                f"\n  - {self.substrate.position_dim}D: {window_size}^{self.substrate.position_dim} = {cell_count:,} cells (IMPRACTICAL)"
+                f"\n\nThis creates:"
+                f"\n  - Network input explosion ({cell_count:,} vision features + position + meters)"
+                f"\n  - Memory explosion (each agent's observation is massive)"
+                f"\n  - Training slowdown (gradient computation over huge inputs)"
+                f"\n\nSolution: Use full observability (partial_observability=False) with normalized position encoding:"
+                f"\n  - observation_encoding='relative': Just {self.substrate.position_dim} dims (normalized coordinates)"
+                f"\n  - observation_encoding='scaled': {self.substrate.position_dim*2} dims (coordinates + grid sizes)"
+                f"\n  - Enables dimension-independent learning WITHOUT exponential curse"
+                f"\n\nSee docs/manual/pomdp_compatibility_matrix.md for details."
             )
 
         # Validate Grid3D POMDP vision range (prevent memory explosion)
@@ -213,10 +237,15 @@ class VectorizedHamletEnv:
         if partial_observability:
             # Level 2 POMDP: local window + position + meters + current affordance type
             window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
+            # Local window footprint depends on substrate dimensionality (e.g., Grid3D → W³)
+            if self.substrate.position_dim == 0:
+                local_window_dim = 0
+            else:
+                local_window_dim = window_size**self.substrate.position_dim
             # Local window + normalized position + meters + affordance type one-hot (N+1 for "none")
             # Position dimension is substrate-specific (2 for Grid2D, 0 for Aspatial)
             self.observation_dim = (
-                window_size * window_size
+                local_window_dim
                 + self.substrate.position_dim  # 2 for Grid2D, 0 for Aspatial
                 + meter_count
                 + (self.num_affordance_types + 1)
