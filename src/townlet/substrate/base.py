@@ -151,23 +151,23 @@ class SpatialSubstrate(ABC):
             affordances: {name: [position_dim]} affordance positions
 
         Returns:
-            [num_agents, observation_dim] position encoding
+            [num_agents, observation_dim] grid + position features
 
-        observation_dim is substrate-specific:
-        - Grid2D (8×8): 64 (one-hot grid cells)
-        - Grid3D (8×8×3): 192 (one-hot 3D cells)
+        observation_dim is substrate-specific (grid + position):
+        - Grid2D (8×8, relative): 66 (64 grid cells + 2 normalized position)
+        - Grid3D (8×8×3, relative): 195 (192 grid cells + 3 normalized position)
         - Aspatial: 0 (no position encoding)
         """
         pass
 
     @abstractmethod
     def get_observation_dim(self) -> int:
-        """Return the dimensionality of position encoding in observations.
+        """Return the dimensionality of grid + position encoding in observations.
 
         Returns:
-            Number of features in position encoding:
-            - Grid2D: width × height
-            - Grid3D: width × height × depth
+            Number of features in observation (grid + position):
+            - Grid2D (8×8, relative): 66 (64 grid + 2 position)
+            - Grid3D (8×8×3, relative): 195 (192 grid + 3 position)
             - Aspatial: 0
         """
         pass

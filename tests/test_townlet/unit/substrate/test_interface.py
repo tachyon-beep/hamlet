@@ -26,8 +26,8 @@ def test_grid2d_substrate_creation():
     substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
 
     assert substrate.position_dim == 2
-    # NEW Phase 5C: default encoding is "relative" (normalized coordinates)
-    assert substrate.get_observation_dim() == 2  # (x, y) normalized
+    # NEW Phase 5C: default encoding is "relative" (grid + normalized position)
+    assert substrate.get_observation_dim() == 66  # (64 grid + 2 position)
 
 
 def test_grid2d_initialize_positions():
@@ -160,40 +160,41 @@ def test_grid2d_compute_distance_chebyshev():
 
 
 def test_grid2d_encode_observation():
-    """Grid2D should encode positions as normalized coordinates (relative encoding)."""
+    """Grid2D should encode grid+position with normalized coordinates (relative encoding)."""
     substrate = Grid2DSubstrate(width=3, height=3, boundary="clamp", distance_metric="manhattan")
 
     # Agent at [1, 1]
     positions = torch.tensor([[1, 1]], dtype=torch.long)
 
-    # Affordance at [2, 2] (currently unused in relative encoding)
+    # Affordance at [2, 2]
     affordances = {"Bed": torch.tensor([2, 2], dtype=torch.long)}
 
     encoding = substrate.encode_observation(positions, affordances)
 
-    # NEW Phase 5C: Should be [1, 2] shape (1 agent, (x, y) normalized)
-    assert encoding.shape == (1, 2)
+    # NEW Phase 5C: Should be [1, 11] shape (1 agent, 9 grid + 2 position)
+    assert encoding.shape == (1, 11)
 
-    # Agent position (1,1) normalized: x=1/2=0.5, y=1/2=0.5 (divide by width-1, height-1)
-    expected = torch.tensor([[0.5, 0.5]])
-    assert torch.allclose(encoding, expected)
+    # Position features (last 2 dims): Agent at (1,1) normalized: x=1/2=0.5, y=1/2=0.5
+    expected_position = torch.tensor([0.5, 0.5])
+    assert torch.allclose(encoding[0, -2:], expected_position)
 
 
 def test_grid2d_encode_observation_overlap():
-    """Grid2D with relative encoding returns normalized position regardless of affordances."""
+    """Grid2D with relative encoding returns grid+position with normalized coordinates."""
     substrate = Grid2DSubstrate(width=3, height=3, boundary="clamp", distance_metric="manhattan")
 
     # Agent at [1, 1]
     positions = torch.tensor([[1, 1]], dtype=torch.long)
 
-    # Affordance also at [1, 1] (same position, currently unused in relative encoding)
+    # Affordance also at [1, 1] (same position)
     affordances = {"Bed": torch.tensor([1, 1], dtype=torch.long)}
 
     encoding = substrate.encode_observation(positions, affordances)
 
-    # NEW Phase 5C: Relative encoding returns normalized coordinates [0.5, 0.5]
-    expected = torch.tensor([[0.5, 0.5]])
-    assert torch.allclose(encoding, expected)
+    # NEW Phase 5C: Returns [1, 11] (9 grid + 2 position), position features at end
+    # Position features (last 2 dims) should be normalized coordinates [0.5, 0.5]
+    expected_position = torch.tensor([0.5, 0.5])
+    assert torch.allclose(encoding[0, -2:], expected_position)
 
 
 def test_grid2d_get_valid_neighbors():

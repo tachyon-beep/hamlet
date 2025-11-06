@@ -48,90 +48,91 @@ def grid2d_absolute(device):
 
 
 def test_grid2d_relative_encoding_dimensions(grid2d_relative):
-    """Relative encoding should return [num_agents, 2] normalized positions."""
+    """Relative encoding should return [num_agents, 66] (64 grid + 2 position)."""
     positions = torch.tensor([[0, 0], [7, 7], [3, 4]], dtype=torch.long)
     affordances = {}
 
     encoded = grid2d_relative.encode_observation(positions, affordances)
 
-    assert encoded.shape == (3, 2), "Should return [num_agents, 2]"
+    assert encoded.shape == (3, 66), "Should return [num_agents, 66] (64 grid + 2 position)"
     assert encoded.dtype == torch.float32
 
 
 def test_grid2d_relative_encoding_values(grid2d_relative):
-    """Relative encoding should normalize to [0, 1] range."""
+    """Relative encoding position features (last 2 dims) should normalize to [0, 1] range."""
     positions = torch.tensor([[0, 0], [7, 7], [3, 4]], dtype=torch.long)
     affordances = {}
 
     encoded = grid2d_relative.encode_observation(positions, affordances)
 
+    # Position features are last 2 dimensions (after 64-dim grid)
     # 0 / 7 = 0.0, 7 / 7 = 1.0, 3 / 7 = 0.428..., 4 / 7 = 0.571...
-    assert torch.allclose(encoded[0], torch.tensor([0.0, 0.0]))
-    assert torch.allclose(encoded[1], torch.tensor([1.0, 1.0]))
-    assert torch.allclose(encoded[2], torch.tensor([3 / 7, 4 / 7]))
+    assert torch.allclose(encoded[0, -2:], torch.tensor([0.0, 0.0]))
+    assert torch.allclose(encoded[1, -2:], torch.tensor([1.0, 1.0]))
+    assert torch.allclose(encoded[2, -2:], torch.tensor([3 / 7, 4 / 7]))
 
 
 def test_grid2d_scaled_encoding_dimensions(grid2d_scaled):
-    """Scaled encoding should return [num_agents, 4] (normalized + ranges)."""
+    """Scaled encoding should return [num_agents, 68] (64 grid + 4 position+metadata)."""
     positions = torch.tensor([[0, 0], [7, 7]], dtype=torch.long)
     affordances = {}
 
     encoded = grid2d_scaled.encode_observation(positions, affordances)
 
-    assert encoded.shape == (2, 4), "Should return [num_agents, 4] (2 pos + 2 ranges)"
+    assert encoded.shape == (2, 68), "Should return [num_agents, 68] (64 grid + 4 position+metadata)"
     assert encoded.dtype == torch.float32
 
 
 def test_grid2d_scaled_encoding_values(grid2d_scaled):
-    """Scaled encoding should have normalized positions + range metadata."""
+    """Scaled encoding position features (last 4 dims) should have normalized positions + range metadata."""
     positions = torch.tensor([[3, 4]], dtype=torch.long)
     affordances = {}
 
     encoded = grid2d_scaled.encode_observation(positions, affordances)
 
-    # First 2 dims: normalized positions
-    assert torch.allclose(encoded[0, :2], torch.tensor([3 / 7, 4 / 7]))
+    # Last 4 dims: normalized positions (2) + range sizes (2)
+    assert torch.allclose(encoded[0, -4:-2], torch.tensor([3 / 7, 4 / 7]))
     # Last 2 dims: range sizes (width=8, height=8)
-    assert torch.allclose(encoded[0, 2:], torch.tensor([8.0, 8.0]))
+    assert torch.allclose(encoded[0, -2:], torch.tensor([8.0, 8.0]))
 
 
 def test_grid2d_absolute_encoding_dimensions(grid2d_absolute):
-    """Absolute encoding should return [num_agents, 2] raw coordinates."""
+    """Absolute encoding should return [num_agents, 66] (64 grid + 2 raw position)."""
     positions = torch.tensor([[0, 0], [7, 7]], dtype=torch.long)
     affordances = {}
 
     encoded = grid2d_absolute.encode_observation(positions, affordances)
 
-    assert encoded.shape == (2, 2), "Should return [num_agents, 2]"
+    assert encoded.shape == (2, 66), "Should return [num_agents, 66] (64 grid + 2 position)"
     assert encoded.dtype == torch.float32
 
 
 def test_grid2d_absolute_encoding_values(grid2d_absolute):
-    """Absolute encoding should return raw unnormalized coordinates."""
+    """Absolute encoding position features (last 2 dims) should return raw unnormalized coordinates."""
     positions = torch.tensor([[0, 0], [7, 7], [3, 4]], dtype=torch.long)
     affordances = {}
 
     encoded = grid2d_absolute.encode_observation(positions, affordances)
 
-    # Should be raw float coordinates
-    assert torch.allclose(encoded[0], torch.tensor([0.0, 0.0]))
-    assert torch.allclose(encoded[1], torch.tensor([7.0, 7.0]))
-    assert torch.allclose(encoded[2], torch.tensor([3.0, 4.0]))
+    # Position features are last 2 dims - should be raw float coordinates
+    assert torch.allclose(encoded[0, -2:], torch.tensor([0.0, 0.0]))
+    assert torch.allclose(encoded[1, -2:], torch.tensor([7.0, 7.0]))
+    assert torch.allclose(encoded[2, -2:], torch.tensor([3.0, 4.0]))
 
 
 def test_grid2d_get_observation_dim_relative(grid2d_relative):
-    """get_observation_dim() should return 2 for relative encoding."""
-    assert grid2d_relative.get_observation_dim() == 2
+    """get_observation_dim() should return 66 for relative encoding (64 grid + 2 position)."""
+    assert grid2d_relative.get_observation_dim() == 66
 
 
 def test_grid2d_get_observation_dim_scaled(grid2d_scaled):
-    """get_observation_dim() should return 4 for scaled encoding."""
-    assert grid2d_scaled.get_observation_dim() == 4
+    """get_observation_dim() should return 68 for scaled encoding (64 grid + 4 position+metadata)."""
+    assert grid2d_scaled.get_observation_dim() == 68
 
 
 def test_grid2d_get_observation_dim_absolute(grid2d_absolute):
-    """get_observation_dim() should return 2 for absolute encoding."""
-    assert grid2d_absolute.get_observation_dim() == 2
+    """get_observation_dim() should return 66 for absolute encoding (64 grid + 2 position)."""
+    assert grid2d_absolute.get_observation_dim() == 66
 
 
 def test_grid2d_default_encoding_is_relative():

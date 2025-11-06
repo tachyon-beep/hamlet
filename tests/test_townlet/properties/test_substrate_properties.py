@@ -167,13 +167,9 @@ def test_property_obs_dim_matches_substrate_grid2d(grid_size, num_agents, test_c
 
     obs = env.reset()
 
-    # Expected dimension based on substrate observation encoding
-    if env.substrate.observation_encoding == "relative":
-        substrate_dim = 2  # Normalized (x, y)
-    elif env.substrate.observation_encoding == "scaled":
-        substrate_dim = 4  # Normalized (x, y) + (width, height)
-    elif env.substrate.observation_encoding == "absolute":
-        substrate_dim = 2  # Raw (x, y)
+    # Expected dimension based on substrate (grid + position)
+    # Use substrate.get_observation_dim() which accounts for grid cells + position features
+    substrate_dim = env.substrate.get_observation_dim()
 
     meter_dim = env.meter_count  # From config (8 for test config)
     affordance_dim = 15  # 14 affordances + "none"

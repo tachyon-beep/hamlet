@@ -173,43 +173,44 @@ class TestGrid3DObservationEncoding:
     """Tests for observation encoding."""
 
     def test_encode_observation_shape(self):
-        """Observation encoding returns constant size."""
+        """Observation encoding returns grid+position (195 dims for 8×8×3 grid)."""
         substrate = Grid3DSubstrate(width=8, height=8, depth=3, boundary="clamp")
         positions = torch.tensor([[0, 0, 0], [7, 7, 2], [4, 4, 1]], dtype=torch.long)
 
         obs = substrate.encode_observation(positions, {})
 
-        # Should be [num_agents, 3] regardless of grid size
-        assert obs.shape == (3, 3)
+        # Should be [num_agents, 195] (192 grid + 3 position)
+        assert obs.shape == (3, 195)
         assert obs.dtype == torch.float32
 
     def test_encode_observation_normalization(self):
-        """Observations normalized to [0, 1]."""
+        """Position features (last 3 dims) normalized to [0, 1]."""
         substrate = Grid3DSubstrate(width=8, height=8, depth=3, boundary="clamp")
         positions = torch.tensor([[0, 0, 0], [7, 7, 2]], dtype=torch.long)
 
         obs = substrate.encode_observation(positions, {})
 
+        # Position features are last 3 dimensions (after 192-dim grid)
         # Min corner: [0, 0, 0]
-        assert torch.allclose(obs[0], torch.tensor([0.0, 0.0, 0.0]))
+        assert torch.allclose(obs[0, -3:], torch.tensor([0.0, 0.0, 0.0]))
 
         # Max corner: [7, 7, 2]
         # Normalized: [7/7, 7/7, 2/2] = [1, 1, 1]
-        assert torch.allclose(obs[1], torch.tensor([1.0, 1.0, 1.0]))
+        assert torch.allclose(obs[1, -3:], torch.tensor([1.0, 1.0, 1.0]))
 
     def test_encode_observation_scales_with_grid_size(self):
-        """Large grids still produce 3-dim observations."""
+        """Large grids produce grid+position (100K grid + 3 position = 100,003 dims)."""
         substrate = Grid3DSubstrate(width=100, height=100, depth=10, boundary="clamp")
         positions = torch.tensor([[50, 50, 5]], dtype=torch.long)
 
         obs = substrate.encode_observation(positions, {})
 
-        # Still 3 dims, not 100*100*10=100K dims!
-        assert obs.shape == (1, 3)
+        # 100,000 grid cells + 3 position features = 100,003 dims
+        assert obs.shape == (1, 100003)
 
-        # Middle of grid ≈ [0.5, 0.5, 0.5]
+        # Position features (last 3 dims): Middle of grid ≈ [0.5, 0.5, 0.5]
         expected = torch.tensor([50 / 99, 50 / 99, 5 / 9])
-        assert torch.allclose(obs[0], expected, atol=0.01)
+        assert torch.allclose(obs[0, -3:], expected, atol=0.01)
 
 
 class TestGrid3DPositionChecks:
