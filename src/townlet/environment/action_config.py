@@ -35,29 +35,29 @@ class ActionConfig(BaseModel):
 
     # Movement-specific
     delta: list[int] | None = Field(
-        None,
+        default=None,
         description="Movement delta [dx, dy] or [dx, dy, dz] for standard movement",
     )
     teleport_to: list[int] | None = Field(
-        None,
+        default=None,
         description="Teleport destination [x, y] or [x, y, z]. Overrides delta.",
     )
 
     # Enabled/disabled state (for curriculum progression)
     enabled: bool = Field(
-        True,
+        default=True,
         description="Whether this action is enabled in current config (for masking)",
     )
 
     # Metadata
-    description: str | None = Field(None, description="Human-readable description")
-    icon: str | None = Field(None, max_length=10, description="Emoji for UI")
+    description: str | None = Field(default=None, description="Human-readable description")
+    icon: str | None = Field(default=None, max_length=10, description="Emoji for UI")
     source: Literal["substrate", "custom", "affordance"] = Field(
-        "custom",
+        default="custom",
         description="Where this action came from",
     )
     source_affordance: str | None = Field(
-        None,
+        default=None,
         description="If source='affordance', which affordance provided it",
     )
 

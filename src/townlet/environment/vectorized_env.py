@@ -617,7 +617,7 @@ class VectorizedHamletEnv:
         if custom_mask.any():
             custom_agent_indices = torch.where(custom_mask)[0]
             for agent_idx in custom_agent_indices:
-                action_id = actions[agent_idx].item()
+                action_id = int(actions[agent_idx].item())
                 action = self.action_space.get_action_by_id(action_id)
 
                 # Apply custom action costs/effects/teleportation
@@ -918,10 +918,11 @@ class VectorizedHamletEnv:
         Returns:
             Meter index, or None if meter doesn't exist
         """
-        mapping = getattr(self, "meter_name_to_index", None)
+        mapping: dict[str, int] | None = getattr(self, "meter_name_to_index", None)
         if mapping is None:
             return None
-        return mapping.get(meter_name)
+        result: int | None = mapping.get(meter_name)
+        return result
 
     def _apply_custom_action(self, agent_idx: int, action: ActionConfig):
         """Apply custom action effects, movement delta, and teleportation.
