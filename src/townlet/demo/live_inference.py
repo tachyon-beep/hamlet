@@ -157,11 +157,13 @@ class LiveInferenceServer:
         """Build substrate metadata for WebSocket messages.
 
         Returns:
-            Dict with substrate type, dimensions, and topology.
+            Dict with substrate type, dimensions, and topology (if applicable).
             Used by frontend to dispatch correct renderer.
 
         Example:
-            Grid2D: {"type": "grid2d", "position_dim": 2, "width": 8, "height": 8, "topology": "square"}
+            Grid2D: {"type": "grid2d", "position_dim": 2, "topology": "square", "width": 8, "height": 8, ...}
+            GridND: {"type": "gridnd", "position_dim": 7, "topology": "hypercube", "dimension_sizes": [5,5,5,5,5,5,5], ...}
+            Continuous2D: {"type": "continuous2d", "position_dim": 2, "bounds": [...], ...}
             Aspatial: {"type": "aspatial", "position_dim": 0}
         """
         if not self.env:
@@ -177,20 +179,38 @@ class LiveInferenceServer:
             "position_dim": substrate.position_dim,
         }
 
-        # Add grid-specific metadata
+        # Add topology if substrate has it (grid substrates only)
+        if hasattr(substrate, "topology"):
+            metadata["topology"] = substrate.topology
+
+        # Add type-specific metadata
         if substrate_type == "grid2d":
-            metadata["topology"] = "square"  # Grid2D is always square topology
             metadata["width"] = substrate.width
             metadata["height"] = substrate.height
             metadata["boundary"] = substrate.boundary
             metadata["distance_metric"] = substrate.distance_metric
+
         elif substrate_type == "grid3d":
-            metadata["topology"] = "cubic"  # Grid3D is always cubic topology
             metadata["width"] = substrate.width
             metadata["height"] = substrate.height
             metadata["depth"] = substrate.depth
             metadata["boundary"] = substrate.boundary
             metadata["distance_metric"] = substrate.distance_metric
+
+        elif substrate_type == "gridnd":
+            metadata["dimension_sizes"] = substrate.dimension_sizes
+            metadata["boundary"] = substrate.boundary
+            metadata["distance_metric"] = substrate.distance_metric
+
+        elif substrate_type.startswith("continuous"):
+            # Continuous substrates (1D/2D/3D/ND)
+            metadata["bounds"] = substrate.bounds
+            metadata["boundary"] = substrate.boundary
+            metadata["movement_delta"] = substrate.movement_delta
+            metadata["interaction_radius"] = substrate.interaction_radius
+            metadata["distance_metric"] = substrate.distance_metric
+
+        # Aspatial has no additional metadata
 
         return metadata
 
