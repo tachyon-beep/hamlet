@@ -120,6 +120,7 @@ class RecurrentSpatialQNetwork(nn.Module):
         )
 
         # Position Encoder: position_dim → 32 features (conditional on position_dim > 0)
+        self.position_encoder: nn.Sequential | None
         if position_dim > 0:
             self.position_encoder = nn.Sequential(
                 nn.Linear(position_dim, 32),

@@ -19,6 +19,10 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.recording.replay import ReplayManager
+from townlet.substrate.continuous import ContinuousSubstrate
+from townlet.substrate.grid2d import Grid2DSubstrate
+from townlet.substrate.grid3d import Grid3DSubstrate
+from townlet.substrate.gridnd import GridNDSubstrate
 
 logger = logging.getLogger(__name__)
 
@@ -183,26 +187,26 @@ class LiveInferenceServer:
         if hasattr(substrate, "topology"):
             metadata["topology"] = substrate.topology
 
-        # Add type-specific metadata
-        if substrate_type == "grid2d":
+        # Add type-specific metadata with type narrowing
+        if isinstance(substrate, Grid2DSubstrate):
             metadata["width"] = substrate.width
             metadata["height"] = substrate.height
             metadata["boundary"] = substrate.boundary
             metadata["distance_metric"] = substrate.distance_metric
 
-        elif substrate_type == "grid3d":
+        elif isinstance(substrate, Grid3DSubstrate):
             metadata["width"] = substrate.width
             metadata["height"] = substrate.height
             metadata["depth"] = substrate.depth
             metadata["boundary"] = substrate.boundary
             metadata["distance_metric"] = substrate.distance_metric
 
-        elif substrate_type == "gridnd":
+        elif isinstance(substrate, GridNDSubstrate):
             metadata["dimension_sizes"] = substrate.dimension_sizes
             metadata["boundary"] = substrate.boundary
             metadata["distance_metric"] = substrate.distance_metric
 
-        elif substrate_type.startswith("continuous"):
+        elif isinstance(substrate, ContinuousSubstrate):
             # Continuous substrates (1D/2D/3D/ND)
             metadata["bounds"] = substrate.bounds
             metadata["boundary"] = substrate.boundary
@@ -855,6 +859,8 @@ class LiveInferenceServer:
         """
         from townlet.substrate.aspatial import AspatialSubstrate
         from townlet.substrate.grid2d import Grid2DSubstrate
+
+        assert self.env is not None, "Environment must be initialized before building grid data"
 
         if isinstance(self.env.substrate, Grid2DSubstrate):
             # 2D grid rendering (current implementation)
