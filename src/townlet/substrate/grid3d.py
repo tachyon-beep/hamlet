@@ -407,10 +407,10 @@ class Grid3DSubstrate(SpatialSubstrate):
                 if affordance_pos.numel() < 3:
                     continue
 
-                aff_tensor = torch.as_tensor(affordance_pos).to(device=device, dtype=torch.long)
-                aff_x = aff_tensor[0].item()
-                aff_y = aff_tensor[1].item()
-                aff_z = aff_tensor[2].item()
+                aff_tensor = torch.as_tensor(affordance_pos, device=device, dtype=torch.long)
+                aff_x = int(aff_tensor[0].item())
+                aff_y = int(aff_tensor[1].item())
+                aff_z = int(aff_tensor[2].item())
 
                 # Compute relative position in local window
                 rel_x = aff_x - agent_x + vision_range

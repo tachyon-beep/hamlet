@@ -429,8 +429,8 @@ class Grid2DSubstrate(SpatialSubstrate):
                 if affordance_pos.numel() < 2:
                     continue
 
-                aff_tensor = torch.as_tensor(affordance_pos).to(device=device, dtype=torch.long)
-                aff_x, aff_y = aff_tensor[0].item(), aff_tensor[1].item()
+                aff_tensor = torch.as_tensor(affordance_pos, device=device, dtype=torch.long)
+                aff_x, aff_y = int(aff_tensor[0].item()), int(aff_tensor[1].item())
 
                 # Compute relative position in local window
                 rel_x = aff_x - agent_x + vision_range
