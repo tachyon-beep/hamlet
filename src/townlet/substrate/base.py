@@ -1,8 +1,12 @@
 """Abstract base class for spatial substrates."""
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from townlet.environment.action_config import ActionConfig
 
 
 class SpatialSubstrate(ABC):
@@ -82,6 +86,22 @@ class SpatialSubstrate(ABC):
             return 2
         # Spatial: 2N + 2 (±movement per dimension + INTERACT + WAIT)
         return 2 * self.position_dim + 2
+
+    @abstractmethod
+    def get_default_actions(self) -> list["ActionConfig"]:
+        """Return substrate's default action space with default costs.
+
+        Returns:
+            List of ActionConfig instances with substrate-provided actions.
+            IDs are temporary (will be reassigned by ActionSpaceBuilder).
+
+        Examples:
+            Grid2D: [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT] (6 actions)
+            Grid3D: [UP, DOWN, LEFT, RIGHT, UP_Z, DOWN_Z, INTERACT, WAIT] (8 actions)
+            GridND(7D): [DIM0_NEG, DIM0_POS, ..., DIM6_POS, INTERACT, WAIT] (16 actions)
+            Aspatial: [INTERACT, WAIT] (2 actions)
+        """
+        pass
 
     @abstractmethod
     def initialize_positions(self, num_agents: int, device: torch.device) -> torch.Tensor:
