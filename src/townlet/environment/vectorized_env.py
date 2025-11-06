@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from townlet.environment.action_builder import ActionSpaceBuilder
 from townlet.environment.affordance_config import load_affordance_config
 from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
@@ -304,10 +305,23 @@ class VectorizedHamletEnv:
             bars_config.meter_name_to_index,
         )
 
-        # Action space size is determined by substrate
-        # Substrate reports number of discrete actions via action_space_size property
-        # This enables dynamic action spaces for N-dimensional substrates
-        self.action_dim = self.substrate.action_space_size
+        # Build composed action space from substrate + global custom actions
+        # TODO(Phase 4.2): Load enabled_actions from training.yaml when TrainingConfig DTO exists
+        # For now, all actions enabled by default (None = all enabled)
+        enabled_actions = None  # Will be loaded from training.yaml in Task 4.2
+
+        global_actions_path = Path("configs/global_actions.yaml")
+        builder = ActionSpaceBuilder(
+            substrate=self.substrate,
+            global_actions_path=global_actions_path,
+            enabled_action_names=enabled_actions,
+        )
+        self.action_space = builder.build()
+        self.action_dim = self.action_space.action_dim
+
+        # Cache action indices for fast lookup (replaces hardcoded formulas from Task 1.6)
+        self.interact_action_idx = self.action_space.get_action_by_name("INTERACT").id
+        self.wait_action_idx = self.action_space.get_action_by_name("WAIT").id
 
         # Build movement deltas from ActionConfig (dynamic, not hardcoded)
         self._movement_deltas = self._build_movement_deltas()
@@ -480,16 +494,8 @@ class VectorizedHamletEnv:
         # Affordability is checked inside interaction handlers; failing to afford just
         # wastes a turn (passive decay) and teaches economic planning
 
-        # Determine INTERACT action index based on substrate dimensionality
-        # 0D: INTERACT = 0, 1D: INTERACT = 2, 2D/3D: INTERACT = 4, N≥4: INTERACT = 2N
-        if self.substrate.position_dim == 0:
-            interact_action_idx = 0
-        elif self.substrate.position_dim == 1:
-            interact_action_idx = 2
-        elif self.substrate.position_dim in (2, 3):
-            interact_action_idx = 4
-        else:  # GridND / ContinuousND (N ≥ 4)
-            interact_action_idx = 2 * self.substrate.position_dim
+        # Use cached INTERACT index (from ActionSpaceBuilder)
+        interact_action_idx = self.interact_action_idx
 
         on_valid_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
@@ -618,19 +624,8 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # WAIT action - lighter energy cost
-        # Index derived from substrate dimensionality:
-        # 0D (aspatial): WAIT = 1
-        # 1D: WAIT = 3
-        # 2D: WAIT = 5
-        # 3D: WAIT = 5
-        if self.substrate.position_dim == 0:
-            wait_action_idx = 1
-        elif self.substrate.position_dim == 1:
-            wait_action_idx = 3
-        elif self.substrate.position_dim in (2, 3):
-            wait_action_idx = 5
-        else:
-            wait_action_idx = 2 * self.substrate.position_dim + 1
+        # Use cached WAIT index (from ActionSpaceBuilder)
+        wait_action_idx = self.wait_action_idx
 
         wait_mask = actions == wait_action_idx
         if wait_mask.any():
@@ -642,19 +637,8 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
-        # Index derived from substrate dimensionality:
-        # 0D (aspatial): INTERACT = 0
-        # 1D: INTERACT = 2
-        # 2D: INTERACT = 4
-        # 3D: INTERACT = 4
-        if self.substrate.position_dim == 0:
-            interact_action_idx = 0
-        elif self.substrate.position_dim == 1:
-            interact_action_idx = 2
-        elif self.substrate.position_dim in (2, 3):
-            interact_action_idx = 4
-        else:
-            interact_action_idx = 2 * self.substrate.position_dim
+        # Use cached INTERACT index (from ActionSpaceBuilder)
+        interact_action_idx = self.interact_action_idx
 
         successful_interactions = {}
         interact_mask = actions == interact_action_idx
