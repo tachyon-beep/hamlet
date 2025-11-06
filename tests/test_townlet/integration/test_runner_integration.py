@@ -403,7 +403,12 @@ class TestRunnerAffordanceTransitions:
         Integration test: When agent uses affordances in sequence (Bed → Hospital → Job),
         runner should track transitions and save to database using insert_affordance_visits().
         """
+        import torch
+
         from townlet.demo.runner import DemoRunner
+
+        # Seed RNG for deterministic affordance placement and agent behavior
+        torch.manual_seed(42)
 
         # Create config with enabled affordances (Bed only for simplicity)
         config_content = """
