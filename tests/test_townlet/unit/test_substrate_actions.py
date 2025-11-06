@@ -390,3 +390,177 @@ def test_aspatial_no_movement_actions():
 
     movement_actions = [a for a in actions if a.type == "movement"]
     assert len(movement_actions) == 0
+
+
+# ============================================================================
+# Meta-Action Ordering Tests (Canonical Order Contract)
+# ============================================================================
+
+
+def test_grid2d_meta_actions_at_end():
+    """Grid2D meta-actions (INTERACT, WAIT) should be last two actions."""
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+    actions = substrate.get_default_actions()
+
+    # Last two actions should be INTERACT, WAIT (in that order)
+    assert len(actions) == 6
+    assert actions[-2].name == "INTERACT"
+    assert actions[-1].name == "WAIT"
+
+    # First 4 should be movement actions (non-zero deltas)
+    for i in range(4):
+        assert actions[i].type == "movement"
+        assert actions[i].delta is not None
+        assert any(d != 0 for d in actions[i].delta)
+
+
+def test_grid3d_meta_actions_at_end():
+    """Grid3D meta-actions (INTERACT, WAIT) should be last two actions."""
+    substrate = Grid3DSubstrate(width=8, height=8, depth=3, boundary="clamp", distance_metric="manhattan")
+    actions = substrate.get_default_actions()
+
+    # Last two actions should be INTERACT, WAIT (in that order)
+    assert len(actions) == 8
+    assert actions[-2].name == "INTERACT"
+    assert actions[-1].name == "WAIT"
+
+    # First 6 should be movement actions (non-zero deltas)
+    for i in range(6):
+        assert actions[i].type == "movement"
+        assert actions[i].delta is not None
+        assert any(d != 0 for d in actions[i].delta)
+
+
+def test_gridnd_meta_actions_at_end():
+    """GridND meta-actions (INTERACT, WAIT) should be last two actions."""
+    substrate = GridNDSubstrate(
+        dimension_sizes=[5, 5, 5, 5],  # 4D
+        boundary="clamp",
+        distance_metric="manhattan",
+    )
+    actions = substrate.get_default_actions()
+
+    # Last two actions should be INTERACT, WAIT (in that order)
+    assert len(actions) == 10  # 4D × 2 + 2 = 10
+    assert actions[-2].name == "INTERACT"
+    assert actions[-1].name == "WAIT"
+
+    # First 8 should be movement actions (non-zero deltas)
+    for i in range(8):
+        assert actions[i].type == "movement"
+        assert actions[i].delta is not None
+        assert any(d != 0 for d in actions[i].delta)
+
+
+def test_continuous1d_meta_actions_at_end():
+    """Continuous1D meta-actions (INTERACT, WAIT) should be last two actions."""
+    substrate = Continuous1DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+    actions = substrate.get_default_actions()
+
+    # Last two actions should be INTERACT, WAIT (in that order)
+    assert len(actions) == 4
+    assert actions[-2].name == "INTERACT"
+    assert actions[-1].name == "WAIT"
+
+    # First 2 should be movement actions (non-zero deltas)
+    for i in range(2):
+        assert actions[i].type == "movement"
+        assert actions[i].delta is not None
+        assert any(d != 0 for d in actions[i].delta)
+
+
+def test_continuous2d_meta_actions_at_end():
+    """Continuous2D meta-actions (INTERACT, WAIT) should be last two actions."""
+    substrate = Continuous2DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        min_y=0.0,
+        max_y=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+    actions = substrate.get_default_actions()
+
+    # Last two actions should be INTERACT, WAIT (in that order)
+    assert len(actions) == 6
+    assert actions[-2].name == "INTERACT"
+    assert actions[-1].name == "WAIT"
+
+    # First 4 should be movement actions (non-zero deltas)
+    for i in range(4):
+        assert actions[i].type == "movement"
+        assert actions[i].delta is not None
+        assert any(d != 0 for d in actions[i].delta)
+
+
+def test_continuous3d_meta_actions_at_end():
+    """Continuous3D meta-actions (INTERACT, WAIT) should be last two actions."""
+    substrate = Continuous3DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        min_y=0.0,
+        max_y=10.0,
+        min_z=0.0,
+        max_z=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+    actions = substrate.get_default_actions()
+
+    # Last two actions should be INTERACT, WAIT (in that order)
+    assert len(actions) == 8
+    assert actions[-2].name == "INTERACT"
+    assert actions[-1].name == "WAIT"
+
+    # First 6 should be movement actions (non-zero deltas)
+    for i in range(6):
+        assert actions[i].type == "movement"
+        assert actions[i].delta is not None
+        assert any(d != 0 for d in actions[i].delta)
+
+
+def test_continuousnd_meta_actions_at_end():
+    """ContinuousND meta-actions (INTERACT, WAIT) should be last two actions."""
+    substrate = ContinuousNDSubstrate(
+        bounds=[(0.0, 10.0)] * 5,  # 5D
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+    actions = substrate.get_default_actions()
+
+    # Last two actions should be INTERACT, WAIT (in that order)
+    assert len(actions) == 12  # 5D × 2 + 2 = 12
+    assert actions[-2].name == "INTERACT"
+    assert actions[-1].name == "WAIT"
+
+    # First 10 should be movement actions (non-zero deltas)
+    for i in range(10):
+        assert actions[i].type == "movement"
+        assert actions[i].delta is not None
+        assert any(d != 0 for d in actions[i].delta)
+
+
+def test_aspatial_only_meta_actions():
+    """Aspatial substrate should ONLY have INTERACT and WAIT (no movement)."""
+    substrate = AspatialSubstrate()
+    actions = substrate.get_default_actions()
+
+    # Should only have INTERACT and WAIT
+    assert len(actions) == 2
+    assert actions[0].name == "INTERACT"
+    assert actions[1].name == "WAIT"
+
+    # Neither should be movement actions
+    assert actions[0].type != "movement"
+    assert actions[1].type != "movement"
+    assert actions[0].delta is None
+    assert actions[1].delta is None

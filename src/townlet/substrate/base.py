@@ -91,6 +91,20 @@ class SpatialSubstrate(ABC):
     def get_default_actions(self) -> list["ActionConfig"]:
         """Return substrate's default action space with default costs.
 
+        **CANONICAL ORDERING CONTRACT:**
+        All substrates MUST emit actions in this order:
+        1. Movement actions (substrate-specific, in any order)
+        2. INTERACT (second-to-last position)
+        3. WAIT (last position)
+
+        This ordering enables downstream systems (ActionSpaceBuilder, environment)
+        to consistently identify meta-actions by position:
+        - actions[-2] is always INTERACT
+        - actions[-1] is always WAIT
+        - actions[:-2] are always movement actions (if any)
+
+        Special case: Aspatial substrates have NO movement actions, only [INTERACT, WAIT].
+
         Returns:
             List of ActionConfig instances with substrate-provided actions.
             IDs are temporary (will be reassigned by ActionSpaceBuilder).
@@ -99,7 +113,7 @@ class SpatialSubstrate(ABC):
             Grid2D: [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT] (6 actions)
             Grid3D: [UP, DOWN, LEFT, RIGHT, UP_Z, DOWN_Z, INTERACT, WAIT] (8 actions)
             GridND(7D): [DIM0_NEG, DIM0_POS, ..., DIM6_POS, INTERACT, WAIT] (16 actions)
-            Aspatial: [INTERACT, WAIT] (2 actions)
+            Aspatial: [INTERACT, WAIT] (2 actions, no movement)
         """
         pass
 
