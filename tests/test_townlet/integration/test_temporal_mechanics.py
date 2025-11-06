@@ -796,9 +796,7 @@ class TestTemporalIntegrations:
         obs = env.reset()
 
         # Temporal features always included for forward compatibility
-        # substrate.get_observation_dim() + 8 (meters) + 15 (affordance) + 4 (temporal)
-        # For Grid2D with "relative" encoding: 2 + 8 + 15 + 4 = 29
-        expected_dim = env.substrate.get_observation_dim() + 8 + 15 + 4
+        expected_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
         assert obs.shape == (1, expected_dim)
 
         # Temporal state is dormant but present

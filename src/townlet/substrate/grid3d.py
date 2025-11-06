@@ -4,6 +4,8 @@ from typing import Literal
 
 import torch
 
+from townlet.environment.affordance_layout import iter_affordance_positions
+
 from .base import SpatialSubstrate
 
 
@@ -212,31 +214,85 @@ class Grid3DSubstrate(SpatialSubstrate):
         """
         return positions.float()
 
+    def _encode_full_grid(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor] | object,
+    ) -> torch.Tensor:
+        """Encode global occupancy for each agent in flattened grid form."""
+
+        num_agents = positions.shape[0]
+        device = positions.device
+        grid_volume = self.width * self.height * self.depth
+
+        affordance_grid = torch.zeros(grid_volume, dtype=torch.float32, device=device)
+
+        for affordance_pos in iter_affordance_positions(affordances):
+            if affordance_pos.numel() < 3:
+                continue
+
+            pos = torch.as_tensor(affordance_pos).to(device=device, dtype=torch.long)
+            x = pos[0].item()
+            y = pos[1].item()
+            z = pos[2].item()
+
+            if 0 <= x < self.width and 0 <= y < self.height and 0 <= z < self.depth:
+                idx = z * (self.width * self.height) + y * self.width + x
+                affordance_grid[idx] = 1.0
+
+        global_grid = affordance_grid.unsqueeze(0).expand(num_agents, -1).clone()
+
+        if num_agents == 0:
+            return global_grid
+
+        agent_x = positions[:, 0].long()
+        agent_y = positions[:, 1].long()
+        agent_z = positions[:, 2].long()
+
+        in_bounds = (
+            (agent_x >= 0) & (agent_x < self.width) & (agent_y >= 0) & (agent_y < self.height) & (agent_z >= 0) & (agent_z < self.depth)
+        )
+
+        if not torch.all(in_bounds):
+            invalid = torch.stack([agent_x[~in_bounds], agent_y[~in_bounds], agent_z[~in_bounds]], dim=1).tolist()
+            raise ValueError(f"Agent positions out of bounds for Grid3D: {invalid}")
+
+        agent_indices = agent_z * (self.width * self.height) + agent_y * self.width + agent_x
+        batch_indices = torch.arange(num_agents, device=device)
+
+        current_values = global_grid[batch_indices, agent_indices]
+        global_grid[batch_indices, agent_indices] = torch.clamp(current_values + 1.0, max=2.0)
+
+        return global_grid
+
+    def _encode_position_features(
+        self,
+        positions: torch.Tensor,
+        affordances: dict[str, torch.Tensor] | object,
+    ) -> torch.Tensor:
+        if self.observation_encoding == "relative":
+            return self._encode_relative(positions, affordances)
+        if self.observation_encoding == "scaled":
+            return self._encode_scaled(positions, affordances)
+        if self.observation_encoding == "absolute":
+            return self._encode_absolute(positions, affordances)
+
+        raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. Must be 'relative', 'scaled', or 'absolute'.")
+
     def encode_observation(
         self,
         positions: torch.Tensor,
-        affordances: dict[str, torch.Tensor],
+        affordances: dict[str, torch.Tensor] | object,
     ) -> torch.Tensor:
-        """Encode agent positions and affordances into observation space.
+        """Encode agent positions and affordances into observation space."""
 
-        Args:
-            positions: Agent positions [num_agents, 3]
-            affordances: Dict mapping affordance names to positions [3]
+        global_grid = self._encode_full_grid(positions, affordances)
+        position_features = self._encode_position_features(positions, affordances)
 
-        Returns:
-            Encoded observations with dimensions based on encoding mode:
-            - relative: [num_agents, 3]
-            - scaled: [num_agents, 6]
-            - absolute: [num_agents, 3]
-        """
-        if self.observation_encoding == "relative":
-            return self._encode_relative(positions, affordances)
-        elif self.observation_encoding == "scaled":
-            return self._encode_scaled(positions, affordances)
-        elif self.observation_encoding == "absolute":
-            return self._encode_absolute(positions, affordances)
-        else:
-            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. " f"Must be 'relative', 'scaled', or 'absolute'.")
+        if position_features.numel() == 0:
+            return global_grid
+
+        return torch.cat([global_grid, position_features], dim=1)
 
     def get_observation_dim(self) -> int:
         """Return dimensionality of position encoding.
@@ -246,14 +302,16 @@ class Grid3DSubstrate(SpatialSubstrate):
             - scaled: 6 (normalized x, y, z, width, height, depth)
             - absolute: 3 (raw x, y, z)
         """
+        grid_dim = self.width * self.height * self.depth
+
         if self.observation_encoding == "relative":
-            return 3
-        elif self.observation_encoding == "scaled":
-            return 6
-        elif self.observation_encoding == "absolute":
-            return 3
-        else:
-            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
+            return grid_dim + 3
+        if self.observation_encoding == "scaled":
+            return grid_dim + 6
+        if self.observation_encoding == "absolute":
+            return grid_dim + 3
+
+        raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}")
 
     def normalize_positions(self, positions: torch.Tensor) -> torch.Tensor:
         """Normalize positions to [0, 1] range (always relative encoding).
@@ -342,10 +400,14 @@ class Grid3DSubstrate(SpatialSubstrate):
             agent_x, agent_y, agent_z = positions[agent_idx]
 
             # Mark affordances in local window
-            for affordance_pos in affordances.values():
-                aff_x = affordance_pos[0].item()
-                aff_y = affordance_pos[1].item()
-                aff_z = affordance_pos[2].item()
+            for affordance_pos in iter_affordance_positions(affordances):
+                if affordance_pos.numel() < 3:
+                    continue
+
+                aff_tensor = torch.as_tensor(affordance_pos).to(device=device, dtype=torch.long)
+                aff_x = aff_tensor[0].item()
+                aff_y = aff_tensor[1].item()
+                aff_z = aff_tensor[2].item()
 
                 # Compute relative position in local window
                 rel_x = aff_x - agent_x + vision_range

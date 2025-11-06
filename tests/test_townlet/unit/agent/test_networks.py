@@ -23,6 +23,8 @@ import torch.nn as nn
 
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 
+FULL_OBS_DIM = 93  # 8×8 occupancy grid (64) + position (2) + meters (8) + affordance (15) + temporal (4)
+
 
 class TestSimpleQNetwork:
     """Test SimpleQNetwork (MLP for full observability)."""
@@ -30,7 +32,7 @@ class TestSimpleQNetwork:
     @pytest.fixture
     def network(self):
         """Create SimpleQNetwork with standard config."""
-        obs_dim = 72  # 8×8 grid + 8 meters
+        obs_dim = FULL_OBS_DIM
         action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
         hidden_dim = 128  # Standard hidden dimension
         return SimpleQNetwork(obs_dim=obs_dim, action_dim=action_dim, hidden_dim=hidden_dim)
@@ -51,7 +53,7 @@ class TestSimpleQNetwork:
         assert isinstance(network.net[6], nn.Linear)  # Q-head
 
         # Check dimensions
-        assert network.net[0].in_features == 72
+        assert network.net[0].in_features == FULL_OBS_DIM
         assert network.net[0].out_features == 128
         assert network.net[3].in_features == 128
         assert network.net[3].out_features == 128
@@ -60,7 +62,7 @@ class TestSimpleQNetwork:
 
     def test_forward_pass_single_agent(self, network):
         """Forward pass should produce correct Q-value shapes."""
-        obs = torch.randn(1, 72)  # Single agent
+        obs = torch.randn(1, FULL_OBS_DIM)  # Single agent
         q_values = network(obs)
 
         assert q_values.shape == (1, 6), f"Expected (1, 6), got {q_values.shape}"
@@ -70,7 +72,7 @@ class TestSimpleQNetwork:
     def test_forward_pass_batch(self, network):
         """Forward pass should handle batched observations."""
         batch_size = 32
-        obs = torch.randn(batch_size, 72)
+        obs = torch.randn(batch_size, FULL_OBS_DIM)
         q_values = network(obs)
 
         assert q_values.shape == (batch_size, 6)
@@ -78,7 +80,7 @@ class TestSimpleQNetwork:
 
     def test_q_value_range(self, network):
         """Q-values should be reasonable (not exploding)."""
-        obs = torch.randn(10, 72)
+        obs = torch.randn(10, FULL_OBS_DIM)
         q_values = network(obs)
 
         # Q-values shouldn't be crazy large (untrained network)
@@ -86,21 +88,21 @@ class TestSimpleQNetwork:
 
     def test_different_observation_dimensions(self):
         """Network should work with different observation dimensions."""
-        # Full observability (8×8 + 8 meters)
-        net_full = SimpleQNetwork(obs_dim=72, action_dim=6, hidden_dim=128)
-        obs_full = torch.randn(4, 72)
+        # Full observability baseline
+        net_full = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
+        obs_full = torch.randn(4, FULL_OBS_DIM)
         q_full = net_full(obs_full)
         assert q_full.shape == (4, 6)
 
         # With temporal features (+ time_of_day + interaction_progress)
-        net_temporal = SimpleQNetwork(obs_dim=74, action_dim=6, hidden_dim=128)
-        obs_temporal = torch.randn(4, 74)
+        net_temporal = SimpleQNetwork(obs_dim=FULL_OBS_DIM + 2, action_dim=6, hidden_dim=128)
+        obs_temporal = torch.randn(4, FULL_OBS_DIM + 2)
         q_temporal = net_temporal(obs_temporal)
         assert q_temporal.shape == (4, 6)
 
     def test_gradient_flow(self, network):
         """Gradients should flow through network."""
-        obs = torch.randn(4, 72, requires_grad=True)
+        obs = torch.randn(4, FULL_OBS_DIM, requires_grad=True)
         q_values = network(obs)
         loss = q_values.mean()
         loss.backward()
@@ -346,7 +348,7 @@ class TestNetworkComparison:
 
     def test_parameter_counts(self):
         """RecurrentSpatialQNetwork should have more parameters (LSTM)."""
-        simple_net = SimpleQNetwork(obs_dim=72, action_dim=6, hidden_dim=128)
+        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
             action_dim=6,
             window_size=5,
@@ -370,7 +372,7 @@ class TestNetworkComparison:
         """Recurrent network should take longer due to sequential LSTM."""
         import time
 
-        simple_net = SimpleQNetwork(obs_dim=72, action_dim=6, hidden_dim=128)
+        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
             action_dim=6,
             window_size=5,
@@ -382,7 +384,7 @@ class TestNetworkComparison:
         )
 
         batch_size = 32
-        obs_simple = torch.randn(batch_size, 72)
+        obs_simple = torch.randn(batch_size, FULL_OBS_DIM)
         obs_recurrent = torch.randn(batch_size, 51)  # 25 + 2 + 8 + 16
 
         # Warm up

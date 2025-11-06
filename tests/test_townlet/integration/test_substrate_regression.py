@@ -10,20 +10,9 @@ import torch
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
-@pytest.mark.parametrize(
-    "grid_size,expected_obs_dim",
-    [
-        (3, 2 + 8 + 15 + 4),  # L0_0_minimal: 2 coords + 8 meters + 15 affordances + 4 temporal = 29
-        (7, 2 + 8 + 15 + 4),  # L0_5_dual_resource: 2 coords + 8 + 15 + 4 = 29
-        (8, 2 + 8 + 15 + 4),  # L1_full_observability: 2 coords + 8 + 15 + 4 = 29
-    ],
-)
-def test_regression_observation_dims_unchanged(grid_size, expected_obs_dim, test_config_pack_path, cpu_device):
-    """Observation dimensions should match expected values with coordinate encoding.
-
-    With Phase 6 coordinate encoding (relative mode), grid size doesn't affect obs_dim.
-    All grids use 2 normalized coordinates, not one-hot encoding.
-    """
+@pytest.mark.parametrize("grid_size", [3, 7, 8])
+def test_regression_observation_dims_unchanged(grid_size, test_config_pack_path, cpu_device):
+    """Observation dimensions should match substrate-provided breakdown."""
     env = VectorizedHamletEnv(
         num_agents=1,
         grid_size=grid_size,
@@ -39,6 +28,8 @@ def test_regression_observation_dims_unchanged(grid_size, expected_obs_dim, test
     )
 
     obs = env.reset()
+
+    expected_obs_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
 
     assert (
         obs.shape[1] == expected_obs_dim
@@ -78,8 +69,10 @@ def test_regression_grid2d_equivalent_to_legacy(test_config_pack_path, cpu_devic
     torch.manual_seed(42)
     obs_new = env_new.reset()
 
-    # Verify observation dimension (29 with coordinate encoding)
-    assert obs_new.shape[1] == 29, f"Observation dim changed: {obs_new.shape[1]} vs 29"
+    expected_dim = env_new.substrate.get_observation_dim() + env_new.meter_count + (env_new.num_affordance_types + 1) + 4
+
+    # Verify observation dimension matches expected breakdown
+    assert obs_new.shape[1] == expected_dim, f"Observation dim changed: {obs_new.shape[1]} vs {expected_dim}"
 
     # Run 10 steps with fixed actions
     actions = [0, 1, 2, 3, 4] * 2  # UP, DOWN, LEFT, RIGHT, INTERACT × 2

@@ -27,13 +27,7 @@ def test_full_observation_uses_substrate(test_config_pack_path):
     obs = env.reset()
 
     # Observation should include substrate position encoding
-    # For 8×8 Grid2D with "relative" encoding: 2 (coords) + 8 (meters) + 15 (affordance) + 4 (temporal) = 29
-    expected_dim = (
-        env.substrate.get_observation_dim()  # 2 for Grid2D with "relative" encoding
-        + 8  # meters
-        + 15  # affordance at position (14 + "none")
-        + 4  # temporal extras (time_sin, time_cos, interaction_progress, lifetime)
-    )
+    expected_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
     assert obs.shape[1] == expected_dim, f"Expected {expected_dim}, got {obs.shape[1]}"
 
 
@@ -62,9 +56,9 @@ def test_partial_observation_uses_substrate(test_config_pack_path):
     expected_dim = (
         window_size * window_size  # 25 for 5×5 window
         + env.substrate.position_dim  # 2 for Grid2D
-        + 8  # meters
-        + 15  # affordance at position
-        + 4  # temporal extras
+        + env.meter_count
+        + (env.num_affordance_types + 1)
+        + 4
     )
     assert obs.shape[1] == expected_dim, f"Expected {expected_dim}, got {obs.shape[1]}"
     assert obs.shape[1] == 54, f"L2 should have 54 dims, got {obs.shape[1]}"

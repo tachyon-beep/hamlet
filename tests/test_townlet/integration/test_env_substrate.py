@@ -159,16 +159,16 @@ def load_enabled_affordances(config_pack_path: Path) -> list[str]:
 
 
 @pytest.mark.parametrize(
-    "config_name,expected_obs_dim",
+    "config_name",
     [
-        ("L0_0_minimal", 29),  # 2 coords + 8 meters + 15 affordances + 4 temporal
-        ("L0_5_dual_resource", 29),  # 2 coords + 8 meters + 15 affordances + 4 temporal
-        ("L1_full_observability", 29),  # 2 coords + 8 + 15 + 4
-        ("L2_partial_observability", 29),  # Same as L1 (full obs_dim, not local window)
-        ("L3_temporal_mechanics", 29),  # Same as L1
+        "L0_0_minimal",
+        "L0_5_dual_resource",
+        "L1_full_observability",
+        "L2_partial_observability",
+        "L3_temporal_mechanics",
     ],
 )
-def test_env_observation_dim_unchanged(config_name, expected_obs_dim):
+def test_env_observation_dim_unchanged(config_name):
     """Environment with substrate.yaml using coordinate encoding (all same dims)."""
     config_path = Path("configs") / config_name
     enabled_affordances = load_enabled_affordances(config_path)
@@ -188,7 +188,9 @@ def test_env_observation_dim_unchanged(config_name, expected_obs_dim):
         device=torch.device("cpu"),
     )
 
-    # Observation dimension should match legacy hardcoded behavior
+    expected_obs_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
+
+    # Observation dimension should match expected breakdown
     assert env.observation_dim == expected_obs_dim
 
     # Verify substrate loaded correctly

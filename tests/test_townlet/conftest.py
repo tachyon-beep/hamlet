@@ -29,6 +29,10 @@ from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.replay_buffer import ReplayBuffer
 
+# Default observation dimensionality for the standard 8×8 full-observability setup:
+#   64 grid cells + 2 normalized position features + 8 meters + 15 affordance slots + 4 temporal
+FULL_OBS_DIM_8X8 = 93
+
 # =============================================================================
 # CONFIGURATION FIXTURES
 # =============================================================================
@@ -394,13 +398,13 @@ def replay_buffer(device: torch.device) -> ReplayBuffer:
 
     Configuration:
         - Capacity: 1000
-        - Observation dimension: 72 (full observability)
+        - Observation dimension: FULL_OBS_DIM_8X8 (standard 8×8 full observability)
         - Device: CUDA if available, else CPU
 
     Returns:
         ReplayBuffer instance
     """
-    return ReplayBuffer(capacity=1000, obs_dim=72, device=device)
+    return ReplayBuffer(capacity=1000, obs_dim=FULL_OBS_DIM_8X8, device=device)
 
 
 @pytest.fixture

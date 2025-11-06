@@ -33,6 +33,8 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
+FULL_OBS_DIM = 93  # Standard 8×8 full observability observation dimension
+
 # =============================================================================
 # TEST CLASS 1: Environment Checkpointing (3 tests)
 # =============================================================================
@@ -514,7 +516,7 @@ class TestExplorationCheckpointing:
     def test_adaptive_intrinsic_exploration_checkpoint_completeness(self, cpu_device):
         """AdaptiveIntrinsicExploration should save all required state for restoration."""
         exploration = AdaptiveIntrinsicExploration(
-            obs_dim=72,
+            obs_dim=FULL_OBS_DIM,
             embed_dim=128,
             initial_intrinsic_weight=1.0,
             variance_threshold=100.0,
@@ -553,7 +555,7 @@ class TestExplorationCheckpointing:
     def test_exploration_checkpoint_preserves_epsilon_decay(self, cpu_device):
         """Epsilon decay progression should be preserved across checkpoint cycle."""
         exploration1 = AdaptiveIntrinsicExploration(
-            obs_dim=72,
+            obs_dim=FULL_OBS_DIM,
             embed_dim=128,
             epsilon_start=1.0,
             epsilon_min=0.1,
@@ -573,7 +575,7 @@ class TestExplorationCheckpointing:
 
         # Create new exploration and load
         exploration2 = AdaptiveIntrinsicExploration(
-            obs_dim=72,
+            obs_dim=FULL_OBS_DIM,
             embed_dim=128,
             epsilon_start=1.0,  # Fresh start
             epsilon_min=0.1,

@@ -53,6 +53,8 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
+FULL_OBS_DIM = 93  # Standard 8×8 full observability observation dimension
+
 # =============================================================================
 # CONFIG PACK LOADING TESTS
 # =============================================================================
@@ -856,7 +858,7 @@ class TestEpsilonConfiguration:
         }
 
         exploration = AdaptiveIntrinsicExploration(
-            obs_dim=72,
+            obs_dim=FULL_OBS_DIM,
             embed_dim=config["exploration"]["embed_dim"],
             initial_intrinsic_weight=config["exploration"]["initial_intrinsic_weight"],
             variance_threshold=config["exploration"]["variance_threshold"],
@@ -929,7 +931,7 @@ class TestEpsilonConfiguration:
 
         # Create exploration with config params (mimics runner initialization)
         exploration = AdaptiveIntrinsicExploration(
-            obs_dim=72,
+            obs_dim=FULL_OBS_DIM,
             embed_dim=training_config["exploration"]["embed_dim"],
             initial_intrinsic_weight=training_config["exploration"]["initial_intrinsic_weight"],
             variance_threshold=training_config["exploration"]["variance_threshold"],

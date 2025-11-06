@@ -17,6 +17,8 @@ import torch
 from townlet.training.replay_buffer import ReplayBuffer
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
 
+FULL_OBS_DIM = 93  # Standard 8×8 full observability observation dimension
+
 # =============================================================================
 # STANDARD REPLAY BUFFER (Feed-forward DQN)
 # =============================================================================
@@ -864,7 +866,7 @@ class TestPostTerminalMasking:
         """Sample should return a mask field."""
         # Store episode with terminal in middle
         episode = {
-            "observations": torch.randn(10, 72, device=cpu_device),
+            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -882,7 +884,7 @@ class TestPostTerminalMasking:
         """Mask should be all True when sequence has no terminal."""
         # Episode with no terminal
         episode = {
-            "observations": torch.randn(10, 72, device=cpu_device),
+            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -899,7 +901,7 @@ class TestPostTerminalMasking:
         """Mask should be False after terminal state."""
         # Episode: terminal at index 3
         episode = {
-            "observations": torch.randn(10, 72, device=cpu_device),
+            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -929,7 +931,7 @@ class TestPostTerminalMasking:
         """Mask should include the terminal timestep itself (True at terminal)."""
         # Episode with terminal at index 2
         episode = {
-            "observations": torch.randn(5, 72, device=cpu_device),
+            "observations": torch.randn(5, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (5,), device=cpu_device),
             "rewards_extrinsic": torch.randn(5, device=cpu_device),
             "rewards_intrinsic": torch.randn(5, device=cpu_device),
@@ -956,21 +958,21 @@ class TestPostTerminalMasking:
         # Store multiple episodes with different terminal positions
         episodes = [
             {  # Terminal at index 2
-                "observations": torch.randn(10, 72, device=cpu_device),
+                "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
                 "actions": torch.randint(0, 6, (10,), device=cpu_device),
                 "rewards_extrinsic": torch.randn(10, device=cpu_device),
                 "rewards_intrinsic": torch.randn(10, device=cpu_device),
                 "dones": torch.tensor([False, False, True] + [False] * 7, device=cpu_device),
             },
             {  # Terminal at index 5
-                "observations": torch.randn(10, 72, device=cpu_device),
+                "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
                 "actions": torch.randint(0, 6, (10,), device=cpu_device),
                 "rewards_extrinsic": torch.randn(10, device=cpu_device),
                 "rewards_intrinsic": torch.randn(10, device=cpu_device),
                 "dones": torch.tensor([False] * 5 + [True] + [False] * 4, device=cpu_device),
             },
             {  # No terminal
-                "observations": torch.randn(10, 72, device=cpu_device),
+                "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
                 "actions": torch.randint(0, 6, (10,), device=cpu_device),
                 "rewards_extrinsic": torch.randn(10, device=cpu_device),
                 "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -1002,7 +1004,7 @@ class TestPostTerminalMasking:
     def test_mask_shape_matches_batch(self, buffer, cpu_device):
         """Mask shape should match [batch_size, seq_len]."""
         episode = {
-            "observations": torch.randn(20, 72, device=cpu_device),
+            "observations": torch.randn(20, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (20,), device=cpu_device),
             "rewards_extrinsic": torch.randn(20, device=cpu_device),
             "rewards_intrinsic": torch.randn(20, device=cpu_device),
@@ -1017,7 +1019,7 @@ class TestPostTerminalMasking:
     def test_mask_works_with_unified_rewards(self, buffer, cpu_device):
         """Mask should work when episode has unified 'rewards' instead of split."""
         episode = {
-            "observations": torch.randn(10, 72, device=cpu_device),
+            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards": torch.randn(10, device=cpu_device),  # Unified rewards
             "dones": torch.tensor([False] * 4 + [True] + [False] * 5, device=cpu_device),
@@ -1042,7 +1044,7 @@ class TestMaskIntegrationWithLoss:
         """Mask sum should equal number of valid timesteps."""
         # Episode with terminal at index 3 (4 valid timesteps: 0,1,2,3)
         episode = {
-            "observations": torch.randn(10, 72, device=cpu_device),
+            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -1062,7 +1064,7 @@ class TestMaskIntegrationWithLoss:
     def test_masked_loss_example(self, buffer, cpu_device):
         """Demonstrate masked loss computation pattern."""
         episode = {
-            "observations": torch.randn(10, 72, device=cpu_device),
+            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),

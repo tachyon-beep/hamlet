@@ -29,22 +29,22 @@ from townlet.substrate.grid2d import Grid2DSubstrate
 class TestFullObservability:
     """Test observation construction in full observability mode.
 
-    Full observability observations (Phase 5C - coordinate encoding):
+    Full observability observations now include a global occupancy grid:
+    - Grid encoding: width × height cells (flattened occupancy map)
     - Position encoding: 2 dims (normalized x, y coordinates [0, 1])
     - Meters: 8 dims (normalized meter values)
     - Affordance encoding: 15 dims (14 types + 1 "none")
     - Temporal features: 4 dims (time_sin, time_cos, interaction_progress, lifetime_progress)
-    Total: 2 + 8 + 15 + 4 = 29 dims
     """
 
     def test_dimension_matches_expected_formula(self, basic_env):
-        """Full observability: 2 position + 8 meters + 15 affordance + 4 temporal = 29."""
+        """Full observability: grid + position + meters + affordance + temporal."""
         obs = basic_env.reset()
 
-        # Expected: 2 (position) + 8 (meters) + 15 (affordance) + 4 (temporal)
-        expected_dim = 2 + 8 + 15 + 4
+        grid_dim = basic_env.substrate.get_observation_dim()  # includes grid + position features
+        expected_dim = grid_dim + basic_env.meter_count + (basic_env.num_affordance_types + 1) + 4
         assert obs.shape == (1, expected_dim)
-        assert obs.shape[1] == 29
+        assert obs.shape[1] == expected_dim
 
     def test_observation_dim_property_matches_actual_shape(self, basic_env):
         """env.observation_dim property should match actual observation shape."""
@@ -59,8 +59,8 @@ class TestFullObservability:
         """Meter values should be included in observation (8 values after position)."""
         obs = basic_env.reset()
 
-        # Meters are indices 2:10 (after 2-dim position encoding)
-        meters = obs[0, 2:10]
+        grid_dim = basic_env.substrate.get_observation_dim()
+        meters = obs[0, grid_dim : grid_dim + basic_env.meter_count]
 
         # Should have 8 meter values
         assert meters.shape[0] == 8
@@ -73,15 +73,46 @@ class TestFullObservability:
         """Affordance encoding should be one-hot (15 dims: 14 types + 1 "none")."""
         obs = basic_env.reset()
 
-        # Affordance encoding is indices 10:25 (after 2 position + 8 meters)
-        affordance = obs[0, 10:25]
+        grid_dim = basic_env.substrate.get_observation_dim()
+
+        # Affordance encoding sits after grid + meters
+        start = grid_dim + basic_env.meter_count
+        end = start + basic_env.num_affordance_types + 1
+        affordance = obs[0, start:end]
 
         # Should have 15 values (14 affordance types + 1 "none")
-        assert affordance.shape[0] == 15
+        assert affordance.shape[0] == basic_env.num_affordance_types + 1
 
         # Should be one-hot: sum = 1.0, all values 0 or 1
         assert affordance.sum() == 1.0
         assert ((affordance == 0.0) | (affordance == 1.0)).all()
+
+    def test_grid_encoding_marks_agent_and_affordances(self, basic_env):
+        """Global grid encoding should mark both agent and affordance locations."""
+        obs = basic_env.reset()
+
+        width = basic_env.substrate.width
+        height = basic_env.substrate.height
+        grid_cells = width * height
+
+        grid_encoding = obs[0, :grid_cells]
+
+        agent_x, agent_y = basic_env.positions[0].tolist()
+        agent_idx = int(agent_y) * width + int(agent_x)
+
+        assert grid_encoding[agent_idx] >= 1.0
+
+        for affordance_pos in basic_env.affordances.values():
+            if affordance_pos.numel() == 0:
+                continue
+
+            aff_x = int(affordance_pos[0].item())
+            aff_y = int(affordance_pos[1].item())
+            if not (0 <= aff_x < width and 0 <= aff_y < height):
+                continue
+
+            idx = aff_y * width + aff_x
+            assert grid_encoding[idx] >= 1.0
 
 
 class TestPartialObservability:
@@ -337,8 +368,7 @@ class TestTemporalFeatures:
         obs = basic_env.reset()
 
         # Observation should still include 4 temporal features at the end
-        # Full obs: 2 position + 8 meters + 15 affordance + 4 temporal = 29
-        expected_dim = 29
+        expected_dim = basic_env.observation_dim
         assert obs.shape == (1, expected_dim)
 
         # Last 4 dimensions are temporal features
@@ -584,12 +614,15 @@ class TestObservationUpdates:
         env.positions[0] = torch.tensor([4, 4], device=cpu_device, dtype=torch.long)
 
         obs1 = env._get_observations()
-        position1 = obs1[0, :2]  # First 2 dims are position encoding
+        grid_cells = env.substrate.width * env.substrate.height
+        grid_dim_total = env.substrate.get_observation_dim()
+        position_slice = slice(grid_cells, grid_dim_total)
+        position1 = obs1[0, position_slice]
 
         # Move UP (guaranteed valid from center)
         actions = torch.tensor([0], device=cpu_device)
         obs2, _, _, _ = env.step(actions)
-        position2 = obs2[0, :2]  # First 2 dims are position encoding
+        position2 = obs2[0, position_slice]
 
         # Position MUST change (agent moved from (4,4) to (3,4))
         assert not torch.equal(position1, position2), "Position should update after movement"
@@ -633,7 +666,9 @@ class TestObservationUpdates:
     def test_meters_update_after_interactions(self, basic_env):
         """Interacting with affordances should change meter values."""
         obs1 = basic_env.reset()
-        meters1 = obs1[0, 2:10]  # After 2-dim position encoding
+        grid_dim_total = basic_env.substrate.get_observation_dim()
+        meter_slice = slice(grid_dim_total, grid_dim_total + basic_env.meter_count)
+        meters1 = obs1[0, meter_slice]
 
         # Take several steps to allow interactions
         for _ in range(10):
@@ -641,7 +676,7 @@ class TestObservationUpdates:
             if dones[0]:
                 break
 
-        meters_final = obs[0, 2:10]  # After 2-dim position encoding
+        meters_final = obs[0, meter_slice]
 
         # Meters should have changed (energy cost, possible interactions)
         # At minimum, energy should have decreased
@@ -818,10 +853,9 @@ class TestMultiAgentObservations:
             affordances=affordances,
         )
 
-        # With coordinate encoding, observations should be identical
-        # (2 position + 8 meters + (num_affordance_types + 1) affordance + 4 temporal)
-        # With 1 affordance type: 2 + 8 + 2 + 4 = 16
-        expected_dim = 2 + 8 + (num_affordance_types + 1) + 4
+        # With global grid encoding, observations should be identical across agents
+        grid_dim_total = builder.substrate.get_observation_dim()
+        expected_dim = grid_dim_total + meters.shape[1] + (num_affordance_types + 1) + 4
         assert obs.shape == (2, expected_dim)
         # Both observations should be identical (same position, same meters, same affordance)
         assert torch.equal(obs[0], obs[1])
@@ -892,11 +926,11 @@ class TestDimensionConsistency:
     """
 
     def test_full_observability_with_temporal_mechanics(self, temporal_env):
-        """Full obs + temporal: 2 position + 8 meters + 15 affordance + 4 temporal = 29."""
+        """Full obs + temporal retains grid, position, meter, affordance, temporal dims."""
         obs = temporal_env.reset()
 
         # Same dimension as without temporal (temporal features always present)
-        expected_dim = 2 + 8 + 15 + 4
+        expected_dim = temporal_env.observation_dim
         assert obs.shape == (1, expected_dim)
 
     def test_pomdp_with_temporal_mechanics(self, test_config_pack_path):
