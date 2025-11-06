@@ -108,3 +108,23 @@ def test_meditate_action_restores_mood(cpu_device, test_config_pack_path):
     # Net mood: +0.02 - 0.001 = +0.019 (should increase significantly)
     mood_change = final_mood - initial_mood
     assert mood_change > 0.015, f"Mood should increase by ~0.019: {mood_change}"
+
+
+def test_rest_action_respects_dynamic_meter_indices(task001_env_4meter):
+    """REST action should work with variable meter ordering (no hard-coded indices)."""
+    env = task001_env_4meter
+    env.reset()
+
+    rest_action = env.action_space.get_action_by_name("REST")
+    rest_action_id = rest_action.id
+
+    mood_idx = env.meter_name_to_index.get("mood")
+    assert mood_idx is not None, "4-meter config stores mood at a dynamic index"
+
+    initial_mood = env.meters[0, mood_idx].item()
+    actions = torch.tensor([rest_action_id], device=env.device)
+
+    env.step(actions)  # Should not raise IndexError when meter count < 5
+
+    final_mood = env.meters[0, mood_idx].item()
+    assert final_mood > initial_mood, "REST should improve mood even with dynamic indices"

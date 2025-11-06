@@ -355,6 +355,16 @@ class ContinuousSubstrate(SpatialSubstrate):
         """Continuous substrates have infinite positions."""
         return False
 
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Base continuous substrate has no intrinsic action space.
+
+        Subclasses (1D/2D/3D) must override this to emit their canonical moves.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not define default actions. "
+            "Use a concrete continuous substrate (Continuous1D/2D/3D) or override get_default_actions()."
+        )
+
 
 class Continuous1DSubstrate(ContinuousSubstrate):
     """1D continuous line."""

@@ -361,13 +361,13 @@ def test_1d_movement_should_pay_movement_cost(continuous1d_env):
 
 
 def test_3d_interact_should_not_pay_movement_cost(continuous3d_env):
-    """3D INTERACT (action 4) should only pay base depletion."""
+    """3D INTERACT (action 6) should only pay base depletion."""
     env = continuous3d_env
     env.reset()
 
     initial_energy = env.meters[0, env.energy_idx].item()
 
-    interact_action = torch.tensor([4], dtype=torch.long, device=torch.device("cpu"))
+    interact_action = torch.tensor([6], dtype=torch.long, device=torch.device("cpu"))
     env.step(interact_action)
 
     final_energy = env.meters[0, env.energy_idx].item()
@@ -378,13 +378,13 @@ def test_3d_interact_should_not_pay_movement_cost(continuous3d_env):
 
 
 def test_3d_wait_should_not_pay_movement_cost(continuous3d_env):
-    """3D WAIT (action 5) should pay base depletion + wait cost only."""
+    """3D WAIT (action 7) should pay base depletion + wait cost only."""
     env = continuous3d_env
     env.reset()
 
     initial_energy = env.meters[0, env.energy_idx].item()
 
-    wait_action = torch.tensor([5], dtype=torch.long, device=torch.device("cpu"))
+    wait_action = torch.tensor([7], dtype=torch.long, device=torch.device("cpu"))
     env.step(wait_action)
 
     final_energy = env.meters[0, env.energy_idx].item()
@@ -395,17 +395,21 @@ def test_3d_wait_should_not_pay_movement_cost(continuous3d_env):
 
 
 def test_3d_vertical_movement_should_pay_movement_cost(continuous3d_env):
-    """3D UP_Z (action 6) should pay both base depletion and movement cost."""
+    """3D UP_Z (action 4) should pay both base depletion and movement cost.
+
+    Note: Environment applies uniform move_energy_cost to all movement actions.
+    The substrate's per-action costs (UP_Z=0.008) are not currently used.
+    """
     env = continuous3d_env
     env.reset()
 
     initial_energy = env.meters[0, env.energy_idx].item()
 
-    up_z_action = torch.tensor([6], dtype=torch.long, device=torch.device("cpu"))
+    up_z_action = torch.tensor([4], dtype=torch.long, device=torch.device("cpu"))
     env.step(up_z_action)
 
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    expected_cost = 0.010  # 0.005 base + 0.005 movement
+    expected_cost = 0.010  # 0.005 base + 0.005 movement (uniform cost)
     assert abs(energy_cost - expected_cost) < 1e-6, f"3D UP_Z should cost {expected_cost:.3%}, but cost {energy_cost:.3%}"

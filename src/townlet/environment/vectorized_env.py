@@ -279,6 +279,8 @@ class VectorizedHamletEnv:
         # Initialize reward strategy (TASK-001: variable meters)
         # Get meter indices from bars_config for dynamic action costs and death detection
         meter_name_to_index = bars_config.meter_name_to_index
+        # Store full mapping for dynamic meter lookups (custom actions, telemetry, etc.)
+        self.meter_name_to_index: dict[str, int] = dict(meter_name_to_index)
         self.energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
         self.health_idx = meter_name_to_index.get("health", min(6, meter_count - 1))  # Default to 6 or last meter
         self.hygiene_idx = meter_name_to_index.get("hygiene", None)  # Optional meter
@@ -905,17 +907,10 @@ class VectorizedHamletEnv:
         Returns:
             Meter index, or None if meter doesn't exist
         """
-        meter_map = {
-            "energy": self.energy_idx,
-            "hygiene": self.hygiene_idx,
-            "satiation": self.satiation_idx,
-            "money": self.money_idx,
-            "mood": 4,  # Mood is at index 4 (see bars.yaml)
-            "social": 5,  # Social is at index 5
-            "health": self.health_idx,
-            "fitness": 7,  # Fitness is at index 7
-        }
-        return meter_map.get(meter_name)
+        mapping = getattr(self, "meter_name_to_index", None)
+        if mapping is None:
+            return None
+        return mapping.get(meter_name)
 
     def _apply_custom_action(self, agent_idx: int, action: ActionConfig):
         """Apply custom action effects, movement delta, and teleportation.
