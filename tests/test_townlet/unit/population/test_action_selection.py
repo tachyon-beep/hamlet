@@ -106,8 +106,8 @@ class TestGreedyActionSelection:
         # Greedy should be deterministic for same state
         assert torch.equal(actions1, actions2)
 
-        # Actions should be valid (0-5 including WAIT)
-        assert all(0 <= a < 6 for a in actions1.tolist())
+        # Actions should be valid (0 to env.action_dim-1)
+        assert all(0 <= a < env.action_dim for a in actions1.tolist())
 
     def test_masked_actions_get_negative_infinity(self, simple_setup):
         """Masked actions should get -inf Q-value before argmax."""
