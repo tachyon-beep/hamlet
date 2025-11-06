@@ -294,4 +294,4 @@ def assert_valid_dones(dones: torch.Tensor, num_agents: int) -> None:
         f"Invalid done shape: expected {expected_shape}, got {dones.shape}\n" f"  num_agents: {num_agents}"
     )
 
-    assert dones.dtype == torch.bool, f"Invalid done dtype: expected torch.bool, got {dones.dtype}\n" f"Done flags must be boolean tensors"
+    assert dones.dtype == torch.bool, f"Invalid done dtype: expected torch.bool, got {dones.dtype}\n" f" Done flags must be boolean tensors"
