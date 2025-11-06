@@ -398,7 +398,7 @@ def test_3d_vertical_movement_should_pay_movement_cost(continuous3d_env):
     """3D UP_Z (action 4) should pay both base depletion and movement cost.
 
     Note: Environment applies uniform move_energy_cost to all movement actions.
-    The substrate's per-action costs (UP_Z=0.008) are not currently used.
+    The substrate's per-action costs (UP_Z=0.008) are not currently enabled.
     """
     env = continuous3d_env
     env.reset()

@@ -93,7 +93,7 @@ class SpatialSubstrate(ABC):
 
         **CANONICAL ORDERING CONTRACT:**
         All substrates MUST emit actions in this order:
-        1. Movement actions (substrate-specific, in any order)
+        1. Movement actions (substrate-specific)
         2. INTERACT (second-to-last position)
         3. WAIT (last position)
 

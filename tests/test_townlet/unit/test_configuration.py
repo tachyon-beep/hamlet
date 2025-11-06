@@ -878,7 +878,7 @@ class TestEpsilonConfiguration:
 
         training_config = {
             "environment": {
-                "grid_size": 5,
+                "grid_size": 8,  # Large enough to fit all affordances from L0_0_minimal
                 "partial_observability": False,
                 "enabled_affordances": ["Bed"],
             },
@@ -916,6 +916,11 @@ class TestEpsilonConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files from test pack
+        # Use L1 substrate (8×8 grid) to fit all affordances
+        l1_config = Path("configs/L1_full_observability")
+        shutil.copy(l1_config / "substrate.yaml", config_dir / "substrate.yaml")
+
+        # Copy other configs from L0 (affordances, bars, cascades, cues)
         l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
@@ -933,7 +938,7 @@ class TestEpsilonConfiguration:
 
         temp_env = VectorizedHamletEnv(
             num_agents=1,
-            grid_size=5,
+            grid_size=8,  # Match training_config grid_size
             partial_observability=False,
             device=torch.device("cpu"),
             vision_range=5,

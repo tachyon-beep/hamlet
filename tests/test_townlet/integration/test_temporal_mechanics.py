@@ -404,22 +404,22 @@ class TestMultiTickInteractions:
         env.meters[0, 0] = 0.3  # Low energy
 
         # Initial observation: no progress (interaction_progress at -2, lifetime at -1)
-        progress_feature = obs[0, -2]
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == 0.0
 
         # After 1 tick: progress = 1 (raw) / 10.0 (normalization) = 0.1
         obs, _, _, _ = env.step(torch.tensor([4], device=env.device))
-        progress_feature = obs[0, -2]
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == pytest.approx(0.1, abs=0.01)
 
         # After 2 ticks: progress = 2 / 10.0 = 0.2
         obs, _, _, _ = env.step(torch.tensor([4], device=env.device))
-        progress_feature = obs[0, -2]
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == pytest.approx(0.2, abs=0.01)
 
         # After 3 ticks: progress = 3 / 10.0 = 0.3
         obs, _, _, _ = env.step(torch.tensor([4], device=env.device))
-        progress_feature = obs[0, -2]
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == pytest.approx(0.3, abs=0.01)
 
     def test_completion_bonus_timing(self, temporal_env):
