@@ -265,6 +265,15 @@ Substrates support three configurable observation encoding modes via `observatio
 
 **Key insight**: With coordinate encoding, observation dim is **constant** across all grid sizes. This enables true transfer learning - a model trained on 3×3 grid works on 8×8 grid without architecture changes.
 
+**Action space dimensions** (UPDATED - includes custom actions):
+
+- **Grid2D configs**: **8 actions** (6 substrate + 2 custom)
+- **Grid3D configs**: **10 actions** (8 substrate + 2 custom)
+- **GridND (7D) configs**: **16 actions** (14 substrate + 2 custom)
+- **Aspatial configs**: **4 actions** (2 substrate + 2 custom)
+
+**Key insight**: With global action vocabulary, action_dim is **constant** across all Grid2D configs (L0, L0.5, L1, L3). This enables checkpoint transfer - a Q-network trained on L0_0_minimal works on L1_full_observability without architecture changes!
+
 **Partial Observability (Level 2 POMDP)**:
 
 - Local grid: 5×5 window (25 dims) - agent only sees local region
@@ -296,12 +305,60 @@ Substrates support three configurable observation encoding modes via `observatio
 - Integration tests: `tests/test_townlet/integration/test_substrate_observations.py`
 - Validation tests: `tests/test_townlet/unit/environment/test_pomdp_validation.py`
 
-**Action space**: Dynamic based on substrate.position_dim
-- Grid2D: 6 actions (UP/DOWN/LEFT/RIGHT/INTERACT/WAIT)
-- Grid3D: 8 actions (±X/±Y/±Z/INTERACT/WAIT)
-- Continuous1D: 4 actions (LEFT/RIGHT/INTERACT/WAIT)
-- GridND (N≥4): 2N+2 actions (D0_NEG, D0_POS, ..., D(N-1)_NEG, D(N-1)_POS, INTERACT, WAIT)
-- Formula: 2 * position_dim + 2
+### Action Space (Composable - TASK-002B)
+
+**Architecture**: Action Space = Substrate Actions + Custom Actions
+
+**Global Vocabulary** (`configs/global_actions.yaml`):
+- All curriculum levels share the **same action vocabulary**
+- Enables checkpoint transfer (same action_dim across configs)
+- Custom actions: REST, MEDITATE (substrate-agnostic)
+
+**Per-Config Enabled Actions** (future - `training.yaml`):
+- Each config can specify which actions are **enabled**
+- Disabled actions masked at runtime (cannot be selected)
+- Currently: All actions enabled by default
+
+**Action Counts by Substrate**:
+- Grid2D: 6 substrate + 2 custom = **8 actions total**
+- Grid3D: 8 substrate + 2 custom = **10 actions total**
+- GridND (7D): 14 substrate + 2 custom = **16 actions total**
+- Aspatial: 2 substrate + 2 custom = **4 actions total**
+
+**Example - Grid2D Action Space**:
+
+| ID | Name | Type | Source | Delta | Costs |
+|----|------|------|--------|-------|-------|
+| 0 | UP | movement | substrate | [0, -1] | energy: 0.005 |
+| 1 | DOWN | movement | substrate | [0, 1] | energy: 0.005 |
+| 2 | LEFT | movement | substrate | [-1, 0] | energy: 0.005 |
+| 3 | RIGHT | movement | substrate | [1, 0] | energy: 0.005 |
+| 4 | INTERACT | interaction | substrate | - | energy: 0.003 |
+| 5 | WAIT | passive | substrate | - | energy: 0.004 |
+| 6 | REST | passive | custom | - | energy: -0.002 (restore) |
+| 7 | MEDITATE | passive | custom | - | energy: 0.001, mood: +0.02 |
+
+**Custom Actions**:
+
+- **REST**: Passive recovery (restores energy + mood), available anywhere
+- **MEDITATE**: Mental health action (costs energy, restores mood)
+
+**Checkpoint Transfer**:
+
+All Grid2D configs have action_dim = 8, enabling checkpoint transfer:
+- L0_0_minimal: 8 actions (3×3 grid, 1 affordance)
+- L0_5_dual_resource: 8 actions (7×7 grid, 4 affordances)
+- L1_full_observability: 8 actions (8×8 grid, 14 affordances)
+
+A Q-network trained on L0 can be transferred to L1 without architecture changes!
+
+**Implementation Details**:
+
+- **ActionConfig**: Pydantic schema defining action properties
+- **ComposedActionSpace**: Container tracking all actions with metadata
+- **ActionSpaceBuilder**: Composes substrate + custom actions from YAML
+- **Canonical Ordering**: [substrate actions...], INTERACT, WAIT come last
+- **Dynamic Deltas**: Movement deltas loaded from ActionConfig (no hardcoding)
 
 **Action Labels** (`src/townlet/environment/action_labels.py`):
 - Configurable domain-specific terminology for actions
@@ -311,6 +368,11 @@ Substrates support three configurable observation encoding modes via `observatio
   - No canonical "gaming" or "cardinal" directions exist in 4D+ space
   - Custom labels supported for domain-specific N-dimensional applications
 - **Example**: 7D GridND uses D0_NEG, D1_NEG, ..., D6_NEG, D0_POS, ..., D6_POS, INTERACT, WAIT (16 actions total)
+
+**See Also**:
+- `docs/config-schemas/enabled_actions.md` - Detailed enabled_actions pattern
+- `configs/global_actions.yaml` - Global action vocabulary
+- `/home/john/hamlet/docs/plans/2025-11-06-composable-action-space.md` - Implementation plan
 
 ### Reward Structure
 
@@ -642,18 +704,19 @@ The curriculum progresses from simple pedagogical tasks to complex POMDP challen
 ### Network Architecture Selection
 
 - **SimpleQNetwork**: Full observability (L0, L0.5, L1)
-  - MLP: obs_dim → 256 → 128 → action_dim (5)
-  - L0: 36 input dims (~26K params)
-  - L0.5: 76 input dims (~60K params)
-  - L1: 91 input dims (~70K params)
+  - MLP: obs_dim → 256 → 128 → action_dim (8 for Grid2D)
+  - L0: 29 input dims → 8 output dims (~26K params)
+  - L0.5: 29 input dims → 8 output dims (~26K params)
+  - L1: 29 input dims → 8 output dims (~26K params)
+  - **Note**: All Grid2D configs have same architecture (29→8), enabling checkpoint transfer!
 
 - **RecurrentSpatialQNetwork**: Partial observability (L2, L3)
   - Vision encoder: 5×5 local window → CNN → 128 features
   - Position encoder: (x, y) → MLP → 32 features
   - Meter encoder: 8 meters → MLP → 32 features
   - LSTM: 192 input → 256 hidden (memory for POMDP)
-  - Q-head: 256 → 128 → action_dim (5)
-  - Total: ~600K params
+  - Q-head: 256 → 128 → action_dim (8 for Grid2D)
+  - Total: ~650K params
   - LSTM hidden state resets at episode start
   - Hidden state persists during episode rollout (memory)
   - Hidden state resets per transition during batch training (simplified approach)

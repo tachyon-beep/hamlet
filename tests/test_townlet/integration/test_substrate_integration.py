@@ -45,8 +45,9 @@ def test_affordance_interaction_multi_substrate(substrate_fixture, request):
         affordance_pos = list(env.affordances.values())[0]
         env.positions[0] = affordance_pos
 
-    # Perform INTERACT action
-    actions = torch.tensor([4], dtype=torch.long, device=env.device)  # INTERACT
+    # Perform INTERACT action (find correct action ID for substrate)
+    interact_action_id = env.action_space.get_action_by_name("INTERACT").id
+    actions = torch.tensor([interact_action_id], dtype=torch.long, device=env.device)
     obs, rewards, dones, info = env.step(actions, depletion_multiplier=1.0)
 
     # Interaction should complete

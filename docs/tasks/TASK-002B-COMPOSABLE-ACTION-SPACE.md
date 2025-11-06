@@ -11,7 +11,7 @@
 ### Current State (Post-TASK-002A)
 
 **Substrate-defined actions work correctly**, but operators cannot:
-- Add custom actions (REST, MEDITATE, TELEPORT_HOME)
+- Add custom actions (REST, MEDITATE - substrate-agnostic actions)
 - Override default action costs per-config
 - Define domain-specific actions (inventory, social, combat)
 
@@ -53,13 +53,13 @@ def action_space_size(self) -> int:
 │  ├──────────────────┤   ├─────────────────┤   ├──────────┤ │
 │  │ UP, DOWN         │   │ REST            │   │ (deferred│ │
 │  │ LEFT, RIGHT      │   │ MEDITATE        │   │ to       │ │
-│  │ INTERACT, WAIT   │   │ TELEPORT_HOME   │   │ TASK-003)│ │
-│  │                  │   │ (operator def.) │   │          │ │
+│  │ INTERACT, WAIT   │   │ (substrate-     │   │ TASK-003)│ │
+│  │                  │   │  agnostic only) │   │          │ │
 │  └──────────────────┘   └─────────────────┘   └──────────┘ │
 │                                                              │
-│  Grid2D: 6 substrate + 3 custom = 9 total actions           │
-│  Grid3D: 8 substrate + 3 custom = 11 total actions          │
-│  GridND(7D): 16 substrate + 3 custom = 19 total actions     │
+│  Grid2D: 6 substrate + 2 custom = 8 total actions           │
+│  Grid3D: 8 substrate + 2 custom = 10 total actions          │
+│  GridND(7D): 14 substrate + 2 custom = 16 total actions     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -787,13 +787,61 @@ def test_teleport_home_warps_position():
 
 ## Design Decisions
 
+### 0. Two Substrate-Agnostic Custom Actions (Not Four) - IMPLEMENTATION DECISION
+
+**Original Plan**: 4 custom actions (REST, MEDITATE, TELEPORT_HOME, SPRINT)
+**Final Implementation**: 2 custom actions (REST, MEDITATE)
+
+**Rationale**: Global vocabulary must work on ALL substrates for curriculum transfer
+
+**Why TELEPORT_HOME and SPRINT were removed**:
+
+1. **TELEPORT_HOME breaks on non-Grid2D substrates**:
+   - Original design: `teleport_to: [0, 0]` (2D coordinates)
+   - Grid3D requires: `teleport_to: [0, 0, 0]` (3D coordinates)
+   - GridND(7D) requires: `teleport_to: [0, 0, 0, 0, 0, 0, 0]` (7D coordinates)
+   - Continuous substrates: float coordinates instead of integers
+   - Aspatial: No concept of position at all
+   - **Problem**: Fixed 2D coordinate in global vocabulary breaks universal curriculum
+
+2. **SPRINT breaks on non-Grid2D substrates**:
+   - Original design: `delta: [0, -2]` (move 2 cells north on Grid2D)
+   - Grid3D: Which axis is "north"? [0, -2, 0]?
+   - GridND(7D): Meaningless without axis specification
+   - Continuous substrates: Movement uses `movement_delta` scaling, not integer deltas
+   - Aspatial: No movement possible
+   - **Problem**: Grid2D-specific movement delta breaks universal curriculum
+
+**Why REST and MEDITATE work universally**:
+- Pure meter manipulation (costs/effects on energy, mood)
+- No spatial assumptions (no position, delta, or teleportation)
+- Work on ALL substrate types:
+  - ✅ Grid2D/3D/ND: Meter effects apply regardless of position dimensionality
+  - ✅ Continuous substrates: Meter effects apply regardless of coordinate system
+  - ✅ Aspatial: Meter effects apply even without position
+
+**Benefits of substrate-agnostic global vocabulary**:
+- ✅ Same action_dim across ALL configs (checkpoint transfer works)
+- ✅ No conditional logic in ActionSpaceBuilder (simpler, cleaner)
+- ✅ Operator can still add substrate-specific actions in per-config files (future extensibility)
+
+**Action Counts (Implementation)**:
+- Grid2D: 6 substrate + 2 custom = **8 actions total** (not 10)
+- Grid3D: 8 substrate + 2 custom = **10 actions total** (not 12)
+- GridND(7D): 14 substrate + 2 custom = **16 actions total** (not 18)
+- Aspatial: 2 substrate + 2 custom = **4 actions total** (not 6)
+
+**Future Work**: Substrate-specific actions (TELEPORT_HOME, SPRINT) can be added in per-config `custom_actions_grid2d.yaml` files for operators who want them, but they won't be in the global vocabulary.
+
+---
+
 ### 1. Fixed Action Space with Masking (CRITICAL FOR CURRICULUM TRANSFER)
 
 **Decision**: All curriculum levels share the **same action vocabulary**. Unavailable actions are **masked out** but still take up action IDs.
 
 **Rationale**: Enables checkpoint transfer across curriculum levels
-- L0_0_minimal: action_dim = 10 (6 substrate + 4 custom)
-- L1_full_observability: action_dim = 10 (same vocabulary)
+- L0_0_minimal: action_dim = 8 (6 substrate + 2 custom)
+- L1_full_observability: action_dim = 8 (same vocabulary)
 - **Checkpoints transferable**: Q-network has same output dimension
 
 **How it works**:
@@ -803,24 +851,21 @@ def test_teleport_home_warps_position():
 version: "1.0"
 description: "Global action vocabulary for entire curriculum"
 
-actions:
-  # Substrate actions (always available)
-  - name: "UP"
-  - name: "DOWN"
-  - name: "LEFT"
-  - name: "RIGHT"
-  - name: "INTERACT"
-  - name: "WAIT"
-
-  # Custom actions (may be disabled per-config)
+custom_actions:
+  # Substrate actions provided by substrate.get_default_actions()
+  # Custom actions (substrate-agnostic only)
   - name: "REST"
+    type: "passive"
+    costs: {energy: -0.002, mood: -0.01}
+
   - name: "MEDITATE"
-  - name: "TELEPORT_HOME"
-  - name: "SPRINT"
+    type: "passive"
+    costs: {energy: 0.001}
+    effects: {mood: 0.02}
 ```
 
 ```yaml
-# configs/L0_0_minimal/training.yaml
+# configs/L0_0_minimal/training.yaml (future - enabled_actions feature)
 enabled_actions:
   # Substrate actions (always enabled)
   - "UP"
@@ -832,11 +877,11 @@ enabled_actions:
 
   # Custom actions (only REST enabled for L0)
   - "REST"
-  # MEDITATE, TELEPORT_HOME, SPRINT disabled (but IDs reserved)
+  # MEDITATE disabled (but ID reserved for curriculum transfer)
 ```
 
 ```yaml
-# configs/L1_full_observability/training.yaml
+# configs/L1_full_observability/training.yaml (future - enabled_actions feature)
 enabled_actions:
   # All actions enabled for L1
   - "UP"
@@ -847,8 +892,6 @@ enabled_actions:
   - "WAIT"
   - "REST"
   - "MEDITATE"
-  - "TELEPORT_HOME"
-  - "SPRINT"
 ```
 
 **Action masking**:
@@ -878,7 +921,7 @@ def get_action_masks(self) -> torch.Tensor:
 - ✅ **Stable network architecture**: Q-network output dim never changes
 
 **Trade-off**:
-- ❌ Unused action IDs (L0 has 10 actions defined, 7 enabled)
+- ❌ Unused action IDs (L0 has 8 actions defined, 7 enabled if MEDITATE disabled)
 - **Acceptable**: Curriculum transfer > memory efficiency
 
 ---

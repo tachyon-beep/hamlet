@@ -66,7 +66,7 @@ class TestLSTMHiddenStatePersistence:
             exploration=exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            action_dim=6,  # Match test environment action space (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+            # action_dim defaults to env.action_dim
             network_type="recurrent",
             vision_window_size=5,
             learning_rate=0.0001,
@@ -116,6 +116,9 @@ class TestLSTMHiddenStatePersistence:
         When agent dies, hidden state should be reset to zeros to prevent
         memory contamination across episodes.
         """
+        # Seed RNG for deterministic behavior in full suite
+        torch.manual_seed(42)
+
         # Create environment with NO affordances (agents die quickly)
         env = VectorizedHamletEnv(
             num_agents=1,
@@ -148,7 +151,7 @@ class TestLSTMHiddenStatePersistence:
             exploration=exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            action_dim=6,  # Match test environment action space
+            # action_dim defaults to env.action_dim
             network_type="recurrent",
             vision_window_size=5,
             train_frequency=10000,  # Disable training (test focuses on death reset)
@@ -208,7 +211,7 @@ class TestLSTMHiddenStatePersistence:
             exploration=exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            action_dim=6,  # Match test environment action space
+            # action_dim defaults to env.action_dim
             network_type="recurrent",
             vision_window_size=5,
             train_frequency=10000,  # Disable training (test focuses on flush behavior)
@@ -268,7 +271,7 @@ class TestLSTMHiddenStatePersistence:
             exploration=exploration,
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
-            action_dim=6,  # Match test environment action space
+            # action_dim defaults to env.action_dim
             network_type="recurrent",
             vision_window_size=5,
             train_frequency=10000,  # Disable training (test focuses on shape verification)
@@ -336,7 +339,7 @@ class TestLSTMBatchTraining:
             exploration=exploration,
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
-            action_dim=6,  # Match test environment action space
+            # action_dim defaults to env.action_dim
             network_type="recurrent",
             vision_window_size=5,
             batch_size=8,
@@ -603,7 +606,7 @@ class TestLSTMForwardPass:
 
         # Create recurrent network
         network = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=env.action_dim,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -627,7 +630,7 @@ class TestLSTMForwardPass:
         q_values, new_hidden = network(obs)
 
         # Verify Q-values shape
-        assert q_values.shape == (1, 6), f"Expected Q-values shape (1, 6), got {q_values.shape}"
+        assert q_values.shape == (1, env.action_dim), f"Expected Q-values shape (1, {env.action_dim}), got {q_values.shape}"
 
         # Verify hidden state shape
         h, c = new_hidden

@@ -53,8 +53,6 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
-FULL_OBS_DIM = 93  # Standard 8×8 full observability observation dimension
-
 # =============================================================================
 # CONFIG PACK LOADING TESTS
 # =============================================================================
@@ -841,7 +839,7 @@ class TestEpsilonConfiguration:
         assert exploration.epsilon_decay == 0.99
         assert exploration.epsilon_min == 0.05
 
-    def test_adaptive_intrinsic_uses_epsilon_config(self, cpu_device: torch.device):
+    def test_adaptive_intrinsic_uses_epsilon_config(self, cpu_device: torch.device, basic_env):
         """AdaptiveIntrinsicExploration should pass epsilon params to RND."""
         config = {
             "training": {
@@ -858,7 +856,7 @@ class TestEpsilonConfiguration:
         }
 
         exploration = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             embed_dim=config["exploration"]["embed_dim"],
             initial_intrinsic_weight=config["exploration"]["initial_intrinsic_weight"],
             variance_threshold=config["exploration"]["variance_threshold"],
@@ -880,7 +878,7 @@ class TestEpsilonConfiguration:
 
         training_config = {
             "environment": {
-                "grid_size": 5,
+                "grid_size": 8,  # Large enough to fit all affordances from L0_0_minimal
                 "partial_observability": False,
                 "enabled_affordances": ["Bed"],
             },
@@ -918,6 +916,11 @@ class TestEpsilonConfiguration:
             yaml.dump(training_config, f)
 
         # Copy other required config files from test pack
+        # Use L1 substrate (8×8 grid) to fit all affordances
+        l1_config = Path("configs/L1_full_observability")
+        shutil.copy(l1_config / "substrate.yaml", config_dir / "substrate.yaml")
+
+        # Copy other configs from L0 (affordances, bars, cascades, cues)
         l0_config = Path("configs/L0_0_minimal")
         for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
             shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
@@ -930,8 +933,25 @@ class TestEpsilonConfiguration:
         )
 
         # Create exploration with config params (mimics runner initialization)
+        # Create a basic env to get observation_dim
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        temp_env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,  # Match training_config grid_size
+            partial_observability=False,
+            device=torch.device("cpu"),
+            vision_range=5,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+            config_pack_path=config_dir,
+        )
+
         exploration = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=temp_env.observation_dim,
             embed_dim=training_config["exploration"]["embed_dim"],
             initial_intrinsic_weight=training_config["exploration"]["initial_intrinsic_weight"],
             variance_threshold=training_config["exploration"]["variance_threshold"],

@@ -378,3 +378,103 @@ aspatial: {}
     assert env.grid_size == 12  # From parameter (aspatial has no width/height)
     assert env.substrate.position_dim == 0  # Aspatial has no position
     assert not hasattr(env.substrate, "width")
+
+
+# =============================================================================
+# ACTION SPACE BUILDER INTEGRATION (TASK-002B Phase 4)
+# =============================================================================
+
+
+def test_vectorized_env_loads_composed_action_space():
+    """VectorizedHamletEnv should use ActionSpaceBuilder.
+
+    TDD Test (RED phase): Verifies env has action_space attribute from builder.
+    """
+    from pathlib import Path
+
+    import torch
+
+    from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+    config_path = Path("configs/L1_full_observability")
+
+    env = VectorizedHamletEnv(
+        config_pack_path=config_path,
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.5,
+        wait_energy_cost=0.1,
+        interact_energy_cost=0.3,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+    # Should have composed action space (substrate + custom)
+    assert hasattr(env, "action_space"), "Environment should have action_space attribute"
+    assert env.action_space.action_dim >= 6  # At least substrate actions
+
+    # action_dim should match action_space
+    assert env.action_dim == env.action_space.action_dim
+
+    # Should have cached action indices (no more hardcoded formulas)
+    assert hasattr(env, "interact_action_idx"), "Should cache INTERACT action index"
+    assert hasattr(env, "wait_action_idx"), "Should cache WAIT action index"
+
+    # Indices should be valid (within action space bounds)
+    assert 0 <= env.interact_action_idx < env.action_dim
+    assert 0 <= env.wait_action_idx < env.action_dim
+
+
+def test_action_masks_include_base_masking():
+    """Action masks should start with base mask from ActionSpace.
+
+    TDD Test (RED phase): Verifies get_action_masks() uses
+    action_space.get_base_action_mask() for disabled action masking.
+
+    This test verifies integration between get_action_masks() and ActionSpace,
+    even though all actions are currently enabled (enabled_actions loading is future task).
+    """
+    from pathlib import Path
+    from unittest.mock import patch
+
+    import torch
+
+    from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+    config_path = Path("configs/L1_full_observability")
+
+    env = VectorizedHamletEnv(
+        config_pack_path=config_path,
+        num_agents=2,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.5,
+        wait_energy_cost=0.1,
+        interact_energy_cost=0.3,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+    env.reset()
+
+    # Mock the get_base_action_mask to verify it's being called
+    with patch.object(env.action_space, "get_base_action_mask", wraps=env.action_space.get_base_action_mask) as mock_base_mask:
+        # Call get_action_masks
+        masks = env.get_action_masks()
+
+        # Verify get_base_action_mask was called
+        mock_base_mask.assert_called_once()
+
+        # Verify it was called with correct arguments
+        call_args = mock_base_mask.call_args
+        assert call_args.kwargs["num_agents"] == 2
+        assert call_args.kwargs["device"] == torch.device("cpu")
+
+    # Verify shape and dtype
+    assert masks.shape == (2, env.action_dim), f"Mask shape should be (2, {env.action_dim}), got {masks.shape}"
+    assert masks.dtype == torch.bool, "Masks should be bool tensor"

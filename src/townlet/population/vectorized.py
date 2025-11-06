@@ -47,7 +47,7 @@ class VectorizedPopulation(PopulationManager):
         agent_ids: list[str],
         device: torch.device,
         obs_dim: int = 70,
-        action_dim: int = 6,
+        action_dim: int | None = None,
         learning_rate: float = 0.00025,
         gamma: float = 0.99,
         replay_buffer_capacity: int = 10000,
@@ -70,7 +70,7 @@ class VectorizedPopulation(PopulationManager):
             agent_ids: List of agent identifiers
             device: PyTorch device
             obs_dim: Observation dimension
-            action_dim: Action dimension
+            action_dim: Action dimension (defaults to env.action_dim if not specified)
             learning_rate: Learning rate for Q-network optimizer
             gamma: Discount factor
             replay_buffer_capacity: Maximum number of transitions in replay buffer
@@ -93,6 +93,11 @@ class VectorizedPopulation(PopulationManager):
         self.network_type = network_type
         self.is_recurrent = network_type == "recurrent"
         self.tb_logger = tb_logger
+
+        # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
+        if action_dim is None:
+            action_dim = env.action_dim
+        self.action_dim = action_dim
 
         # Agent runtime metrics (telemetry + reward baseline source of truth)
         self.runtime_registry = AgentRuntimeRegistry(agent_ids=agent_ids, device=device)
@@ -773,7 +778,7 @@ class VectorizedPopulation(PopulationManager):
             "meter_names": bars_config.meter_names,
             "version": bars_config.version,
             "obs_dim": self.env.observation_dim,
-            "action_dim": 6,  # Hardcoded for now (will be moved to actions.yaml in TASK-002B)
+            "action_dim": self.action_dim,  # From environment action space (TASK-002B Phase 4.1)
         }
 
         # Target network (recurrent mode only)

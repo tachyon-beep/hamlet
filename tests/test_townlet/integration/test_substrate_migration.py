@@ -55,8 +55,8 @@ def test_training_with_continuous1d_substrate(tmp_path):
         assert (runner.env.positions[:, 0] >= 0.0).all()
         assert (runner.env.positions[:, 0] <= 10.0).all()
 
-        # Verify action dim = 4 for 1D
-        assert runner.env.action_dim == 4
+        # Verify action dim = 6 for 1D (4 substrate + 2 custom)
+        assert runner.env.action_dim == 6
 
 
 def test_training_with_continuous2d_substrate(tmp_path):
@@ -84,8 +84,8 @@ def test_training_with_continuous2d_substrate(tmp_path):
         assert (runner.env.positions[:, 1] >= 0.0).all()
         assert (runner.env.positions[:, 1] <= 10.0).all()
 
-        # Verify action dim = 6 for 2D
-        assert runner.env.action_dim == 6
+        # Verify action dim = 8 for 2D (6 substrate + 2 custom)
+        assert runner.env.action_dim == 8
 
         # Verify affordances are randomly placed in continuous space
         for affordance_name, affordance_pos in runner.env.affordances.items():
@@ -120,8 +120,8 @@ def test_training_with_continuous3d_substrate(tmp_path):
         assert (runner.env.positions[:, 2] >= 0.0).all()
         assert (runner.env.positions[:, 2] <= 10.0).all()
 
-        # Verify action dim = 8 for 3D
-        assert runner.env.action_dim == 8
+        # Verify action dim = 10 for 3D (8 substrate + 2 custom)
+        assert runner.env.action_dim == 10
 
         # Verify affordances are randomly placed in continuous space
         for affordance_name, affordance_pos in runner.env.affordances.items():

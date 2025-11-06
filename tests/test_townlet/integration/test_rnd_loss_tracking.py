@@ -67,7 +67,7 @@ class TestRNDLossTracking:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -139,7 +139,7 @@ class TestRNDLossTracking:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,

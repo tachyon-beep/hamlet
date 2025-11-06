@@ -4,6 +4,7 @@ from typing import Literal, cast
 
 import torch
 
+from townlet.environment.action_config import ActionConfig
 from townlet.environment.affordance_layout import iter_affordance_positions
 from townlet.substrate.base import SpatialSubstrate
 
@@ -152,6 +153,99 @@ class Grid2DSubstrate(SpatialSubstrate):
         elif self.distance_metric == "chebyshev":
             # L∞ distance: max(|x1-x2|, |y1-y2|)
             return torch.abs(pos1 - pos2).max(dim=-1)[0]
+
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return Grid2D's 6 default actions with default costs.
+
+        Returns:
+            [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT] with standard 2D costs.
+        """
+        return [
+            ActionConfig(
+                id=0,  # Temporary, reassigned by builder
+                name="UP",
+                type="movement",
+                delta=[0, -1],
+                teleport_to=None,
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
+                description="Move one cell upward (north)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+            ActionConfig(
+                id=1,
+                name="DOWN",
+                type="movement",
+                delta=[0, 1],
+                teleport_to=None,
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
+                description="Move one cell downward (south)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+            ActionConfig(
+                id=2,
+                name="LEFT",
+                type="movement",
+                delta=[-1, 0],
+                teleport_to=None,
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
+                description="Move one cell left (west)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+            ActionConfig(
+                id=3,
+                name="RIGHT",
+                type="movement",
+                delta=[1, 0],
+                teleport_to=None,
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
+                description="Move one cell right (east)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+            ActionConfig(
+                id=4,
+                name="INTERACT",
+                type="interaction",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.003},
+                effects={},
+                description="Interact with affordance at current position",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+            ActionConfig(
+                id=5,
+                name="WAIT",
+                type="passive",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.004},
+                effects={},
+                description="Wait in place (idle metabolic cost)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+        ]
 
     def _encode_relative(
         self,

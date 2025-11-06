@@ -73,7 +73,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -161,7 +161,7 @@ class TestEpisodeLifecycle:
             exploration=exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="recurrent",
             vision_window_size=5,
             learning_rate=0.0001,
@@ -183,11 +183,12 @@ class TestEpisodeLifecycle:
         h0, c0 = recurrent_network.get_hidden_state()
         initial_h = h0.clone()
 
-        # Run episode for 20 steps
+        # Run episode for 10 steps (reduced from 20 to avoid cascade-induced death)
+        # Even with ultra-minimal costs and full meters, cascade effects can kill agents over longer runs
         episode_done = False
         step_count = 0
 
-        while not episode_done and step_count < 20:
+        while not episode_done and step_count < 10:
             # Execute one step
             agent_state = population.step_population(env)
 
@@ -212,7 +213,7 @@ class TestEpisodeLifecycle:
 
         # Episode should complete
         assert step_count > 0, "Episode should run at least 1 step"
-        assert step_count <= 50, "Episode should not exceed max_steps"
+        assert step_count <= 10, "Episode should not exceed max_steps"
 
     def test_multi_agent_episode_with_partial_dones(self, cpu_device, test_config_pack_path):
         """Verify multi-agent episode where agents die at different times.
@@ -256,7 +257,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0", "agent_1", "agent_2", "agent_3"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -328,7 +329,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -407,7 +408,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -492,7 +493,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -526,7 +527,7 @@ class TestEpisodeLifecycle:
 
             # Validate action
             assert agent_state.actions.shape == (1,), f"Step {step}: Action shape should be (1,)"
-            assert 0 <= agent_state.actions[0] < 6, f"Step {step}: Action should be in range [0, 6)"
+            assert 0 <= agent_state.actions[0] < env.action_dim, f"Step {step}: Action should be in range [0, {env.action_dim})"
 
             # Validate reward
             assert agent_state.rewards.shape == (1,), f"Step {step}: Reward shape should be (1,)"

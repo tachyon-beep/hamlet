@@ -82,7 +82,7 @@ class TestObservationPipeline:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -162,7 +162,7 @@ class TestObservationPipeline:
             exploration=exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="recurrent",  # POMDP uses recurrent network
             vision_window_size=5,
             learning_rate=0.0001,
@@ -235,7 +235,7 @@ class TestRewardPipeline:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -308,7 +308,7 @@ class TestRewardPipeline:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -393,7 +393,7 @@ class TestRewardPipeline:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -476,7 +476,7 @@ class TestActionPipeline:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -492,7 +492,7 @@ class TestActionPipeline:
             q_values = population.q_network(population.current_obs)
 
         # Verify Q-values shape
-        assert q_values.shape == (2, 6), f"Q-values should be [2, 6], got {q_values.shape}"
+        assert q_values.shape == (2, env.action_dim), f"Q-values should be [2, {env.action_dim}], got {q_values.shape}"
 
         # Verify Q-values are finite (untrained network should still produce valid outputs)
         assert torch.isfinite(q_values).all(), "Q-values should not contain NaN/Inf from untrained network"
@@ -504,9 +504,9 @@ class TestActionPipeline:
         assert hasattr(agent_state, "actions"), "Agent state should have actions"
         assert agent_state.actions.shape == (2,), "Actions should be [num_agents]"
 
-        # Verify actions are valid (in range [0, 6))
+        # Verify actions are valid (in range [0, action_dim))
         for action in agent_state.actions:
-            assert 0 <= action < 6, f"Action should be in [0, 6), got {action}"
+            assert 0 <= action < env.action_dim, f"Action should be in [0, {env.action_dim}), got {action}"
 
     def test_exploration_epsilon_greedy_with_masking(self, cpu_device, test_config_pack_path):
         """Verify epsilon-greedy selects actions with masking correctly.
@@ -547,7 +547,7 @@ class TestActionPipeline:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -568,9 +568,9 @@ class TestActionPipeline:
             if agent_state.dones[0]:
                 break
 
-        # Verify all actions are valid (should be in [0, 6))
+        # Verify all actions are valid (should be in [0, action_dim))
         for action in actions_taken:
-            assert 0 <= action < 6, f"Action should be in [0, 6), got {action}"
+            assert 0 <= action < env.action_dim, f"Action should be in [0, {env.action_dim}), got {action}"
 
         # Verify all positions stayed within bounds (8×8 grid from substrate.yaml)
         for pos in positions:
@@ -618,7 +618,7 @@ class TestActionPipeline:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,

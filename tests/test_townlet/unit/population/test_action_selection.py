@@ -52,7 +52,7 @@ class TestGreedyActionSelection:
         )
 
         obs_dim = env.observation_dim
-        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6, hidden_dim=128)
+        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=env.action_dim, hidden_dim=128)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(epsilon=0.1)
@@ -64,7 +64,7 @@ class TestGreedyActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -106,8 +106,8 @@ class TestGreedyActionSelection:
         # Greedy should be deterministic for same state
         assert torch.equal(actions1, actions2)
 
-        # Actions should be valid (0-5 including WAIT)
-        assert all(0 <= a < 6 for a in actions1.tolist())
+        # Actions should be valid (0 to env.action_dim-1)
+        assert all(0 <= a < env.action_dim for a in actions1.tolist())
 
     def test_masked_actions_get_negative_infinity(self, simple_setup):
         """Masked actions should get -inf Q-value before argmax."""
@@ -172,7 +172,7 @@ class TestEpsilonGreedyActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -221,13 +221,23 @@ class TestEpsilonGreedyActionSelection:
         # Place agents at top-left corner (UP and LEFT masked)
         env.positions = torch.tensor([[0, 0], [0, 0]], device=env.device)
 
+        # Get dynamic action IDs
+        down_id = 1  # DOWN is always index 1 for Grid2D
+        right_id = 3  # RIGHT is always index 3 for Grid2D
+        interact_id = env.interact_action_idx
+        wait_id = env.wait_action_idx
+        rest_id = env.action_space.get_action_by_name("REST").id
+        meditate_id = env.action_space.get_action_by_name("MEDITATE").id
+
+        # Valid actions: DOWN, RIGHT, INTERACT, WAIT, REST, MEDITATE
+        valid_actions = [down_id, right_id, interact_id, wait_id, rest_id, meditate_id]
+
         # Select with epsilon=1.0 (always random)
         for _ in range(100):
             actions = population.select_epsilon_greedy_actions(env, epsilon=1.0)
 
             # Should never see UP (0) or LEFT (2)
-            # Valid actions: DOWN (1), RIGHT (3), INTERACT (4), WAIT (5)
-            assert all(a in [1, 3, 4, 5] for a in actions.tolist())
+            assert all(a in valid_actions for a in actions.tolist())
 
     def test_epsilon_greedy_mixes_exploration_exploitation(self, simple_setup):
         """With 0 < epsilon < 1, should see mix of greedy and random."""
@@ -282,7 +292,7 @@ class TestRecurrentNetworkActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="recurrent",
@@ -365,7 +375,7 @@ class TestActionSelectionEdgeCases:
             agent_ids=[0],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",

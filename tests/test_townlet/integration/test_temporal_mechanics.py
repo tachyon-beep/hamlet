@@ -99,23 +99,12 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 class TestTimeProgression:
     """24-hour cycle and time encoding in observations."""
 
-    def test_full_24_hour_cycle(self, cpu_device):
+    def test_full_24_hour_cycle(self, temporal_env):
         """Verify 24-hour cycle completes and wraps correctly.
 
         Migrated from: test_temporal_integration.py::test_full_24_hour_cycle
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
         assert env.time_of_day == 0
@@ -123,35 +112,24 @@ class TestTimeProgression:
         # Step through 24 hours
         for expected_time in range(24):
             assert env.time_of_day == expected_time
-            env.step(torch.tensor([0], device=cpu_device))  # UP action
+            env.step(torch.tensor([0], device=env.device))  # UP action
 
         # Should wrap back to 0
         assert env.time_of_day == 0
 
-    def test_time_of_day_cycles(self, cpu_device):
+    def test_time_of_day_cycles(self, temporal_env):
         """Verify time cycles through 24 ticks (alternative verification).
 
         Migrated from: test_vectorized_env_temporal.py::test_time_of_day_cycles
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
         # Step 24 times
         for i in range(24):
             assert env.time_of_day == i
-            env.step(torch.tensor([4], device=cpu_device))  # INTERACT action
+            env.step(torch.tensor([4], device=env.device))  # INTERACT action
 
         # Should wrap back to 0
         assert env.time_of_day == 0
@@ -206,23 +184,12 @@ class TestTimeProgression:
 class TestOperatingHours:
     """Time-based affordance availability and action masking."""
 
-    def test_operating_hours_mask_job(self, cpu_device):
+    def test_operating_hours_mask_job(self, temporal_env):
         """Verify Job is masked out after 6pm (closed hours).
 
         Migrated from: test_temporal_integration.py::test_operating_hours_mask_job
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -241,23 +208,12 @@ class TestOperatingHours:
         masks = env.get_action_masks()
         assert not masks[0, 4]  # INTERACT blocked
 
-    def test_bar_wraparound_hours(self, cpu_device):
+    def test_bar_wraparound_hours(self, temporal_env):
         """Verify Bar operating hours wrap around midnight (6pm-4am).
 
         New test: Validates wraparound logic for late-night affordances.
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -281,23 +237,12 @@ class TestOperatingHours:
         masks = env.get_action_masks()
         assert not masks[0, 4]  # INTERACT blocked
 
-    def test_24_hour_affordances(self, cpu_device):
+    def test_24_hour_affordances(self, temporal_env):
         """Verify 24-hour affordances (Bed, Hospital) are always available.
 
         New test: Validates always-open affordances.
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -320,23 +265,12 @@ class TestOperatingHours:
 class TestMultiTickInteractions:
     """Multi-tick interaction mechanics (linear + completion bonus)."""
 
-    def test_progressive_benefit_accumulation(self, cpu_device):
+    def test_progressive_benefit_accumulation(self, temporal_env):
         """Verify linear benefits accumulate per tick.
 
         Migrated from: test_multi_interaction.py::test_progressive_benefit_accumulation
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -351,35 +285,24 @@ class TestMultiTickInteractions:
         # But also -0.5% depletion per tick
         # Net per tick: +7.0%
         # First INTERACT
-        env.step(torch.tensor([4], device=cpu_device))
+        env.step(torch.tensor([4], device=env.device))
 
         energy_after_1 = env.meters[0, 0].item()
         # Expected: +0.075 (benefit) - 0.005 (depletion) + cascading ~= +0.070
         assert abs((energy_after_1 - initial_energy) - 0.070) < 0.01
 
         # Second INTERACT
-        env.step(torch.tensor([4], device=cpu_device))
+        env.step(torch.tensor([4], device=env.device))
 
         energy_after_2 = env.meters[0, 0].item()
         assert abs((energy_after_2 - initial_energy) - 0.140) < 0.02
 
-    def test_completion_bonus(self, cpu_device):
+    def test_completion_bonus(self, temporal_env):
         """Verify 25% bonus on full completion.
 
         Migrated from: test_multi_interaction.py::test_completion_bonus
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -394,7 +317,7 @@ class TestMultiTickInteractions:
 
         # Complete all 5 ticks
         for _ in range(5):
-            env.step(torch.tensor([4], device=cpu_device))
+            env.step(torch.tensor([4], device=env.device))
 
         final_energy = env.meters[0, 0].item()
         final_health = env.meters[0, 6].item()
@@ -409,23 +332,12 @@ class TestMultiTickInteractions:
         # (cascading effects from energy/satiation also apply)
         assert (final_health - initial_health) > 0.015
 
-    def test_multi_tick_job_completion(self, cpu_device):
+    def test_multi_tick_job_completion(self, temporal_env):
         """Verify Job completion over 4 ticks with money gain.
 
         Migrated from: test_temporal_integration.py::test_multi_tick_job_completion
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -439,7 +351,7 @@ class TestMultiTickInteractions:
 
         # Complete 4 ticks of Job
         for i in range(4):
-            env.step(torch.tensor([4], device=cpu_device))  # INTERACT
+            env.step(torch.tensor([4], device=env.device))  # INTERACT
             # Progress: 1, 2, 3, then 0 (completes on 4th)
             if i < 3:
                 assert env.interaction_progress[0] == (i + 1)
@@ -452,23 +364,12 @@ class TestMultiTickInteractions:
         # Normalized: +0.28125
         assert (final_money - initial_money) > 0.25  # At least 25% gain
 
-    def test_money_charged_per_tick(self, cpu_device):
+    def test_money_charged_per_tick(self, temporal_env):
         """Verify cost charged each tick, not on completion.
 
         Migrated from: test_multi_interaction.py::test_money_charged_per_tick
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -478,33 +379,22 @@ class TestMultiTickInteractions:
         env.meters[0, 3] = 0.50  # Start with $50
 
         # Bed costs $1/tick = 0.01 normalized
-        env.step(torch.tensor([4], device=cpu_device))
+        env.step(torch.tensor([4], device=env.device))
 
         money_after_1 = env.meters[0, 3].item()
         assert abs(money_after_1 - 0.49) < 0.001  # $50 - $1 = $49
 
-        env.step(torch.tensor([4], device=cpu_device))
+        env.step(torch.tensor([4], device=env.device))
 
         money_after_2 = env.meters[0, 3].item()
         assert abs(money_after_2 - 0.48) < 0.001  # $49 - $1 = $48
 
-    def test_interaction_progress_in_observations(self, cpu_device):
+    def test_interaction_progress_in_observations(self, temporal_env):
         """Verify interaction progress (0.0-1.0) appears in observations.
 
         New test: Validates that agents can observe their own progress.
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         obs = env.reset()
 
@@ -514,41 +404,30 @@ class TestMultiTickInteractions:
         env.meters[0, 0] = 0.3  # Low energy
 
         # Initial observation: no progress (interaction_progress at -2, lifetime at -1)
-        progress_feature = obs[0, -2]
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == 0.0
 
         # After 1 tick: progress = 1 (raw) / 10.0 (normalization) = 0.1
-        obs, _, _, _ = env.step(torch.tensor([4], device=cpu_device))
-        progress_feature = obs[0, -2]
+        obs, _, _, _ = env.step(torch.tensor([4], device=env.device))
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == pytest.approx(0.1, abs=0.01)
 
         # After 2 ticks: progress = 2 / 10.0 = 0.2
-        obs, _, _, _ = env.step(torch.tensor([4], device=cpu_device))
-        progress_feature = obs[0, -2]
+        obs, _, _, _ = env.step(torch.tensor([4], device=env.device))
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == pytest.approx(0.2, abs=0.01)
 
         # After 3 ticks: progress = 3 / 10.0 = 0.3
-        obs, _, _, _ = env.step(torch.tensor([4], device=cpu_device))
-        progress_feature = obs[0, -2]
+        obs, _, _, _ = env.step(torch.tensor([4], device=env.device))
+        progress_feature = obs[0, -2].cpu().item()
         assert progress_feature == pytest.approx(0.3, abs=0.01)
 
-    def test_completion_bonus_timing(self, cpu_device):
+    def test_completion_bonus_timing(self, temporal_env):
         """Verify completion bonus applied ONLY on final tick.
 
         New test: Validates that completion bonus doesn't leak into linear ticks.
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -563,7 +442,7 @@ class TestMultiTickInteractions:
 
         # Job: 4 ticks, $5.625/tick (linear) + $5.625 bonus (completion)
         for i in range(4):
-            env.step(torch.tensor([4], device=cpu_device))
+            env.step(torch.tensor([4], device=env.device))
             money_values.append(env.meters[0, 3].item())
 
         # Verify linear accumulation
@@ -596,23 +475,12 @@ class TestMultiTickInteractions:
 class TestEarlyExitMechanics:
     """Early exit from multi-tick interactions."""
 
-    def test_early_exit_from_interaction(self, cpu_device):
+    def test_early_exit_from_interaction(self, temporal_env):
         """Verify agent can exit early and keep linear benefits.
 
         Migrated from: test_temporal_integration.py::test_early_exit_from_interaction
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -624,15 +492,15 @@ class TestEarlyExitMechanics:
         initial_energy = env.meters[0, 0].item()
 
         # Do 2 ticks of Bed (requires 5 for completion)
-        env.step(torch.tensor([4], device=cpu_device))
-        env.step(torch.tensor([4], device=cpu_device))
+        env.step(torch.tensor([4], device=env.device))
+        env.step(torch.tensor([4], device=env.device))
         assert env.interaction_progress[0] == 2
 
         energy_after_2 = env.meters[0, 0].item()
 
         # Move away - early exit from interaction
         # Progress tracking state persists until next interaction (implicit reset)
-        env.step(torch.tensor([0], device=cpu_device))  # UP
+        env.step(torch.tensor([0], device=env.device))  # UP
 
         # Key behavior: Energy should have increased from 2 ticks (no completion bonus)
         # Each Bed tick gives ~7% energy, so 2 ticks ≈ 14%
@@ -642,23 +510,12 @@ class TestEarlyExitMechanics:
         # With completion bonus, gain would be ~21%, without it's ~14%
         assert (energy_after_2 - initial_energy) < 0.18
 
-    def test_early_exit_keeps_progress(self, cpu_device):
+    def test_early_exit_keeps_progress(self, temporal_env):
         """Verify agent keeps linear benefits if exiting early.
 
         Migrated from: test_multi_interaction.py::test_early_exit_keeps_progress
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = temporal_env
 
         env.reset()
 
@@ -671,12 +528,12 @@ class TestEarlyExitMechanics:
 
         # Do 3 ticks, then move away
         for _ in range(3):
-            env.step(torch.tensor([4], device=cpu_device))
+            env.step(torch.tensor([4], device=env.device))
 
         energy_after_3 = env.meters[0, 0].item()
 
         # Move away (UP action)
-        env.step(torch.tensor([0], device=cpu_device))
+        env.step(torch.tensor([0], device=env.device))
 
         # Energy should be at approximately 3 × 7% = 21% gain
         # (3 ticks of benefit minus depletion, no completion bonus)
@@ -725,7 +582,7 @@ class TestMultiAgentTemporal:
         env.time_of_day = 10  # Job open
 
         # Agent 2: Not interacting (move to empty position)
-        env.positions[2] = torch.tensor([3, 3], device=cpu_device)
+        env.positions[2] = torch.tensor([3, 3], device=env.device)
 
         # Execute 3 steps
         for i in range(3):
@@ -737,7 +594,7 @@ class TestMultiAgentTemporal:
                     4,  # Agent 1: INTERACT (Job) all 3 times
                     0,  # Agent 2: UP (no interaction)
                 ],
-                device=cpu_device,
+                device=env.device,
             )
 
             obs, _, _, _ = env.step(actions)
@@ -810,7 +667,7 @@ class TestTemporalIntegrations:
 
         initial_energy = env.meters[0, 0].item()
 
-        env.step(torch.tensor([4], device=cpu_device))  # INTERACT
+        env.step(torch.tensor([4], device=env.device))  # INTERACT
 
         final_energy = env.meters[0, 0].item()
         # Legacy mode: single-shot benefit (+50% energy from Bed)
@@ -853,7 +710,7 @@ class TestTemporalIntegrations:
         # Run 100 steps across day/night cycle
         step_count = 0
         for _ in range(100):
-            action = torch.tensor([0], device=cpu_device)  # UP action
+            action = torch.tensor([0], device=env.device)  # UP action
             obs, reward, done, info = env.step(action)
 
             if not done[0]:

@@ -23,21 +23,19 @@ import torch.nn as nn
 
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 
-FULL_OBS_DIM = 93  # 8×8 occupancy grid (64) + position (2) + meters (8) + affordance (15) + temporal (4)
-
 
 class TestSimpleQNetwork:
     """Test SimpleQNetwork (MLP for full observability)."""
 
     @pytest.fixture
-    def network(self):
+    def network(self, basic_env):
         """Create SimpleQNetwork with standard config."""
-        obs_dim = FULL_OBS_DIM
-        action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+        obs_dim = basic_env.observation_dim
+        action_dim = basic_env.action_dim
         hidden_dim = 128  # Standard hidden dimension
         return SimpleQNetwork(obs_dim=obs_dim, action_dim=action_dim, hidden_dim=hidden_dim)
 
-    def test_initialization(self, network):
+    def test_initialization(self, network, basic_env):
         """Network should initialize with correct architecture including LayerNorm."""
         assert isinstance(network, nn.Module)
         assert isinstance(network.net, nn.Sequential)
@@ -53,56 +51,56 @@ class TestSimpleQNetwork:
         assert isinstance(network.net[6], nn.Linear)  # Q-head
 
         # Check dimensions
-        assert network.net[0].in_features == FULL_OBS_DIM
+        assert network.net[0].in_features == basic_env.observation_dim
         assert network.net[0].out_features == 128
         assert network.net[3].in_features == 128
         assert network.net[3].out_features == 128
         assert network.net[6].in_features == 128
-        assert network.net[6].out_features == 6
+        assert network.net[6].out_features == basic_env.action_dim
 
-    def test_forward_pass_single_agent(self, network):
+    def test_forward_pass_single_agent(self, network, basic_env):
         """Forward pass should produce correct Q-value shapes."""
-        obs = torch.randn(1, FULL_OBS_DIM)  # Single agent
+        obs = torch.randn(1, basic_env.observation_dim)  # Single agent
         q_values = network(obs)
 
-        assert q_values.shape == (1, 6), f"Expected (1, 6), got {q_values.shape}"
+        assert q_values.shape == (1, basic_env.action_dim), f"Expected (1, {basic_env.action_dim}), got {q_values.shape}"
         assert not torch.isnan(q_values).any(), "Q-values contain NaN"
         assert not torch.isinf(q_values).any(), "Q-values contain Inf"
 
-    def test_forward_pass_batch(self, network):
+    def test_forward_pass_batch(self, network, basic_env):
         """Forward pass should handle batched observations."""
         batch_size = 32
-        obs = torch.randn(batch_size, FULL_OBS_DIM)
+        obs = torch.randn(batch_size, basic_env.observation_dim)
         q_values = network(obs)
 
-        assert q_values.shape == (batch_size, 6)
+        assert q_values.shape == (batch_size, basic_env.action_dim)
         assert not torch.isnan(q_values).any()
 
-    def test_q_value_range(self, network):
+    def test_q_value_range(self, network, basic_env):
         """Q-values should be reasonable (not exploding)."""
-        obs = torch.randn(10, FULL_OBS_DIM)
+        obs = torch.randn(10, basic_env.observation_dim)
         q_values = network(obs)
 
         # Q-values shouldn't be crazy large (untrained network)
         assert q_values.abs().max() < 100, "Untrained Q-values too large (initialization issue?)"
 
-    def test_different_observation_dimensions(self):
+    def test_different_observation_dimensions(self, basic_env):
         """Network should work with different observation dimensions."""
         # Full observability baseline
-        net_full = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
-        obs_full = torch.randn(4, FULL_OBS_DIM)
+        net_full = SimpleQNetwork(obs_dim=basic_env.observation_dim, action_dim=basic_env.action_dim, hidden_dim=128)
+        obs_full = torch.randn(4, basic_env.observation_dim)
         q_full = net_full(obs_full)
-        assert q_full.shape == (4, 6)
+        assert q_full.shape == (4, basic_env.action_dim)
 
         # With temporal features (+ time_of_day + interaction_progress)
-        net_temporal = SimpleQNetwork(obs_dim=FULL_OBS_DIM + 2, action_dim=6, hidden_dim=128)
-        obs_temporal = torch.randn(4, FULL_OBS_DIM + 2)
+        net_temporal = SimpleQNetwork(obs_dim=basic_env.observation_dim + 2, action_dim=basic_env.action_dim, hidden_dim=128)
+        obs_temporal = torch.randn(4, basic_env.observation_dim + 2)
         q_temporal = net_temporal(obs_temporal)
-        assert q_temporal.shape == (4, 6)
+        assert q_temporal.shape == (4, basic_env.action_dim)
 
-    def test_gradient_flow(self, network):
+    def test_gradient_flow(self, network, basic_env):
         """Gradients should flow through network."""
-        obs = torch.randn(4, FULL_OBS_DIM, requires_grad=True)
+        obs = torch.randn(4, basic_env.observation_dim, requires_grad=True)
         q_values = network(obs)
         loss = q_values.mean()
         loss.backward()
@@ -117,13 +115,13 @@ class TestRecurrentSpatialQNetwork:
     """Test RecurrentSpatialQNetwork (LSTM for partial observability)."""
 
     @pytest.fixture
-    def network(self):
+    def network(self, basic_env):
         """Create RecurrentSpatialQNetwork with standard config."""
         # Network computes obs_dim from window_size + num_meters + affordances
         # Default num_affordance_types=15 → encoding size = 15+1 = 16
         # Observation: 25 (5×5) + 2 (position) + 8 (meters) + 16 (affordance) = 51
         return RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=basic_env.action_dim,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -155,19 +153,19 @@ class TestRecurrentSpatialQNetwork:
         assert isinstance(network.q_head[2], nn.ReLU)
         assert isinstance(network.q_head[3], nn.Linear)  # 128 → 6
 
-    def test_forward_pass_without_hidden_state(self, network):
+    def test_forward_pass_without_hidden_state(self, network, basic_env):
         """Forward pass should work without providing hidden state."""
         # 25 (grid) + 2 (pos) + 8 (meters) + 16 (affordance encoding) = 51
         obs = torch.randn(1, 51)
         q_values, hidden = network(obs)
 
-        assert q_values.shape == (1, 6)
+        assert q_values.shape == (1, basic_env.action_dim)
         assert hidden is not None
         assert len(hidden) == 2  # (h, c)
         assert hidden[0].shape == (1, 1, 256)  # (num_layers, batch, hidden_size)
         assert hidden[1].shape == (1, 1, 256)
 
-    def test_forward_pass_with_hidden_state(self, network):
+    def test_forward_pass_with_hidden_state(self, network, basic_env):
         """Forward pass should accept and update hidden state."""
         obs = torch.randn(1, 51)
 
@@ -177,7 +175,7 @@ class TestRecurrentSpatialQNetwork:
         # Second forward pass with previous hidden state
         q2, hidden2 = network(obs, hidden1)
 
-        assert q2.shape == (1, 6)
+        assert q2.shape == (1, basic_env.action_dim)
         assert not torch.equal(q1, q2), "Q-values should differ with different hidden states"
         assert not torch.equal(hidden1[0], hidden2[0]), "Hidden state should be updated"
 
@@ -228,7 +226,7 @@ class TestRecurrentSpatialQNetwork:
         assert torch.equal(stored_h, custom_h)
         assert torch.equal(stored_c, custom_c)
 
-    def test_batch_processing(self, network):
+    def test_batch_processing(self, network, basic_env):
         """Network should handle batched observations."""
         batch_size = 8
         obs = torch.randn(batch_size, 51)
@@ -236,11 +234,11 @@ class TestRecurrentSpatialQNetwork:
         network.reset_hidden_state(batch_size, device=torch.device("cpu"))
         q_values, hidden = network(obs)
 
-        assert q_values.shape == (batch_size, 6)
+        assert q_values.shape == (batch_size, basic_env.action_dim)
         assert hidden[0].shape == (1, batch_size, 256)
         assert hidden[1].shape == (1, batch_size, 256)
 
-    def test_vision_encoding(self, network):
+    def test_vision_encoding(self, network, basic_env):
         """Vision encoder should process 5×5 window correctly."""
         # Test just the vision encoder component
         # Vision goes through conv-like processing (reshaped to spatial)
@@ -248,7 +246,7 @@ class TestRecurrentSpatialQNetwork:
         obs = torch.randn(4, 51)
         q_values, _ = network(obs)
 
-        assert q_values.shape == (4, 6)
+        assert q_values.shape == (4, basic_env.action_dim)
         assert not torch.isnan(q_values).any()
 
     def test_gradient_flow_through_lstm(self, network):
@@ -281,11 +279,11 @@ class TestRecurrentSpatialQNetwork:
         for i in range(len(hidden_states) - 1):
             assert not torch.equal(hidden_states[i], hidden_states[i + 1]), f"Hidden state unchanged between steps {i} and {i + 1}"
 
-    def test_different_observation_dimensions(self):
+    def test_different_observation_dimensions(self, basic_env):
         """Network should work with temporal features added (obs dimensions change)."""
         # Base POMDP: 25 (5×5) + 2 (pos) + 8 (meters) + 15 (affordance) = 50
         net_base = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=basic_env.action_dim,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -295,13 +293,13 @@ class TestRecurrentSpatialQNetwork:
         )
         obs_base = torch.randn(2, 51)
         q_base, _ = net_base(obs_base)
-        assert q_base.shape == (2, 6)
+        assert q_base.shape == (2, basic_env.action_dim)
 
         # With temporal: 25 + 2 + 8 + 16 + 2 (time + progress) = 52
         # But network doesn't know about temporal - it just processes extra dims
         # So we test it handles the expected 50 dims correctly
         net_temporal = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=basic_env.action_dim,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -311,7 +309,7 @@ class TestRecurrentSpatialQNetwork:
         )
         obs_temporal = torch.randn(2, 51)
         q_temporal, _ = net_temporal(obs_temporal)
-        assert q_temporal.shape == (2, 6)
+        assert q_temporal.shape == (2, basic_env.action_dim)
 
     def test_lstm_memory_effect(self, network):
         """LSTM should show memory effect across sequence."""
@@ -346,11 +344,11 @@ class TestRecurrentSpatialQNetwork:
 class TestNetworkComparison:
     """Compare behavior between SimpleQNetwork and RecurrentSpatialQNetwork."""
 
-    def test_parameter_counts(self):
+    def test_parameter_counts(self, basic_env):
         """RecurrentSpatialQNetwork should have more parameters (LSTM)."""
-        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
+        simple_net = SimpleQNetwork(obs_dim=basic_env.observation_dim, action_dim=basic_env.action_dim, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=basic_env.action_dim,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -368,13 +366,13 @@ class TestNetworkComparison:
 
         assert recurrent_params > simple_params, "Recurrent network should have more parameters due to LSTM"
 
-    def test_computational_difference(self):
+    def test_computational_difference(self, basic_env):
         """Recurrent network should take longer due to sequential LSTM."""
         import time
 
-        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
+        simple_net = SimpleQNetwork(obs_dim=basic_env.observation_dim, action_dim=basic_env.action_dim, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=basic_env.action_dim,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -384,7 +382,7 @@ class TestNetworkComparison:
         )
 
         batch_size = 32
-        obs_simple = torch.randn(batch_size, FULL_OBS_DIM)
+        obs_simple = torch.randn(batch_size, basic_env.observation_dim)
         obs_recurrent = torch.randn(batch_size, 51)  # 25 + 2 + 8 + 16
 
         # Warm up

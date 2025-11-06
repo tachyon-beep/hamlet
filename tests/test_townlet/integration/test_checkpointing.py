@@ -33,8 +33,6 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
-FULL_OBS_DIM = 93  # Standard 8×8 full observability observation dimension
-
 # =============================================================================
 # TEST CLASS 1: Environment Checkpointing (3 tests)
 # =============================================================================
@@ -233,7 +231,7 @@ class TestPopulationCheckpointing:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -296,7 +294,7 @@ class TestPopulationCheckpointing:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -325,7 +323,7 @@ class TestPopulationCheckpointing:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -372,7 +370,7 @@ class TestPopulationCheckpointing:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             replay_buffer_capacity=1000,
         )
@@ -397,7 +395,7 @@ class TestPopulationCheckpointing:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             replay_buffer_capacity=1000,
         )
@@ -513,10 +511,10 @@ class TestExplorationCheckpointing:
     Verifies exploration strategies can be saved and restored correctly.
     """
 
-    def test_adaptive_intrinsic_exploration_checkpoint_completeness(self, cpu_device):
+    def test_adaptive_intrinsic_exploration_checkpoint_completeness(self, cpu_device, basic_env):
         """AdaptiveIntrinsicExploration should save all required state for restoration."""
         exploration = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             embed_dim=128,
             initial_intrinsic_weight=1.0,
             variance_threshold=100.0,
@@ -552,10 +550,10 @@ class TestExplorationCheckpointing:
         assert "decay_rate" in state, "Should have decay_rate"
         assert "survival_history" in state, "Should have survival_history"
 
-    def test_exploration_checkpoint_preserves_epsilon_decay(self, cpu_device):
+    def test_exploration_checkpoint_preserves_epsilon_decay(self, cpu_device, basic_env):
         """Epsilon decay progression should be preserved across checkpoint cycle."""
         exploration1 = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             embed_dim=128,
             epsilon_start=1.0,
             epsilon_min=0.1,
@@ -575,7 +573,7 @@ class TestExplorationCheckpointing:
 
         # Create new exploration and load
         exploration2 = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             embed_dim=128,
             epsilon_start=1.0,  # Fresh start
             epsilon_min=0.1,
@@ -666,7 +664,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner.env.observation_dim,
-                    action_dim=6,
+                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
 
@@ -738,7 +736,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner1.env.observation_dim,
-                    action_dim=6,
+                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
 
@@ -777,7 +775,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner2.env.observation_dim,
-                    action_dim=6,
+                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
 
@@ -835,7 +833,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner1.env.observation_dim,
-                    action_dim=6,
+                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
 
@@ -887,7 +885,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner2.env.observation_dim,
-                    action_dim=6,
+                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
 
@@ -962,7 +960,7 @@ class TestCheckpointRoundTrip:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -995,7 +993,7 @@ class TestCheckpointRoundTrip:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1054,7 +1052,7 @@ class TestCheckpointRoundTrip:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1108,7 +1106,7 @@ class TestCheckpointRoundTrip:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env2.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1170,7 +1168,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1209,7 +1207,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1231,7 +1229,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1252,7 +1250,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1274,7 +1272,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1298,7 +1296,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 
@@ -1321,7 +1319,7 @@ class TestVariableMeterCheckpoints:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
         )
 

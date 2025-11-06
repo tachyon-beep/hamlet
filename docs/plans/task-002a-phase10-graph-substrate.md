@@ -321,18 +321,18 @@ from townlet.substrate.grid3d import Grid3DSubstrate
 def test_1d_action_mapping():
     """1D substrate should have 3 actions (LEFT, RIGHT, INTERACT)."""
     substrate = Grid1DSubstrate(length=10, boundary="clamp")
-    
+
     assert substrate.action_space_size == 3
-    
+
     # Test LEFT
     pos = torch.tensor([[5]], dtype=torch.long)
     new_pos = substrate.apply_action(pos, torch.tensor([0]))
     assert new_pos[0, 0].item() == 4
-    
-    # Test RIGHT  
+
+    # Test RIGHT
     new_pos = substrate.apply_action(pos, torch.tensor([1]))
     assert new_pos[0, 0].item() == 6
-    
+
     # Test INTERACT
     new_pos = substrate.apply_action(pos, torch.tensor([2]))
     assert new_pos[0, 0].item() == 5  # No movement
@@ -341,14 +341,14 @@ def test_1d_action_mapping():
 def test_2d_action_mapping():
     """2D substrate should have 5 actions (4 dirs + INTERACT)."""
     substrate = Grid2DSubstrate(width=10, height=10, boundary="clamp")
-    
+
     assert substrate.action_space_size == 5
 
 
 def test_3d_action_mapping():
     """3D substrate should have 7 actions (6 dirs + INTERACT)."""
     substrate = Grid3DSubstrate(width=10, height=10, depth=10, boundary="clamp")
-    
+
     assert substrate.action_space_size == 7
 ```
 
@@ -415,12 +415,12 @@ def __init__(
 ):
     # Get action space size from substrate (NOT hardcoded!)
     action_dim = substrate.action_space_size
-    
+
     self.q_network = SimpleQNetwork(
         obs_dim=observation_dim,
         action_dim=action_dim,  # Dynamic!
     )
-    
+
     self.target_network = SimpleQNetwork(
         obs_dim=observation_dim,
         action_dim=action_dim,  # Dynamic!
@@ -435,10 +435,10 @@ Pass substrate to population:
 def __init__(self, ...):
     # Load substrate first
     self.substrate = load_substrate(config_dir / "substrate.yaml")
-    
+
     # Compute observation dim from substrate
     obs_dim = self.substrate.get_observation_dim() + meters + affordances + temporal
-    
+
     # Create population with dynamic action space
     self.population = VectorizedPopulation(
         substrate=self.substrate,  # NEW!
@@ -455,12 +455,12 @@ def test_qnetwork_dynamic_action_dim():
     from townlet.substrate.grid1d import Grid1DSubstrate
     from townlet.substrate.grid2d import Grid2DSubstrate
     from townlet.agent.networks import SimpleQNetwork
-    
+
     # 1D: action_dim=3
     substrate_1d = Grid1DSubstrate(length=10)
     q_net_1d = SimpleQNetwork(obs_dim=50, action_dim=substrate_1d.action_space_size)
     assert q_net_1d.q_head[-1].out_features == 3
-    
+
     # 2D: action_dim=5
     substrate_2d = Grid2DSubstrate(width=8, height=8)
     q_net_2d = SimpleQNetwork(obs_dim=91, action_dim=substrate_2d.action_space_size)
@@ -558,13 +558,13 @@ Store valid actions when adding transitions:
 ```python
 def store_transition(self, state, action, reward, next_state, done):
     """Store transition with valid actions for next state."""
-    
+
     # Get valid actions for next state (for masked Q-target)
     if hasattr(self.substrate, 'get_valid_actions'):
         # Extract next position from next_state (substrate-specific)
         next_position = self._extract_position_from_state(next_state)
         valid_actions_list = self.substrate.get_valid_actions(next_position)
-        
+
         # Convert to boolean mask
         valid_actions_mask = torch.zeros(
             self.substrate.action_space_size,
@@ -574,7 +574,7 @@ def store_transition(self, state, action, reward, next_state, done):
     else:
         # No masking needed (all actions valid)
         valid_actions_mask = None
-    
+
     transition = Transition(
         state=state,
         action=action,
@@ -583,7 +583,7 @@ def store_transition(self, state, action, reward, next_state, done):
         done=done,
         valid_actions=valid_actions_mask,  # NEW!
     )
-    
+
     self.replay_buffer.add(transition)
 ```
 
@@ -593,22 +593,22 @@ Update Q-learning target computation:
 def compute_loss(self, batch):
     """Compute TD loss with action masking support."""
     states, actions, rewards, next_states, dones, valid_actions = batch
-    
+
     # Current Q-values
     current_q_values = self.q_network(states)
     current_q = current_q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
-    
+
     # Next Q-values (with action masking)
     with torch.no_grad():
         next_q_values = self.target_network(next_states)
-        
+
         # Apply action masking if available
         if valid_actions is not None:
             next_q_values[~valid_actions] = -float('inf')
-        
+
         max_next_q = next_q_values.max(dim=1)[0]
         target_q = rewards + self.gamma * max_next_q * (1 - dones)
-    
+
     # MSE loss
     loss = F.mse_loss(current_q, target_q)
     return loss
@@ -620,12 +620,12 @@ def compute_loss(self, batch):
 def test_replay_buffer_with_valid_actions():
     """Replay buffer should store and retrieve valid actions."""
     from townlet.training.replay_buffer import ReplayBuffer, Transition
-    
+
     buffer = ReplayBuffer(capacity=100)
-    
+
     # Add transition with valid actions mask
     valid_actions = torch.tensor([True, True, False, False, True])  # Actions 0,1,4 valid
-    
+
     transition = Transition(
         state=torch.randn(10),
         action=0,
@@ -634,9 +634,9 @@ def test_replay_buffer_with_valid_actions():
         done=False,
         valid_actions=valid_actions,
     )
-    
+
     buffer.add(transition)
-    
+
     # Sample and verify
     batch = buffer.sample(1)
     assert batch.valid_actions is not None
@@ -1272,19 +1272,19 @@ def test_action_masking_in_training_loop():
     """Action masking should work in full training loop."""
     from townlet.substrate.graph import GraphSubstrate
     from townlet.environment.vectorized_env import VectorizedHamletEnv
-    
+
     # Simple graph
     edges = [(0, 1), (1, 2)]
     substrate = GraphSubstrate(num_nodes=3, edges=edges, directed=False)
-    
+
     env = VectorizedHamletEnv(substrate=substrate, num_agents=4, ...)
-    
+
     # Reset
     obs = env.reset()
-    
+
     # Get valid action masks
     masks = env.get_valid_action_masks()
-    
+
     # Verify masks are correct
     for i in range(env.num_agents):
         position = env.positions[i]
@@ -1598,7 +1598,7 @@ elif config.type == "graph":
 substrate:
   type: graph
   num_nodes: 16
-  
+
   # Simple subway network
   edges:
     - [0, 1]   # Line 1
@@ -1618,7 +1618,7 @@ substrate:
     - [14, 15]
     - [4, 14]
     - [8, 15]
-  
+
   directed: false
   distance_metric: shortest_path
 ```
@@ -2098,7 +2098,7 @@ Add graph visualization mode:
   <div id="app">
     <!-- Grid visualization (existing) -->
     <GridVisualization v-if="substrateType === 'grid'" :agents="agents" />
-    
+
     <!-- Graph visualization (NEW) -->
     <GraphVisualization
       v-if="substrateType === 'graph'"
@@ -2106,7 +2106,7 @@ Add graph visualization mode:
       :edges="edges"
       :agents="agents"
     />
-    
+
     <!-- Action masking overlay (NEW) -->
     <ActionMaskingOverlay
       :selected-agent="selectedAgent"

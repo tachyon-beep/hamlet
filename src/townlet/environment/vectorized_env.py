@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from townlet.environment.action_builder import ActionSpaceBuilder
 from townlet.environment.affordance_config import load_affordance_config
 from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
@@ -20,6 +21,7 @@ from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
 
 if TYPE_CHECKING:
+    from townlet.environment.action_config import ActionConfig
     from townlet.population.runtime_registry import AgentRuntimeRegistry
 
 
@@ -277,6 +279,8 @@ class VectorizedHamletEnv:
         # Initialize reward strategy (TASK-001: variable meters)
         # Get meter indices from bars_config for dynamic action costs and death detection
         meter_name_to_index = bars_config.meter_name_to_index
+        # Store full mapping for dynamic meter lookups (custom actions, telemetry, etc.)
+        self.meter_name_to_index: dict[str, int] = dict(meter_name_to_index)
         self.energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
         self.health_idx = meter_name_to_index.get("health", min(6, meter_count - 1))  # Default to 6 or last meter
         self.hygiene_idx = meter_name_to_index.get("hygiene", None)  # Optional meter
@@ -304,10 +308,28 @@ class VectorizedHamletEnv:
             bars_config.meter_name_to_index,
         )
 
-        # Action space size is determined by substrate
-        # Substrate reports number of discrete actions via action_space_size property
-        # This enables dynamic action spaces for N-dimensional substrates
-        self.action_dim = self.substrate.action_space_size
+        # Build composed action space from substrate + global custom actions
+        # TODO(Phase 4.2): Load enabled_actions from training.yaml when TrainingConfig DTO exists
+        # For now, all actions enabled by default (None = all enabled)
+        enabled_actions = None  # Will be loaded from training.yaml in Task 4.2
+
+        global_actions_path = Path("configs/global_actions.yaml")
+        builder = ActionSpaceBuilder(
+            substrate=self.substrate,
+            global_actions_path=global_actions_path,
+            enabled_action_names=enabled_actions,
+        )
+        self.action_space = builder.build()
+        self.action_dim = self.action_space.action_dim
+
+        # Cache action indices for fast lookup (replaces hardcoded formulas from Task 1.6)
+        self.interact_action_idx = self.action_space.get_action_by_name("INTERACT").id
+        self.wait_action_idx = self.action_space.get_action_by_name("WAIT").id
+        self.up_z_action_idx = self._get_optional_action_idx("UP_Z")
+        self.down_z_action_idx = self._get_optional_action_idx("DOWN_Z")
+
+        # Build movement deltas from ActionConfig (dynamic, not hardcoded)
+        self._movement_deltas = self._build_movement_deltas()
 
         # State tensors (initialized in reset)
         self.positions = torch.zeros(
@@ -339,6 +361,41 @@ class VectorizedHamletEnv:
     def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
         """Attach runtime registry for telemetry tracking."""
         self.runtime_registry = registry
+
+    def _get_optional_action_idx(self, action_name: str) -> int | None:
+        """Return action index if available in composed action space."""
+        try:
+            return self.action_space.get_action_by_name(action_name).id
+        except ValueError:
+            return None
+
+    def _build_movement_deltas(self) -> torch.Tensor:
+        """Build movement delta tensor from substrate default actions.
+
+        Returns:
+            [action_space_size, position_dim] tensor of movement deltas
+        """
+        substrate_actions = self.substrate.get_default_actions()
+        action_space_size = self.substrate.action_space_size
+        position_dim = self.substrate.position_dim
+
+        # Initialize zero deltas for all actions
+        deltas = torch.zeros(
+            (action_space_size, position_dim),
+            device=self.device,
+            dtype=self.substrate.position_dtype,
+        )
+
+        # Fill in deltas from ActionConfig
+        for action in substrate_actions:
+            if action.delta is not None:
+                deltas[action.id] = torch.tensor(
+                    action.delta,
+                    device=self.device,
+                    dtype=self.substrate.position_dtype,
+                )
+
+        return deltas
 
     def get_action_label_names(self) -> dict[int, str]:
         """Get action label names for current substrate.
@@ -414,9 +471,13 @@ class VectorizedHamletEnv:
             action_masks: [num_agents, action_dim] bool tensor
                 True = valid action, False = invalid
                 Grid2D (6 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
-                Grid3D (8 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, UP_Z, DOWN_Z]
+                Grid3D (8 actions): [UP, DOWN, LEFT, RIGHT, UP_Z, DOWN_Z, INTERACT, WAIT]
         """
-        action_masks = torch.ones(self.num_agents, self.action_dim, dtype=torch.bool, device=self.device)
+        # Start with base mask (disabled actions = False)
+        action_masks = self.action_space.get_base_action_mask(
+            num_agents=self.num_agents,
+            device=self.device,
+        )
 
         # Check boundary constraints (only for spatial substrates)
         if self.substrate.position_dim >= 2:
@@ -441,24 +502,18 @@ class VectorizedHamletEnv:
             else:
                 at_ceiling = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
-            action_masks[at_ceiling, 6] = False  # Can't go UP_Z at ceiling
-            action_masks[at_floor, 7] = False  # Can't go DOWN_Z at floor
+            if self.up_z_action_idx is not None:
+                action_masks[at_ceiling, self.up_z_action_idx] = False  # Can't go UP_Z at ceiling
+            if self.down_z_action_idx is not None:
+                action_masks[at_floor, self.down_z_action_idx] = False  # Can't go DOWN_Z at floor
 
         # Mask INTERACT - only valid when on an open affordance
         # P1.4: Removed affordability check - agents can attempt INTERACT even when broke
         # Affordability is checked inside interaction handlers; failing to afford just
         # wastes a turn (passive decay) and teaches economic planning
 
-        # Determine INTERACT action index based on substrate dimensionality
-        # 0D: INTERACT = 0, 1D: INTERACT = 2, 2D/3D: INTERACT = 4, N≥4: INTERACT = 2N
-        if self.substrate.position_dim == 0:
-            interact_action_idx = 0
-        elif self.substrate.position_dim == 1:
-            interact_action_idx = 2
-        elif self.substrate.position_dim in (2, 3):
-            interact_action_idx = 4
-        else:  # GridND / ContinuousND (N ≥ 4)
-            interact_action_idx = 2 * self.substrate.position_dim
+        # Use cached INTERACT index (from ActionSpaceBuilder)
+        interact_action_idx = self.interact_action_idx
 
         on_valid_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
@@ -554,76 +609,29 @@ class VectorizedHamletEnv:
         Returns:
             Dictionary mapping agent indices to affordance names for successful interactions
         """
+        # === CUSTOM ACTION DISPATCH (early) ===
+        # Custom actions start after substrate actions
+        custom_action_start_id = self.action_space.substrate_action_count
+        custom_mask = actions >= custom_action_start_id
+
+        if custom_mask.any():
+            custom_agent_indices = torch.where(custom_mask)[0]
+            for agent_idx in custom_agent_indices:
+                action_id = int(actions[agent_idx].item())
+                action = self.action_space.get_action_by_id(action_id)
+
+                # Apply custom action costs/effects/teleportation
+                self._apply_custom_action(agent_idx, action)
+
         # Store old positions for temporal mechanics progress tracking
         old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
 
-        # Movement deltas - dynamically sized based on substrate dimensionality
-        # Always float32 - substrates cast to their dtype as needed
-        position_dim = self.substrate.position_dim
-        if position_dim == 0:
-            # Aspatial: no movement deltas needed, but provide dummy array
-            deltas = torch.zeros((6, 0), device=self.device, dtype=torch.float32)
-        elif position_dim == 1:
-            deltas = torch.tensor(
-                [
-                    [-1],  # MOVE_X_NEGATIVE (action 0)
-                    [1],  # MOVE_X_POSITIVE (action 1)
-                    [0],  # INTERACT (no movement, action 2)
-                    [0],  # WAIT (no movement, action 3)
-                ],
-                device=self.device,
-                dtype=torch.float32,
-            )
-        elif position_dim == 2:
-            deltas = torch.tensor(
-                [
-                    [0, -1],  # UP - decreases y, x unchanged
-                    [0, 1],  # DOWN - increases y, x unchanged
-                    [-1, 0],  # LEFT - decreases x, y unchanged
-                    [1, 0],  # RIGHT - increases x, y unchanged
-                    [0, 0],  # INTERACT (no movement)
-                    [0, 0],  # WAIT (no movement)
-                ],
-                device=self.device,
-                dtype=torch.float32,
-            )
-        elif position_dim == 3:
-            deltas = torch.tensor(
-                [
-                    [0, -1, 0],  # UP - decreases y (Grid2D compat: action 0)
-                    [0, 1, 0],  # DOWN - increases y (Grid2D compat: action 1)
-                    [-1, 0, 0],  # LEFT - decreases x (Grid2D compat: action 2)
-                    [1, 0, 0],  # RIGHT - increases x (Grid2D compat: action 3)
-                    [0, 0, 0],  # INTERACT (no movement) (Grid2D compat: action 4)
-                    [0, 0, 0],  # WAIT (no movement) (Grid2D compat: action 5)
-                    [0, 0, 1],  # UP_Z - increases z (new for 3D: action 6)
-                    [0, 0, -1],  # DOWN_Z - decreases z (new for 3D: action 7)
-                ],
-                device=self.device,
-                dtype=torch.float32,
-            )
-        elif position_dim >= 4:
-            # N-dimensional substrates: 2N movement actions + INTERACT + WAIT
-            action_count = 2 * position_dim + 2
-            deltas = torch.zeros((action_count, position_dim), device=self.device, dtype=torch.float32)
-
-            for dim_idx in range(position_dim):
-                # Negative direction for this axis (index dim_idx)
-                deltas[dim_idx, dim_idx] = -1.0
-                # Positive direction for this axis (index position_dim + dim_idx)
-                deltas[position_dim + dim_idx, dim_idx] = 1.0
-
-            # INTERACT (2N) and WAIT (2N+1) remain zero vectors by construction
-        else:
-            raise ValueError(
-                f"Unsupported substrate position_dim: {position_dim}. "
-                "Expected 0 (aspatial), 1 (1D continuous), 2 (Grid2D/Continuous2D), 3 (Grid3D/Continuous3D), "
-                "or N ≥ 4 (GridND/ContinuousND)."
-            )
-
-        # Apply movement with substrate-specific boundary handling
-        movement_deltas = deltas[actions]  # [num_agents, position_dim]
-        self.positions = self.substrate.apply_movement(self.positions, movement_deltas)
+        # Apply movement using pre-built delta tensor from ActionConfig
+        # Only for substrate actions (custom actions already handled above)
+        substrate_mask = actions < custom_action_start_id
+        if substrate_mask.any():
+            movement_deltas = self._movement_deltas[actions[substrate_mask]]  # [num_substrate_agents, position_dim]
+            self.positions[substrate_mask] = self.substrate.apply_movement(self.positions[substrate_mask], movement_deltas)
 
         # Reset progress for agents that moved away (temporal mechanics)
         if self.enable_temporal_mechanics and old_positions is not None:
@@ -636,8 +644,13 @@ class VectorizedHamletEnv:
         # Determine movement actions directly from the movement deltas to support
         # substrates where non-movement actions appear before all movement actions
         # (e.g., 3D where INTERACT/WAIT sit at indices < last movement deltas).
-        movement_actions = deltas.ne(0).any(dim=1)
-        movement_mask = movement_actions[actions]
+        # Only apply to substrate actions (not custom actions)
+        movement_actions = self._movement_deltas.ne(0).any(dim=1)
+        # Create a full mask (initialize to False for all agents)
+        movement_mask = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+        # Only check movement for substrate actions
+        if substrate_mask.any():
+            movement_mask[substrate_mask] = movement_actions[actions[substrate_mask]]
         if movement_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             movement_costs = torch.zeros(self.meter_count, device=self.device)
@@ -651,21 +664,10 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # WAIT action - lighter energy cost
-        # Index derived from substrate dimensionality:
-        # 0D (aspatial): WAIT = 1
-        # 1D: WAIT = 3
-        # 2D: WAIT = 5
-        # 3D: WAIT = 5
-        if self.substrate.position_dim == 0:
-            wait_action_idx = 1
-        elif self.substrate.position_dim == 1:
-            wait_action_idx = 3
-        elif self.substrate.position_dim in (2, 3):
-            wait_action_idx = 5
-        else:
-            wait_action_idx = 2 * self.substrate.position_dim + 1
+        # Use cached WAIT index (from ActionSpaceBuilder)
+        wait_action_idx = self.wait_action_idx
 
-        wait_mask = actions == wait_action_idx
+        wait_mask = (actions == wait_action_idx) & substrate_mask
         if wait_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             wait_costs = torch.zeros(self.meter_count, device=self.device)
@@ -675,22 +677,11 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
-        # Index derived from substrate dimensionality:
-        # 0D (aspatial): INTERACT = 0
-        # 1D: INTERACT = 2
-        # 2D: INTERACT = 4
-        # 3D: INTERACT = 4
-        if self.substrate.position_dim == 0:
-            interact_action_idx = 0
-        elif self.substrate.position_dim == 1:
-            interact_action_idx = 2
-        elif self.substrate.position_dim in (2, 3):
-            interact_action_idx = 4
-        else:
-            interact_action_idx = 2 * self.substrate.position_dim
+        # Use cached INTERACT index (from ActionSpaceBuilder)
+        interact_action_idx = self.interact_action_idx
 
         successful_interactions = {}
-        interact_mask = actions == interact_action_idx
+        interact_mask = (actions == interact_action_idx) & substrate_mask
         if interact_mask.any():
             successful_interactions = self._handle_interactions(interact_mask)
 
@@ -917,6 +908,58 @@ class VectorizedHamletEnv:
         for name, pos in positions.items():
             if name in self.affordances:
                 self.affordances[name] = torch.tensor(pos, device=self.device, dtype=self.substrate.position_dtype)
+
+    def _get_meter_index(self, meter_name: str) -> int | None:
+        """Get meter index by name.
+
+        Args:
+            meter_name: Meter name (e.g., "energy", "mood")
+
+        Returns:
+            Meter index, or None if meter doesn't exist
+        """
+        mapping: dict[str, int] | None = getattr(self, "meter_name_to_index", None)
+        if mapping is None:
+            return None
+        result: int | None = mapping.get(meter_name)
+        return result
+
+    def _apply_custom_action(self, agent_idx: int, action: ActionConfig):
+        """Apply custom action effects, movement delta, and teleportation.
+
+        Args:
+            agent_idx: Agent index
+            action: Custom action config
+        """
+        # Apply costs (negative costs = restoration)
+        for meter_name, cost in action.costs.items():
+            meter_idx = self._get_meter_index(meter_name)
+            if meter_idx is not None:
+                self.meters[agent_idx, meter_idx] -= cost  # Subtract cost (negative = add)
+
+        # Apply effects
+        for meter_name, effect in action.effects.items():
+            meter_idx = self._get_meter_index(meter_name)
+            if meter_idx is not None:
+                self.meters[agent_idx, meter_idx] += effect  # Add effect
+
+        # Apply movement delta (for movement-type custom actions like SPRINT)
+        if action.delta is not None:
+            delta_tensor = torch.tensor(action.delta, device=self.device, dtype=self.substrate.position_dtype)
+            new_position = self.substrate.apply_movement(self.positions[agent_idx : agent_idx + 1], delta_tensor.unsqueeze(0))
+            self.positions[agent_idx] = new_position.squeeze(0)
+
+        # Handle teleportation (overrides movement delta if both present)
+        if action.teleport_to is not None:
+            target_pos = torch.tensor(
+                action.teleport_to,
+                device=self.device,
+                dtype=self.substrate.position_dtype,
+            )
+            self.positions[agent_idx] = target_pos
+
+        # Clamp meters to [0, 1]
+        self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
     def randomize_affordance_positions(self):
         """Randomize affordance positions for generalization testing.

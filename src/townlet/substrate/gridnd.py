@@ -5,6 +5,7 @@ from typing import Literal
 
 import torch
 
+from townlet.environment.action_config import ActionConfig
 from townlet.substrate.base import SpatialSubstrate
 
 
@@ -201,6 +202,102 @@ class GridNDSubstrate(SpatialSubstrate):
         elif self.distance_metric == "chebyshev":
             # L∞ distance: max of absolute differences
             return torch.abs(pos1 - pos2).max(dim=-1)[0]
+
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return GridND's 2N+2 default actions with default costs.
+
+        Returns:
+            [DIM0_NEG, DIM0_POS, DIM1_NEG, DIM1_POS, ..., INTERACT, WAIT]
+
+        Example:
+            4D grid: 8 movement + INTERACT + WAIT = 10 actions
+            7D grid: 14 movement + INTERACT + WAIT = 16 actions
+        """
+        actions = []
+        action_id = 0
+
+        # Generate movement actions for each dimension
+        n_dims = len(self.dimension_sizes)
+        for dim_idx in range(n_dims):
+            # Negative direction (DIM{N}_NEG)
+            delta = [0] * n_dims
+            delta[dim_idx] = -1
+            actions.append(
+                ActionConfig(
+                    id=action_id,
+                    name=f"DIM{dim_idx}_NEG",
+                    type="movement",
+                    delta=delta,
+                    teleport_to=None,
+                    costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                    effects={},
+                    description=f"Move -1 along dimension {dim_idx}",
+                    icon=None,
+                    source="substrate",
+                    source_affordance=None,
+                    enabled=True,
+                )
+            )
+            action_id += 1
+
+            # Positive direction (DIM{N}_POS)
+            delta = [0] * n_dims
+            delta[dim_idx] = 1
+            actions.append(
+                ActionConfig(
+                    id=action_id,
+                    name=f"DIM{dim_idx}_POS",
+                    type="movement",
+                    delta=delta,
+                    teleport_to=None,
+                    costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                    effects={},
+                    description=f"Move +1 along dimension {dim_idx}",
+                    icon=None,
+                    source="substrate",
+                    source_affordance=None,
+                    enabled=True,
+                )
+            )
+            action_id += 1
+
+        # Core interactions
+        actions.append(
+            ActionConfig(
+                id=action_id,
+                name="INTERACT",
+                type="interaction",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.003},
+                effects={},
+                description="Interact with affordance at current position",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            )
+        )
+        action_id += 1
+
+        actions.append(
+            ActionConfig(
+                id=action_id,
+                name="WAIT",
+                type="passive",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.004},
+                effects={},
+                description="Wait and do nothing (lower cost than movement)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            )
+        )
+
+        return actions
 
     def _encode_relative(self, positions: torch.Tensor, affordances: dict[str, torch.Tensor]) -> torch.Tensor:
         """Encode positions as normalized coordinates [0, 1] per dimension."""

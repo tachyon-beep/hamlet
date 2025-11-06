@@ -2,6 +2,7 @@
 
 import torch
 
+from townlet.environment.action_config import ActionConfig
 from townlet.substrate.base import SpatialSubstrate
 
 
@@ -132,3 +133,40 @@ class AspatialSubstrate(SpatialSubstrate):
     def supports_enumerable_positions(self) -> bool:
         """Aspatial substrates have no positions."""
         return False
+
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return Aspatial's 2 default actions (no movement).
+
+        Returns:
+            [INTERACT, WAIT] only (no spatial movement)
+        """
+        return [
+            ActionConfig(
+                id=0,
+                name="INTERACT",
+                type="interaction",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.003},
+                effects={},
+                description="Interact with affordance (aspatial, no position required)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+            ActionConfig(
+                id=1,
+                name="WAIT",
+                type="passive",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.004},
+                effects={},
+                description="Wait (idle metabolic cost)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            ),
+        ]

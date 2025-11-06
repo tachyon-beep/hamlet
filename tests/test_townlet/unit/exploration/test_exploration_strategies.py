@@ -22,8 +22,6 @@ from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.exploration.rnd import RNDExploration
 from townlet.training.state import BatchedAgentState
 
-FULL_OBS_DIM = 93  # Standard 8×8 full observability observation dimension
-
 # =============================================================================
 # EPSILON-GREEDY EXPLORATION
 # =============================================================================
@@ -935,10 +933,10 @@ class TestAdaptiveIntrinsicWeightGetter:
 class TestRNDCheckpointCompleteness:
     """Test RND exploration checkpoint completeness."""
 
-    def test_rnd_saves_predictor_optimizer(self, cpu_device):
+    def test_rnd_saves_predictor_optimizer(self, cpu_device, basic_env):
         """RND should save predictor optimizer state."""
         rnd = RNDExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             embed_dim=128,
             learning_rate=1e-4,
             device=cpu_device,
@@ -948,10 +946,10 @@ class TestRNDCheckpointCompleteness:
         state = rnd.checkpoint_state()
         assert "optimizer" in state, "RND checkpoint must include optimizer state"
 
-    def test_rnd_saves_epsilon(self, cpu_device):
+    def test_rnd_saves_epsilon(self, cpu_device, basic_env):
         """RND should save epsilon decay parameters."""
         rnd = RNDExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             epsilon_start=0.8,
             epsilon_min=0.05,
             epsilon_decay=0.99,
@@ -966,10 +964,10 @@ class TestRNDCheckpointCompleteness:
         assert state["epsilon_min"] == 0.05
         assert state["epsilon_decay"] == 0.99
 
-    def test_rnd_saves_network_architecture_params(self, cpu_device):
+    def test_rnd_saves_network_architecture_params(self, cpu_device, basic_env):
         """RND should save architecture parameters for reconstruction."""
         rnd = RNDExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             embed_dim=256,
             device=cpu_device,
         )
@@ -977,12 +975,12 @@ class TestRNDCheckpointCompleteness:
         state = rnd.checkpoint_state()
         assert "obs_dim" in state, "RND checkpoint must include obs_dim"
         assert "embed_dim" in state, "RND checkpoint must include embed_dim"
-        assert state["obs_dim"] == FULL_OBS_DIM
+        assert state["obs_dim"] == basic_env.observation_dim
         assert state["embed_dim"] == 256
 
-    def test_rnd_saves_network_weights(self, cpu_device):
+    def test_rnd_saves_network_weights(self, cpu_device, basic_env):
         """RND should save both fixed and predictor network weights."""
-        rnd = RNDExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        rnd = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = rnd.checkpoint_state()
         assert "fixed_network" in state, "RND checkpoint must include fixed_network"
@@ -992,9 +990,9 @@ class TestRNDCheckpointCompleteness:
         assert isinstance(state["fixed_network"], dict)
         assert isinstance(state["predictor_network"], dict)
 
-    def test_rnd_restores_epsilon(self, cpu_device):
+    def test_rnd_restores_epsilon(self, cpu_device, basic_env):
         """RND should restore epsilon from checkpoint."""
-        rnd = RNDExploration(obs_dim=FULL_OBS_DIM, epsilon_start=1.0, device=cpu_device)
+        rnd = RNDExploration(obs_dim=basic_env.observation_dim, epsilon_start=1.0, device=cpu_device)
 
         # Decay epsilon
         for _ in range(10):
@@ -1004,17 +1002,17 @@ class TestRNDCheckpointCompleteness:
         state = rnd.checkpoint_state()
 
         # Create new RND and restore
-        rnd2 = RNDExploration(obs_dim=FULL_OBS_DIM, epsilon_start=1.0, device=cpu_device)
+        rnd2 = RNDExploration(obs_dim=basic_env.observation_dim, epsilon_start=1.0, device=cpu_device)
         rnd2.load_state(state)
 
         assert abs(rnd2.epsilon - decayed_epsilon) < 1e-6, "Epsilon should be restored"
 
-    def test_rnd_restores_network_weights(self, cpu_device):
+    def test_rnd_restores_network_weights(self, cpu_device, basic_env):
         """RND should restore network weights from checkpoint."""
-        rnd = RNDExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        rnd = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         # Train predictor on some data
-        obs = torch.randn(128, FULL_OBS_DIM, device=cpu_device)
+        obs = torch.randn(128, basic_env.observation_dim, device=cpu_device)
         target = rnd.fixed_network(obs)
         pred = rnd.predictor_network(obs)
         loss = torch.nn.functional.mse_loss(pred, target)
@@ -1026,23 +1024,23 @@ class TestRNDCheckpointCompleteness:
         state = rnd.checkpoint_state()
 
         # Create new RND and restore
-        rnd2 = RNDExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        rnd2 = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         rnd2.load_state(state)
 
         # Networks should produce same output
-        test_obs = torch.randn(10, FULL_OBS_DIM, device=cpu_device)
+        test_obs = torch.randn(10, basic_env.observation_dim, device=cpu_device)
         pred1 = rnd.predictor_network(test_obs)
         pred2 = rnd2.predictor_network(test_obs)
 
         assert torch.allclose(pred1, pred2), "Predictor network weights should be restored"
 
-    def test_rnd_restores_optimizer_state(self, cpu_device):
+    def test_rnd_restores_optimizer_state(self, cpu_device, basic_env):
         """RND should restore optimizer state from checkpoint."""
-        rnd = RNDExploration(obs_dim=FULL_OBS_DIM, learning_rate=1e-3, device=cpu_device)
+        rnd = RNDExploration(obs_dim=basic_env.observation_dim, learning_rate=1e-3, device=cpu_device)
 
         # Train for a few steps to build optimizer state
         for _ in range(5):
-            obs = torch.randn(128, FULL_OBS_DIM, device=cpu_device)
+            obs = torch.randn(128, basic_env.observation_dim, device=cpu_device)
             target = rnd.fixed_network(obs)
             pred = rnd.predictor_network(obs)
             loss = torch.nn.functional.mse_loss(pred, target)
@@ -1055,7 +1053,7 @@ class TestRNDCheckpointCompleteness:
         optimizer_state_keys = set(state["optimizer"]["state"].keys())
 
         # Create new RND and restore
-        rnd2 = RNDExploration(obs_dim=FULL_OBS_DIM, learning_rate=1e-3, device=cpu_device)
+        rnd2 = RNDExploration(obs_dim=basic_env.observation_dim, learning_rate=1e-3, device=cpu_device)
         rnd2.load_state(state)
 
         # Optimizer should have same state
@@ -1066,10 +1064,10 @@ class TestRNDCheckpointCompleteness:
 class TestAdaptiveIntrinsicCheckpointCompleteness:
     """Test AdaptiveIntrinsic exploration checkpoint completeness."""
 
-    def test_adaptive_saves_intrinsic_weight(self, cpu_device):
+    def test_adaptive_saves_intrinsic_weight(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should save current intrinsic weight."""
         adaptive = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             initial_intrinsic_weight=0.5,
             device=cpu_device,
         )
@@ -1078,10 +1076,10 @@ class TestAdaptiveIntrinsicCheckpointCompleteness:
         assert "current_intrinsic_weight" in state
         assert state["current_intrinsic_weight"] == 0.5
 
-    def test_adaptive_saves_annealing_params(self, cpu_device):
+    def test_adaptive_saves_annealing_params(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should save all annealing parameters."""
         adaptive = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             variance_threshold=50.0,
             survival_window=200,
             decay_rate=0.95,
@@ -1099,9 +1097,9 @@ class TestAdaptiveIntrinsicCheckpointCompleteness:
         assert state["decay_rate"] == 0.95
         assert state["min_intrinsic_weight"] == 0.05
 
-    def test_adaptive_saves_survival_history(self, cpu_device):
+    def test_adaptive_saves_survival_history(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should save survival history for annealing."""
-        adaptive = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         # Simulate some survival times
         adaptive.survival_history = [10.0, 20.0, 30.0, 40.0, 50.0]
@@ -1110,9 +1108,9 @@ class TestAdaptiveIntrinsicCheckpointCompleteness:
         assert "survival_history" in state
         assert state["survival_history"] == [10.0, 20.0, 30.0, 40.0, 50.0]
 
-    def test_adaptive_saves_rnd_state(self, cpu_device):
+    def test_adaptive_saves_rnd_state(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should save underlying RND state."""
-        adaptive = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = adaptive.checkpoint_state()
         assert "rnd_state" in state
@@ -1123,10 +1121,10 @@ class TestAdaptiveIntrinsicCheckpointCompleteness:
         assert "predictor_network" in rnd_state
         assert "optimizer" in rnd_state
 
-    def test_adaptive_restores_intrinsic_weight(self, cpu_device):
+    def test_adaptive_restores_intrinsic_weight(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should restore intrinsic weight from checkpoint."""
         adaptive = AdaptiveIntrinsicExploration(
-            obs_dim=FULL_OBS_DIM,
+            obs_dim=basic_env.observation_dim,
             initial_intrinsic_weight=1.0,
             device=cpu_device,
         )
@@ -1137,14 +1135,14 @@ class TestAdaptiveIntrinsicCheckpointCompleteness:
         state = adaptive.checkpoint_state()
 
         # Create new instance and restore
-        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         adaptive2.load_state(state)
 
         assert abs(adaptive2.current_intrinsic_weight - 0.3) < 1e-6
 
-    def test_adaptive_restores_survival_history(self, cpu_device):
+    def test_adaptive_restores_survival_history(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should restore survival history from checkpoint."""
-        adaptive = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         # Set survival history
         adaptive.survival_history = [15.0, 25.0, 35.0]
@@ -1152,27 +1150,27 @@ class TestAdaptiveIntrinsicCheckpointCompleteness:
         state = adaptive.checkpoint_state()
 
         # Create new instance and restore
-        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         adaptive2.load_state(state)
 
         assert adaptive2.survival_history == [15.0, 25.0, 35.0]
 
-    def test_adaptive_restores_rnd_state(self, cpu_device):
+    def test_adaptive_restores_rnd_state(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should restore RND state from checkpoint."""
-        adaptive = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         # Train RND predictor
-        obs = torch.randn(128, FULL_OBS_DIM, device=cpu_device)
+        obs = torch.randn(128, basic_env.observation_dim, device=cpu_device)
         adaptive.rnd.obs_buffer = [obs[i] for i in range(128)]
         adaptive.rnd.update_predictor()
 
         # Get predictor output before checkpoint
-        test_obs = torch.randn(10, FULL_OBS_DIM, device=cpu_device)
+        test_obs = torch.randn(10, basic_env.observation_dim, device=cpu_device)
         pred_before = adaptive.rnd.predictor_network(test_obs)
 
         # Save and restore
         state = adaptive.checkpoint_state()
-        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         adaptive2.load_state(state)
 
         # Predictor should produce same output
@@ -1183,23 +1181,23 @@ class TestAdaptiveIntrinsicCheckpointCompleteness:
 class TestCheckpointRoundTrip:
     """Test full checkpoint save/restore cycle."""
 
-    def test_rnd_roundtrip_preserves_behavior(self, cpu_device):
+    def test_rnd_roundtrip_preserves_behavior(self, cpu_device, basic_env):
         """RND should have identical behavior after save/restore."""
-        rnd = RNDExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        rnd = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         # Train predictor
         for _ in range(5):
-            obs = torch.randn(128, FULL_OBS_DIM, device=cpu_device)
+            obs = torch.randn(128, basic_env.observation_dim, device=cpu_device)
             rnd.obs_buffer.extend([obs[i] for i in range(128)])
             rnd.update_predictor()
 
         # Compute intrinsic rewards before checkpoint
-        test_obs = torch.randn(10, FULL_OBS_DIM, device=cpu_device)
+        test_obs = torch.randn(10, basic_env.observation_dim, device=cpu_device)
         rewards_before = rnd.compute_intrinsic_rewards(test_obs)
 
         # Save and restore
         state = rnd.checkpoint_state()
-        rnd2 = RNDExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        rnd2 = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         rnd2.load_state(state)
 
         # Compute intrinsic rewards after restore
@@ -1208,13 +1206,13 @@ class TestCheckpointRoundTrip:
         # Should be identical
         assert torch.allclose(rewards_before, rewards_after), "RND behavior should be preserved"
 
-    def test_adaptive_roundtrip_preserves_behavior(self, cpu_device):
+    def test_adaptive_roundtrip_preserves_behavior(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should have identical behavior after save/restore."""
-        adaptive = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         # Train and anneal
         for _ in range(3):
-            obs = torch.randn(128, FULL_OBS_DIM, device=cpu_device)
+            obs = torch.randn(128, basic_env.observation_dim, device=cpu_device)
             adaptive.rnd.obs_buffer.extend([obs[i] for i in range(128)])
             adaptive.rnd.update_predictor()
 
@@ -1222,12 +1220,12 @@ class TestCheckpointRoundTrip:
         adaptive.current_intrinsic_weight = 0.5
 
         # Compute intrinsic rewards before checkpoint
-        test_obs = torch.randn(10, FULL_OBS_DIM, device=cpu_device)
+        test_obs = torch.randn(10, basic_env.observation_dim, device=cpu_device)
         rewards_before = adaptive.compute_intrinsic_rewards(test_obs)
 
         # Save and restore
         state = adaptive.checkpoint_state()
-        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         adaptive2.load_state(state)
 
         # Compute intrinsic rewards after restore
@@ -1241,31 +1239,31 @@ class TestCheckpointRoundTrip:
 class TestCheckpointBackwardsCompatibility:
     """Test handling of missing checkpoint fields (backwards compatibility)."""
 
-    def test_rnd_handles_missing_optimizer(self, cpu_device):
+    def test_rnd_handles_missing_optimizer(self, cpu_device, basic_env):
         """RND should handle checkpoints without optimizer state (legacy)."""
-        rnd = RNDExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        rnd = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = rnd.checkpoint_state()
         # Simulate legacy checkpoint without optimizer
         del state["optimizer"]
 
         # Should not crash (though training may be suboptimal)
-        rnd2 = RNDExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        rnd2 = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         try:
             rnd2.load_state(state)
         except KeyError:
             pytest.fail("RND should handle missing optimizer gracefully")
 
-    def test_adaptive_handles_missing_survival_history(self, cpu_device):
+    def test_adaptive_handles_missing_survival_history(self, cpu_device, basic_env):
         """AdaptiveIntrinsic should handle checkpoints without survival history."""
-        adaptive = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = adaptive.checkpoint_state()
         # Simulate legacy checkpoint without survival history
         del state["survival_history"]
 
         # Should not crash (annealing may restart)
-        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=FULL_OBS_DIM, device=cpu_device)
+        adaptive2 = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
         try:
             adaptive2.load_state(state)
         except KeyError:

@@ -1346,11 +1346,60 @@ Part of TASK-002B Phase 1 (COMPLETE)."
 
 **Goal:** Ensure every substrate emits a canonical action table where all movement actions populate the leading indices and the meta actions (`INTERACT`, `WAIT`) occupy the final two slots. Update environment consumers so they derive indices from the substrate catalog instead of hard-coded formulas. Follow strict TDD (write failing tests first).
 
+**CRITICAL**: This task eliminates ALL hardcoded action index calculations that would break when custom actions are added.
+
 **Files:**
 - Tests: `tests/test_townlet/unit/test_substrate_actions.py`, `tests/test_townlet/unit/environment/test_movement_mask_bug.py`, `tests/test_townlet/unit/environment/test_action_labels.py` (new)
 - Runtime: `src/townlet/environment/action_labels.py`, `src/townlet/environment/vectorized_env.py`
 - Substrates: `src/townlet/substrate/*`
 - Docs: this plan, `docs/bugs/movement-mask-dynamic-action-spaces.md`, `CHANGELOG.md`
+
+**Hardcoded Index Locations to Fix** (CRITICAL - must address ALL of these):
+
+1. **`src/townlet/environment/vectorized_env.py:453-461`** - INTERACT index calculation:
+   ```python
+   # BEFORE (hardcoded formula):
+   if self.substrate.position_dim == 0:
+       interact_action_idx = 0
+   elif self.substrate.position_dim == 1:
+       interact_action_idx = 2
+   elif self.substrate.position_dim in (2, 3):
+       interact_action_idx = 4
+   else:
+       interact_action_idx = 2 * self.substrate.position_dim
+
+   # AFTER (name-based lookup):
+   interact_action_idx = self.action_space.get_action_by_name("INTERACT").id
+   ```
+
+2. **`src/townlet/environment/vectorized_env.py:660-666`** - WAIT index calculation:
+   ```python
+   # BEFORE (hardcoded formula):
+   if self.substrate.position_dim == 0:
+       wait_action_idx = 1
+   elif self.substrate.position_dim == 1:
+       wait_action_idx = 3
+   elif self.substrate.position_dim in (2, 3):
+       wait_action_idx = 5
+   else:
+       wait_action_idx = 2 * self.substrate.position_dim + 1
+
+   # AFTER (name-based lookup):
+   wait_action_idx = self.action_space.get_action_by_name("WAIT").id
+   ```
+
+3. **`src/townlet/environment/vectorized_env.py:684-690`** - Duplicate WAIT index calculation (for action costs):
+   ```python
+   # BEFORE (same hardcoded formula as #2)
+   # AFTER (use cached self.wait_action_idx from initialization)
+   ```
+
+4. **Cache indices at initialization** (add to `__init__` after ActionSpaceBuilder runs):
+   ```python
+   # Cache action indices for fast lookup during step()
+   self.interact_action_idx = self.action_space.get_action_by_name("INTERACT").id
+   self.wait_action_idx = self.action_space.get_action_by_name("WAIT").id
+   ```
 
 **Step 1: Write failing substrate tests (TDD)**
 - Extend `tests/test_townlet/unit/test_substrate_actions.py` with assertions that for spatial substrates (1D, 2D, 3D, ND) the final two default-action names are exactly `INTERACT` followed by `WAIT`, and that all earlier entries have non-zero movement deltas.
@@ -1366,17 +1415,226 @@ Part of TASK-002B Phase 1 (COMPLETE)."
 - Refactor `ActionLabels._filter_labels_for_substrate` (and related helpers) to accept the substrate default-action order, mapping canonical names on top of that dynamic index set rather than constructing fixed dictionaries.
 - Adjust each substrate `get_default_actions()` implementation if necessary to guarantee movement actions come first and meta actions are last (most already follow this, but double-check ND variants).
 
-**Step 4: Update environment logic**
-- Modify `VectorizedHamletEnv` to cache movement/interact/wait indices from the substrate catalog or action labels at initialization, eliminating the `2 * position_dim` formulas.
-- Ensure movement masking continues to rely on deltas (already implemented) while wait/interact costs reference the catalog-derived indices.
+**Step 4: Update environment logic (CRITICAL - replace ALL hardcoded indices)**
+- Modify `VectorizedHamletEnv.__init__()` to cache action indices after ActionSpaceBuilder runs:
+  ```python
+  # After self.action_space = builder.build()
+  self.interact_action_idx = self.action_space.get_action_by_name("INTERACT").id
+  self.wait_action_idx = self.action_space.get_action_by_name("WAIT").id
+  ```
+- Replace hardcoded index calculations in lines 453-461 (INTERACT) with `self.interact_action_idx`
+- Replace hardcoded index calculations in lines 660-666 (WAIT) with `self.wait_action_idx`
+- Replace hardcoded index calculations in lines 684-690 (WAIT costs) with `self.wait_action_idx`
+- Ensure movement masking continues to rely on deltas (already implemented) while wait/interact costs reference the cached indices.
 
-**Step 5: Migrate dependent tests/docs**
+**Step 5: Regression tests (CRITICAL - verify no breakage)**
+- Add regression test: `test_interact_wait_indices_match_action_space()`
+  ```python
+  def test_interact_wait_indices_match_action_space():
+      """Cached indices must match action_space lookups."""
+      env = VectorizedHamletEnv(config_pack_path=Path("configs/L1_full_observability"), ...)
+
+      # Verify cached indices match action_space
+      assert env.interact_action_idx == env.action_space.get_action_by_name("INTERACT").id
+      assert env.wait_action_idx == env.action_space.get_action_by_name("WAIT").id
+
+      # Verify no hardcoded assumptions (Grid2D should NOT always have INTERACT=4)
+      # This test will fail if hardcoded formulas are still present
+  ```
 - Update existing tests (movement mask regression, action masks) to use helper lookups for meta-action indices.
 - Document the ordering contract in `docs/bugs/movement-mask-dynamic-action-spaces.md` and note the change in `CHANGELOG.md`, including guidance for any serialized policies/configs that referenced hard-coded indices.
 
 **Step 6: Verify and commit**
 - Run the focused suites first (`uv run pytest tests/test_townlet/unit/test_substrate_actions.py tests/test_townlet/unit/environment/test_movement_mask_bug.py`) to confirm TDD success, then the broader project suite.
+- **CRITICAL**: Run full integration tests to verify no regressions in action dispatch
 - Commit with a message referencing this plan section (Task 1.6) once all tests pass.
+
+**Estimated Time**: 4-6 hours (increased from implicit estimate due to pervasive changes)
+
+---
+
+### Task 1.7: Refactor movement delta arrays to use ActionConfig
+
+**Goal:** Replace hardcoded movement delta arrays with dynamic delta tensors built from ActionConfig.delta fields. This enables custom movement actions (e.g., SPRINT, JUMP) to work correctly.
+
+**CRITICAL**: Current implementation assumes action IDs 0-3 are always movement in fixed order. Custom actions break this assumption.
+
+**Files:**
+- Modify: `src/townlet/environment/vectorized_env.py`
+- Test: `tests/test_townlet/integration/test_custom_actions.py` (will be created in Phase 5)
+
+**Current Problem** (`vectorized_env.py:560-622`):
+
+```python
+# Hardcoded delta arrays indexed by action ID
+elif position_dim == 2:
+    deltas = torch.tensor([
+        [0, -1],  # UP - assumes action 0
+        [0, 1],   # DOWN - assumes action 1
+        [-1, 0],  # LEFT - assumes action 2
+        [1, 0],   # RIGHT - assumes action 3
+        [0, 0],   # INTERACT - assumes action 4
+        [0, 0],   # WAIT - assumes action 5
+    ], device=device, dtype=dtype)
+
+# Direct indexing assumes fixed action order
+movement_deltas = deltas[actions]  # BREAKS if action IDs change
+```
+
+**Step 1: Write failing test for custom movement action**
+
+Add to `tests/test_townlet/unit/test_vectorized_env.py`:
+
+```python
+def test_movement_deltas_from_action_config():
+    """Movement deltas should come from ActionConfig, not hardcoded arrays."""
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        num_agents=1,
+        device=torch.device("cpu"),
+    )
+
+    env.reset()
+
+    # Get UP action from action_space
+    up_action = env.action_space.get_action_by_name("UP")
+
+    # Execute UP action
+    actions = torch.tensor([up_action.id], device=env.device)
+    initial_pos = env.positions[0].clone()
+
+    env.step(actions)
+
+    # Position should change by UP delta [0, -1]
+    expected_delta = torch.tensor(up_action.delta, device=env.device, dtype=env.substrate.position_dtype)
+    expected_pos = initial_pos + expected_delta
+
+    # Handle boundary clamping
+    expected_pos = torch.clamp(expected_pos, 0, env.substrate.width - 1)
+
+    assert torch.equal(env.positions[0], expected_pos), \
+        f"UP action should move by delta {up_action.delta}"
+```
+
+**Step 2: Run test to verify current behavior**
+
+```bash
+uv run pytest tests/test_townlet/unit/test_vectorized_env.py::test_movement_deltas_from_action_config -v
+```
+
+Expected: PASS (current implementation works for substrate actions)
+
+**Step 3: Build movement delta tensor from ActionConfig**
+
+Modify `src/townlet/environment/vectorized_env.py`
+
+Add method after `__init__` (around line 340):
+
+```python
+def _build_movement_delta_tensor(self) -> torch.Tensor:
+    """Build movement delta tensor from action_space.
+
+    Returns:
+        [action_dim, position_dim] tensor of movement deltas
+        Non-movement actions have [0, 0, ...] deltas
+    """
+    deltas = torch.zeros(
+        self.action_dim,
+        self.substrate.position_dim,
+        device=self.device,
+        dtype=self.substrate.position_dtype,
+    )
+
+    # Populate from ActionConfig.delta fields
+    for action in self.action_space.actions:
+        if action.delta is not None:
+            deltas[action.id] = torch.tensor(
+                action.delta,
+                device=self.device,
+                dtype=self.substrate.position_dtype,
+            )
+
+    return deltas
+```
+
+Call this in `__init__` after ActionSpaceBuilder runs:
+
+```python
+# After: self.action_space = builder.build()
+
+# Build movement delta tensor (replaces hardcoded arrays)
+self.movement_deltas = self._build_movement_delta_tensor()
+```
+
+**Step 4: Replace hardcoded delta arrays in _execute_actions()**
+
+Modify `src/townlet/environment/vectorized_env.py:546-697`
+
+```python
+# BEFORE (lines 560-622): Hardcoded delta arrays
+if position_dim == 0:
+    deltas = torch.zeros(...)
+elif position_dim == 1:
+    deltas = torch.tensor([...], ...)
+elif position_dim == 2:
+    deltas = torch.tensor([[0, -1], [0, 1], ...], ...)
+# ... etc.
+
+movement_deltas = deltas[actions]
+
+# AFTER: Use pre-built tensor from ActionConfig
+movement_deltas = self.movement_deltas[actions]  # Already built in __init__
+```
+
+**Step 5: Handle custom movement actions (teleportation)**
+
+Modify custom action dispatch (Task 4.3) to handle teleportation:
+
+```python
+# In custom action dispatch section (around line 2650):
+if action.type == "movement":
+    if action.teleport_to is not None:
+        # Teleportation: override position directly
+        target_pos = torch.tensor(
+            action.teleport_to,
+            device=self.device,
+            dtype=self.substrate.position_dtype,
+        )
+        self.positions[agent_idx] = target_pos
+    elif action.delta is not None:
+        # Custom delta movement (e.g., SPRINT with delta [0, -2])
+        # Already handled by movement_deltas tensor
+        pass
+```
+
+**Step 6: Run tests to verify**
+
+```bash
+# Unit test
+uv run pytest tests/test_townlet/unit/test_vectorized_env.py::test_movement_deltas_from_action_config -v
+
+# Integration tests (verify no regression)
+uv run pytest tests/test_townlet/integration/test_training_loop.py -v
+uv run pytest tests/test_townlet/integration/test_curriculum_signal_purity.py -v
+```
+
+Expected: PASS (all tests pass, movement still works correctly)
+
+**Step 7: Commit**
+
+```bash
+git add src/townlet/environment/vectorized_env.py tests/test_townlet/unit/test_vectorized_env.py
+git commit -m "refactor(env): build movement deltas from ActionConfig
+
+- Replace hardcoded delta arrays with dynamic tensor
+- _build_movement_delta_tensor() builds from ActionConfig.delta
+- Enables custom movement actions (SPRINT, JUMP, etc.)
+- No behavior change for substrate actions (same deltas)
+
+Part of TASK-002B Phase 1 (COMPLETE)."
+```
+
+**Estimated Time**: 3-4 hours
 
 ---
 
@@ -2672,8 +2930,168 @@ git commit -m "feat(env): implement custom action dispatch
 - Custom actions dispatched in step() after substrate actions
 - REST/MEDITATE/TELEPORT_HOME now functional
 
+Part of TASK-002B Phase 4."
+```
+
+---
+
+### Task 4.4: Test suite audit - fix hardcoded action_dim=6
+
+**Goal:** Find and fix all tests that hardcode `action_dim=6` instead of querying `env.action_dim`. This ensures tests won't break when custom actions are added.
+
+**CRITICAL**: 30+ test files assume Grid2D always has action_dim=6. This will break when global_actions.yaml adds custom actions.
+
+**Files:**
+- Multiple test files (see locations below)
+
+**Step 1: Grep for hardcoded action_dim=6**
+
+```bash
+cd /home/john/hamlet
+grep -r "action_dim=6" tests/ --include="*.py"
+```
+
+Expected findings (non-exhaustive):
+- `tests/test_townlet/conftest.py:366` - SimpleQNetwork fixture
+- `tests/test_townlet/integration/test_training_loop.py:76` - Network construction
+- `tests/test_townlet/unit/test_*` - Various unit tests
+
+**Step 2: Create test to verify dynamic action_dim**
+
+Add to `tests/test_townlet/unit/test_vectorized_env.py`:
+
+```python
+def test_action_dim_matches_action_space():
+    """env.action_dim must match env.action_space.action_dim (no hardcoded 6)."""
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        num_agents=1,
+        device=torch.device("cpu"),
+    )
+
+    # env.action_dim must come from action_space, not substrate
+    assert env.action_dim == env.action_space.action_dim
+
+    # For Grid2D with global_actions.yaml, action_dim should be > 6
+    # (6 substrate + N custom)
+    assert env.action_dim >= 6
+
+    # Verify NOT hardcoded to 6
+    # This test documents the expectation: action_dim is dynamic
+```
+
+**Step 3: Fix conftest.py fixture (CRITICAL)**
+
+Modify `tests/test_townlet/conftest.py:366`:
+
+```python
+# BEFORE (hardcoded):
+@pytest.fixture
+def simple_network():
+    return SimpleQNetwork(obs_dim=100, action_dim=6, hidden_dim=128)
+
+# AFTER (dynamic):
+@pytest.fixture
+def simple_network(env):  # Depends on env fixture
+    return SimpleQNetwork(
+        obs_dim=env.observation_dim,
+        action_dim=env.action_dim,  # Dynamic from env
+        hidden_dim=128,
+    )
+```
+
+**Step 4: Fix integration tests**
+
+Modify `tests/test_townlet/integration/test_training_loop.py:76`:
+
+```python
+# BEFORE:
+network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6, hidden_dim=128)
+
+# AFTER:
+network = SimpleQNetwork(obs_dim=obs_dim, action_dim=env.action_dim, hidden_dim=128)
+```
+
+**Step 5: Fix remaining unit tests**
+
+For each test file with hardcoded `action_dim=6`:
+
+**Pattern A** (test creates env and network):
+```python
+# BEFORE:
+env = VectorizedHamletEnv(...)
+network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=6, hidden_dim=128)
+
+# AFTER:
+env = VectorizedHamletEnv(...)
+network = SimpleQNetwork(obs_dim=env.observation_dim, action_dim=env.action_dim, hidden_dim=128)
+```
+
+**Pattern B** (test uses mock env):
+```python
+# BEFORE:
+mock_env.action_dim = 6
+
+# AFTER:
+mock_env.action_dim = env.action_space.action_dim  # Or appropriate value for mock
+```
+
+**Step 6: Run full test suite**
+
+```bash
+# Verify no hardcoded action_dim assumptions remain
+uv run pytest tests/ -v --tb=short
+
+# Look for failures related to action_dim mismatches
+# Fix any remaining hardcoded values
+```
+
+**Step 7: Document the pattern**
+
+Add to test suite best practices (create if needed: `tests/README.md`):
+
+```markdown
+## Test Best Practices
+
+### Dynamic Action Dimension
+
+**ALWAYS** use `env.action_dim`, **NEVER** hardcode `action_dim=6`:
+
+```python
+# ✅ CORRECT (dynamic):
+network = SimpleQNetwork(
+    obs_dim=env.observation_dim,
+    action_dim=env.action_dim,  # Queries composed action space
+    hidden_dim=128,
+)
+
+# ❌ INCORRECT (hardcoded):
+network = SimpleQNetwork(
+    obs_dim=env.observation_dim,
+    action_dim=6,  # BREAKS when custom actions added
+    hidden_dim=128,
+)
+```
+
+**Rationale**: Grid2D has 6 substrate actions, but `global_actions.yaml` adds
+custom actions (REST, MEDITATE, etc.). Total `action_dim = substrate + custom`.
+```
+
+**Step 8: Commit**
+
+```bash
+git add tests/
+git commit -m "fix(tests): replace hardcoded action_dim=6 with env.action_dim
+
+- Fixes 30+ tests that assumed Grid2D always has 6 actions
+- Updates fixtures to query env.action_dim dynamically
+- Documents best practice: never hardcode action_dim
+- Tests now work with custom actions in global_actions.yaml
+
 Part of TASK-002B Phase 4 (COMPLETE)."
 ```
+
+**Estimated Time**: 2-3 hours
 
 ---
 
@@ -2867,8 +3285,25 @@ Part of TASK-002B Phase 5 (COMPLETE)."
 
 Plan complete! This creates a bite-sized, TDD-driven implementation plan for TASK-002B.
 
-**Total tasks**: 20+ tasks across 5 phases
-**Estimated time**: 20-28 hours
+**Total tasks**: 17 tasks across 5 phases (updated with critical fixes)
+**Estimated time**: 24-40 hours (realistic estimate including critical refactoring)
+
+**Phase Breakdown**:
+| Phase | Tasks | Estimated Time |
+|-------|-------|----------------|
+| Phase 0: ActionConfig Schema | 1 task | 2-3 hours |
+| Phase 1: Substrate Actions | 7 tasks (includes critical refactoring) | 12-18 hours |
+| Phase 2: ActionSpaceBuilder | 2 tasks | 4-5 hours |
+| Phase 3: Global Actions | 1 task | 1-2 hours |
+| Phase 4: Environment Integration | 4 tasks (includes test audit) | 12-16 hours |
+| Phase 5: Testing & Docs | 2 tasks | 2-4 hours |
+| **TOTAL** | **17 tasks** | **24-40 hours** |
+
+**Critical Tasks Added** (peer review findings):
+- ✅ **Task 1.6 (expanded)**: Replace ALL hardcoded action indices (4-6 hours)
+- ✅ **Task 1.7 (NEW)**: Refactor movement delta arrays (3-4 hours)
+- ✅ **Task 4.4 (NEW)**: Test suite audit - fix hardcoded action_dim=6 (2-3 hours)
+
 **Key achievements**:
 - ✅ Substrate default actions (Grid2D/3D/ND, Continuous, Aspatial)
 - ✅ ActionSpaceBuilder with global vocabulary
@@ -2876,9 +3311,16 @@ Plan complete! This creates a bite-sized, TDD-driven implementation plan for TAS
 - ✅ Environment integration with action masking
 - ✅ Custom action dispatch
 - ✅ Curriculum transfer tests
+- ✅ **Critical refactoring** to support custom actions (indices, deltas, tests)
+
+**Risk Mitigation**:
+- Phase 1 (Task 1.6 + 1.7) addresses ALL hardcoded action assumptions
+- Phase 4 (Task 4.4) prevents test suite breakage
+- Incremental TDD ensures no regressions
+- Full test suite run after each phase
 
 **Execution options**:
-1. **Subagent-Driven (this session)**: Use superpowers:subagent-driven-development
+1. **Subagent-Driven (recommended)**: Use superpowers:subagent-driven-development
 2. **Parallel Session**: Open new session with superpowers:executing-plans
 
 Which execution approach would you like to use?
