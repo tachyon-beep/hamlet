@@ -703,8 +703,11 @@ The frontend supports **two rendering modes** based on substrate type:
   "substrate": {
     "type": "grid2d",
     "position_dim": 2,
+    "topology": "square",
     "width": 8,
-    "height": 8
+    "height": 8,
+    "boundary": "clamp",
+    "distance_metric": "manhattan"
   },
   "grid": {
     "agents": [{"id": "agent_0", "x": 3, "y": 5}],
@@ -712,6 +715,14 @@ The frontend supports **two rendering modes** based on substrate type:
   }
 }
 ```
+
+**Topology Field** (Grid Substrates Only):
+- **Grid2D**: `topology: "square"` (4-connected 2D grid)
+- **Grid3D**: `topology: "cubic"` (6-connected 3D grid)
+- **GridND**: `topology: "hypercube"` (2N-connected ND grid)
+- **Continuous/Aspatial**: Topology field omitted (not applicable)
+
+**Rationale**: Topology describes discrete connectivity pattern. Continuous spaces have no discrete cells, so topology is meaningless and omitted from metadata.
 
 ---
 
