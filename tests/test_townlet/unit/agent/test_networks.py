@@ -24,7 +24,7 @@ import torch.nn as nn
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 
 FULL_OBS_DIM = 93  # 8×8 occupancy grid (64) + position (2) + meters (8) + affordance (15) + temporal (4)
-ACTION_DIM = 10  # Grid2D: 6 substrate actions + 4 custom actions (TASK-002B)
+ACTION_DIM = 8  # Grid2D: 6 substrate actions + 2 custom actions (TASK-002B)
 
 
 class TestSimpleQNetwork:
@@ -59,14 +59,14 @@ class TestSimpleQNetwork:
         assert network.net[3].in_features == 128
         assert network.net[3].out_features == 128
         assert network.net[6].in_features == 128
-        assert network.net[6].out_features == 6
+        assert network.net[6].out_features == ACTION_DIM
 
     def test_forward_pass_single_agent(self, network):
         """Forward pass should produce correct Q-value shapes."""
         obs = torch.randn(1, FULL_OBS_DIM)  # Single agent
         q_values = network(obs)
 
-        assert q_values.shape == (1, 6), f"Expected (1, 6), got {q_values.shape}"
+        assert q_values.shape == (1, ACTION_DIM), f"Expected (1, {ACTION_DIM}), got {q_values.shape}"
         assert not torch.isnan(q_values).any(), "Q-values contain NaN"
         assert not torch.isinf(q_values).any(), "Q-values contain Inf"
 
@@ -76,7 +76,7 @@ class TestSimpleQNetwork:
         obs = torch.randn(batch_size, FULL_OBS_DIM)
         q_values = network(obs)
 
-        assert q_values.shape == (batch_size, 6)
+        assert q_values.shape == (batch_size, ACTION_DIM)
         assert not torch.isnan(q_values).any()
 
     def test_q_value_range(self, network):
@@ -162,7 +162,7 @@ class TestRecurrentSpatialQNetwork:
         obs = torch.randn(1, 51)
         q_values, hidden = network(obs)
 
-        assert q_values.shape == (1, 6)
+        assert q_values.shape == (1, ACTION_DIM)
         assert hidden is not None
         assert len(hidden) == 2  # (h, c)
         assert hidden[0].shape == (1, 1, 256)  # (num_layers, batch, hidden_size)
@@ -178,7 +178,7 @@ class TestRecurrentSpatialQNetwork:
         # Second forward pass with previous hidden state
         q2, hidden2 = network(obs, hidden1)
 
-        assert q2.shape == (1, 6)
+        assert q2.shape == (1, ACTION_DIM)
         assert not torch.equal(q1, q2), "Q-values should differ with different hidden states"
         assert not torch.equal(hidden1[0], hidden2[0]), "Hidden state should be updated"
 
@@ -237,7 +237,7 @@ class TestRecurrentSpatialQNetwork:
         network.reset_hidden_state(batch_size, device=torch.device("cpu"))
         q_values, hidden = network(obs)
 
-        assert q_values.shape == (batch_size, 6)
+        assert q_values.shape == (batch_size, ACTION_DIM)
         assert hidden[0].shape == (1, batch_size, 256)
         assert hidden[1].shape == (1, batch_size, 256)
 

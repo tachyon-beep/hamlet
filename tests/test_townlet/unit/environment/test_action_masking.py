@@ -256,7 +256,8 @@ class TestInteractMasking:
         for action in [0, 1, 2, 3]:  # UP, DOWN, LEFT, RIGHT
             # Allow for boundary differences based on position
             # Just verify that being on affordance doesn't break movement
-            assert masks_bed.shape == (1, 6), "Should have 6 actions"
+            assert masks_bed.shape[0] == 1, "Should have 1 agent"
+            assert masks_bed.shape[1] == basic_env.action_dim, f"Should have {basic_env.action_dim} actions"
 
 
 class TestTimeBasedMasking:
@@ -590,12 +591,13 @@ class TestActionMaskingIntegration:
             assert masks[0, 0], "UP should be available if not at top boundary"
 
     def test_mask_shape_consistency(self, multi_agent_env):
-        """Action masks should always have correct shape (num_agents, 6)."""
+        """Action masks should always have correct shape (num_agents, action_dim)."""
         multi_agent_env.reset()
 
         # Test in various configurations
         masks = multi_agent_env.get_action_masks()
-        assert masks.shape == (4, 6), "Masks should be (num_agents=4, actions=6)"
+        expected_shape = (multi_agent_env.num_agents, multi_agent_env.action_dim)
+        assert masks.shape == expected_shape, f"Masks should be {expected_shape}"
         assert masks.dtype == torch.bool, "Masks should be boolean"
 
     def test_at_least_one_action_always_available_for_alive(self, basic_env):
