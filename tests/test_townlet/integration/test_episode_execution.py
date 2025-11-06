@@ -73,7 +73,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -161,7 +161,7 @@ class TestEpisodeLifecycle:
             exploration=exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="recurrent",
             vision_window_size=5,
             learning_rate=0.0001,
@@ -256,7 +256,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0", "agent_1", "agent_2", "agent_3"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -328,7 +328,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -407,7 +407,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0", "agent_1"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -492,7 +492,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -526,7 +526,7 @@ class TestEpisodeLifecycle:
 
             # Validate action
             assert agent_state.actions.shape == (1,), f"Step {step}: Action shape should be (1,)"
-            assert 0 <= agent_state.actions[0] < 6, f"Step {step}: Action should be in range [0, 6)"
+            assert 0 <= agent_state.actions[0] < env.action_dim, f"Step {step}: Action should be in range [0, {env.action_dim})"
 
             # Validate reward
             assert agent_state.rewards.shape == (1,), f"Step {step}: Reward shape should be (1,)"

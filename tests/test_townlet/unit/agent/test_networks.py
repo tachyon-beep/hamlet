@@ -24,6 +24,7 @@ import torch.nn as nn
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 
 FULL_OBS_DIM = 93  # 8×8 occupancy grid (64) + position (2) + meters (8) + affordance (15) + temporal (4)
+ACTION_DIM = 10  # Grid2D: 6 substrate actions + 4 custom actions (TASK-002B)
 
 
 class TestSimpleQNetwork:
@@ -33,7 +34,7 @@ class TestSimpleQNetwork:
     def network(self):
         """Create SimpleQNetwork with standard config."""
         obs_dim = FULL_OBS_DIM
-        action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+        action_dim = ACTION_DIM  # Grid2D substrate + custom actions
         hidden_dim = 128  # Standard hidden dimension
         return SimpleQNetwork(obs_dim=obs_dim, action_dim=action_dim, hidden_dim=hidden_dim)
 
@@ -89,16 +90,16 @@ class TestSimpleQNetwork:
     def test_different_observation_dimensions(self):
         """Network should work with different observation dimensions."""
         # Full observability baseline
-        net_full = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
+        net_full = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=ACTION_DIM, hidden_dim=128)
         obs_full = torch.randn(4, FULL_OBS_DIM)
         q_full = net_full(obs_full)
-        assert q_full.shape == (4, 6)
+        assert q_full.shape == (4, ACTION_DIM)
 
         # With temporal features (+ time_of_day + interaction_progress)
-        net_temporal = SimpleQNetwork(obs_dim=FULL_OBS_DIM + 2, action_dim=6, hidden_dim=128)
+        net_temporal = SimpleQNetwork(obs_dim=FULL_OBS_DIM + 2, action_dim=ACTION_DIM, hidden_dim=128)
         obs_temporal = torch.randn(4, FULL_OBS_DIM + 2)
         q_temporal = net_temporal(obs_temporal)
-        assert q_temporal.shape == (4, 6)
+        assert q_temporal.shape == (4, ACTION_DIM)
 
     def test_gradient_flow(self, network):
         """Gradients should flow through network."""
@@ -123,7 +124,7 @@ class TestRecurrentSpatialQNetwork:
         # Default num_affordance_types=15 → encoding size = 15+1 = 16
         # Observation: 25 (5×5) + 2 (position) + 8 (meters) + 16 (affordance) = 51
         return RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=ACTION_DIM,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -248,7 +249,7 @@ class TestRecurrentSpatialQNetwork:
         obs = torch.randn(4, 51)
         q_values, _ = network(obs)
 
-        assert q_values.shape == (4, 6)
+        assert q_values.shape == (4, ACTION_DIM)
         assert not torch.isnan(q_values).any()
 
     def test_gradient_flow_through_lstm(self, network):
@@ -285,7 +286,7 @@ class TestRecurrentSpatialQNetwork:
         """Network should work with temporal features added (obs dimensions change)."""
         # Base POMDP: 25 (5×5) + 2 (pos) + 8 (meters) + 15 (affordance) = 50
         net_base = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=ACTION_DIM,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -295,13 +296,13 @@ class TestRecurrentSpatialQNetwork:
         )
         obs_base = torch.randn(2, 51)
         q_base, _ = net_base(obs_base)
-        assert q_base.shape == (2, 6)
+        assert q_base.shape == (2, ACTION_DIM)
 
         # With temporal: 25 + 2 + 8 + 16 + 2 (time + progress) = 52
         # But network doesn't know about temporal - it just processes extra dims
         # So we test it handles the expected 50 dims correctly
         net_temporal = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=ACTION_DIM,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -311,7 +312,7 @@ class TestRecurrentSpatialQNetwork:
         )
         obs_temporal = torch.randn(2, 51)
         q_temporal, _ = net_temporal(obs_temporal)
-        assert q_temporal.shape == (2, 6)
+        assert q_temporal.shape == (2, ACTION_DIM)
 
     def test_lstm_memory_effect(self, network):
         """LSTM should show memory effect across sequence."""
@@ -348,9 +349,9 @@ class TestNetworkComparison:
 
     def test_parameter_counts(self):
         """RecurrentSpatialQNetwork should have more parameters (LSTM)."""
-        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
+        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=ACTION_DIM, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=ACTION_DIM,
             window_size=5,
             position_dim=2,
             num_meters=8,
@@ -372,9 +373,9 @@ class TestNetworkComparison:
         """Recurrent network should take longer due to sequential LSTM."""
         import time
 
-        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=6, hidden_dim=128)
+        simple_net = SimpleQNetwork(obs_dim=FULL_OBS_DIM, action_dim=ACTION_DIM, hidden_dim=128)
         recurrent_net = RecurrentSpatialQNetwork(
-            action_dim=6,
+            action_dim=ACTION_DIM,
             window_size=5,
             position_dim=2,
             num_meters=8,

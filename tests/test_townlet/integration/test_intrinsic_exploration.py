@@ -75,7 +75,7 @@ class TestRNDIntrinsicRewards:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=obs_dim,  # Must match environment's observation dimension
-            action_dim=6,  # Test environment action space (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -147,7 +147,7 @@ class TestRNDIntrinsicRewards:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=obs_dim,  # Must match environment's observation dimension
-            action_dim=6,  # Test environment action space (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -230,7 +230,7 @@ class TestRNDIntrinsicRewards:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=obs_dim,  # Must match environment's observation dimension
-            action_dim=6,  # Test environment action space (UP, DOWN, LEFT, RIGHT, INTERACT, WAIT)
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,

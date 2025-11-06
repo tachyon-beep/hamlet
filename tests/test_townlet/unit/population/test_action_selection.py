@@ -52,7 +52,7 @@ class TestGreedyActionSelection:
         )
 
         obs_dim = env.observation_dim
-        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=6, hidden_dim=128)
+        network = SimpleQNetwork(obs_dim=obs_dim, action_dim=env.action_dim, hidden_dim=128)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(epsilon=0.1)
@@ -64,7 +64,7 @@ class TestGreedyActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -172,7 +172,7 @@ class TestEpsilonGreedyActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -282,7 +282,7 @@ class TestRecurrentNetworkActionSelection:
             agent_ids=[0, 1],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="recurrent",
@@ -365,7 +365,7 @@ class TestActionSelectionEdgeCases:
             agent_ids=[0],
             device=torch.device("cpu"),
             obs_dim=obs_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",

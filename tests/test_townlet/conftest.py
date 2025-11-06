@@ -363,7 +363,7 @@ def simple_qnetwork(basic_env: VectorizedHamletEnv, device: torch.device) -> Sim
         SimpleQNetwork instance
     """
     obs_dim = basic_env.observation_builder.get_observation_dim()
-    return SimpleQNetwork(obs_dim=obs_dim, action_dim=6, hidden_dim=128).to(device)
+    return SimpleQNetwork(obs_dim=obs_dim, action_dim=basic_env.action_dim, hidden_dim=128).to(device)
 
 
 @pytest.fixture
@@ -378,7 +378,7 @@ def recurrent_qnetwork(pomdp_env: VectorizedHamletEnv, device: torch.device) -> 
         RecurrentSpatialQNetwork instance
     """
     return RecurrentSpatialQNetwork(
-        action_dim=6,
+        action_dim=pomdp_env.action_dim,
         window_size=5,  # 5×5 local vision
         num_meters=pomdp_env.meter_count,  # Dynamic meter count (TASK-001)
         num_affordance_types=14,
@@ -575,7 +575,7 @@ def non_training_recurrent_population(
         exploration=exploration,
         agent_ids=["agent_0"],
         device=cpu_device,
-        action_dim=6,
+        # action_dim defaults to env.action_dim
         network_type="recurrent",
         vision_window_size=5,
         train_frequency=10000,  # DISABLED: Prevents unintended training in tests

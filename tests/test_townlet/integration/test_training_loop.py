@@ -73,7 +73,7 @@ class TestMaskedLossIntegration:
             exploration=exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="recurrent",  # LSTM for masked loss
             vision_window_size=5,
             learning_rate=0.0001,
@@ -157,7 +157,7 @@ class TestMaskedLossIntegration:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -177,9 +177,9 @@ class TestMaskedLossIntegration:
             if agent_state.dones[0]:
                 break
 
-        # Verify actions are valid (should be in [0, 5])
+        # Verify actions are valid (should be in [0, action_dim))
         for action in actions_taken:
-            assert 0 <= action < 6, f"Action should be in [0, 6), got {action}"
+            assert 0 <= action < env.action_dim, f"Action should be in [0, {env.action_dim}), got {action}"
 
         # Verify actions were taken (not all zeros)
         assert len(set(actions_taken)) > 1, "Should have variety of actions (not all zeros)"
@@ -225,7 +225,7 @@ class TestMaskedLossIntegration:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -308,7 +308,7 @@ class TestMultiEpisodeTraining:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -397,7 +397,7 @@ class TestMultiEpisodeTraining:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -473,7 +473,7 @@ class TestMultiEpisodeTraining:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -542,7 +542,7 @@ class TestMultiEpisodeTraining:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
@@ -621,7 +621,7 @@ class TestMultiEpisodeTraining:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            action_dim=6,
+            # action_dim defaults to env.action_dim
             network_type="simple",
             learning_rate=0.00025,
             gamma=0.99,
