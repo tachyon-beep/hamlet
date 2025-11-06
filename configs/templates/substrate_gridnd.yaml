@@ -108,6 +108,24 @@ gridnd:
   # Default: "relative" for consistency and transfer learning across grid sizes
   observation_encoding: "relative"
 
+  # Grid topology: Connectivity pattern of the grid
+  # Options:
+  #   - "hypercube": 2N-connected N-dimensional Cartesian grid (default and only option)
+  #
+  # Behavioral implications:
+  #   - "hypercube": Each cell connects to 2N neighbors (±1 per dimension)
+  #                  Example (4D): Each cell has 8 neighbors
+  #                  Example (7D): Each cell has 14 neighbors
+  #                  Topology is dimension-agnostic (same for all N≥4)
+  #
+  # Why explicit?
+  #   - Future-proof for other lattice types (simplex, BCC, FCC)
+  #   - Documents connectivity pattern in config
+  #   - Matches metadata sent to frontend via WebSocket
+  #
+  # Default: "hypercube" (only option currently supported)
+  topology: "hypercube"
+
 # Examples and Pedagogical Notes:
 
 # Example 1: 4D Hypercube (Minimal High-Dimensional Grid)
