@@ -249,3 +249,85 @@ def test_empty_enabled_list_disables_all():
     # Verify all actions disabled
     for action in space.actions:
         assert not action.enabled
+
+
+def test_load_global_actions_yaml():
+    """Should load configs/global_actions.yaml successfully."""
+    from pathlib import Path
+
+    from townlet.environment.action_builder import ActionSpaceBuilder
+    from townlet.substrate.grid2d import Grid2DSubstrate
+
+    global_actions_path = Path("configs/global_actions.yaml")
+
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    builder = ActionSpaceBuilder(
+        substrate=substrate,
+        global_actions_path=global_actions_path,
+    )
+
+    space = builder.build()
+
+    # Grid2D (6) + global custom actions (4) = 10 total
+    assert space.action_dim == 10
+    assert space.substrate_action_count == 6
+    assert space.custom_action_count == 4
+
+
+def test_global_actions_has_rest_and_meditate():
+    """Global actions should include REST and MEDITATE."""
+    from pathlib import Path
+
+    from townlet.environment.action_builder import ActionSpaceBuilder
+    from townlet.substrate.grid2d import Grid2DSubstrate
+
+    global_actions_path = Path("configs/global_actions.yaml")
+
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    builder = ActionSpaceBuilder(
+        substrate=substrate,
+        global_actions_path=global_actions_path,
+    )
+
+    space = builder.build()
+
+    # Should have REST and MEDITATE
+    rest = space.get_action_by_name("REST")
+    assert rest.type == "passive"
+    assert rest.costs.get("energy", 0) < 0  # Negative cost (restoration)
+
+    meditate = space.get_action_by_name("MEDITATE")
+    assert meditate.type == "passive"
+    assert meditate.effects.get("mood", 0) > 0  # Positive effect (restoration)
+
+
+def test_global_actions_has_teleport_and_sprint():
+    """Global actions should include TELEPORT_HOME and SPRINT."""
+    from pathlib import Path
+
+    from townlet.environment.action_builder import ActionSpaceBuilder
+    from townlet.substrate.grid2d import Grid2DSubstrate
+
+    global_actions_path = Path("configs/global_actions.yaml")
+
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    builder = ActionSpaceBuilder(
+        substrate=substrate,
+        global_actions_path=global_actions_path,
+    )
+
+    space = builder.build()
+
+    # TELEPORT_HOME should be movement with teleport_to
+    teleport = space.get_action_by_name("TELEPORT_HOME")
+    assert teleport.type == "movement"
+    assert teleport.teleport_to == [0, 0]
+    assert teleport.costs.get("energy", 0) > 0  # Costs energy
+
+    # SPRINT should be movement with delta
+    sprint = space.get_action_by_name("SPRINT")
+    assert sprint.type == "movement"
+    assert sprint.delta == [0, -2]  # Move 2 cells north

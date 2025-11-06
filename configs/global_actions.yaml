@@ -1,0 +1,60 @@
+version: "1.0"
+description: "Global action vocabulary for HAMLET curriculum"
+
+# Custom actions shared across all curriculum levels
+# Disabled actions still occupy action IDs (for checkpoint transfer)
+#
+# Action space for all configs:
+#   - Grid2D substrates: 6 substrate + 4 custom = 10 total
+#   - Grid3D substrates: 8 substrate + 4 custom = 12 total
+#   - etc.
+#
+# Per-config enabled_actions list in training.yaml controls which are available
+
+custom_actions:
+  # Passive recovery (weak version of Bed affordance)
+  - name: "REST"
+    type: "passive"
+    costs:
+      energy: -0.002  # Restores 0.2% energy per step
+      mood: -0.01     # Restores 1% mood per step
+    description: "Rest in place (weaker than Bed, but available anywhere)"
+    icon: "😴"
+
+  # Mental health action
+  - name: "MEDITATE"
+    type: "passive"
+    costs:
+      energy: 0.001   # Costs 0.1% energy
+    effects:
+      mood: 0.02      # Restores 2% mood
+    description: "Meditate to improve mood without sleeping"
+    icon: "🧘"
+
+  # Movement shortcut (expensive teleport)
+  - name: "TELEPORT_HOME"
+    type: "movement"
+    teleport_to: [0, 0]  # Warp to origin
+    costs:
+      energy: 0.5      # 50% energy cost
+      money: 10.0      # $10 teleport fee
+    description: "Instantly return to home position (expensive)"
+    icon: "🏠"
+
+  # Fast movement (high cost)
+  - name: "SPRINT"
+    type: "movement"
+    delta: [0, -2]  # Move 2 cells north (assumes Grid2D)
+    costs:
+      energy: 0.02     # 2% energy (4x normal movement)
+      satiation: 0.01  # 1% satiation (burns calories)
+    description: "Sprint 2 cells north (only works on Grid2D)"
+    icon: "🏃"
+
+# Notes:
+# - REST enables gradual recovery without finding Bed
+# - MEDITATE provides mood boost without social interaction
+# - TELEPORT_HOME creates economic choice (expensive but saves time)
+# - SPRINT is Grid2D-specific (won't work on Grid3D or GridND)
+#   This demonstrates that operators can define substrate-specific actions
+#   Permissive semantics: invalid deltas fail at runtime, not config validation
