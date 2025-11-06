@@ -248,10 +248,10 @@ class ActionLabelConfig(BaseModel):
 
         # Validate custom labels (if provided)
         if self.custom is not None:
-            # Check all keys are integers 0-7
+            # Check all keys are non-negative integers
             for key in self.custom.keys():
-                if not isinstance(key, int) or key < 0 or key > 7:
-                    raise ValueError(f"Custom label keys must be integers 0-7, got: {key}")
+                if not isinstance(key, int) or key < 0:
+                    raise ValueError(f"Custom label keys must be non-negative integers, got: {key}")
 
             # Check all values are non-empty strings
             for value in self.custom.values():

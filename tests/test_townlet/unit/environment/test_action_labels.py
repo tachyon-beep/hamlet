@@ -505,10 +505,17 @@ class TestActionLabelConfig:
         with pytest.raises(ValidationError, match="Input should be a valid integer"):
             ActionLabelConfig(custom={"a": "TEST"})  # type: ignore
 
-    def test_config_invalid_custom_key_range(self):
-        """ActionLabelConfig rejects keys outside 0-7 range."""
-        with pytest.raises(ValueError, match="must be integers 0-7"):
-            ActionLabelConfig(custom={8: "TEST"})
+    def test_config_accepts_custom_keys_beyond_default_range(self):
+        """ActionLabelConfig allows high-index custom labels for higher dimensions."""
+        custom = {8: "INTERACT_ALT", 9: "WAIT_ALT"}
+        config = ActionLabelConfig(custom=custom)
+
+        assert config.custom == custom
+
+    def test_config_invalid_custom_negative_key(self):
+        """ActionLabelConfig rejects negative custom keys."""
+        with pytest.raises(ValueError, match="non-negative integers"):
+            ActionLabelConfig(custom={-1: "NEG"})
 
     def test_config_invalid_custom_value_type(self):
         """ActionLabelConfig rejects non-string values."""
