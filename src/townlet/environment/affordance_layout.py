@@ -11,7 +11,7 @@ type.
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import torch
 
@@ -48,6 +48,7 @@ def iter_affordance_positions(affordances: object) -> Iterator[torch.Tensor]:
     if affordances is None:
         return
 
+    items: Any
     if isinstance(affordances, Mapping):
         items = affordances.values()
     elif isinstance(affordances, AffordancePositionProvider):

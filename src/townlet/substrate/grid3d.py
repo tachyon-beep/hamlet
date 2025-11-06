@@ -1,6 +1,6 @@
 """3D cubic grid substrate with integer coordinates (x, y, z)."""
 
-from typing import Literal
+from typing import Literal, cast
 
 import torch
 
@@ -231,10 +231,10 @@ class Grid3DSubstrate(SpatialSubstrate):
             if affordance_pos.numel() < 3:
                 continue
 
-            pos = torch.as_tensor(affordance_pos).to(device=device, dtype=torch.long)
-            x = pos[0].item()
-            y = pos[1].item()
-            z = pos[2].item()
+            pos = torch.as_tensor(affordance_pos, device=device, dtype=torch.long)
+            x = int(pos[0].item())
+            y = int(pos[1].item())
+            z = int(pos[2].item())
 
             if 0 <= x < self.width and 0 <= y < self.height and 0 <= z < self.depth:
                 idx = z * (self.width * self.height) + y * self.width + x
@@ -270,12 +270,15 @@ class Grid3DSubstrate(SpatialSubstrate):
         positions: torch.Tensor,
         affordances: dict[str, torch.Tensor] | object,
     ) -> torch.Tensor:
+        # The affordances parameter accepts object for flexibility with affordance_layout helpers,
+        # but the encoding methods expect dict. This is safe because encode_observation validates the type.
+        affordances_dict = cast(dict[str, torch.Tensor], affordances)
         if self.observation_encoding == "relative":
-            return self._encode_relative(positions, affordances)
+            return self._encode_relative(positions, affordances_dict)
         if self.observation_encoding == "scaled":
-            return self._encode_scaled(positions, affordances)
+            return self._encode_scaled(positions, affordances_dict)
         if self.observation_encoding == "absolute":
-            return self._encode_absolute(positions, affordances)
+            return self._encode_absolute(positions, affordances_dict)
 
         raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. Must be 'relative', 'scaled', or 'absolute'.")
 

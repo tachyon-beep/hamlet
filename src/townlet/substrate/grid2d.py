@@ -1,6 +1,6 @@
 """2D square grid substrate (replicates current HAMLET behavior)."""
 
-from typing import Literal
+from typing import Literal, cast
 
 import torch
 
@@ -250,9 +250,9 @@ class Grid2DSubstrate(SpatialSubstrate):
             if affordance_pos.numel() < 2:
                 continue
 
-            pos = torch.as_tensor(affordance_pos).to(device=device, dtype=torch.long)
-            x = pos[0].item()
-            y = pos[1].item()
+            pos = torch.as_tensor(affordance_pos, device=device, dtype=torch.long)
+            x = int(pos[0].item())
+            y = int(pos[1].item())
 
             if 0 <= x < self.width and 0 <= y < self.height:
                 idx = y * self.width + x
@@ -287,13 +287,16 @@ class Grid2DSubstrate(SpatialSubstrate):
         affordances: dict[str, torch.Tensor] | object,
     ) -> torch.Tensor:
         """Encode agent-centric features based on configured mode."""
+        # The affordances parameter accepts object for flexibility with affordance_layout helpers,
+        # but the encoding methods expect dict. This is safe because encode_observation validates the type.
+        affordances_dict = cast(dict[str, torch.Tensor], affordances)
 
         if self.observation_encoding == "relative":
-            return self._encode_relative(positions, affordances)
+            return self._encode_relative(positions, affordances_dict)
         if self.observation_encoding == "scaled":
-            return self._encode_scaled(positions, affordances)
+            return self._encode_scaled(positions, affordances_dict)
         if self.observation_encoding == "absolute":
-            return self._encode_absolute(positions, affordances)
+            return self._encode_absolute(positions, affordances_dict)
 
         raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. Must be 'relative', 'scaled', or 'absolute'.")
 
