@@ -44,9 +44,9 @@ def test_l0_and_l1_have_same_action_dim():
         f"L0 and L1 must have same action_dim for checkpoint transfer. " f"L0: {env_l0.action_dim}, L1: {env_l1.action_dim}"
     )
 
-    # Verify both are Grid2D with 10 actions (6 substrate + 4 custom)
-    assert env_l0.action_dim == 10, f"L0 should have 10 actions, got {env_l0.action_dim}"
-    assert env_l1.action_dim == 10, f"L1 should have 10 actions, got {env_l1.action_dim}"
+    # Verify both are Grid2D with 8 actions (6 substrate + 2 custom)
+    assert env_l0.action_dim == 8, f"L0 should have 8 actions, got {env_l0.action_dim}"
+    assert env_l1.action_dim == 8, f"L1 should have 8 actions, got {env_l1.action_dim}"
 
 
 def test_l0_and_l1_share_global_vocabulary():
@@ -88,6 +88,6 @@ def test_l0_and_l1_share_global_vocabulary():
     assert l0_action_names == l1_action_names, f"L0 and L1 must share action vocabulary. " f"L0: {l0_action_names}, L1: {l1_action_names}"
 
     # Verify custom actions present
-    expected_custom = {"REST", "MEDITATE", "TELEPORT_HOME", "SPRINT"}
+    expected_custom = {"REST", "MEDITATE"}
     assert expected_custom.issubset(l0_action_names), f"L0 should have custom actions: {expected_custom}"
     assert expected_custom.issubset(l1_action_names), f"L1 should have custom actions: {expected_custom}"

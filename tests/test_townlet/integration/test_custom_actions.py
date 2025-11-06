@@ -1,4 +1,4 @@
-"""Integration tests for custom actions (REST, MEDITATE, TELEPORT_HOME, SPRINT)."""
+"""Integration tests for custom actions (REST, MEDITATE)."""
 
 from pathlib import Path
 
@@ -108,42 +108,3 @@ def test_meditate_action_restores_mood(cpu_device, test_config_pack_path):
     # Net mood: +0.02 - 0.001 = +0.019 (should increase significantly)
     mood_change = final_mood - initial_mood
     assert mood_change > 0.015, f"Mood should increase by ~0.019: {mood_change}"
-
-
-def test_teleport_home_warps_to_origin(cpu_device, test_config_pack_path):
-    """TELEPORT_HOME action should warp agent to [0, 0]."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=5,
-        partial_observability=False,
-        vision_range=5,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        config_pack_path=test_config_pack_path,
-        device=cpu_device,
-        agent_lifespan=1000,
-    )
-
-    env.reset()
-
-    # Move agent away from origin
-    env.positions[0] = torch.tensor([3, 4], device=env.device, dtype=env.substrate.position_dtype)
-    initial_pos = env.positions[0].clone()
-
-    # Find TELEPORT_HOME action
-    teleport_action = env.action_space.get_action_by_name("TELEPORT_HOME")
-    teleport_action_id = teleport_action.id
-
-    # Execute TELEPORT_HOME
-    actions = torch.tensor([teleport_action_id], device=env.device)
-    env.step(actions)
-
-    final_pos = env.positions[0]
-
-    # Agent should be at origin [0, 0]
-    assert torch.equal(
-        final_pos, torch.tensor([0, 0], device=env.device, dtype=env.substrate.position_dtype)
-    ), f"Position should be [0, 0], got {final_pos}"
-    assert not torch.equal(initial_pos, final_pos), "Position should have changed"

@@ -267,10 +267,10 @@ Substrates support three configurable observation encoding modes via `observatio
 
 **Action space dimensions** (UPDATED - includes custom actions):
 
-- **Grid2D configs**: **10 actions** (6 substrate + 4 custom)
-- **Grid3D configs**: **12 actions** (8 substrate + 4 custom)
-- **GridND (7D) configs**: **18 actions** (14 substrate + 4 custom)
-- **Aspatial configs**: **6 actions** (2 substrate + 4 custom)
+- **Grid2D configs**: **8 actions** (6 substrate + 2 custom)
+- **Grid3D configs**: **10 actions** (8 substrate + 2 custom)
+- **GridND (7D) configs**: **16 actions** (14 substrate + 2 custom)
+- **Aspatial configs**: **4 actions** (2 substrate + 2 custom)
 
 **Key insight**: With global action vocabulary, action_dim is **constant** across all Grid2D configs (L0, L0.5, L1, L3). This enables checkpoint transfer - a Q-network trained on L0_0_minimal works on L1_full_observability without architecture changes!
 
@@ -312,7 +312,7 @@ Substrates support three configurable observation encoding modes via `observatio
 **Global Vocabulary** (`configs/global_actions.yaml`):
 - All curriculum levels share the **same action vocabulary**
 - Enables checkpoint transfer (same action_dim across configs)
-- Custom actions: REST, MEDITATE, TELEPORT_HOME, SPRINT
+- Custom actions: REST, MEDITATE (substrate-agnostic)
 
 **Per-Config Enabled Actions** (future - `training.yaml`):
 - Each config can specify which actions are **enabled**
@@ -320,10 +320,10 @@ Substrates support three configurable observation encoding modes via `observatio
 - Currently: All actions enabled by default
 
 **Action Counts by Substrate**:
-- Grid2D: 6 substrate + 4 custom = **10 actions total**
-- Grid3D: 8 substrate + 4 custom = **12 actions total**
-- GridND (7D): 14 substrate + 4 custom = **18 actions total**
-- Aspatial: 2 substrate + 4 custom = **6 actions total**
+- Grid2D: 6 substrate + 2 custom = **8 actions total**
+- Grid3D: 8 substrate + 2 custom = **10 actions total**
+- GridND (7D): 14 substrate + 2 custom = **16 actions total**
+- Aspatial: 2 substrate + 2 custom = **4 actions total**
 
 **Example - Grid2D Action Space**:
 
@@ -337,22 +337,18 @@ Substrates support three configurable observation encoding modes via `observatio
 | 5 | WAIT | passive | substrate | - | energy: 0.004 |
 | 6 | REST | passive | custom | - | energy: -0.002 (restore) |
 | 7 | MEDITATE | passive | custom | - | energy: 0.001, mood: +0.02 |
-| 8 | TELEPORT_HOME | movement | custom | teleport to [0,0] | energy: 0.5, money: 10.0 |
-| 9 | SPRINT | movement | custom | [0, -2] | energy: 0.02 |
 
 **Custom Actions**:
 
 - **REST**: Passive recovery (restores energy + mood), available anywhere
 - **MEDITATE**: Mental health action (costs energy, restores mood)
-- **TELEPORT_HOME**: Expensive warp to origin (50% energy + $10)
-- **SPRINT**: Fast movement (2 cells, Grid2D-specific, 4x energy cost)
 
 **Checkpoint Transfer**:
 
-All Grid2D configs have action_dim = 10, enabling checkpoint transfer:
-- L0_0_minimal: 10 actions (3×3 grid, 1 affordance)
-- L0_5_dual_resource: 10 actions (7×7 grid, 4 affordances)
-- L1_full_observability: 10 actions (8×8 grid, 14 affordances)
+All Grid2D configs have action_dim = 8, enabling checkpoint transfer:
+- L0_0_minimal: 8 actions (3×3 grid, 1 affordance)
+- L0_5_dual_resource: 8 actions (7×7 grid, 4 affordances)
+- L1_full_observability: 8 actions (8×8 grid, 14 affordances)
 
 A Q-network trained on L0 can be transferred to L1 without architecture changes!
 
@@ -708,18 +704,18 @@ The curriculum progresses from simple pedagogical tasks to complex POMDP challen
 ### Network Architecture Selection
 
 - **SimpleQNetwork**: Full observability (L0, L0.5, L1)
-  - MLP: obs_dim → 256 → 128 → action_dim (10 for Grid2D)
-  - L0: 29 input dims → 10 output dims (~30K params)
-  - L0.5: 29 input dims → 10 output dims (~30K params)
-  - L1: 29 input dims → 10 output dims (~30K params)
-  - **Note**: All Grid2D configs have same architecture (29→10), enabling checkpoint transfer!
+  - MLP: obs_dim → 256 → 128 → action_dim (8 for Grid2D)
+  - L0: 29 input dims → 8 output dims (~26K params)
+  - L0.5: 29 input dims → 8 output dims (~26K params)
+  - L1: 29 input dims → 8 output dims (~26K params)
+  - **Note**: All Grid2D configs have same architecture (29→8), enabling checkpoint transfer!
 
 - **RecurrentSpatialQNetwork**: Partial observability (L2, L3)
   - Vision encoder: 5×5 local window → CNN → 128 features
   - Position encoder: (x, y) → MLP → 32 features
   - Meter encoder: 8 meters → MLP → 32 features
   - LSTM: 192 input → 256 hidden (memory for POMDP)
-  - Q-head: 256 → 128 → action_dim (10 for Grid2D)
+  - Q-head: 256 → 128 → action_dim (8 for Grid2D)
   - Total: ~650K params
   - LSTM hidden state resets at episode start
   - Hidden state persists during episode rollout (memory)

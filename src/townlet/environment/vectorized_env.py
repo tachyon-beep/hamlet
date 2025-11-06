@@ -918,7 +918,7 @@ class VectorizedHamletEnv:
         return meter_map.get(meter_name)
 
     def _apply_custom_action(self, agent_idx: int, action: ActionConfig):
-        """Apply custom action effects.
+        """Apply custom action effects, movement delta, and teleportation.
 
         Args:
             agent_idx: Agent index
@@ -936,7 +936,13 @@ class VectorizedHamletEnv:
             if meter_idx is not None:
                 self.meters[agent_idx, meter_idx] += effect  # Add effect
 
-        # Handle teleportation
+        # Apply movement delta (for movement-type custom actions like SPRINT)
+        if action.delta is not None:
+            delta_tensor = torch.tensor(action.delta, device=self.device, dtype=self.substrate.position_dtype)
+            new_position = self.substrate.apply_movement(self.positions[agent_idx : agent_idx + 1], delta_tensor.unsqueeze(0))
+            self.positions[agent_idx] = new_position.squeeze(0)
+
+        # Handle teleportation (overrides movement delta if both present)
         if action.teleport_to is not None:
             target_pos = torch.tensor(
                 action.teleport_to,
