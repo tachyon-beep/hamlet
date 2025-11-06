@@ -325,6 +325,8 @@ class VectorizedHamletEnv:
         # Cache action indices for fast lookup (replaces hardcoded formulas from Task 1.6)
         self.interact_action_idx = self.action_space.get_action_by_name("INTERACT").id
         self.wait_action_idx = self.action_space.get_action_by_name("WAIT").id
+        self.up_z_action_idx = self._get_optional_action_idx("UP_Z")
+        self.down_z_action_idx = self._get_optional_action_idx("DOWN_Z")
 
         # Build movement deltas from ActionConfig (dynamic, not hardcoded)
         self._movement_deltas = self._build_movement_deltas()
@@ -359,6 +361,13 @@ class VectorizedHamletEnv:
     def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
         """Attach runtime registry for telemetry tracking."""
         self.runtime_registry = registry
+
+    def _get_optional_action_idx(self, action_name: str) -> int | None:
+        """Return action index if available in composed action space."""
+        try:
+            return self.action_space.get_action_by_name(action_name).id
+        except ValueError:
+            return None
 
     def _build_movement_deltas(self) -> torch.Tensor:
         """Build movement delta tensor from substrate default actions.
@@ -462,7 +471,7 @@ class VectorizedHamletEnv:
             action_masks: [num_agents, action_dim] bool tensor
                 True = valid action, False = invalid
                 Grid2D (6 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
-                Grid3D (8 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, UP_Z, DOWN_Z]
+                Grid3D (8 actions): [UP, DOWN, LEFT, RIGHT, UP_Z, DOWN_Z, INTERACT, WAIT]
         """
         # Start with base mask (disabled actions = False)
         action_masks = self.action_space.get_base_action_mask(
@@ -493,8 +502,10 @@ class VectorizedHamletEnv:
             else:
                 at_ceiling = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
-            action_masks[at_ceiling, 6] = False  # Can't go UP_Z at ceiling
-            action_masks[at_floor, 7] = False  # Can't go DOWN_Z at floor
+            if self.up_z_action_idx is not None:
+                action_masks[at_ceiling, self.up_z_action_idx] = False  # Can't go UP_Z at ceiling
+            if self.down_z_action_idx is not None:
+                action_masks[at_floor, self.down_z_action_idx] = False  # Can't go DOWN_Z at floor
 
         # Mask INTERACT - only valid when on an open affordance
         # P1.4: Removed affordability check - agents can attempt INTERACT even when broke

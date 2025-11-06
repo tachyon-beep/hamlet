@@ -71,7 +71,7 @@ Don’t put it **after** ACS — ACS needs VFS to compile masks and read/write s
 
 =====
 
-# A) TASK-003 — Strict schemas + no defaults (the contract freeze)
+# A) TASK-003B — Strict schemas + no defaults (the contract freeze)
 
 ## A1. Schema registry and versioning
 
