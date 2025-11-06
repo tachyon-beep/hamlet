@@ -168,6 +168,7 @@ class TestEpisodeLifecycle:
             gamma=0.99,
             replay_buffer_capacity=1000,
             batch_size=8,
+            train_frequency=10000,  # Disable training (test focuses on episode execution and hidden state)
         )
 
         # Reset environment and population
@@ -201,9 +202,9 @@ class TestEpisodeLifecycle:
             step_count += 1
 
         # Verify agent survived (death resets hidden state to zeros, causing false failures)
-        assert not episode_done, (
-            f"Agent died after {step_count} steps (cascade effects). " "Death resets hidden state to zeros, invalidating test."
-        )
+        assert (
+            not episode_done
+        ), f"Agent died after {step_count} steps (cascade effects). Death resets hidden state to zeros, invalidating test."
 
         # Verify hidden state evolved during episode
         h_final, c_final = recurrent_network.get_hidden_state()

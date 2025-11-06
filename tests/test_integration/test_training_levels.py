@@ -158,6 +158,9 @@ def run_training_pipeline(
     avg_survival = sum(survival_times[-20:]) / min(20, len(survival_times))
     final_stage = curriculum.agent_stages[0].item() if hasattr(curriculum, "agent_stages") else 1
 
+    # Close database connection before returning
+    db.close()
+
     return {
         "final_episode": max_episodes,
         "avg_survival": avg_survival,

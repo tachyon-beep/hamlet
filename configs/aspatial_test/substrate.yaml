@@ -1,0 +1,8 @@
+version: "1.0"
+type: "aspatial"
+description: "Aspatial test substrate - no spatial grid, meters only, for testing"
+
+# Aspatial substrates have no configuration parameters
+# No positions, no distances, no movement, no grid
+# Affordances are available without spatial location
+aspatial: {}

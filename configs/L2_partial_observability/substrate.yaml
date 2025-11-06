@@ -1,0 +1,33 @@
+# Substrate Configuration for Level 2: Partial Observability (POMDP)
+#
+# Same 8×8 grid as L1, but agent sees only 5×5 local window. Agent must
+# build mental map through exploration (LSTM memory).
+#
+# Spatial substrate identical to L1 - only observability differs
+# (controlled in training.yaml via partial_observability=true).
+#
+# Level 2 characteristics:
+# - Same grid as L1 (8×8, 64 cells)
+# - Local vision window (5×5, vision_range=2)
+# - Recurrent Q-network with LSTM (~600K params)
+# - Agent must build spatial memory
+
+version: "1.0"
+
+description: "8×8 square grid with hard boundaries for Level 2 POMDP training"
+
+type: "grid"
+
+grid:
+  topology: "square"
+
+  # Grid dimensions: 8×8 (64 total cells)
+  # Same spatial substrate as L1 for direct comparison
+  width: 8
+  height: 8
+
+  # Boundary behavior: "clamp" (hard walls)
+  boundary: "clamp"
+
+  # Distance metric: "manhattan" (L1 norm)
+  distance_metric: "manhattan"

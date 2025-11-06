@@ -1,0 +1,39 @@
+# Action Labels Configuration - Custom Submarine Example
+#
+# Custom marine terminology for submarine navigation.
+# Demonstrates how to create domain-specific labels for specialized contexts.
+# Use for: Marine contexts, custom domains, specialized training
+
+# Custom labels: Dictionary mapping action indices to labels
+# Must specify all 8 canonical actions (0-7)
+custom:
+  0: "PORT"       # Move left (port side in marine terminology)
+  1: "STARBOARD"  # Move right (starboard side in marine terminology)
+  2: "AFT"        # Move backward (toward stern)
+  3: "FORE"       # Move forward (toward bow)
+  4: "INTERACT"   # Interact with object
+  5: "WAIT"       # Hold position
+  6: "SURFACE"    # Move up (toward surface)
+  7: "DIVE"       # Move down (dive deeper)
+
+# Note: Label indices are automatically remapped based on substrate dimensionality:
+#   - Aspatial (0D): {0: INTERACT, 1: WAIT} (2 actions)
+#   - 1D: {0: PORT, 1: STARBOARD, 2: INTERACT, 3: WAIT} (4 actions)
+#   - 2D: {0: FORE, 1: AFT, 2: PORT, 3: STARBOARD, 4: INTERACT, 5: WAIT} (6 actions)
+#   - 3D: {0: FORE, 1: AFT, 2: PORT, 3: STARBOARD, 4: INTERACT, 5: WAIT, 6: SURFACE, 7: DIVE} (8 actions)
+#
+# Custom label guidelines:
+#   - Keys must be integers 0-7 (canonical action indices)
+#   - Values must be non-empty strings
+#   - All 8 actions must be specified (even if substrate only uses subset)
+#   - Labels are automatically filtered to substrate's action space
+#
+# Examples of other custom domains:
+#   - Aviation: ROLL_LEFT, ROLL_RIGHT, PITCH_UP, PITCH_DOWN, YAW_LEFT, YAW_RIGHT
+#   - Medical: PROXIMAL, DISTAL, ANTERIOR, POSTERIOR, SUPERIOR, INFERIOR
+#   - Architecture: NORTH_WING, SOUTH_WING, EAST_WING, WEST_WING, UPPER_FLOOR, LOWER_FLOOR
+#
+# Pedagogical value:
+#   - Demonstrates arbitrary nature of labels (semantics > syntax)
+#   - Enables domain-appropriate learning contexts
+#   - Shows how same math operations map to different terminology

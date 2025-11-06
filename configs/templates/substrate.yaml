@@ -1,0 +1,144 @@
+# Substrate Configuration - TEMPLATE
+#
+# Copy this file into your config pack directory and customize the values.
+#
+# UNIVERSE_AS_CODE Principle:
+# All spatial parameters must be explicitly specified. No hidden defaults allowed.
+# This ensures reproducible configs and operator awareness of all behavioral parameters.
+#
+# Config Pack Structure:
+# Every config pack should include these files:
+#   - substrate.yaml    (this file - spatial substrate definition)
+#   - bars.yaml         (meter definitions: energy, health, satiation, etc.)
+#   - cascades.yaml     (cascade physics: meter interactions)
+#   - affordances.yaml  (interaction definitions: Bed, Job, Hospital, etc.)
+#   - training.yaml     (training hyperparameters and network config)
+#   - cues.yaml         (optional - UI metadata for visualization)
+
+version: "1.0"
+
+# Human-readable description of this substrate configuration
+# Should explain: grid size, boundary type, distance metric, intended use
+description: "REPLACE_WITH_DESCRIPTION (e.g., '8×8 square grid for my custom level')"
+
+# Substrate type: "grid" (spatial with positioning) or "aspatial" (pure state machine)
+#
+# "grid": Agents have positions on 2D grid, navigate via movement actions
+# "aspatial": No positions, agents interact with affordances directly (no navigation)
+type: "grid"  # Options: "grid", "aspatial"
+
+# Grid substrate configuration (REQUIRED if type="grid", omit if type="aspatial")
+grid:
+  # Topology: Type of grid coordinate system
+  # Currently only "square" (standard 2D Cartesian grid) is supported
+  # Future: "hexagonal", "triangular", "3d_cube" (reserved for future use)
+  topology: "square"
+
+  # Grid dimensions (REQUIRED, must be positive integers)
+  # width: Number of columns (x-axis, 0 to width-1)
+  # height: Number of rows (y-axis, 0 to height-1)
+  #
+  # Current implementation: Non-square grids (width ≠ height) are supported
+  # but uncommon. Most curriculum levels use square grids.
+  #
+  # NEW Phase 5C - Observation dimension impact depends on observation_encoding:
+  #   - "relative": 2 dims (normalized x, y) regardless of grid size
+  #   - "scaled": 4 dims (normalized x, y + width, height)
+  #   - "absolute": 2 dims (raw x, y as floats)
+  # OLD Phase 5A/5B: one-hot encoding used width × height dimensions
+  width: 8
+  height: 8
+
+  # Boundary behavior: What happens when agent tries to move outside grid
+  # Options:
+  #   - "clamp": Hard walls - position clamped to grid edges (agent stays at edge)
+  #   - "wrap": Toroidal wraparound - agent wraps to opposite edge (Pac-Man style)
+  #   - "bounce": Elastic reflection - agent reflects back from boundary
+  #   - "sticky": Sticky walls - agent stays in place when hitting boundary
+  #
+  # Behavioral implications:
+  #   - "clamp": Agent learns edges exist, corners are dead ends
+  #   - "wrap": Infinite grid feel, shortest path may cross edges
+  #   - "bounce": Agent bounces back, reflects across boundary
+  #   - "sticky": Similar to clamp but different semantics (stays in place vs clamped)
+  #
+  # Most curriculum levels use "clamp" for clear spatial boundaries.
+  boundary: "clamp"
+
+  # Distance metric: How to measure distance between two positions
+  # Options:
+  #   - "manhattan": L1 norm, |x1-x2| + |y1-y2| (sum of absolute differences)
+  #   - "euclidean": L2 norm, sqrt((x1-x2)² + (y1-y2)²) (straight-line distance)
+  #   - "chebyshev": L∞ norm, max(|x1-x2|, |y1-y2|) (max of differences)
+  #
+  # Behavioral implications:
+  #   - "manhattan": Only cardinal movement, diagonal distance = x + y steps
+  #                  Example: [0,0] to [3,4] = 7 steps
+  #                  Natural for grid worlds with 4-directional movement
+  #   - "euclidean": Considers diagonal shortcuts, diagonal distance < manhattan
+  #                  Example: [0,0] to [3,4] = 5.0 steps
+  #                  More realistic for spatial reasoning, but doesn't match movement mechanics
+  #   - "chebyshev": Diagonal = 1 step (8-directional movement)
+  #                  Example: [0,0] to [3,4] = 4 steps
+  #                  Natural for games with diagonal movement
+  #
+  # Most curriculum levels use "manhattan" to match 4-directional movement.
+  distance_metric: "manhattan"
+
+  # NEW Phase 5C: Observation encoding mode
+  # Options:
+  #   - "relative": Normalized coordinates [0,1] (2 dims for 2D, 3 dims for 3D)
+  #   - "scaled": Normalized + grid size metadata (4 dims for 2D, 6 dims for 3D)
+  #   - "absolute": Raw unnormalized coordinates (2 dims for 2D, 3 dims for 3D)
+  #
+  # Behavioral implications:
+  #   - "relative": Network input is grid-size independent (transfer learning friendly)
+  #                 Agent sees normalized [0,1] positions
+  #   - "scaled": Includes grid size info - useful for size-dependent strategies
+  #               Agent sees normalized positions + (width, height)
+  #   - "absolute": Raw coordinates - network learns size-specific patterns
+  #                 Agent sees raw (x, y) as floats
+  #
+  # Default: "relative" for consistency and transfer learning
+  # BREAKING CHANGE from Phase 5A/5B: Old configs used one-hot encoding (width×height dims)
+  observation_encoding: "relative"
+
+# Aspatial substrate configuration (REQUIRED if type="aspatial", omit if type="grid")
+#
+# Aspatial universes have NO positioning - agents exist in pure state space.
+# Affordances are available without navigation. Reveals that meters are the
+# true universe - positioning is just an optional overlay.
+#
+# Use cases:
+#   - Pure resource management (no spatial planning)
+#   - Baseline for comparing spatial vs aspatial learning
+#   - Pedagogical: Show that substrate is OPTIONAL
+#
+# Uncomment if using aspatial mode:
+# aspatial: {}
+
+# Examples and Pedagogical Notes:
+#
+# Standard Grid (Most Common):
+#   type: grid
+#   grid: {topology: square, width: 8, height: 8, boundary: clamp, distance_metric: manhattan}
+#   Use for: Standard curriculum levels, spatial planning
+#
+# Toroidal Grid (Wraparound):
+#   type: grid
+#   grid: {topology: square, width: 8, height: 8, boundary: wrap, distance_metric: manhattan}
+#   Use for: Pac-Man style worlds, infinite grid feel
+#
+# Euclidean Distance (Diagonal-Aware):
+#   type: grid
+#   grid: {topology: square, width: 8, height: 8, boundary: clamp, distance_metric: euclidean}
+#   Use for: Comparing distance metrics, realistic spatial reasoning
+#
+# Aspatial (No Positioning):
+#   type: aspatial
+#   aspatial: {}
+#   Use for: Pure resource management, baseline comparison
+#
+# Pedagogical Value:
+# Changing ONE parameter (boundary, distance_metric) dramatically alters gameplay.
+# Students learn how spatial abstractions shape agent behavior.

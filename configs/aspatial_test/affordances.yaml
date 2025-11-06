@@ -1,0 +1,58 @@
+version: "2.0"
+description: "Aspatial test affordances - 4 affordances, no positions"
+status: "TEST"
+
+affordances:
+  - id: "0"
+    name: "Bed"
+    category: "energy"
+    interaction_type: "instant"
+    costs:
+      - meter: "money"
+        amount: 0.05
+    effects:
+      - meter: "energy"
+        amount: 0.50
+      - meter: "health"
+        amount: 0.02
+    operating_hours: [0, 24]
+
+  - id: "1"
+    name: "Hospital"
+    category: "health"
+    interaction_type: "instant"
+    costs:
+      - meter: "money"
+        amount: 0.15
+    effects:
+      - meter: "health"
+        amount: 0.60
+    operating_hours: [0, 24]
+
+  - id: "2"
+    name: "HomeMeal"
+    category: "food"
+    interaction_type: "instant"
+    costs:
+      - meter: "money"
+        amount: 0.04
+    effects:
+      - meter: "energy"
+        amount: 0.20
+      - meter: "mood"
+        amount: 0.10
+    operating_hours: [0, 24]
+
+  - id: "3"
+    name: "Job"
+    category: "income"
+    interaction_type: "instant"
+    costs:
+      - meter: "energy"
+        amount: 0.15
+    effects:
+      - meter: "money"
+        amount: 0.225
+      - meter: "mood"
+        amount: -0.05
+    operating_hours: [8, 18]

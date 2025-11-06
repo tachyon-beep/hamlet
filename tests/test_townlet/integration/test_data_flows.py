@@ -37,11 +37,14 @@ class TestObservationPipeline:
         - Dimensions vary by grid size but structure is consistent
 
         Integration point: VectorizedHamletEnv → ObservationBuilder → Population
+
+        NOTE: After TASK-002A, grid_size is loaded from substrate.yaml (8×8),
+              not from the grid_size parameter (which is now ignored).
         """
-        # Create 5×5 environment for testing
+        # Create environment - grid_size parameter ignored, loaded from substrate.yaml (8×8)
         env = VectorizedHamletEnv(
             num_agents=1,
-            grid_size=5,
+            grid_size=5,  # NOTE: Ignored! Actual grid_size comes from substrate.yaml
             partial_observability=False,
             vision_range=5,
             enable_temporal_mechanics=False,
@@ -57,8 +60,9 @@ class TestObservationPipeline:
         obs = env.reset()
 
         # Verify observation dimension calculation
-        # Full obs: grid_size² + 8 meters + 15 affordances + 4 temporal
-        expected_dim = (5 * 5) + 8 + 15 + 4  # 25 + 8 + 15 + 4 = 52
+        # Full obs: substrate.get_observation_dim() + 8 meters + 15 affordances + 4 temporal
+        # Substrate observation encoding determines dimension (relative=2, scaled=4, absolute=2 for Grid2D)
+        expected_dim = env.substrate.get_observation_dim() + 8 + 15 + 4
         assert obs.shape == (1, expected_dim), f"Observation should be [1, {expected_dim}], got {obs.shape}"
 
         # Verify observation matches environment's reported dimension
@@ -165,6 +169,7 @@ class TestObservationPipeline:
             gamma=0.99,
             replay_buffer_capacity=1000,
             batch_size=8,
+            train_frequency=10000,  # Disable training (test focuses on observation structure)
         )
 
         population.reset()
@@ -513,11 +518,13 @@ class TestActionPipeline:
         - Random exploration respects action masks
 
         Integration point: Environment.get_action_masks() → Exploration.select_actions()
+
+        NOTE: After TASK-002A, grid_size comes from substrate.yaml (8×8).
         """
-        # Create small environment to easily hit boundaries
+        # Create environment - grid_size loaded from substrate.yaml (8×8)
         env = VectorizedHamletEnv(
             num_agents=1,
-            grid_size=5,
+            grid_size=5,  # NOTE: Ignored! Actual grid_size comes from substrate.yaml (8×8)
             partial_observability=False,
             vision_range=5,
             enable_temporal_mechanics=False,
@@ -565,11 +572,11 @@ class TestActionPipeline:
         for action in actions_taken:
             assert 0 <= action < 6, f"Action should be in [0, 6), got {action}"
 
-        # Verify all positions stayed within bounds
+        # Verify all positions stayed within bounds (8×8 grid from substrate.yaml)
         for pos in positions:
             x, y = pos[0].item(), pos[1].item()
-            assert 0 <= x < 5, f"X position should be in [0, 5), got {x}"
-            assert 0 <= y < 5, f"Y position should be in [0, 5), got {y}"
+            assert 0 <= x < 8, f"X position should be in [0, 8), got {x}"
+            assert 0 <= y < 8, f"Y position should be in [0, 8), got {y}"
 
         # Verify action variety (not all same action)
         assert len(set(actions_taken)) > 1, "Should have variety of actions (not all same)"

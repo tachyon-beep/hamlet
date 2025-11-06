@@ -43,7 +43,8 @@ METER_COLORS = {
 }
 
 # Action names
-ACTION_NAMES = ["↑ Up", "↓ Down", "← Left", "→ Right", "⚡ Interact", "⏸ Wait"]
+# Note: Using simple characters to avoid font glyph warnings with DejaVu Sans
+ACTION_NAMES = ["↑ Up", "↓ Down", "← Left", "→ Right", "⚡ Interact", "• Wait"]
 
 
 class EpisodeVideoRenderer:
@@ -187,7 +188,7 @@ class EpisodeVideoRenderer:
         circle = patches.Circle(
             (agent_x, agent_y),
             0.35,
-            color=self.agent_color,
+            facecolor=self.agent_color,
             linewidth=2,
             edgecolor="white",
             zorder=10,

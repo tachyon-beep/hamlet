@@ -1,0 +1,31 @@
+version: "1.0"
+description: "Continuous 3D volume substrate - full 3D continuous navigation"
+
+type: "continuous"
+
+continuous:
+  dimensions: 3
+
+  # Bounds for each dimension
+  bounds:
+    - [0.0, 10.0]  # X dimension: 0 to 10 units
+    - [0.0, 10.0]  # Y dimension: 0 to 10 units
+    - [0.0, 10.0]  # Z dimension: 0 to 10 units
+
+  # Boundary handling
+  boundary: "clamp"
+
+  # Movement granularity (how far discrete actions move agent)
+  movement_delta: 0.5
+
+  # Interaction radius (distance threshold for affordance interaction)
+  interaction_radius: 0.8
+
+  # Distance metric
+  distance_metric: "euclidean"
+
+# Use cases:
+# - 3D continuous navigation
+# - Drone/robot simulation
+# - Complex spatial reasoning
+# - Advanced continuous control

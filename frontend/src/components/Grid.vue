@@ -141,6 +141,10 @@ const props = defineProps({
   heatMap: {
     type: Object,
     default: () => ({})
+  },
+  substrate: {
+    type: Object,
+    default: () => ({ type: 'grid2d', position_dim: 2 })
   }
 })
 

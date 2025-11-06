@@ -79,7 +79,7 @@ class RewardStrategy:
         """
         if step_counts.shape[0] != self.num_agents or dones.shape[0] != self.num_agents:
             raise ValueError(
-                f"RewardStrategy expected tensors shaped [{self.num_agents}], got " f"step_counts={step_counts.shape}, dones={dones.shape}"
+                f"RewardStrategy expected tensors shaped [{self.num_agents}], got step_counts={step_counts.shape}, dones={dones.shape}"
             )
 
         if meters.shape != (self.num_agents, self.meter_count):

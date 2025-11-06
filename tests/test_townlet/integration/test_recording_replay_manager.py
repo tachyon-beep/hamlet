@@ -33,6 +33,8 @@ class TestReplayManager:
             assert replay.database is db
             assert replay.recordings_base_dir == recordings_dir
             assert replay.is_loaded() is False
+            # Close database to prevent resource warnings
+            db.close()
 
     def test_load_episode_from_file(self):
         """ReplayManager should load and decompress episode."""
@@ -111,6 +113,8 @@ class TestReplayManager:
             assert replay.get_total_steps() == 10
             assert replay.get_metadata()["episode_id"] == 100
             assert replay.get_affordances() == {"Bed": [2, 3]}  # msgpack converts tuples to lists
+            # Close database to prevent resource warnings
+            db.close()
 
     def test_load_nonexistent_episode(self):
         """ReplayManager should return False for nonexistent episode."""
@@ -129,6 +133,8 @@ class TestReplayManager:
             success = replay.load_episode(999)
             assert success is False
             assert replay.is_loaded() is False
+            # Close database to prevent resource warnings
+            db.close()
 
     def test_replay_step_progression(self):
         """ReplayManager should advance through steps."""
@@ -213,6 +219,8 @@ class TestReplayManager:
             # Advance to step 2
             next_step = replay.next_step()
             assert replay.get_current_step_index() == 2
+            # Close database to prevent resource warnings
+            db.close()
 
     def test_replay_at_end(self):
         """ReplayManager should detect end of episode."""
@@ -290,6 +298,8 @@ class TestReplayManager:
 
             assert replay.is_at_end() is True
             assert replay.get_current_step() is None
+            # Close database to prevent resource warnings
+            db.close()
 
     def test_replay_seek(self):
         """ReplayManager should support seeking."""
@@ -374,6 +384,8 @@ class TestReplayManager:
             success = replay.seek(100)
             assert success is False
             assert replay.get_current_step_index() == 0  # Unchanged
+            # Close database to prevent resource warnings
+            db.close()
 
     def test_replay_reset(self):
         """ReplayManager should reset to beginning."""
@@ -450,6 +462,8 @@ class TestReplayManager:
             replay.reset()
             assert replay.get_current_step_index() == 0
             assert replay.playing is False
+            # Close database to prevent resource warnings
+            db.close()
 
     def test_replay_unload(self):
         """ReplayManager should unload episode."""
@@ -523,3 +537,5 @@ class TestReplayManager:
             assert replay.is_loaded() is False
             assert replay.episode_id is None
             assert replay.get_total_steps() == 0
+            # Close database to prevent resource warnings
+            db.close()

@@ -73,6 +73,7 @@ class TestLSTMHiddenStatePersistence:
             gamma=0.99,
             replay_buffer_capacity=1000,
             batch_size=8,
+            train_frequency=10000,  # Disable training (test focuses on hidden state persistence)
         )
 
         # Reset environment and population
@@ -105,8 +106,8 @@ class TestLSTMHiddenStatePersistence:
             h_next, c_next = hidden_states[i + 1]
 
             # Hidden states should be different (memory evolving)
-            assert not torch.allclose(h_curr, h_next, atol=1e-6), f"Hidden state should change between steps {i} and {i+1}"
-            assert not torch.allclose(c_curr, c_next, atol=1e-6), f"Cell state should change between steps {i} and {i+1}"
+            assert not torch.allclose(h_curr, h_next, atol=1e-6), f"Hidden state should change between steps {i} and {i + 1}"
+            assert not torch.allclose(c_curr, c_next, atol=1e-6), f"Cell state should change between steps {i} and {i + 1}"
 
     def test_hidden_state_resets_on_death(self, test_config_pack_path, cpu_device):
         """
@@ -150,6 +151,7 @@ class TestLSTMHiddenStatePersistence:
             action_dim=6,  # Match test environment action space
             network_type="recurrent",
             vision_window_size=5,
+            train_frequency=10000,  # Disable training (test focuses on death reset)
         )
 
         population.reset()
@@ -209,6 +211,7 @@ class TestLSTMHiddenStatePersistence:
             action_dim=6,  # Match test environment action space
             network_type="recurrent",
             vision_window_size=5,
+            train_frequency=10000,  # Disable training (test focuses on flush behavior)
         )
 
         population.reset()
@@ -268,6 +271,7 @@ class TestLSTMHiddenStatePersistence:
             action_dim=6,  # Match test environment action space
             network_type="recurrent",
             vision_window_size=5,
+            train_frequency=10000,  # Disable training (test focuses on shape verification)
         )
 
         population.reset()
@@ -380,6 +384,7 @@ class TestLSTMBatchTraining:
         network = RecurrentSpatialQNetwork(
             action_dim=2,  # Actions: 0 (A→B) or 1 (B→C)
             window_size=1,  # Minimal spatial observation
+            position_dim=2,
             num_meters=2,  # Minimal state (just state_id encoded)
             num_affordance_types=1,
             enable_temporal_features=False,
@@ -437,6 +442,7 @@ class TestLSTMBatchTraining:
         target_network = RecurrentSpatialQNetwork(
             action_dim=2,
             window_size=1,
+            position_dim=2,
             num_meters=2,
             num_affordance_types=1,
             enable_temporal_features=False,
@@ -514,9 +520,9 @@ class TestLSTMBatchTraining:
         initial_loss = sum(losses[:10]) / 10
         final_loss = sum(losses[-10:]) / 10
 
-        assert final_loss < initial_loss * 0.5, (
-            f"Loss should decrease during training. " f"Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
-        )
+        assert (
+            final_loss < initial_loss * 0.5
+        ), f"Loss should decrease during training. Initial: {initial_loss:.4f}, Final: {final_loss:.4f}"
 
     def test_lstm_memory_persistence_in_training(self, cpu_device):
         """
@@ -530,6 +536,7 @@ class TestLSTMBatchTraining:
         network = RecurrentSpatialQNetwork(
             action_dim=2,
             window_size=1,
+            position_dim=2,
             num_meters=2,
             num_affordance_types=1,
             enable_temporal_features=False,
@@ -598,6 +605,7 @@ class TestLSTMForwardPass:
         network = RecurrentSpatialQNetwork(
             action_dim=6,
             window_size=5,
+            position_dim=2,
             num_meters=8,
             num_affordance_types=env.num_affordance_types,
             enable_temporal_features=False,

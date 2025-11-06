@@ -1,0 +1,33 @@
+environment:
+  substrate_type: "aspatial"  # No grid
+  enabled_affordances: ["Bed", "Hospital", "HomeMeal", "Job"]
+  enable_temporal_mechanics: false
+  move_energy_cost: 0.0  # No movement in aspatial
+  wait_energy_cost: 0.001
+  interact_energy_cost: 0.0
+  agent_lifespan: 1000
+
+population:
+  num_agents: 1
+  learning_rate: 0.00025
+  gamma: 0.99
+  network_type: "simple"  # MLP for aspatial (no LSTM needed)
+  replay_buffer_capacity: 1000
+  batch_size: 32
+
+curriculum:
+  type: "static"  # Simple static curriculum for testing
+  max_steps_per_episode: 200
+
+exploration:
+  type: "epsilon_greedy"
+  epsilon_start: 1.0
+  epsilon_decay: 0.995
+  epsilon_min: 0.01
+
+training:
+  device: "cuda"
+  max_episodes: 100
+  train_frequency: 4
+  target_update_frequency: 100
+  max_grad_norm: 10.0

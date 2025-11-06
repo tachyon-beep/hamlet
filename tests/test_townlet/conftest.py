@@ -29,6 +29,10 @@ from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.replay_buffer import ReplayBuffer
 
+# Default observation dimensionality for the standard 8×8 full-observability setup:
+#   64 grid cells + 2 normalized position features + 8 meters + 15 affordance slots + 4 temporal
+FULL_OBS_DIM_8X8 = 93
+
 # =============================================================================
 # CONFIGURATION FIXTURES
 # =============================================================================
@@ -237,6 +241,112 @@ def multi_agent_env(test_config_pack_path: Path, device: torch.device) -> Vector
 
 
 # =============================================================================
+# TASK-002A: SUBSTRATE-PARAMETERIZED FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def grid2d_3x3_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+    """Small 3×3 Grid2D environment for fast tests.
+
+    Configuration:
+        - 1 agent
+        - 3×3 grid
+        - Full observability
+        - No temporal mechanics
+        - Device: CUDA if available, else CPU
+
+    Use for: Fast unit tests that don't need full 8×8 grid
+
+    Returns:
+        VectorizedHamletEnv with 3×3 Grid2D substrate
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=3,
+        partial_observability=False,
+        vision_range=3,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+        config_pack_path=test_config_pack_path,
+        device=device,
+    )
+
+
+@pytest.fixture
+def grid2d_8x8_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+    """Standard 8×8 Grid2D environment (same as basic_env, explicit name).
+
+    Configuration:
+        - 1 agent
+        - 8×8 grid
+        - Full observability
+        - No temporal mechanics
+        - Device: CUDA if available, else CPU
+
+    Use for: Tests requiring standard grid size (legacy compatibility)
+
+    Returns:
+        VectorizedHamletEnv with 8×8 Grid2D substrate
+    """
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=8,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+        config_pack_path=test_config_pack_path,
+        device=device,
+    )
+
+
+@pytest.fixture
+def aspatial_env(device: torch.device) -> VectorizedHamletEnv:
+    """Aspatial environment (no grid, meters only).
+
+    Configuration:
+        - 1 agent
+        - No spatial substrate (aspatial)
+        - 4 meters: energy, health, money, mood
+        - 4 affordances: Bed, Hospital, HomeMeal, Job
+        - Device: CUDA if available, else CPU
+
+    Use for: Testing aspatial substrate behavior (no positions, no movement)
+
+    Returns:
+        VectorizedHamletEnv with Aspatial substrate
+    """
+    # Use aspatial config pack created in Task 8.1
+    repo_root = Path(__file__).parent.parent.parent
+    aspatial_config_path = repo_root / "configs" / "aspatial_test"
+
+    return VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=1,  # Ignored for aspatial, but required by constructor
+        partial_observability=False,
+        vision_range=1,
+        enable_temporal_mechanics=False,
+        device=device,
+        config_pack_path=aspatial_config_path,
+        move_energy_cost=0.005,  # Must be > wait_energy_cost (validation requirement)
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+    )
+
+
+# Parameterization helper for multi-substrate tests
+SUBSTRATE_FIXTURES = ["grid2d_3x3_env", "grid2d_8x8_env", "aspatial_env"]
+
+
+# =============================================================================
 # NETWORK FIXTURES
 # =============================================================================
 
@@ -288,13 +398,13 @@ def replay_buffer(device: torch.device) -> ReplayBuffer:
 
     Configuration:
         - Capacity: 1000
-        - Observation dimension: 72 (full observability)
+        - Observation dimension: FULL_OBS_DIM_8X8 (standard 8×8 full observability)
         - Device: CUDA if available, else CPU
 
     Returns:
         ReplayBuffer instance
     """
-    return ReplayBuffer(capacity=1000, obs_dim=72, device=device)
+    return ReplayBuffer(capacity=1000, obs_dim=FULL_OBS_DIM_8X8, device=device)
 
 
 @pytest.fixture
@@ -338,19 +448,17 @@ def epsilon_greedy_exploration(device: torch.device) -> EpsilonGreedyExploration
     """Create an epsilon-greedy exploration strategy.
 
     Configuration:
-        - Epsilon start: 1.0
+        - Epsilon: 1.0
         - Epsilon min: 0.1
         - Epsilon decay: 0.99
-        - Device: CUDA if available, else CPU
 
     Returns:
         EpsilonGreedyExploration instance
     """
     return EpsilonGreedyExploration(
-        epsilon_start=1.0,
+        epsilon=1.0,
         epsilon_min=0.1,
         epsilon_decay=0.99,
-        device=device,
     )
 
 
@@ -407,6 +515,72 @@ def vectorized_population(
         replay_buffer_capacity=1000,
         batch_size=32,
         device=device,
+    )
+
+
+@pytest.fixture
+def non_training_recurrent_population(
+    test_config_pack_path: Path,
+    cpu_device: torch.device,
+) -> VectorizedPopulation:
+    """Create recurrent population with training DISABLED for unit tests.
+
+    This fixture is designed for tests that focus on:
+    - Hidden state management (persistence, reset, shape)
+    - Episode flushing behavior
+    - LSTM forward pass mechanics
+    - Observation processing
+
+    NOT for tests that verify:
+    - Training convergence
+    - Q-network weight updates
+    - Replay buffer sampling during training
+
+    Configuration:
+        - Network type: Recurrent (LSTM)
+        - POMDP: 5×5 vision window
+        - Training: DISABLED (train_frequency=10000)
+        - Sequence length: 8 (production default)
+        - Batch size: 8 (production default)
+        - Device: CPU (for deterministic behavior)
+
+    Returns:
+        VectorizedPopulation instance with training disabled
+    """
+    env = VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=5,
+        partial_observability=True,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.005,
+        wait_energy_cost=0.001,
+        interact_energy_cost=0.0,
+        agent_lifespan=1000,
+        config_pack_path=test_config_pack_path,
+        device=cpu_device,
+    )
+
+    curriculum = StaticCurriculum()
+    exploration = EpsilonGreedyExploration(
+        epsilon=0.1,
+        epsilon_min=0.1,
+        epsilon_decay=1.0,
+        device=cpu_device,
+    )
+
+    return VectorizedPopulation(
+        env=env,
+        curriculum=curriculum,
+        exploration=exploration,
+        agent_ids=["agent_0"],
+        device=cpu_device,
+        action_dim=6,
+        network_type="recurrent",
+        vision_window_size=5,
+        train_frequency=10000,  # DISABLED: Prevents unintended training in tests
+        sequence_length=8,  # Production default
+        batch_size=8,  # Production default
     )
 
 
@@ -799,6 +973,37 @@ def task001_env_12meter(cpu_device: torch.device, task001_config_12meter: Path) 
         config_pack_path=task001_config_12meter,
         device=cpu_device,
     )
+
+
+# =============================================================================
+# DATABASE FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def demo_database(tmp_path: Path):
+    """Create a DemoDatabase with automatic cleanup.
+
+    This fixture ensures database connections are properly closed after each test,
+    preventing ResourceWarnings from unclosed sqlite3 connections.
+
+    Args:
+        tmp_path: pytest's temporary directory
+
+    Yields:
+        DemoDatabase instance
+
+    Example:
+        def test_something(demo_database):
+            demo_database.insert_episode(...)
+            # Database automatically closed after test
+    """
+    from townlet.demo.database import DemoDatabase
+
+    db_path = tmp_path / "test.db"
+    db = DemoDatabase(db_path)
+    yield db
+    db.close()
 
 
 # =============================================================================

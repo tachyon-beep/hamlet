@@ -1,0 +1,29 @@
+# Substrate Configuration for Integration Testing
+#
+# Lite version of L1 for automated testing. Same spatial substrate as L1
+# (8×8 grid with clamp boundaries) but shorter training runs (200 episodes).
+#
+# Used for:
+# - CI/CD automated testing
+# - Quick validation of code changes
+# - Behavioral regression detection
+
+version: "1.0"
+
+description: "8×8 square grid with hard boundaries for integration testing"
+
+type: "grid"
+
+grid:
+  topology: "square"
+
+  # Grid dimensions: 8×8 (64 total cells)
+  # Same as L1 for behavioral consistency
+  width: 8
+  height: 8
+
+  # Boundary behavior: "clamp" (hard walls)
+  boundary: "clamp"
+
+  # Distance metric: "manhattan" (L1 norm)
+  distance_metric: "manhattan"

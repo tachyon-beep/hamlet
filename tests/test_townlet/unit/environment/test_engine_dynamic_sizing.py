@@ -20,9 +20,9 @@ class TestCascadeEngineDynamicSizing:
         engine = CascadeEngine(config, device=cpu_device)
 
         # Depletion tensor should be [4] not [8]
-        assert engine._base_depletions.shape == (4,), (
-            f"Expected depletion tensor shape (4,) for 4-meter config, " f"got {engine._base_depletions.shape}"
-        )
+        assert engine._base_depletions.shape == (
+            4,
+        ), f"Expected depletion tensor shape (4,) for 4-meter config, got {engine._base_depletions.shape}"
 
     def test_12meter_depletions_tensor_size(self, cpu_device, task001_config_12meter):
         """CascadeEngine should create 12-element depletion tensor for 12-meter config."""
@@ -30,9 +30,9 @@ class TestCascadeEngineDynamicSizing:
         engine = CascadeEngine(config, device=cpu_device)
 
         # Depletion tensor should be [12] not [8]
-        assert engine._base_depletions.shape == (12,), (
-            f"Expected depletion tensor shape (12,) for 12-meter config, " f"got {engine._base_depletions.shape}"
-        )
+        assert engine._base_depletions.shape == (
+            12,
+        ), f"Expected depletion tensor shape (12,) for 12-meter config, got {engine._base_depletions.shape}"
 
     def test_4meter_initial_values_tensor_size(self, cpu_device, task001_config_4meter):
         """CascadeEngine should create 4-element initial_values tensor for 4-meter config."""
@@ -41,7 +41,7 @@ class TestCascadeEngineDynamicSizing:
 
         # Initial values tensor should be [4] not [8]
         initial = engine.get_initial_meter_values()
-        assert initial.shape == (4,), f"Expected initial_values tensor shape (4,) for 4-meter config, " f"got {initial.shape}"
+        assert initial.shape == (4,), f"Expected initial_values tensor shape (4,) for 4-meter config, got {initial.shape}"
 
     def test_12meter_initial_values_tensor_size(self, cpu_device, task001_config_12meter):
         """CascadeEngine should create 12-element initial_values tensor for 12-meter config."""
@@ -50,7 +50,7 @@ class TestCascadeEngineDynamicSizing:
 
         # Initial values tensor should be [12] not [8]
         initial = engine.get_initial_meter_values()
-        assert initial.shape == (12,), f"Expected initial_values tensor shape (12,) for 12-meter config, " f"got {initial.shape}"
+        assert initial.shape == (12,), f"Expected initial_values tensor shape (12,) for 12-meter config, got {initial.shape}"
 
     def test_depletions_contain_correct_values(self, cpu_device, task001_config_4meter):
         """Depletion tensor should contain actual base_depletion values from config."""
@@ -71,9 +71,10 @@ class TestVectorizedEnvDynamicSizing:
         num_agents = env.num_agents
 
         # Meters tensor should be [num_agents, 4] not [num_agents, 8]
-        assert env.meters.shape == (num_agents, 4), (
-            f"Expected meters tensor shape ({num_agents}, 4) for 4-meter config, " f"got {env.meters.shape}"
-        )
+        assert env.meters.shape == (
+            num_agents,
+            4,
+        ), f"Expected meters tensor shape ({num_agents}, 4) for 4-meter config, got {env.meters.shape}"
 
     def test_12meter_meters_tensor_size(self, task001_env_12meter):
         """VectorizedHamletEnv should create [num_agents, 12] meters tensor for 12-meter config."""
@@ -81,14 +82,15 @@ class TestVectorizedEnvDynamicSizing:
         num_agents = env.num_agents
 
         # Meters tensor should be [num_agents, 12] not [num_agents, 8]
-        assert env.meters.shape == (num_agents, 12), (
-            f"Expected meters tensor shape ({num_agents}, 12) for 12-meter config, " f"got {env.meters.shape}"
-        )
+        assert env.meters.shape == (
+            num_agents,
+            12,
+        ), f"Expected meters tensor shape ({num_agents}, 12) for 12-meter config, got {env.meters.shape}"
 
     def test_4meter_observation_dim_full_obs(self, cpu_device, task001_config_4meter):
         """VectorizedHamletEnv should compute correct obs_dim for 4-meter full obs config."""
-        # 4-meter config uses 8×8 grid (copied from test config pack)
-        # Full obs: grid_onehot(64) + meters(4) + affordance_onehot(15) + temporal(4) = 87
+        # 4-meter config uses 8×8 Grid2D with "relative" encoding
+        # Full obs: substrate_obs(2) + meters(4) + affordance_onehot(15) + temporal(4) = 25
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_4meter,
             num_agents=1,
@@ -104,12 +106,15 @@ class TestVectorizedEnvDynamicSizing:
             agent_lifespan=1000,
         )
 
-        assert env.observation_dim == 87, f"Expected obs_dim=87 for 4-meter full obs (64+4+15+4), " f"got {env.observation_dim}"
+        expected_dim = env.substrate.get_observation_dim() + 4 + 15 + 4  # substrate + meters + affordances + temporal
+        assert (
+            env.observation_dim == expected_dim
+        ), f"Expected obs_dim={expected_dim} for 4-meter full obs (2+4+15+4), got {env.observation_dim}"
 
     def test_12meter_observation_dim_full_obs(self, cpu_device, task001_config_12meter):
         """VectorizedHamletEnv should compute correct obs_dim for 12-meter full obs config."""
-        # 12-meter config has 8×8 grid
-        # Full obs: grid_onehot(64) + meters(12) + affordance_onehot(15) + temporal(4) = 95
+        # 12-meter config has 8×8 Grid2D with "relative" encoding
+        # Full obs: substrate_obs(2) + meters(12) + affordance_onehot(15) + temporal(4) = 33
         env = VectorizedHamletEnv(
             config_pack_path=task001_config_12meter,
             num_agents=1,
@@ -126,7 +131,10 @@ class TestVectorizedEnvDynamicSizing:
             # Minimal for testing
         )
 
-        assert env.observation_dim == 95, f"Expected obs_dim=95 for 12-meter full obs (64+12+15+4), " f"got {env.observation_dim}"
+        expected_dim = env.substrate.get_observation_dim() + 12 + 15 + 4  # substrate + meters + affordances + temporal
+        assert (
+            env.observation_dim == expected_dim
+        ), f"Expected obs_dim={expected_dim} for 12-meter full obs (2+12+15+4), got {env.observation_dim}"
 
     def test_4meter_observation_dim_pomdp(self, cpu_device, task001_config_4meter):
         """VectorizedHamletEnv should compute correct obs_dim for 4-meter POMDP config."""
@@ -146,7 +154,7 @@ class TestVectorizedEnvDynamicSizing:
             agent_lifespan=1000,
         )
 
-        assert env.observation_dim == 50, f"Expected obs_dim=50 for 4-meter POMDP (25+2+4+15+4), " f"got {env.observation_dim}"
+        assert env.observation_dim == 50, f"Expected obs_dim=50 for 4-meter POMDP (25+2+4+15+4), got {env.observation_dim}"
 
     def test_12meter_observation_dim_pomdp(self, cpu_device, task001_config_12meter):
         """VectorizedHamletEnv should compute correct obs_dim for 12-meter POMDP config."""
@@ -167,4 +175,4 @@ class TestVectorizedEnvDynamicSizing:
             # Minimal for testing
         )
 
-        assert env.observation_dim == 58, f"Expected obs_dim=58 for 12-meter POMDP (25+2+12+15+4), " f"got {env.observation_dim}"
+        assert env.observation_dim == 58, f"Expected obs_dim=58 for 12-meter POMDP (25+2+12+15+4), got {env.observation_dim}"

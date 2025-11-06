@@ -1,0 +1,30 @@
+# Substrate Configuration for Level 0.5: Dual Resource Management
+#
+# Slightly larger grid to accommodate 4 affordances (Bed, Hospital, HomeMeal, Job)
+# with room for navigation and resource management learning.
+#
+# Level 0.5 teaches balancing multiple resources:
+# - Energy + Health cycles (Bed restores energy, Hospital restores health)
+# - Economic loop (Job earns money, money enables affordances)
+# - Spatial planning (navigate between 4 affordances)
+
+version: "1.0"
+
+description: "7×7 square grid with hard boundaries for Level 0.5 multi-resource training"
+
+type: "grid"
+
+grid:
+  topology: "square"
+
+  # Grid dimensions: 7×7 (49 total cells)
+  # Sufficient space for 4 affordances + agent navigation
+  width: 7
+  height: 7
+
+  # Boundary behavior: "clamp" (hard walls)
+  boundary: "clamp"
+
+  # Distance metric: "manhattan" (L1 norm)
+  distance_metric: "manhattan"
+  observation_encoding: "relative"  # NEW Phase 5C: normalized coordinates
