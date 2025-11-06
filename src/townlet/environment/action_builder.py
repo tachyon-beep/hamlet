@@ -29,7 +29,7 @@ class ComposedActionSpace:
         substrate_action_count: int,
         custom_action_count: int,
         affordance_action_count: int,
-        enabled_action_names: set[str] | None = None,
+        enabled_action_names: set[str] | None,  # NO DEFAULT: explicit None for "all enabled"
     ):
         self.actions = actions
         self.substrate_action_count = substrate_action_count
@@ -117,7 +117,7 @@ class ActionSpaceBuilder:
         self,
         substrate: SpatialSubstrate,
         global_actions_path: Path,
-        enabled_action_names: list[str] | None = None,
+        enabled_action_names: list[str] | None,  # NO DEFAULT: explicit None for "all enabled"
     ):
         """Initialize action space builder.
 
@@ -129,7 +129,11 @@ class ActionSpaceBuilder:
         """
         self.substrate = substrate
         self.global_actions_path = global_actions_path
-        self.enabled_action_names = set(enabled_action_names) if enabled_action_names is not None else None
+        # Convert list to set, or keep None (None = all actions enabled)
+        if enabled_action_names is not None:
+            self.enabled_action_names: set[str] | None = set(enabled_action_names)
+        else:
+            self.enabled_action_names = None  # Explicit: all actions enabled
 
     def build(self) -> ComposedActionSpace:
         """Build complete action space from global vocabulary."""
@@ -175,25 +179,51 @@ class ActionSpaceBuilder:
         return action_name in self.enabled_action_names
 
     def _load_global_custom_actions(self) -> list[ActionConfig]:
-        """Load custom actions from global_actions.yaml."""
+        """Load custom actions from global_actions.yaml.
+
+        NO-DEFAULTS PRINCIPLE: Operators must explicitly specify all behavioral fields.
+        Parser will error if costs/effects are missing (no silent defaults).
+        """
         with open(self.global_actions_path) as f:
             data = yaml.safe_load(f)
 
-        # Global file contains custom actions only (substrate provides its own)
-        custom_action_data = data.get("custom_actions", [])
+        # NO DEFAULT: Require explicit "custom_actions" key (fail if missing)
+        if "custom_actions" not in data:
+            raise ValueError(
+                f"Missing 'custom_actions' key in {self.global_actions_path}. "
+                "Global actions file must explicitly define custom_actions list (use [] for none)."
+            )
+
+        custom_action_data = data["custom_actions"]
 
         # Parse into ActionConfig objects
         actions = []
         for action_dict in custom_action_data:
-            # Add default fields if missing
-            if "costs" not in action_dict:
-                action_dict["costs"] = {}
-            if "effects" not in action_dict:
-                action_dict["effects"] = {}
-
             # Temporary ID (will be reassigned by build())
             action_dict["id"] = 0
 
+            # enabled is INTERNAL (assigned by builder, not from YAML)
+            # Explicitly assign True - will be updated based on enabled_action_names
+            action_dict["enabled"] = True
+
+            # source is always "custom" for global_actions.yaml
+            action_dict["source"] = "custom"
+
+            # Explicitly set optional fields to None if not in YAML
+            # NO DEFAULTS: All fields must be explicit
+            if "delta" not in action_dict:
+                action_dict["delta"] = None
+            if "teleport_to" not in action_dict:
+                action_dict["teleport_to"] = None
+            if "description" not in action_dict:
+                action_dict["description"] = None
+            if "icon" not in action_dict:
+                action_dict["icon"] = None
+            if "source_affordance" not in action_dict:
+                action_dict["source_affordance"] = None
+
+            # NO DEFAULTS: Pydantic will error if costs/effects missing
+            # Operators must explicitly specify costs: {} or effects: {}
             actions.append(ActionConfig(**action_dict))
 
         return actions

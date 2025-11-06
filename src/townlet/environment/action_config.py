@@ -22,43 +22,43 @@ class ActionConfig(BaseModel):
     type: Literal["movement", "interaction", "passive", "transaction"]
 
     # Costs: Multi-meter pattern (matches affordances.yaml effects structure)
+    # NO DEFAULT: Operators must explicitly specify costs (use {} for no costs)
     costs: dict[str, float] = Field(
-        default_factory=dict,
-        description="Meter costs: {meter_name: amount}. Negative = restoration.",
+        description="Meter costs: {meter_name: amount}. Negative = restoration. REQUIRED: must explicitly specify (use {} for no costs).",
     )
 
     # Effects: Additional meter changes beyond costs
+    # NO DEFAULT: Operators must explicitly specify effects (use {} for no effects)
     effects: dict[str, float] = Field(
-        default_factory=dict,
-        description="Meter effects: {meter_name: amount}. For actions with benefits.",
+        description="Meter effects: {meter_name: amount}. For actions with benefits. "
+        "REQUIRED: must explicitly specify (use {} for no effects).",
     )
 
     # Movement-specific
+    # NO DEFAULT: Callers must explicitly pass None for non-movement actions
     delta: list[int] | None = Field(
-        default=None,
-        description="Movement delta [dx, dy] or [dx, dy, dz] for standard movement",
+        description="Movement delta [dx, dy] or [dx, dy, dz] for standard movement. Pass None for non-movement.",
     )
     teleport_to: list[int] | None = Field(
-        default=None,
-        description="Teleport destination [x, y] or [x, y, z]. Overrides delta.",
+        description="Teleport destination [x, y] or [x, y, z]. Overrides delta. Pass None if not teleporting.",
     )
 
     # Enabled/disabled state (for curriculum progression)
+    # INTERNAL: Assigned by ActionSpaceBuilder based on enabled_actions list
+    # Not specified in YAML configs - computed from training.yaml enabled_actions
     enabled: bool = Field(
-        default=True,
-        description="Whether this action is enabled in current config (for masking)",
+        description="Whether this action is enabled in current config (for masking). INTERNAL: assigned by builder.",
     )
 
     # Metadata
-    description: str | None = Field(default=None, description="Human-readable description")
-    icon: str | None = Field(default=None, max_length=10, description="Emoji for UI")
+    # NO DEFAULT: Callers must explicitly pass None or value
+    description: str | None = Field(description="Human-readable description. Pass None if not needed.")
+    icon: str | None = Field(max_length=10, description="Emoji for UI. Pass None if not needed.")
     source: Literal["substrate", "custom", "affordance"] = Field(
-        default="custom",
-        description="Where this action came from",
+        description="Where this action came from. REQUIRED: must explicitly specify.",
     )
     source_affordance: str | None = Field(
-        default=None,
-        description="If source='affordance', which affordance provided it",
+        description="If source='affordance', which affordance provided it. Pass None for substrate/custom.",
     )
 
     @model_validator(mode="after")

@@ -20,6 +20,7 @@ custom_actions:
     costs:
       energy: -0.002  # Restores 0.2% energy per step
       mood: -0.01     # Restores 1% mood per step
+    effects: {}  # NO DEFAULTS: explicit empty dict for no effects
     description: "Rest in place (weaker than Bed, but available anywhere)"
     icon: "😴"
 

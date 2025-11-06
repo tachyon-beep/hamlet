@@ -404,8 +404,10 @@ class Continuous1DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[-1],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move left by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -414,26 +416,36 @@ class Continuous1DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[1],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move right by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
                 id=2,
                 name="INTERACT",
                 type="interaction",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.003},
+                effects={},
                 description="Interact with affordance at current position",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
                 id=3,
                 name="WAIT",
                 type="passive",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.004},
+                effects={},
                 description="Wait in place (idle metabolic cost)",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
         ]
@@ -480,8 +492,10 @@ class Continuous2DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[0, -1],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move upward by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -490,8 +504,10 @@ class Continuous2DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[0, 1],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move downward by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -500,8 +516,10 @@ class Continuous2DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[-1, 0],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move left by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -510,26 +528,36 @@ class Continuous2DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[1, 0],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move right by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
                 id=4,
                 name="INTERACT",
                 type="interaction",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.003},
+                effects={},
                 description="Interact with affordance at current position",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
                 id=5,
                 name="WAIT",
                 type="passive",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.004},
+                effects={},
                 description="Wait in place (idle metabolic cost)",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
         ]
@@ -580,8 +608,10 @@ class Continuous3DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[0, -1, 0],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move upward by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -590,8 +620,10 @@ class Continuous3DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[0, 1, 0],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move downward by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -600,8 +632,10 @@ class Continuous3DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[-1, 0, 0],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move left by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -610,8 +644,10 @@ class Continuous3DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[1, 0, 0],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                effects={},
                 description=f"Move right by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -620,8 +656,10 @@ class Continuous3DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[0, 0, -1],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.008, "hygiene": 0.003, "satiation": 0.006},
+                effects={},
                 description=f"Move up vertically by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
@@ -630,26 +668,36 @@ class Continuous3DSubstrate(ContinuousSubstrate):
                 type="movement",
                 delta=[0, 0, 1],  # Scaled by movement_delta in apply_movement()
                 costs={"energy": 0.006, "hygiene": 0.003, "satiation": 0.005},
+                effects={},
                 description=f"Move down vertically by {self.movement_delta} units",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
                 id=6,
                 name="INTERACT",
                 type="interaction",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.003},
+                effects={},
                 description="Interact with affordance at current position",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
             ActionConfig(
                 id=7,
                 name="WAIT",
                 type="passive",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.004},
+                effects={},
                 description="Wait in place (idle metabolic cost)",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             ),
         ]

@@ -229,8 +229,10 @@ class GridNDSubstrate(SpatialSubstrate):
                     type="movement",
                     delta=delta,
                     costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                    effects={},
                     description=f"Move -1 along dimension {dim_idx}",
                     source="substrate",
+                    source_affordance=None,
                     enabled=True,
                 )
             )
@@ -246,8 +248,10 @@ class GridNDSubstrate(SpatialSubstrate):
                     type="movement",
                     delta=delta,
                     costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                    effects={},
                     description=f"Move +1 along dimension {dim_idx}",
                     source="substrate",
+                    source_affordance=None,
                     enabled=True,
                 )
             )
@@ -259,9 +263,13 @@ class GridNDSubstrate(SpatialSubstrate):
                 id=action_id,
                 name="INTERACT",
                 type="interaction",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.003},
+                effects={},
                 description="Interact with affordance at current position",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             )
         )
@@ -272,9 +280,13 @@ class GridNDSubstrate(SpatialSubstrate):
                 id=action_id,
                 name="WAIT",
                 type="passive",
+                delta=None,
+                teleport_to=None,
                 costs={"energy": 0.004},
+                effects={},
                 description="Wait and do nothing (lower cost than movement)",
                 source="substrate",
+                source_affordance=None,
                 enabled=True,
             )
         )

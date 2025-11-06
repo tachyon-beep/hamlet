@@ -59,6 +59,18 @@ src/townlet/environment/vectorized_env.py:*
 src/townlet/environment/action_labels.py:*
 src/townlet/substrate/**:*
 
+# ActionConfig and ActionSpaceBuilder - INTERNAL fields only
+# Behavioral fields (costs, effects) have NO defaults (operator must specify)
+# Metadata fields (delta, teleport_to, icon, description, source_affordance) use None as STRUCTURAL defaults
+# enabled is INTERNAL (computed by builder, not from config)
+src/townlet/environment/action_config.py:ActionConfig:*:delta:CALL003
+src/townlet/environment/action_config.py:ActionConfig:*:teleport_to:CALL003
+src/townlet/environment/action_config.py:ActionConfig:*:description:CALL003
+src/townlet/environment/action_config.py:ActionConfig:*:icon:CALL003
+src/townlet/environment/action_config.py:ActionConfig:*:source:CALL003
+src/townlet/environment/action_config.py:ActionConfig:*:source_affordance:CALL003
+src/townlet/environment/action_builder.py:ActionSpaceBuilder:__init__:enabled_action_names:DEF001
+
 # Exploration - will be config-driven in BRAIN_AS_CODE (TASK-005)
 src/townlet/exploration/**:*
 
