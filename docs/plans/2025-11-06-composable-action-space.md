@@ -1342,6 +1342,44 @@ Part of TASK-002B Phase 1 (COMPLETE)."
 
 ---
 
+### Task 1.6: Align meta-action ordering with composable action outputs
+
+**Goal:** Ensure every substrate emits a canonical action table where all movement actions populate the leading indices and the meta actions (`INTERACT`, `WAIT`) occupy the final two slots. Update environment consumers so they derive indices from the substrate catalog instead of hard-coded formulas. Follow strict TDD (write failing tests first).
+
+**Files:**
+- Tests: `tests/test_townlet/unit/test_substrate_actions.py`, `tests/test_townlet/unit/environment/test_movement_mask_bug.py`, `tests/test_townlet/unit/environment/test_action_labels.py` (new)
+- Runtime: `src/townlet/environment/action_labels.py`, `src/townlet/environment/vectorized_env.py`
+- Substrates: `src/townlet/substrate/*`
+- Docs: this plan, `docs/bugs/movement-mask-dynamic-action-spaces.md`, `CHANGELOG.md`
+
+**Step 1: Write failing substrate tests (TDD)**
+- Extend `tests/test_townlet/unit/test_substrate_actions.py` with assertions that for spatial substrates (1D, 2D, 3D, ND) the final two default-action names are exactly `INTERACT` followed by `WAIT`, and that all earlier entries have non-zero movement deltas.
+- Keep the aspatial assertions but add an explicit check that only the two meta actions exist.
+- Run `uv run pytest tests/test_townlet/unit/test_substrate_actions.py::test_grid3d_action_names tests/test_townlet/unit/test_substrate_actions.py::test_gridnd_action_naming_pattern` and confirm failure until implementation catches up.
+
+**Step 2: Write failing environment/label tests**
+- Add a lightweight helper test (new `test_action_labels.py`) that verifies `get_labels()` mirrors the substrate ordering (meta actions appear last in the returned mapping).
+- Update `tests/test_townlet/unit/environment/test_movement_mask_bug.py` to obtain wait/interact indices via substrate-provided catalogs instead of formulas; expect failures until runtime logic changes.
+- Run the updated tests to observe the anticipated failures.
+
+**Step 3: Implement substrate/catalog alignment**
+- Refactor `ActionLabels._filter_labels_for_substrate` (and related helpers) to accept the substrate default-action order, mapping canonical names on top of that dynamic index set rather than constructing fixed dictionaries.
+- Adjust each substrate `get_default_actions()` implementation if necessary to guarantee movement actions come first and meta actions are last (most already follow this, but double-check ND variants).
+
+**Step 4: Update environment logic**
+- Modify `VectorizedHamletEnv` to cache movement/interact/wait indices from the substrate catalog or action labels at initialization, eliminating the `2 * position_dim` formulas.
+- Ensure movement masking continues to rely on deltas (already implemented) while wait/interact costs reference the catalog-derived indices.
+
+**Step 5: Migrate dependent tests/docs**
+- Update existing tests (movement mask regression, action masks) to use helper lookups for meta-action indices.
+- Document the ordering contract in `docs/bugs/movement-mask-dynamic-action-spaces.md` and note the change in `CHANGELOG.md`, including guidance for any serialized policies/configs that referenced hard-coded indices.
+
+**Step 6: Verify and commit**
+- Run the focused suites first (`uv run pytest tests/test_townlet/unit/test_substrate_actions.py tests/test_townlet/unit/environment/test_movement_mask_bug.py`) to confirm TDD success, then the broader project suite.
+- Commit with a message referencing this plan section (Task 1.6) once all tests pass.
+
+---
+
 ## Phase 2: ActionSpaceBuilder and ComposedActionSpace
 
 ### Task 2.1: ComposedActionSpace class
