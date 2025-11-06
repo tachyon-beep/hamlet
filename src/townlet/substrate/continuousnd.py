@@ -5,6 +5,7 @@ from typing import Literal
 
 import torch
 
+from townlet.environment.action_config import ActionConfig
 from townlet.substrate.base import SpatialSubstrate
 
 
@@ -373,6 +374,79 @@ class ContinuousNDSubstrate(SpatialSubstrate):
     def supports_enumerable_positions(self) -> bool:
         """Continuous substrates have infinite positions."""
         return False
+
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return ContinuousND's 2N+2 default actions (same pattern as GridND).
+
+        Note: Deltas are integers that get scaled by movement_delta in apply_movement().
+        """
+        actions = []
+        action_id = 0
+        n_dims = len(self.bounds)
+
+        # Generate movement actions for each dimension
+        for dim_idx in range(n_dims):
+            # Negative direction
+            delta = [0] * n_dims
+            delta[dim_idx] = -1  # Scaled by movement_delta in apply_movement()
+            actions.append(
+                ActionConfig(
+                    id=action_id,
+                    name=f"DIM{dim_idx}_NEG",
+                    type="movement",
+                    delta=delta,
+                    costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                    description=f"Move -{self.movement_delta} along dimension {dim_idx}",
+                    source="substrate",
+                    enabled=True,
+                )
+            )
+            action_id += 1
+
+            # Positive direction
+            delta = [0] * n_dims
+            delta[dim_idx] = 1  # Scaled by movement_delta in apply_movement()
+            actions.append(
+                ActionConfig(
+                    id=action_id,
+                    name=f"DIM{dim_idx}_POS",
+                    type="movement",
+                    delta=delta,
+                    costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                    description=f"Move +{self.movement_delta} along dimension {dim_idx}",
+                    source="substrate",
+                    enabled=True,
+                )
+            )
+            action_id += 1
+
+        # Core interactions
+        actions.append(
+            ActionConfig(
+                id=action_id,
+                name="INTERACT",
+                type="interaction",
+                costs={"energy": 0.003},
+                description="Interact with affordance at current position",
+                source="substrate",
+                enabled=True,
+            )
+        )
+        action_id += 1
+
+        actions.append(
+            ActionConfig(
+                id=action_id,
+                name="WAIT",
+                type="passive",
+                costs={"energy": 0.004},
+                description="Wait in place (idle metabolic cost)",
+                source="substrate",
+                enabled=True,
+            )
+        )
+
+        return actions
 
     def encode_partial_observation(
         self,

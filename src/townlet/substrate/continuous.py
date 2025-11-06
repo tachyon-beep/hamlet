@@ -4,6 +4,8 @@ from typing import Literal
 
 import torch
 
+from townlet.environment.action_config import ActionConfig
+
 from .base import SpatialSubstrate
 
 
@@ -379,6 +381,53 @@ class Continuous1DSubstrate(ContinuousSubstrate):
         self.min_x = min_x
         self.max_x = max_x
 
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return Continuous1D's 4 default actions.
+
+        Note: Deltas are integers that get scaled by movement_delta in apply_movement().
+        Delta of -1 means: move by -1 * movement_delta
+        """
+        return [
+            ActionConfig(
+                id=0,
+                name="LEFT",
+                type="movement",
+                delta=[-1],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move left by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=1,
+                name="RIGHT",
+                type="movement",
+                delta=[1],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move right by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=2,
+                name="INTERACT",
+                type="interaction",
+                costs={"energy": 0.003},
+                description="Interact with affordance at current position",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=3,
+                name="WAIT",
+                type="passive",
+                costs={"energy": 0.004},
+                description="Wait in place (idle metabolic cost)",
+                source="substrate",
+                enabled=True,
+            ),
+        ]
+
 
 class Continuous2DSubstrate(ContinuousSubstrate):
     """2D continuous plane."""
@@ -408,6 +457,72 @@ class Continuous2DSubstrate(ContinuousSubstrate):
         self.max_x = max_x
         self.min_y = min_y
         self.max_y = max_y
+
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return Continuous2D's 6 default actions (same names as Grid2D).
+
+        Note: Deltas are integers that get scaled by movement_delta in apply_movement().
+        """
+        return [
+            ActionConfig(
+                id=0,
+                name="UP",
+                type="movement",
+                delta=[0, -1],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move upward by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=1,
+                name="DOWN",
+                type="movement",
+                delta=[0, 1],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move downward by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=2,
+                name="LEFT",
+                type="movement",
+                delta=[-1, 0],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move left by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=3,
+                name="RIGHT",
+                type="movement",
+                delta=[1, 0],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move right by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=4,
+                name="INTERACT",
+                type="interaction",
+                costs={"energy": 0.003},
+                description="Interact with affordance at current position",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=5,
+                name="WAIT",
+                type="passive",
+                costs={"energy": 0.004},
+                description="Wait in place (idle metabolic cost)",
+                source="substrate",
+                enabled=True,
+            ),
+        ]
 
 
 class Continuous3DSubstrate(ContinuousSubstrate):
@@ -442,3 +557,89 @@ class Continuous3DSubstrate(ContinuousSubstrate):
         self.max_y = max_y
         self.min_z = min_z
         self.max_z = max_z
+
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return Continuous3D's 8 default actions (same pattern as Grid3D).
+
+        Note: Deltas are integers that get scaled by movement_delta in apply_movement().
+        """
+        return [
+            ActionConfig(
+                id=0,
+                name="UP",
+                type="movement",
+                delta=[0, -1, 0],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move upward by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=1,
+                name="DOWN",
+                type="movement",
+                delta=[0, 1, 0],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move downward by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=2,
+                name="LEFT",
+                type="movement",
+                delta=[-1, 0, 0],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move left by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=3,
+                name="RIGHT",
+                type="movement",
+                delta=[1, 0, 0],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description=f"Move right by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=4,
+                name="UP_Z",
+                type="movement",
+                delta=[0, 0, -1],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.008, "hygiene": 0.003, "satiation": 0.006},
+                description=f"Move up vertically by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=5,
+                name="DOWN_Z",
+                type="movement",
+                delta=[0, 0, 1],  # Scaled by movement_delta in apply_movement()
+                costs={"energy": 0.006, "hygiene": 0.003, "satiation": 0.005},
+                description=f"Move down vertically by {self.movement_delta} units",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=6,
+                name="INTERACT",
+                type="interaction",
+                costs={"energy": 0.003},
+                description="Interact with affordance at current position",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=7,
+                name="WAIT",
+                type="passive",
+                costs={"energy": 0.004},
+                description="Wait in place (idle metabolic cost)",
+                source="substrate",
+                enabled=True,
+            ),
+        ]

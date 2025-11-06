@@ -1,6 +1,8 @@
 """Tests for substrate default action generation."""
 
 from townlet.environment.action_config import ActionConfig
+from townlet.substrate.continuous import Continuous1DSubstrate, Continuous2DSubstrate, Continuous3DSubstrate
+from townlet.substrate.continuousnd import ContinuousNDSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
 from townlet.substrate.gridnd import GridNDSubstrate
@@ -161,6 +163,198 @@ def test_gridnd_movement_deltas():
     actions = substrate.get_default_actions()
     actions_by_name = {a.name: a for a in actions}
 
+    # DIM0_NEG: [-1, 0, 0, 0]
+    assert actions_by_name["DIM0_NEG"].delta == [-1, 0, 0, 0]
+    # DIM0_POS: [+1, 0, 0, 0]
+    assert actions_by_name["DIM0_POS"].delta == [1, 0, 0, 0]
+    # DIM3_NEG: [0, 0, 0, -1]
+    assert actions_by_name["DIM3_NEG"].delta == [0, 0, 0, -1]
+    # DIM3_POS: [0, 0, 0, +1]
+    assert actions_by_name["DIM3_POS"].delta == [0, 0, 0, 1]
+
+
+# ============================================================================
+# Continuous Substrate Tests
+# ============================================================================
+
+
+def test_continuous1d_generates_4_actions():
+    """Continuous1D should provide 4 actions (LEFT/RIGHT/INTERACT/WAIT)."""
+    substrate = Continuous1DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+
+    assert len(actions) == 4
+    names = [a.name for a in actions]
+    assert names == ["LEFT", "RIGHT", "INTERACT", "WAIT"]
+
+
+def test_continuous1d_uses_integer_deltas():
+    """Continuous1D deltas are integers (scaled by movement_delta in apply_movement)."""
+    substrate = Continuous1DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+    actions_by_name = {a.name: a for a in actions}
+
+    # Deltas are integers that get scaled by movement_delta
+    assert actions_by_name["LEFT"].delta == [-1]
+    assert actions_by_name["RIGHT"].delta == [1]
+
+
+def test_continuous2d_generates_6_actions():
+    """Continuous2D should provide 6 actions (same as Grid2D)."""
+    substrate = Continuous2DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        min_y=0.0,
+        max_y=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+
+    assert len(actions) == 6
+    names = [a.name for a in actions]
+    assert names == ["UP", "DOWN", "LEFT", "RIGHT", "INTERACT", "WAIT"]
+
+
+def test_continuous2d_uses_integer_deltas():
+    """Continuous2D deltas are integers (scaled by movement_delta in apply_movement)."""
+    substrate = Continuous2DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        min_y=0.0,
+        max_y=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+    actions_by_name = {a.name: a for a in actions}
+
+    # Deltas are integers that get scaled by movement_delta
+    assert actions_by_name["UP"].delta == [0, -1]
+    assert actions_by_name["DOWN"].delta == [0, 1]
+    assert actions_by_name["LEFT"].delta == [-1, 0]
+    assert actions_by_name["RIGHT"].delta == [1, 0]
+
+
+def test_continuous3d_generates_8_actions():
+    """Continuous3D should provide 8 actions (same as Grid3D)."""
+    substrate = Continuous3DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        min_y=0.0,
+        max_y=10.0,
+        min_z=0.0,
+        max_z=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+
+    assert len(actions) == 8
+    names = [a.name for a in actions]
+    assert names == ["UP", "DOWN", "LEFT", "RIGHT", "UP_Z", "DOWN_Z", "INTERACT", "WAIT"]
+
+
+def test_continuous3d_uses_integer_deltas():
+    """Continuous3D deltas are integers (scaled by movement_delta in apply_movement)."""
+    substrate = Continuous3DSubstrate(
+        min_x=0.0,
+        max_x=10.0,
+        min_y=0.0,
+        max_y=10.0,
+        min_z=0.0,
+        max_z=10.0,
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+    actions_by_name = {a.name: a for a in actions}
+
+    # Deltas are integers that get scaled by movement_delta
+    assert actions_by_name["UP"].delta == [0, -1, 0]
+    assert actions_by_name["DOWN"].delta == [0, 1, 0]
+    assert actions_by_name["LEFT"].delta == [-1, 0, 0]
+    assert actions_by_name["RIGHT"].delta == [1, 0, 0]
+    assert actions_by_name["UP_Z"].delta == [0, 0, -1]
+    assert actions_by_name["DOWN_Z"].delta == [0, 0, 1]
+
+
+def test_continuousnd_generates_2n_plus_2_actions():
+    """ContinuousND should provide 2N+2 actions (same pattern as GridND)."""
+    substrate = ContinuousNDSubstrate(
+        bounds=[(0.0, 10.0)] * 5,  # 5D
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+
+    assert len(actions) == 12  # 5D × 2 + INTERACT + WAIT
+
+
+def test_continuousnd_action_naming_pattern():
+    """ContinuousND actions should follow DIM{N}_{NEG|POS} naming pattern."""
+    substrate = ContinuousNDSubstrate(
+        bounds=[(0.0, 10.0)] * 4,  # 4D
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+    names = [a.name for a in actions]
+
+    expected = [
+        "DIM0_NEG",
+        "DIM0_POS",  # Dimension 0
+        "DIM1_NEG",
+        "DIM1_POS",  # Dimension 1
+        "DIM2_NEG",
+        "DIM2_POS",  # Dimension 2
+        "DIM3_NEG",
+        "DIM3_POS",  # Dimension 3
+        "INTERACT",
+        "WAIT",
+    ]
+    assert names == expected
+
+
+def test_continuousnd_uses_integer_deltas():
+    """ContinuousND deltas are integers (scaled by movement_delta in apply_movement)."""
+    substrate = ContinuousNDSubstrate(
+        bounds=[(0.0, 10.0)] * 4,  # 4D
+        boundary="clamp",
+        movement_delta=0.5,
+        interaction_radius=0.8,
+    )
+
+    actions = substrate.get_default_actions()
+    actions_by_name = {a.name: a for a in actions}
+
+    # Deltas are integers that get scaled by movement_delta
     # DIM0_NEG: [-1, 0, 0, 0]
     assert actions_by_name["DIM0_NEG"].delta == [-1, 0, 0, 0]
     # DIM0_POS: [+1, 0, 0, 0]
