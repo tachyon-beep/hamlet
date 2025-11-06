@@ -96,29 +96,44 @@
           class="grid-wrapper"
           :style="{ transform: `scale(${store.gridZoom})` }"
         >
+          <!-- Substrate-based renderer dispatch -->
           <Grid
+            v-if="store.substrateType === 'grid2d' || store.substrateType === 'grid3d'"
             :grid-width="store.gridWidth"
             :grid-height="store.gridHeight"
             :agents="store.agents"
             :affordances="store.affordances"
             :heat-map="store.heatMap"
+            :substrate="store.substrateMetadata"
           />
-          <!-- Interaction progress ring overlay (temporal mechanics) -->
-          <InteractionProgressRing
-            v-if="store.agents && store.agents.length > 0 && store.interactionProgress > 0"
-            :x="store.agents[0].x"
-            :y="store.agents[0].y"
-            :progress="store.interactionProgress"
-            :affordance-type="currentAffordanceType"
-            :cell-size="75"
+          <AspatialView
+            v-else-if="store.substrateType === 'aspatial'"
+            :meters="store.agentMeters"
+            :affordances="store.affordances"
+            :current-step="store.currentStep"
+            :last-action="store.lastAction"
+            :last-affordance="currentAffordanceType"
           />
-          <!-- Phase 3: Novelty heatmap overlay -->
-          <NoveltyHeatmap
-            v-if="store.rndMetrics && store.rndMetrics.novelty_map"
-            :novelty-map="store.rndMetrics.novelty_map"
-            :grid-size="store.gridWidth"
-            :cell-size="75"
-          />
+
+          <!-- Spatial-only overlays (only for grid substrates) -->
+          <template v-if="store.substrateType === 'grid2d' || store.substrateType === 'grid3d'">
+            <!-- Interaction progress ring overlay (temporal mechanics) -->
+            <InteractionProgressRing
+              v-if="store.agents && store.agents.length > 0 && store.interactionProgress > 0"
+              :x="store.agents[0].x"
+              :y="store.agents[0].y"
+              :progress="store.interactionProgress"
+              :affordance-type="currentAffordanceType"
+              :cell-size="75"
+            />
+            <!-- Phase 3: Novelty heatmap overlay -->
+            <NoveltyHeatmap
+              v-if="store.rndMetrics && store.rndMetrics.novelty_map"
+              :novelty-map="store.rndMetrics.novelty_map"
+              :grid-size="store.gridWidth"
+              :cell-size="75"
+            />
+          </template>
         </div>
 
         <!-- ✅ Show empty state when not connected -->
@@ -177,6 +192,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useSimulationStore } from './stores/simulation'
 import Grid from './components/Grid.vue'
+import AspatialView from './components/AspatialView.vue'
 import MeterPanel from './components/MeterPanel.vue'
 import MinimalControls from './components/MinimalControls.vue'
 import DeathCertificates from './components/DeathCertificates.vue'

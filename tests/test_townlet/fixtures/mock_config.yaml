@@ -132,9 +132,9 @@ cascades:
 # Expected computed values (for assertion documentation)
 expected_values:
 
-  obs_dim_full_observability: 72    # 8x8 grid (64) + 8 meters
-  obs_dim_partial_observability: 35  # 5x5 vision (25) + position (2) + 8 meters
-  obs_dim_temporal_full: 74          # 72 + time_of_day (1) + interaction_progress (1)
-  obs_dim_temporal_partial: 37       # 35 + 2
+  obs_dim_full_observability: 93    # 8×8 grid (64) + position (2) + meters (8) + affordance (15) + temporal (4)
+  obs_dim_partial_observability: 54  # 5×5 vision (25) + position (2) + meters (8) + affordance (15) + temporal (4)
+  obs_dim_temporal_full: 93          # Temporal features always included in full observability
+  obs_dim_temporal_partial: 54       # Temporal features always included in partial observability
 
   action_space_size: 5  # UP, DOWN, LEFT, RIGHT, INTERACT

@@ -1,0 +1,208 @@
+# Continuous 3D Substrate Configuration - TEMPLATE
+#
+# Copy this file into your config pack directory and customize the values.
+#
+# UNIVERSE_AS_CODE Principle:
+# All spatial parameters must be explicitly specified. No hidden defaults allowed.
+# This ensures reproducible configs and operator awareness of all behavioral parameters.
+#
+# Config Pack Structure:
+# Every config pack should include these files:
+#   - substrate.yaml    (this file - spatial substrate definition)
+#   - bars.yaml         (meter definitions: energy, health, satiation, etc.)
+#   - cascades.yaml     (cascade physics: meter interactions)
+#   - affordances.yaml  (interaction definitions: Bed, Job, Hospital, etc.)
+#   - training.yaml     (training hyperparameters and network config)
+#   - cues.yaml         (optional - UI metadata for visualization)
+
+version: "1.0"
+
+# Human-readable description of this continuous substrate configuration
+description: "3D continuous volume substrate (advanced: full 3D navigation)"
+
+# Substrate type: "continuous" for float-based positioning
+# Continuous substrates use torch.float32 positions instead of integer coordinates
+type: "continuous"
+
+# Continuous substrate configuration (REQUIRED for type="continuous")
+continuous:
+  # Dimensionality: Number of spatial dimensions
+  # Options: 1 (line), 2 (plane), 3 (volume)
+  # 3D is the most advanced - full volumetric navigation with vertical movement
+  dimensions: 3
+
+  # Bounds: Min/max values for each dimension
+  # Format: List of [min, max] tuples, one per dimension
+  # Length must match dimensions (1D = 1 tuple, 2D = 2 tuples, 3D = 3 tuples)
+  #
+  # Example interpretations:
+  #   - [[0, 10], [0, 10], [0, 10]]: 10×10×10 unit cube
+  #   - [[0, 20], [0, 15], [0, 5]]: 20×15×5 unit rectangular prism
+  #   - [[-5, 5], [-5, 5], [0, 10]]: Cube centered at XY origin, Z from ground
+  #
+  # Pedagogical note: Use cube bounds (same width/height/depth) for symmetric space
+  bounds:
+    - [0.0, 10.0]  # X dimension: 0 to 10 units (width)
+    - [0.0, 10.0]  # Y dimension: 0 to 10 units (height)
+    - [0.0, 10.0]  # Z dimension: 0 to 10 units (depth/vertical)
+
+  # Boundary behavior: What happens when agent tries to move outside bounds
+  # Options:
+  #   - "clamp": Hard walls - position clamped to bounds (agent stops at edge)
+  #   - "wrap": Toroidal wraparound - agent wraps to opposite edge (Pac-Man style)
+  #   - "bounce": Elastic reflection - agent bounces back from boundary
+  #   - "sticky": Sticky walls - agent stays in place when hitting boundary
+  #
+  # Behavioral implications:
+  #   - "clamp": Agent learns boundaries exist, corners are dead ends
+  #   - "wrap": Infinite volume feel, position wraps around all 3 axes
+  #   - "bounce": Agent reflects back, bounces off walls/ceiling/floor
+  #   - "sticky": Agent must choose to move away from boundaries
+  #
+  # Most levels use "clamp" for clear spatial boundaries.
+  boundary: "clamp"
+
+  # Movement delta: How far agent moves per discrete action step
+  # Unit: Same as bounds (e.g., if bounds in meters, delta in meters)
+  #
+  # Action semantics:
+  #   - Agent chooses discrete actions (UP, DOWN, LEFT, RIGHT, UP_Z, DOWN_Z, INTERACT, WAIT)
+  #   - Each movement action moves agent by ±movement_delta units
+  #   - Example: movement_delta=0.5 means UP_Z moves (0, 0, +0.5), DOWN moves (0, -0.5, 0)
+  #
+  # Behavioral implications:
+  #   - Smaller delta = more precise control, longer navigation time
+  #   - Larger delta = coarser control, faster navigation
+  #   - Typical range: 0.1 to 1.0 units per action
+  #
+  # Pedagogical note: 3D navigation is harder than 2D due to extra degree of freedom
+  movement_delta: 0.5
+
+  # Interaction radius: Maximum distance for proximity-based interaction
+  # Unit: Same as bounds and movement_delta
+  #
+  # Interaction semantics:
+  #   - Agent can interact with affordances within this radius
+  #   - Distance measured using distance_metric (euclidean or manhattan)
+  #   - 3D distance: sqrt((x1-x2)² + (y1-y2)² + (z1-z2)²) for euclidean
+  #
+  # Behavioral implications:
+  #   - Smaller radius = agent must position precisely in 3D (harder)
+  #   - Larger radius = agent can interact from farther away (easier)
+  #   - Typical range: 0.5 to 2.0 units
+  #   - Should be ≥ movement_delta to avoid "stepping over" affordances
+  #
+  # Validation: System warns if interaction_radius < movement_delta
+  interaction_radius: 0.8
+
+  # Distance metric: How to measure distance in continuous space
+  # Options:
+  #   - "euclidean": L2 norm, straight-line distance in 3D (most common)
+  #   - "manhattan": L1 norm, sum of absolute differences along 3 axes
+  #   - "chebyshev": L∞ norm, max of absolute differences (26-directional movement)
+  #
+  # Behavioral implications:
+  #   - "euclidean": Natural for continuous space, considers 3D diagonal distance
+  #                  Distance from [0,0,0] to [1,1,1] = sqrt(3) ≈ 1.732
+  #   - "manhattan": Matches grid-like movement patterns in 3D
+  #                  Distance from [0,0,0] to [1,1,1] = 3.0
+  #   - "chebyshev": Matches 26-directional movement (king's move in 3D chess)
+  #                  Distance from [0,0,0] to [1,1,1] = 1.0 (max of |1|, |1|, |1|)
+  #
+  # Most continuous levels use "euclidean" for realistic 3D distance measurement.
+  distance_metric: "euclidean"
+
+# Examples and Pedagogical Notes:
+#
+# Standard 3D Cube (Symmetric):
+#   dimensions: 3
+#   bounds: [[0.0, 10.0], [0.0, 10.0], [0.0, 10.0]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Full 3D navigation, volumetric exploration
+#
+# Large 3D Volume (Exploration):
+#   dimensions: 3
+#   bounds: [[0.0, 50.0], [0.0, 50.0], [0.0, 50.0]]
+#   boundary: clamp
+#   movement_delta: 1.0
+#   interaction_radius: 2.0
+#   Use for: Large-scale 3D navigation, challenging exploration
+#
+# Multi-Floor Building (Vertical Layers):
+#   dimensions: 3
+#   bounds: [[0.0, 20.0], [0.0, 20.0], [0.0, 5.0]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Multi-floor environments, vertical navigation challenges
+#
+# Toroidal 3D (Wraparound):
+#   dimensions: 3
+#   bounds: [[0.0, 10.0], [0.0, 10.0], [0.0, 10.0]]
+#   boundary: wrap
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Infinite 3D space feel, toroidal geometry
+#
+# Fine-Grained 3D (Precision):
+#   dimensions: 3
+#   bounds: [[0.0, 10.0], [0.0, 10.0], [0.0, 10.0]]
+#   boundary: clamp
+#   movement_delta: 0.1
+#   interaction_radius: 0.3
+#   Use for: Precision 3D navigation, fine motor control
+#
+# Pedagogical Value:
+# 3D continuous substrates are the most advanced spatial configuration:
+#   - Full volumetric navigation with vertical movement
+#   - 8 actions (6 movement + 2 meta) vs 6 for 2D
+#   - Requires 3D spatial reasoning and memory
+#   - Comparable to real-world robotics/drone navigation
+#
+# Experimental Design:
+# Compare agents trained on:
+#   - 2D continuous (6 actions, planar navigation)
+#   - 3D continuous (8 actions, volumetric navigation)
+# Measure: learning speed, sample efficiency, vertical navigation strategy
+#
+# Action Space:
+# 3D continuous substrates have 8 actions:
+#   - UP (action 0): Move up in Y by movement_delta (0, +delta, 0)
+#   - DOWN (action 1): Move down in Y by movement_delta (0, -delta, 0)
+#   - LEFT (action 2): Move left in X by movement_delta (-delta, 0, 0)
+#   - RIGHT (action 3): Move right in X by movement_delta (+delta, 0, 0)
+#   - INTERACT (action 4): Interact with nearby affordance
+#   - WAIT (action 5): Do nothing (still incurs energy cost)
+#   - UP_Z (action 6): Move up in Z by movement_delta (0, 0, +delta)
+#   - DOWN_Z (action 7): Move down in Z by movement_delta (0, 0, -delta)
+#
+# Observation Encoding:
+# 3D positions are normalized to [0, 1] for each dimension:
+#   - Position [0.0, 0.0, 0.0] → observation [0.0, 0.0, 0.0]
+#   - Position [10.0, 10.0, 10.0] → observation [1.0, 1.0, 1.0]
+#   - Position [5.0, 7.5, 2.5] → observation [0.5, 0.75, 0.25]
+#
+# This ensures observation dimension (3) is constant regardless of bounds.
+#
+# Affordance Placement:
+# In 3D continuous space, affordances are randomly sampled from volume:
+#   - Grid3D: All positions enumerable (W×H×D cells), shuffle and assign
+#   - Continuous3D: Infinite positions, random sampling with uniform distribution
+#
+# This means affordance positions change every episode (unless explicitly fixed).
+# Agents must learn to search in 3D space, not memorize fixed locations.
+#
+# Visualization Challenges:
+# 3D substrates are harder to visualize:
+#   - 2D frontend can show XY slice at current Z level
+#   - Z coordinate displayed as numeric value or color gradient
+#   - Consider depth-based transparency or isometric projection
+#
+# Performance Considerations:
+# 3D substrates have larger state/action spaces:
+#   - Observation: 3 position dims vs 2 for 2D
+#   - Action space: 8 actions vs 6 for 2D
+#   - Exploration: O(n³) volume vs O(n²) area
+#   - Training time: Expect 2-3× longer convergence than 2D

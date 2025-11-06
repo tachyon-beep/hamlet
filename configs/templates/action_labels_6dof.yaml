@@ -1,0 +1,34 @@
+# Action Labels Configuration - 6-DoF Robotics Preset
+#
+# Six degrees of freedom robotics terminology (SWAY, HEAVE, SURGE).
+# Use for: Robotics, aerospace, underwater vehicles, professional contexts
+#
+# Reference: https://en.wikipedia.org/wiki/Six_degrees_of_freedom
+# Translation movements in robotics:
+#   - SWAY: Side-to-side translation (X-axis)
+#   - HEAVE: Vertical translation (Y-axis)
+#   - SURGE: Forward-backward translation (Z-axis)
+
+# Preset name: "gaming", "6dof", "cardinal", or "math"
+preset: "6dof"
+
+# 6-DoF preset labels (reference only - automatically applied):
+#   0: SWAY_LEFT      - Move left (negative X translation)
+#   1: SWAY_RIGHT     - Move right (positive X translation)
+#   2: HEAVE_DOWN     - Move down (negative Y translation)
+#   3: HEAVE_UP       - Move up (positive Y translation)
+#   4: INTERACT       - Interact with affordance
+#   5: WAIT           - Do nothing (low energy cost)
+#   6: SURGE_FORWARD  - Move forward (positive Z translation, 3D only)
+#   7: SURGE_BACKWARD - Move backward (negative Z translation, 3D only)
+#
+# Note: Label indices are automatically remapped based on substrate dimensionality:
+#   - Aspatial (0D): {0: INTERACT, 1: WAIT} (2 actions)
+#   - 1D: {0: SWAY_LEFT, 1: SWAY_RIGHT, 2: INTERACT, 3: WAIT} (4 actions)
+#   - 2D: {0: HEAVE_UP, 1: HEAVE_DOWN, 2: SWAY_LEFT, 3: SWAY_RIGHT, 4: INTERACT, 5: WAIT} (6 actions)
+#   - 3D: {0: HEAVE_UP, 1: HEAVE_DOWN, 2: SWAY_LEFT, 3: SWAY_RIGHT, 4: INTERACT, 5: WAIT, 6: SURGE_FORWARD, 7: SURGE_BACKWARD} (8 actions)
+#
+# Pedagogical value:
+#   - Demonstrates domain-specific terminology matters
+#   - Same mathematical transformations, different labels
+#   - Professional robotics contexts require precise language

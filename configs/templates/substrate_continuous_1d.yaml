@@ -1,0 +1,162 @@
+# Continuous 1D Substrate Configuration - TEMPLATE
+#
+# Copy this file into your config pack directory and customize the values.
+#
+# UNIVERSE_AS_CODE Principle:
+# All spatial parameters must be explicitly specified. No hidden defaults allowed.
+# This ensures reproducible configs and operator awareness of all behavioral parameters.
+#
+# Config Pack Structure:
+# Every config pack should include these files:
+#   - substrate.yaml    (this file - spatial substrate definition)
+#   - bars.yaml         (meter definitions: energy, health, satiation, etc.)
+#   - cascades.yaml     (cascade physics: meter interactions)
+#   - affordances.yaml  (interaction definitions: Bed, Job, Hospital, etc.)
+#   - training.yaml     (training hyperparameters and network config)
+#   - cues.yaml         (optional - UI metadata for visualization)
+
+version: "1.0"
+
+# Human-readable description of this continuous substrate configuration
+description: "1D continuous line substrate (pedagogical: simplest continuous space)"
+
+# Substrate type: "continuous" for float-based positioning
+# Continuous substrates use torch.float32 positions instead of integer coordinates
+type: "continuous"
+
+# Continuous substrate configuration (REQUIRED for type="continuous")
+continuous:
+  # Dimensionality: Number of spatial dimensions
+  # Options: 1 (line), 2 (plane), 3 (volume)
+  # 1D is pedagogically simple - just left/right movement
+  dimensions: 1
+
+  # Bounds: Min/max values for each dimension
+  # Format: List of [min, max] tuples, one per dimension
+  # Length must match dimensions (1D = 1 tuple, 2D = 2 tuples, 3D = 3 tuples)
+  #
+  # Example interpretations:
+  #   - [0.0, 10.0]: Line from 0 to 10 units (10 units wide)
+  #   - [0.0, 100.0]: Line from 0 to 100 units (100 units wide)
+  #   - [-5.0, 5.0]: Line centered at origin (10 units wide)
+  #
+  # Pedagogical note: Larger bounds = more exploration space
+  bounds:
+    - [0.0, 10.0]  # X dimension: 0 to 10 units
+
+  # Boundary behavior: What happens when agent tries to move outside bounds
+  # Options:
+  #   - "clamp": Hard walls - position clamped to bounds (agent stops at edge)
+  #   - "wrap": Toroidal wraparound - agent wraps to opposite edge (Pac-Man style)
+  #   - "bounce": Elastic reflection - agent bounces back from boundary
+  #   - "sticky": Sticky walls - agent stays in place when hitting boundary
+  #
+  # Behavioral implications:
+  #   - "clamp": Agent learns boundaries exist, can get stuck at edges
+  #   - "wrap": Infinite line feel, position wraps to opposite side
+  #   - "bounce": Agent reflects back, bounces off boundaries
+  #   - "sticky": Similar to clamp but agent must choose to move away
+  #
+  # Most levels use "clamp" for clear spatial boundaries.
+  boundary: "clamp"
+
+  # Movement delta: How far agent moves per discrete action step
+  # Unit: Same as bounds (e.g., if bounds in meters, delta in meters)
+  #
+  # Action semantics:
+  #   - Agent chooses discrete actions (LEFT, RIGHT, INTERACT, WAIT)
+  #   - Each movement action moves agent by ±movement_delta units
+  #   - Example: movement_delta=0.5 means LEFT moves -0.5, RIGHT moves +0.5
+  #
+  # Behavioral implications:
+  #   - Smaller delta = more precise control, longer navigation time
+  #   - Larger delta = coarser control, faster navigation
+  #   - Typical range: 0.1 to 1.0 units per action
+  #
+  # Pedagogical note: Compare to grid substrates where delta is implicit (1 cell)
+  movement_delta: 0.5
+
+  # Interaction radius: Maximum distance for proximity-based interaction
+  # Unit: Same as bounds and movement_delta
+  #
+  # Interaction semantics:
+  #   - Agent can interact with affordances within this radius
+  #   - Distance measured using distance_metric (euclidean or manhattan)
+  #   - Replaces grid's "exact position match" with "proximity detection"
+  #
+  # Behavioral implications:
+  #   - Smaller radius = agent must position precisely (harder)
+  #   - Larger radius = agent can interact from farther away (easier)
+  #   - Typical range: 0.5 to 2.0 units
+  #   - Should be ≥ movement_delta to avoid "stepping over" affordances
+  #
+  # Validation: System warns if interaction_radius < movement_delta
+  interaction_radius: 0.8
+
+  # Distance metric: How to measure distance in continuous space
+  # Options:
+  #   - "euclidean": L2 norm, straight-line distance (most common)
+  #   - "manhattan": L1 norm, sum of absolute differences
+  #   - "chebyshev": L∞ norm, max of absolute differences (8-directional movement)
+  #
+  # Behavioral implications:
+  #   - "euclidean": Natural for continuous space, considers diagonal shortcuts
+  #   - "manhattan": Matches grid-like movement patterns
+  #   - "chebyshev": Matches 8-directional movement (king's move in chess)
+  #
+  # Most continuous levels use "euclidean" for realistic distance measurement.
+  distance_metric: "euclidean"
+
+# Examples and Pedagogical Notes:
+#
+# Pedagogical 1D (Simple Line):
+#   dimensions: 1
+#   bounds: [[0.0, 10.0]]
+#   boundary: clamp
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Teaching continuous space basics, simplest substrate
+#
+# Wide 1D (Large Exploration):
+#   dimensions: 1
+#   bounds: [[0.0, 100.0]]
+#   boundary: clamp
+#   movement_delta: 1.0
+#   interaction_radius: 2.0
+#   Use for: Long-distance navigation, exploration challenges
+#
+# Wraparound 1D (Infinite Loop):
+#   dimensions: 1
+#   bounds: [[0.0, 10.0]]
+#   boundary: wrap
+#   movement_delta: 0.5
+#   interaction_radius: 0.8
+#   Use for: Teaching toroidal geometry, cyclic navigation
+#
+# Fine-Grained 1D (Precise Control):
+#   dimensions: 1
+#   bounds: [[0.0, 10.0]]
+#   boundary: clamp
+#   movement_delta: 0.1
+#   interaction_radius: 0.3
+#   Use for: Precision navigation challenges, fine motor control
+#
+# Pedagogical Value:
+# 1D continuous substrates are the simplest continuous space - only left/right movement.
+# Students learn proximity-based interaction, float positioning, and continuous control.
+# Compare to grid substrates to understand discrete vs continuous abstractions.
+#
+# Action Space:
+# 1D continuous substrates have 4 actions:
+#   - MOVE_X_NEGATIVE (action 0): Move left by movement_delta
+#   - MOVE_X_POSITIVE (action 1): Move right by movement_delta
+#   - INTERACT (action 2): Interact with nearby affordance
+#   - WAIT (action 3): Do nothing (still incurs energy cost)
+#
+# Observation Encoding:
+# 1D position is normalized to [0, 1] for consistent observation size:
+#   - Position 0.0 → observation 0.0
+#   - Position 10.0 → observation 1.0
+#   - Position 5.0 → observation 0.5
+#
+# This ensures observation dimension is constant regardless of bounds.

@@ -1,0 +1,18 @@
+# Example: Aspatial Universe (No Positioning)
+#
+# This substrate demonstrates pure state machine mode where agents have
+# NO position and NO navigation. Affordances are available without spatial location.
+#
+# Reveals core insight: Meters are the TRUE universe - positioning is just an overlay.
+#
+# Behavioral differences from grid substrate:
+#   - No movement actions (UP/DOWN/LEFT/RIGHT disabled)
+#   - No navigation planning (all affordances equally accessible)
+#   - Pure resource management (energy, health, satiation cycles)
+#   - Observation dim: 0 grid + 8 meters + 15 affordances + 4 temporal = 27 dims
+
+version: "1.0"
+description: "Aspatial universe (pure resource management, no navigation)"
+type: "aspatial"
+
+aspatial: {}

@@ -1,0 +1,203 @@
+# cascades.yaml - Threshold-Based Cascade Effects
+# This defines how meters affect each other when they fall below thresholds.
+#
+# Math Approach: GRADIENT PENALTIES (validated with 275 passing tests)
+# When source < threshold:
+#   deficit = (threshold - source_value) / threshold  # Normalized 0.0-1.0
+#   penalty = strength * deficit
+#   target -= penalty
+#
+# This gives smooth gradient gameplay (unlike multipliers which are binary).
+# Lower source value → higher deficit → stronger penalty (proportional)
+#
+# Example: satiation at 20% with 30% threshold
+#   deficit = (0.3 - 0.2) / 0.3 = 0.333
+#   health_penalty = 0.004 * 0.333 = 0.00133 per step
+
+version: "1.0"
+description: "Default cascade configuration (gradient penalties, 30% thresholds)"
+math_type: "gradient_penalty"
+
+# Special modulation: Fitness modulates health depletion rate
+# This is NOT a threshold cascade - it's a continuous multiplicative modulation
+modulations:
+  - name: "fitness_health_modulation"
+    description: "Low fitness increases health depletion rate (gradient approach)"
+    source: "fitness"
+    target: "health"
+    type: "depletion_multiplier"
+
+    # Formula: multiplier = base + (range * (1.0 - fitness))
+    # fitness=100% (1.0) → multiplier = 0.5x (healthy!)
+    # fitness=50% (0.5) → multiplier = 1.75x (moderate)
+    # fitness=0% (0.0) → multiplier = 3.0x (unhealthy!)
+    base_multiplier: 0.5
+    range: 2.5  # 0.5 + 2.5 = 3.0 max multiplier
+
+    baseline_depletion: 0.001  # From bars.yaml health.base_depletion
+
+    note: "This creates smooth fitness gradient - unfit agents get sick faster"
+
+# Threshold-based cascades (our validated math)
+# Categories organize by tier relationships:
+# - primary_to_pivotal: Major needs → Death conditions (AGGRESSIVE)
+# - secondary_to_primary: Quality of life → Major needs (AGGRESSIVE)
+# - secondary_to_pivotal: Quality of life → Death conditions (WEAK)
+
+cascades:
+  # PRIMARY → PIVOTAL (AGGRESSIVE EFFECTS)
+  # These are the most important - failure to meet major needs causes death
+
+  - name: "satiation_to_health"
+    description: "Starvation makes you sick (FUNDAMENTAL need)"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "health"
+    target_index: 6
+    threshold: 0.3  # Below 30%
+    strength: 0.004  # 0.4% penalty at threshold, ~0.8% at 0%
+
+    teaching_note: "SATIATION IS FUNDAMENTAL - affects BOTH pivotal meters"
+    why_it_matters: "Hungry → sick → death. Food must be prioritized."
+
+  - name: "satiation_to_energy"
+    description: "Hunger makes you exhausted (FUNDAMENTAL need)"
+    category: "primary_to_pivotal"
+    source: "satiation"
+    source_index: 2
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.005  # 0.5% penalty at threshold, ~1.0% at 0%
+
+    teaching_note: "SATIATION IS FUNDAMENTAL - affects BOTH pivotal meters"
+    why_it_matters: "Hungry → exhausted → death. Food must be prioritized."
+
+  - name: "mood_to_energy"
+    description: "Depression leads to exhaustion (specialized effect)"
+    category: "primary_to_pivotal"
+    source: "mood"
+    source_index: 4
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.005  # 0.5% penalty at threshold, ~1.0% at 0%
+
+    teaching_note: "Mental health affects physical energy"
+    why_it_matters: "Depressed → exhausted → death"
+
+  # SECONDARY → PRIMARY (AGGRESSIVE EFFECTS)
+  # Quality of life problems cascade to major needs
+
+  - name: "hygiene_to_satiation"
+    description: "Being dirty reduces appetite"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "satiation"
+    target_index: 2
+    threshold: 0.3
+    strength: 0.002  # 0.2% penalty at threshold
+
+    teaching_note: "Poor hygiene affects appetite"
+
+  - name: "hygiene_to_fitness"
+    description: "Being dirty makes exercise harder"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "fitness"
+    target_index: 7
+    threshold: 0.3
+    strength: 0.002  # 0.2% penalty at threshold
+
+    teaching_note: "Hard to work out when you're grimy"
+
+  - name: "hygiene_to_mood"
+    description: "Being dirty makes you feel bad"
+    category: "secondary_to_primary"
+    source: "hygiene"
+    source_index: 1
+    target: "mood"
+    target_index: 4
+    threshold: 0.3
+    strength: 0.003  # 0.3% penalty at threshold (stronger than fitness/satiation)
+
+    teaching_note: "Poor hygiene affects mental health"
+
+  - name: "social_to_mood"
+    description: "Loneliness causes depression"
+    category: "secondary_to_primary"
+    source: "social"
+    source_index: 5
+    target: "mood"
+    target_index: 4
+    threshold: 0.3
+    strength: 0.004  # 0.4% penalty at threshold (STRONGEST secondary effect)
+
+    teaching_note: "Social isolation strongly affects mental health"
+    why_it_matters: "Loneliness is a powerful force"
+
+  # SECONDARY → PIVOTAL (WEAK DIRECT EFFECTS)
+  # These exist but are minor compared to the cascades through primary meters
+
+  - name: "hygiene_to_health"
+    description: "Poor hygiene weakly affects health directly"
+    category: "secondary_to_pivotal_weak"
+    source: "hygiene"
+    source_index: 1
+    target: "health"
+    target_index: 6
+    threshold: 0.3
+    strength: 0.0005  # 0.05% penalty (WEAK - 10x weaker than satiation)
+
+    teaching_note: "Mostly cascades through primary meters, weak direct effect"
+
+  - name: "hygiene_to_energy"
+    description: "Poor hygiene weakly affects energy directly"
+    category: "secondary_to_pivotal_weak"
+    source: "hygiene"
+    source_index: 1
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0005  # 0.05% penalty (WEAK)
+
+    teaching_note: "Mostly cascades through primary meters, weak direct effect"
+
+  - name: "social_to_energy"
+    description: "Loneliness weakly affects energy directly"
+    category: "secondary_to_pivotal_weak"
+    source: "social"
+    source_index: 5
+    target: "energy"
+    target_index: 0
+    threshold: 0.3
+    strength: 0.0008  # 0.08% penalty (WEAK but stronger than hygiene)
+
+    teaching_note: "Mostly cascades through mood, weak direct effect"
+
+# Cascade execution order (important for deterministic behavior)
+execution_order:
+  - "modulations"  # First: Fitness modulates health depletion
+  - "primary_to_pivotal"  # Second: Major needs affect death conditions
+  - "secondary_to_primary"  # Third: Quality of life affects major needs
+  - "secondary_to_pivotal_weak"  # Fourth: Weak direct effects
+
+# Metadata
+notes:
+  - "All strengths are per-step penalties"
+  - "Deficit is normalized: (threshold - value) / threshold"
+  - "Gradient approach creates smooth gameplay (no binary cliffs)"
+  - "30% threshold gives agents time to respond before cascading"
+  - "Satiation is FUNDAMENTAL - only meter affecting both pivotal meters"
+  - "Total of 10 cascade effects + 1 modulation = 11 relationships"
+  - "Validated with 275 passing tests - DO NOT CHANGE without re-testing"
+
+teaching_insights:
+  hierarchy: "Three-tier cascade: Secondary → Primary → Pivotal"
+  fundamental_need: "Satiation affects BOTH health AND energy (unique!)"
+  asymmetric_design: "Not all primaries are equal - satiation is special"
+  smooth_gradients: "Penalties scale with deficit (no sudden death)"
+  strategic_depth: "Must maintain quality of life to prevent cascade failures"

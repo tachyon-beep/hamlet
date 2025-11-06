@@ -1,0 +1,31 @@
+version: "1.0"
+description: "Minimal UI cues for aspatial testing"
+
+cues:
+  meters:
+    energy:
+      color: "#fbbf24"
+      icon: "⚡"
+    health:
+      color: "#ef4444"
+      icon: "❤️"
+    money:
+      color: "#22c55e"
+      icon: "💰"
+    mood:
+      color: "#a78bfa"
+      icon: "😊"
+
+  affordances:
+    Bed:
+      icon: "🛏️"
+      color: "#6366f1"
+    Hospital:
+      icon: "🏥"
+      color: "#991b1b"
+    HomeMeal:
+      icon: "🍽️"
+      color: "#f59e0b"
+    Job:
+      icon: "💼"
+      color: "#8b5cf6"

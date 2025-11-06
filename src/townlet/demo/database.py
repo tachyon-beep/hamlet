@@ -392,3 +392,16 @@ class DemoDatabase:
 
         self.conn.close()
         self._closed = True
+
+    def __enter__(self):
+        """Context manager entry - returns self."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures database is closed."""
+        self.close()
+        return False  # Don't suppress exceptions
+
+    def __del__(self):
+        """Destructor - ensures database is closed during garbage collection."""
+        self.close()

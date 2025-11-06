@@ -19,6 +19,10 @@ from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.recording.replay import ReplayManager
+from townlet.substrate.continuous import ContinuousSubstrate
+from townlet.substrate.grid2d import Grid2DSubstrate
+from townlet.substrate.grid3d import Grid3DSubstrate
+from townlet.substrate.gridnd import GridNDSubstrate
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +157,67 @@ class LiveInferenceServer:
             return {"schema_version": TELEMETRY_SCHEMA_VERSION, "episode_index": None, "agents": []}
         return build_agent_telemetry_payload(self.population, episode_index=self.current_episode)
 
+    def _build_substrate_metadata(self) -> dict[str, Any]:
+        """Build substrate metadata for WebSocket messages.
+
+        Returns:
+            Dict with substrate type, dimensions, and topology (if applicable).
+            Used by frontend to dispatch correct renderer.
+
+        Example:
+            Grid2D: {"type": "grid2d", "position_dim": 2, "topology": "square", "width": 8, "height": 8, ...}
+            GridND: {"type": "gridnd", "position_dim": 7, "topology": "hypercube", "dimension_sizes": [5,5,5,5,5,5,5], ...}
+            Continuous2D: {"type": "continuous2d", "position_dim": 2, "bounds": [...], ...}
+            Aspatial: {"type": "aspatial", "position_dim": 0}
+        """
+        if not self.env:
+            return {"type": "unknown", "position_dim": 0}
+
+        substrate = self.env.substrate
+
+        # Derive substrate type from class name (Grid2DSubstrate -> "grid2d")
+        substrate_type = type(substrate).__name__.lower().replace("substrate", "")
+
+        metadata = {
+            "type": substrate_type,
+            "position_dim": substrate.position_dim,
+        }
+
+        # Add topology if substrate has it (grid substrates only)
+        if hasattr(substrate, "topology"):
+            metadata["topology"] = substrate.topology
+
+        # Add type-specific metadata with type narrowing
+        if isinstance(substrate, Grid2DSubstrate):
+            metadata["width"] = substrate.width
+            metadata["height"] = substrate.height
+            metadata["boundary"] = substrate.boundary
+            metadata["distance_metric"] = substrate.distance_metric
+
+        elif isinstance(substrate, Grid3DSubstrate):
+            metadata["width"] = substrate.width
+            metadata["height"] = substrate.height
+            metadata["depth"] = substrate.depth
+            metadata["boundary"] = substrate.boundary
+            metadata["distance_metric"] = substrate.distance_metric
+
+        elif isinstance(substrate, GridNDSubstrate):
+            metadata["dimension_sizes"] = substrate.dimension_sizes
+            metadata["boundary"] = substrate.boundary
+            metadata["distance_metric"] = substrate.distance_metric
+
+        elif isinstance(substrate, ContinuousSubstrate):
+            # Continuous substrates (1D/2D/3D/ND)
+            metadata["bounds"] = substrate.bounds
+            metadata["boundary"] = substrate.boundary
+            metadata["movement_delta"] = substrate.movement_delta
+            metadata["interaction_radius"] = substrate.interaction_radius
+            metadata["distance_metric"] = substrate.distance_metric
+
+        # Aspatial has no additional metadata
+
+        return metadata
+
     async def startup(self):
         """Initialize environment and start checkpoint monitoring."""
         logger.info("Starting live inference server")
@@ -192,6 +257,7 @@ class LiveInferenceServer:
         move_energy_cost = 0.005
         wait_energy_cost = 0.001
         interact_energy_cost = 0.0
+        agent_lifespan = 1000  # Default lifespan for inference mode
 
         if self.config:
             env_cfg = self.config.get("environment", {})
@@ -216,6 +282,7 @@ class LiveInferenceServer:
                 "energy_interact_depletion",
                 env_cfg.get("interact_energy_cost", interact_energy_cost),
             )
+            agent_lifespan = env_cfg.get("agent_lifespan", agent_lifespan)
 
             logger.info(
                 f"Environment config: grid={grid_size}, "
@@ -238,6 +305,7 @@ class LiveInferenceServer:
             move_energy_cost=move_energy_cost,
             wait_energy_cost=wait_energy_cost,
             interact_energy_cost=interact_energy_cost,
+            agent_lifespan=agent_lifespan,
             config_pack_path=self.config_dir,
         )
 
@@ -363,7 +431,7 @@ class LiveInferenceServer:
         self.clients.add(websocket)
         logger.info(f"Client connected. Total clients: {len(self.clients)}")
 
-        # Send connection message
+        # Send connection message with substrate metadata
         await websocket.send_json(
             {
                 "type": "connected",
@@ -375,6 +443,7 @@ class LiveInferenceServer:
                 "total_episodes": self.total_episodes,
                 "epsilon": self.current_epsilon,
                 "auto_checkpoint_mode": self.auto_checkpoint_mode,
+                "substrate": self._build_substrate_metadata(),
             }
         )
 
@@ -537,7 +606,7 @@ class LiveInferenceServer:
         current_stage = int(agent_snapshot["curriculum_stage"])
         epsilon_snapshot = float(agent_snapshot["epsilon"])
 
-        # Send episode start with curriculum info
+        # Send episode start with curriculum info and substrate metadata
         await self._broadcast_to_clients(
             {
                 "type": "episode_start",
@@ -549,6 +618,7 @@ class LiveInferenceServer:
                 "curriculum_stage": current_stage,
                 "curriculum_multiplier": float(current_multiplier),
                 "telemetry": episode_telemetry,
+                "substrate": self._build_substrate_metadata(),
             }
         )
 
@@ -640,7 +710,7 @@ class LiveInferenceServer:
             }
         )
 
-        logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, " f"reward: {final_cumulative_reward:.2f}")
+        logger.info(f"Episode {self.current_episode} complete: {self.current_step} steps, reward: {final_cumulative_reward:.2f}")
 
     async def _broadcast_state_update(self, cumulative_reward: float, last_action: int, q_values: torch.Tensor, step_reward: float = 1.0):
         """Broadcast current state to all clients."""
@@ -648,7 +718,11 @@ class LiveInferenceServer:
         assert self.env is not None, "Environment must be initialized before broadcasting state"
         assert self.population is not None, "Population must be initialized before broadcasting state"
 
-        # Get agent position (unpack for frontend compatibility)
+        # Get agent position (substrate-agnostic)
+        # agent_pos is a list of length substrate.position_dim
+        # - 2D: [x, y]
+        # - 3D: [x, y, z]
+        # - Aspatial: []
         agent_pos = self.env.positions[0].cpu().tolist()
 
         # Get action masks (which actions are valid)
@@ -673,17 +747,25 @@ class LiveInferenceServer:
         for meter_name, idx in meter_indices.items():
             meters[meter_name] = self.env.meters[0, idx].item()
 
-        # Get affordances (unpack position for frontend compatibility)
+        # Get affordances (substrate-agnostic position handling)
         affordances = []
         for name, pos in self.env.affordances.items():
             pos_list = pos.cpu().tolist()
-            affordances.append(
-                {
-                    "type": name,  # Frontend expects 'type' not 'name'
-                    "x": pos_list[0],
-                    "y": pos_list[1],
-                }
-            )
+            affordance_data = {"type": name}  # Frontend expects 'type' not 'name'
+
+            # Add position data based on substrate dimensionality
+            if self.env.substrate.position_dim == 2:
+                # 2D grid: use x, y
+                affordance_data["x"] = pos_list[0]
+                affordance_data["y"] = pos_list[1]
+            elif self.env.substrate.position_dim == 3:
+                # 3D grid: use x, y, z
+                affordance_data["x"] = pos_list[0]
+                affordance_data["y"] = pos_list[1]
+                affordance_data["z"] = pos_list[2]
+            # Aspatial (position_dim=0): no position data needed
+
+            affordances.append(affordance_data)
 
         # Convert Q-values to list for JSON serialization (supports legacy 5-action checkpoints)
         q_values_list = q_values.cpu().tolist()
@@ -725,20 +807,8 @@ class LiveInferenceServer:
             "total_episodes": self.total_episodes,  # For training progress bar
             # DEBUG
             "_debug_total_episodes": self.total_episodes,
-            "grid": {
-                "width": self.env.grid_size,
-                "height": self.env.grid_size,
-                "agents": [
-                    {
-                        "id": "agent_0",
-                        "x": agent_pos[0],  # Frontend expects x, y not position
-                        "y": agent_pos[1],
-                        "color": "#4CAF50",  # Green color for agent
-                        "last_action": last_action,
-                    }
-                ],
-                "affordances": affordances,
-            },
+            "substrate": self._build_substrate_metadata(),
+            "grid": self._build_grid_data(agent_pos, last_action, affordances),
             "agent_meters": {"agent_0": {"meters": meters}},  # MeterPanel expects agent_0.meters nested structure
             "q_values": q_values_list,  # Q-values for all 6 actions
             "action_masks": action_masks,  # Which actions are valid [6] bool list
@@ -775,6 +845,53 @@ class LiveInferenceServer:
             }
 
         await self._broadcast_to_clients(update)
+
+    def _build_grid_data(self, agent_pos: list, last_action: int, affordances: list) -> dict:
+        """Build grid data based on substrate type.
+
+        Args:
+            agent_pos: Agent position (list of length substrate.position_dim)
+            last_action: Last action taken
+            affordances: List of affordance dicts with positions
+
+        Returns:
+            Grid data dict for frontend rendering
+        """
+        from townlet.substrate.aspatial import AspatialSubstrate
+        from townlet.substrate.grid2d import Grid2DSubstrate
+
+        assert self.env is not None, "Environment must be initialized before building grid data"
+
+        if isinstance(self.env.substrate, Grid2DSubstrate):
+            # 2D grid rendering (current implementation)
+            return {
+                "type": "grid2d",
+                "width": self.env.substrate.width,
+                "height": self.env.substrate.height,
+                "agents": [
+                    {
+                        "id": "agent_0",
+                        "x": agent_pos[0],
+                        "y": agent_pos[1],
+                        "color": "#4CAF50",
+                        "last_action": last_action,
+                    }
+                ],
+                "affordances": affordances,
+            }
+        elif isinstance(self.env.substrate, AspatialSubstrate):
+            # Aspatial rendering (meters-only, no grid)
+            return {
+                "type": "aspatial",
+                # No position data for aspatial substrate
+            }
+        else:
+            # Future: Grid3DSubstrate, GraphSubstrate, etc.
+            return {
+                "type": "unknown",
+                "substrate_type": type(self.env.substrate).__name__,
+                "message": "Rendering for this substrate type not yet implemented",
+            }
 
     async def _broadcast_to_clients(self, message: dict):
         """Broadcast message to all connected clients."""
@@ -961,13 +1078,14 @@ class LiveInferenceServer:
         meter_names = ["energy", "hygiene", "satiation", "money", "health", "fitness", "mood", "social"]
         agent_meters = {"agent_0": {"meters": {name: val for name, val in zip(meter_names, meters_tuple)}}}
 
-        # Build state update
+        # Build state update with substrate metadata
         state_update = {
             "type": "state_update",
             "mode": "replay",
             "episode_id": metadata["episode_id"],
             "step": step_data["step"],
             "cumulative_reward": step_data["reward"] * step_data["step"],  # Approximation
+            "substrate": self._build_substrate_metadata(),
             "grid": grid_state,
             "agent_meters": agent_meters,
             "replay_metadata": {

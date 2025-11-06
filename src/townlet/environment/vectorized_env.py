@@ -17,6 +17,7 @@ from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.observation_builder import ObservationBuilder
 from townlet.environment.reward_strategy import RewardStrategy
+from townlet.substrate.continuous import ContinuousSubstrate
 
 if TYPE_CHECKING:
     from townlet.population.runtime_registry import AgentRuntimeRegistry
@@ -74,8 +75,59 @@ class VectorizedHamletEnv:
         if not self.config_pack_path.exists():
             raise FileNotFoundError(f"Config pack directory not found: {self.config_pack_path}")
 
+        # BREAKING CHANGE: substrate.yaml is now REQUIRED
+        substrate_config_path = self.config_pack_path / "substrate.yaml"
+        if not substrate_config_path.exists():
+            raise FileNotFoundError(
+                f"substrate.yaml is required but not found in {self.config_pack_path}.\n\n"
+                f"All config packs must define their spatial substrate.\n\n"
+                f"Quick fix:\n"
+                f"  1. Copy template: cp configs/templates/substrate.yaml {self.config_pack_path}/\n"
+                f"  2. Edit substrate.yaml to match your grid_size from training.yaml\n"
+                f"  3. See CLAUDE.md 'Configuration System' for details\n\n"
+                f"This is a breaking change from TASK-002A. Previous configs without\n"
+                f"substrate.yaml will no longer work. See CHANGELOG.md for migration guide."
+            )
+
+        from townlet.substrate.config import load_substrate_config
+        from townlet.substrate.factory import SubstrateFactory
+
+        substrate_config = load_substrate_config(substrate_config_path)
+        self.substrate = SubstrateFactory.build(substrate_config, device=device)
+
+        # Load action labels (optional - defaults to "gaming" preset if not specified)
+        from townlet.environment.action_labels import get_labels
+
+        action_labels_config_path = self.config_pack_path / "action_labels.yaml"
+        if action_labels_config_path.exists():
+            # Load custom action labels from config
+            import yaml
+
+            with open(action_labels_config_path) as f:
+                action_labels_data = yaml.safe_load(f)
+
+            from townlet.substrate.config import ActionLabelConfig
+
+            label_config = ActionLabelConfig(**action_labels_data)
+
+            # Get labels for substrate dimensionality
+            if label_config.preset:
+                self.action_labels = get_labels(preset=label_config.preset, substrate_position_dim=self.substrate.position_dim)
+            else:
+                self.action_labels = get_labels(custom_labels=label_config.custom, substrate_position_dim=self.substrate.position_dim)
+        else:
+            # Default to gaming preset if no action_labels.yaml
+            self.action_labels = get_labels(preset="gaming", substrate_position_dim=self.substrate.position_dim)
+
+        # Update grid_size from substrate (for backward compatibility with other code)
+        # For aspatial substrates, keep parameter value; for grid substrates, use substrate
+        self.grid_size = grid_size  # Default to parameter (for aspatial or backward compat)
+        if hasattr(self.substrate, "width") and hasattr(self.substrate, "height"):
+            if self.substrate.width != self.substrate.height:
+                raise ValueError(f"Non-square grids not yet supported: {self.substrate.width}×{self.substrate.height}")
+            self.grid_size = self.substrate.width  # Override with substrate for grid
+
         self.num_agents = num_agents
-        self.grid_size = grid_size
         self.device = device
         self.partial_observability = partial_observability
         self.vision_range = vision_range
@@ -119,23 +171,91 @@ class VectorizedHamletEnv:
 
         # DEPLOYED affordances: have positions on grid, can be interacted with
         # Positions will be randomized by randomize_affordance_positions() before first use
-        self.affordances = {name: torch.tensor([0, 0], device=device, dtype=torch.long) for name in affordance_names_to_deploy}
+        default_position = torch.zeros(self.substrate.position_dim, dtype=self.substrate.position_dtype, device=device)
+        self.affordances = {name: default_position.clone() for name in affordance_names_to_deploy}
 
         # OBSERVATION VOCABULARY: Full list from YAML, used for fixed observation encoding
         # This stays constant across all curriculum levels for transfer learning
         self.affordance_names = all_affordance_names
         self.num_affordance_types = len(all_affordance_names)
 
+        # Validate partial observability support
+        if partial_observability and self.substrate.position_dim == 0:
+            raise ValueError(
+                "Partial observability (POMDP) is not supported for aspatial substrates. "
+                "A local vision window requires at least 1 spatial dimension. "
+                "Set partial_observability=False when using an aspatial substrate."
+            )
+        if partial_observability and isinstance(self.substrate, ContinuousSubstrate):
+            raise ValueError(
+                "Partial observability (POMDP) is not supported for continuous substrates. "
+                "Continuous spaces have infinite positions within any local window, making discrete vision grids undefined. "
+                "Use partial_observability=False with 'relative' or 'scaled' observation_encoding instead."
+            )
+        if partial_observability and self.substrate.position_dim >= 4:
+            window_size = 2 * vision_range + 1
+            cell_count = window_size**self.substrate.position_dim
+            raise ValueError(
+                f"Partial observability (POMDP) is not supported for {self.substrate.position_dim}D substrates. "
+                f"\n\nProblem: Local window size grows EXPONENTIALLY with dimensionality:"
+                f"\n  - 2D: {window_size}×{window_size} = {window_size**2} cells (practical)"
+                f"\n  - 3D: {window_size}×{window_size}×{window_size} = {window_size**3} cells (supported up to vision_range=2)"
+                f"\n  - {self.substrate.position_dim}D: {window_size}^{self.substrate.position_dim} = {cell_count:,} cells (IMPRACTICAL)"
+                f"\n\nThis creates:"
+                f"\n  - Network input explosion ({cell_count:,} vision features + position + meters)"
+                f"\n  - Memory explosion (each agent's observation is massive)"
+                f"\n  - Training slowdown (gradient computation over huge inputs)"
+                f"\n\nSolution: Use full observability (partial_observability=False) with normalized position encoding:"
+                f"\n  - observation_encoding='relative': Just {self.substrate.position_dim} dims (normalized coordinates)"
+                f"\n  - observation_encoding='scaled': {self.substrate.position_dim*2} dims (coordinates + grid sizes)"
+                f"\n  - Enables dimension-independent learning WITHOUT exponential curse"
+                f"\n\nSee docs/manual/pomdp_compatibility_matrix.md for details."
+            )
+
+        # Validate Grid3D POMDP vision range (prevent memory explosion)
+        if partial_observability and self.substrate.position_dim == 3:
+            window_volume = (2 * vision_range + 1) ** 3
+            if window_volume > 125:  # 5×5×5 = 125 is the threshold
+                raise ValueError(
+                    f"Grid3D POMDP with vision_range={vision_range} requires {window_volume} cells "
+                    f"(window size {2*vision_range+1}×{2*vision_range+1}×{2*vision_range+1}), which is excessive. "
+                    f"Use vision_range ≤ 2 (5×5×5 = 125 cells) for Grid3D partial observability, "
+                    f"or disable partial_observability."
+                )
+
+        # Validate observation_encoding compatibility with POMDP
+        if partial_observability and hasattr(self.substrate, "observation_encoding"):
+            if self.substrate.observation_encoding != "relative":
+                raise ValueError(
+                    f"Partial observability (POMDP) requires observation_encoding='relative', "
+                    f"but substrate is configured with observation_encoding='{self.substrate.observation_encoding}'. "
+                    f"POMDP uses normalized positions for recurrent network position encoder. "
+                    f"Set observation_encoding='relative' in substrate.yaml or disable partial_observability."
+                )
+
         # Observation dimensions depend on observability mode
         if partial_observability:
             # Level 2 POMDP: local window + position + meters + current affordance type
             window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
-            # Grid + position + meter_count meters + affordance type one-hot (N+1 for "none")
-            self.observation_dim = window_size * window_size + 2 + meter_count + (self.num_affordance_types + 1)
+            # Local window footprint depends on substrate dimensionality (e.g., Grid3D → W³)
+            if self.substrate.position_dim == 0:
+                local_window_dim = 0
+            else:
+                local_window_dim = window_size**self.substrate.position_dim
+            # Local window + normalized position + meters + affordance type one-hot (N+1 for "none")
+            # Position dimension is substrate-specific (2 for Grid2D, 0 for Aspatial)
+            self.observation_dim = (
+                local_window_dim
+                + self.substrate.position_dim  # 2 for Grid2D, 0 for Aspatial
+                + meter_count
+                + (self.num_affordance_types + 1)
+            )
         else:
-            # Level 1: full grid one-hot + meters + current affordance type
-            # Grid one-hot + meter_count meters + affordance type (N+1 for "none")
-            self.observation_dim = grid_size * grid_size + meter_count + (self.num_affordance_types + 1)
+            # Level 1: full grid encoding + meters + current affordance type
+            # Grid encoding dimension is substrate-specific (width*height for Grid2D, 0 for Aspatial)
+            self.observation_dim = (
+                self.substrate.get_observation_dim() + meter_count + (self.num_affordance_types + 1)  # Substrate-specific grid encoding
+            )
 
         # Always add temporal features for forward compatibility (4 features)
         # time_sin, time_cos, interaction_progress, lifetime_progress
@@ -144,13 +264,14 @@ class VectorizedHamletEnv:
         # Initialize observation builder
         self.observation_builder = ObservationBuilder(
             num_agents=num_agents,
-            grid_size=grid_size,
+            grid_size=self.grid_size,
             device=device,
             partial_observability=partial_observability,
             vision_range=vision_range,
             enable_temporal_mechanics=enable_temporal_mechanics,
             num_affordance_types=self.num_affordance_types,
             affordance_names=self.affordance_names,
+            substrate=self.substrate,  # Pass substrate to observation builder
         )
 
         # Initialize reward strategy (TASK-001: variable meters)
@@ -183,10 +304,17 @@ class VectorizedHamletEnv:
             bars_config.meter_name_to_index,
         )
 
-        self.action_dim = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+        # Action space size is determined by substrate
+        # Substrate reports number of discrete actions via action_space_size property
+        # This enables dynamic action spaces for N-dimensional substrates
+        self.action_dim = self.substrate.action_space_size
 
         # State tensors (initialized in reset)
-        self.positions = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+        self.positions = torch.zeros(
+            (self.num_agents, self.substrate.position_dim),
+            dtype=self.substrate.position_dtype,
+            device=self.device,
+        )
         self.meters = torch.zeros((self.num_agents, meter_count), dtype=torch.float32, device=self.device)
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
@@ -194,7 +322,11 @@ class VectorizedHamletEnv:
         # Temporal mechanics state
         self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
         self.last_interaction_affordance: list[str | None] = [None] * self.num_agents
-        self.last_interaction_position = torch.zeros((self.num_agents, 2), dtype=torch.long, device=self.device)
+        self.last_interaction_position = torch.zeros(
+            (self.num_agents, self.substrate.position_dim),
+            dtype=self.substrate.position_dtype,
+            device=self.device,
+        )
         self.time_of_day = 0
 
         if not self.enable_temporal_mechanics:
@@ -208,6 +340,20 @@ class VectorizedHamletEnv:
         """Attach runtime registry for telemetry tracking."""
         self.runtime_registry = registry
 
+    def get_action_label_names(self) -> dict[int, str]:
+        """Get action label names for current substrate.
+
+        Returns:
+            Dictionary mapping action indices to user-facing labels.
+
+        Example:
+            >>> env = VectorizedHamletEnv(...)
+            >>> labels = env.get_action_label_names()
+            >>> print(labels)
+            {0: 'UP', 1: 'DOWN', 2: 'LEFT', 3: 'RIGHT', 4: 'INTERACT', 5: 'WAIT'}
+        """
+        return self.action_labels.get_all_labels()
+
     def reset(self) -> torch.Tensor:
         """
         Reset all environments.
@@ -215,8 +361,8 @@ class VectorizedHamletEnv:
         Returns:
             observations: [num_agents, observation_dim]
         """
-        # Random starting positions
-        self.positions = torch.randint(0, self.grid_size, (self.num_agents, 2), device=self.device)
+        # Use substrate for position initialization (supports grid and aspatial)
+        self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
 
         # Initial meter values (normalized to [0, 1])
         # [energy, hygiene, satiation, money, mood, social, health, fitness]
@@ -265,35 +411,61 @@ class VectorizedHamletEnv:
         take them off the grid. This saves exploration budget and speeds learning.
 
         Returns:
-            action_masks: [num_agents, 6] bool tensor
+            action_masks: [num_agents, action_dim] bool tensor
                 True = valid action, False = invalid
-                Actions: [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
+                Grid2D (6 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
+                Grid3D (8 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, UP_Z, DOWN_Z]
         """
-        action_masks = torch.ones(self.num_agents, 6, dtype=torch.bool, device=self.device)
+        action_masks = torch.ones(self.num_agents, self.action_dim, dtype=torch.bool, device=self.device)
 
-        # Check boundary constraints
-        # positions[:, 0] = x (column), positions[:, 1] = y (row)
-        at_top = self.positions[:, 1] == 0  # y == 0
-        at_bottom = self.positions[:, 1] == self.grid_size - 1  # y == max
-        at_left = self.positions[:, 0] == 0  # x == 0
-        at_right = self.positions[:, 0] == self.grid_size - 1  # x == max
+        # Check boundary constraints (only for spatial substrates)
+        if self.substrate.position_dim >= 2:
+            # positions[:, 0] = x (column), positions[:, 1] = y (row)
+            at_top = self.positions[:, 1] == 0  # y == 0
+            at_bottom = self.positions[:, 1] == self.grid_size - 1  # y == max
+            at_left = self.positions[:, 0] == 0  # x == 0
+            at_right = self.positions[:, 0] == self.grid_size - 1  # x == max
 
-        # Mask invalid movements
-        action_masks[at_top, 0] = False  # Can't go UP at top edge
-        action_masks[at_bottom, 1] = False  # Can't go DOWN at bottom edge
-        action_masks[at_left, 2] = False  # Can't go LEFT at left edge
-        action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
+            # Mask invalid movements
+            action_masks[at_top, 0] = False  # Can't go UP at top edge
+            action_masks[at_bottom, 1] = False  # Can't go DOWN at bottom edge
+            action_masks[at_left, 2] = False  # Can't go LEFT at left edge
+            action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
 
-        # Mask INTERACT (action 4) - only valid when on an open affordance
+        # 3D-specific: mask Z-axis movements at floor/ceiling
+        if self.substrate.position_dim == 3:
+            at_floor = self.positions[:, 2] == 0  # z == 0
+            # Assume depth from substrate
+            if hasattr(self.substrate, "depth"):
+                at_ceiling = self.positions[:, 2] == self.substrate.depth - 1
+            else:
+                at_ceiling = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+
+            action_masks[at_ceiling, 6] = False  # Can't go UP_Z at ceiling
+            action_masks[at_floor, 7] = False  # Can't go DOWN_Z at floor
+
+        # Mask INTERACT - only valid when on an open affordance
         # P1.4: Removed affordability check - agents can attempt INTERACT even when broke
         # Affordability is checked inside interaction handlers; failing to afford just
         # wastes a turn (passive decay) and teaches economic planning
+
+        # Determine INTERACT action index based on substrate dimensionality
+        # 0D: INTERACT = 0, 1D: INTERACT = 2, 2D/3D: INTERACT = 4, N≥4: INTERACT = 2N
+        if self.substrate.position_dim == 0:
+            interact_action_idx = 0
+        elif self.substrate.position_dim == 1:
+            interact_action_idx = 2
+        elif self.substrate.position_dim in (2, 3):
+            interact_action_idx = 4
+        else:  # GridND / ContinuousND (N ≥ 4)
+            interact_action_idx = 2 * self.substrate.position_dim
+
         on_valid_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
         # Check each affordance using AffordanceEngine
         for affordance_name, affordance_pos in self.affordances.items():
-            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            on_this_affordance = distances == 0
+            # Check if on affordance for interaction (using substrate)
+            on_this_affordance = self.substrate.is_on_position(self.positions, affordance_pos)
 
             # Check operating hours using AffordanceEngine
             if self.enable_temporal_mechanics:
@@ -304,7 +476,7 @@ class VectorizedHamletEnv:
             # Valid if on affordance AND is open (affordability checked in handler)
             on_valid_affordance |= on_this_affordance
 
-        action_masks[:, 4] = on_valid_affordance
+        action_masks[:, interact_action_idx] = on_valid_affordance
 
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking
@@ -385,28 +557,73 @@ class VectorizedHamletEnv:
         # Store old positions for temporal mechanics progress tracking
         old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
 
-        # Movement deltas (x, y) coordinates
-        # x = horizontal (column), y = vertical (row)
-        deltas = torch.tensor(
-            [
-                [0, -1],  # UP - decreases y, x unchanged
-                [0, 1],  # DOWN - increases y, x unchanged
-                [-1, 0],  # LEFT - decreases x, y unchanged
-                [1, 0],  # RIGHT - increases x, y unchanged
-                [0, 0],  # INTERACT (no movement)
-                [0, 0],  # WAIT (no movement)
-            ],
-            device=self.device,
-        )
+        # Movement deltas - dynamically sized based on substrate dimensionality
+        # Always float32 - substrates cast to their dtype as needed
+        position_dim = self.substrate.position_dim
+        if position_dim == 0:
+            # Aspatial: no movement deltas needed, but provide dummy array
+            deltas = torch.zeros((6, 0), device=self.device, dtype=torch.float32)
+        elif position_dim == 1:
+            deltas = torch.tensor(
+                [
+                    [-1],  # MOVE_X_NEGATIVE (action 0)
+                    [1],  # MOVE_X_POSITIVE (action 1)
+                    [0],  # INTERACT (no movement, action 2)
+                    [0],  # WAIT (no movement, action 3)
+                ],
+                device=self.device,
+                dtype=torch.float32,
+            )
+        elif position_dim == 2:
+            deltas = torch.tensor(
+                [
+                    [0, -1],  # UP - decreases y, x unchanged
+                    [0, 1],  # DOWN - increases y, x unchanged
+                    [-1, 0],  # LEFT - decreases x, y unchanged
+                    [1, 0],  # RIGHT - increases x, y unchanged
+                    [0, 0],  # INTERACT (no movement)
+                    [0, 0],  # WAIT (no movement)
+                ],
+                device=self.device,
+                dtype=torch.float32,
+            )
+        elif position_dim == 3:
+            deltas = torch.tensor(
+                [
+                    [0, -1, 0],  # UP - decreases y (Grid2D compat: action 0)
+                    [0, 1, 0],  # DOWN - increases y (Grid2D compat: action 1)
+                    [-1, 0, 0],  # LEFT - decreases x (Grid2D compat: action 2)
+                    [1, 0, 0],  # RIGHT - increases x (Grid2D compat: action 3)
+                    [0, 0, 0],  # INTERACT (no movement) (Grid2D compat: action 4)
+                    [0, 0, 0],  # WAIT (no movement) (Grid2D compat: action 5)
+                    [0, 0, 1],  # UP_Z - increases z (new for 3D: action 6)
+                    [0, 0, -1],  # DOWN_Z - decreases z (new for 3D: action 7)
+                ],
+                device=self.device,
+                dtype=torch.float32,
+            )
+        elif position_dim >= 4:
+            # N-dimensional substrates: 2N movement actions + INTERACT + WAIT
+            action_count = 2 * position_dim + 2
+            deltas = torch.zeros((action_count, position_dim), device=self.device, dtype=torch.float32)
 
-        # Apply movement
-        movement_deltas = deltas[actions]  # [num_agents, 2]
-        new_positions = self.positions + movement_deltas
+            for dim_idx in range(position_dim):
+                # Negative direction for this axis (index dim_idx)
+                deltas[dim_idx, dim_idx] = -1.0
+                # Positive direction for this axis (index position_dim + dim_idx)
+                deltas[position_dim + dim_idx, dim_idx] = 1.0
 
-        # Clamp to grid boundaries
-        new_positions = torch.clamp(new_positions, 0, self.grid_size - 1)
+            # INTERACT (2N) and WAIT (2N+1) remain zero vectors by construction
+        else:
+            raise ValueError(
+                f"Unsupported substrate position_dim: {position_dim}. "
+                "Expected 0 (aspatial), 1 (1D continuous), 2 (Grid2D/Continuous2D), 3 (Grid3D/Continuous3D), "
+                "or N ≥ 4 (GridND/ContinuousND)."
+            )
 
-        self.positions = new_positions
+        # Apply movement with substrate-specific boundary handling
+        movement_deltas = deltas[actions]  # [num_agents, position_dim]
+        self.positions = self.substrate.apply_movement(self.positions, movement_deltas)
 
         # Reset progress for agents that moved away (temporal mechanics)
         if self.enable_temporal_mechanics and old_positions is not None:
@@ -416,8 +633,11 @@ class VectorizedHamletEnv:
                     self.last_interaction_affordance[agent_idx] = None
 
         # Apply action costs (configurable)
-        # Movement (UP, DOWN, LEFT, RIGHT)
-        movement_mask = actions < 4
+        # Determine movement actions directly from the movement deltas to support
+        # substrates where non-movement actions appear before all movement actions
+        # (e.g., 3D where INTERACT/WAIT sit at indices < last movement deltas).
+        movement_actions = deltas.ne(0).any(dim=1)
+        movement_mask = movement_actions[actions]
         if movement_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             movement_costs = torch.zeros(self.meter_count, device=self.device)
@@ -430,8 +650,22 @@ class VectorizedHamletEnv:
             self.meters[movement_mask] -= movement_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
-        # WAIT action (action 5) - lighter energy cost
-        wait_mask = actions == 5
+        # WAIT action - lighter energy cost
+        # Index derived from substrate dimensionality:
+        # 0D (aspatial): WAIT = 1
+        # 1D: WAIT = 3
+        # 2D: WAIT = 5
+        # 3D: WAIT = 5
+        if self.substrate.position_dim == 0:
+            wait_action_idx = 1
+        elif self.substrate.position_dim == 1:
+            wait_action_idx = 3
+        elif self.substrate.position_dim in (2, 3):
+            wait_action_idx = 5
+        else:
+            wait_action_idx = 2 * self.substrate.position_dim + 1
+
+        wait_mask = actions == wait_action_idx
         if wait_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             wait_costs = torch.zeros(self.meter_count, device=self.device)
@@ -441,8 +675,22 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
+        # Index derived from substrate dimensionality:
+        # 0D (aspatial): INTERACT = 0
+        # 1D: INTERACT = 2
+        # 2D: INTERACT = 4
+        # 3D: INTERACT = 4
+        if self.substrate.position_dim == 0:
+            interact_action_idx = 0
+        elif self.substrate.position_dim == 1:
+            interact_action_idx = 2
+        elif self.substrate.position_dim in (2, 3):
+            interact_action_idx = 4
+        else:
+            interact_action_idx = 2 * self.substrate.position_dim
+
         successful_interactions = {}
-        interact_mask = actions == 4
+        interact_mask = actions == interact_action_idx
         if interact_mask.any():
             successful_interactions = self._handle_interactions(interact_mask)
 
@@ -466,9 +714,8 @@ class VectorizedHamletEnv:
         successful_interactions = {}
 
         for affordance_name, affordance_pos in self.affordances.items():
-            # Distance to affordance
-            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            at_affordance = (distances == 0) & interact_mask
+            # Check if still on same affordance (using substrate)
+            at_affordance = self.substrate.is_on_position(self.positions, affordance_pos) & interact_mask
 
             if not at_affordance.any():
                 continue
@@ -548,9 +795,8 @@ class VectorizedHamletEnv:
 
         # Check each affordance
         for affordance_name, affordance_pos in self.affordances.items():
-            # Distance to affordance
-            distances = torch.abs(self.positions - affordance_pos).sum(dim=1)
-            at_affordance = (distances == 0) & interact_mask
+            # Check which agents are on this affordance (using substrate)
+            at_affordance = self.substrate.is_on_position(self.positions, affordance_pos) & interact_mask
 
             if not at_affordance.any():
                 continue
@@ -598,74 +844,126 @@ class VectorizedHamletEnv:
         )
 
     def get_affordance_positions(self) -> dict:
-        """Get current affordance positions (P1.1 checkpointing).
+        """Get current affordance positions (substrate-agnostic checkpointing).
 
         Returns:
-            Dictionary with 'positions' and 'ordering' keys:
-            - 'positions': Dict mapping affordance names to [x, y] positions
+            Dictionary with 'positions', 'ordering', and 'position_dim' keys:
+            - 'positions': Dict mapping affordance names to position lists
             - 'ordering': List of affordance names in consistent order
+            - 'position_dim': Dimensionality for validation (0=aspatial, 2=2D, 3=3D)
         """
         positions = {}
         for name, pos_tensor in self.affordances.items():
-            # Convert tensor position to list (for JSON serialization)
+            # Convert tensor to list (handles any dimensionality)
             pos = pos_tensor.cpu().tolist()
-            positions[name] = [int(pos[0]), int(pos[1])]
 
-        # Include affordance ordering for consistent observation encoding
+            # Ensure pos is a list (even for 0-dimensional positions)
+            if isinstance(pos, int | float):
+                pos = [pos]
+            elif self.substrate.position_dim == 0:
+                pos = []
+
+            positions[name] = [int(x) for x in pos] if pos else []
+
         return {
             "positions": positions,
             "ordering": self.affordance_names,
+            "position_dim": self.substrate.position_dim,  # For validation
         }
 
     def set_affordance_positions(self, checkpoint_data: dict) -> None:
-        """Set affordance positions from checkpoint (P1.1 checkpointing).
+        """Set affordance positions from checkpoint (Phase 4+ only).
+
+        BREAKING CHANGE: Only loads Phase 4+ checkpoints with position_dim field.
+        Legacy checkpoints will not load.
 
         Args:
-            checkpoint_data: Dictionary with 'positions' and optionally 'ordering':
-                - If 'ordering' provided, rebuild affordances dict in that order
-                - Otherwise, use current affordance_names (backwards compatible)
-        """
-        # Handle backwards compatibility: checkpoint might be old format (just positions dict)
-        if "positions" in checkpoint_data:
-            positions = checkpoint_data["positions"]
-            ordering = checkpoint_data.get("ordering", self.affordance_names)
-        else:
-            # Old format: checkpoint_data is the positions dict directly
-            positions = checkpoint_data
-            ordering = self.affordance_names
+            checkpoint_data: Dictionary with 'positions', 'ordering', and 'position_dim'
 
-        # Restore ordering first (critical for consistent observation encoding)
+        Raises:
+            ValueError: If checkpoint missing position_dim or incompatible with substrate
+        """
+        # Validate position_dim exists (no default fallback)
+        if "position_dim" not in checkpoint_data:
+            raise ValueError(
+                "Checkpoint missing 'position_dim' field.\n"
+                "This is a legacy checkpoint (pre-Phase 4).\n"
+                "\n"
+                "BREAKING CHANGE: Phase 4 changed checkpoint format.\n"
+                "Legacy checkpoints (Version 2) are no longer compatible.\n"
+                "\n"
+                "Action required:\n"
+                "  1. Delete old checkpoint directories: checkpoints_level*/\n"
+                "  2. Retrain models from scratch with Phase 4+ code\n"
+                "\n"
+                "If you need to preserve old models, checkout pre-Phase 4 git commit."
+            )
+
+        # Validate compatibility (no backward compatibility)
+        checkpoint_position_dim = checkpoint_data["position_dim"]
+        if checkpoint_position_dim != self.substrate.position_dim:
+            raise ValueError(
+                f"Checkpoint position_dim mismatch: checkpoint has {checkpoint_position_dim}D, "
+                f"but current substrate requires {self.substrate.position_dim}D."
+            )
+
+        # Simple loading (no backward compat branches)
+        positions = checkpoint_data["positions"]
+        ordering = checkpoint_data["ordering"]
+
         self.affordance_names = ordering
         self.num_affordance_types = len(self.affordance_names)
 
-        # Rebuild affordances dict in correct order
         for name, pos in positions.items():
             if name in self.affordances:
-                self.affordances[name] = torch.tensor(pos, device=self.device, dtype=torch.long)
+                self.affordances[name] = torch.tensor(pos, device=self.device, dtype=self.substrate.position_dtype)
 
     def randomize_affordance_positions(self):
         """Randomize affordance positions for generalization testing.
 
-        Ensures no two affordances occupy the same position.
+        Grid substrates: Shuffle all positions
+        Continuous substrates: Random sampling
+        Aspatial: No positions
+
+        Ensures no two affordances occupy the same position (for grid substrates).
         """
         import random
 
-        # Validate that grid has enough cells for all affordances (need +1 for agent)
+        # Skip if no affordances to randomize
         num_affordances = len(self.affordances)
-        total_cells = self.grid_size * self.grid_size
-        if num_affordances >= total_cells:
-            raise ValueError(
-                f"Grid has {total_cells} cells but {num_affordances} affordances + 1 agent need space. "
-                f"Reduce affordances or increase grid_size to at least {int((num_affordances + 1) ** 0.5) + 1}."
-            )
+        if num_affordances == 0:
+            return  # Nothing to randomize
 
-        # Generate list of all grid positions
-        all_positions = [(x, y) for x in range(self.grid_size) for y in range(self.grid_size)]
+        # Aspatial substrates don't have positions
+        if self.substrate.position_dim == 0:
+            # Aspatial: no positions, affordances don't need placement
+            return
 
-        # Shuffle and assign to affordances
-        random.shuffle(all_positions)
+        # Check if substrate supports enumerable positions
+        if hasattr(self.substrate, "supports_enumerable_positions") and self.substrate.supports_enumerable_positions():
+            # Grid substrates: shuffle all positions
+            all_positions = self.substrate.get_all_positions()
 
-        # Assign new positions to affordances
-        for i, affordance_name in enumerate(self.affordances.keys()):
-            new_pos = all_positions[i]
-            self.affordances[affordance_name] = torch.tensor(new_pos, dtype=torch.long, device=self.device)
+            # Validate that grid has enough cells for all affordances (need +1 for agent)
+            total_cells = len(all_positions)
+            if num_affordances >= total_cells:
+                raise ValueError(
+                    f"Grid has {total_cells} cells but {num_affordances} affordances + 1 agent need space. "
+                    f"Reduce affordances or increase grid_size to at least {int((num_affordances + 1) ** 0.5) + 1}."
+                )
+
+            # Shuffle and assign to affordances
+            random.shuffle(all_positions)
+
+            # Assign new positions to affordances
+            for i, affordance_name in enumerate(self.affordances.keys()):
+                new_pos = all_positions[i]
+                self.affordances[affordance_name] = torch.tensor(new_pos, dtype=self.substrate.position_dtype, device=self.device)
+        else:
+            # Continuous/other: random sampling
+            # Use substrate's initialize_positions for random placement
+            affordance_positions_tensor = self.substrate.initialize_positions(num_agents=num_affordances, device=self.device)
+
+            # Assign to affordances
+            for i, affordance_name in enumerate(self.affordances.keys()):
+                self.affordances[affordance_name] = affordance_positions_tensor[i]

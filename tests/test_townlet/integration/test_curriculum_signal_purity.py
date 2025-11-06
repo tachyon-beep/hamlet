@@ -325,9 +325,9 @@ class TestCurriculumSignalInterpretability:
 
             # Critical assertion: Curriculum reward equals survival time
             # NOT inflated by intrinsic rewards from RND exploration
-            assert abs(curriculum_reward - survival_time) < 1e-5, (
-                f"Episode {episode}: Curriculum reward ({curriculum_reward}) " f"should equal survival time ({survival_time})"
-            )
+            assert (
+                abs(curriculum_reward - survival_time) < 1e-5
+            ), f"Episode {episode}: Curriculum reward ({curriculum_reward}) should equal survival time ({survival_time})"
 
         # Verify all episodes showed positive survival
         for i, curr_r in enumerate(curriculum_rewards_log):
@@ -427,13 +427,13 @@ class TestCurriculumSignalInterpretability:
 
         # Verify: Stage should NOT have advanced (low survival rate)
         # Even if intrinsic rewards were large, advancement is based on survival performance
-        assert final_stage <= initial_stage, (
-            f"Curriculum should not advance with low survival rate (30%). " f"Initial stage: {initial_stage}, Final stage: {final_stage}"
-        )
+        assert (
+            final_stage <= initial_stage
+        ), f"Curriculum should not advance with low survival rate (30%). Initial stage: {initial_stage}, Final stage: {final_stage}"
 
         # Additional verification: Curriculum sees survival rate, not total rewards
         # (curriculum tracker would show ~30.0, not inflated reward values)
         last_curriculum_reward = curriculum.tracker.prev_avg_reward[0].item()
-        assert 25.0 < last_curriculum_reward < 35.0, (
-            f"Curriculum should see survival time (~30), " f"not inflated reward. Got: {last_curriculum_reward}"
-        )
+        assert (
+            25.0 < last_curriculum_reward < 35.0
+        ), f"Curriculum should see survival time (~30), not inflated reward. Got: {last_curriculum_reward}"

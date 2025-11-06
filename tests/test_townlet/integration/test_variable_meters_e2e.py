@@ -325,6 +325,7 @@ class TestVariableMetersEndToEnd:
             network_type="recurrent",  # Use recurrent network
             replay_buffer_capacity=100,
             batch_size=32,
+            train_frequency=10000,  # Disable training (test focuses on network creation with variable meters)
         )
 
         # Verify environment setup

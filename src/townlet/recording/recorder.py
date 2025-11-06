@@ -119,7 +119,11 @@ class EpisodeRecorder:
 
         recorded_step = RecordedStep(
             step=step,
-            position=(int(positions[0].item()), int(positions[1].item())),
+            # Convert position to tuple (handles any dimensionality)
+            # - 2D: (x, y)
+            # - 3D: (x, y, z)
+            # - Aspatial: ()
+            position=tuple(int(positions[i].item()) for i in range(positions.shape[0])),
             meters=tuple(meters.tolist()),
             action=action,
             reward=reward,

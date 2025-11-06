@@ -70,6 +70,7 @@ class RecurrentSpatialQNetwork(nn.Module):
         self,
         action_dim: int,
         window_size: int,
+        position_dim: int,
         num_meters: int,
         num_affordance_types: int,
         enable_temporal_features: bool,
@@ -81,6 +82,7 @@ class RecurrentSpatialQNetwork(nn.Module):
         Args:
             action_dim: Number of actions
             window_size: Size of local vision window (5 for 5×5)
+            position_dim: Dimensionality of position (2 for Grid2D, 3 for Grid3D, 0 for Aspatial)
             num_meters: Number of meter values
             num_affordance_types: Number of affordance types
             enable_temporal_features: Whether to expect temporal features
@@ -96,6 +98,7 @@ class RecurrentSpatialQNetwork(nn.Module):
         super().__init__()
         self.action_dim = action_dim
         self.window_size = window_size
+        self.position_dim = position_dim
         self.num_meters = num_meters
         self.num_affordance_types = num_affordance_types
         self.enable_temporal_features = enable_temporal_features
@@ -116,13 +119,20 @@ class RecurrentSpatialQNetwork(nn.Module):
             nn.ReLU(),
         )
 
-        # Position Encoder: (x, y) → 32 features
-        self.position_encoder = nn.Sequential(
-            nn.Linear(2, 32),
-            nn.ReLU(),
-        )
+        # Position Encoder: position_dim → 32 features (conditional on position_dim > 0)
+        self.position_encoder: nn.Sequential | None
+        if position_dim > 0:
+            self.position_encoder = nn.Sequential(
+                nn.Linear(position_dim, 32),
+                nn.ReLU(),
+            )
+            position_features = 32
+        else:
+            # Aspatial: no position encoding
+            self.position_encoder = None
+            position_features = 0
 
-        # Meter Encoder: 8 meters → 32 features
+        # Meter Encoder: num_meters → 32 features
         self.meter_encoder = nn.Sequential(
             nn.Linear(num_meters, 32),
             nn.ReLU(),
@@ -134,8 +144,9 @@ class RecurrentSpatialQNetwork(nn.Module):
             nn.ReLU(),
         )
 
-        # LSTM: 224 input (128 + 32 + 32 + 32) → hidden_dim
-        self.lstm_input_dim = 128 + 32 + 32 + 32
+        # LSTM: variable input → hidden_dim
+        # Input size: 128 (vision) + position_features (0 or 32) + 32 (meters) + 32 (affordance)
+        self.lstm_input_dim = 128 + position_features + 32 + 32
         self.lstm = nn.LSTM(input_size=self.lstm_input_dim, hidden_size=hidden_dim, num_layers=1, batch_first=True)
 
         # LayerNorm for LSTM output
@@ -161,10 +172,10 @@ class RecurrentSpatialQNetwork(nn.Module):
         Args:
             obs: [batch, obs_dim] observations where:
                 - obs[:, :window_size²] = local grid
-                - obs[:, window_size²:window_size²+2] = position (2)
-                - obs[:, window_size²+2:window_size²+2+num_meters] = meters
-                - obs[:, window_size²+2+num_meters:window_size²+2+num_meters+num_affordance_dims] = affordance
-                - obs[:, window_size²+2+num_meters+num_affordance_dims:] = temporal (if enabled)
+                - obs[:, window_size²:window_size²+position_dim] = position (position_dim)
+                - obs[:, window_size²+position_dim:window_size²+position_dim+num_meters] = meters
+                - obs[:, window_size²+position_dim+num_meters:window_size²+position_dim+num_meters+num_affordance_dims] = affordance
+                - obs[:, window_size²+position_dim+num_meters+num_affordance_dims:] = temporal (if enabled)
             hidden: Optional LSTM hidden state (h, c), each [1, batch, hidden_dim]
 
         Returns:
@@ -181,9 +192,12 @@ class RecurrentSpatialQNetwork(nn.Module):
         grid = obs[:, idx : idx + grid_size_flat]
         idx += grid_size_flat
 
-        # Extract position
-        position = obs[:, idx : idx + 2]
-        idx += 2
+        # Extract position (if position_dim > 0)
+        if self.position_dim > 0:
+            position = obs[:, idx : idx + self.position_dim]
+            idx += self.position_dim
+        else:
+            position = None
 
         # Extract meters
         meters = obs[:, idx : idx + self.num_meters]
@@ -202,15 +216,24 @@ class RecurrentSpatialQNetwork(nn.Module):
 
         # Encode components
         vision_features = self.vision_encoder(grid_2d)  # [batch, 128]
-        position_features = self.position_encoder(position)  # [batch, 32]
+
+        if self.position_encoder is not None:
+            position_features = self.position_encoder(position)  # [batch, 32]
+        else:
+            # Aspatial: no position features
+            position_features = None
+
         meter_features = self.meter_encoder(meters)  # [batch, 32]
         affordance_features = self.affordance_encoder(affordance)  # [batch, 32]
 
-        # Concatenate features
-        combined = torch.cat([vision_features, position_features, meter_features, affordance_features], dim=1)  # [batch, 224]
+        # Concatenate features (conditionally include position)
+        if position_features is not None:
+            combined = torch.cat([vision_features, position_features, meter_features, affordance_features], dim=1)
+        else:
+            combined = torch.cat([vision_features, meter_features, affordance_features], dim=1)
 
         # LSTM expects [batch, seq_len, input_dim]
-        combined = combined.unsqueeze(1)  # [batch, 1, 224]
+        combined = combined.unsqueeze(1)  # [batch, 1, lstm_input_dim]
 
         # Use provided hidden state or self.hidden_state
         if hidden is None:

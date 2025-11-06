@@ -57,7 +57,7 @@ class RecordedStep:
     """
 
     step: int  # Step number within episode
-    position: tuple[int, int]  # Agent (x, y)
+    position: tuple[int, ...]  # Agent position (x, y) or (x, y, z) or ()
     meters: tuple[float, ...]  # 8 meters, normalized [0,1]
     action: int  # Action taken (0-5)
     reward: float  # Extrinsic reward
@@ -93,7 +93,7 @@ class EpisodeMetadata:
     timestamp: float
 
     # Affordance context
-    affordance_layout: dict[str, tuple[int, int]]  # name → (x, y)
+    affordance_layout: dict[str, tuple[int, ...]]  # name → (x, y) or (x, y, z) or ()
     affordance_visits: dict[str, int]  # name → count
 
 
