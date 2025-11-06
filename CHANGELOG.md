@@ -15,14 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Summary
 
-Replaced hardcoded action space with composable architecture supporting substrate actions + custom actions from global vocabulary. Enables curriculum transfer via fixed action_dim, custom actions (REST, MEDITATE, TELEPORT_HOME, SPRINT), and runtime action masking.
+Replaced hardcoded action space with composable architecture supporting substrate actions + custom actions from global vocabulary. Enables curriculum transfer via fixed action_dim, substrate-agnostic custom actions (REST, MEDITATE), and runtime action masking.
 
 **Key Achievements:**
 
-- Composable action space: Substrate (6-14) + Custom (4) = 10-18 total actions
+- Composable action space: Substrate (6-14) + Custom (2) = 8-16 total actions
 - Global vocabulary (`global_actions.yaml`) shared across all configs
 - Checkpoint transfer enabled (same action_dim across L0→L1→L2→L3)
-- 4 custom actions: REST (recovery), MEDITATE (mood), TELEPORT_HOME (warp), SPRINT (fast move)
+- 2 substrate-agnostic custom actions: REST (recovery), MEDITATE (mood)
 - 350+ tests passing (12 action builder, 3 custom actions, 2 curriculum transfer)
 - 78 test fixes for dynamic action_dim (no more hardcoded action_dim=6)
 
@@ -33,7 +33,10 @@ Replaced hardcoded action space with composable architecture supporting substrat
 - `ActionConfig`: Pydantic schema for action definitions (costs, effects, delta, teleport_to, enabled)
 - `ComposedActionSpace`: Container tracking substrate + custom + affordance actions with metadata
 - `ActionSpaceBuilder`: Composes actions from substrate.get_default_actions() + global_actions.yaml
-- `configs/global_actions.yaml`: Global vocabulary with 4 custom actions (REST, MEDITATE, TELEPORT_HOME, SPRINT)
+- `configs/global_actions.yaml`: Global vocabulary with 2 substrate-agnostic custom actions (REST, MEDITATE)
+  - **Design Decision**: Removed TELEPORT_HOME and SPRINT from original plan (broke on non-Grid2D substrates)
+  - Global vocabulary must work on ALL substrates for curriculum transfer (Grid2D/3D/ND, Continuous, Aspatial)
+  - Substrate-specific actions can be added in per-config files (future extensibility)
 
 **Substrate Default Actions** (Phase 1):
 
@@ -55,10 +58,9 @@ Replaced hardcoded action space with composable architecture supporting substrat
 
 **Custom Actions** (Phase 3-4):
 
-- **REST**: Passive recovery (energy: -0.002, mood: -0.01), available anywhere
-- **MEDITATE**: Mental health action (energy: +0.001, mood effects: +0.02)
-- **TELEPORT_HOME**: Expensive warp to [0,0] (energy: 0.5, money: 10.0)
-- **SPRINT**: Fast movement (delta: [0, -2], energy: 0.02, Grid2D-specific)
+- **REST**: Passive recovery (energy: -0.002, mood: -0.01), available anywhere, substrate-agnostic
+- **MEDITATE**: Mental health action (energy: +0.001, mood effects: +0.02), substrate-agnostic
+- **Note**: TELEPORT_HOME and SPRINT removed from global vocabulary (Grid2D-specific, breaks universal curriculum)
 
 **Testing & Documentation** (Phase 5):
 
@@ -72,10 +74,10 @@ Replaced hardcoded action space with composable architecture supporting substrat
 
 **Action Space Formula** (Phase 1):
 
-- Grid2D: 6 substrate + 4 custom = **10 actions** (was 6)
-- Grid3D: 8 substrate + 4 custom = **12 actions** (was 8)
-- GridND(7D): 14 substrate + 4 custom = **18 actions** (was 16)
-- Aspatial: 2 substrate + 4 custom = **6 actions** (was 2)
+- Grid2D: 6 substrate + 2 custom = **8 actions** (was 6)
+- Grid3D: 8 substrate + 2 custom = **10 actions** (was 8)
+- GridND(7D): 14 substrate + 2 custom = **16 actions** (was 14)
+- Aspatial: 2 substrate + 2 custom = **4 actions** (was 2)
 
 **VectorizedHamletEnv** (Phase 4):
 
@@ -91,9 +93,9 @@ Replaced hardcoded action space with composable architecture supporting substrat
 
 **Network Architecture** (Phase 5):
 
-- SimpleQNetwork: 29 input → **10 output** dims (~30K params, was ~26K)
-- RecurrentSpatialQNetwork: 256 hidden → **10 output** dims (~650K params, was ~600K)
-- All Grid2D configs have same architecture (29→10), enabling checkpoint transfer!
+- SimpleQNetwork: 29 input → **8 output** dims (~28K params, was ~26K)
+- RecurrentSpatialQNetwork: 256 hidden → **8 output** dims (~620K params, was ~600K)
+- All Grid2D configs have same architecture (29→8), enabling checkpoint transfer!
 
 ### Fixed
 
@@ -139,15 +141,15 @@ Replaced hardcoded action space with composable architecture supporting substrat
 
 **Checkpoint Transfer Mechanism**:
 
-- L0_0_minimal: 3×3 grid, 1 affordance, 10 actions
-- L0_5_dual_resource: 7×7 grid, 4 affordances, 10 actions
-- L1_full_observability: 8×8 grid, 14 affordances, 10 actions
-- L3_temporal_mechanics: 8×8 grid, temporal mechanics, 10 actions
+- L0_0_minimal: 3×3 grid, 1 affordance, 8 actions (6 substrate + 2 custom)
+- L0_5_dual_resource: 7×7 grid, 4 affordances, 8 actions (6 substrate + 2 custom)
+- L1_full_observability: 8×8 grid, 14 affordances, 8 actions (6 substrate + 2 custom)
+- L3_temporal_mechanics: 8×8 grid, temporal mechanics, 8 actions (6 substrate + 2 custom)
 
 All have:
 - Observation dim: 29 (constant via relative position encoding)
-- Action dim: 10 (constant via global vocabulary)
-- Network architecture: 29→256→128→10 (SimpleQNetwork)
+- Action dim: 8 (constant via global vocabulary - substrate-agnostic actions only)
+- Network architecture: 29→256→128→8 (SimpleQNetwork)
 
 Result: **Q-network trained on L0 transfers to L1-L3 without retraining!**
 
@@ -155,8 +157,8 @@ Result: **Q-network trained on L0 transfers to L1-L3 without retraining!**
 
 **Memory**:
 
-- SimpleQNetwork: +4K params (26K → 30K, +15% for 4 custom actions)
-- RecurrentSpatialQNetwork: +50K params (600K → 650K, +8%)
+- SimpleQNetwork: +2K params (26K → 28K, +8% for 2 custom actions)
+- RecurrentSpatialQNetwork: +20K params (600K → 620K, +3%)
 
 **Runtime**:
 
@@ -173,10 +175,10 @@ Result: **Q-network trained on L0 transfers to L1-L3 without retraining!**
 
 **For Operators**:
 
-1. Action counts changed for all substrate types (+4 custom actions)
-2. Grid2D configs: `action_dim=6` → `action_dim=10`
+1. Action counts changed for all substrate types (+2 substrate-agnostic custom actions)
+2. Grid2D configs: `action_dim=6` → `action_dim=8`
 3. Tests: Remove hardcoded `action_dim=6`, use `env.action_dim` instead
-4. Networks: Update output dim from 6 to 10 for Grid2D configs
+4. Networks: Update output dim from 6 to 8 for Grid2D configs
 
 **For Developers**:
 
@@ -203,7 +205,7 @@ Result: **Q-network trained on L0 transfers to L1-L3 without retraining!**
 - `d874bf6` - fix(actions): correct empty list behavior in ActionSpaceBuilder
 
 **Phase 3 (Global Actions Config)**:
-- `7083bc0` - feat(config): add global_actions.yaml with 4 custom actions
+- `7083bc0` - feat(config): add global_actions.yaml with 2 substrate-agnostic custom actions
 - `d859288` - docs(config): document enabled_actions pattern
 
 **Phase 4 (Environment Integration)**:

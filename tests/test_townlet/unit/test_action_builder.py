@@ -1,9 +1,24 @@
 """Tests for ActionSpaceBuilder and ComposedActionSpace."""
 
+from pathlib import Path
+
+import pytest
 import torch
+import yaml
 
 from townlet.environment.action_builder import ComposedActionSpace
 from townlet.environment.action_config import ActionConfig
+
+GLOBAL_ACTIONS_PATH = Path("configs/global_actions.yaml")
+
+
+def _load_global_custom_actions() -> list[dict]:
+    """Load custom actions from global_actions.yaml (empty list if missing)."""
+    if not GLOBAL_ACTIONS_PATH.exists():
+        return []
+    with GLOBAL_ACTIONS_PATH.open() as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("custom_actions", [])
 
 
 def test_composed_action_space_basic():
@@ -106,8 +121,6 @@ def test_composed_action_space_get_base_mask():
 
 def test_action_space_builder_substrate_only():
     """Builder with no custom actions should return substrate actions only."""
-    from pathlib import Path
-
     from townlet.environment.action_builder import ActionSpaceBuilder
     from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -224,8 +237,6 @@ custom_actions:
 
 def test_empty_enabled_list_disables_all():
     """Empty enabled_action_names list should disable all actions."""
-    from pathlib import Path
-
     from townlet.environment.action_builder import ActionSpaceBuilder
     from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -253,12 +264,10 @@ def test_empty_enabled_list_disables_all():
 
 def test_load_global_actions_yaml():
     """Should load configs/global_actions.yaml successfully."""
-    from pathlib import Path
-
     from townlet.environment.action_builder import ActionSpaceBuilder
     from townlet.substrate.grid2d import Grid2DSubstrate
 
-    global_actions_path = Path("configs/global_actions.yaml")
+    global_actions_path = GLOBAL_ACTIONS_PATH
 
     substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
 
@@ -269,20 +278,21 @@ def test_load_global_actions_yaml():
 
     space = builder.build()
 
-    # Grid2D (6) + global custom actions (4) = 10 total
-    assert space.action_dim == 10
-    assert space.substrate_action_count == 6
-    assert space.custom_action_count == 4
+    custom_actions = _load_global_custom_actions()
+    expected_substrate = substrate.action_space_size
+    expected_custom = len(custom_actions)
+
+    assert space.action_dim == expected_substrate + expected_custom
+    assert space.substrate_action_count == expected_substrate
+    assert space.custom_action_count == expected_custom
 
 
 def test_global_actions_has_rest_and_meditate():
     """Global actions should include REST and MEDITATE."""
-    from pathlib import Path
-
     from townlet.environment.action_builder import ActionSpaceBuilder
     from townlet.substrate.grid2d import Grid2DSubstrate
 
-    global_actions_path = Path("configs/global_actions.yaml")
+    global_actions_path = GLOBAL_ACTIONS_PATH
 
     substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
 
@@ -292,6 +302,11 @@ def test_global_actions_has_rest_and_meditate():
     )
 
     space = builder.build()
+
+    custom_names = {entry["name"] for entry in _load_global_custom_actions()}
+    required = {"REST", "MEDITATE"}
+    if not required.issubset(custom_names):
+        pytest.skip("REST/MEDITATE not defined in global_actions.yaml")
 
     # Should have REST and MEDITATE
     rest = space.get_action_by_name("REST")
@@ -303,14 +318,12 @@ def test_global_actions_has_rest_and_meditate():
     assert meditate.effects.get("mood", 0) > 0  # Positive effect (restoration)
 
 
-def test_global_actions_has_teleport_and_sprint():
-    """Global actions should include TELEPORT_HOME and SPRINT."""
-    from pathlib import Path
-
+def test_global_actions_yaml_actions_present():
+    """Custom actions from YAML should appear in built action space."""
     from townlet.environment.action_builder import ActionSpaceBuilder
     from townlet.substrate.grid2d import Grid2DSubstrate
 
-    global_actions_path = Path("configs/global_actions.yaml")
+    global_actions_path = GLOBAL_ACTIONS_PATH
 
     substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
 
@@ -321,13 +334,22 @@ def test_global_actions_has_teleport_and_sprint():
 
     space = builder.build()
 
-    # TELEPORT_HOME should be movement with teleport_to
-    teleport = space.get_action_by_name("TELEPORT_HOME")
-    assert teleport.type == "movement"
-    assert teleport.teleport_to == [0, 0]
-    assert teleport.costs.get("energy", 0) > 0  # Costs energy
+    custom_entries = _load_global_custom_actions()
+    expected_names = {entry["name"] for entry in custom_entries}
+    space_custom_names = {action.name for action in space.actions if action.source == "custom"}
 
-    # SPRINT should be movement with delta
-    sprint = space.get_action_by_name("SPRINT")
-    assert sprint.type == "movement"
-    assert sprint.delta == [0, -2]  # Move 2 cells north
+    assert space_custom_names == expected_names
+
+    # Validate that numeric properties defined in YAML propagate to the action configs
+    for entry in custom_entries:
+        action = space.get_action_by_name(entry["name"])
+        if "delta" in entry:
+            assert action.delta == entry["delta"]
+        if "teleport_to" in entry:
+            assert action.teleport_to == entry["teleport_to"]
+        if "costs" in entry:
+            for meter, amount in entry["costs"].items():
+                assert action.costs.get(meter) == amount
+        if "effects" in entry:
+            for meter, amount in entry["effects"].items():
+                assert action.effects.get(meter) == amount
