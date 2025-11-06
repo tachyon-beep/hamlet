@@ -1,6 +1,7 @@
 """Tests for substrate default action generation."""
 
 from townlet.environment.action_config import ActionConfig
+from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.continuous import Continuous1DSubstrate, Continuous2DSubstrate, Continuous3DSubstrate
 from townlet.substrate.continuousnd import ContinuousNDSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
@@ -363,3 +364,29 @@ def test_continuousnd_uses_integer_deltas():
     assert actions_by_name["DIM3_NEG"].delta == [0, 0, 0, -1]
     # DIM3_POS: [0, 0, 0, +1]
     assert actions_by_name["DIM3_POS"].delta == [0, 0, 0, 1]
+
+
+# ============================================================================
+# Aspatial Substrate Tests
+# ============================================================================
+
+
+def test_aspatial_generates_2_actions():
+    """Aspatial should provide only 2 actions (no movement)."""
+    substrate = AspatialSubstrate()
+
+    actions = substrate.get_default_actions()
+
+    assert len(actions) == 2  # INTERACT + WAIT only
+    names = [a.name for a in actions]
+    assert names == ["INTERACT", "WAIT"]
+
+
+def test_aspatial_no_movement_actions():
+    """Aspatial should have zero movement actions."""
+    substrate = AspatialSubstrate()
+
+    actions = substrate.get_default_actions()
+
+    movement_actions = [a for a in actions if a.type == "movement"]
+    assert len(movement_actions) == 0
