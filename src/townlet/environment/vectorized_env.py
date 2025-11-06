@@ -21,6 +21,7 @@ from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
 
 if TYPE_CHECKING:
+    from townlet.environment.action_config import ActionConfig
     from townlet.population.runtime_registry import AgentRuntimeRegistry
 
 
@@ -595,12 +596,29 @@ class VectorizedHamletEnv:
         Returns:
             Dictionary mapping agent indices to affordance names for successful interactions
         """
+        # === CUSTOM ACTION DISPATCH (early) ===
+        # Custom actions start after substrate actions
+        custom_action_start_id = self.action_space.substrate_action_count
+        custom_mask = actions >= custom_action_start_id
+
+        if custom_mask.any():
+            custom_agent_indices = torch.where(custom_mask)[0]
+            for agent_idx in custom_agent_indices:
+                action_id = actions[agent_idx].item()
+                action = self.action_space.get_action_by_id(action_id)
+
+                # Apply custom action costs/effects/teleportation
+                self._apply_custom_action(agent_idx, action)
+
         # Store old positions for temporal mechanics progress tracking
         old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
 
         # Apply movement using pre-built delta tensor from ActionConfig
-        movement_deltas = self._movement_deltas[actions]  # [num_agents, position_dim]
-        self.positions = self.substrate.apply_movement(self.positions, movement_deltas)
+        # Only for substrate actions (custom actions already handled above)
+        substrate_mask = actions < custom_action_start_id
+        if substrate_mask.any():
+            movement_deltas = self._movement_deltas[actions[substrate_mask]]  # [num_substrate_agents, position_dim]
+            self.positions[substrate_mask] = self.substrate.apply_movement(self.positions[substrate_mask], movement_deltas)
 
         # Reset progress for agents that moved away (temporal mechanics)
         if self.enable_temporal_mechanics and old_positions is not None:
@@ -613,8 +631,13 @@ class VectorizedHamletEnv:
         # Determine movement actions directly from the movement deltas to support
         # substrates where non-movement actions appear before all movement actions
         # (e.g., 3D where INTERACT/WAIT sit at indices < last movement deltas).
+        # Only apply to substrate actions (not custom actions)
         movement_actions = self._movement_deltas.ne(0).any(dim=1)
-        movement_mask = movement_actions[actions]
+        # Create a full mask (initialize to False for all agents)
+        movement_mask = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+        # Only check movement for substrate actions
+        if substrate_mask.any():
+            movement_mask[substrate_mask] = movement_actions[actions[substrate_mask]]
         if movement_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             movement_costs = torch.zeros(self.meter_count, device=self.device)
@@ -631,7 +654,7 @@ class VectorizedHamletEnv:
         # Use cached WAIT index (from ActionSpaceBuilder)
         wait_action_idx = self.wait_action_idx
 
-        wait_mask = actions == wait_action_idx
+        wait_mask = (actions == wait_action_idx) & substrate_mask
         if wait_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             wait_costs = torch.zeros(self.meter_count, device=self.device)
@@ -645,7 +668,7 @@ class VectorizedHamletEnv:
         interact_action_idx = self.interact_action_idx
 
         successful_interactions = {}
-        interact_mask = actions == interact_action_idx
+        interact_mask = (actions == interact_action_idx) & substrate_mask
         if interact_mask.any():
             successful_interactions = self._handle_interactions(interact_mask)
 
@@ -872,6 +895,58 @@ class VectorizedHamletEnv:
         for name, pos in positions.items():
             if name in self.affordances:
                 self.affordances[name] = torch.tensor(pos, device=self.device, dtype=self.substrate.position_dtype)
+
+    def _get_meter_index(self, meter_name: str) -> int | None:
+        """Get meter index by name.
+
+        Args:
+            meter_name: Meter name (e.g., "energy", "mood")
+
+        Returns:
+            Meter index, or None if meter doesn't exist
+        """
+        meter_map = {
+            "energy": self.energy_idx,
+            "hygiene": self.hygiene_idx,
+            "satiation": self.satiation_idx,
+            "money": self.money_idx,
+            "mood": 4,  # Mood is at index 4 (see bars.yaml)
+            "social": 5,  # Social is at index 5
+            "health": self.health_idx,
+            "fitness": 7,  # Fitness is at index 7
+        }
+        return meter_map.get(meter_name)
+
+    def _apply_custom_action(self, agent_idx: int, action: ActionConfig):
+        """Apply custom action effects.
+
+        Args:
+            agent_idx: Agent index
+            action: Custom action config
+        """
+        # Apply costs (negative costs = restoration)
+        for meter_name, cost in action.costs.items():
+            meter_idx = self._get_meter_index(meter_name)
+            if meter_idx is not None:
+                self.meters[agent_idx, meter_idx] -= cost  # Subtract cost (negative = add)
+
+        # Apply effects
+        for meter_name, effect in action.effects.items():
+            meter_idx = self._get_meter_index(meter_name)
+            if meter_idx is not None:
+                self.meters[agent_idx, meter_idx] += effect  # Add effect
+
+        # Handle teleportation
+        if action.teleport_to is not None:
+            target_pos = torch.tensor(
+                action.teleport_to,
+                device=self.device,
+                dtype=self.substrate.position_dtype,
+            )
+            self.positions[agent_idx] = target_pos
+
+        # Clamp meters to [0, 1]
+        self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
     def randomize_affordance_positions(self):
         """Randomize affordance positions for generalization testing.
