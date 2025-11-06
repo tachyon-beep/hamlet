@@ -17,8 +17,6 @@ import torch
 from townlet.training.replay_buffer import ReplayBuffer
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
 
-FULL_OBS_DIM = 93  # Standard 8×8 full observability observation dimension
-
 # =============================================================================
 # STANDARD REPLAY BUFFER (Feed-forward DQN)
 # =============================================================================
@@ -862,11 +860,11 @@ class TestPostTerminalMasking:
         """Empty sequential replay buffer on CPU for deterministic tests."""
         return SequentialReplayBuffer(capacity=10000, device=cpu_device)
 
-    def test_sample_returns_mask(self, buffer, cpu_device):
+    def test_sample_returns_mask(self, buffer, cpu_device, basic_env):
         """Sample should return a mask field."""
         # Store episode with terminal in middle
         episode = {
-            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -880,11 +878,11 @@ class TestPostTerminalMasking:
         assert batch["mask"].shape == (2, 5), f"Mask shape should be [batch, seq_len], got {batch['mask'].shape}"
         assert batch["mask"].dtype == torch.bool, f"Mask should be bool, got {batch['mask'].dtype}"
 
-    def test_mask_all_true_when_no_terminal(self, buffer, cpu_device):
+    def test_mask_all_true_when_no_terminal(self, buffer, cpu_device, basic_env):
         """Mask should be all True when sequence has no terminal."""
         # Episode with no terminal
         episode = {
-            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -897,11 +895,11 @@ class TestPostTerminalMasking:
         # All masks should be True (no terminals)
         assert torch.all(batch["mask"]), "Mask should be all True when no terminal in sequence"
 
-    def test_mask_false_after_terminal(self, buffer, cpu_device):
+    def test_mask_false_after_terminal(self, buffer, cpu_device, basic_env):
         """Mask should be False after terminal state."""
         # Episode: terminal at index 3
         episode = {
-            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -927,11 +925,11 @@ class TestPostTerminalMasking:
             if terminal_idx < len(mask) - 1:
                 assert torch.all(~mask[terminal_idx + 1 :]), f"Mask should be False after terminal at {terminal_idx}"
 
-    def test_mask_includes_terminal_timestep(self, buffer, cpu_device):
+    def test_mask_includes_terminal_timestep(self, buffer, cpu_device, basic_env):
         """Mask should include the terminal timestep itself (True at terminal)."""
         # Episode with terminal at index 2
         episode = {
-            "observations": torch.randn(5, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(5, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (5,), device=cpu_device),
             "rewards_extrinsic": torch.randn(5, device=cpu_device),
             "rewards_intrinsic": torch.randn(5, device=cpu_device),
@@ -953,26 +951,26 @@ class TestPostTerminalMasking:
         # Only timesteps AFTER terminal should be False
         assert torch.all(~mask[terminal_idx + 1 :]), "Only timesteps after terminal should be False"
 
-    def test_mask_with_multiple_sequences(self, buffer, cpu_device):
+    def test_mask_with_multiple_sequences(self, buffer, cpu_device, basic_env):
         """Each sequence in batch should have its own mask based on its terminal."""
         # Store multiple episodes with different terminal positions
         episodes = [
             {  # Terminal at index 2
-                "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+                "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
                 "actions": torch.randint(0, 6, (10,), device=cpu_device),
                 "rewards_extrinsic": torch.randn(10, device=cpu_device),
                 "rewards_intrinsic": torch.randn(10, device=cpu_device),
                 "dones": torch.tensor([False, False, True] + [False] * 7, device=cpu_device),
             },
             {  # Terminal at index 5
-                "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+                "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
                 "actions": torch.randint(0, 6, (10,), device=cpu_device),
                 "rewards_extrinsic": torch.randn(10, device=cpu_device),
                 "rewards_intrinsic": torch.randn(10, device=cpu_device),
                 "dones": torch.tensor([False] * 5 + [True] + [False] * 4, device=cpu_device),
             },
             {  # No terminal
-                "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+                "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
                 "actions": torch.randint(0, 6, (10,), device=cpu_device),
                 "rewards_extrinsic": torch.randn(10, device=cpu_device),
                 "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -1001,10 +999,10 @@ class TestPostTerminalMasking:
                 # No terminal -> all True
                 assert torch.all(mask), f"Sequence {i}: should be all True (no terminal)"
 
-    def test_mask_shape_matches_batch(self, buffer, cpu_device):
+    def test_mask_shape_matches_batch(self, buffer, cpu_device, basic_env):
         """Mask shape should match [batch_size, seq_len]."""
         episode = {
-            "observations": torch.randn(20, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(20, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (20,), device=cpu_device),
             "rewards_extrinsic": torch.randn(20, device=cpu_device),
             "rewards_intrinsic": torch.randn(20, device=cpu_device),
@@ -1016,10 +1014,10 @@ class TestPostTerminalMasking:
 
         assert batch["mask"].shape == (16, 10), f"Mask shape should be [16, 10], got {batch['mask'].shape}"
 
-    def test_mask_works_with_unified_rewards(self, buffer, cpu_device):
+    def test_mask_works_with_unified_rewards(self, buffer, cpu_device, basic_env):
         """Mask should work when episode has unified 'rewards' instead of split."""
         episode = {
-            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards": torch.randn(10, device=cpu_device),  # Unified rewards
             "dones": torch.tensor([False] * 4 + [True] + [False] * 5, device=cpu_device),
@@ -1040,11 +1038,11 @@ class TestMaskIntegrationWithLoss:
         """Empty sequential replay buffer on CPU for deterministic tests."""
         return SequentialReplayBuffer(capacity=10000, device=cpu_device)
 
-    def test_mask_sum_counts_valid_timesteps(self, buffer, cpu_device):
+    def test_mask_sum_counts_valid_timesteps(self, buffer, cpu_device, basic_env):
         """Mask sum should equal number of valid timesteps."""
         # Episode with terminal at index 3 (4 valid timesteps: 0,1,2,3)
         episode = {
-            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),
@@ -1061,10 +1059,10 @@ class TestMaskIntegrationWithLoss:
         # Should have 4 valid timesteps (0,1,2,3 - including terminal)
         assert valid_count == 4, f"Expected 4 valid timesteps, got {valid_count}"
 
-    def test_masked_loss_example(self, buffer, cpu_device):
+    def test_masked_loss_example(self, buffer, cpu_device, basic_env):
         """Demonstrate masked loss computation pattern."""
         episode = {
-            "observations": torch.randn(10, FULL_OBS_DIM, device=cpu_device),
+            "observations": torch.randn(10, basic_env.observation_dim, device=cpu_device),
             "actions": torch.randint(0, 6, (10,), device=cpu_device),
             "rewards_extrinsic": torch.randn(10, device=cpu_device),
             "rewards_intrinsic": torch.randn(10, device=cpu_device),

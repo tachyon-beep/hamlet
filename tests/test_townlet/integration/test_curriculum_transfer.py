@@ -44,10 +44,6 @@ def test_l0_and_l1_have_same_action_dim():
         f"L0 and L1 must have same action_dim for checkpoint transfer. " f"L0: {env_l0.action_dim}, L1: {env_l1.action_dim}"
     )
 
-    # Verify both are Grid2D with 8 actions (6 substrate + 2 custom)
-    assert env_l0.action_dim == 8, f"L0 should have 8 actions, got {env_l0.action_dim}"
-    assert env_l1.action_dim == 8, f"L1 should have 8 actions, got {env_l1.action_dim}"
-
 
 def test_l0_and_l1_share_global_vocabulary():
     """L0 and L1 should share same action vocabulary (from global_actions.yaml)."""

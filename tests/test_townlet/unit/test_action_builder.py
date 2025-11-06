@@ -21,12 +21,35 @@ def _load_global_custom_actions() -> list[dict]:
     return data.get("custom_actions", [])
 
 
+def make_action(id: int, name: str, type: str, **overrides) -> ActionConfig:
+    """Factory for creating ActionConfig in tests with explicit defaults.
+
+    Centralizes ActionConfig creation so when fields change, we only update here.
+    """
+    defaults = {
+        "id": id,
+        "name": name,
+        "type": type,
+        "delta": None,
+        "teleport_to": None,
+        "costs": {},
+        "effects": {},
+        "enabled": True,
+        "description": None,
+        "icon": None,
+        "source": "substrate",
+        "source_affordance": None,
+    }
+    defaults.update(overrides)
+    return ActionConfig(**defaults)
+
+
 def test_composed_action_space_basic():
     """ComposedActionSpace should track actions and metadata."""
     actions = [
-        ActionConfig(id=0, name="UP", type="movement", delta=[0, -1], costs={}, source="substrate"),
-        ActionConfig(id=1, name="DOWN", type="movement", delta=[0, 1], costs={}, source="substrate"),
-        ActionConfig(id=2, name="REST", type="passive", costs={}, source="custom"),
+        make_action(0, "UP", "movement", delta=[0, -1]),
+        make_action(1, "DOWN", "movement", delta=[0, 1]),
+        make_action(2, "REST", "passive", source="custom"),
     ]
 
     space = ComposedActionSpace(
@@ -34,6 +57,7 @@ def test_composed_action_space_basic():
         substrate_action_count=2,
         custom_action_count=1,
         affordance_action_count=0,
+        enabled_action_names=None,
     )
 
     assert space.action_dim == 3
@@ -44,11 +68,17 @@ def test_composed_action_space_basic():
 def test_composed_action_space_get_by_id():
     """Should retrieve action by ID."""
     actions = [
-        ActionConfig(id=0, name="UP", type="movement", delta=[0, -1], costs={}, source="substrate"),
-        ActionConfig(id=1, name="REST", type="passive", costs={}, source="custom"),
+        make_action(0, "UP", "movement", delta=[0, -1]),
+        make_action(1, "REST", "passive", source="custom"),
     ]
 
-    space = ComposedActionSpace(actions=actions, substrate_action_count=1, custom_action_count=1, affordance_action_count=0)
+    space = ComposedActionSpace(
+        actions=actions,
+        substrate_action_count=1,
+        custom_action_count=1,
+        affordance_action_count=0,
+        enabled_action_names=None,
+    )
 
     assert space.get_action_by_id(0).name == "UP"
     assert space.get_action_by_id(1).name == "REST"
@@ -57,11 +87,17 @@ def test_composed_action_space_get_by_id():
 def test_composed_action_space_get_by_name():
     """Should retrieve action by name."""
     actions = [
-        ActionConfig(id=0, name="UP", type="movement", delta=[0, -1], costs={}, source="substrate"),
-        ActionConfig(id=1, name="REST", type="passive", costs={}, source="custom"),
+        make_action(0, "UP", "movement", delta=[0, -1]),
+        make_action(1, "REST", "passive", source="custom"),
     ]
 
-    space = ComposedActionSpace(actions=actions, substrate_action_count=1, custom_action_count=1, affordance_action_count=0)
+    space = ComposedActionSpace(
+        actions=actions,
+        substrate_action_count=1,
+        custom_action_count=1,
+        affordance_action_count=0,
+        enabled_action_names=None,
+    )
 
     assert space.get_action_by_name("UP").id == 0
     assert space.get_action_by_name("REST").id == 1
@@ -70,10 +106,10 @@ def test_composed_action_space_get_by_name():
 def test_composed_action_space_enabled_count():
     """Should count enabled vs disabled actions."""
     actions = [
-        ActionConfig(id=0, name="UP", type="movement", delta=[0, -1], costs={}, source="substrate", enabled=True),
-        ActionConfig(id=1, name="DOWN", type="movement", delta=[0, 1], costs={}, source="substrate", enabled=True),
-        ActionConfig(id=2, name="REST", type="passive", costs={}, source="custom", enabled=True),
-        ActionConfig(id=3, name="MEDITATE", type="passive", costs={}, source="custom", enabled=False),  # Disabled
+        make_action(0, "UP", "movement", delta=[0, -1]),
+        make_action(1, "DOWN", "movement", delta=[0, 1]),
+        make_action(2, "REST", "passive", source="custom"),
+        make_action(3, "MEDITATE", "passive", enabled=False, source="custom"),  # Disabled
     ]
 
     space = ComposedActionSpace(
@@ -91,10 +127,10 @@ def test_composed_action_space_enabled_count():
 def test_composed_action_space_get_base_mask():
     """Should generate action mask with disabled actions masked out."""
     actions = [
-        ActionConfig(id=0, name="UP", type="movement", delta=[0, -1], costs={}, source="substrate", enabled=True),
-        ActionConfig(id=1, name="DOWN", type="movement", delta=[0, 1], costs={}, source="substrate", enabled=True),
-        ActionConfig(id=2, name="REST", type="passive", costs={}, source="custom", enabled=True),
-        ActionConfig(id=3, name="MEDITATE", type="passive", costs={}, source="custom", enabled=False),  # Disabled
+        make_action(0, "UP", "movement", delta=[0, -1]),
+        make_action(1, "DOWN", "movement", delta=[0, 1]),
+        make_action(2, "REST", "passive", source="custom"),
+        make_action(3, "MEDITATE", "passive", enabled=False, source="custom"),  # Disabled
     ]
 
     space = ComposedActionSpace(
@@ -102,6 +138,7 @@ def test_composed_action_space_get_base_mask():
         substrate_action_count=2,
         custom_action_count=2,
         affordance_action_count=0,
+        enabled_action_names=None,
     )
 
     mask = space.get_base_action_mask(num_agents=2, device=torch.device("cpu"))
@@ -130,6 +167,7 @@ def test_action_space_builder_substrate_only():
     builder = ActionSpaceBuilder(
         substrate=substrate,
         global_actions_path=Path("/nonexistent/global_actions.yaml"),
+        enabled_action_names=None,
     )
 
     space = builder.build()
@@ -155,9 +193,11 @@ custom_actions:
   - name: "REST"
     type: "passive"
     costs: {energy: -0.002}
+    effects: {}
   - name: "MEDITATE"
     type: "passive"
     costs: {mood: 0.02}
+    effects: {}
 """
     )
 
@@ -166,6 +206,7 @@ custom_actions:
     builder = ActionSpaceBuilder(
         substrate=substrate,
         global_actions_path=global_actions_yaml,
+        enabled_action_names=None,
     )
 
     space = builder.build()
@@ -199,9 +240,11 @@ custom_actions:
   - name: "REST"
     type: "passive"
     costs: {}
+    effects: {}
   - name: "MEDITATE"
     type: "passive"
     costs: {}
+    effects: {}
 """
     )
 
@@ -274,6 +317,7 @@ def test_load_global_actions_yaml():
     builder = ActionSpaceBuilder(
         substrate=substrate,
         global_actions_path=global_actions_path,
+        enabled_action_names=None,
     )
 
     space = builder.build()
@@ -299,6 +343,7 @@ def test_global_actions_has_rest_and_meditate():
     builder = ActionSpaceBuilder(
         substrate=substrate,
         global_actions_path=global_actions_path,
+        enabled_action_names=None,
     )
 
     space = builder.build()
@@ -330,6 +375,7 @@ def test_global_actions_yaml_actions_present():
     builder = ActionSpaceBuilder(
         substrate=substrate,
         global_actions_path=global_actions_path,
+        enabled_action_names=None,
     )
 
     space = builder.build()
