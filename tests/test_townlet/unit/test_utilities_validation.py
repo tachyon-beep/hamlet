@@ -6,7 +6,7 @@ This test file validates that the test utilities in utils/ work correctly.
 import pytest
 import torch
 
-from tests.test_townlet.utils.assertions import (
+from ..utils.assertions import (
     assert_meters_in_range,
     assert_positions_in_bounds,
     assert_valid_action_mask,
@@ -14,7 +14,7 @@ from tests.test_townlet.utils.assertions import (
     assert_valid_observation,
     assert_valid_rewards,
 )
-from tests.test_townlet.utils.builders import (
+from ..utils.builders import (
     make_bars_config,
     make_grid2d_substrate,
     make_grid3d_substrate,
