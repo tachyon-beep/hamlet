@@ -5,8 +5,6 @@ This test suite demonstrates the P1 bug where the hardcoded movement_mask
 with fewer than 4 movement actions.
 
 Bug Location: src/townlet/environment/vectorized_env.py:595
-Status: EXPECTED TO FAIL until bug is fixed
-
 See: docs/bugs/movement-mask-dynamic-action-spaces.md
 """
 
@@ -99,6 +97,59 @@ continuous:
         config_pack_path=config_pack,
         num_agents=1,
         grid_size=8,  # Ignored for continuous
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        enabled_affordances=[],  # No affordances for testing
+        move_energy_cost=0.005,  # 0.5%
+        wait_energy_cost=0.001,  # 0.1%
+        interact_energy_cost=0.003,  # 0.3%
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+
+@pytest.fixture
+def continuous3d_env(tmp_path):
+    """Create 3D continuous environment for testing."""
+    import shutil
+
+    # Create config pack
+    config_pack = tmp_path / "continuous3d_test"
+    config_pack.mkdir()
+
+    # Create 3D continuous substrate.yaml
+    substrate_yaml = config_pack / "substrate.yaml"
+    substrate_yaml.write_text(
+        """
+version: "1.0"
+description: "3D continuous substrate for testing action costs"
+type: "continuous"
+continuous:
+  dimensions: 3
+  bounds:
+    - [0.0, 10.0]
+    - [0.0, 10.0]
+    - [0.0, 10.0]
+  boundary: "clamp"
+  movement_delta: 0.5
+  interaction_radius: 0.8
+  distance_metric: "euclidean"
+  observation_encoding: "relative"
+"""
+    )
+
+    # Copy complete config files from test config
+    test_config = Path("configs/test")
+    shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
+    shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
+    shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
+
+    # Create environment
+    return VectorizedHamletEnv(
+        config_pack_path=config_pack,
+        num_agents=1,
+        grid_size=8,  # Ignored for continuous substrates
         partial_observability=False,
         vision_range=2,
         enable_temporal_mechanics=False,
@@ -307,3 +358,54 @@ def test_1d_movement_should_pay_movement_cost(continuous1d_env):
     actual_cost = energy_cost
 
     assert abs(actual_cost - expected_cost) < 1e-6, f"LEFT movement should cost {expected_cost:.3%}, but cost {actual_cost:.3%}"
+
+
+def test_3d_interact_should_not_pay_movement_cost(continuous3d_env):
+    """3D INTERACT (action 4) should only pay base depletion."""
+    env = continuous3d_env
+    env.reset()
+
+    initial_energy = env.meters[0, env.energy_idx].item()
+
+    interact_action = torch.tensor([4], dtype=torch.long, device=torch.device("cpu"))
+    env.step(interact_action)
+
+    final_energy = env.meters[0, env.energy_idx].item()
+    energy_cost = initial_energy - final_energy
+
+    expected_cost = 0.005  # base_depletion
+    assert abs(energy_cost - expected_cost) < 1e-6, f"3D INTERACT should cost {expected_cost:.3%}, but cost {energy_cost:.3%}"
+
+
+def test_3d_wait_should_not_pay_movement_cost(continuous3d_env):
+    """3D WAIT (action 5) should pay base depletion + wait cost only."""
+    env = continuous3d_env
+    env.reset()
+
+    initial_energy = env.meters[0, env.energy_idx].item()
+
+    wait_action = torch.tensor([5], dtype=torch.long, device=torch.device("cpu"))
+    env.step(wait_action)
+
+    final_energy = env.meters[0, env.energy_idx].item()
+    energy_cost = initial_energy - final_energy
+
+    expected_cost = 0.006  # 0.005 base + 0.001 wait
+    assert abs(energy_cost - expected_cost) < 1e-6, f"3D WAIT should cost {expected_cost:.3%}, but cost {energy_cost:.3%}"
+
+
+def test_3d_vertical_movement_should_pay_movement_cost(continuous3d_env):
+    """3D UP_Z (action 6) should pay both base depletion and movement cost."""
+    env = continuous3d_env
+    env.reset()
+
+    initial_energy = env.meters[0, env.energy_idx].item()
+
+    up_z_action = torch.tensor([6], dtype=torch.long, device=torch.device("cpu"))
+    env.step(up_z_action)
+
+    final_energy = env.meters[0, env.energy_idx].item()
+    energy_cost = initial_energy - final_energy
+
+    expected_cost = 0.010  # 0.005 base + 0.005 movement
+    assert abs(energy_cost - expected_cost) < 1e-6, f"3D UP_Z should cost {expected_cost:.3%}, but cost {energy_cost:.3%}"

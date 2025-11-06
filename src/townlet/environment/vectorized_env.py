@@ -594,7 +594,7 @@ class VectorizedHamletEnv:
         # Determine movement actions directly from the movement deltas to support
         # substrates where non-movement actions appear before all movement actions
         # (e.g., 3D where INTERACT/WAIT sit at indices < last movement deltas).
-        movement_actions = deltas.abs().sum(dim=1) > 0
+        movement_actions = deltas.ne(0).any(dim=1)
         movement_mask = movement_actions[actions]
         if movement_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
