@@ -252,13 +252,11 @@ def assert_valid_rewards(rewards: torch.Tensor, num_agents: int) -> None:
     expected_shape = (num_agents,)
 
     assert rewards.shape == expected_shape, (
-        f"Invalid reward shape: expected {expected_shape}, got {rewards.shape}\n"
-        f"  num_agents: {num_agents}"
+        f"Invalid reward shape: expected {expected_shape}, got {rewards.shape}\n" f"  num_agents: {num_agents}"
     )
 
     assert rewards.dtype == torch.float32, (
-        f"Invalid reward dtype: expected torch.float32, got {rewards.dtype}\n"
-        f"Rewards must be float32 for training"
+        f"Invalid reward dtype: expected torch.float32, got {rewards.dtype}\n" f"Rewards must be float32 for training"
     )
 
     # Check for NaN/Inf
