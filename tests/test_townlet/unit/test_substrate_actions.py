@@ -3,6 +3,7 @@
 from townlet.environment.action_config import ActionConfig
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
+from townlet.substrate.gridnd import GridNDSubstrate
 
 
 def test_grid2d_generates_6_default_actions():
@@ -106,3 +107,65 @@ def test_grid3d_z_axis_deltas():
 
     assert actions_by_name["UP_Z"].delta == [0, 0, -1]  # Decrease Z (up floor)
     assert actions_by_name["DOWN_Z"].delta == [0, 0, 1]  # Increase Z (down floor)
+
+
+def test_gridnd_generates_2n_plus_2_actions():
+    """GridND should provide 2N+2 actions (±1 per dimension + INTERACT + WAIT)."""
+    # 7D hypercube
+    substrate = GridNDSubstrate(
+        dimension_sizes=[5, 5, 5, 5, 5, 5, 5],
+        boundary="clamp",
+        distance_metric="manhattan",
+    )
+
+    actions = substrate.get_default_actions()
+
+    # 7 dimensions × 2 directions + INTERACT + WAIT = 16 actions
+    assert len(actions) == 16
+
+
+def test_gridnd_action_naming_pattern():
+    """GridND actions should follow DIM{N}_{NEG|POS} naming pattern."""
+    substrate = GridNDSubstrate(
+        dimension_sizes=[3, 3, 3, 3],  # 4D
+        boundary="clamp",
+        distance_metric="manhattan",
+    )
+
+    actions = substrate.get_default_actions()
+    names = [a.name for a in actions]
+
+    expected = [
+        "DIM0_NEG",
+        "DIM0_POS",  # Dimension 0
+        "DIM1_NEG",
+        "DIM1_POS",  # Dimension 1
+        "DIM2_NEG",
+        "DIM2_POS",  # Dimension 2
+        "DIM3_NEG",
+        "DIM3_POS",  # Dimension 3
+        "INTERACT",
+        "WAIT",
+    ]
+    assert names == expected
+
+
+def test_gridnd_movement_deltas():
+    """GridND actions should have correct deltas."""
+    substrate = GridNDSubstrate(
+        dimension_sizes=[5, 5, 5, 5],  # 4D
+        boundary="clamp",
+        distance_metric="manhattan",
+    )
+
+    actions = substrate.get_default_actions()
+    actions_by_name = {a.name: a for a in actions}
+
+    # DIM0_NEG: [-1, 0, 0, 0]
+    assert actions_by_name["DIM0_NEG"].delta == [-1, 0, 0, 0]
+    # DIM0_POS: [+1, 0, 0, 0]
+    assert actions_by_name["DIM0_POS"].delta == [1, 0, 0, 0]
+    # DIM3_NEG: [0, 0, 0, -1]
+    assert actions_by_name["DIM3_NEG"].delta == [0, 0, 0, -1]
+    # DIM3_POS: [0, 0, 0, +1]
+    assert actions_by_name["DIM3_POS"].delta == [0, 0, 0, 1]
