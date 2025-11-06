@@ -461,7 +461,11 @@ class VectorizedHamletEnv:
                 Grid2D (6 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT]
                 Grid3D (8 actions): [UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, UP_Z, DOWN_Z]
         """
-        action_masks = torch.ones(self.num_agents, self.action_dim, dtype=torch.bool, device=self.device)
+        # Start with base mask (disabled actions = False)
+        action_masks = self.action_space.get_base_action_mask(
+            num_agents=self.num_agents,
+            device=self.device,
+        )
 
         # Check boundary constraints (only for spatial substrates)
         if self.substrate.position_dim >= 2:
