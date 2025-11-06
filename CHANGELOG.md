@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Replaced hardcoded 2D grid assumptions with config-driven spatial substrate system supporting 1D-100D spaces. Enables 3D environments, continuous spaces, aspatial universes, and N-dimensional RL research.
 
 **Key Achievements:**
+
 - 6 substrate types implemented (Grid2D/3D/ND, Continuous1D/2D/3D/ND, Aspatial)
 - 3 observation encoding modes (relative, scaled, absolute)
 - 4 boundary modes (clamp, wrap, bounce, sticky)
@@ -27,6 +28,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 ### Added
 
 **Substrate Types** (6 total):
+
 - `Grid2DSubstrate`: 2D discrete grids (original behavior preserved)
 - `Grid3DSubstrate`: 3D cubic grids for multi-floor environments
 - `GridNDSubstrate`: 4D-100D hypercube grids (supports up to 100 dimensions)
@@ -35,6 +37,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - `AspatialSubstrate`: Position-less universes (pure resource management)
 
 **Configuration System** (Phases 1-3):
+
 - `substrate.yaml` schema with Pydantic validation
 - `observation_encoding` modes: relative (transfer learning), scaled (size-aware), absolute (physics)
 - Boundary modes: clamp (walls), wrap (toroidal), bounce (elastic), sticky (adhesive)
@@ -44,6 +47,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - All curriculum levels (L0, L0.5, L1, L2, L3) have `substrate.yaml`
 
 **Position Management** (Phases 4-5):
+
 - Abstract `SpatialSubstrate` interface for polymorphic operations
 - `substrate.initialize_positions()` - random agent/affordance placement
 - `substrate.apply_movement()` - boundary-aware movement
@@ -53,6 +57,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - VectorizedHamletEnv fully substrate-agnostic
 
 **Observation Encoding** (Phase 6):
+
 - Coordinate encoding: 3D (8×8×3) = 512 dims → 3 dims (170× reduction)
 - Substrate-specific `encode_observation()` and `encode_partial_observation()`
 - Enables transfer learning (same network works on different grid sizes)
@@ -61,6 +66,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - Aspatial: 13 dims (0 coords + 4 meters + 5 affordances + 4 temporal with test config)
 
 **Frontend Multi-Substrate Rendering** (Phase 7):
+
 - `AspatialView.vue`: Meters-only dashboard (no fake grid)
 - `Grid.vue`: SVG-based 2D grid with heat maps (existing)
 - WebSocket substrate metadata protocol
@@ -68,6 +74,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - Live inference server routes by substrate type
 
 **Testing Framework** (Phase 8):
+
 - Property-based tests (Hypothesis): 8 tests for substrate contracts
 - Integration tests: 8 parameterized tests (Grid2D + Aspatial)
 - Regression tests: 7 tests for backward compatibility
@@ -75,6 +82,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - **Coverage**: 77% overall, 85%+ substrate modules
 
 **Checkpoint Format V3**:
+
 - Added `substrate_metadata` with `position_dim` and `substrate_type`
 - Validates substrate compatibility on load
 - Pre-flight validation for legacy checkpoints
@@ -83,29 +91,34 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 ### Changed
 
 **BREAKING CHANGES:**
+
 - Checkpoint format Version 2 → Version 3 (substrate metadata required)
 - Legacy checkpoints unsupported (clear migration path)
 - ObservationBuilder requires substrate parameter
 - All position tensors now variable-length: `(num_agents, position_dim)` where `position_dim` ∈ [0, 100]
 
 **Position Management:**
+
 - Removed 2D hardcoded assumptions (was `positions.shape = (N, 2)`)
 - Now substrate-aware (Grid2D: 2, Grid3D: 3, GridND: N, Aspatial: 0)
 - All movement operations use `substrate.apply_movement()` (was `torch.clamp`)
 - Distance checks use `substrate.compute_distance()` (was hardcoded Manhattan)
 
 **Observation Encoding:**
+
 - Full observability: coordinate encoding (was one-hot grid cells)
 - POMDP: substrate-aware local windows (was hardcoded 2D)
 - Dimension calculation: `substrate.position_dim` (was `grid_size²`)
 - Transfer learning enabled: train on 3×3, deploy on 8×8 with same network
 
 **Action Space:**
+
 - Dynamic sizing: `substrate.action_space_size` (was hardcoded if-else)
 - Grid2D: 6 actions, Grid3D: 8 actions, GridND: 2N+2 actions
 - Aspatial: 2 actions (INTERACT + WAIT only)
 
 **Recording & Visualization:**
+
 - Variable-length position tuples: `tuple[int, ...]` (was `tuple[int, int]`)
 - Frontend routing by substrate type (was single 2D renderer)
 - WebSocket includes substrate metadata
@@ -125,6 +138,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 **Final Implementation**: 6 substrate types, 8 phases, 81-107h (+368-586%)
 
 **Additions Beyond Original Scope:**
+
 - GridND/ContinuousND (4D-100D support) - generalization was cheap
 - 3 encoding modes (was 1) - research paradigm flexibility
 - Action label system - pedagogical value (semantics are arbitrary)
@@ -132,12 +146,14 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - Testing Phase 8 - production quality requirements
 
 **Why Scope Expanded:**
+
 - Generalization cheap: Grid3D → GridND was 2-3h
 - Research value: robotics, abstract RL, high-dimensional spaces
 - Pedagogical completeness: deep insights about RL representation
 - Production quality: property-based testing, regression coverage
 
 **Was It Worth It?**
+
 - ✅ Supports 1D-100D substrates (future-proof)
 - ✅ Transfer learning works (practical benefit)
 - ✅ Aspatial reveals insight (positioning optional)
@@ -146,12 +162,14 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 ### Testing
 
 **Final Test Results:**
+
 - 1,159/1,159 tests passing (100%)
 - 23 substrate-specific tests (property-based, integration, regression)
 - 77% code coverage overall
 - 85%+ coverage for substrate modules (grid2d: 92%, continuous: 95%, continuousnd: 96%)
 
 **Test Categories:**
+
 - Property tests (Hypothesis): substrate contracts, invariants
 - Integration tests: multi-substrate parameterization
 - Regression tests: Grid2D behavioral equivalence
@@ -353,7 +371,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 
 - Replaced print() statements with proper logging in:
   - src/townlet/demo/live_inference.py
-  - src/townlet/recording/__main__.py
+  - src/townlet/recording/**main**.py
 - Updated pyproject.toml with all top-level dependencies
 
 ### Fixed (Repository Cleanup)
@@ -364,7 +382,7 @@ Replaced hardcoded 2D grid assumptions with config-driven spatial substrate syst
 - Documentation paths now correctly point to docs/manual/ and docs/architecture/
 - .gitignore patterns:
   - Changed `__pycache__/` to `**/__pycache__/` for recursive matching
-  - Consolidated database patterns (*.db, *.db-shm, *.db-wal, *.sqlite, *.sqlite3)
+  - Consolidated database patterns (*.db,*.db-shm, *.db-wal,*.sqlite, *.sqlite3)
   - Removed duplicate patterns
 - CI workflow now includes mypy type checking
 

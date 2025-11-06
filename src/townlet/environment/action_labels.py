@@ -176,13 +176,18 @@ def get_labels(
     Args:
         preset: Preset name ("gaming", "6dof", "cardinal", "math") or None for custom
         custom_labels: Custom label dictionary (required if preset=None)
-        substrate_position_dim: Substrate dimensionality (0, 1, 2, 3)
+        substrate_position_dim: Substrate dimensionality (0-100)
 
     Returns:
         ActionLabels instance filtered to substrate's action space
 
     Raises:
         ValueError: If preset unknown or custom_labels invalid
+
+    Notes:
+        - For N≥4 dimensions, all presets use dimension index notation (D0_NEG, D0_POS, etc.)
+        - Custom labels can override default dimension labels for N≥4 substrates
+        - Action count for N-dimensional substrates: 2N + 2 (movement + INTERACT + WAIT)
 
     Examples:
         >>> # Gaming labels for 2D substrate
@@ -200,6 +205,29 @@ def get_labels(
         ... )
         >>> labels.get_label(CanonicalAction.MOVE_Z_POSITIVE)
         'SURFACE'
+
+        >>> # 7D substrate with math preset (auto-generated labels)
+        >>> labels = get_labels(preset="math", substrate_position_dim=7)
+        >>> labels.get_label(0)  # D0_NEG
+        'D0_NEG'
+        >>> labels.get_label(7)  # D0_POS
+        'D0_POS'
+        >>> labels.get_label(14)  # INTERACT
+        'INTERACT'
+        >>> labels.get_action_count()
+        16
+
+        >>> # 4D substrate with custom robotics labels
+        >>> labels = get_labels(
+        ...     custom_labels={
+        ...         0: "TRANS_X_NEG", 1: "TRANS_Y_NEG", 2: "TRANS_Z_NEG", 3: "ROT_ROLL_NEG",
+        ...         4: "TRANS_X_POS", 5: "TRANS_Y_POS", 6: "TRANS_Z_POS", 7: "ROT_ROLL_POS",
+        ...         8: "INTERACT", 9: "WAIT"
+        ...     },
+        ...     substrate_position_dim=4
+        ... )
+        >>> labels.get_label(3)
+        'ROT_ROLL_NEG'
     """
     # Validate inputs
     if preset is None and custom_labels is None:
@@ -211,10 +239,18 @@ def get_labels(
     # Get base labels (preset or custom)
     if preset is not None:
         base_labels = PRESET_LABELS[preset]
-        all_labels = base_labels.labels.copy()
         description = base_labels.description
         domain = base_labels.domain
+
+        # For N≥4 dimensions, ignore preset labels (use dimension index notation instead)
+        # Presets only define labels for 0-3D substrates
+        if substrate_position_dim >= 4:
+            all_labels = {}  # Empty dict triggers fallback to D{i}_NEG/D{i}_POS
+        else:
+            all_labels = base_labels.labels.copy()
     else:
+        # At this point, custom_labels cannot be None due to validation above
+        assert custom_labels is not None, "custom_labels must be provided when preset is None"
         all_labels = custom_labels.copy()
         description = "Custom action labels"
         domain = "custom"
@@ -229,8 +265,8 @@ def _filter_labels_for_substrate(labels: dict[int, str], position_dim: int) -> d
     """Filter labels to match substrate's action space.
 
     Args:
-        labels: Full label dictionary (all 8 actions)
-        position_dim: Substrate dimensionality (0, 1, 2, 3)
+        labels: Full label dictionary (all 8 actions for 0-3D, or custom for N≥4)
+        position_dim: Substrate dimensionality (0, 1, 2, 3, or N≥4)
 
     Returns:
         Filtered label dictionary matching substrate's action count
@@ -240,8 +276,10 @@ def _filter_labels_for_substrate(labels: dict[int, str], position_dim: int) -> d
     - 1D: MOVE_X_NEGATIVE (0), MOVE_X_POSITIVE (1), INTERACT (2), WAIT (3) → 4 actions
     - 2D: + MOVE_Y_NEGATIVE, MOVE_Y_POSITIVE → 6 actions
     - 3D: + MOVE_Z_POSITIVE, MOVE_Z_NEGATIVE → 8 actions
+    - N≥4: 2N movement actions + INTERACT + WAIT → 2N+2 actions
 
     Note: Action indices are remapped for aspatial and 1D substrates.
+    For N≥4, dimension index notation is used (D0_NEG, D0_POS, etc.).
     """
     if position_dim == 0:
         # Aspatial: INTERACT=0, WAIT=1
@@ -279,5 +317,43 @@ def _filter_labels_for_substrate(labels: dict[int, str], position_dim: int) -> d
             6: labels.get(CanonicalAction.MOVE_Z_POSITIVE, "MOVE_Z_POSITIVE"),
             7: labels.get(CanonicalAction.MOVE_Z_NEGATIVE, "MOVE_Z_NEGATIVE"),
         }
+    elif position_dim >= 4:
+        # N-dimensional: Generate labels programmatically using dimension index notation
+        # Action space: 2N movement actions + INTERACT + WAIT
+        # Actions 0 to N-1: D{i}_NEG (negative direction per dimension)
+        # Actions N to 2N-1: D{i}_POS (positive direction per dimension)
+        # Action 2N: INTERACT
+        # Action 2N+1: WAIT
+        #
+        # Note: For N≥4, custom labels can override defaults, but preset labels
+        # are ignored (no canonical "gaming" or "cardinal" directions exist in 4D+)
+        filtered = {}
+
+        # Movement actions: negative directions (0 to N-1)
+        for dim in range(position_dim):
+            neg_idx = dim
+            # Use custom label if provided, otherwise use dimension index notation
+            if neg_idx in labels:
+                filtered[neg_idx] = labels[neg_idx]
+            else:
+                filtered[neg_idx] = f"D{dim}_NEG"
+
+        # Movement actions: positive directions (N to 2N-1)
+        for dim in range(position_dim):
+            pos_idx = position_dim + dim
+            # Use custom label if provided, otherwise use dimension index notation
+            if pos_idx in labels:
+                filtered[pos_idx] = labels[pos_idx]
+            else:
+                filtered[pos_idx] = f"D{dim}_POS"
+
+        # Meta actions
+        interact_idx = 2 * position_dim
+        wait_idx = 2 * position_dim + 1
+        filtered[interact_idx] = labels.get(interact_idx, "INTERACT")
+        filtered[wait_idx] = labels.get(wait_idx, "WAIT")
+
+        return filtered
     else:
-        raise ValueError(f"Invalid position_dim: {position_dim}. Must be 0, 1, 2, or 3.")
+        # This should never happen (position_dim < 0)
+        raise ValueError(f"Invalid position_dim: {position_dim}. Must be >= 0.")

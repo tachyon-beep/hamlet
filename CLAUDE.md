@@ -284,7 +284,17 @@ Substrates support three configurable observation encoding modes via `observatio
 - Grid2D: 6 actions (UP/DOWN/LEFT/RIGHT/INTERACT/WAIT)
 - Grid3D: 8 actions (±X/±Y/±Z/INTERACT/WAIT)
 - Continuous1D: 4 actions (LEFT/RIGHT/INTERACT/WAIT)
+- GridND (N≥4): 2N+2 actions (D0_NEG, D0_POS, ..., D(N-1)_NEG, D(N-1)_POS, INTERACT, WAIT)
 - Formula: 2 * position_dim + 2
+
+**Action Labels** (`src/townlet/environment/action_labels.py`):
+- Configurable domain-specific terminology for actions
+- **Presets**: `gaming` (LEFT/RIGHT/UP/DOWN), `6dof` (SWAY/HEAVE/SURGE), `cardinal` (NORTH/SOUTH), `math` (X_NEG/X_POS)
+- **Custom labels**: User-defined terminology for specialized domains
+- **N-dimensional support** (N≥4): All presets use dimension index notation (D0_NEG, D0_POS, etc.)
+  - No canonical "gaming" or "cardinal" directions exist in 4D+ space
+  - Custom labels supported for domain-specific N-dimensional applications
+- **Example**: 7D GridND uses D0_NEG, D1_NEG, ..., D6_NEG, D0_POS, ..., D6_POS, INTERACT, WAIT (16 actions total)
 
 ### Reward Structure
 
