@@ -450,13 +450,15 @@ class VectorizedHamletEnv:
         # wastes a turn (passive decay) and teaches economic planning
 
         # Determine INTERACT action index based on substrate dimensionality
-        # 1D: INTERACT = 2, 2D: INTERACT = 4, 3D: INTERACT = 4, Aspatial: INTERACT = 0
-        if self.substrate.position_dim == 1:
-            interact_action_idx = 2
-        elif self.substrate.position_dim == 0:
+        # 0D: INTERACT = 0, 1D: INTERACT = 2, 2D/3D: INTERACT = 4, N≥4: INTERACT = 2N
+        if self.substrate.position_dim == 0:
             interact_action_idx = 0
-        else:  # 2D or 3D
+        elif self.substrate.position_dim == 1:
+            interact_action_idx = 2
+        elif self.substrate.position_dim in (2, 3):
             interact_action_idx = 4
+        else:  # GridND / ContinuousND (N ≥ 4)
+            interact_action_idx = 2 * self.substrate.position_dim
 
         on_valid_affordance = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
 
@@ -557,10 +559,11 @@ class VectorizedHamletEnv:
 
         # Movement deltas - dynamically sized based on substrate dimensionality
         # Always float32 - substrates cast to their dtype as needed
-        # For 1D (Continuous1D): 2 directions (X-/X+) + interact/wait
-        # For 2D (Grid2D, Continuous2D): 4 directions + interact/wait
-        # For 3D (Grid3D, Continuous3D): 6 directions + interact/wait
-        if self.substrate.position_dim == 1:
+        position_dim = self.substrate.position_dim
+        if position_dim == 0:
+            # Aspatial: no movement deltas needed, but provide dummy array
+            deltas = torch.zeros((6, 0), device=self.device, dtype=torch.float32)
+        elif position_dim == 1:
             deltas = torch.tensor(
                 [
                     [-1],  # MOVE_X_NEGATIVE (action 0)
@@ -569,9 +572,9 @@ class VectorizedHamletEnv:
                     [0],  # WAIT (no movement, action 3)
                 ],
                 device=self.device,
-                dtype=torch.float32,  # Always float, substrates cast if needed
+                dtype=torch.float32,
             )
-        elif self.substrate.position_dim == 2:
+        elif position_dim == 2:
             deltas = torch.tensor(
                 [
                     [0, -1],  # UP - decreases y, x unchanged
@@ -582,9 +585,9 @@ class VectorizedHamletEnv:
                     [0, 0],  # WAIT (no movement)
                 ],
                 device=self.device,
-                dtype=torch.float32,  # Always float, substrates cast if needed
+                dtype=torch.float32,
             )
-        elif self.substrate.position_dim == 3:
+        elif position_dim == 3:
             deltas = torch.tensor(
                 [
                     [0, -1, 0],  # UP - decreases y (Grid2D compat: action 0)
@@ -597,15 +600,25 @@ class VectorizedHamletEnv:
                     [0, 0, -1],  # DOWN_Z - decreases z (new for 3D: action 7)
                 ],
                 device=self.device,
-                dtype=torch.float32,  # Always float, substrates cast if needed
+                dtype=torch.float32,
             )
-        elif self.substrate.position_dim == 0:
-            # Aspatial: no movement deltas needed, but provide dummy array
-            deltas = torch.zeros((6, 0), device=self.device, dtype=torch.float32)
+        elif position_dim >= 4:
+            # N-dimensional substrates: 2N movement actions + INTERACT + WAIT
+            action_count = 2 * position_dim + 2
+            deltas = torch.zeros((action_count, position_dim), device=self.device, dtype=torch.float32)
+
+            for dim_idx in range(position_dim):
+                # Negative direction for this axis (index dim_idx)
+                deltas[dim_idx, dim_idx] = -1.0
+                # Positive direction for this axis (index position_dim + dim_idx)
+                deltas[position_dim + dim_idx, dim_idx] = 1.0
+
+            # INTERACT (2N) and WAIT (2N+1) remain zero vectors by construction
         else:
             raise ValueError(
-                f"Unsupported substrate position_dim: {self.substrate.position_dim}. "
-                f"Expected 0 (aspatial), 1 (1D continuous), 2 (Grid2D/Continuous2D), or 3 (Grid3D/Continuous3D)"
+                f"Unsupported substrate position_dim: {position_dim}. "
+                "Expected 0 (aspatial), 1 (1D continuous), 2 (Grid2D/Continuous2D), 3 (Grid3D/Continuous3D), "
+                "or N ≥ 4 (GridND/ContinuousND)."
             )
 
         # Apply movement with substrate-specific boundary handling
