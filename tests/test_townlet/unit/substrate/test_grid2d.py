@@ -144,3 +144,111 @@ def test_grid2d_default_encoding_is_relative():
         # observation_encoding NOT provided
     )
     assert substrate.observation_encoding == "relative"
+
+
+# =============================================================================
+# BACKWARD COMPATIBILITY TESTS (from TASK-002A)
+# =============================================================================
+
+
+def test_substrate_initialize_positions_correctness():
+    """Grid2D.initialize_positions() should return valid grid positions.
+
+    Legacy validation test: ensures position initialization works correctly.
+    """
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    positions = substrate.initialize_positions(num_agents=10, device=torch.device("cpu"))
+
+    # Correct shape and type
+    assert positions.shape == (10, 2)
+    assert positions.dtype == torch.long
+
+    # Within bounds
+    assert (positions >= 0).all()
+    assert (positions < 8).all()
+
+
+def test_substrate_movement_matches_legacy():
+    """Substrate movement should produce identical results to legacy torch.clamp.
+
+    Legacy validation test: ensures substrate.apply_movement matches old hardcoded behavior.
+    """
+    from pathlib import Path
+
+    from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+    env = VectorizedHamletEnv(
+        config_pack_path=Path("configs/L1_full_observability"),
+        num_agents=1,
+        grid_size=8,
+        partial_observability=False,
+        vision_range=2,
+        enable_temporal_mechanics=False,
+        move_energy_cost=0.5,
+        wait_energy_cost=0.1,
+        interact_energy_cost=0.3,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+    )
+
+    # Test substrate.apply_movement directly
+    substrate = env.substrate
+    positions = torch.tensor([[3, 3]], dtype=torch.long, device=torch.device("cpu"))
+
+    # Move up (delta [0, -1])
+    deltas = torch.tensor([[0, -1]], dtype=torch.long, device=torch.device("cpu"))
+    new_positions = substrate.apply_movement(positions, deltas)
+
+    # Should move to [3, 2]
+    assert (new_positions == torch.tensor([[3, 2]], dtype=torch.long)).all()
+
+    # Test boundary clamping at edge
+    edge_positions = torch.tensor([[0, 0]], dtype=torch.long, device=torch.device("cpu"))
+    up_left_delta = torch.tensor([[-1, -1]], dtype=torch.long, device=torch.device("cpu"))
+    clamped = substrate.apply_movement(edge_positions, up_left_delta)
+
+    # Should clamp to [0, 0] (not go negative)
+    assert (clamped == torch.tensor([[0, 0]], dtype=torch.long)).all()
+
+
+# =============================================================================
+# TOPOLOGY ATTRIBUTE TESTS
+# =============================================================================
+
+
+def test_grid2d_stores_topology_when_provided():
+    """Grid2D should store topology attribute when explicitly provided."""
+    substrate = Grid2DSubstrate(
+        width=8,
+        height=8,
+        boundary="clamp",
+        distance_metric="manhattan",
+        observation_encoding="relative",
+        topology="square",
+    )
+    assert substrate.topology == "square"
+
+
+def test_grid2d_topology_defaults_to_square():
+    """Grid2D topology should default to 'square' if not provided."""
+    substrate = Grid2DSubstrate(
+        width=8,
+        height=8,
+        boundary="clamp",
+        distance_metric="manhattan",
+        observation_encoding="relative",
+    )
+    assert substrate.topology == "square"
+
+
+def test_grid2d_topology_attribute_exists():
+    """Grid2D should have topology attribute (not inherited from base)."""
+    substrate = Grid2DSubstrate(
+        width=8,
+        height=8,
+        boundary="clamp",
+        distance_metric="manhattan",
+        observation_encoding="relative",
+    )
+    assert hasattr(substrate, "topology")
