@@ -116,6 +116,9 @@ class TestLSTMHiddenStatePersistence:
         When agent dies, hidden state should be reset to zeros to prevent
         memory contamination across episodes.
         """
+        # Seed RNG for deterministic behavior in full suite
+        torch.manual_seed(42)
+
         # Create environment with NO affordances (agents die quickly)
         env = VectorizedHamletEnv(
             num_agents=1,
