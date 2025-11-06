@@ -591,14 +591,11 @@ class VectorizedHamletEnv:
                     self.last_interaction_affordance[agent_idx] = None
 
         # Apply action costs (configurable)
-        # Movement actions - dynamic based on substrate dimensionality
-        # Formula: 2 * position_dim movement actions (±1 per dimension)
-        # 0D (aspatial): 0 movement actions
-        # 1D: 2 movement actions (LEFT, RIGHT)
-        # 2D: 4 movement actions (UP, DOWN, LEFT, RIGHT)
-        # 3D: 6 movement actions (±X, ±Y, ±Z)
-        num_movement_actions = 2 * self.substrate.position_dim
-        movement_mask = actions < num_movement_actions
+        # Determine movement actions directly from the movement deltas to support
+        # substrates where non-movement actions appear before all movement actions
+        # (e.g., 3D where INTERACT/WAIT sit at indices < last movement deltas).
+        movement_actions = deltas.abs().sum(dim=1) > 0
+        movement_mask = movement_actions[actions]
         if movement_mask.any():
             # TASK-001: Create dynamic cost tensor based on meter_count
             movement_costs = torch.zeros(self.meter_count, device=self.device)
@@ -612,12 +609,19 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # WAIT action - lighter energy cost
-        # Formula: WAIT is always the last action (2 * position_dim + 1)
+        # Index derived from substrate dimensionality:
         # 0D (aspatial): WAIT = 1
         # 1D: WAIT = 3
         # 2D: WAIT = 5
-        # 3D: WAIT = 7
-        wait_action_idx = 2 * self.substrate.position_dim + 1
+        # 3D: WAIT = 5
+        if self.substrate.position_dim == 0:
+            wait_action_idx = 1
+        elif self.substrate.position_dim == 1:
+            wait_action_idx = 3
+        elif self.substrate.position_dim in (2, 3):
+            wait_action_idx = 5
+        else:
+            wait_action_idx = 2 * self.substrate.position_dim + 1
 
         wait_mask = actions == wait_action_idx
         if wait_mask.any():
@@ -629,12 +633,19 @@ class VectorizedHamletEnv:
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
         # Handle INTERACT actions
-        # Formula: INTERACT is second-to-last action (2 * position_dim)
+        # Index derived from substrate dimensionality:
         # 0D (aspatial): INTERACT = 0
         # 1D: INTERACT = 2
         # 2D: INTERACT = 4
-        # 3D: INTERACT = 6
-        interact_action_idx = 2 * self.substrate.position_dim
+        # 3D: INTERACT = 4
+        if self.substrate.position_dim == 0:
+            interact_action_idx = 0
+        elif self.substrate.position_dim == 1:
+            interact_action_idx = 2
+        elif self.substrate.position_dim in (2, 3):
+            interact_action_idx = 4
+        else:
+            interact_action_idx = 2 * self.substrate.position_dim
 
         successful_interactions = {}
         interact_mask = actions == interact_action_idx

@@ -56,7 +56,8 @@ src/townlet/environment/reward_strategy.py:*
 src/townlet/environment/vectorized_env.py:*
 
 # Action Labels for Substrate
- src/townlet/environment/action_labels.py:*
+src/townlet/environment/action_labels.py:*
+src/townlet/substrate/**:*
 
 # Exploration - will be config-driven in BRAIN_AS_CODE (TASK-005)
 src/townlet/exploration/**:*
