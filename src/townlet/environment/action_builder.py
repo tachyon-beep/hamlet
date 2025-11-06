@@ -129,7 +129,7 @@ class ActionSpaceBuilder:
         """
         self.substrate = substrate
         self.global_actions_path = global_actions_path
-        self.enabled_action_names = set(enabled_action_names) if enabled_action_names else None
+        self.enabled_action_names = set(enabled_action_names) if enabled_action_names is not None else None
 
     def build(self) -> ComposedActionSpace:
         """Build complete action space from global vocabulary."""

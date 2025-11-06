@@ -220,3 +220,32 @@ custom_actions:
 
     # Enabled count = 3
     assert space.enabled_action_count == 3
+
+
+def test_empty_enabled_list_disables_all():
+    """Empty enabled_action_names list should disable all actions."""
+    from pathlib import Path
+
+    from townlet.environment.action_builder import ActionSpaceBuilder
+    from townlet.substrate.grid2d import Grid2DSubstrate
+
+    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
+
+    # Empty list = explicitly disable all actions
+    builder = ActionSpaceBuilder(
+        substrate=substrate,
+        global_actions_path=Path("/nonexistent/global_actions.yaml"),
+        enabled_action_names=[],  # Empty list (disable all)
+    )
+
+    space = builder.build()
+
+    # All 6 substrate actions exist
+    assert space.action_dim == 6
+
+    # But ZERO actions enabled
+    assert space.enabled_action_count == 0
+
+    # Verify all actions disabled
+    for action in space.actions:
+        assert not action.enabled
