@@ -12,8 +12,14 @@ def test_action_config_basic():
         name="UP",
         type="movement",
         delta=[0, -1],
+        teleport_to=None,
         costs={"energy": 0.005},
+        effects={},
         enabled=True,
+        description="Move up",
+        icon=None,
+        source="substrate",
+        source_affordance=None,
     )
 
     assert action.id == 0
@@ -30,21 +36,35 @@ def test_action_config_disabled():
         id=1,
         name="REST",
         type="passive",
+        delta=None,
+        teleport_to=None,
         costs={"energy": -0.002},
+        effects={},
         enabled=False,  # Disabled in L0, enabled in L1
+        description="Rest",
+        icon=None,
+        source="custom",
+        source_affordance=None,
     )
 
     assert action.enabled is False
 
 
 def test_action_config_default_enabled():
-    """Action should default to enabled=True if not specified."""
+    """Action with enabled=True should be enabled."""
     action = ActionConfig(
         id=0,
         name="UP",
         type="movement",
         delta=[0, -1],
+        teleport_to=None,
         costs={},
+        effects={},
+        enabled=True,
+        description="Move up",
+        icon=None,
+        source="substrate",
+        source_affordance=None,
     )
 
     assert action.enabled is True
@@ -53,14 +73,53 @@ def test_action_config_default_enabled():
 def test_movement_action_requires_delta_or_teleport():
     """Movement action must have delta or teleport_to."""
     # Valid: has delta
-    ActionConfig(id=0, name="UP", type="movement", delta=[0, -1], costs={})
+    ActionConfig(
+        id=0,
+        name="UP",
+        type="movement",
+        delta=[0, -1],
+        teleport_to=None,
+        costs={},
+        effects={},
+        enabled=True,
+        description="Move up",
+        icon=None,
+        source="substrate",
+        source_affordance=None,
+    )
 
     # Valid: has teleport_to
-    ActionConfig(id=1, name="TELEPORT", type="movement", teleport_to=[0, 0], costs={})
+    ActionConfig(
+        id=1,
+        name="TELEPORT",
+        type="movement",
+        delta=None,
+        teleport_to=[0, 0],
+        costs={},
+        effects={},
+        enabled=True,
+        description="Teleport",
+        icon=None,
+        source="custom",
+        source_affordance=None,
+    )
 
     # Invalid: has neither
     with pytest.raises(ValueError, match="must define delta or teleport_to"):
-        ActionConfig(id=2, name="INVALID", type="movement", costs={})
+        ActionConfig(
+            id=2,
+            name="INVALID",
+            type="movement",
+            delta=None,
+            teleport_to=None,
+            costs={},
+            effects={},
+            enabled=True,
+            description="Invalid",
+            icon=None,
+            source="substrate",
+            source_affordance=None,
+        )
 
 
 def test_non_movement_cannot_have_delta():
@@ -71,7 +130,14 @@ def test_non_movement_cannot_have_delta():
             name="INTERACT",
             type="interaction",
             delta=[0, 0],
+            teleport_to=None,
             costs={},
+            effects={},
+            enabled=True,
+            description="Interact",
+            icon=None,
+            source="substrate",
+            source_affordance=None,
         )
 
 
@@ -81,7 +147,15 @@ def test_negative_costs_allowed():
         id=0,
         name="REST",
         type="passive",
+        delta=None,
+        teleport_to=None,
         costs={"energy": -0.002, "mood": -0.01},  # Restores meters
+        effects={},
+        enabled=True,
+        description="Rest",
+        icon=None,
+        source="custom",
+        source_affordance=None,
     )
 
     assert action.costs["energy"] == -0.002
