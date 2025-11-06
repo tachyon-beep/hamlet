@@ -2,6 +2,7 @@
 
 from townlet.environment.action_config import ActionConfig
 from townlet.substrate.grid2d import Grid2DSubstrate
+from townlet.substrate.grid3d import Grid3DSubstrate
 
 
 def test_grid2d_generates_6_default_actions():
@@ -75,3 +76,33 @@ def test_grid2d_all_actions_marked_as_substrate():
     actions = substrate.get_default_actions()
 
     assert all(a.source == "substrate" for a in actions)
+
+
+def test_grid3d_generates_8_default_actions():
+    """Grid3D should provide 8 default actions (adds UP_Z, DOWN_Z)."""
+    substrate = Grid3DSubstrate(width=8, height=8, depth=3, boundary="clamp", distance_metric="manhattan")
+
+    actions = substrate.get_default_actions()
+
+    assert len(actions) == 8  # UP, DOWN, LEFT, RIGHT, UP_Z, DOWN_Z, INTERACT, WAIT
+
+
+def test_grid3d_action_names():
+    """Grid3D actions should include Z-axis movement."""
+    substrate = Grid3DSubstrate(width=8, height=8, depth=3, boundary="clamp", distance_metric="manhattan")
+
+    actions = substrate.get_default_actions()
+    names = [a.name for a in actions]
+
+    assert names == ["UP", "DOWN", "LEFT", "RIGHT", "UP_Z", "DOWN_Z", "INTERACT", "WAIT"]
+
+
+def test_grid3d_z_axis_deltas():
+    """Grid3D Z-axis actions should have correct deltas."""
+    substrate = Grid3DSubstrate(width=8, height=8, depth=3, boundary="clamp", distance_metric="manhattan")
+
+    actions = substrate.get_default_actions()
+    actions_by_name = {a.name: a for a in actions}
+
+    assert actions_by_name["UP_Z"].delta == [0, 0, -1]  # Decrease Z (up floor)
+    assert actions_by_name["DOWN_Z"].delta == [0, 0, 1]  # Increase Z (down floor)

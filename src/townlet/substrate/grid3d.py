@@ -4,6 +4,7 @@ from typing import Literal, cast
 
 import torch
 
+from townlet.environment.action_config import ActionConfig
 from townlet.environment.affordance_layout import iter_affordance_positions
 
 from .base import SpatialSubstrate
@@ -134,6 +135,96 @@ class Grid3DSubstrate(SpatialSubstrate):
             return torch.sqrt(((pos1 - pos2) ** 2).sum(dim=-1))
         elif self.distance_metric == "chebyshev":
             return torch.abs(pos1 - pos2).max(dim=-1)[0]
+
+    def get_default_actions(self) -> list[ActionConfig]:
+        """Return Grid3D's 8 default actions with default costs.
+
+        Returns:
+            [UP, DOWN, LEFT, RIGHT, UP_Z, DOWN_Z, INTERACT, WAIT] with standard 3D costs.
+        """
+        return [
+            # XY plane movement (same as Grid2D)
+            ActionConfig(
+                id=0,
+                name="UP",
+                type="movement",
+                delta=[0, -1, 0],
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description="Move one cell upward (north)",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=1,
+                name="DOWN",
+                type="movement",
+                delta=[0, 1, 0],
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description="Move one cell downward (south)",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=2,
+                name="LEFT",
+                type="movement",
+                delta=[-1, 0, 0],
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description="Move one cell left (west)",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=3,
+                name="RIGHT",
+                type="movement",
+                delta=[1, 0, 0],
+                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                description="Move one cell right (east)",
+                source="substrate",
+                enabled=True,
+            ),
+            # Z-axis movement (vertical)
+            ActionConfig(
+                id=4,
+                name="UP_Z",
+                type="movement",
+                delta=[0, 0, -1],
+                costs={"energy": 0.008, "hygiene": 0.003, "satiation": 0.006},  # Stairs cost more
+                description="Move one floor up (climb stairs)",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=5,
+                name="DOWN_Z",
+                type="movement",
+                delta=[0, 0, 1],
+                costs={"energy": 0.006, "hygiene": 0.003, "satiation": 0.005},  # Going down easier
+                description="Move one floor down (descend stairs)",
+                source="substrate",
+                enabled=True,
+            ),
+            # Core interactions (same as Grid2D)
+            ActionConfig(
+                id=6,
+                name="INTERACT",
+                type="interaction",
+                costs={"energy": 0.003},
+                description="Interact with affordance at current position",
+                source="substrate",
+                enabled=True,
+            ),
+            ActionConfig(
+                id=7,
+                name="WAIT",
+                type="passive",
+                costs={"energy": 0.004},
+                description="Wait in place (idle metabolic cost)",
+                source="substrate",
+                enabled=True,
+            ),
+        ]
 
     def is_on_position(self, positions: torch.Tensor, target_position: torch.Tensor) -> torch.Tensor:
         """Check if agents are on target position (exact match in 3D)."""
