@@ -69,7 +69,7 @@ jobs:
       - name: Substrate Config Validator - Validate substrate.yaml files
         run: |
           echo "Running substrate config validator - all substrate.yaml files must be valid"
-          python scripts/validate_substrates.py --ci --json substrate-validation.json
+          uv run python scripts/validate_substrates.py --ci --json substrate-validation.json
           if [ $? -ne 0 ]; then
             echo "❌ Substrate validation failed. See error output above."
             exit 1
