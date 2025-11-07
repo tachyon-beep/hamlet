@@ -68,9 +68,10 @@ class VFSObservationSpecBuilder:
         obs_fields = []
 
         for exposure_config in normalized_exposures:
-            var_id = exposure_config.get("source_variable")
-            if not var_id:
+            raw_var_id = exposure_config.get("source_variable")
+            if not isinstance(raw_var_id, str) or not raw_var_id:
                 raise ValueError("Exposure entry missing 'source_variable'")
+            var_id = raw_var_id
             if var_id not in var_map:
                 raise ValueError(f"Variable {var_id} not found in definitions")
 
