@@ -92,18 +92,31 @@ def load_exposures_from_config(config_path: Path) -> dict:
     return exposures
 
 
-def calculate_vfs_observation_dim(variables: list[VariableDef], exposures: dict) -> int:
+def calculate_vfs_observation_dim(
+    variables: list[VariableDef],
+    exposures: dict,
+    partial_observability: bool = False
+) -> int:
     """Calculate total observation dimension from VFS specification.
 
     Args:
         variables: List of variable definitions
         exposures: Dict of exposure configurations
+        partial_observability: If True, filter for POMDP mode (exclude grid_encoding)
 
     Returns:
         Total observation dimension (sum of all field dimensions)
     """
     builder = VFSObservationSpecBuilder()
     obs_spec = builder.build_observation_spec(variables, exposures)
+
+    # Filter observation spec based on observability mode (matches environment filtering)
+    if partial_observability:
+        # POMDP: Exclude grid_encoding, include local_window
+        obs_spec = [field for field in obs_spec if field.source_variable != "grid_encoding"]
+    else:
+        # Full observability: Exclude local_window, include grid_encoding
+        obs_spec = [field for field in obs_spec if field.source_variable != "local_window"]
 
     total_dims = 0
     for field in obs_spec:

@@ -46,6 +46,16 @@ def compute_vfs_observation_dim_from_agent_readable(config_path: Path) -> int:
     builder = VFSObservationSpecBuilder()
     spec = builder.build_observation_spec(variables, exposures)
 
+    # Filter observation spec based on observability mode (matches environment filtering)
+    # L2_partial_observability uses POMDP mode, others use full observability
+    partial_observability = "partial_observability" in str(config_path)
+    if partial_observability:
+        # POMDP: Exclude grid_encoding, include local_window
+        spec = [field for field in spec if field.source_variable != "grid_encoding"]
+    else:
+        # Full observability: Exclude local_window, include grid_encoding
+        spec = [field for field in spec if field.source_variable != "local_window"]
+
     # Calculate total dimensions
     total_dims = 0
     for field in spec:
