@@ -195,6 +195,77 @@ class TestRegistryInitialization:
         home_pos = registry.get("home_pos", reader="engine")
         assert home_pos.shape == torch.Size([4, 2])
 
+    def test_duplicate_variable_ids_raise_error(self):
+        """Duplicate variable identifiers are rejected at construction time."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="energy",
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=1.0,
+            ),
+            VariableDef(
+                id="energy",  # Duplicate on purpose
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=0.5,
+            ),
+        ]
+
+        with pytest.raises(ValueError, match="Duplicate variable id 'energy'"):
+            VariableRegistry(variables=variables, num_agents=2, device=torch.device("cpu"))
+
+    def test_global_scalar_dtype_is_float32(self):
+        """Global scalar tensors are initialized with float32 dtype for consistency."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="time_sin",
+                scope="global",
+                type="scalar",
+                lifetime="tick",
+                readable_by=["engine"],
+                writable_by=["engine"],
+                default=0,  # Int default should still yield float tensor
+            )
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=1, device=torch.device("cpu"))
+        value = registry.get("time_sin", reader="engine")
+
+        assert value.dtype == torch.float32
+        assert value.shape == torch.Size([])
+
+    def test_missing_dims_for_vec_variables_raise_value_error(self):
+        """vecNi/vecNf variables without dims raise a descriptive error."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        bad_variable = VariableDef.model_construct(
+            id="grid",
+            scope="agent",
+            type="vecNf",
+            dims=None,
+            lifetime="episode",
+            readable_by=["agent"],
+            writable_by=["engine"],
+            default=[0.0, 0.0],
+        )
+
+        with pytest.raises(ValueError, match="must have dims field defined"):
+            VariableRegistry(variables=[bad_variable], num_agents=2, device=torch.device("cpu"))
+
 
 class TestRegistryAccessControl:
     """Test access control enforcement (readable_by/writable_by)."""

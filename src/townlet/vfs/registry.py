@@ -50,8 +50,12 @@ class VariableRegistry:
         self.num_agents = num_agents
         self.device = device
 
-        # Store variable definitions by ID
-        self._definitions: dict[str, VariableDef] = {var.id: var for var in variables}
+        # Store variable definitions by ID, guarding against duplicate IDs
+        self._definitions: dict[str, VariableDef] = {}
+        for var in variables:
+            if var.id in self._definitions:
+                raise ValueError(f"Duplicate variable id '{var.id}' in registry initialization")
+            self._definitions[var.id] = var
 
         # Initialize storage tensors
         self._storage: dict[str, torch.Tensor] = {}
@@ -89,7 +93,7 @@ class VariableRegistry:
                 # Scalar: default is a single float
                 if var_def.scope == "global":
                     # Global scalar: shape []
-                    tensor = torch.tensor(var_def.default, device=self.device)
+                    tensor = torch.tensor(var_def.default, device=self.device, dtype=torch.float32)
                 else:
                     # Agent/agent_private scalar: shape [num_agents]
                     tensor = torch.full(
@@ -151,7 +155,8 @@ class VariableRegistry:
         elif var_def.type == "vec3i":
             dims = 3
         elif var_def.type in ("vecNi", "vecNf"):
-            assert var_def.dims is not None, f"vecNi/vecNf variable {var_def.id} must have dims field"
+            if var_def.dims is None:
+                raise ValueError(f"vecNi/vecNf variable '{var_def.id}' must have dims field defined")
             dims = var_def.dims
         else:
             raise ValueError(f"Unsupported variable type: {var_def.type}")

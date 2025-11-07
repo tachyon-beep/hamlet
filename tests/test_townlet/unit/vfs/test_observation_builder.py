@@ -200,6 +200,74 @@ class TestObservationSpecBuilderMultipleVariables:
         assert source_vars == {"energy", "position", "velocity", "position_7d", "grid_encoding", "is_alive"}
 
 
+class TestObservationSpecBuilderValidation:
+    """Validation-focused tests for observation spec builder."""
+
+    def test_legacy_dict_exposures_emit_warning(self, sample_variables):
+        """Legacy dict exposure format is still supported but warns."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {"energy": {"normalization": None}}
+
+        with pytest.warns(DeprecationWarning):
+            spec = builder.build_observation_spec(sample_variables, exposures)
+
+        assert len(spec) == 1
+        assert spec[0].source_variable == "energy"
+
+    def test_vector_normalization_length_mismatch_raises(self, sample_variables):
+        """Normalization list length must match flattened observation shape."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {
+            "position": {
+                "normalization": {
+                    "kind": "minmax",
+                    "min": [0, 0, 0],  # Wrong length for vec2i
+                    "max": [7, 7, 7],
+                }
+            }
+        }
+
+        with pytest.raises(ValueError, match="must provide 2 values"):
+            builder.build_observation_spec(sample_variables, exposures)
+
+    def test_vector_normalization_scalar_values_rejected(self, sample_variables):
+        """Vector observations require per-dimension normalization arrays."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {
+            "position": {
+                "normalization": {
+                    "kind": "minmax",
+                    "min": 0.0,
+                    "max": 1.0,
+                }
+            }
+        }
+
+        with pytest.raises(ValueError, match="must be a list of length 2"):
+            builder.build_observation_spec(sample_variables, exposures)
+
+    def test_scalar_normalization_allows_scalar_values(self, sample_variables):
+        """Scalar observations may use scalar normalization params."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {
+            "energy": {
+                "normalization": {
+                    "kind": "minmax",
+                    "min": 0.0,
+                    "max": 1.0,
+                }
+            }
+        }
+
+        spec = builder.build_observation_spec(sample_variables, exposures)
+        assert len(spec) == 1
+        assert spec[0].source_variable == "energy"
+
+
 class TestObservationDimensionCalculation:
     """Test total observation dimension calculation."""
 

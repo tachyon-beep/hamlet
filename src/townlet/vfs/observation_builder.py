@@ -9,6 +9,8 @@ from variable definitions and exposure configurations. These specs are used by
 the BAC (Behavioral Action Compiler) for dynamic network input head generation.
 """
 
+import math
+import warnings
 from typing import Any
 
 from townlet.vfs.schema import NormalizationSpec, ObservationField, VariableDef
@@ -54,14 +56,7 @@ class VFSObservationSpecBuilder:
             'energy'
         """
         # Normalize exposures to list form (multiple entries per variable allowed)
-        normalized_exposures: list[dict[str, Any]] = []
-        if isinstance(exposures, dict):
-            for var_id, exposure_config in exposures.items():
-                config = dict(exposure_config or {})
-                config["source_variable"] = var_id
-                normalized_exposures.append(config)
-        else:
-            normalized_exposures = [dict(exposure) for exposure in exposures]
+        normalized_exposures = self._normalize_exposures(exposures)
 
         # Build variable lookup map
         var_map = {v.id: v for v in variables}
@@ -91,10 +86,7 @@ class VFSObservationSpecBuilder:
             shape = shape_config if shape_config is not None else self._infer_shape(var_def)
 
             # Build normalization spec if provided
-            norm_spec = None
-            if exposure_config.get("normalization"):
-                norm_config = exposure_config["normalization"]
-                norm_spec = NormalizationSpec(**norm_config)
+            norm_spec = self._build_normalization_spec(exposure_config.get("normalization"))
 
             # Create observation field
             field = ObservationField(
@@ -105,6 +97,7 @@ class VFSObservationSpecBuilder:
                 normalization=norm_spec,
             )
 
+            self._validate_normalization_shape(field_id, shape, norm_spec)
             obs_fields.append(field)
 
         return obs_fields
@@ -151,3 +144,71 @@ class VFSObservationSpecBuilder:
             return [var_def.dims]
         else:
             raise ValueError(f"Unknown variable type: {var_def.type}")
+
+    def _normalize_exposures(
+        self,
+        exposures: list[dict[str, Any]] | dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Normalize exposures to list form, warning on legacy dict usage."""
+        if isinstance(exposures, dict):
+            warnings.warn(
+                "Passing VFS exposures as a dict is deprecated; supply a list of exposure entries instead.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            normalized: list[dict[str, Any]] = []
+            for var_id, exposure_config in exposures.items():
+                config = dict(exposure_config or {})
+                config["source_variable"] = var_id
+                normalized.append(config)
+            return normalized
+
+        return [dict(exposure) for exposure in exposures]
+
+    def _build_normalization_spec(self, norm_config: dict[str, Any] | None) -> NormalizationSpec | None:
+        """Build a NormalizationSpec from config dict, if provided."""
+        if not norm_config:
+            return None
+        return NormalizationSpec(**norm_config)
+
+    def _validate_normalization_shape(
+        self,
+        field_id: str,
+        shape: list[int],
+        norm_spec: NormalizationSpec | None,
+    ) -> None:
+        """Ensure normalization parameters align with observation shape."""
+        if norm_spec is None:
+            return
+
+        dims = self._shape_volume(shape)
+
+        def _validate_param(label: str, values: float | list[float] | None) -> None:
+            if values is None:
+                return
+            if isinstance(values, list):
+                if dims == 1 and len(values) == 1:
+                    return
+                if len(values) != dims:
+                    raise ValueError(
+                        f"Normalization '{label}' for observation '{field_id}' must provide {dims} values "
+                        f"to match shape {shape}, got {len(values)}"
+                    )
+            else:
+                if dims > 1:
+                    raise ValueError(
+                        f"Normalization '{label}' for observation '{field_id}' must be a list of length {dims} "
+                        f"to match shape {shape}, not a scalar"
+                    )
+
+        _validate_param("min", norm_spec.min)
+        _validate_param("max", norm_spec.max)
+        _validate_param("mean", norm_spec.mean)
+        _validate_param("std", norm_spec.std)
+
+    @staticmethod
+    def _shape_volume(shape: list[int]) -> int:
+        """Return flattened size for an observation shape."""
+        if not shape:
+            return 1
+        return math.prod(shape)
