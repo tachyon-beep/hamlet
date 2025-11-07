@@ -496,7 +496,7 @@ class VectorizedHamletEnv:
             self.vfs_registry.set("position", self.positions.float(), writer="engine")
 
         # Meters (write each meter individually)
-        for meter_idx, meter_name in enumerate(self.meter_name_to_index.keys()):
+        for meter_name, meter_idx in self.meter_name_to_index.items():
             self.vfs_registry.set(meter_name, self.meters[:, meter_idx], writer="engine")
 
         # Affordance encoding (one-hot of current affordance)

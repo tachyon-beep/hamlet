@@ -439,6 +439,74 @@ class TestVFSActionConfigIntegration:
             assert write_spec.variable_id in var_ids, f"Action writes variable '{write_spec.variable_id}' which doesn't exist in config"
 
 
+class TestVFSEnvironmentIntegration:
+    """Test VFS integration with VectorizedHamletEnv."""
+
+    def test_meter_index_mapping_correctness(self, test_config_pack_path: Path):
+        """Regression test: Ensure meter indices are read from meter_name_to_index, not enumerate().
+
+        This tests the fix for a bug where enumerate() was used instead of the stored
+        meter indices, which would cause silent data corruption if meters were defined
+        out-of-order in the YAML config.
+
+        Bug scenario:
+        - meter_name_to_index = {"hygiene": 7, "energy": 0, "health": 1, ...}
+        - enumerate(keys()) would give: hygiene→0, energy→1, health→2 (WRONG!)
+        - Should use stored indices: hygiene→7, energy→0, health→1 (CORRECT)
+        """
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        # Initialize environment with test config (uses configs/test, designed for integration testing)
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=8,  # Test config uses 8×8 grid
+            device=torch.device("cpu"),
+            config_pack_path=test_config_pack_path,
+            partial_observability=False,
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+        )
+
+        # Verify meter_name_to_index exists and has expected structure
+        assert hasattr(env, "meter_name_to_index"), "Environment should have meter_name_to_index"
+        assert len(env.meter_name_to_index) == 8, "Should have 8 meters"
+
+        # Set known meter values in the environment's meter tensor
+        # Use distinctive values to detect if wrong indices are used
+        meter_values = {
+            "energy": 0.1,
+            "health": 0.2,
+            "satiation": 0.3,
+            "money": 0.4,
+            "mood": 0.5,
+            "social": 0.6,
+            "fitness": 0.7,
+            "hygiene": 0.8,
+        }
+
+        for meter_name, value in meter_values.items():
+            meter_idx = env.meter_name_to_index[meter_name]
+            env.meters[:, meter_idx] = value
+
+        # Trigger VFS registry update (this calls _get_observations internally)
+        obs = env._get_observations()
+
+        # Verify each meter in VFS registry has correct value
+        for meter_name, expected_value in meter_values.items():
+            actual_value = env.vfs_registry.get(meter_name, reader="agent")
+
+            # All agents should have the same value we set
+            assert torch.allclose(actual_value, torch.tensor([expected_value, expected_value])), (
+                f"Meter '{meter_name}' has incorrect value in VFS registry. "
+                f"Expected {expected_value}, got {actual_value.tolist()}. "
+                f"This indicates meter_name_to_index mapping is incorrect!"
+            )
+
+
 # ========================================
 # INTEGRATION TEST SUMMARY
 # ========================================
@@ -450,6 +518,7 @@ class TestVFSActionConfigIntegration:
 # ✓ Registry Integration: Initialize registry with loaded variables
 # ✓ End-to-End: Complete pipeline from YAML to observations
 # ✓ ActionConfig Integration: Validate reads/writes reference valid variables
+# ✓ Environment Integration: Meter index mapping correctness
 #
 # Coverage:
 # - All 5 curriculum levels (L0_0, L0_5, L1, L2, L3)
@@ -457,3 +526,4 @@ class TestVFSActionConfigIntegration:
 # - Observation spec building and dimension calculation
 # - Registry initialization and access control
 # - ActionConfig VFS field validation
+# - Meter-to-VFS registry mapping (regression test)
