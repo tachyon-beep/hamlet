@@ -41,7 +41,10 @@ aspatial: {}
     shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
     shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
     shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
+
+    # Use aspatial VFS config (no position or grid_encoding)
+    aspatial_config = Path("configs/aspatial_test")
+    shutil.copy(aspatial_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
     # Create environment
     return VectorizedHamletEnv(
@@ -92,7 +95,10 @@ continuous:
     shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
     shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
     shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
+
+    # Use continuous1D VFS config (1D position)
+    continuous1d_config = Path("configs/L1_continuous_1D")
+    shutil.copy(continuous1d_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
     # Create environment
     return VectorizedHamletEnv(
@@ -146,7 +152,10 @@ continuous:
     shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
     shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
     shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
+
+    # Use continuous3D VFS config (3D position)
+    continuous3d_config = Path("configs/L1_continuous_3D")
+    shutil.copy(continuous3d_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
     # Create environment
     return VectorizedHamletEnv(
