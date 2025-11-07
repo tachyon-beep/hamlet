@@ -2,8 +2,16 @@
 # Variable & Feature System (VFS) - Phase 1
 
 **Created**: 2025-11-07
-**Estimated Total Effort**: 28-36 hours (4-5 days)
+**Updated**: 2025-11-07 (Peer review modifications)
+**Estimated Total Effort**: 38-50 hours (5-6 days)
 **Approach**: Test-Driven Development (Red-Green-Refactor)
+
+**IMPORTANT CHANGES** (from peer review):
+- Added Cycle 0: Observation structure reverse engineering (4-6h)
+- Renamed VFS observation class: `ObservationBuilder` → `VFSObservationSpecBuilder`
+- Updated effort estimates based on complexity analysis
+- Added scope semantics clarification for registry
+- Added integration specification requirements
 
 ---
 
@@ -54,7 +62,252 @@ uv sync
 
 ---
 
-## TDD Cycle 1: Variable Type Definitions (2 hours)
+## TDD Cycle 0: Observation Structure Reverse Engineering (4-6 hours)
+
+**⚠️ CRITICAL**: This cycle must complete BEFORE implementing VFS. It prevents observation dimension incompatibility that would break all existing checkpoints.
+
+### 0.1 Document Current Observation Formulas (1 hour)
+
+**File**: `docs/vfs/observation-dimension-formulas.md` (NEW)
+
+```markdown
+# Current Observation Dimension Formulas
+
+## Full Observability
+obs_dim = substrate.get_observation_dim() + meter_count + (num_affordances + 1) + 4
+
+Components:
+- substrate.get_observation_dim(): Grid2D=2, Grid3D=3, GridND=N, Aspatial=0
+- meter_count: Always 8 (energy, health, satiation, money, mood, social, fitness, hygiene)
+- num_affordances + 1: One-hot encoding (affordance types + "none")
+- 4: Temporal features (time_sin, time_cos, interaction_progress, lifetime_progress)
+
+## Partial Observability (POMDP)
+obs_dim = window_size^position_dim + position_dim + meter_count + (num_affordances + 1) + 4
+
+Components:
+- window_size: (2 * vision_range + 1) - e.g., vision_range=2 → 5×5 window
+- position_dim: 2 for Grid2D, 3 for Grid3D
+- window_size^position_dim: 25 for Grid2D 5×5 window
+- (all other components same as full observability)
+
+## Current Dimensions by Config
+- L0_0_minimal: 29 dims (2 + 8 + 15 + 4)
+- L0_5_dual_resource: 29 dims
+- L1_full_observability: 29 dims
+- L2_partial_observability: 54 dims (25 + 2 + 8 + 15 + 4)
+- L3_temporal_mechanics: 29 dims
+```
+
+### 0.2 Create Reference Variable Definitions (2-3 hours)
+
+For EACH config, create reference `variables_reference.yaml` that maps current observation structure to VFS variables.
+
+**File**: `configs/L1_full_observability/variables_reference.yaml` (EXAMPLE)
+
+```yaml
+# Reference variable definitions for L1 config
+# These MUST produce observation_dim = 29
+
+version: "1.0"
+description: "Reference variables for L1 full observability (29 dims)"
+
+variables:
+  # Position: 2 dims (substrate.get_observation_dim())
+  - id: "position"
+    scope: "agent"
+    type: "vec2i"
+    lifetime: "episode"
+    readable_by: ["agent"]
+    writable_by: ["actions"]
+    default: [0, 0]
+
+  # Meters: 8 scalars = 8 dims
+  - id: "energy"
+    scope: "agent"
+    type: "scalar"
+    lifetime: "episode"
+    readable_by: ["agent"]
+    writable_by: ["actions"]
+    default: 1.0
+  # ... (repeat for all 8 meters: health, satiation, money, mood, social, fitness, hygiene)
+
+  # Affordance at position: 15 dims (14 affordance types + 1 "none")
+  # Represented as one-hot vector
+  - id: "affordance_at_position"
+    scope: "agent"
+    type: "vecNi"
+    dims: 15
+    lifetime: "tick"
+    readable_by: ["agent"]
+    writable_by: ["engine"]
+    default: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  # Default: "none"
+
+  # Temporal features: 4 dims
+  - id: "time_sin"
+    scope: "global"
+    type: "scalar"
+    lifetime: "tick"
+    readable_by: ["agent"]
+    writable_by: ["engine"]
+    default: 0.0
+
+  - id: "time_cos"
+    scope: "global"
+    type: "scalar"
+    lifetime: "tick"
+    readable_by: ["agent"]
+    writable_by: ["engine"]
+    default: 1.0
+
+  - id: "interaction_progress"
+    scope: "agent"
+    type: "scalar"
+    lifetime: "tick"
+    readable_by: ["agent"]
+    writable_by: ["engine"]
+    default: 0.0
+
+  - id: "lifetime_progress"
+    scope: "agent"
+    type: "scalar"
+    lifetime: "episode"
+    readable_by: ["agent"]
+    writable_by: ["engine"]
+    default: 0.0
+
+exposed_observations:
+  - id: "obs_position"
+    source_variable: "position"
+    shape: [2]
+  - id: "obs_energy"
+    source_variable: "energy"
+    shape: []
+  # ... (all 8 meters)
+  - id: "obs_affordance_at_position"
+    source_variable: "affordance_at_position"
+    shape: [15]
+  - id: "obs_time_sin"
+    source_variable: "time_sin"
+    shape: []
+  - id: "obs_time_cos"
+    source_variable: "time_cos"
+    shape: []
+  - id: "obs_interaction_progress"
+    source_variable: "interaction_progress"
+    shape: []
+  - id: "obs_lifetime_progress"
+    source_variable: "lifetime_progress"
+    shape: []
+
+# Total dims: 2 + 8*1 + 15 + 4*1 = 2 + 8 + 15 + 4 = 29 ✓
+```
+
+**Repeat for**: L0_0_minimal, L0_5_dual_resource, L2_partial_observability, L3_temporal_mechanics
+
+### 0.3 Build Validation Script (1 hour)
+
+**File**: `scripts/validate_vfs_dimensions.py` (NEW)
+
+```python
+"""Validate that VFS reference variables produce correct observation dimensions.
+
+CRITICAL: This script must pass before implementing VFS.
+"""
+
+from pathlib import Path
+import torch
+from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+def validate_config(config_name: str, expected_dim: int):
+    """Validate observation dimension for a config."""
+    config_path = Path(f"configs/{config_name}")
+
+    # Get current dimension from environment
+    env = VectorizedHamletEnv(
+        num_agents=1,
+        grid_size=8,
+        partial_observability="partial" in config_name.lower(),
+        vision_range=2,
+        enable_temporal_mechanics="temporal" in config_name.lower(),
+        move_energy_cost=0.005,
+        wait_energy_cost=0.004,
+        interact_energy_cost=0.003,
+        agent_lifespan=1000,
+        device=torch.device("cpu"),
+        config_pack_path=config_path,
+    )
+
+    actual_dim = env.observation_dim
+
+    # Load reference variables
+    ref_path = config_path / "variables_reference.yaml"
+    if not ref_path.exists():
+        print(f"❌ {config_name}: Missing variables_reference.yaml")
+        return False
+
+    # TODO: Compute dimension from reference variables
+    # (This will be implemented in Cycle 3 using VFSObservationSpecBuilder)
+    # For now, just validate expected vs actual
+
+    if actual_dim == expected_dim:
+        print(f"✓ {config_name}: {actual_dim} dims (correct)")
+        return True
+    else:
+        print(f"❌ {config_name}: Expected {expected_dim}, got {actual_dim}")
+        return False
+
+if __name__ == "__main__":
+    configs = [
+        ("L0_0_minimal", 29),
+        ("L0_5_dual_resource", 29),
+        ("L1_full_observability", 29),
+        ("L2_partial_observability", 54),
+        ("L3_temporal_mechanics", 29),
+    ]
+
+    all_passed = all(validate_config(name, dim) for name, dim in configs)
+
+    if all_passed:
+        print("\n✓ All configs validated - safe to proceed with VFS implementation")
+        exit(0)
+    else:
+        print("\n❌ Validation failed - DO NOT proceed until fixed")
+        exit(1)
+```
+
+### 0.4 Run Validation (30 minutes)
+
+```bash
+# Run validation script
+python scripts/validate_vfs_dimensions.py
+
+# Expected output:
+# ✓ L0_0_minimal: 29 dims (correct)
+# ✓ L0_5_dual_resource: 29 dims (correct)
+# ✓ L1_full_observability: 29 dims (correct)
+# ✓ L2_partial_observability: 54 dims (correct)
+# ✓ L3_temporal_mechanics: 29 dims (correct)
+#
+# ✓ All configs validated - safe to proceed with VFS implementation
+```
+
+**If validation fails**:
+1. Review observation formulas
+2. Check reference variable definitions
+3. Verify dimension calculations
+4. Fix discrepancies
+5. Re-run until all configs pass
+
+**Success Criteria**:
+- All 5 configs validate correctly
+- Reference variables documented for each config
+- Dimension formulas documented
+- Validation script passes
+
+---
+
+## TDD Cycle 1: Variable Type Definitions (4 hours)
 
 ### 1.1 RED: Write Schema Validation Tests
 
@@ -413,7 +666,12 @@ uv run pytest tests/test_townlet/unit/vfs/test_schema.py -v
 
 ---
 
-## TDD Cycle 2: Variable Registry (4-5 hours)
+## TDD Cycle 2: Variable Registry (10-12 hours)
+
+**⚠️ COMPLEXITY NOTE**: Registry is more complex than initially estimated due to:
+- Scope-specific tensor management (global/agent/agent_private have different shapes)
+- Access control enforcement with multiple edge cases
+- Type-specific default initialization patterns (6 types × 3 scopes = 18 patterns)
 
 ### 2.1 RED: Write Registry Tests
 
@@ -637,9 +895,31 @@ class VariableRegistry:
     """Runtime storage for variables with access control.
 
     Manages variable storage with scope-aware tensor shapes:
-    - global: Single value [1] or [dims]
-    - agent: Per-agent values [num_agents] or [num_agents, dims]
-    - agent_private: Per-agent values [num_agents] or [num_agents, dims]
+    - global: Single value [] or [dims] (shared by all agents)
+    - agent: Per-agent values [num_agents] or [num_agents, dims] (publicly readable)
+    - agent_private: Per-agent values [num_agents] or [num_agents, dims] (owner-only access)
+
+    Scope Semantics (CRITICAL):
+    ---------------------
+    get(scope="global", var_id, agent_id=None, reader):
+        - Returns scalar tensor (shape=[])
+        - agent_id must be None (global has no per-agent values)
+
+    get(scope="agent", var_id, agent_id=None, reader):
+        - If agent_id=X: Returns specific agent's value
+        - If agent_id=None: Returns all agents' values [num_agents, ...]
+        - All readers can access (public variable)
+
+    get(scope="agent_private", var_id, agent_id=X, reader="agent"):
+        - agent_id is REQUIRED
+        - Only owning agent can read (enforced by access control)
+        - Returns agent X's private value
+
+    Access Control:
+    --------------
+    - readable_by: List of roles allowed to read (["agent", "engine", "acs"])
+    - writable_by: List of roles allowed to write (["actions", "engine"])
+    - Agent_private enforces owner-only reads (even if "agent" in readable_by)
     """
 
     def __init__(
@@ -871,18 +1151,22 @@ uv run pytest tests/test_townlet/unit/vfs/test_registry.py -v
 
 ---
 
-## TDD Cycle 3: Observation Builder (3-4 hours)
+## TDD Cycle 3: VFS Observation Spec Builder (6-8 hours)
 
-### 3.1 RED: Write Observation Builder Tests
+**⚠️ NAMING NOTE**: This class is named `VFSObservationSpecBuilder` to avoid collision with the existing `environment.observation_builder.ObservationBuilder` class. They serve different purposes:
+- **`environment.ObservationBuilder`**: Runtime observation construction (tensors)
+- **`vfs.VFSObservationSpecBuilder`**: Compile-time spec generation (schemas for BAC)
+
+### 3.1 RED: Write Observation Spec Builder Tests
 
 **File**: `tests/test_townlet/unit/vfs/test_observation_builder.py`
 
 ```python
-"""Test ObservationBuilder for generating observation specs."""
+"""Test VFSObservationSpecBuilder for generating observation specs."""
 
 import pytest
 from townlet.vfs.schema import VariableDef, NormalizationSpec
-from townlet.vfs.observation_builder import ObservationBuilder
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 
 
 @pytest.fixture
@@ -920,12 +1204,12 @@ def sample_variables():
     ]
 
 
-class TestObservationBuilder:
+class TestVFSObservationSpecBuilder:
     """Test observation spec generation."""
 
     def test_build_spec_for_scalar_variable(self, sample_variables):
         """Build observation spec for scalar variable."""
-        builder = ObservationBuilder()
+        builder = VFSObservationSpecBuilder()
 
         # Expose energy as observation
         exposures = {
@@ -943,7 +1227,7 @@ class TestObservationBuilder:
 
     def test_build_spec_for_vec2i_variable(self, sample_variables):
         """Build observation spec for vec2i variable."""
-        builder = ObservationBuilder()
+        builder = VFSObservationSpecBuilder()
 
         exposures = {
             "position": {
@@ -959,7 +1243,7 @@ class TestObservationBuilder:
 
     def test_build_spec_for_vecNi_variable(self, sample_variables):
         """Build observation spec for vecNi variable."""
-        builder = ObservationBuilder()
+        builder = VFSObservationSpecBuilder()
 
         exposures = {
             "position_7d": {
@@ -975,7 +1259,7 @@ class TestObservationBuilder:
 
     def test_build_spec_multiple_variables(self, sample_variables):
         """Build observation spec for multiple variables."""
-        builder = ObservationBuilder()
+        builder = VFSObservationSpecBuilder()
 
         exposures = {
             "energy": {"normalization": None},
@@ -990,7 +1274,7 @@ class TestObservationBuilder:
 
     def test_total_observation_dim_calculation(self, sample_variables):
         """Calculate total observation dimension."""
-        builder = ObservationBuilder()
+        builder = VFSObservationSpecBuilder()
 
         exposures = {
             "energy": {"normalization": None},      # 0 dims (scalar)
@@ -1013,22 +1297,30 @@ class TestObservationBuilder:
 uv run pytest tests/test_townlet/unit/vfs/test_observation_builder.py -v
 ```
 
-### 3.2 GREEN: Implement Observation Builder
+### 3.2 GREEN: Implement VFS Observation Spec Builder
 
 **File**: `src/townlet/vfs/observation_builder.py`
 
 ```python
-"""Observation builder for generating observation specs from variables."""
+"""VFS observation spec builder for generating observation specs from variables.
+
+NOTE: This is NOT the same as environment.observation_builder.ObservationBuilder!
+- environment.ObservationBuilder: Runtime observation construction (tensors)
+- vfs.VFSObservationSpecBuilder: Compile-time spec generation (schemas for BAC)
+"""
 
 from typing import Dict, List, Any
 from townlet.vfs.schema import VariableDef, ObservationField, NormalizationSpec
 
 
-class ObservationBuilder:
+class VFSObservationSpecBuilder:
     """Constructs observation specifications from variable definitions.
 
     Generates ObservationField specs that BAC compiler can use to
     build network input heads dynamically.
+
+    This class generates SPECIFICATIONS (schemas), not runtime observations.
+    For runtime observation construction, see environment.observation_builder.ObservationBuilder.
     """
 
     def build_observation_spec(
@@ -1103,11 +1395,11 @@ class ObservationBuilder:
 **Update**: `src/townlet/vfs/__init__.py`
 
 ```python
-from townlet.vfs.observation_builder import ObservationBuilder
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 
 __all__ = [
     # ... existing exports ...
-    "ObservationBuilder",
+    "VFSObservationSpecBuilder",
 ]
 ```
 
@@ -1116,7 +1408,7 @@ __all__ = [
 uv run pytest tests/test_townlet/unit/vfs/test_observation_builder.py -v
 ```
 
-### 3.3 REFACTOR: Clean Up Observation Builder
+### 3.3 REFACTOR: Clean Up VFS Observation Spec Builder
 
 - Add error handling for invalid exposure configs
 - Add helper methods for common normalization patterns
@@ -1308,7 +1600,7 @@ import torch
 from pathlib import Path
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.vfs.schema import VariableDef
-from townlet.vfs.observation_builder import ObservationBuilder
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 
 
 def compute_current_observation_dim(config_path: Path) -> int:
@@ -1335,11 +1627,11 @@ def compute_current_observation_dim(config_path: Path) -> int:
 
 
 def compute_vfs_observation_dim(variables: list, exposures: dict) -> int:
-    """Compute observation_dim using VFS observation builder.
+    """Compute observation_dim using VFS observation spec builder.
 
     This is how BAC compiler will calculate dimensions.
     """
-    builder = ObservationBuilder()
+    builder = VFSObservationSpecBuilder()
     spec = builder.build_observation_spec(variables, exposures)
 
     # Calculate total dimensions
@@ -1431,7 +1723,9 @@ uv run pytest tests/test_townlet/unit/vfs/test_observation_dimension_regression.
 
 ---
 
-## TDD Cycle 6: Integration Tests (2-3 hours)
+## TDD Cycle 6: Integration Tests (3-4 hours)
+
+**⚠️ COMPLEXITY NOTE**: Integration tests are more complex due to dual observation system (legacy + VFS) coexistence testing.
 
 ### 6.1 RED: Write Integration Tests
 
@@ -1444,7 +1738,7 @@ import pytest
 import torch
 from townlet.vfs.schema import VariableDef
 from townlet.vfs.registry import VariableRegistry
-from townlet.vfs.observation_builder import ObservationBuilder
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 
 
 class TestVariableToObservationFlow:
@@ -1497,7 +1791,7 @@ class TestVariableToObservationFlow:
         registry.set("agent", "energy", 0.5, agent_id=0, writer="actions")
 
         # Step 5: Build observation spec
-        builder = ObservationBuilder()
+        builder = VFSObservationSpecBuilder()
         exposures = {
             "world_config_hash": {"normalization": None},
             "energy": {"normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
@@ -1690,7 +1984,7 @@ declarative variable specifications.
 ## Quick Start
 
 ```python
-from townlet.vfs import VariableDef, VariableRegistry, ObservationBuilder
+from townlet.vfs import VariableDef, VariableRegistry, VFSObservationSpecBuilder
 
 # Define variables
 variables = [
@@ -1713,7 +2007,7 @@ registry.set("agent", "energy", 0.5, agent_id=0, writer="actions")
 value = registry.get("agent", "energy", agent_id=0, reader="agent")
 
 # Build observation spec for BAC
-builder = ObservationBuilder()
+builder = VFSObservationSpecBuilder()
 exposures = {"energy": {"normalization": None}}
 obs_spec = builder.build_observation_spec(variables, exposures)
 ```
@@ -1746,6 +2040,16 @@ Deferred to post-TASK-004:
 ### After Each TDD Cycle
 
 ```bash
+# Cycle 0: Observation reverse engineering
+git add docs/vfs/observation-dimension-formulas.md configs/*/variables_reference.yaml scripts/validate_vfs_dimensions.py
+git commit -m "docs(vfs): Add observation dimension reverse engineering (TDD Cycle 0)
+
+- Document current observation dimension formulas
+- Create reference variable definitions for all configs
+- Build dimension validation script
+- Validate all configs produce correct dimensions
+- CRITICAL: Prevents checkpoint incompatibility"
+
 # Cycle 1: Schema definitions
 git add src/townlet/vfs/schema.py src/townlet/vfs/__init__.py tests/test_townlet/unit/vfs/test_schema.py
 git commit -m "feat(vfs): Add schema definitions with validation (TDD Cycle 1)
@@ -1768,15 +2072,16 @@ git commit -m "feat(vfs): Add VariableRegistry with access control (TDD Cycle 2)
 - Per-agent and global tensor management
 - 18 registry operation tests (all passing)"
 
-# Cycle 3: Observation builder
+# Cycle 3: VFS observation spec builder
 git add src/townlet/vfs/observation_builder.py tests/test_townlet/unit/vfs/test_observation_builder.py
-git commit -m "feat(vfs): Add ObservationBuilder for spec generation (TDD Cycle 3)
+git commit -m "feat(vfs): Add VFSObservationSpecBuilder for spec generation (TDD Cycle 3)
 
 - Build observation specs from variables + exposures
 - Shape inference from variable types
 - Normalization parameter pass-through
 - Support all substrate dimensionalities
-- 6 observation builder tests (all passing)"
+- Renamed to avoid collision with environment.ObservationBuilder
+- 6 observation spec builder tests (all passing)"
 
 # Cycle 4: ActionConfig extension
 git add src/townlet/environment/action_config.py tests/test_townlet/unit/environment/test_action_config_extension.py
@@ -1849,15 +2154,17 @@ After completing all TDD cycles, verify:
 | Cycle | Task | Estimated | Actual | Notes |
 |-------|------|-----------|--------|-------|
 | Setup | Module structure | 0.5h | | |
-| 1 | Schema definitions | 2h | | |
-| 2 | Variable registry | 4-5h | | |
-| 3 | Observation builder | 3-4h | | |
-| 4 | ActionConfig extension | 1-2h | | |
-| 5 | Dimension regression | 3-4h | | CRITICAL |
-| 6 | Integration tests | 2-3h | | |
-| 7 | Config templates | 1h | | |
-| Final | Validation & docs | 1-2h | | |
-| **Total** | | **28-36h** | | |
+| **0** | **Observation reverse engineering** | **4-6h** | | **NEW - CRITICAL** |
+| 1 | Schema definitions | 4h | | Increased from 2h |
+| 2 | Variable registry | 10-12h | | Increased from 4-5h (scope complexity) |
+| 3 | VFS observation spec builder | 6-8h | | Renamed + increased from 3-4h |
+| 4 | ActionConfig extension | 1-2h | | Unchanged |
+| 5 | Dimension regression | 3-4h | | CRITICAL - uses Cycle 0 references |
+| 6 | Integration tests | 3-4h | | Increased from 2-3h (dual system) |
+| 7 | Config templates | 1h | | Unchanged |
+| Final | Validation & docs | 1-2h | | Unchanged |
+| **Integration** | **Integration specification** | **2h** | | **NEW** |
+| **Total** | | **38-50h** | | **Updated from 28-36h** |
 
 ---
 
@@ -1887,6 +2194,74 @@ After completing all TDD cycles, verify:
 
 **Problem**: End-to-end flow broken
 **Solution**: Run unit tests first - integration depends on them all passing
+
+---
+
+## Integration Specification (2 hours)
+
+**⚠️ CRITICAL**: Document how VFS integrates with existing VectorizedHamletEnv observation system.
+
+### Dual Observation System Coexistence
+
+**Two ObservationBuilder classes exist**:
+1. **`environment.observation_builder.ObservationBuilder`** (existing)
+   - Purpose: Runtime observation construction (builds tensors)
+   - Input: positions, meters, affordances
+   - Output: `torch.Tensor` [num_agents, observation_dim]
+   - Used by: VectorizedHamletEnv.reset(), VectorizedHamletEnv.step()
+
+2. **`vfs.observation_builder.VFSObservationSpecBuilder`** (new)
+   - Purpose: Compile-time spec generation (builds schemas)
+   - Input: List[VariableDef], exposures dict
+   - Output: List[ObservationField] (Pydantic schemas)
+   - Used by: BAC compiler (TASK-005), UAC compiler (TASK-004A)
+
+### Integration Points
+
+**Phase 1 (This Task)**: Parallel systems, no replacement
+```python
+# Existing system (continues to work)
+env = VectorizedHamletEnv(...)
+obs = env.reset()  # Uses environment.ObservationBuilder
+
+# New system (for compilers)
+builder = VFSObservationSpecBuilder()
+obs_spec = builder.build_observation_spec(variables, exposures)
+# Returns schema, not tensors
+```
+
+**Phase 2 (Future - Post-TASK-004)**: Migration path
+```python
+# Environment can optionally use VFS variables
+if config_pack_path / "variables.yaml" exists:
+    # Load VFS variable definitions
+    variables = load_variables_yaml(config_pack_path / "variables.yaml")
+    registry = VariableRegistry(variables, num_agents, device)
+
+    # Build observation spec from VFS
+    builder = VFSObservationSpecBuilder()
+    obs_spec = builder.build_observation_spec(variables, exposures)
+
+    # Use spec to construct observations
+    obs = construct_from_spec(obs_spec, registry)
+else:
+    # Legacy path (current hardcoded system)
+    obs = legacy_observation_builder.build_observations(...)
+```
+
+### Decision Logic
+
+**When to use VFS path vs legacy path**:
+- **VFS path**: If `config_pack_path / "variables.yaml"` exists
+- **Legacy path**: Otherwise (backward compatibility)
+
+### Testing Strategy
+
+**Tests must validate coexistence**:
+1. Legacy ObservationBuilder still works (no regressions)
+2. VFSObservationSpecBuilder produces compatible specs
+3. Both systems can run in same process
+4. Dimension validation passes for both systems
 
 ---
 
