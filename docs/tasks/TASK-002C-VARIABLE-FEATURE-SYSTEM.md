@@ -2,10 +2,12 @@
 
 **Status**: Planned
 **Priority**: High
-**Estimated Effort**: 16-20 hours (2-3 days)
-**Dependencies**: TASK-002A (Stratum), TASK-002B (ACS)
-**Enables**: TASK-003 (UAC Core DTOs), TASK-005 (Brain as Code), TASK-004A (UAC Compiler)
+**Estimated Effort**: 28-36 hours (4-5 days)
+**Dependencies**: TASK-002A (Substrate), TASK-002B (Composable Actions)
+**Enables**: TASK-004A (UAC Compiler), TASK-005 (Brain as Code), BLOCKER 2 (World Config Hash)
+**Parallel Work**: TASK-003 (UAC Core DTOs - independent, can proceed in parallel)
 **Created**: 2025-11-06
+**Updated**: 2025-11-07 (Deep dive review - effort revised, scope clarifications added)
 **Completed**: [Pending]
 
 **Keywords**: variables, features, observations, typed-contracts, UAC, BAC, ACS, schema, registry, cross-cutting
@@ -153,9 +155,113 @@ meters[3] = money   # Index 3 is money... because we said so
 
 ---
 
+## Scope Semantics (CRITICAL CLARIFICATION)
+
+**Problem**: The meaning of `scope` values must be precisely defined to avoid implementation ambiguity.
+
+### Scope Definitions
+
+**`global`**: Single value shared by entire universe
+- **Storage**: Single tensor element (not per-agent)
+- **Access**: All agents observe same value
+- **Use cases**: `world_config_hash`, `time_of_day`, `total_population`
+- **Example**: World configuration hash for BLOCKER 2 solution
+
+**`agent`**: Per-agent value, publicly readable
+- **Storage**: Per-agent tensor `[num_agents]` or `[num_agents, dims]`
+- **Access**: All agents can read any agent's value
+- **Use cases**: `position`, `energy`, `health` (public meters)
+- **Example**: Agent positions visible to all for spatial reasoning
+
+**`agent_private`**: Per-agent value, private to owner
+- **Storage**: Per-agent tensor `[num_agents]` or `[num_agents, dims]`
+- **Access**: Only owning agent can read their own value
+- **Use cases**: `home_pos` (remembered location), `private_goals`, `beliefs`
+- **Example**: Agent's remembered home position for teleport action
+
+### Observation Implications
+
+**Global variables**: Broadcast to all agents (1 value → num_agents copies)
+**Agent variables**: Each agent sees all agent values (full matrix)
+**Agent_private variables**: Each agent sees only their own value (diagonal extraction)
+
+---
+
+## Variable Type System (EXPANDED)
+
+The type system must support all substrate dimensionalities (1D-100D) and both discrete/continuous spaces.
+
+### Supported Types (Phase 1)
+
+**Scalar Types:**
+- `scalar`: Single float value
+  - Shape: `[]` (0-dimensional)
+  - Example: `energy`, `health`, `world_config_hash`
+
+**Fixed-Dimension Vector Types:**
+- `vec2i`: 2D integer vector (Grid2D positions)
+  - Shape: `[2]`
+  - Example: `position` on 8×8 grid
+
+- `vec3i`: 3D integer vector (Grid3D positions)
+  - Shape: `[3]`
+  - Example: `position` on 3D grid
+
+**Variable-Dimension Vector Types (NEW):**
+- `vecNi`: N-dimensional integer vector
+  - Shape: `[dims]` where `dims` specified in schema
+  - Example: `position` on 7D GridND
+  - **Required field**: `dims: int` (e.g., `dims: 7` for GridND)
+
+- `vecNf`: N-dimensional float vector
+  - Shape: `[dims]` where `dims` specified in schema
+  - Example: `position` in continuous 4D space
+  - **Required field**: `dims: int`
+
+**Boolean Type:**
+- `bool`: Boolean flag
+  - Shape: `[]` (stored as 0.0 or 1.0)
+  - Example: `is_at_home`, `panic_mode_active`
+
+### Type Schema Update
+
+```python
+@dataclass
+class VariableDef:
+    """Variable declaration in UAC."""
+    id: str
+    scope: Literal["global", "agent", "agent_private"]
+    type: Literal["scalar", "vec2i", "vec3i", "vecNi", "vecNf", "bool"]
+    dims: Optional[int] = None  # Required for vecNi/vecNf
+    lifetime: Literal["tick", "episode"]
+    readable_by: List[str]
+    writable_by: List[str]
+    default: Any
+    description: str = ""
+
+    @model_validator(mode="after")
+    def validate_dims(self) -> "VariableDef":
+        """vecNi and vecNf require dims field."""
+        if self.type in ["vecNi", "vecNf"] and self.dims is None:
+            raise ValueError(f"Type {self.type} requires dims field")
+        if self.type not in ["vecNi", "vecNf"] and self.dims is not None:
+            raise ValueError(f"Type {self.type} cannot have dims field")
+        return self
+```
+
+### Phase 2 Types (Deferred)
+
+- `categorical`: Discrete choice (needs `categories` list)
+- `stack`: LIFO collection (needs `element_type`, `capacity`)
+- `queue`: FIFO collection (needs `element_type`, `capacity`)
+- `map`: Key-value store (needs `key_type`, `value_type`)
+- `struct`: Composite type (needs field definitions)
+
+---
+
 ## Detailed Design
 
-### Phase 1: Minimal Foundation (16-20 hours)
+### Phase 1: Minimal Foundation (28-36 hours)
 
 **Objective**: Establish typed contracts for variables, observations, and action dependencies without complex runtime behavior.
 
@@ -183,10 +289,10 @@ meters[3] = money   # Index 3 is money... because we said so
     - `build_observation_spec(variables, exposures)`: Generate ObservationSpec
     - Returns shape, dtype, normalization for each field
 
-- **File**: `src/townlet/acs/action_schema.py` (MODIFY)
-  - Extend `ActionSchema` dataclass:
-    - Add `reads: List[str] = field(default_factory=list)`
-    - Add `writes: List[WriteSpec] = field(default_factory=list)`
+- **File**: `src/townlet/environment/action_config.py` (MODIFY)
+  - Extend `ActionConfig` Pydantic model:
+    - Add `reads: List[str] = Field(default_factory=list)`
+    - Add `writes: List[WriteSpec] = Field(default_factory=list)`
 
 - **File**: `configs/templates/variables.yaml` (NEW)
   - Template showing variable definitions
@@ -201,12 +307,20 @@ class VariableDef:
     """Variable declaration in UAC."""
     id: str                      # e.g., "home_pos", "energy", "world_config_hash"
     scope: Literal["global", "agent", "agent_private"]
-    type: Literal["scalar", "vec2i", "vec3i", "bool"]
+    type: Literal["scalar", "vec2i", "vec3i", "vecNi", "vecNf", "bool"]  # Expanded type system
+    dims: Optional[int] = None   # Required for vecNi/vecNf (e.g., dims=7 for 7D GridND)
     lifetime: Literal["tick", "episode"]  # tick = derived feature, episode = persistent
     readable_by: List[str]      # ["agent", "engine", "acs"]
     writable_by: List[str]      # ["actions", "engine"]
     default: Any                # Default value (must match type)
     description: str = ""
+
+    @model_validator(mode="after")
+    def validate_dims(self) -> "VariableDef":
+        """vecNi and vecNf require dims field."""
+        if self.type in ["vecNi", "vecNf"] and self.dims is None:
+            raise ValueError(f"Type {self.type} requires dims field")
+        return self
 
 @dataclass
 class ObservationField:
@@ -232,43 +346,66 @@ class WriteSpec:
     expression: str              # e.g., "agent.pos", "clamp(energy - 5, 0, 100)"
 ```
 
-**Tests**:
+**Tests** (25-30 tests total):
 
-- [ ] `tests/test_vfs/test_schema.py`: Schema validation
+- [ ] `tests/test_vfs/test_schema.py`: Schema validation (8-10 tests)
   - VariableDef validation (valid types, scopes, lifetimes)
+  - vecNi/vecNf require dims field (validation test)
   - ObservationField validation (shape matches variable type)
   - NormalizationSpec validation (min < max, etc.)
+  - Type system: scalar, vec2i, vec3i, vecNi, vecNf, bool
+  - Scope semantics: global, agent, agent_private
 
-- [ ] `tests/test_vfs/test_registry.py`: Registry operations
-  - Get/set variables by scope
+- [ ] `tests/test_vfs/test_registry.py`: Registry operations (8-10 tests)
+  - Get/set variables by scope (global/agent/agent_private)
   - Access control enforcement (readable_by, writable_by)
   - Default values applied correctly
   - get_observation_spec() returns correct fields
+  - Scope storage: global (1 value), agent (num_agents), agent_private (num_agents)
+  - Error handling: invalid scope, missing variable, access violation
 
-- [ ] `tests/test_vfs/test_observation_builder.py`: Observation builder
+- [ ] `tests/test_vfs/test_observation_builder.py`: Observation builder (5-6 tests)
   - Build observation spec from variables + exposures
-  - Shape inference from variable types (vec2i → [2], scalar → [])
+  - Shape inference from variable types (vec2i → [2], scalar → [], vecNi → [dims])
   - Normalization parameters passed through
+  - Support all substrate types (Grid2D, Grid3D, GridND, Continuous, Aspatial)
 
-- [ ] `tests/test_acs/test_action_schema_extension.py`: Action schema
-  - ActionSchema with reads/writes fields
+- [ ] `tests/test_vfs/test_observation_dimension_regression.py`: **CRITICAL VALIDATION** (4-5 tests)
+  - **VFS observation_dim must equal current hardcoded calculation**
+  - Test all curriculum levels: L0_minimal, L0_5_dual, L1_full, L2_pomdp, L3_temporal
+  - Full observability: VFS dim == substrate.get_observation_dim() + meters + affordances + 4
+  - Partial observability: VFS dim == window_size^position_dim + position_dim + meters + affordances + 4
+  - **If these tests fail, checkpoints will be incompatible!**
+
+- [ ] `tests/test_environment/test_action_config_extension.py`: Action config extension (2-3 tests)
+  - ActionConfig with reads/writes fields
   - Serialization/deserialization preserves reads/writes
+  - Backward compatibility: ActionConfig without reads/writes still loads
 
 **Success Criteria**:
 
-- ✅ All VFS schemas defined and validated
+- ✅ All VFS schemas defined and validated (including expanded type system)
+- ✅ Scope semantics clearly documented (global/agent/agent_private)
 - ✅ VariableRegistry implements get/set with access checks
 - ✅ ObservationBuilder generates specs from variable definitions
-- ✅ ActionSchema extended with reads/writes fields
-- ✅ Unit tests pass (15+ tests total)
+- ✅ ActionConfig extended with reads/writes fields (not ActionSchema - corrected path)
+- ✅ **All 25-30 unit tests pass** (increased from 15+)
+- ✅ **Observation dimension regression tests pass** (CRITICAL - prevents checkpoint breakage)
 - ✅ Example `variables.yaml` in templates
 
-**Time Estimate**: 16-20 hours
-- Schema design and implementation: 4 hours
-- Registry implementation: 6 hours
-- Observation builder: 4 hours
-- ACS extension: 2 hours
-- Tests: 4-6 hours
+**Time Estimate**: 28-36 hours (4-5 days)
+- Schema design and implementation: 4 hours (unchanged)
+- Registry implementation: **8-10 hours** (increased - scope semantics, access control complexity)
+- Observation builder: **6-8 hours** (increased - must support all substrate types)
+- ACS extension: 2 hours (unchanged)
+- Tests: **10-12 hours** (increased - 25-30 tests, regression validation critical)
+- Documentation & Examples: 2 hours (unchanged)
+
+**Effort Increase Rationale**:
+- Scope semantics (global/agent/agent_private) require careful tensor management
+- Type system expanded (vecNi, vecNf for N-dimensional substrates)
+- Observation dimension validation critical (checkpoint compatibility)
+- Test count realistic based on existing integration test complexity (200-500 lines each)
 
 ---
 
@@ -330,7 +467,13 @@ class WriteSpec:
 
 **Critical Paths**:
 
-- [ ] Existing ACS tests still pass (action schema is backward compatible)
+- [ ] **Observation dimension compatibility** (CRITICAL - MUST PASS)
+  - VFS-generated `observation_dim` must equal current hardcoded calculation
+  - Test ALL configs: L0_minimal, L0_5_dual, L1_full, L2_pomdp, L3_temporal
+  - Formula verification: VFS sum(field.shape_size) == env.observation_dim
+  - **Why critical**: Different dim → all checkpoints incompatible!
+
+- [ ] Existing ActionConfig tests still pass (backward compatible)
 - [ ] Existing configs without variables.yaml still load
 - [ ] Meters continue working as arrays (no migration yet)
 
@@ -338,6 +481,27 @@ class WriteSpec:
 
 - [ ] Registry get/set operations: <1µs per operation
 - [ ] Observation spec generation: <10ms for 100 variables
+
+**Validation Test Example**:
+
+```python
+def test_vfs_observation_dim_backward_compatible():
+    """CRITICAL: VFS must generate identical observation_dim to current code."""
+    for config_name in ["L0_minimal", "L0_5_dual", "L1_full", "L2_pomdp", "L3_temporal"]:
+        # Current environment (hardcoded calculation)
+        env_current = VectorizedHamletEnv.from_config(config_name)
+
+        # VFS-based calculation
+        variables = load_variables_from_config(config_name)
+        obs_spec = ObservationBuilder.build_observation_spec(variables)
+        vfs_dim = sum(field.shape_size for field in obs_spec.fields)
+
+        # MUST be identical
+        assert vfs_dim == env_current.observation_dim, (
+            f"Config {config_name}: VFS dim {vfs_dim} != current dim {env_current.observation_dim}. "
+            f"Checkpoint incompatibility detected!"
+        )
+```
 
 ---
 
@@ -528,19 +692,51 @@ action_result = execute_action("teleport_home", agent_id=0)
 
 ### Technical Risks
 
-**Risk 1: Schema may need refinement after UAC compiler (TASK-004)**
+**Risk 1: Observation Dimension Compatibility** ⚠️ **CRITICAL - NEW**
+
+- **Severity**: HIGH
+- **Problem**: VFS must generate **identical** observation_dim to current hardcoded calculation
+- **Impact**: Different dim → all existing checkpoints incompatible (breaking change)
+- **Mitigation**:
+  - Create regression test suite comparing VFS dim to current env.observation_dim
+  - Test ALL configs (L0_minimal, L0_5_dual, L1_full, L2_pomdp, L3_temporal)
+  - Fail fast if dimensions mismatch
+- **Contingency**: If VFS generates different dims, must either:
+  1. Fix VFS calculation to match current (preferred)
+  2. Declare breaking change and invalidate all checkpoints (last resort)
+- **Test Example**: See "Regression Testing" section above
+
+**Risk 2: Schema may need refinement after UAC compiler (TASK-004)**
 
 - **Severity**: Medium
 - **Mitigation**: Keep Phase 1 scope minimal, expect iteration
 - **Contingency**: Schema changes are cheap before many systems depend on them
 
-**Risk 2: Performance of registry get/set might not scale**
+**Risk 3: Scope Semantics Complexity** ⚠️ **MEDIUM - NEW**
+
+- **Severity**: Medium
+- **Problem**: global/agent/agent_private require careful tensor management
+- **Challenge**: Global (1 value) vs agent (num_agents values) storage patterns
+- **Mitigation**:
+  - Clear documentation added (see "Scope Semantics" section)
+  - Unit tests validate storage shapes for each scope
+  - Registry enforces scope contracts at runtime
+- **Contingency**: If scope semantics prove insufficient, extend in Phase 2
+
+**Risk 4: Variable Type System Completeness** ⚠️ **LOW - NEW**
+
+- **Severity**: Low
+- **Problem**: vecNi/vecNf added for N-dimensional support, may need more types
+- **Mitigation**: Phase 2 explicitly defers complex types (categorical, stack, queue)
+- **Contingency**: Type system extensible, add types as needed
+
+**Risk 5: Performance of registry get/set might not scale**
 
 - **Severity**: Low
 - **Mitigation**: Profile in Phase 2, optimize if needed
-- **Contingency**: Registry is simple dict lookups, very fast
+- **Contingency**: Registry is simple dict lookups, very fast (existing AgentRuntimeRegistry proves pattern)
 
-**Risk 3: Access control model may be too simplistic**
+**Risk 6: Access control model may be too simplistic**
 
 - **Severity**: Low
 - **Mitigation**: Start with basic readable_by/writable_by, extend in Phase 2
@@ -548,86 +744,104 @@ action_result = execute_action("teleport_home", agent_id=0)
 
 ### Blocking Dependencies
 
-- ✅ **TASK-002A** (Stratum): Complete
-- ✅ **TASK-002B** (ACS): Complete
-- ⚠️ **TASK-003** (UAC Core DTOs): Partially blocked by this task (circular dependency - see note below)
+- ✅ **TASK-002A** (Substrate Abstraction): Complete (renamed from "Stratum" in final implementation)
+- ✅ **TASK-002B** (Composable Action Space): Complete
+- ⚠️ **TASK-003** (UAC Core DTOs): **Independent** - can proceed in parallel
 
-**Circular Dependency Resolution**:
+**TASK-003 Relationship Clarification**:
 
-- TASK-003 defines UAC DTOs (bars, affordances, cascades)
-- TASK-002C defines VFS DTOs (variables, observations)
-- **Resolution**: These are parallel concerns. VFS variables are separate from UAC bars/affordances.
-- **Sequencing**: Do TASK-002C first (simpler scope), then TASK-003 can reference VFS schemas.
+- **Original spec claimed**: TASK-002C blocks TASK-003
+- **Reality**: TASK-003 defines UAC DTOs (bars, affordances, cascades) which are **independent** of VFS
+- **Evidence**: `cascade_config.py` already implemented in codebase (150 lines, working)
+- **Resolution**: TASK-003 and TASK-002C are **parallel work**
+  - VFS defines variable contracts (for TASK-004A compiler, TASK-005 BAC)
+  - TASK-003 defines universe element contracts (bars, affordances, cascades)
+  - No circular dependency - different concerns
+- **Sequencing**: Either order works; TASK-002C slightly simpler scope, so recommend first
 
 ### Impact Radius
 
-**Files Modified**: ~8 files
-- 4 new files in `src/townlet/vfs/`
-- 1 modified file in `src/townlet/acs/`
-- 1 new config template
-- 2+ test files
+**Files Modified**: ~10 files
+- 4 new files in `src/townlet/vfs/` (schema, registry, observation_builder, __init__)
+- 1 modified file in `src/townlet/environment/action_config.py` (corrected from acs/)
+- 1 new config template (`configs/templates/variables.yaml`)
+- 4-5 test files (schema, registry, observation_builder, dimension regression, action_config extension)
 
-**Tests Added**: 15+ tests
-**Breaking Changes**: None (purely additive)
+**Tests Added**: 25-30 tests (increased from 15+ to reflect realistic complexity)
+**Breaking Changes**: None (purely additive in Phase 1)
 
 **Blast Radius**: Small
 
 - VFS is new subsystem, no legacy code depends on it
-- ACS extension is backward compatible (new fields optional)
+- ActionConfig extension is backward compatible (new fields optional with defaults)
 - Existing configs work unchanged
+- **Critical constraint**: VFS observation_dim must match current calculation (regression tests enforce)
 
 ---
 
 ## Effort Breakdown
 
-### Detailed Estimates
+### Detailed Estimates (REVISED)
 
-**Schema Design & Implementation**: 4 hours
+**Schema Design & Implementation**: 4 hours (unchanged)
 
 - Define VariableDef, ObservationField, WriteSpec dataclasses: 2 hours
-- Define NormalizationSpec and type enums: 1 hour
-- Validation logic (Pydantic or manual): 1 hour
+- Define NormalizationSpec and expanded type enums (vecNi, vecNf): 1 hour
+- Validation logic (Pydantic validators for dims field): 1 hour
 
-**Registry Implementation**: 6 hours
+**Registry Implementation**: 8-10 hours (increased from 6h)
 
 - VariableRegistry class structure: 2 hours
-- get/set with access control: 2 hours
+- get/set with scope-aware access control: 3-4 hours (global vs agent vs agent_private tensor shapes)
 - get_observation_spec() method: 1 hour
-- Error handling and edge cases: 1 hour
+- Error handling and edge cases (access violations, scope validation): 2-3 hours
+- **Reason for increase**: Scope semantics (global=1 value, agent=num_agents, agent_private=num_agents) require careful tensor management
 
-**Observation Builder**: 4 hours
+**Observation Builder**: 6-8 hours (increased from 4h)
 
 - ObservationBuilder class: 2 hours
-- build_observation_spec() logic: 2 hours
+- build_observation_spec() logic: 2-3 hours
+- Support all substrate types (Grid2D, Grid3D, GridND, Continuous, Aspatial): 2-3 hours
+- **Reason for increase**: Must generate specs for all substrate dimensionalities, ensure dimension compatibility
 
-**ACS Extension**: 2 hours
+**ActionConfig Extension**: 2 hours (unchanged)
 
-- Extend ActionSchema dataclass: 0.5 hours
+- Extend ActionConfig Pydantic model: 0.5 hours
 - Update serialization/deserialization: 0.5 hours
 - Update existing tests: 1 hour
 
-**Testing**: 4-6 hours
+**Testing**: 10-12 hours (increased from 4-6h)
 
-- Unit tests for schemas: 1 hour
-- Unit tests for registry: 2 hours
-- Unit tests for observation builder: 1 hour
-- Integration tests: 1-2 hours
+- Unit tests for schemas (8-10 tests): 2 hours
+- Unit tests for registry (8-10 tests): 3 hours
+- Unit tests for observation builder (5-6 tests): 2 hours
+- **Observation dimension regression tests (4-5 tests - CRITICAL)**: 2-3 hours
+- Integration tests (variable → observation flow): 2 hours
+- ActionConfig extension tests (2-3 tests): 1 hour
+- **Reason for increase**: 25-30 tests total, regression validation complex (must test all configs), existing integration tests are 200-500 lines each
 
-**Documentation & Examples**: 2 hours
+**Documentation & Examples**: 2 hours (unchanged)
 
 - VFS module README: 1 hour
 - Example variables.yaml template: 1 hour
 
-**Total**: 16-20 hours (2-3 days)
+**Total**: 28-36 hours (4-5 days)
 
-**Confidence**: High
+**Confidence**: High (90%)
+
+**Comparison to Original Estimate**:
+- Original: 16-20 hours (2-3 days)
+- Revised: 28-36 hours (4-5 days)
+- Increase: +12-16 hours (+75% effort)
+- **Justification**: Original underestimated scope semantics complexity, test count, and observation dimension validation criticality
 
 ### Assumptions
 
 - No complex feature derivation needed in Phase 1
-- Access control is simple readable_by/writable_by lists
+- Access control is simple readable_by/writable_by lists (extensible in Phase 2)
 - Registry uses in-memory dict (no persistence in Phase 1)
 - UAC compiler (TASK-004) will handle YAML → VariableDef generation
+- **New assumption**: VFS observation_dim must match current env calculation (regression tests enforce)
 
 ---
 
@@ -683,8 +897,10 @@ action_result = execute_action("teleport_home", agent_id=0)
 
 ### Code References
 
-- `src/townlet/acs/action_schema.py` - Action schema to be extended
-- `src/townlet/stratum/interface.py` - Substrate interface (inspiration for contracts)
+- `src/townlet/environment/action_config.py` - ActionConfig to be extended (corrected path)
+- `src/townlet/substrate/base.py` - Substrate interface (inspiration for contracts, renamed from stratum)
+- `src/townlet/environment/observation_builder.py` - Current observation construction (integration point)
+- `src/townlet/population/runtime_registry.py` - AgentRuntimeRegistry (pattern for VariableRegistry)
 - `configs/templates/` - Config template directory for variables.yaml
 
 ---
@@ -718,6 +934,68 @@ action_result = execute_action("teleport_home", agent_id=0)
 ---
 
 **IMPLEMENTATION NOTE**: This is a **foundational cross-cutting layer**. Resist the urge to add complex features in Phase 1. The goal is to establish typed contracts that unblock compilers, not to build the perfect variable system. Learn from UAC compiler (TASK-004) usage before adding complexity.
+
+---
+
+## Revision History
+
+### 2025-11-07: Deep Dive Review (Implementation Readiness Assessment)
+
+**Changes Made**:
+
+1. **Effort Estimate Updated**: 16-20h → **28-36h** (4-5 days)
+   - Registry: 6h → 8-10h (scope semantics complexity)
+   - ObservationBuilder: 4h → 6-8h (all substrate types)
+   - Testing: 4-6h → 10-12h (25-30 tests, regression critical)
+
+2. **Scope Semantics Clarified**: Added dedicated section defining global/agent/agent_private
+   - Global: Single value (tensor shape [1])
+   - Agent: Per-agent values (tensor shape [num_agents])
+   - Agent_private: Per-agent private values (tensor shape [num_agents], access-controlled)
+
+3. **Variable Type System Expanded**: Added vecNi, vecNf for N-dimensional substrates
+   - vecNi: N-dimensional integer vector (requires dims field)
+   - vecNf: N-dimensional float vector (requires dims field)
+   - Supports GridND (4D-100D) and ContinuousND substrates
+
+4. **Observation Dimension Validation**: **CRITICAL** new requirement
+   - VFS-generated observation_dim MUST equal current hardcoded calculation
+   - Regression tests for ALL configs (L0, L0.5, L1, L2, L3)
+   - Prevents checkpoint incompatibility (breaking change)
+
+5. **Test Count Increased**: 15+ → **25-30 tests**
+   - Added observation dimension regression tests (4-5 tests - critical)
+   - Increased per-module test counts based on existing test complexity
+   - Example validation test provided
+
+6. **New Risks Identified**:
+   - Risk 1: Observation dimension compatibility (HIGH severity - checkpoint breakage)
+   - Risk 3: Scope semantics complexity (MEDIUM severity - tensor management)
+   - Risk 4: Variable type system completeness (LOW severity - extensible)
+
+7. **File Path Corrections**:
+   - Fixed: `acs/action_schema.py` → `environment/action_config.py`
+   - Fixed: `stratum/interface.py` → `substrate/base.py` (renamed in TASK-002A)
+   - Added: Additional code references for integration points
+
+8. **TASK-003 Relationship Clarified**:
+   - Updated from "blocks TASK-003" to "parallel work - independent"
+   - Evidence: cascade_config.py already implemented (150 lines)
+   - No circular dependency - different concerns
+
+9. **Dependencies Updated**:
+   - "TASK-002A (Stratum)" → "TASK-002A (Substrate)" (final naming)
+   - Added "BLOCKER 2 (World Config Hash)" to enabled tasks
+
+**Implementation Readiness Score**: 8.5/10 (was unscored)
+
+**Recommendation**: **CONDITIONAL GO** - Proceed after reviewing updated effort estimate and critical validation requirements.
+
+**Key Takeaways**:
+- Original estimate underestimated scope semantics and testing complexity by ~75%
+- Observation dimension compatibility is CRITICAL - must not break checkpoints
+- All prerequisites met, integration points clean, patterns established
+- Risk mitigation strategies clear, no showstoppers identified
 
 ---
 
