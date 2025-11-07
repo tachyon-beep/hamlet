@@ -36,15 +36,34 @@ aspatial: {}
 """
     )
 
-    # Copy complete config files from test config
+    # Copy complete config files from test config (8 meters)
     test_config = Path("configs/test")
     shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
     shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
     shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
+    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
-    # Use aspatial VFS config (no position or grid_encoding)
-    aspatial_config = Path("configs/aspatial_test")
-    shutil.copy(aspatial_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
+    # Generate aspatial-specific VFS config (8 meters, no position/grid_encoding)
+    import yaml
+    vfs_yaml = config_pack / "variables_reference.yaml"
+    with open(vfs_yaml) as f:
+        vfs_config = yaml.safe_load(f)
+
+    # Remove grid_encoding and position variables (aspatial has no position)
+    vfs_config["variables"] = [
+        var for var in vfs_config["variables"]
+        if var["id"] not in ["grid_encoding", "local_window", "position"]
+    ]
+
+    # Remove grid_encoding observation (aspatial has no grid)
+    if "exposed_observations" in vfs_config:
+        vfs_config["exposed_observations"] = [
+            obs for obs in vfs_config["exposed_observations"]
+            if obs["id"] not in ["obs_grid_encoding", "obs_local_window", "obs_position"]
+        ]
+
+    with open(vfs_yaml, "w") as f:
+        yaml.safe_dump(vfs_config, f, sort_keys=False)
 
     # Create environment
     return VectorizedHamletEnv(
