@@ -49,6 +49,7 @@ def compute_vfs_observation_dim_from_agent_readable(config_path: Path) -> int:
     # Filter observation spec based on observability mode (matches environment filtering)
     # Load partial_observability setting from training.yaml
     import yaml
+
     training_yaml = config_path / "training.yaml"
     if training_yaml.exists():
         with open(training_yaml) as f:
