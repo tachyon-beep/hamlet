@@ -11,14 +11,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+import yaml
 
 from townlet.environment.action_builder import ActionSpaceBuilder
 from townlet.environment.affordance_config import load_affordance_config
 from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
-from townlet.environment.observation_builder import ObservationBuilder
 from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
+from townlet.vfs import VariableRegistry, VFSObservationSpecBuilder
+from townlet.vfs.schema import VariableDef
 
 if TYPE_CHECKING:
     from townlet.environment.action_config import ActionConfig
@@ -97,14 +99,55 @@ class VectorizedHamletEnv:
         substrate_config = load_substrate_config(substrate_config_path)
         self.substrate = SubstrateFactory.build(substrate_config, device=device)
 
+        # VFS INTEGRATION: Load variables from config pack
+        # BREAKING CHANGE: variables_reference.yaml is now REQUIRED
+        variables_path = self.config_pack_path / "variables_reference.yaml"
+        if not variables_path.exists():
+            raise FileNotFoundError(
+                f"variables_reference.yaml is required but not found in {self.config_pack_path}.\n\n"
+                f"All config packs must define their VFS variables.\n\n"
+                f"Quick fix:\n"
+                f"  1. Copy reference: cp configs/L1_full_observability/variables_reference.yaml {self.config_pack_path}/\n"
+                f"  2. Edit to match your configuration\n"
+                f"  3. See docs/config-schemas/variables.md for schema details\n\n"
+                f"This is a breaking change from VFS Phase 1 integration. Previous configs without\n"
+                f"variables_reference.yaml will no longer work. See docs/vfs-integration-guide.md."
+            )
+
+        with open(variables_path) as f:
+            variables_data = yaml.safe_load(f)
+
+        self.vfs_variables = [VariableDef(**var_data) for var_data in variables_data["variables"]]
+
+        # Build exposure configuration for observation spec
+        self.vfs_exposures = {}
+        if "exposed_observations" in variables_data:
+            for obs in variables_data["exposed_observations"]:
+                var_id = obs["source_variable"]
+                self.vfs_exposures[var_id] = {
+                    "normalization": obs.get("normalization"),
+                }
+        else:
+            # Fallback: expose all agent-readable variables
+            for var in self.vfs_variables:
+                if "agent" in var.readable_by:
+                    self.vfs_exposures[var.id] = {"normalization": None}
+
+        # Filter exposures based on observability mode
+        # Full obs uses grid_encoding, POMDP uses local_window
+        if partial_observability:
+            # POMDP: Remove grid_encoding if present (use local_window instead)
+            self.vfs_exposures.pop("grid_encoding", None)
+        else:
+            # Full obs: Remove local_window if present (use grid_encoding instead)
+            self.vfs_exposures.pop("local_window", None)
+
         # Load action labels (optional - defaults to "gaming" preset if not specified)
         from townlet.environment.action_labels import get_labels
 
         action_labels_config_path = self.config_pack_path / "action_labels.yaml"
         if action_labels_config_path.exists():
             # Load custom action labels from config
-            import yaml
-
             with open(action_labels_config_path) as f:
                 action_labels_data = yaml.safe_load(f)
 
@@ -235,46 +278,21 @@ class VectorizedHamletEnv:
                     f"Set observation_encoding='relative' in substrate.yaml or disable partial_observability."
                 )
 
-        # Observation dimensions depend on observability mode
-        if partial_observability:
-            # Level 2 POMDP: local window + position + meters + current affordance type
-            window_size = 2 * vision_range + 1  # 5×5 for vision_range=2
-            # Local window footprint depends on substrate dimensionality (e.g., Grid3D → W³)
-            if self.substrate.position_dim == 0:
-                local_window_dim = 0
-            else:
-                local_window_dim = window_size**self.substrate.position_dim
-            # Local window + normalized position + meters + affordance type one-hot (N+1 for "none")
-            # Position dimension is substrate-specific (2 for Grid2D, 0 for Aspatial)
-            self.observation_dim = (
-                local_window_dim
-                + self.substrate.position_dim  # 2 for Grid2D, 0 for Aspatial
-                + meter_count
-                + (self.num_affordance_types + 1)
-            )
-        else:
-            # Level 1: full grid encoding + meters + current affordance type
-            # Grid encoding dimension is substrate-specific (width*height for Grid2D, 0 for Aspatial)
-            self.observation_dim = (
-                self.substrate.get_observation_dim() + meter_count + (self.num_affordance_types + 1)  # Substrate-specific grid encoding
-            )
+        # VFS INTEGRATION: Initialize variable registry
+        # Registry holds runtime state for all VFS variables
+        self.vfs_registry = VariableRegistry(variables=self.vfs_variables, num_agents=num_agents, device=device)
 
-        # Always add temporal features for forward compatibility (4 features)
-        # time_sin, time_cos, interaction_progress, lifetime_progress
-        self.observation_dim += 4
+        # VFS INTEGRATION: Build observation spec from variables
+        # This replaces hardcoded observation dimension calculation
+        obs_builder = VFSObservationSpecBuilder()
+        self.vfs_observation_spec = obs_builder.build_observation_spec(self.vfs_variables, self.vfs_exposures)
 
-        # Initialize observation builder
-        self.observation_builder = ObservationBuilder(
-            num_agents=num_agents,
-            grid_size=self.grid_size,
-            device=device,
-            partial_observability=partial_observability,
-            vision_range=vision_range,
-            enable_temporal_mechanics=enable_temporal_mechanics,
-            num_affordance_types=self.num_affordance_types,
-            affordance_names=self.affordance_names,
-            substrate=self.substrate,  # Pass substrate to observation builder
-        )
+        # Calculate observation_dim from VFS spec
+        self.observation_dim = sum(field.shape[0] if field.shape else 1 for field in self.vfs_observation_spec)
+
+        # Store partial observability settings for observation construction
+        self.partial_observability = partial_observability
+        self.vision_range = vision_range
 
         # Initialize reward strategy (TASK-001: variable meters)
         # Get meter indices from bars_config for dynamic action costs and death detection
@@ -441,24 +459,130 @@ class VectorizedHamletEnv:
 
     def _get_observations(self) -> torch.Tensor:
         """
-        Construct observation vector.
+        Construct observation vector using VFS registry.
 
         Returns:
             observations: [num_agents, observation_dim]
         """
+        import math
+
         # Calculate lifetime progress: 0.0 at birth, 1.0 at retirement
         # This allows agent to learn temporal planning based on remaining lifespan
         lifetime_progress = (self.step_counts.float() / self.agent_lifespan).clamp(0.0, 1.0)
 
-        # Delegate to observation builder
-        return self.observation_builder.build_observations(
-            positions=self.positions,
-            meters=self.meters,
-            affordances=self.affordances,
-            time_of_day=self.time_of_day if self.enable_temporal_mechanics else 0,
-            interaction_progress=self.interaction_progress if self.enable_temporal_mechanics else None,
-            lifetime_progress=lifetime_progress,
-        )
+        # Update VFS registry with current state
+        # Grid encoding (full or partial depending on POMDP setting)
+        if self.partial_observability:
+            # POMDP: Local window encoding (returns only the local window, no position)
+            local_window = self.substrate.encode_partial_observation(self.positions, self.affordances, vision_range=self.vision_range)
+            # POMDP uses "local_window" variable name
+            self.vfs_registry.set("local_window", local_window, writer="engine")
+        else:
+            # Full observability: Complete grid encoding (grid only, position handled separately in VFS)
+            # Use internal _encode_full_grid to get ONLY the grid, not grid+position
+            if hasattr(self.substrate, "_encode_full_grid"):
+                grid_encoding = self.substrate._encode_full_grid(self.positions, self.affordances)
+            else:
+                # Fallback for substrates without _encode_full_grid (e.g., aspatial)
+                grid_encoding = self.substrate.encode_observation(self.positions, self.affordances)
+            # Full obs uses "grid_encoding" variable name
+            self.vfs_registry.set("grid_encoding", grid_encoding, writer="engine")
+
+        # Position (normalized for POMDP, substrate-specific for full obs)
+        if self.partial_observability:
+            normalized_positions = self.substrate.normalize_positions(self.positions)
+            self.vfs_registry.set("position", normalized_positions, writer="engine")
+        else:
+            self.vfs_registry.set("position", self.positions.float(), writer="engine")
+
+        # Meters (write each meter individually)
+        for meter_idx, meter_name in enumerate(self.meter_name_to_index.keys()):
+            self.vfs_registry.set(meter_name, self.meters[:, meter_idx], writer="engine")
+
+        # Affordance encoding (one-hot of current affordance)
+        affordance_encoding = self._build_affordance_encoding()
+        self.vfs_registry.set("affordance_at_position", affordance_encoding, writer="engine")
+
+        # Temporal features
+        time_of_day = self.time_of_day if self.enable_temporal_mechanics else 0
+        time_angle = (time_of_day / 24.0) * 2 * math.pi
+        time_sin = torch.full((self.num_agents,), math.sin(time_angle), device=self.device)
+        time_cos = torch.full((self.num_agents,), math.cos(time_angle), device=self.device)
+
+        self.vfs_registry.set("time_sin", time_sin, writer="engine")
+        self.vfs_registry.set("time_cos", time_cos, writer="engine")
+
+        if self.enable_temporal_mechanics and self.interaction_progress is not None:
+            normalized_progress = self.interaction_progress.float() / 10.0
+        else:
+            normalized_progress = torch.zeros(self.num_agents, device=self.device)
+
+        self.vfs_registry.set("interaction_progress", normalized_progress, writer="engine")
+        self.vfs_registry.set("lifetime_progress", lifetime_progress, writer="engine")
+
+        # Build observations from VFS registry according to observation spec
+        observations = []
+        for field in self.vfs_observation_spec:
+            value = self.vfs_registry.get(field.source_variable, reader="agent")
+
+            # Apply normalization if specified
+            if field.normalization:
+                if field.normalization.kind == "minmax":
+                    min_val = field.normalization.min
+                    max_val = field.normalization.max
+                    # Convert to tensors if not already
+                    if not isinstance(min_val, torch.Tensor):
+                        min_val = torch.tensor(min_val, device=self.device, dtype=value.dtype)
+                    if not isinstance(max_val, torch.Tensor):
+                        max_val = torch.tensor(max_val, device=self.device, dtype=value.dtype)
+                    value = (value - min_val) / (max_val - min_val + 1e-8)  # Add epsilon to avoid division by zero
+                elif field.normalization.kind == "zscore":
+                    mean = field.normalization.mean
+                    std = field.normalization.std
+                    # Convert to tensors if not already
+                    if not isinstance(mean, torch.Tensor):
+                        mean = torch.tensor(mean, device=self.device, dtype=value.dtype)
+                    if not isinstance(std, torch.Tensor):
+                        std = torch.tensor(std, device=self.device, dtype=value.dtype)
+                    value = (value - mean) / (std + 1e-8)  # Add epsilon to avoid division by zero
+
+            # Ensure 2D shape [num_agents, *]
+            if value.ndim == 1:
+                value = value.unsqueeze(1)
+
+            observations.append(value)
+
+        return torch.cat(observations, dim=1)
+
+    def _build_affordance_encoding(self) -> torch.Tensor:
+        """Build one-hot encoding of current affordance under each agent.
+
+        This encodes against the FULL affordance vocabulary (from affordances.yaml),
+        not just deployed affordances. This ensures observation dimensions stay
+        constant across curriculum levels.
+
+        Returns:
+            encoding: [num_agents, num_affordance_types + 1]
+                Last dimension is "none" (not on any affordance)
+        """
+        # Initialize with "none" (all zeros except last column)
+        affordance_encoding = torch.zeros(self.num_agents, self.num_affordance_types + 1, device=self.device)
+        affordance_encoding[:, -1] = 1.0  # Default to "none"
+
+        # Iterate over FULL affordance vocabulary (not just deployed)
+        # This ensures consistent encoding across curriculum levels
+        for affordance_idx, affordance_name in enumerate(self.affordance_names):
+            # Check if this affordance is DEPLOYED (has position on grid)
+            if affordance_name in self.affordances:
+                affordance_pos = self.affordances[affordance_name]
+                # Check which agents are on affordance (using substrate)
+                on_affordance = self.substrate.is_on_position(self.positions, affordance_pos)
+                if on_affordance.any():
+                    affordance_encoding[on_affordance, -1] = 0.0  # Clear "none"
+                    affordance_encoding[on_affordance, affordance_idx] = 1.0
+            # If affordance NOT deployed, agent can never be "on" it, stays as "none"
+
+        return affordance_encoding
 
     def get_action_masks(self) -> torch.Tensor:
         """
