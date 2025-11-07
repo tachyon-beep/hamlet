@@ -26,6 +26,7 @@ from unittest.mock import Mock, patch
 
 import torch
 
+from tests.test_townlet.builders import make_test_episode_metadata, make_test_recorded_step
 from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata, RecordedStep
 
 # =============================================================================
@@ -143,19 +144,7 @@ class TestEpisodeRecorderEdgeCases:
             assert recorder.queue.full()
 
             # Try to finish episode - should log error but not crash
-            metadata = EpisodeMetadata(
-                episode_id=100,
-                survival_steps=10,
-                total_reward=10.0,
-                extrinsic_reward=10.0,
-                intrinsic_reward=0.0,
-                curriculum_stage=1,
-                epsilon=0.5,
-                intrinsic_weight=0.0,
-                timestamp=1234567890.0,
-                affordance_layout={"Bed": (2, 3)},
-                affordance_visits={"Bed": 1},
-            )
+            metadata = make_test_episode_metadata()
 
             with patch("townlet.recording.recorder.logger") as mock_logger:
                 recorder.finish_episode(metadata)
@@ -217,16 +206,7 @@ class TestRecordingWriterProcessing:
             )
 
             # Add a RecordedStep to queue
-            step = RecordedStep(
-                step=0,
-                position=(3, 5),
-                meters=(1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85),
-                action=2,
-                reward=1.0,
-                intrinsic_reward=0.1,
-                done=False,
-                q_values=None,
-            )
+            step = make_test_recorded_step()
             test_queue.put(step)
 
             # Process one iteration
@@ -259,31 +239,10 @@ class TestRecordingWriterProcessing:
 
             # Add some steps first
             writer.episode_buffer.append(
-                RecordedStep(
-                    step=0,
-                    position=(3, 5),
-                    meters=(1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85),
-                    action=2,
-                    reward=1.0,
-                    intrinsic_reward=0.1,
-                    done=False,
-                    q_values=None,
-                )
+                make_test_recorded_step()
             )
 
-            metadata = EpisodeMetadata(
-                episode_id=100,
-                survival_steps=10,
-                total_reward=10.0,
-                extrinsic_reward=10.0,
-                intrinsic_reward=0.0,
-                curriculum_stage=1,
-                epsilon=0.5,
-                intrinsic_weight=0.0,
-                timestamp=1234567890.0,
-                affordance_layout={"Bed": (2, 3)},
-                affordance_visits={"Bed": 1},
-            )
+            metadata = make_test_episode_metadata()
 
             marker = EpisodeEndMarker(metadata=metadata)
 
@@ -318,16 +277,7 @@ class TestRecordingWriterProcessing:
 
             # Add a step to buffer
             writer.episode_buffer.append(
-                RecordedStep(
-                    step=0,
-                    position=(3, 5),
-                    meters=(1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85),
-                    action=2,
-                    reward=1.0,
-                    intrinsic_reward=0.1,
-                    done=False,
-                    q_values=None,
-                )
+                make_test_recorded_step()
             )
 
             metadata = EpisodeMetadata(
@@ -443,19 +393,7 @@ class TestRecordingWriterProcessing:
                 curriculum=None,
             )
 
-            metadata = EpisodeMetadata(
-                episode_id=100,
-                survival_steps=10,
-                total_reward=10.0,
-                extrinsic_reward=10.0,
-                intrinsic_reward=0.0,
-                curriculum_stage=1,
-                epsilon=0.5,
-                intrinsic_weight=0.0,
-                timestamp=1234567890.0,
-                affordance_layout={"Bed": (2, 3)},
-                affordance_visits={"Bed": 1},
-            )
+            metadata = make_test_episode_metadata()
 
             result = writer._should_record_episode(metadata)
             assert result is False
@@ -476,19 +414,7 @@ class TestRecordingWriterProcessing:
                 curriculum=None,
             )
 
-            metadata = EpisodeMetadata(
-                episode_id=100,
-                survival_steps=10,
-                total_reward=10.0,
-                extrinsic_reward=10.0,
-                intrinsic_reward=0.0,
-                curriculum_stage=1,
-                epsilon=0.5,
-                intrinsic_weight=0.0,
-                timestamp=1234567890.0,
-                affordance_layout={"Bed": (2, 3)},
-                affordance_visits={"Bed": 1},
-            )
+            metadata = make_test_episode_metadata()
 
             result = writer._should_record_episode(metadata)
             assert result is False
@@ -511,31 +437,10 @@ class TestRecordingWriterProcessing:
 
             # Add step to buffer
             writer.episode_buffer.append(
-                RecordedStep(
-                    step=0,
-                    position=(3, 5),
-                    meters=(1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85),
-                    action=2,
-                    reward=1.0,
-                    intrinsic_reward=0.1,
-                    done=False,
-                    q_values=None,
-                )
+                make_test_recorded_step()
             )
 
-            metadata = EpisodeMetadata(
-                episode_id=42,
-                survival_steps=10,
-                total_reward=10.0,
-                extrinsic_reward=10.0,
-                intrinsic_reward=0.0,
-                curriculum_stage=1,
-                epsilon=0.5,
-                intrinsic_weight=0.0,
-                timestamp=1234567890.0,
-                affordance_layout={"Bed": (2, 3)},
-                affordance_visits={"Bed": 1},
-            )
+            metadata = make_test_episode_metadata(episode_id=42)
 
             writer._write_episode(metadata)
 
@@ -561,31 +466,10 @@ class TestRecordingWriterProcessing:
             )
 
             writer.episode_buffer.append(
-                RecordedStep(
-                    step=0,
-                    position=(3, 5),
-                    meters=(1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85),
-                    action=2,
-                    reward=1.0,
-                    intrinsic_reward=0.1,
-                    done=False,
-                    q_values=None,
-                )
+                make_test_recorded_step()
             )
 
-            metadata = EpisodeMetadata(
-                episode_id=99,
-                survival_steps=10,
-                total_reward=10.0,
-                extrinsic_reward=10.0,
-                intrinsic_reward=0.0,
-                curriculum_stage=1,
-                epsilon=0.5,
-                intrinsic_weight=0.0,
-                timestamp=1234567890.0,
-                affordance_layout={"Bed": (2, 3)},
-                affordance_visits={"Bed": 1},
-            )
+            metadata = make_test_episode_metadata(episode_id=99)
 
             writer._write_episode(metadata)
 
@@ -612,31 +496,10 @@ class TestRecordingWriterProcessing:
             )
 
             writer.episode_buffer.append(
-                RecordedStep(
-                    step=0,
-                    position=(3, 5),
-                    meters=(1.0, 0.9, 0.8, 0.5, 0.7, 0.6, 0.95, 0.85),
-                    action=2,
-                    reward=1.0,
-                    intrinsic_reward=0.1,
-                    done=False,
-                    q_values=None,
-                )
+                make_test_recorded_step()
             )
 
-            metadata = EpisodeMetadata(
-                episode_id=55,
-                survival_steps=10,
-                total_reward=10.0,
-                extrinsic_reward=10.0,
-                intrinsic_reward=0.0,
-                curriculum_stage=1,
-                epsilon=0.5,
-                intrinsic_weight=0.0,
-                timestamp=1234567890.0,
-                affordance_layout={"Bed": (2, 3)},
-                affordance_visits={"Bed": 1},
-            )
+            metadata = make_test_episode_metadata(episode_id=55)
 
             writer._write_episode(metadata)
 
