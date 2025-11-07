@@ -406,7 +406,7 @@ def simple_qnetwork(basic_env: VectorizedHamletEnv, device: torch.device) -> Sim
     Returns:
         SimpleQNetwork instance
     """
-    obs_dim = basic_env.observation_builder.get_observation_dim()
+    obs_dim = basic_env.observation_dim  # VFS: Use observation_dim directly (observation_builder removed)
     return SimpleQNetwork(obs_dim=obs_dim, action_dim=basic_env.action_dim, hidden_dim=128).to(device)
 
 
@@ -519,7 +519,7 @@ def adaptive_intrinsic_exploration(basic_env: VectorizedHamletEnv, device: torch
     Returns:
         AdaptiveIntrinsicExploration instance
     """
-    obs_dim = basic_env.observation_builder.get_observation_dim()
+    obs_dim = basic_env.observation_dim  # VFS: Use observation_dim directly (observation_builder removed)
     return AdaptiveIntrinsicExploration(
         obs_dim=obs_dim,
         embed_dim=128,

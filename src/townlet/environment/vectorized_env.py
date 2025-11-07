@@ -35,6 +35,109 @@ class VectorizedHamletEnv:
     All state is stored as PyTorch tensors on specified device.
     """
 
+    @staticmethod
+    def _generate_minimal_vfs_config(bars_config, partial_observability: bool, grid_size: int):
+        """Generate minimal VFS configuration for backward compatibility.
+
+        This provides a fallback when variables_reference.yaml doesn't exist,
+        allowing legacy tests and configs to continue working.
+
+        Args:
+            bars_config: BarsConfig with meter definitions
+            partial_observability: Whether using POMDP mode
+            grid_size: Grid size for determining observation dimensions
+
+        Returns:
+            Tuple of (vfs_variables, vfs_exposures)
+        """
+        from townlet.vfs.schema import VariableDef
+
+        variables = []
+        exposures = {}
+
+        # Grid encoding (full obs) or local window (POMDP)
+        if partial_observability:
+            # POMDP: 5×5 local window
+            variables.append(VariableDef(
+                id="local_window",
+                scope="agent",
+                type="vecNf",
+                dims=25,  # 5×5 window
+                lifetime="tick",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=[0.0] * 25
+            ))
+            exposures["local_window"] = {"normalization": None}
+        else:
+            # Full obs: Complete grid
+            grid_cells = grid_size * grid_size
+            variables.append(VariableDef(
+                id="grid_encoding",
+                scope="agent",
+                type="vecNf",
+                dims=grid_cells,
+                lifetime="tick",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=[0.0] * grid_cells
+            ))
+            exposures["grid_encoding"] = {"normalization": None}
+
+        # Position (2D normalized coordinates)
+        variables.append(VariableDef(
+            id="position",
+            scope="agent",
+            type="vecNf",
+            dims=2,
+            lifetime="episode",
+            readable_by=["agent"],
+            writable_by=["engine"],
+            default=[0.0, 0.0]
+        ))
+        exposures["position"] = {"normalization": None}
+
+        # Meters (dynamic count based on bars_config)
+        for meter_name in bars_config.meter_name_to_index.keys():
+            variables.append(VariableDef(
+                id=meter_name,
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=1.0 if meter_name != "money" else 0.0
+            ))
+            exposures[meter_name] = {"normalization": None}
+
+        # Affordance at position (15 dims: 14 types + none)
+        variables.append(VariableDef(
+            id="affordance_at_position",
+            scope="agent",
+            type="vecNf",
+            dims=15,
+            lifetime="tick",
+            readable_by=["agent"],
+            writable_by=["engine"],
+            default=[0.0] * 14 + [1.0]  # Default to "none"
+        ))
+        exposures["affordance_at_position"] = {"normalization": None}
+
+        # Temporal features (4 scalars)
+        for var_id in ["time_sin", "time_cos", "interaction_progress", "lifetime_progress"]:
+            variables.append(VariableDef(
+                id=var_id,
+                scope="global" if var_id in ["time_sin", "time_cos"] else "agent",
+                type="scalar",
+                lifetime="tick" if var_id in ["time_sin", "time_cos", "interaction_progress"] else "episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=0.0
+            ))
+            exposures[var_id] = {"normalization": None}
+
+        return variables, exposures
+
     def __init__(
         self,
         num_agents: int,
@@ -99,49 +202,6 @@ class VectorizedHamletEnv:
         substrate_config = load_substrate_config(substrate_config_path)
         self.substrate = SubstrateFactory.build(substrate_config, device=device)
 
-        # VFS INTEGRATION: Load variables from config pack
-        # BREAKING CHANGE: variables_reference.yaml is now REQUIRED
-        variables_path = self.config_pack_path / "variables_reference.yaml"
-        if not variables_path.exists():
-            raise FileNotFoundError(
-                f"variables_reference.yaml is required but not found in {self.config_pack_path}.\n\n"
-                f"All config packs must define their VFS variables.\n\n"
-                f"Quick fix:\n"
-                f"  1. Copy reference: cp configs/L1_full_observability/variables_reference.yaml {self.config_pack_path}/\n"
-                f"  2. Edit to match your configuration\n"
-                f"  3. See docs/config-schemas/variables.md for schema details\n\n"
-                f"This is a breaking change from VFS Phase 1 integration. Previous configs without\n"
-                f"variables_reference.yaml will no longer work. See docs/vfs-integration-guide.md."
-            )
-
-        with open(variables_path) as f:
-            variables_data = yaml.safe_load(f)
-
-        self.vfs_variables = [VariableDef(**var_data) for var_data in variables_data["variables"]]
-
-        # Build exposure configuration for observation spec
-        self.vfs_exposures = {}
-        if "exposed_observations" in variables_data:
-            for obs in variables_data["exposed_observations"]:
-                var_id = obs["source_variable"]
-                self.vfs_exposures[var_id] = {
-                    "normalization": obs.get("normalization"),
-                }
-        else:
-            # Fallback: expose all agent-readable variables
-            for var in self.vfs_variables:
-                if "agent" in var.readable_by:
-                    self.vfs_exposures[var.id] = {"normalization": None}
-
-        # Filter exposures based on observability mode
-        # Full obs uses grid_encoding, POMDP uses local_window
-        if partial_observability:
-            # POMDP: Remove grid_encoding if present (use local_window instead)
-            self.vfs_exposures.pop("grid_encoding", None)
-        else:
-            # Full obs: Remove local_window if present (use grid_encoding instead)
-            self.vfs_exposures.pop("local_window", None)
-
         # Load action labels (optional - defaults to "gaming" preset if not specified)
         from townlet.environment.action_labels import get_labels
 
@@ -196,6 +256,57 @@ class VectorizedHamletEnv:
         self.bars_config = bars_config  # Store for use in affordance validation (TASK-001)
         self.meter_count = bars_config.meter_count
         meter_count = self.meter_count  # Keep local variable for backward compatibility in this method
+
+        # VFS INTEGRATION: Load variables from config pack (with backward compatibility)
+        # Must happen AFTER bars_config is loaded (needed for fallback generation)
+        variables_path = self.config_pack_path / "variables_reference.yaml"
+
+        if variables_path.exists():
+            # Load from VFS config file
+            with open(variables_path) as f:
+                variables_data = yaml.safe_load(f)
+
+            self.vfs_variables = [VariableDef(**var_data) for var_data in variables_data["variables"]]
+
+            # Build exposure configuration for observation spec
+            self.vfs_exposures = {}
+            if "exposed_observations" in variables_data:
+                for obs in variables_data["exposed_observations"]:
+                    var_id = obs["source_variable"]
+                    self.vfs_exposures[var_id] = {
+                        "normalization": obs.get("normalization"),
+                    }
+            else:
+                # Fallback: expose all agent-readable variables
+                for var in self.vfs_variables:
+                    if "agent" in var.readable_by:
+                        self.vfs_exposures[var.id] = {"normalization": None}
+
+            # Filter exposures based on observability mode
+            # Full obs uses grid_encoding, POMDP uses local_window
+            if partial_observability:
+                # POMDP: Remove grid_encoding if present (use local_window instead)
+                self.vfs_exposures.pop("grid_encoding", None)
+            else:
+                # Full obs: Remove local_window if present (use grid_encoding instead)
+                self.vfs_exposures.pop("local_window", None)
+        else:
+            # BACKWARD COMPATIBILITY: Generate minimal VFS config for legacy configs/tests
+            # This allows tests to continue working without variables_reference.yaml
+            import warnings
+            warnings.warn(
+                f"variables_reference.yaml not found in {self.config_pack_path}. "
+                f"Using auto-generated minimal VFS configuration for backward compatibility. "
+                f"This is deprecated - please add variables_reference.yaml to your config pack. "
+                f"See configs/L1_full_observability/variables_reference.yaml for an example.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            self.vfs_variables, self.vfs_exposures = self._generate_minimal_vfs_config(
+                bars_config=bars_config,
+                partial_observability=partial_observability,
+                grid_size=grid_size
+            )
 
         # Load affordance configuration to get FULL universe vocabulary
         # This must also happen before observation dimension calculation
