@@ -313,13 +313,22 @@ Substrates support three configurable observation encoding modes via `observatio
 
 ### Variable & Feature System (VFS) - Phase 1
 
-**Status**: TASK-002C Implementation Complete (Cycles 0-6)
+**Status**: ✅ INTEGRATED INTO PRODUCTION (TASK-002C Complete + Integration)
 **Purpose**: Declarative state space configuration for observation specs, access control, and action dependencies
+
+**Integration Status**:
+- ✅ VFS integrated into VectorizedHamletEnv (replaces legacy ObservationBuilder)
+- ✅ All config packs now use `variables_reference.yaml` for observation generation
+- ✅ Training validated (L0_0_minimal tested successfully)
+- ✅ Checkpoints save/load correctly
+- ✅ Dimension compatibility maintained (L0_0: 38, L0_5: 78, L1: 93, L2: 54, L3: 93)
 
 **Architecture**:
 
 ```
-VFS Pipeline: YAML Config → Schema Validation → Observation Spec → Runtime Registry
+VFS Pipeline: YAML Config → Schema Validation → Observation Spec → Runtime Registry → Observations
+                                                                                    ↓
+                                                                    VectorizedHamletEnv._get_observations()
 ```
 
 **Key Components**:
@@ -439,8 +448,26 @@ VFS maintains **exact compatibility** with current hardcoded dimensions to prese
 - Design document: `docs/plans/2025-11-06-variables-and-features-system.md`
 - Implementation plan: `docs/tasks/TASK-002-variables-and-features-system.md`
 
-**Phase 1 Status**: COMPLETE ✅
+**Phase 1 Status**: ✅ COMPLETE & INTEGRATED
 **Phase 2 (Future)**: Behavioral Action Compiler (BAC) integration
+
+**BREAKING CHANGE** (Post-Integration):
+
+All config packs **MUST** include `variables_reference.yaml`. Legacy configs will fail with:
+
+```
+FileNotFoundError: variables_reference.yaml is required but not found in configs/your_config/.
+
+Quick fix:
+  1. Copy reference: cp configs/L1_full_observability/variables_reference.yaml configs/your_config/
+  2. Edit to match your configuration
+  3. See docs/config-schemas/variables.md for schema details
+```
+
+**Migration**: See `docs/vfs-integration-guide.md` for complete migration instructions.
+
+**Removed Files**:
+- `src/townlet/environment/observation_builder.py` (212 lines) - Replaced by VFS
 
 ---
 
