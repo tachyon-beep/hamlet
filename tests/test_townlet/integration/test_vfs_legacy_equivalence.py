@@ -52,8 +52,8 @@ class TestVFSLegacyEquivalence:
         variables = load_variables_from_config(config_path)
         exposures = load_exposures_from_config(config_path)
 
-        # L2 uses POMDP mode, others use full observability
-        partial_observability = config_name == "L2_partial_observability"
+        # L2 and L3 use POMDP mode, others use full observability
+        partial_observability = config_name in ["L2_partial_observability", "L3_temporal_mechanics"]
         vfs_dim = calculate_vfs_observation_dim(variables, exposures, partial_observability=partial_observability)
 
         assert_dimension_equivalence(config_name, vfs_dim, expected_dim)

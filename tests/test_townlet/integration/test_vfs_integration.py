@@ -323,7 +323,7 @@ class TestVFSEndToEndPipeline:
             "L0_5_dual_resource": 78,
             "L1_full_observability": 93,
             "L2_partial_observability": 54,
-            "L3_temporal_mechanics": 93,
+            "L3_temporal_mechanics": 54,  # POMDP mode (local_window instead of grid_encoding)
         }
 
         for config_name, expected_dim in expected_dims.items():

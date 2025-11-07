@@ -1,26 +1,26 @@
 # TEMPORARY REFERENCE VARIABLES (Cycle 0.2)
-# Purpose: Scaffolding for dimension validation (will be deleted in Cycle 7)
-# Config: L3_temporal_mechanics (8×8 Grid2D, temporal mechanics enabled)
-# Expected observation_dim: 93 (66 substrate + 8 meters + 15 affordance + 4 temporal)
+# Config: L3_temporal_mechanics (8×8 Grid2D, POMDP mode, temporal mechanics enabled)
+# Expected observation_dim: 54 (25 window + 2 position + 8 meters + 15 affordance + 4 temporal)
 
 version: "1.0"
 
 variables:
-  # ========================================
-  # SUBSTRATE ENCODING (66 dims)
-  # ========================================
-  # Grid2D substrate.get_observation_dim() = 64 grid cells + 2 position
+  # POMDP local window: 25 cells (5×5)
+  - {id: "local_window", scope: "agent", type: "vecNf", dims: 25, lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
 
+  # Full observability grid encoding: 64 cells (8×8) - NOT used in POMDP mode
+  # NOTE: Not readable by agent in L3 (POMDP mode), only readable by engine for internal use
   - id: "grid_encoding"
     scope: "agent"
     type: "vecNf"  # N-dimensional float vector
     dims: 64
     lifetime: "tick"  # Derived from current position
-    readable_by: ["agent", "engine"]
+    readable_by: ["engine"]
     writable_by: ["engine"]
     default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     description: "8×8 grid encoding (0=empty, 1=agent, 2=affordance, 3=both)"
 
+  # Normalized position: 2 dims
   - id: "position"
     scope: "agent"
     type: "vecNf"  # N-dimensional float vector (normalized position)
@@ -168,11 +168,8 @@ variables:
 # These map variables to observation fields for BAC compiler
 
 exposed_observations:
-  - id: "obs_grid_encoding"
-    source_variable: "grid_encoding"
-    exposed_to: ["agent"]
-    shape: [64]
-    normalization: null  # Already in [0, 3] range
+  - {id: "obs_local_window", source_variable: "local_window", exposed_to: ["agent"], shape: [25]}
+  # NOTE: obs_grid_encoding not exposed for POMDP mode (L3 always uses partial_observability=true)
 
   - id: "obs_position"
     source_variable: "position"
@@ -291,8 +288,8 @@ exposed_observations:
 # ========================================
 # DIMENSION VALIDATION
 # ========================================
-# Total observation dimensions: 64 + 2 + 8 + 15 + 4 = 93
-# - Grid encoding: 64 dims
+# Total observation dimensions: 25 + 2 + 8 + 15 + 4 = 54
+# - Local window: 25 dims (5×5 POMDP window)
 # - Position: 2 dims
 # - Meters: 8 dims (8 scalars × 1)
 # - Affordance: 15 dims

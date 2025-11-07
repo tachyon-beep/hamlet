@@ -8,7 +8,7 @@ Reference Dimensions (from Cycle 0.4 manual validation):
 - L0_5_dual_resource: 78 dims (7x7 grid)
 - L1_full_observability: 93 dims (8x8 grid)
 - L2_partial_observability: 54 dims (POMDP 5x5 window)
-- L3_temporal_mechanics: 93 dims (8x8 grid)
+- L3_temporal_mechanics: 54 dims (POMDP 5x5 window + temporal features)
 """
 
 from pathlib import Path
@@ -47,8 +47,17 @@ def compute_vfs_observation_dim_from_agent_readable(config_path: Path) -> int:
     spec = builder.build_observation_spec(variables, exposures)
 
     # Filter observation spec based on observability mode (matches environment filtering)
-    # L2_partial_observability uses POMDP mode, others use full observability
-    partial_observability = "partial_observability" in str(config_path)
+    # Load partial_observability setting from training.yaml
+    import yaml
+    training_yaml = config_path / "training.yaml"
+    if training_yaml.exists():
+        with open(training_yaml) as f:
+            training_config = yaml.safe_load(f)
+        partial_observability = training_config.get("environment", {}).get("partial_observability", False)
+    else:
+        # Fallback: check path name for backward compatibility
+        partial_observability = "partial_observability" in str(config_path)
+
     if partial_observability:
         # POMDP: Exclude grid_encoding, include local_window
         spec = [field for field in spec if field.source_variable != "grid_encoding"]
@@ -129,7 +138,7 @@ class TestObservationDimensionRegressionL3:
     """Test L3 temporal mechanics config observation dimension compatibility."""
 
     def test_l3_temporal_mechanics_dimension(self):
-        """L3_temporal_mechanics: VFS dims must match current implementation (93 dims)."""
+        """L3_temporal_mechanics: VFS dims must match current implementation (54 dims POMDP)."""
         config_path = CONFIG_PATHS["L3_temporal_mechanics"]
         expected_dim = EXPECTED_DIMENSIONS["L3_temporal_mechanics"]
 
@@ -198,7 +207,7 @@ class TestObservationDimensionBreakdown:
 # ✓ L0_5_dual_resource: 78 dims (7x7 grid)
 # ✓ L1_full_observability: 93 dims (8x8 grid, full breakdown tested)
 # ✓ L2_partial_observability: 54 dims (POMDP 5x5 window)
-# ✓ L3_temporal_mechanics: 93 dims (8x8 grid, temporal features)
+# ✓ L3_temporal_mechanics: 54 dims (POMDP 5x5 window, temporal features)
 #
 # Critical: If any test fails, ALL checkpoints become incompatible!
 # These tests must ALWAYS pass to maintain checkpoint compatibility.
