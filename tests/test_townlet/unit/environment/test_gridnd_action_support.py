@@ -43,6 +43,7 @@ gridnd:
 
     # Update VFS config to match 4D substrate (L1_3D_house has 3D position)
     import yaml
+
     vfs_yaml = dest_config / "variables_reference.yaml"
     with open(vfs_yaml) as f:
         vfs_config = yaml.safe_load(f)

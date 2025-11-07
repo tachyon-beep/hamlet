@@ -45,21 +45,18 @@ aspatial: {}
 
     # Generate aspatial-specific VFS config (8 meters, no position/grid_encoding)
     import yaml
+
     vfs_yaml = config_pack / "variables_reference.yaml"
     with open(vfs_yaml) as f:
         vfs_config = yaml.safe_load(f)
 
     # Remove grid_encoding and position variables (aspatial has no position)
-    vfs_config["variables"] = [
-        var for var in vfs_config["variables"]
-        if var["id"] not in ["grid_encoding", "local_window", "position"]
-    ]
+    vfs_config["variables"] = [var for var in vfs_config["variables"] if var["id"] not in ["grid_encoding", "local_window", "position"]]
 
     # Remove grid_encoding observation (aspatial has no grid)
     if "exposed_observations" in vfs_config:
         vfs_config["exposed_observations"] = [
-            obs for obs in vfs_config["exposed_observations"]
-            if obs["id"] not in ["obs_grid_encoding", "obs_local_window", "obs_position"]
+            obs for obs in vfs_config["exposed_observations"] if obs["id"] not in ["obs_grid_encoding", "obs_local_window", "obs_position"]
         ]
 
     with open(vfs_yaml, "w") as f:
