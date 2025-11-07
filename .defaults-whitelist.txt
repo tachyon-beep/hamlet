@@ -99,6 +99,7 @@ src/townlet/vfs/schema.py:NormalizationSpec:*:std:CALL003
 src/townlet/vfs/schema.py:ObservationField:*:normalization:CALL003
 src/townlet/vfs/schema.py:VariableDef:*:dims:CALL003
 src/townlet/vfs/schema.py:VariableDef:*:description:CALL003
+src/townlet/vfs/observation_builder.py:*
 
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS
