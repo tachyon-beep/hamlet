@@ -8,7 +8,6 @@ and scope semantics. It handles three scope patterns:
 - agent_private: Per-agent values, observable only by owner (shape [num_agents] or [num_agents, dims])
 """
 
-
 import torch
 
 from townlet.vfs.schema import VariableDef
@@ -164,9 +163,7 @@ class VariableRegistry:
         elif var_def.type == "vec3i":
             dims = 3
         elif var_def.type in ("vecNi", "vecNf"):
-            assert (
-                var_def.dims is not None
-            ), f"vecNi/vecNf variable {var_def.id} must have dims field"
+            assert var_def.dims is not None, f"vecNi/vecNf variable {var_def.id} must have dims field"
             dims = var_def.dims
         else:
             raise ValueError(f"Unsupported variable type: {var_def.type}")
