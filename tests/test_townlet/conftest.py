@@ -867,6 +867,88 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
     with open(config_4m / "affordances.yaml", "w") as f:
         yaml.safe_dump(affordances_config, f)
 
+    # Generate matching variables_reference.yaml for 4 meters
+    # Must match bars_config meter count to avoid VFS/bars mismatch
+    vfs_config = {
+        "version": "1.0",
+        "variables": [
+            # Grid encoding (64 dims for 8×8 grid)
+            {
+                "id": "grid_encoding",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 64,
+                "lifetime": "tick",
+                "readable_by": ["agent", "engine"],
+                "writable_by": ["engine"],
+                "default": [0.0] * 64,
+                "description": "8×8 grid encoding",
+            },
+            # Local window for POMDP (5×5 = 25 cells)
+            {
+                "id": "local_window",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 25,
+                "lifetime": "tick",
+                "readable_by": ["agent", "engine"],
+                "writable_by": ["engine"],
+                "default": [0.0] * 25,
+                "description": "5×5 local window for POMDP",
+            },
+            # Position (2 dims)
+            {
+                "id": "position",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 2,
+                "lifetime": "episode",
+                "readable_by": ["agent", "engine", "acs"],
+                "writable_by": ["actions", "engine"],
+                "default": [0.0, 0.0],
+                "description": "Normalized agent position (x, y)",
+            },
+            # 4 meters: energy, health, money, mood
+            {"id": "energy", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "health", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "money", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 0.0},
+            {"id": "mood", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            # Affordance at position (15 dims)
+            {
+                "id": "affordance_at_position",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 15,
+                "lifetime": "tick",
+                "readable_by": ["agent", "engine"],
+                "writable_by": ["engine"],
+                "default": [0.0] * 14 + [1.0],
+            },
+            # Temporal features (4 scalars)
+            {"id": "time_sin", "scope": "global", "type": "scalar", "lifetime": "tick", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 0.0},
+            {"id": "time_cos", "scope": "global", "type": "scalar", "lifetime": "tick", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 1.0},
+            {"id": "interaction_progress", "scope": "agent", "type": "scalar", "lifetime": "tick", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 0.0},
+            {"id": "lifetime_progress", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 0.0},
+        ],
+        "exposed_observations": [
+            {"id": "obs_grid_encoding", "source_variable": "grid_encoding", "exposed_to": ["agent"], "shape": [64], "normalization": None},
+            {"id": "obs_local_window", "source_variable": "local_window", "exposed_to": ["agent"], "shape": [25], "normalization": None},
+            {"id": "obs_position", "source_variable": "position", "exposed_to": ["agent"], "shape": [2], "normalization": {"kind": "minmax", "min": [0.0, 0.0], "max": [1.0, 1.0]}},
+            {"id": "obs_energy", "source_variable": "energy", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_health", "source_variable": "health", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_money", "source_variable": "money", "exposed_to": ["agent"], "shape": [], "normalization": None},
+            {"id": "obs_mood", "source_variable": "mood", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_affordance_at_position", "source_variable": "affordance_at_position", "exposed_to": ["agent"], "shape": [15], "normalization": None},
+            {"id": "obs_time_sin", "source_variable": "time_sin", "exposed_to": ["agent"], "shape": [], "normalization": None},
+            {"id": "obs_time_cos", "source_variable": "time_cos", "exposed_to": ["agent"], "shape": [], "normalization": None},
+            {"id": "obs_interaction_progress", "source_variable": "interaction_progress", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_lifetime_progress", "source_variable": "lifetime_progress", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+        ],
+    }
+
+    with open(config_4m / "variables_reference.yaml", "w") as f:
+        yaml.safe_dump(vfs_config, f, sort_keys=False)
+
     return config_4m
 
 
@@ -937,6 +1019,108 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
 
     with open(config_12m / "bars.yaml", "w") as f:
         yaml.safe_dump(bars_12m, f)
+
+    # Generate matching variables_reference.yaml for 12 meters
+    # Must match bars_config meter count to avoid VFS/bars mismatch
+    vfs_config = {
+        "version": "1.0",
+        "variables": [
+            # Grid encoding (64 dims for 8×8 grid)
+            {
+                "id": "grid_encoding",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 64,
+                "lifetime": "tick",
+                "readable_by": ["agent", "engine"],
+                "writable_by": ["engine"],
+                "default": [0.0] * 64,
+                "description": "8×8 grid encoding",
+            },
+            # Local window for POMDP (5×5 = 25 cells)
+            {
+                "id": "local_window",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 25,
+                "lifetime": "tick",
+                "readable_by": ["agent", "engine"],
+                "writable_by": ["engine"],
+                "default": [0.0] * 25,
+                "description": "5×5 local window for POMDP",
+            },
+            # Position (2 dims)
+            {
+                "id": "position",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 2,
+                "lifetime": "episode",
+                "readable_by": ["agent", "engine", "acs"],
+                "writable_by": ["actions", "engine"],
+                "default": [0.0, 0.0],
+                "description": "Normalized agent position (x, y)",
+            },
+            # 8 standard meters
+            {"id": "energy", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "health", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "satiation", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "money", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 0.0},
+            {"id": "mood", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "social", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "fitness", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            {"id": "hygiene", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 1.0},
+            # 4 additional meters
+            {"id": "reputation", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 0.5},
+            {"id": "skill", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 0.3},
+            {"id": "spirituality", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 0.6},
+            {"id": "community_trust", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine", "acs"], "writable_by": ["actions", "engine"], "default": 0.7},
+            # Affordance at position (15 dims)
+            {
+                "id": "affordance_at_position",
+                "scope": "agent",
+                "type": "vecNf",
+                "dims": 15,
+                "lifetime": "tick",
+                "readable_by": ["agent", "engine"],
+                "writable_by": ["engine"],
+                "default": [0.0] * 14 + [1.0],
+            },
+            # Temporal features (4 scalars)
+            {"id": "time_sin", "scope": "global", "type": "scalar", "lifetime": "tick", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 0.0},
+            {"id": "time_cos", "scope": "global", "type": "scalar", "lifetime": "tick", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 1.0},
+            {"id": "interaction_progress", "scope": "agent", "type": "scalar", "lifetime": "tick", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 0.0},
+            {"id": "lifetime_progress", "scope": "agent", "type": "scalar", "lifetime": "episode", "readable_by": ["agent", "engine"], "writable_by": ["engine"], "default": 0.0},
+        ],
+        "exposed_observations": [
+            {"id": "obs_grid_encoding", "source_variable": "grid_encoding", "exposed_to": ["agent"], "shape": [64], "normalization": None},
+            {"id": "obs_local_window", "source_variable": "local_window", "exposed_to": ["agent"], "shape": [25], "normalization": None},
+            {"id": "obs_position", "source_variable": "position", "exposed_to": ["agent"], "shape": [2], "normalization": {"kind": "minmax", "min": [0.0, 0.0], "max": [1.0, 1.0]}},
+            # 8 standard meters
+            {"id": "obs_energy", "source_variable": "energy", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_health", "source_variable": "health", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_satiation", "source_variable": "satiation", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_money", "source_variable": "money", "exposed_to": ["agent"], "shape": [], "normalization": None},
+            {"id": "obs_mood", "source_variable": "mood", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_social", "source_variable": "social", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_fitness", "source_variable": "fitness", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_hygiene", "source_variable": "hygiene", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            # 4 additional meters
+            {"id": "obs_reputation", "source_variable": "reputation", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_skill", "source_variable": "skill", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_spirituality", "source_variable": "spirituality", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_community_trust", "source_variable": "community_trust", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            # Affordance and temporal
+            {"id": "obs_affordance_at_position", "source_variable": "affordance_at_position", "exposed_to": ["agent"], "shape": [15], "normalization": None},
+            {"id": "obs_time_sin", "source_variable": "time_sin", "exposed_to": ["agent"], "shape": [], "normalization": None},
+            {"id": "obs_time_cos", "source_variable": "time_cos", "exposed_to": ["agent"], "shape": [], "normalization": None},
+            {"id": "obs_interaction_progress", "source_variable": "interaction_progress", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+            {"id": "obs_lifetime_progress", "source_variable": "lifetime_progress", "exposed_to": ["agent"], "shape": [], "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}},
+        ],
+    }
+
+    with open(config_12m / "variables_reference.yaml", "w") as f:
+        yaml.safe_dump(vfs_config, f, sort_keys=False)
 
     return config_12m
 
