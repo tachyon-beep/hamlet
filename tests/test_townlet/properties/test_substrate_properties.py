@@ -148,7 +148,7 @@ def test_property_aspatial_no_position_operations():
     grid_size=st.integers(min_value=3, max_value=10),
     num_agents=st.integers(min_value=1, max_value=4),
 )
-@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)  # Disable deadline for VFS overhead
 def test_property_obs_dim_matches_substrate_grid2d(grid_size, num_agents, test_config_pack_path, cpu_device):
     """Observation dimension should match substrate + meters + affordances + temporal."""
     env = VectorizedHamletEnv(
