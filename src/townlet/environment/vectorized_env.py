@@ -557,7 +557,7 @@ class VectorizedHamletEnv:
 
             # Broadcast global scalars to all agents
             if value.ndim == 0:
-                value = value.expand(self.num_agents)
+                value = value.expand(self.num_agents).clone()
 
             # Apply normalization if specified
             if field.normalization:
