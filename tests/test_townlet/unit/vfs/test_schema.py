@@ -154,7 +154,7 @@ class TestVariableDef:
         """vecNf type requires dims field."""
         from townlet.vfs.schema import VariableDef
 
-        with pytest.raises(ValidationError, match="dims.*required"):
+        with pytest.raises(ValidationError, match="requires 'dims' field"):
             VariableDef(
                 id="test",
                 scope="agent",
@@ -246,7 +246,7 @@ class TestNormalizationSpec:
         """MinMax normalization requires min field."""
         from townlet.vfs.schema import NormalizationSpec
 
-        with pytest.raises(ValidationError, match="min.*required"):
+        with pytest.raises(ValidationError, match="requires 'min' parameter"):
             NormalizationSpec(
                 kind="minmax",
                 max=1.0,
@@ -257,7 +257,7 @@ class TestNormalizationSpec:
         """Z-score normalization requires mean field."""
         from townlet.vfs.schema import NormalizationSpec
 
-        with pytest.raises(ValidationError, match="mean.*required"):
+        with pytest.raises(ValidationError, match="requires 'mean' parameter"):
             NormalizationSpec(
                 kind="zscore",
                 std=0.2,
