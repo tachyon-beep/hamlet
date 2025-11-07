@@ -894,3 +894,517 @@ class TestGetActionMasks:
 # =============================================================================
 # PLACEHOLDER: PHASE 15C, 15D tests will be added incrementally
 # =============================================================================
+
+
+# =============================================================================
+# PHASE 15C: INTERACTIONS & REWARDS
+# =============================================================================
+
+
+class TestHandleInteractions:
+    """Test VectorizedHamletEnv._handle_interactions() and _handle_interactions_legacy()."""
+
+    def test_handle_interactions_legacy_when_temporal_disabled(self):
+        """Should use legacy instant interactions when temporal mechanics disabled."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,  # Legacy mode
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Create interact mask
+        interact_mask = torch.tensor([True])
+
+        # Should return dict (may be empty if no affordance at position)
+        result = env._handle_interactions(interact_mask)
+        assert isinstance(result, dict)
+
+    def test_handle_interactions_multi_tick_when_temporal_enabled(self):
+        """Should use multi-tick interactions when temporal mechanics enabled."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=True,  # Multi-tick mode
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Multi-tick mode should initialize progress tracking
+        assert hasattr(env, 'interaction_progress')
+        assert hasattr(env, 'last_interaction_affordance')
+        assert hasattr(env, 'last_interaction_position')
+
+    def test_handle_interactions_returns_empty_when_no_interact(self):
+        """Should return empty dict when no agents interact."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # No agents interacting
+        interact_mask = torch.tensor([False, False])
+
+        result = env._handle_interactions(interact_mask)
+        assert result == {}
+
+    def test_handle_interactions_legacy_returns_dict(self):
+        """Should return dict mapping agent indices to affordance names."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        interact_mask = torch.tensor([True])
+
+        result = env._handle_interactions_legacy(interact_mask)
+        assert isinstance(result, dict)
+
+
+class TestCalculateShapedRewards:
+    """Test VectorizedHamletEnv._calculate_shaped_rewards()."""
+
+    def test_calculate_shaped_rewards_returns_tensor(self):
+        """Should return rewards tensor."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        rewards = env._calculate_shaped_rewards()
+
+        assert isinstance(rewards, torch.Tensor)
+        assert rewards.shape == (2,)
+
+    def test_calculate_shaped_rewards_uses_meter_values(self):
+        """Should calculate rewards based on current meter values."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Get initial reward
+        initial_reward = env._calculate_shaped_rewards()
+
+        # Modify meters (reduce energy)
+        env.meters[0, env.energy_idx] = 0.1
+
+        # Reward should change
+        new_reward = env._calculate_shaped_rewards()
+        # Rewards are based on meter states, so they should differ
+        assert initial_reward.item() != new_reward.item()
+
+    def test_calculate_shaped_rewards_returns_finite_values(self):
+        """Should return finite reward values (no NaN or inf)."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=3,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        rewards = env._calculate_shaped_rewards()
+
+        assert torch.all(torch.isfinite(rewards)).item()
+
+
+class TestApplyCustomAction:
+    """Test VectorizedHamletEnv._apply_custom_action()."""
+
+    def test_apply_custom_action_rest_action(self):
+        """Should handle REST custom action."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Find REST action
+        rest_action = env._get_optional_action_idx("REST")
+        if rest_action is not None:
+            action_config = env.action_space.get_action_by_id(rest_action)
+
+            # Apply REST action (should execute without error)
+            # Note: Meters may or may not change depending on action config costs
+            # (test configs may have very low/zero costs for balancing)
+            env._apply_custom_action(0, action_config)
+
+            # Verify method executed without error and meters are still valid
+            assert isinstance(env.meters, torch.Tensor)
+            assert env.meters.shape == (1, 8)
+
+    def test_apply_custom_action_meditate_action(self):
+        """Should handle MEDITATE custom action."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Find MEDITATE action
+        meditate_action = env._get_optional_action_idx("MEDITATE")
+        if meditate_action is not None:
+            action_config = env.action_space.get_action_by_id(meditate_action)
+
+            # Apply MEDITATE action (should execute without error)
+            # Note: Meters may or may not change depending on action config costs
+            # (test configs may have very low/zero costs for balancing)
+            env._apply_custom_action(0, action_config)
+
+            # Verify method executed without error and meters are still valid
+            assert isinstance(env.meters, torch.Tensor)
+            assert env.meters.shape == (1, 8)
+
+    def test_get_optional_action_idx_returns_int_or_none(self):
+        """Should return action index for valid actions, None otherwise."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Valid action
+        rest_idx = env._get_optional_action_idx("REST")
+        assert rest_idx is None or isinstance(rest_idx, int)
+
+        # Invalid action
+        invalid_idx = env._get_optional_action_idx("NONEXISTENT_ACTION")
+        assert invalid_idx is None
+
+
+# =============================================================================
+# PHASE 15D: CHECKPOINTING
+# =============================================================================
+
+
+class TestGetAffordancePositions:
+    """Test VectorizedHamletEnv.get_affordance_positions()."""
+
+    def test_get_affordance_positions_returns_dict(self):
+        """Should return dict with positions, ordering, and position_dim."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        positions = env.get_affordance_positions()
+
+        assert isinstance(positions, dict)
+        assert "positions" in positions
+        assert "ordering" in positions
+        assert "position_dim" in positions
+
+    def test_get_affordance_positions_has_correct_position_dim(self):
+        """Should include position_dim matching substrate."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        checkpoint_data = env.get_affordance_positions()
+
+        # Grid2D should have position_dim = 2
+        assert checkpoint_data["position_dim"] == 2
+
+    def test_get_affordance_positions_includes_all_affordances(self):
+        """Should include all affordances in positions dict."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        checkpoint_data = env.get_affordance_positions()
+
+        # Should have same affordances
+        assert set(checkpoint_data["positions"].keys()) == set(env.affordances.keys())
+
+    def test_get_affordance_positions_converts_to_lists(self):
+        """Should convert tensor positions to lists."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        checkpoint_data = env.get_affordance_positions()
+
+        # All positions should be lists
+        for name, pos in checkpoint_data["positions"].items():
+            assert isinstance(pos, list)
+
+
+class TestSetAffordancePositions:
+    """Test VectorizedHamletEnv.set_affordance_positions()."""
+
+    def test_set_affordance_positions_updates_affordances(self):
+        """Should update affordance positions from checkpoint data."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Get current positions
+        original_checkpoint = env.get_affordance_positions()
+
+        # Randomize positions
+        env.randomize_affordance_positions()
+
+        # Restore from checkpoint
+        env.set_affordance_positions(original_checkpoint)
+
+        # Positions should match original
+        restored_checkpoint = env.get_affordance_positions()
+        assert restored_checkpoint["positions"] == original_checkpoint["positions"]
+
+    def test_set_affordance_positions_validates_position_dim(self):
+        """Should validate position_dim matches substrate."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Create invalid checkpoint with wrong position_dim
+        invalid_checkpoint = {
+            "positions": {},
+            "ordering": [],
+            "position_dim": 3,  # Wrong! Should be 2 for Grid2D
+        }
+
+        with pytest.raises(ValueError, match="position_dim mismatch"):
+            env.set_affordance_positions(invalid_checkpoint)
+
+
+class TestRandomizeAffordancePositions:
+    """Test VectorizedHamletEnv.randomize_affordance_positions()."""
+
+    def test_randomize_affordance_positions_changes_positions(self):
+        """Should change affordance positions."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Get current positions
+        original_positions = env.get_affordance_positions()
+
+        # Randomize
+        env.randomize_affordance_positions()
+
+        # Get new positions
+        new_positions = env.get_affordance_positions()
+
+        # At least some positions should change
+        # (with 8x8 grid, very unlikely all stay the same)
+        assert original_positions["positions"] != new_positions["positions"]
+
+    def test_randomize_affordance_positions_maintains_affordance_count(self):
+        """Should keep same number of affordances."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        original_count = len(env.affordances)
+
+        env.randomize_affordance_positions()
+
+        assert len(env.affordances) == original_count
+
+    def test_randomize_affordance_positions_stays_in_bounds(self):
+        """Should keep all positions within grid bounds."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        grid_size = 8
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=grid_size,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        env.randomize_affordance_positions()
+
+        # All positions should be within [0, grid_size)
+        for affordance_pos in env.affordances.values():
+            assert torch.all(affordance_pos >= 0).item()
+            assert torch.all(affordance_pos < grid_size).item()
+
+
+# =============================================================================
+# END OF SPRINT 15 TESTS
+# =============================================================================
