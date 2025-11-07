@@ -158,6 +158,14 @@ def load_enabled_affordances(config_pack_path: Path) -> list[str]:
     return config["environment"]["enabled_affordances"]
 
 
+def load_partial_observability(config_pack_path: Path) -> bool:
+    """Load partial_observability setting from training.yaml."""
+    training_yaml = config_pack_path / "training.yaml"
+    with open(training_yaml) as f:
+        config = yaml.safe_load(f)
+    return config["environment"]["partial_observability"]
+
+
 @pytest.mark.parametrize(
     "config_name",
     [
@@ -172,12 +180,13 @@ def test_env_observation_dim_unchanged(config_name):
     """Environment with substrate.yaml using coordinate encoding (all same dims)."""
     config_path = Path("configs") / config_name
     enabled_affordances = load_enabled_affordances(config_path)
+    partial_observability = load_partial_observability(config_path)
 
     env = VectorizedHamletEnv(
         config_pack_path=config_path,
         num_agents=1,
         grid_size=8,
-        partial_observability=False,
+        partial_observability=partial_observability,  # Use config's POMDP setting
         vision_range=2,
         enable_temporal_mechanics=False,
         enabled_affordances=enabled_affordances,
@@ -188,7 +197,15 @@ def test_env_observation_dim_unchanged(config_name):
         device=torch.device("cpu"),
     )
 
-    expected_obs_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
+    # Calculate expected observation dimension based on observability mode
+    if partial_observability:
+        # POMDP: local_window + position + meters + affordances + temporal
+        window_size = 2 * env.vision_range + 1
+        local_window_dim = window_size**env.substrate.position_dim
+        expected_obs_dim = local_window_dim + env.substrate.position_dim + env.meter_count + (env.num_affordance_types + 1) + 4
+    else:
+        # Full observability: grid_encoding + position + meters + affordances + temporal
+        expected_obs_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
 
     # Observation dimension should match expected breakdown
     assert env.observation_dim == expected_obs_dim
@@ -357,6 +374,7 @@ aspatial: {}
     shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
     shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
     shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
+    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
     # Create environment with aspatial substrate and grid_size parameter
     env = VectorizedHamletEnv(

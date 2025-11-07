@@ -1,0 +1,49 @@
+# TEMPORARY REFERENCE VARIABLES (Cycle 0.2)
+# Purpose: Scaffolding for dimension validation (will be deleted in Cycle 7)
+# Config: L0_0_minimal (3×3 Grid2D, full observability)
+# Expected observation_dim: 38 (11 substrate + 8 meters + 15 affordance + 4 temporal)
+
+version: "1.0"
+
+variables:
+  # Substrate encoding: 9 grid cells + 2 position = 11 dims
+  - {id: "grid_encoding", scope: "agent", type: "vecNf", dims: 9, lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: [0,0,0,0,0,0,0,0,0]}
+  - {id: "position", scope: "agent", type: "vecNf", dims: 2, lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: [0,0]}
+  
+  # Meters: 8 scalars
+  - {id: "energy", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  - {id: "health", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  - {id: "satiation", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  - {id: "money", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 0.0}
+  - {id: "mood", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  - {id: "social", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  - {id: "fitness", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  - {id: "hygiene", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  
+  # Affordance: 15 dims
+  - {id: "affordance_at_position", scope: "agent", type: "vecNf", dims: 15, lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]}
+  
+  # Temporal: 4 scalars
+  - {id: "time_sin", scope: "global", type: "scalar", lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: 0.0}
+  - {id: "time_cos", scope: "global", type: "scalar", lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
+  - {id: "interaction_progress", scope: "agent", type: "scalar", lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: 0.0}
+  - {id: "lifetime_progress", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 0.0}
+
+exposed_observations:
+  - {id: "obs_grid", source_variable: "grid_encoding", exposed_to: ["agent"], shape: [9]}
+  - {id: "obs_pos", source_variable: "position", exposed_to: ["agent"], shape: [2]}
+  - {id: "obs_energy", source_variable: "energy", exposed_to: ["agent"], shape: []}
+  - {id: "obs_health", source_variable: "health", exposed_to: ["agent"], shape: []}
+  - {id: "obs_satiation", source_variable: "satiation", exposed_to: ["agent"], shape: []}
+  - {id: "obs_money", source_variable: "money", exposed_to: ["agent"], shape: []}
+  - {id: "obs_mood", source_variable: "mood", exposed_to: ["agent"], shape: []}
+  - {id: "obs_social", source_variable: "social", exposed_to: ["agent"], shape: []}
+  - {id: "obs_fitness", source_variable: "fitness", exposed_to: ["agent"], shape: []}
+  - {id: "obs_hygiene", source_variable: "hygiene", exposed_to: ["agent"], shape: []}
+  - {id: "obs_affordance", source_variable: "affordance_at_position", exposed_to: ["agent"], shape: [15]}
+  - {id: "obs_time_sin", source_variable: "time_sin", exposed_to: ["agent"], shape: []}
+  - {id: "obs_time_cos", source_variable: "time_cos", exposed_to: ["agent"], shape: []}
+  - {id: "obs_interaction_progress", source_variable: "interaction_progress", exposed_to: ["agent"], shape: []}
+  - {id: "obs_lifetime_progress", source_variable: "lifetime_progress", exposed_to: ["agent"], shape: []}
+
+# Dimension validation: 9 + 2 + 8 + 15 + 4 = 38 dims

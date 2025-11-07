@@ -41,6 +41,35 @@ gridnd:
 """
     )
 
+    # Update VFS config to match 4D substrate (L1_3D_house has 3D position)
+    import yaml
+
+    vfs_yaml = dest_config / "variables_reference.yaml"
+    with open(vfs_yaml) as f:
+        vfs_config = yaml.safe_load(f)
+
+    # Find and update position variable from 3D to 4D
+    for var in vfs_config["variables"]:
+        if var["id"] == "position":
+            var["dims"] = 4
+            var["default"] = [0.0, 0.0, 0.0, 0.0]
+            var["description"] = "Normalized agent position (4D) in [0, 1]^4 range"
+            break
+
+    # Update normalization spec for position observation (must match dims)
+    for obs in vfs_config.get("exposed_observations", []):
+        if obs["id"] == "obs_position":
+            # Update shape to match 4D
+            obs["shape"] = [4]
+            # Update normalization min/max to 4D arrays (were 3D)
+            if obs.get("normalization"):
+                obs["normalization"]["min"] = [0.0, 0.0, 0.0, 0.0]
+                obs["normalization"]["max"] = [1.0, 1.0, 1.0, 1.0]
+            break
+
+    with open(vfs_yaml, "w") as f:
+        yaml.safe_dump(vfs_config, f, sort_keys=False)
+
     return dest_config
 
 
