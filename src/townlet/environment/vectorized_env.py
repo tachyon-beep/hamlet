@@ -494,14 +494,17 @@ class VectorizedHamletEnv:
             else:
                 # Fallback for substrates without _encode_full_grid (e.g., aspatial)
                 grid_encoding = self.substrate.encode_observation(self.positions, self.affordances)
-            # Full obs uses "grid_encoding" variable name
-            self.vfs_registry.set("grid_encoding", grid_encoding, writer="engine")
+            # Full obs uses "grid_encoding" variable name (if present in VFS config)
+            if "grid_encoding" in self.vfs_registry._definitions:
+                self.vfs_registry.set("grid_encoding", grid_encoding, writer="engine")
 
         # Position (always normalized to [0,1] as per VFS schema)
         # VFS variables_reference.yaml specifies position as "Normalized agent position (x, y) in [0, 1] range"
         # Observation normalization (minmax with min=0, max=1) is a pass-through that expects [0,1] input
-        normalized_positions = self.substrate.normalize_positions(self.positions)
-        self.vfs_registry.set("position", normalized_positions, writer="engine")
+        # Only set if position variable exists (aspatial substrates have no position)
+        if "position" in self.vfs_registry._definitions:
+            normalized_positions = self.substrate.normalize_positions(self.positions)
+            self.vfs_registry.set("position", normalized_positions, writer="engine")
 
         # Meters (write each meter individually)
         for meter_name, meter_idx in self.meter_name_to_index.items():

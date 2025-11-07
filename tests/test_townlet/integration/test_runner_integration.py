@@ -167,7 +167,7 @@ training:
         # Copy test config pack files (bars, cascades, affordances, cues, substrate)
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml", "variables_reference.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -257,7 +257,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml", "variables_reference.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -344,7 +344,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml", "variables_reference.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -466,7 +466,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml", "variables_reference.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -693,7 +693,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml", "variables_reference.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -771,7 +771,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml", "variables_reference.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
@@ -850,7 +850,7 @@ training:
         # Copy test config pack files
         import shutil
 
-        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml"]:
+        for file in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml", "substrate.yaml", "variables_reference.yaml"]:
             src = test_config_pack_path / file
             dst = config_dir / file
             if src.exists():
