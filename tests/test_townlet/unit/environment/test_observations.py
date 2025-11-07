@@ -280,6 +280,36 @@ class TestPartialObservabilityWindowDimensions:
         with substrate_path.open("w") as fh:
             yaml.safe_dump(cubic_config, fh)
 
+        # Update VFS config to match 3D substrate (configs/test has 2D position)
+        vfs_path = temp_config_pack / "variables_reference.yaml"
+        with vfs_path.open() as fh:
+            vfs_config = yaml.safe_load(fh)
+
+        # Update position variable from 2D to 3D
+        for var in vfs_config["variables"]:
+            if var["id"] == "position":
+                var["dims"] = 3
+                var["default"] = [0.0, 0.0, 0.0]
+                var["description"] = "Normalized agent position (3D) in [0, 1]^3 range"
+            elif var["id"] == "local_window":
+                # POMDP window: vision_range=1 → (2*1+1)^3 = 3^3 = 27 cells
+                var["dims"] = 27
+                var["description"] = "POMDP local observation window (3×3×3 cube, vision_range=1)"
+
+        # Update observations (position and local_window)
+        for obs in vfs_config.get("exposed_observations", []):
+            if obs["id"] == "obs_position":
+                obs["shape"] = [3]
+                if obs.get("normalization"):
+                    obs["normalization"]["min"] = [0.0, 0.0, 0.0]
+                    obs["normalization"]["max"] = [1.0, 1.0, 1.0]
+            elif obs["id"] == "obs_local_window":
+                # Update local_window obs shape to match 3D window
+                obs["shape"] = [27]
+
+        with vfs_path.open("w") as fh:
+            yaml.safe_dump(vfs_config, fh)
+
         env = VectorizedHamletEnv(
             num_agents=1,
             grid_size=5,
