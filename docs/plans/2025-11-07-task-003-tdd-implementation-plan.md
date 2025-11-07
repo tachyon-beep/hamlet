@@ -915,23 +915,241 @@ def load_curriculum_config(config_dir: Path) -> CurriculumConfig:
 
 ## Cycle 4: Basic DTOs (BarConfig, CascadeConfig, AffordanceConfig) (2-3 hours)
 
-**Goal**: Create basic versions of existing DTOs (without advanced features)
+**Goal**: Create basic structural DTOs (no cross-file validation, no advanced features)
 
-**Note**: These DTOs already exist in some form. This cycle creates **no-defaults** versions.
+**IMPORTANT**: ActionConfig already exists from TASK-002B - skip it in this cycle.
 
-### Deliverables
+### Scope Boundaries (What Goes Where)
 
-**`src/townlet/config/bar.py`** - Basic meter definitions
-**`src/townlet/config/cascade.py`** - Basic cascade definitions
-**`src/townlet/config/affordance.py`** - Basic affordance definitions (no capabilities)
+**In TASK-003 (this cycle)**:
+- ✅ Structural validation (types, ranges, required fields)
+- ✅ Single-file validation (field constraints within one DTO)
+- ✅ No-defaults enforcement
 
-**Scope**:
-- Basic fields only
-- No cross-file validation (defer to TASK-004A)
-- No capabilities/effect pipelines (defer to TASK-004B)
-- Focus on structural validation only
+**Defer to TASK-004A** (Universe Compiler):
+- ❌ Cross-file validation (e.g., "does affordance ID exist in affordances.yaml?")
+- ❌ Reference checking (e.g., "does meter name in cascade match bars.yaml?")
+- ❌ Complex graph validation (cascade loops, orphaned references)
 
-**COMMIT**: `feat(config): Add BarConfig, CascadeConfig, and AffordanceConfig basic DTOs`
+**Defer to TASK-004B** (Capabilities System):
+- ❌ Affordance capabilities (visibility, requirements, unlock conditions)
+- ❌ Effect pipelines (complex affordance effects)
+- ❌ Availability masking (temporal, spatial, state-based)
+
+### Deliverable 1: BarConfig (30 minutes)
+
+**File**: `src/townlet/config/bar.py`
+
+**In Scope** (TASK-003):
+```python
+class BarConfig(BaseModel):
+    """Basic meter definition - structural validation only."""
+
+    # Meter identity (REQUIRED)
+    name: str = Field(min_length=1, description="Meter name (e.g., 'energy')")
+
+    # Initial state (REQUIRED)
+    initial: float = Field(ge=0.0, le=1.0, description="Starting value [0, 1]")
+
+    # Bounds (REQUIRED)
+    min: float = Field(ge=0.0, description="Minimum value")
+    max: float = Field(le=1.0, description="Maximum value")
+
+    # Metadata (OPTIONAL)
+    description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_bounds_order(self) -> "BarConfig":
+        """Ensure min <= initial <= max."""
+        if not (self.min <= self.initial <= self.max):
+            raise ValueError(...)
+        return self
+```
+
+**Out of Scope** (defer):
+- ❌ Decay rates (cascade integration - TASK-004A)
+- ❌ Cross-reference to cascade rules (TASK-004A)
+- ❌ Validation that meter names are unique across bars.yaml (TASK-004A)
+
+### Deliverable 2: CascadeConfig (30 minutes)
+
+**File**: `src/townlet/config/cascade.py`
+
+**In Scope** (TASK-003):
+```python
+class CascadeConfig(BaseModel):
+    """Basic cascade rule - structural validation only."""
+
+    # Cascade identity (REQUIRED)
+    source_meter: str = Field(min_length=1, description="Source meter name")
+    target_meter: str = Field(min_length=1, description="Target meter name")
+
+    # Cascade rule (REQUIRED)
+    threshold: float = Field(ge=0.0, le=1.0, description="Trigger threshold")
+    rate: float = Field(description="Drain rate per tick")
+
+    # Metadata (OPTIONAL)
+    description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_not_self_cascade(self) -> "CascadeConfig":
+        """Source and target must be different."""
+        if self.source_meter == self.target_meter:
+            raise ValueError(...)
+        return self
+```
+
+**Out of Scope** (defer):
+- ❌ Validation that source_meter exists in bars.yaml (TASK-004A)
+- ❌ Validation that target_meter exists in bars.yaml (TASK-004A)
+- ❌ Cascade loop detection (A→B→C→A) (TASK-004A)
+- ❌ Orphaned cascade rules (TASK-004A)
+
+### Deliverable 3: AffordanceConfig (60 minutes)
+
+**File**: `src/townlet/config/affordance.py`
+
+**In Scope** (TASK-003):
+```python
+class AffordanceConfig(BaseModel):
+    """Basic affordance definition - structural validation only."""
+
+    # Affordance identity (REQUIRED)
+    id: str = Field(min_length=1, description="Unique affordance ID")
+    name: str = Field(min_length=1, description="Display name")
+
+    # Type (REQUIRED)
+    type: str = Field(min_length=1, description="Affordance type category")
+
+    # Basic effects (REQUIRED)
+    effects: dict[str, float] = Field(
+        description="Meter changes {meter_name: delta}"
+    )
+
+    # Position (OPTIONAL - for explicit placement)
+    position: list[int] | dict[str, int] | int | None = Field(
+        default=None,
+        description="Explicit position (2D list, 3D list, hex dict, or graph node ID)"
+    )
+
+    # Metadata (OPTIONAL)
+    description: str | None = None
+
+    @field_validator("position")
+    @classmethod
+    def validate_position_format(cls, v):
+        """Validate position format (list, dict, int, or None)."""
+        if v is None:
+            return v  # Randomize (default)
+
+        if isinstance(v, list):
+            if not all(isinstance(x, int) for x in v):
+                raise ValueError(...)
+            if len(v) not in [2, 3]:
+                raise ValueError(...)
+            return v
+
+        if isinstance(v, dict):
+            if set(v.keys()) != {"q", "r"}:
+                raise ValueError(...)
+            return v
+
+        if isinstance(v, int) and v >= 0:
+            return v
+
+        raise ValueError(...)
+```
+
+**Out of Scope** (defer):
+- ❌ Validation that meter names in effects exist in bars.yaml (TASK-004A)
+- ❌ Capabilities (visibility, requirements, unlock) (TASK-004B)
+- ❌ Effect pipelines (complex multi-step effects) (TASK-004B)
+- ❌ Availability masking (temporal, spatial, state-based) (TASK-004B)
+- ❌ Multi-tick interaction mechanics (TASK-004B)
+
+### Deliverable 4: Skip ActionConfig (Already Done)
+
+**Status**: ✅ **ActionConfig already exists from TASK-002B**
+
+**Location**: `src/townlet/environment/action_config.py`
+
+**What Exists**:
+- ✅ Pydantic validation for actions
+- ✅ Fields: id, name, type, delta, costs, reads, writes
+- ✅ Used by ComposedActionSpace
+- ✅ No-defaults enforcement already applied
+
+**Action for TASK-003**: **SKIP** - no need to create or modify
+
+**Reference in HamletConfig** (Cycle 5): Link to existing ActionConfig
+
+### Test Strategy
+
+**For each DTO**:
+1. **RED**: Write failing tests
+   - Missing required field
+   - Type mismatch
+   - Range violations
+   - Validator logic
+
+2. **GREEN**: Implement minimal DTO
+   - Required fields only
+   - Basic validators
+   - Clear error messages
+
+3. **REFACTOR**: Clean up
+   - Extract common patterns
+   - Improve error messages
+   - Add config templates
+
+### What We're NOT Testing (Explicitly Defer)
+
+**Don't test these in TASK-003**:
+- ❌ "Does affordance ID exist in affordances.yaml?" (TASK-004A)
+- ❌ "Does meter name in effects exist in bars.yaml?" (TASK-004A)
+- ❌ "Are there cascade loops?" (TASK-004A)
+- ❌ "Does affordance have required capabilities?" (TASK-004B)
+
+**Why**: These require cross-file loading and graph analysis (TASK-004A's job)
+
+**How to avoid**: In tests, use arbitrary meter/affordance names. Don't validate references.
+
+```python
+# ✅ GOOD (TASK-003): Test structural validation
+def test_affordance_effects_is_dict():
+    with pytest.raises(ValidationError):
+        AffordanceConfig(
+            id="Bed",
+            name="Bed",
+            type="rest",
+            effects="not_a_dict",  # Type error
+        )
+
+# ❌ BAD (TASK-004A): Don't test cross-file references yet
+def test_affordance_effects_meter_exists():
+    # This belongs in TASK-004A
+    with pytest.raises(ValidationError):
+        AffordanceConfig(
+            id="Bed",
+            name="Bed",
+            type="rest",
+            effects={"nonexistent_meter": 0.2},  # Don't validate this yet
+        )
+```
+
+### Success Criteria (Cycle 4)
+
+- [ ] BarConfig created with structural validation
+- [ ] CascadeConfig created with structural validation
+- [ ] AffordanceConfig created with structural validation (no capabilities)
+- [ ] ActionConfig explicitly marked as "skip - already done"
+- [ ] 15+ tests passing (5 per DTO: required fields, types, ranges, validators, loading)
+- [ ] Clear error messages for all validation failures
+- [ ] Config templates created for bars.yaml, cascades.yaml, affordances.yaml
+- [ ] NO cross-file validation implemented (deferred to TASK-004A)
+- [ ] NO capabilities/effect pipelines (deferred to TASK-004B)
+
+**COMMIT**: `feat(config): Add BarConfig, CascadeConfig, AffordanceConfig basic DTOs`
 
 ---
 
