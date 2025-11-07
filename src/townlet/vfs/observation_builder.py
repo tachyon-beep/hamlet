@@ -77,7 +77,13 @@ class VFSObservationSpecBuilder:
             var_def = var_map[var_id]
 
             # Use provided metadata when present, otherwise infer defaults
-            field_id = exposure_config.get("id") or f"obs_{var_id}"
+            raw_field_id = exposure_config.get("id")
+            if raw_field_id is None:
+                field_id = f"obs_{var_id}"
+            else:
+                if not isinstance(raw_field_id, str):
+                    raise ValueError(f"Exposure field id for '{var_id}' must be a string")
+                field_id = raw_field_id
             exposed_to = exposure_config.get("exposed_to") or ["agent"]
 
             shape_config = exposure_config.get("shape")

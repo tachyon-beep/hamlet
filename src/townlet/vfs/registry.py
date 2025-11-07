@@ -99,28 +99,12 @@ class VariableRegistry:
                         dtype=torch.float32,
                     )
             elif var_def.type in ("vecNi", "vecNf", "vec2i", "vec3i"):
-                # Vector: default is a list
-                default_list = var_def.default
+                base_default = self._build_vector_default(var_def)
 
                 if var_def.scope == "global":
-                    # Global vector: shape [dims]
-                    tensor = torch.tensor(default_list, device=self.device)
-                    if var_def.type in ("vecNi", "vec2i", "vec3i"):
-                        tensor = tensor.long()
-                    else:
-                        tensor = tensor.float()
+                    tensor = base_default.clone()
                 else:
-                    # Agent/agent_private vector: shape [num_agents, dims]
-                    # Create [num_agents, dims] tensor filled with default
-                    dims = len(default_list)
-                    tensor = torch.zeros(
-                        (self.num_agents, dims),
-                        device=self.device,
-                        dtype=torch.long if var_def.type in ("vecNi", "vec2i", "vec3i") else torch.float32,
-                    )
-                    # Fill with default values
-                    for i, val in enumerate(default_list):
-                        tensor[:, i] = val
+                    tensor = base_default.unsqueeze(0).expand(self.num_agents, -1).clone()
             elif var_def.type == "bool":
                 # Bool: default is a boolean
                 if var_def.scope == "global":
@@ -260,3 +244,31 @@ class VariableRegistry:
 
         # Update storage (defensive copy to avoid aliasing)
         self._storage[variable_id] = value.to(self.device).clone()
+
+    def _get_vector_dims(self, var_def: VariableDef) -> int:
+        """Return expected dimensionality for vector variables."""
+        if var_def.type == "vec2i":
+            return 2
+        if var_def.type == "vec3i":
+            return 3
+        if var_def.type in ("vecNi", "vecNf"):
+            if var_def.dims is None:
+                raise ValueError(f"Variable '{var_def.id}' missing 'dims' for type '{var_def.type}'")
+            return var_def.dims
+        default_list = var_def.default
+        if isinstance(default_list, list):
+            return len(default_list)
+        raise ValueError(f"Variable '{var_def.id}' must provide default list for type '{var_def.type}'")
+
+    def _build_vector_default(self, var_def: VariableDef) -> torch.Tensor:
+        """Build default tensor for vector variables, padding if necessary."""
+        dims = self._get_vector_dims(var_def)
+        dtype = torch.long if var_def.type in ("vecNi", "vec2i", "vec3i") else torch.float32
+        tensor = torch.zeros(dims, device=self.device, dtype=dtype)
+
+        default_values = var_def.default
+        if isinstance(default_values, list) and default_values:
+            copy_len = min(len(default_values), dims)
+            default_tensor = torch.tensor(default_values[:copy_len], device=self.device, dtype=dtype)
+            tensor[:copy_len] = default_tensor
+        return tensor

@@ -7,9 +7,10 @@ environment with tensor operations [num_agents, ...].
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 import yaml
@@ -626,21 +627,27 @@ class VectorizedHamletEnv:
         if getattr(self.substrate, "position_dim", 0) == 0:
             return None
 
+        encode_fn = Callable[[torch.Tensor, dict[str, torch.Tensor]], torch.Tensor]
+
         encoder = getattr(self.substrate, "_encode_position_features", None)
         if callable(encoder):
-            return encoder(self.positions, self.affordances)
+            typed_encoder = cast(encode_fn, encoder)
+            return typed_encoder(self.positions, self.affordances)
 
         public_encoder = getattr(self.substrate, "encode_position_features", None)
         if callable(public_encoder):
-            return public_encoder(self.positions, self.affordances)
+            typed_public = cast(encode_fn, public_encoder)
+            return typed_public(self.positions, self.affordances)
 
         encode_observation = getattr(self.substrate, "encode_observation", None)
         if callable(encode_observation):
-            return encode_observation(self.positions, self.affordances)
+            typed_encode_obs = cast(encode_fn, encode_observation)
+            return typed_encode_obs(self.positions, self.affordances)
 
         normalizer = getattr(self.substrate, "normalize_positions", None)
         if callable(normalizer):
-            return normalizer(self.positions)
+            typed_normalizer = cast(Callable[[torch.Tensor], torch.Tensor], normalizer)
+            return typed_normalizer(self.positions)
 
         return None
 
