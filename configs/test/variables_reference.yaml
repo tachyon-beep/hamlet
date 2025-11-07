@@ -188,6 +188,12 @@ exposed_observations:
     shape: [64]
     normalization: null  # Already in [0, 3] range
 
+  - id: "obs_local_window"
+    source_variable: "local_window"
+    exposed_to: ["agent"]
+    shape: [25]
+    normalization: null  # Already in [0, 3] range
+
   - id: "obs_position"
     source_variable: "position"
     exposed_to: ["agent"]

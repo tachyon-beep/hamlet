@@ -285,7 +285,21 @@ class VectorizedHamletEnv:
         # VFS INTEGRATION: Build observation spec from variables
         # This replaces hardcoded observation dimension calculation
         obs_builder = VFSObservationSpecBuilder()
-        self.vfs_observation_spec = obs_builder.build_observation_spec(self.vfs_variables, self.vfs_exposures)
+        all_obs_spec = obs_builder.build_observation_spec(self.vfs_variables, self.vfs_exposures)
+
+        # Filter observation spec based on observability mode
+        # POMDP uses "local_window", full obs uses "grid_encoding"
+        # The YAML may expose both, but only one is written to the registry based on mode
+        if partial_observability:
+            # POMDP: Exclude grid_encoding, include local_window
+            self.vfs_observation_spec = [
+                field for field in all_obs_spec if field.source_variable != "grid_encoding"
+            ]
+        else:
+            # Full observability: Exclude local_window, include grid_encoding
+            self.vfs_observation_spec = [
+                field for field in all_obs_spec if field.source_variable != "local_window"
+            ]
 
         # Calculate observation_dim from VFS spec
         self.observation_dim = sum(field.shape[0] if field.shape else 1 for field in self.vfs_observation_spec)

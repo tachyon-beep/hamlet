@@ -7,7 +7,10 @@ version: "1.0"
 variables:
   # POMDP local window: 25 cells (5×5)
   - {id: "local_window", scope: "agent", type: "vecNf", dims: 25, lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
-  
+
+  # Full observability grid encoding: 64 cells (8×8) - for testing flexibility
+  - {id: "grid_encoding", scope: "agent", type: "vecNf", dims: 64, lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+
   # Normalized position: 2 dims
   - {id: "position", scope: "agent", type: "vecNf", dims: 2, lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: [0,0]}
   
@@ -32,6 +35,7 @@ variables:
 
 exposed_observations:
   - {id: "obs_local_window", source_variable: "local_window", exposed_to: ["agent"], shape: [25]}
+  - {id: "obs_grid_encoding", source_variable: "grid_encoding", exposed_to: ["agent"], shape: [64]}
   - {id: "obs_pos", source_variable: "position", exposed_to: ["agent"], shape: [2]}
   - {id: "obs_energy", source_variable: "energy", exposed_to: ["agent"], shape: []}
   - {id: "obs_health", source_variable: "health", exposed_to: ["agent"], shape: []}
