@@ -1,7 +1,10 @@
-# TEMPORARY REFERENCE VARIABLES (Cycle 0.2)
-# Purpose: Scaffolding for dimension validation (will be deleted in Cycle 7)
+# VFS REFERENCE VARIABLES (Test Infrastructure)
+# Purpose: Validate VFS observation dimension calculations match current implementation
 # Config: L1_full_observability (8×8 Grid2D, full observability)
 # Expected observation_dim: 93 (66 substrate + 8 meters + 15 affordance + 4 temporal)
+#
+# NOTE: This file is part of the VFS test infrastructure (Cycle 5 regression tests).
+# DO NOT DELETE - Required for checkpoint compatibility validation!
 
 version: "1.0"
 
