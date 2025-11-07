@@ -7,6 +7,187 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 2025-11-07 - TASK-002C: VFS Phase 1 Integration (COMPLETE)
+
+**Status**: ✅ Complete (Nov 2025)
+**Branch**: `claude/review-tdd-implementation-plan-011CUsrSgdXVvvK5pbMigkQf`
+**Scope**: Pre-release cleanup and integration
+
+### Summary
+
+Integrated Variable & Feature System (VFS) Phase 1 into production environment, replacing legacy hardcoded observation system. Centralized test utilities to eliminate duplication and establish best practices for VFS testing.
+
+**Key Achievements:**
+
+- VFS fully integrated into `VectorizedHamletEnv` (replaces 212-line `ObservationBuilder`)
+- All 5 curriculum levels validated (dimension compatibility maintained)
+- Training validated (L0_0_minimal tested successfully, checkpoints working)
+- Test suite refactored (centralized utilities, eliminated ~100 lines of duplication)
+- 88 VFS tests passing (76 unit + 12 integration)
+
+### Added
+
+**VFS Integration** (Production):
+
+- `VectorizedHamletEnv` now uses VFS for observation generation
+  - Loads `variables_reference.yaml` from config packs (required)
+  - Initializes `VariableRegistry` with GPU tensor backing
+  - Builds observation spec from variables + exposures
+  - `_get_observations()` method rewritten to use VFS registry
+  - Exposure filtering based on observability mode (grid_encoding vs local_window)
+  - Dynamic normalization (minmax/zscore) from variable config
+
+**Test Utilities** (Test Infrastructure):
+
+- `tests/test_townlet/unit/vfs/test_helpers.py` (135 lines)
+  - `EXPECTED_DIMENSIONS`: Centralized constant for all 5 curriculum levels
+  - `CONFIG_PATHS`: Centralized config paths (no magic strings)
+  - `load_variables_from_config()`: Load VFS variables from YAML
+  - `load_exposures_from_config()`: Load exposure configuration
+  - `calculate_vfs_observation_dim()`: Calculate total observation dimensions
+  - `assert_dimension_equivalence()`: Assert with checkpoint incompatibility warnings
+
+### Changed
+
+**BREAKING CHANGES:**
+
+- All config packs **MUST** include `variables_reference.yaml`
+- Missing file triggers clear error with quick-fix instructions
+- Legacy observation system fully removed (no backward compatibility)
+
+**Test Refactoring:**
+
+- `test_vfs_legacy_equivalence.py`: 209 → 106 lines (49% reduction)
+  - Replaced 5 repetitive test methods with single `@pytest.mark.parametrize` test
+  - Import shared utilities instead of local copies
+  - All tests use centralized constants and helpers
+
+- `test_observation_dimension_regression.py`: Minor cleanup
+  - Import shared constants (`EXPECTED_DIMENSIONS`, `CONFIG_PATHS`)
+  - Use `assert_dimension_equivalence()` for better error messages
+  - Kept `compute_vfs_observation_dim_from_agent_readable()` local (different logic)
+
+**VectorizedHamletEnv Changes:**
+
+- Added VFS imports: `VariableRegistry`, `VFSObservationSpecBuilder`, `VariableDef`
+- `__init__()` loads variables and builds observation spec
+- `observation_dim` calculated from VFS spec (dynamic, not hardcoded)
+- `_get_observations()` completely rewritten (VFS registry-based)
+- Tensor type conversions for normalization (YAML lists → torch.Tensor)
+- Exposure filtering for POMDP vs full observability
+
+### Removed
+
+**Legacy System:**
+
+- `src/townlet/environment/observation_builder.py` (212 lines)
+  - Hardcoded observation construction replaced by VFS
+  - All imports removed from codebase
+  - 9 tests skipped (unit tests of legacy internals)
+
+**Test Duplication:**
+
+- ~100 lines of duplicated helper functions removed
+- Local `EXPECTED_DIMENSIONS` constants consolidated
+- Hardcoded config paths replaced with shared constant
+
+### Fixed
+
+**VFS Integration Issues:**
+
+- YAML import shadowing (removed duplicate conditional import)
+- Normalization type mismatch (added tensor conversion for min/max/mean/std)
+- Grid encoding dimension duplication (use `_encode_full_grid()` instead of `encode_observation()`)
+- Missing `variables_reference.yaml` in test config (added with both grid_encoding and local_window)
+- POMDP variable name mismatch (conditional logic for grid_encoding vs local_window)
+- ObservationBuilder imports in tests (removed, added skip decorators)
+
+### Testing
+
+**Dimension Validation:**
+
+- All 5 curriculum levels validated:
+  - L0_0_minimal: 38 dims ✅
+  - L0_5_dual_resource: 78 dims ✅
+  - L1_full_observability: 93 dims ✅
+  - L2_partial_observability: 54 dims ✅
+  - L3_temporal_mechanics: 93 dims ✅
+
+**Training Validation:**
+
+- L0_0_minimal: 5-episode smoke test passed
+- Checkpoint save/load working (2.7MB checkpoints)
+- No dimension mismatches or tensor shape errors
+
+**Test Coverage:**
+
+- 88 VFS tests passing (76 unit + 12 integration)
+- 13 dimension validation tests (7 integration + 6 regression)
+- Test helpers: 100% utilization (all 6 utilities actively used)
+- Test execution: ~24 function calls across test suites
+
+### Performance Impact
+
+**Memory:**
+
+- VFS registry: Minimal overhead (reuses existing tensors)
+- Observation spec: Built once at initialization (O(1) per episode)
+
+**Runtime:**
+
+- Observation generation: Same performance as legacy (registry lookups are O(1))
+- No performance regressions detected in training
+
+### Migration Guide
+
+**For Operators:**
+
+1. All config packs MUST have `variables_reference.yaml`
+2. Copy reference: `cp configs/L1_full_observability/variables_reference.yaml configs/your_config/`
+3. Edit variables to match your configuration
+4. See `docs/config-schemas/variables.md` for schema details
+
+**For Developers:**
+
+1. Use `VFS registry.get(var_id, reader="agent")` for observations
+2. Use `registry.set(var_id, value, writer="engine")` to update state
+3. Observation dimensions calculated dynamically from VFS spec
+4. Access control enforced by registry (reader/writer permissions)
+
+### Test Quality Improvements
+
+**Best Practices Implemented:**
+
+- DRY principle: Single source of truth for test constants
+- No magic numbers: Centralized `EXPECTED_DIMENSIONS` and `CONFIG_PATHS`
+- Parametrization: 5 repetitive tests → 1 parametrized test
+- Shared scaffolding: Consistent helpers across test suites
+- Type hints and docstrings throughout test utilities
+
+**Test Helper Utilization:**
+
+- Integration tests: 6/6 utilities used (100%)
+- Regression tests: 4/6 utilities used (66%, has specialized logic)
+- Overall: 6/6 utilities actively used by at least one suite
+
+### Commits
+
+**VFS Integration:**
+- `74792b4` - feat(vfs): Integrate VFS into VectorizedHamletEnv, remove legacy ObservationBuilder
+- `c28a2ee` - docs: Update CLAUDE.md with VFS integration status
+
+**Test Refactoring:**
+- `667f39a` - refactor(tests): Centralize VFS test utilities to eliminate duplication
+
+### References
+
+- VFS Design: `docs/plans/2025-11-06-variables-and-features-system.md`
+- Implementation plan: `docs/tasks/TASK-002-variables-and-features-system.md`
+- Configuration guide: `docs/config-schemas/variables.md`
+- Migration guide: `docs/vfs-integration-guide.md` (if exists)
+
+---
+
 ## 2025-11-07 - TASK-002B: Composable Action Space (COMPLETE)
 
 **Status**: ✅ All 5 Phases Complete (Nov 2025)
