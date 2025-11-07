@@ -493,7 +493,7 @@ class TestVFSEnvironmentIntegration:
             env.meters[:, meter_idx] = value
 
         # Trigger VFS registry update (this calls _get_observations internally)
-        obs = env._get_observations()
+        env._get_observations()
 
         # Verify each meter in VFS registry has correct value
         for meter_name, expected_value in meter_values.items():
@@ -505,6 +505,100 @@ class TestVFSEnvironmentIntegration:
                 f"Expected {expected_value}, got {actual_value.tolist()}. "
                 f"This indicates meter_name_to_index mapping is incorrect!"
             )
+
+    def test_position_normalization_full_observability(self, test_config_pack_path: Path):
+        """Regression test: Ensure positions are normalized in full observability mode.
+
+        This tests the fix for a bug where full observability stored raw grid coordinates
+        (e.g., 7.0) instead of normalized [0,1] coordinates, breaking the VFS schema contract.
+
+        The VFS schema specifies position as "Normalized agent position (x, y) in [0, 1] range",
+        and the observation normalization (minmax with min=0, max=1) is a pass-through that
+        expects values already in [0,1].
+
+        Bug scenario:
+        - Raw position: (7, 7) on 8×8 grid
+        - Without normalization: VFS stores 7.0 → observation sees 7.0 (WRONG!)
+        - With normalization: VFS stores 0.875 → observation sees 0.875 (CORRECT!)
+        """
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        # Test with full observability (the bug case)
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            device=torch.device("cpu"),
+            config_pack_path=test_config_pack_path,
+            partial_observability=False,  # Full observability (bug case)
+            vision_range=8,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+        )
+
+        # Set agent to position (7, 7) - far corner of 8×8 grid
+        env.positions[0] = torch.tensor([7, 7], dtype=torch.long, device=env.device)
+
+        # Trigger VFS registry update
+        env._get_observations()
+
+        # Get position from VFS registry
+        vfs_position = env.vfs_registry.get("position", reader="agent")
+
+        # Position should be normalized to [0,1]
+        # For an 8×8 grid, position (7,7) should normalize to (7/7, 7/7) = (1.0, 1.0)
+        # (Grid2D normalizes by dividing by grid_size-1)
+        expected_normalized = torch.tensor([[1.0, 1.0]], device=env.device)
+
+        assert torch.allclose(vfs_position, expected_normalized, atol=1e-6), (
+            f"Position not properly normalized in full observability mode! "
+            f"Expected {expected_normalized.tolist()}, got {vfs_position.tolist()}. "
+            f"VFS schema requires normalized [0,1] positions, but raw coordinates were stored."
+        )
+
+        # Also verify the position is within [0,1] range
+        assert torch.all(vfs_position >= 0.0) and torch.all(vfs_position <= 1.0), (
+            f"Position outside [0,1] range: {vfs_position.tolist()}. " f"This violates the VFS schema contract."
+        )
+
+    def test_position_normalization_pomdp(self, test_config_pack_path: Path):
+        """Verify positions are normalized in POMDP mode (this should already work)."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        # Test with POMDP (this was already working, but verify it still works)
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            device=torch.device("cpu"),
+            config_pack_path=test_config_pack_path,
+            partial_observability=True,  # POMDP mode
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.001,
+            interact_energy_cost=0.0,
+            agent_lifespan=1000,
+        )
+
+        # Set agent to position (7, 7)
+        env.positions[0] = torch.tensor([7, 7], dtype=torch.long, device=env.device)
+
+        # Trigger VFS registry update
+        env._get_observations()
+
+        # Get position from VFS registry
+        vfs_position = env.vfs_registry.get("position", reader="agent")
+
+        # Position should be normalized to [0,1]
+        expected_normalized = torch.tensor([[1.0, 1.0]], device=env.device)
+
+        assert torch.allclose(vfs_position, expected_normalized, atol=1e-6), (
+            f"Position not properly normalized in POMDP mode! " f"Expected {expected_normalized.tolist()}, got {vfs_position.tolist()}."
+        )
+
+        assert torch.all(vfs_position >= 0.0) and torch.all(vfs_position <= 1.0), f"Position outside [0,1] range: {vfs_position.tolist()}"
 
 
 # ========================================
@@ -518,7 +612,7 @@ class TestVFSEnvironmentIntegration:
 # ✓ Registry Integration: Initialize registry with loaded variables
 # ✓ End-to-End: Complete pipeline from YAML to observations
 # ✓ ActionConfig Integration: Validate reads/writes reference valid variables
-# ✓ Environment Integration: Meter index mapping correctness
+# ✓ Environment Integration: Meter index mapping and position normalization
 #
 # Coverage:
 # - All 5 curriculum levels (L0_0, L0_5, L1, L2, L3)
@@ -527,3 +621,4 @@ class TestVFSEnvironmentIntegration:
 # - Registry initialization and access control
 # - ActionConfig VFS field validation
 # - Meter-to-VFS registry mapping (regression test)
+# - Position normalization in full obs and POMDP modes (regression tests)

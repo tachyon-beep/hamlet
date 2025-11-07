@@ -488,12 +488,11 @@ class VectorizedHamletEnv:
             # Full obs uses "grid_encoding" variable name
             self.vfs_registry.set("grid_encoding", grid_encoding, writer="engine")
 
-        # Position (normalized for POMDP, substrate-specific for full obs)
-        if self.partial_observability:
-            normalized_positions = self.substrate.normalize_positions(self.positions)
-            self.vfs_registry.set("position", normalized_positions, writer="engine")
-        else:
-            self.vfs_registry.set("position", self.positions.float(), writer="engine")
+        # Position (always normalized to [0,1] as per VFS schema)
+        # VFS variables_reference.yaml specifies position as "Normalized agent position (x, y) in [0, 1] range"
+        # Observation normalization (minmax with min=0, max=1) is a pass-through that expects [0,1] input
+        normalized_positions = self.substrate.normalize_positions(self.positions)
+        self.vfs_registry.set("position", normalized_positions, writer="engine")
 
         # Meters (write each meter individually)
         for meter_name, meter_idx in self.meter_name_to_index.items():
@@ -532,19 +531,19 @@ class VectorizedHamletEnv:
                     max_val = field.normalization.max
                     # Convert to tensors if not already
                     if not isinstance(min_val, torch.Tensor):
-                        min_val = torch.tensor(min_val, device=self.device, dtype=value.dtype)
+                        min_val = torch.tensor(min_val, device=self.device, dtype=value.dtype)  # type: ignore[assignment]
                     if not isinstance(max_val, torch.Tensor):
-                        max_val = torch.tensor(max_val, device=self.device, dtype=value.dtype)
-                    value = (value - min_val) / (max_val - min_val + 1e-8)  # Add epsilon to avoid division by zero
+                        max_val = torch.tensor(max_val, device=self.device, dtype=value.dtype)  # type: ignore[assignment]
+                    value = (value - min_val) / (max_val - min_val + 1e-8)  # type: ignore[operator] # Add epsilon to avoid division by zero
                 elif field.normalization.kind == "zscore":
                     mean = field.normalization.mean
                     std = field.normalization.std
                     # Convert to tensors if not already
                     if not isinstance(mean, torch.Tensor):
-                        mean = torch.tensor(mean, device=self.device, dtype=value.dtype)
+                        mean = torch.tensor(mean, device=self.device, dtype=value.dtype)  # type: ignore[assignment]
                     if not isinstance(std, torch.Tensor):
-                        std = torch.tensor(std, device=self.device, dtype=value.dtype)
-                    value = (value - mean) / (std + 1e-8)  # Add epsilon to avoid division by zero
+                        std = torch.tensor(std, device=self.device, dtype=value.dtype)  # type: ignore[assignment]
+                    value = (value - mean) / (std + 1e-8)  # type: ignore[operator] # Add epsilon to avoid division by zero
 
             # Ensure 2D shape [num_agents, *]
             if value.ndim == 1:
