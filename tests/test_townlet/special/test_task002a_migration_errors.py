@@ -25,6 +25,7 @@ def test_missing_substrate_yaml_raises_helpful_error(tmp_path):
     shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
     shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
     shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
+    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
     # Attempt to create environment without substrate.yaml
     with pytest.raises(FileNotFoundError) as exc_info:

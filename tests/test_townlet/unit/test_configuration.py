@@ -919,6 +919,7 @@ class TestEpsilonConfiguration:
         # Use L1 substrate (8×8 grid) to fit all affordances
         l1_config = Path("configs/L1_full_observability")
         shutil.copy(l1_config / "substrate.yaml", config_dir / "substrate.yaml")
+        shutil.copy(l1_config / "variables_reference.yaml", config_dir / "variables_reference.yaml")
 
         # Copy other configs from L0 (affordances, bars, cascades, cues)
         l0_config = Path("configs/L0_0_minimal")

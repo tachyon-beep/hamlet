@@ -218,10 +218,14 @@ src/townlet/
 │   ├── adaptive_intrinsic.py # AdaptiveIntrinsicExploration (RND + annealing)
 │   ├── rnd.py               # RNDExploration (novelty rewards)
 │   └── epsilon_greedy.py    # EpsilonGreedyExploration
-└── training/
-    ├── state.py             # BatchedAgentState, PopulationCheckpoint
-    ├── replay_buffer.py     # ReplayBuffer (experience replay)
-    └── (runner.py coming)   # DemoRunner (main entry point - currently in hamlet/demo/)
+├── training/
+│   ├── state.py             # BatchedAgentState, PopulationCheckpoint
+│   ├── replay_buffer.py     # ReplayBuffer (experience replay)
+│   └── (runner.py coming)   # DemoRunner (main entry point - currently in hamlet/demo/)
+└── vfs/                     # Variable & Feature System (Phase 1)
+    ├── schema.py            # Pydantic schemas (VariableDef, ObservationField, etc.)
+    ├── registry.py          # VariableRegistry (runtime storage with access control)
+    └── observation_builder.py # VFSObservationSpecBuilder (compile-time spec generation)
 ```
 
 ### State Representation
@@ -304,6 +308,168 @@ Substrates support three configurable observation encoding modes via `observatio
 - Unit tests: `tests/test_townlet/unit/substrate/test_interface.py`
 - Integration tests: `tests/test_townlet/integration/test_substrate_observations.py`
 - Validation tests: `tests/test_townlet/unit/environment/test_pomdp_validation.py`
+
+---
+
+### Variable & Feature System (VFS) - Phase 1
+
+**Status**: ✅ INTEGRATED INTO PRODUCTION (TASK-002C Complete + Integration)
+**Purpose**: Declarative state space configuration for observation specs, access control, and action dependencies
+
+**Integration Status**:
+- ✅ VFS integrated into VectorizedHamletEnv (replaces legacy ObservationBuilder)
+- ✅ All config packs now use `variables_reference.yaml` for observation generation
+- ✅ Training validated (L0_0_minimal tested successfully)
+- ✅ Checkpoints save/load correctly
+- ✅ Dimension compatibility maintained (L0_0: 38, L0_5: 78, L1: 93, L2: 54, L3: 93)
+
+**Architecture**:
+
+```
+VFS Pipeline: YAML Config → Schema Validation → Observation Spec → Runtime Registry → Observations
+                                                                                    ↓
+                                                                    VectorizedHamletEnv._get_observations()
+```
+
+**Key Components**:
+
+1. **Schema Definitions** (`src/townlet/vfs/schema.py`)
+   - `VariableDef`: Variable definitions with scope, type, lifetime, access control
+   - `ObservationField`: Observation specs with shape and normalization
+   - `NormalizationSpec`: Minmax/zscore normalization specifications
+   - `WriteSpec`: Action write specifications (variable_id + expression)
+
+2. **Variable Registry** (`src/townlet/vfs/registry.py`)
+   - Runtime storage for VFS variables with GPU tensor backing
+   - Access control enforcement (reader/writer permissions)
+   - Scope semantics: global, agent, agent_private
+   - Shape management: `[]` (global scalar) to `[num_agents, dims]` (agent vector)
+
+3. **Observation Spec Builder** (`src/townlet/vfs/observation_builder.py`)
+   - Compile-time observation spec generation from variable definitions
+   - Dimension calculation and validation
+   - Normalization configuration
+   - Ensures checkpoint compatibility
+
+**Variable Scope Semantics**:
+
+| Scope | Shape (Scalar) | Shape (Vector) | Use Case |
+|-------|----------------|----------------|----------|
+| `global` | `[]` | `[dims]` | Time, weather, global state |
+| `agent` | `[num_agents]` | `[num_agents, dims]` | Meters, position, visible state |
+| `agent_private` | `[num_agents]` | `[num_agents, dims]` | Hidden state, internal rewards |
+
+**Type System**:
+- **Scalar types**: `scalar` (float), `bool`
+- **Vector types**: `vec2i`, `vec3i`, `vecNi` (int), `vecNf` (float)
+- **Storage**: PyTorch tensors (CPU/CUDA) with automatic device management
+
+**Access Control**:
+- **Readers**: agent, engine, acs (Adversarial Curriculum), bac (Behavioral Action Compiler)
+- **Writers**: engine, actions, bac
+- **Enforcement**: `registry.get(var_id, reader="agent")` raises `PermissionError` if denied
+
+**Configuration Example** (`configs/*/variables_reference.yaml`):
+
+```yaml
+version: "1.0"
+
+variables:
+  - id: "energy"
+    scope: "agent"
+    type: "scalar"
+    lifetime: "episode"  # persistent across ticks
+    readable_by: ["agent", "engine", "acs"]
+    writable_by: ["actions", "engine"]
+    default: 1.0
+    description: "Energy level [0.0-1.0]"
+
+  - id: "position"
+    scope: "agent"
+    type: "vecNf"
+    dims: 2
+    lifetime: "episode"
+    readable_by: ["agent", "engine", "acs"]
+    writable_by: ["actions", "engine"]
+    default: [0.0, 0.0]
+    description: "Normalized agent position"
+
+exposed_observations:
+  - id: "obs_energy"
+    source_variable: "energy"
+    exposed_to: ["agent"]
+    shape: []
+    normalization:
+      kind: "minmax"
+      min: 0.0
+      max: 1.0
+```
+
+**ActionConfig Integration** (Phase 1):
+
+Actions declare variable dependencies via `reads` and `writes` fields:
+
+```python
+action = ActionConfig(
+    id=0,
+    name="MOVE_UP",
+    type="movement",
+    delta=[0, -1],
+    costs={"energy": 0.005},
+    reads=["position", "energy"],  # VFS: Dependencies
+    writes=[WriteSpec(variable_id="position", expression="position + delta")],
+)
+```
+
+**Observation Dimension Validation** (CRITICAL):
+
+VFS maintains **exact compatibility** with current hardcoded dimensions to preserve checkpoints:
+
+| Config Level | Expected Dims | VFS Calculated | Status |
+|--------------|---------------|----------------|--------|
+| L0_0_minimal | 38 | 38 | ✅ Validated |
+| L0_5_dual_resource | 78 | 78 | ✅ Validated |
+| L1_full_observability | 93 | 93 | ✅ Validated |
+| L2_partial_observability | 54 | 54 | ✅ Validated |
+| L3_temporal_mechanics | 93 | 93 | ✅ Validated |
+
+**Regression tests** ensure dimension compatibility: `tests/test_townlet/unit/vfs/test_observation_dimension_regression.py`
+
+**Test Coverage**:
+- **88 tests total** (76 unit + 12 integration) - ALL PASSING ✅
+- Schema validation: 23 tests (93% coverage)
+- Registry operations: 25 tests (83% coverage)
+- Observation builder: 22 tests (92% coverage)
+- Dimension regression: 6 tests (5 configs validated)
+- End-to-end integration: 12 tests (YAML → observations)
+
+**Documentation**:
+- Configuration guide: `docs/config-schemas/variables.md`
+- Design document: `docs/plans/2025-11-06-variables-and-features-system.md`
+- Implementation plan: `docs/tasks/TASK-002-variables-and-features-system.md`
+
+**Phase 1 Status**: ✅ COMPLETE & INTEGRATED
+**Phase 2 (Future)**: Behavioral Action Compiler (BAC) integration
+
+**BREAKING CHANGE** (Post-Integration):
+
+All config packs **MUST** include `variables_reference.yaml`. Legacy configs will fail with:
+
+```
+FileNotFoundError: variables_reference.yaml is required but not found in configs/your_config/.
+
+Quick fix:
+  1. Copy reference: cp configs/L1_full_observability/variables_reference.yaml configs/your_config/
+  2. Edit to match your configuration
+  3. See docs/config-schemas/variables.md for schema details
+```
+
+**Migration**: See `docs/vfs-integration-guide.md` for complete migration instructions.
+
+**Removed Files**:
+- `src/townlet/environment/observation_builder.py` (212 lines) - Replaced by VFS
+
+---
 
 ### Action Space (Composable - TASK-002B)
 

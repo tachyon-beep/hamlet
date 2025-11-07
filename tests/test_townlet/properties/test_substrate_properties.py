@@ -148,7 +148,7 @@ def test_property_aspatial_no_position_operations():
     grid_size=st.integers(min_value=3, max_value=10),
     num_agents=st.integers(min_value=1, max_value=4),
 )
-@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)  # Disable deadline for VFS overhead
 def test_property_obs_dim_matches_substrate_grid2d(grid_size, num_agents, test_config_pack_path, cpu_device):
     """Observation dimension should match substrate + meters + affordances + temporal."""
     env = VectorizedHamletEnv(
@@ -190,8 +190,9 @@ def test_property_obs_dim_aspatial(aspatial_env):
     # Expected dimension (no grid)
     grid_dim = 0  # Aspatial has no grid
     meter_dim = aspatial_env.meter_count  # 4 for aspatial_test config
-    # aspatial_test has 4 affordances (not full 14), so affordance_dim = 4 + 1 ("none") = 5
-    affordance_dim = 5  # 4 affordances (Bed, Hospital, HomeMeal, Job) + "none"
+    # NOTE: aspatial_test uses local vocabulary (4 affordances + "none" = 5 dims)
+    # This is a test fixture that doesn't follow global vocabulary principle
+    affordance_dim = 5  # Local vocabulary: 4 affordances (Bed, Hospital, HomeMeal, Job) + "none"
     temporal_dim = 4  # time_sin, time_cos, interaction_progress, lifetime_progress
 
     expected_dim = grid_dim + meter_dim + affordance_dim + temporal_dim

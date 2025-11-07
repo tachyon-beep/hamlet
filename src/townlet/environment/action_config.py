@@ -4,6 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+# VFS Integration (Phase 1 - TASK-002C)
+from townlet.vfs.schema import WriteSpec
+
 
 class ActionConfig(BaseModel):
     """Single action definition.
@@ -59,6 +62,16 @@ class ActionConfig(BaseModel):
     )
     source_affordance: str | None = Field(
         description="If source='affordance', which affordance provided it. Pass None for substrate/custom.",
+    )
+
+    # VFS Integration (Phase 1 - TASK-002C)
+    reads: list[str] = Field(
+        default_factory=list,
+        description="Variables this action reads (for dependency tracking). Defaults to empty list for backward compatibility.",
+    )
+    writes: list[WriteSpec] = Field(
+        default_factory=list,
+        description="Variables this action writes (with expressions). Defaults to empty list for backward compatibility.",
     )
 
     @model_validator(mode="after")
