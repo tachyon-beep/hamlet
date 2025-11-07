@@ -357,6 +357,7 @@ aspatial: {}
     shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
     shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
     shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
+    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
     # Create environment with aspatial substrate and grid_size parameter
     env = VectorizedHamletEnv(
