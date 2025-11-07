@@ -292,14 +292,10 @@ class VectorizedHamletEnv:
         # The YAML may expose both, but only one is written to the registry based on mode
         if partial_observability:
             # POMDP: Exclude grid_encoding, include local_window
-            self.vfs_observation_spec = [
-                field for field in all_obs_spec if field.source_variable != "grid_encoding"
-            ]
+            self.vfs_observation_spec = [field for field in all_obs_spec if field.source_variable != "grid_encoding"]
         else:
             # Full observability: Exclude local_window, include grid_encoding
-            self.vfs_observation_spec = [
-                field for field in all_obs_spec if field.source_variable != "local_window"
-            ]
+            self.vfs_observation_spec = [field for field in all_obs_spec if field.source_variable != "local_window"]
 
         # Calculate observation_dim from VFS spec
         self.observation_dim = sum(field.shape[0] if field.shape else 1 for field in self.vfs_observation_spec)

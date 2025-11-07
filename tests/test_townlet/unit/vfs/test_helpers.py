@@ -92,11 +92,7 @@ def load_exposures_from_config(config_path: Path) -> dict:
     return exposures
 
 
-def calculate_vfs_observation_dim(
-    variables: list[VariableDef],
-    exposures: dict,
-    partial_observability: bool = False
-) -> int:
+def calculate_vfs_observation_dim(variables: list[VariableDef], exposures: dict, partial_observability: bool = False) -> int:
     """Calculate total observation dimension from VFS specification.
 
     Args:
