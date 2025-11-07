@@ -1,9 +1,11 @@
 # VFS REFERENCE VARIABLES
 # Config: aspatial_test (Aspatial, no positioning)
-# Expected observation_dim: 27 (0 position + 8 meters + 15 affordance + 4 temporal)
+# Expected observation_dim: 13 (0 position + 4 meters + 5 affordance + 4 temporal)
 #
 # NOTE: Aspatial substrates have no concept of position.
 # Pure resource management without spatial navigation.
+# NOTE: This config has only 4 meters (energy, health, money, mood) to match bars.yaml
+# NOTE: This config has only 4 affordances (Bed, Hospital, HomeMeal, Job) + "none" = 5 dims
 
 version: "1.0"
 
@@ -14,7 +16,7 @@ variables:
   # Aspatial substrate has no position variable
 
   # ========================================
-  # METERS (8 dims)
+  # METERS (4 dims)
   # ========================================
 
   - id: "energy"
@@ -35,22 +37,13 @@ variables:
     default: 1.0
     description: "Health level [0.0-1.0]"
 
-  - id: "satiation"
-    scope: "agent"
-    type: "scalar"
-    lifetime: "episode"
-    readable_by: ["agent", "engine", "acs"]
-    writable_by: ["actions", "engine"]
-    default: 1.0
-    description: "Satiation (food) level [0.0-1.0]"
-
   - id: "money"
     scope: "agent"
     type: "scalar"
     lifetime: "episode"
     readable_by: ["agent", "engine", "acs"]
     writable_by: ["actions", "engine"]
-    default: 0.0
+    default: 0.5
     description: "Money accumulated"
 
   - id: "mood"
@@ -59,50 +52,24 @@ variables:
     lifetime: "episode"
     readable_by: ["agent", "engine", "acs"]
     writable_by: ["actions", "engine"]
-    default: 1.0
+    default: 0.7
     description: "Mood level [0.0-1.0]"
 
-  - id: "social"
-    scope: "agent"
-    type: "scalar"
-    lifetime: "episode"
-    readable_by: ["agent", "engine", "acs"]
-    writable_by: ["actions", "engine"]
-    default: 1.0
-    description: "Social satisfaction [0.0-1.0]"
-
-  - id: "fitness"
-    scope: "agent"
-    type: "scalar"
-    lifetime: "episode"
-    readable_by: ["agent", "engine", "acs"]
-    writable_by: ["actions", "engine"]
-    default: 1.0
-    description: "Fitness level [0.0-1.0]"
-
-  - id: "hygiene"
-    scope: "agent"
-    type: "scalar"
-    lifetime: "episode"
-    readable_by: ["agent", "engine", "acs"]
-    writable_by: ["actions", "engine"]
-    default: 1.0
-    description: "Hygiene level [0.0-1.0]"
-
   # ========================================
-  # AFFORDANCE AT POSITION (15 dims)
+  # AFFORDANCE AT POSITION (5 dims)
   # ========================================
   # Phase 1: Use fixed-size vector for one-hot encoding
+  # NOTE: Test config only has 4 affordances + "none" = 5 dims
 
   - id: "affordance_at_position"
     scope: "agent"
     type: "vecNf"  # N-dimensional float vector (one-hot encoding)
-    dims: 15
+    dims: 5
     lifetime: "tick"  # Derived from current position
     readable_by: ["agent", "engine"]
     writable_by: ["engine"]
-    default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-    description: "One-hot affordance type at agent position (14 types + none)"
+    default: [0.0, 0.0, 0.0, 0.0, 1.0]
+    description: "One-hot affordance type at agent position (4 types: Bed, Hospital, HomeMeal, Job + none)"
 
   # ========================================
   # TEMPORAL FEATURES (4 dims)
@@ -168,15 +135,6 @@ exposed_observations:
       min: 0.0
       max: 1.0
 
-  - id: "obs_satiation"
-    source_variable: "satiation"
-    exposed_to: ["agent"]
-    shape: []
-    normalization:
-      kind: "minmax"
-      min: 0.0
-      max: 1.0
-
   - id: "obs_money"
     source_variable: "money"
     exposed_to: ["agent"]
@@ -192,37 +150,10 @@ exposed_observations:
       min: 0.0
       max: 1.0
 
-  - id: "obs_social"
-    source_variable: "social"
-    exposed_to: ["agent"]
-    shape: []
-    normalization:
-      kind: "minmax"
-      min: 0.0
-      max: 1.0
-
-  - id: "obs_fitness"
-    source_variable: "fitness"
-    exposed_to: ["agent"]
-    shape: []
-    normalization:
-      kind: "minmax"
-      min: 0.0
-      max: 1.0
-
-  - id: "obs_hygiene"
-    source_variable: "hygiene"
-    exposed_to: ["agent"]
-    shape: []
-    normalization:
-      kind: "minmax"
-      min: 0.0
-      max: 1.0
-
   - id: "obs_affordance_at_position"
     source_variable: "affordance_at_position"
     exposed_to: ["agent"]
-    shape: [15]
+    shape: [5]
     normalization: null  # One-hot, already [0, 1]
 
   - id: "obs_time_sin"
@@ -258,9 +189,10 @@ exposed_observations:
 # ========================================
 # DIMENSION VALIDATION
 # ========================================
-# Total observation dimensions: 0 + 8 + 15 + 4 = 27
+# Total observation dimensions: 0 + 4 + 5 + 4 = 13
 # - Position: 0 dims (aspatial - no position)
-# - Meters: 8 dims (8 scalars × 1)
-# - Affordance: 15 dims
-# - Temporal: 4 dims (4 scalars × 1)
+# - Meters: 4 dims (energy, health, money, mood)
+# - Affordance: 5 dims (4 affordances: Bed, Hospital, HomeMeal, Job + "none")
+# - Temporal: 4 dims (time_sin, time_cos, interaction_progress, lifetime_progress)
 # NOTE: Aspatial substrates have no position or grid_encoding
+# NOTE: Test config uses local vocabulary (4 affordances), not global (14)

@@ -190,8 +190,9 @@ def test_property_obs_dim_aspatial(aspatial_env):
     # Expected dimension (no grid)
     grid_dim = 0  # Aspatial has no grid
     meter_dim = aspatial_env.meter_count  # 4 for aspatial_test config
-    # aspatial_test has 4 affordances (not full 14), so affordance_dim = 4 + 1 ("none") = 5
-    affordance_dim = 5  # 4 affordances (Bed, Hospital, HomeMeal, Job) + "none"
+    # NOTE: aspatial_test uses local vocabulary (4 affordances + "none" = 5 dims)
+    # This is a test fixture that doesn't follow global vocabulary principle
+    affordance_dim = 5  # Local vocabulary: 4 affordances (Bed, Hospital, HomeMeal, Job) + "none"
     temporal_dim = 4  # time_sin, time_cos, interaction_progress, lifetime_progress
 
     expected_dim = grid_dim + meter_dim + affordance_dim + temporal_dim
