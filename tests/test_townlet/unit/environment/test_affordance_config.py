@@ -19,7 +19,6 @@ Uncovered lines to target:
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import yaml
@@ -28,13 +27,10 @@ from pydantic import ValidationError
 from townlet.environment.affordance_config import (
     AffordanceConfig,
     AffordanceConfigCollection,
-    AffordanceCost,
-    AffordanceEffect,
     is_affordance_open,
     load_affordance_config,
 )
 from townlet.environment.cascade_config import BarConfig, BarsConfig, TerminalCondition
-
 
 # =============================================================================
 # PYDANTIC MODEL VALIDATION TESTS

@@ -22,13 +22,11 @@ Uncovered lines to target:
 import queue
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import Mock, patch
 
-import pytest
 import torch
 
 from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata, RecordedStep
-
 
 # =============================================================================
 # EPISODE RECORDER TESTS

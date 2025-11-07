@@ -16,9 +16,8 @@ Uncovered lines to target:
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import Mock, patch
 
-import pytest
 import torch
 import torch.nn as nn
 

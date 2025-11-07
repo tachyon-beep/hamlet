@@ -14,11 +14,9 @@ Test Coverage:
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import Mock, patch
 
 import numpy as np
-import pytest
-
 
 # =============================================================================
 # EXPORT_EPISODE_VIDEO TESTS
