@@ -11,11 +11,9 @@ Coverage targets:
 - src/townlet/environment/vectorized_env.py:106-119 (action label loading)
 """
 
-import tempfile
 from pathlib import Path
 
 import pytest
-import torch
 import yaml
 
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -304,7 +302,6 @@ class TestAffordancePositionSerialization:
         Coverage target: lines 854-857 (aspatial position handling)
         """
         # Create aspatial environment
-        from pathlib import Path
 
         repo_root = Path(__file__).parent.parent.parent.parent.parent
         aspatial_config_path = repo_root / "configs" / "aspatial_test"

@@ -11,7 +11,6 @@ import torch
 
 from townlet.substrate.continuousnd import ContinuousNDSubstrate
 
-
 # =============================================================================
 # ACTION GENERATION TESTS (Lines 383-467)
 # =============================================================================

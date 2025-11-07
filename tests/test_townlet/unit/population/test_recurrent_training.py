@@ -174,7 +174,6 @@ class TestLSTMHiddenStateManagement:
         population.reset()
 
         # Get initial hidden state
-        from townlet.agent.networks import RecurrentSpatialQNetwork
 
         recurrent_network = population.q_network
         h_before, c_before = recurrent_network.get_hidden_state()
@@ -500,9 +499,6 @@ class TestAdaptiveIntrinsicExplorationIntegration:
         )
 
         population.reset()
-
-        # Record initial intrinsic weight (use getter method)
-        initial_weight = exploration.get_intrinsic_weight()
 
         # Simulate episode end with survival time
         agent_idx = 0
