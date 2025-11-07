@@ -603,6 +603,377 @@ affordances:
 
 ---
 
+### Phase 5: Compiler Artifact DTOs (3-5 hours)
+
+**Context**: The compilation process produces **artifact DTOs** that represent the compiled universe. These are distinct from config DTOs - they are the **outputs** of compilation, not inputs.
+
+**Purpose**: These DTOs serve as **data contracts** between UAC, BAC, and the Training system, enabling type-safe handoffs between components.
+
+**Deliverable**: `src/townlet/universe/dto/` (new directory)
+
+```
+src/townlet/universe/dto/
+├── __init__.py
+├── observation_spec.py      # ObservationSpec, ObservationField
+├── action_metadata.py       # ActionSpaceMetadata, ActionMetadata
+├── meter_metadata.py        # MeterMetadata, MeterInfo
+├── affordance_metadata.py   # AffordanceMetadata, AffordanceInfo
+└── universe_metadata.py     # UniverseMetadata
+```
+
+---
+
+#### 5.1: ObservationSpec (UAC → BAC Handoff)
+
+**Purpose**: Provides rich observation structure for BAC compiler to build custom neural network encoders.
+
+**File**: `src/townlet/universe/dto/observation_spec.py`
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+@dataclass
+class ObservationField:
+    """Single field in observation vector."""
+    name: str  # e.g., "energy", "position", "local_grid"
+    type: Literal["scalar", "vector", "categorical", "spatial_grid"]
+    dims: int  # Number of dimensions this field occupies
+    start_index: int  # Index in flat observation vector
+    end_index: int    # Exclusive end index (for slicing)
+    scope: Literal["global", "agent", "agent_private"]
+    description: str
+
+    # Semantic metadata for custom encoders
+    semantic_type: str | None = None  # "position", "meter", "affordance", "cue", "temporal", "vision"
+    categorical_labels: list[str] | None = None  # For one-hot encodings
+
+@dataclass
+class ObservationSpec:
+    """Complete observation specification."""
+    total_dims: int  # Sum of all field dims (this is obs_dim)
+    fields: list[ObservationField]  # All observation fields
+    encoding_version: str = "1.0"  # For checkpoint compatibility
+
+    def get_field_by_name(self, name: str) -> ObservationField:
+        """Lookup field by name."""
+        for field in self.fields:
+            if field.name == name:
+                return field
+        raise KeyError(f"Field '{name}' not found in observation spec")
+
+    def get_fields_by_semantic_type(self, semantic: str) -> list[ObservationField]:
+        """Get fields by semantic meaning (e.g., all 'meter' fields)."""
+        return [f for f in self.fields if f.semantic_type == semantic]
+```
+
+**Example Usage** (BAC Compiler):
+
+```python
+# brain.yaml specifies custom encoders
+architecture:
+  encoders:
+    - name: "meter_encoder"
+      input_fields: ["energy", "health", "satiation"]  # References ObservationSpec
+      type: "mlp"
+      hidden_layers: [64]
+
+# BAC compiler uses ObservationSpec to build encoder
+meter_fields = [obs_spec.get_field_by_name(name) for name in ["energy", "health", "satiation"]]
+input_dim = sum(field.dims for field in meter_fields)  # 3
+start_idx = meter_fields[0].start_index
+end_idx = meter_fields[-1].end_index
+
+meter_encoder = MLP(input_dim=input_dim, hidden_layers=[64])
+
+# Runtime: Extract meter values from observation
+meter_values = obs[:, start_idx:end_idx]  # [batch, 3]
+meter_features = meter_encoder(meter_values)
+```
+
+**Rationale**: BAC needs rich semantic information to build domain-specific encoders (vision encoders, position encoders, meter encoders). A simple `obs_dim` scalar is insufficient.
+
+---
+
+#### 5.2: ActionSpaceMetadata (UAC → Training Handoff)
+
+**Purpose**: Provides action metadata for logging, masking, and debugging.
+
+**File**: `src/townlet/universe/dto/action_metadata.py`
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+import torch
+
+@dataclass
+class ActionMetadata:
+    """Metadata for single action."""
+    id: int
+    name: str
+    type: Literal["movement", "interaction", "passive", "custom"]
+    enabled: bool
+    source: Literal["substrate", "custom", "affordance"]
+    costs: dict[str, float]  # meter_name → cost
+    description: str
+
+@dataclass
+class ActionSpaceMetadata:
+    """Rich metadata about action space."""
+    total_actions: int
+    actions: list[ActionMetadata]
+
+    def get_enabled_actions(self) -> list[ActionMetadata]:
+        """Get only enabled actions."""
+        return [a for a in self.actions if a.enabled]
+
+    def get_action_mask(self, num_agents: int, device: torch.device) -> torch.Tensor:
+        """Get base action mask (disabled actions masked out).
+
+        Returns:
+            [num_agents, total_actions] bool tensor
+            False = action disabled, True = action available
+        """
+        mask = torch.ones(num_agents, self.total_actions, dtype=torch.bool, device=device)
+        for action in self.actions:
+            if not action.enabled:
+                mask[:, action.id] = False
+        return mask
+```
+
+**Example Usage** (Training System):
+
+```python
+# Get base action mask from universe
+action_mask = universe.action_space.get_action_mask(
+    num_agents=4,
+    device=torch.device('cuda')
+)
+
+# Apply temporal masking (affordances with operating hours)
+# ... temporal logic ...
+
+# Agent selects action
+actions = agent.select_actions(obs, action_mask)
+
+# Log action usage
+for action in universe.action_space.get_enabled_actions():
+    count = (actions == action.id).sum().item()
+    logger.log(f"action_{action.name}_count", count)
+```
+
+---
+
+#### 5.3: MeterMetadata (UAC → Training Handoff)
+
+**Purpose**: Provides meter names and indices for per-meter logging.
+
+**File**: `src/townlet/universe/dto/meter_metadata.py`
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class MeterInfo:
+    """Single meter metadata."""
+    name: str
+    index: int  # Index in meters tensor
+    critical: bool  # Agent dies if reaches 0?
+    initial_value: float
+    observable: bool  # In observation space?
+    description: str
+
+@dataclass
+class MeterMetadata:
+    """Metadata about meters."""
+    meters: list[MeterInfo]
+
+    def get_meter_by_name(self, name: str) -> MeterInfo:
+        """Lookup meter by name."""
+        for meter in self.meters:
+            if meter.name == name:
+                return meter
+        raise KeyError(f"Meter '{name}' not found")
+```
+
+**Example Usage** (Training System):
+
+```python
+# Log per-meter values
+for meter in universe.meter_metadata.meters:
+    mean_value = env.meters[:, meter.index].mean().item()
+    logger.log_meter(meter.name, mean_value)
+
+# Check critical meters
+for meter in universe.meter_metadata.meters:
+    if meter.critical:
+        min_value = env.meters[:, meter.index].min().item()
+        if min_value < 0.1:
+            logger.warn(f"Critical meter '{meter.name}' low: {min_value:.2f}")
+```
+
+---
+
+#### 5.4: AffordanceMetadata (UAC → Training Handoff)
+
+**Purpose**: Provides affordance metadata for tracking usage patterns.
+
+**File**: `src/townlet/universe/dto/affordance_metadata.py`
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class AffordanceInfo:
+    """Single affordance metadata."""
+    id: str
+    name: str
+    enabled: bool  # Deployed in this config?
+    effects: dict[str, float]  # meter_name → delta
+    cost: float  # Money cost
+    description: str
+
+@dataclass
+class AffordanceMetadata:
+    """Metadata about affordances."""
+    affordances: list[AffordanceInfo]
+
+    def get_affordance_by_name(self, name: str) -> AffordanceInfo:
+        """Lookup affordance by name."""
+        for affordance in self.affordances:
+            if affordance.name == name:
+                return affordance
+        raise KeyError(f"Affordance '{name}' not found")
+```
+
+**Example Usage** (Training System):
+
+```python
+# Track affordance interaction counts
+for affordance in universe.affordance_metadata.affordances:
+    if affordance.enabled:
+        # Count interactions via environment tracking
+        interaction_count = env.get_affordance_interaction_count(affordance.id)
+        logger.log(f"affordance_{affordance.name}_interactions", interaction_count)
+```
+
+---
+
+#### 5.5: UniverseMetadata (High-Level Metadata)
+
+**Purpose**: Provides universe-level metadata including checkpoint compatibility info.
+
+**File**: `src/townlet/universe/dto/universe_metadata.py`
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class UniverseMetadata:
+    """High-level metadata about compiled universe."""
+    universe_name: str  # e.g., "L1_full_observability"
+    schema_version: str  # e.g., "1.0"
+    compiled_at: str  # ISO timestamp
+    config_hash: str  # Hash of all config files (for checkpoint compatibility)
+
+    # Dimensions (for checkpoint compatibility)
+    obs_dim: int
+    action_dim: int
+    num_meters: int
+    num_affordances: int
+    position_dim: int  # Substrate-specific (2 for Grid2D, 7 for GridND-7D)
+```
+
+**Example Usage** (Checkpoint Compatibility):
+
+```python
+# When saving checkpoint
+torch.save({
+    'network_state': agent.network.state_dict(),
+    'universe_hash': universe.metadata.config_hash,  # NEW: Track universe version
+    'obs_dim': universe.metadata.obs_dim,
+    'action_dim': universe.metadata.action_dim,
+}, checkpoint_path)
+
+# When loading checkpoint
+checkpoint = torch.load(checkpoint_path)
+if checkpoint['obs_dim'] != universe.metadata.obs_dim:
+    raise ValueError(
+        f"Checkpoint incompatible: obs_dim mismatch "
+        f"({checkpoint['obs_dim']} vs {universe.metadata.obs_dim})"
+    )
+
+if checkpoint['universe_hash'] != universe.metadata.config_hash:
+    import warnings
+    warnings.warn(
+        "Checkpoint trained on different universe config. "
+        "Transfer learning may behave unexpectedly.",
+        UserWarning
+    )
+```
+
+**Rationale**: Solves **BLOCKER 2** from TASK-002C - enables curriculum-driven world model adaptation by tracking which universe configuration was used for training.
+
+---
+
+#### 5.6: Integration with Compilation Pipeline
+
+These artifact DTOs are produced by the UAC compiler (TASK-004A):
+
+```python
+# UniverseCompiler (TASK-004A) produces these artifacts
+class UniverseCompiler:
+    def compile(self, config_dir: Path) -> CompiledUniverse:
+        # Stage 1-4: Load and validate configs
+        # ...
+
+        # Stage 5: Compute metadata and build artifact DTOs
+        observation_spec = self._build_observation_spec(substrate, vfs_config)
+        action_space_metadata = self._build_action_space_metadata(substrate, actions)
+        meter_metadata = self._build_meter_metadata(bars_config)
+        affordance_metadata = self._build_affordance_metadata(affordances_config)
+        universe_metadata = UniverseMetadata(
+            universe_name=config_dir.name,
+            schema_version="1.0",
+            compiled_at=datetime.now().isoformat(),
+            config_hash=self._compute_config_hash(config_dir),
+            obs_dim=observation_spec.total_dims,
+            action_dim=action_space_metadata.total_actions,
+            num_meters=len(meter_metadata.meters),
+            num_affordances=len(affordance_metadata.affordances),
+            position_dim=substrate.position_dim,
+        )
+
+        # Stage 7: Emit compiled universe
+        return CompiledUniverse(
+            metadata=universe_metadata,
+            observation_spec=observation_spec,
+            action_space=action_space_metadata,
+            meter_metadata=meter_metadata,
+            affordance_metadata=affordance_metadata,
+            # ... other components
+        )
+```
+
+---
+
+#### 5.7: Success Criteria for Phase 5
+
+- [ ] ObservationField and ObservationSpec DTOs created
+- [ ] ActionMetadata and ActionSpaceMetadata DTOs created
+- [ ] MeterInfo and MeterMetadata DTOs created
+- [ ] AffordanceInfo and AffordanceMetadata DTOs created
+- [ ] UniverseMetadata DTO created
+- [ ] All DTOs are immutable (frozen dataclasses)
+- [ ] Query methods work correctly (get_field_by_name, get_meter_by_name, etc.)
+- [ ] Example L1 observation spec can be constructed
+- [ ] Example L2 POMDP observation spec can be constructed
+- [ ] Checkpoint compatibility checks work (obs_dim, action_dim, universe_hash)
+- [ ] Unit tests for all DTOs
+- [ ] Documentation with examples for each DTO
+
+---
+
 ## Design Philosophy: Permissive Semantics, Strict Syntax
 
 The universe compiler follows this principle: **Enforce structure mercilessly, but remain conceptually agnostic about semantics.**
@@ -942,6 +1313,7 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 
 ## Success Criteria
 
+**Config DTOs (Phases 1-4)**:
 - [ ] TrainingConfig DTO created with no-defaults enforcement
 - [ ] EnvironmentConfig DTO created with no-defaults enforcement
 - [ ] CurriculumConfig DTO created with no-defaults enforcement
@@ -952,6 +1324,17 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 - [ ] CascadeConfig DTO created
 - [ ] ActionConfig DTO created (TASK-002B integration)
 - [ ] HamletConfig DTO created (master config)
+
+**Compiler Artifact DTOs (Phase 5)**:
+- [ ] ObservationField and ObservationSpec DTOs created
+- [ ] ActionMetadata and ActionSpaceMetadata DTOs created
+- [ ] MeterInfo and MeterMetadata DTOs created
+- [ ] AffordanceInfo and AffordanceMetadata DTOs created
+- [ ] UniverseMetadata DTO created with config_hash computation
+- [ ] All artifact DTOs are immutable (frozen dataclasses)
+- [ ] Query methods implemented (get_field_by_name, get_meter_by_name, etc.)
+
+**Integration**:
 - [ ] All L0-L3 configs load through DTOs
 - [ ] Invalid configs rejected at load with clear error messages
 - [ ] IDE autocomplete works for config field access
@@ -960,12 +1343,15 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 - [ ] All configs load through DTOs (no manual dict access)
 - [ ] Adding new parameter requires updating DTO (forces documentation)
 - [ ] CI can validate all configs in repo without running training
+- [ ] Checkpoint compatibility checks work (obs_dim, action_dim, universe_hash)
+
+**Scope**:
 - [ ] **Validation Scope**: Core DTOs validate structural integrity (types, ranges, constraints)
 - [ ] **Cross-file validation** (meter references, affordance IDs) deferred to TASK-004A
 
 ---
 
-## Estimated Effort: 7-12 hours
+## Estimated Effort: 10-17 hours
 
 **Breakdown**:
 
@@ -973,6 +1359,7 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 - Phase 2 (EnvironmentConfig): 2-3h
 - Phase 3 (Curriculum/Population): 2-3h
 - Phase 4 (Master Config): 1-2h
+- **Phase 5 (Compiler Artifact DTOs): 3-5h**
 - SubstrateConfig (TASK-002A): Included in Phase 2
 - Position validation: Included in Phase 2
 - Testing/Documentation: Included in phases
