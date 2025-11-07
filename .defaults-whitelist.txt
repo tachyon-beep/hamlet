@@ -63,12 +63,15 @@ src/townlet/substrate/**:*
 # Behavioral fields (costs, effects) have NO defaults (operator must specify)
 # Metadata fields (delta, teleport_to, icon, description, source_affordance) use None as STRUCTURAL defaults
 # enabled is INTERNAL (computed by builder, not from config)
+# VFS fields (reads, writes) default to empty lists for backward compatibility during Phase 1
 src/townlet/environment/action_config.py:ActionConfig:*:delta:CALL003
 src/townlet/environment/action_config.py:ActionConfig:*:teleport_to:CALL003
 src/townlet/environment/action_config.py:ActionConfig:*:description:CALL003
 src/townlet/environment/action_config.py:ActionConfig:*:icon:CALL003
 src/townlet/environment/action_config.py:ActionConfig:*:source:CALL003
 src/townlet/environment/action_config.py:ActionConfig:*:source_affordance:CALL003
+src/townlet/environment/action_config.py:ActionConfig:*:reads:CALL003
+src/townlet/environment/action_config.py:ActionConfig:*:writes:CALL003
 src/townlet/environment/action_builder.py:ActionSpaceBuilder:__init__:enabled_action_names:DEF001
 
 # Exploration - will be config-driven in BRAIN_AS_CODE (TASK-005)
@@ -84,11 +87,36 @@ src/townlet/training/sequential_replay_buffer.py:*
 # State DTOs - some defaults are metadata (acceptable per no-defaults principle)
 src/townlet/training/state.py:*
 
+# VFS (Variable & Feature System) - Phase 1 schemas
+# Optional/metadata fields with acceptable defaults per no-defaults principle:
+#   - NormalizationSpec: min/max/mean/std are optional (kind determines which are used)
+#   - ObservationField: normalization is optional (None = no normalization)
+#   - VariableDef: dims optional (only for vecNi/vecNf), description optional (metadata)
+src/townlet/vfs/schema.py:NormalizationSpec:*:min:CALL003
+src/townlet/vfs/schema.py:NormalizationSpec:*:max:CALL003
+src/townlet/vfs/schema.py:NormalizationSpec:*:mean:CALL003
+src/townlet/vfs/schema.py:NormalizationSpec:*:std:CALL003
+src/townlet/vfs/schema.py:ObservationField:*:normalization:CALL003
+src/townlet/vfs/schema.py:VariableDef:*:dims:CALL003
+src/townlet/vfs/schema.py:VariableDef:*:description:CALL003
+
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS
 # ============================================================================
 # Use line-based patterns ONLY for one-off exceptions that don't fit structural patterns
-# (Currently none - prefer structural patterns)
+
+# VFS Phase 1 - ActionConfig VFS integration fields (backward compatibility)
+src/townlet/environment/action_config.py:68:CALL003
+src/townlet/environment/action_config.py:72:CALL003
+
+# VFS Phase 1 - Schema optional/metadata fields
+src/townlet/vfs/schema.py:44:CALL003
+src/townlet/vfs/schema.py:48:CALL003
+src/townlet/vfs/schema.py:54:CALL003
+src/townlet/vfs/schema.py:58:CALL003
+src/townlet/vfs/schema.py:150:CALL003
+src/townlet/vfs/schema.py:212:CALL003
+src/townlet/vfs/schema.py:236:CALL003
 
 # ============================================================================
 # TEMPORARY - Will be removed by TASK-003 and TASK-004A
