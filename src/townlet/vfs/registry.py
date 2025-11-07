@@ -55,6 +55,8 @@ class VariableRegistry:
 
         # Initialize storage tensors
         self._storage: dict[str, torch.Tensor] = {}
+        self._expected_shapes: dict[str, torch.Size] = {}
+        self._expected_dtypes: dict[str, torch.dtype] = {}
         self._initialize_storage()
 
     @property
@@ -136,6 +138,8 @@ class VariableRegistry:
                 raise ValueError(f"Unsupported variable type: {var_def.type}")
 
             self._storage[var_id] = tensor
+            self._expected_shapes[var_id] = tensor.shape
+            self._expected_dtypes[var_id] = tensor.dtype
 
     def _compute_shape(self, var_def: VariableDef) -> tuple[int, ...]:
         """Compute tensor shape for a variable definition.
@@ -206,7 +210,15 @@ class VariableRegistry:
         if reader not in var_def.readable_by:
             raise PermissionError(f"'{reader}' is not allowed to read variable '{variable_id}'. " f"Readable by: {var_def.readable_by}")
 
-        return self._storage[variable_id]
+        value = self._storage[variable_id]
+
+        if var_def.scope == "agent_private" and reader == "agent":
+            raise PermissionError(
+                f"'{reader}' is not allowed to read agent_private variable '{variable_id}'. "
+                "Only privileged readers (engine, acs, etc.) may access raw values."
+            )
+
+        return value.clone()
 
     def set(self, variable_id: str, value: torch.Tensor, writer: str) -> None:
         """Set variable value with access control.
@@ -237,5 +249,14 @@ class VariableRegistry:
         if writer not in var_def.writable_by:
             raise PermissionError(f"'{writer}' is not allowed to write variable '{variable_id}'. " f"Writable by: {var_def.writable_by}")
 
-        # Update storage
-        self._storage[variable_id] = value.to(self.device)
+        expected_shape = self._expected_shapes[variable_id]
+        expected_dtype = self._expected_dtypes[variable_id]
+
+        if value.shape != expected_shape:
+            raise ValueError(f"Value for '{variable_id}' has shape {tuple(value.shape)}, expected {tuple(expected_shape)}")
+
+        if value.dtype != expected_dtype:
+            raise ValueError(f"Value for '{variable_id}' has dtype {value.dtype}, expected {expected_dtype}")
+
+        # Update storage (defensive copy to avoid aliasing)
+        self._storage[variable_id] = value.to(self.device).clone()

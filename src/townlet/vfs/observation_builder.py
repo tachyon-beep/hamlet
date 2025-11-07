@@ -27,14 +27,16 @@ class VFSObservationSpecBuilder:
     def build_observation_spec(
         self,
         variables: list[VariableDef],
-        exposures: dict[str, dict[str, Any]],
+        exposures: list[dict[str, Any]] | dict[str, dict[str, Any]],
     ) -> list[ObservationField]:
         """Build observation specification from variables and exposure config.
 
         Args:
             variables: List of variable definitions
-            exposures: Dict mapping variable_id -> exposure config
-                      e.g., {"energy": {"normalization": {...}}}
+                exposures: Exposure configuration describing which variables to expose.
+                    Accepts either:
+                        - List of exposure entries loaded from YAML (preferred)
+                        - Legacy dict mapping variable_id -> {"normalization": {...}}
 
         Returns:
             List of ObservationField specs
@@ -51,18 +53,35 @@ class VFSObservationSpecBuilder:
             >>> spec[0].source_variable
             'energy'
         """
+        # Normalize exposures to list form (multiple entries per variable allowed)
+        normalized_exposures: list[dict[str, Any]] = []
+        if isinstance(exposures, dict):
+            for var_id, exposure_config in exposures.items():
+                config = dict(exposure_config or {})
+                config["source_variable"] = var_id
+                normalized_exposures.append(config)
+        else:
+            normalized_exposures = [dict(exposure) for exposure in exposures]
+
         # Build variable lookup map
         var_map = {v.id: v for v in variables}
         obs_fields = []
 
-        for var_id, exposure_config in exposures.items():
+        for exposure_config in normalized_exposures:
+            var_id = exposure_config.get("source_variable")
+            if not var_id:
+                raise ValueError("Exposure entry missing 'source_variable'")
             if var_id not in var_map:
                 raise ValueError(f"Variable {var_id} not found in definitions")
 
             var_def = var_map[var_id]
 
-            # Infer shape from variable type
-            shape = self._infer_shape(var_def)
+            # Use provided metadata when present, otherwise infer defaults
+            field_id = exposure_config.get("id") or f"obs_{var_id}"
+            exposed_to = exposure_config.get("exposed_to") or ["agent"]
+
+            shape_config = exposure_config.get("shape")
+            shape = shape_config if shape_config is not None else self._infer_shape(var_def)
 
             # Build normalization spec if provided
             norm_spec = None
@@ -72,9 +91,9 @@ class VFSObservationSpecBuilder:
 
             # Create observation field
             field = ObservationField(
-                id=f"obs_{var_id}",
+                id=field_id,
                 source_variable=var_id,
-                exposed_to=["agent"],  # Default to agent for Phase 1
+                exposed_to=exposed_to,
                 shape=shape,
                 normalization=norm_spec,
             )

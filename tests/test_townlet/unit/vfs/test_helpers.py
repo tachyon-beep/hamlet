@@ -4,7 +4,9 @@ This module provides common helper functions used across VFS unit and integratio
 tests to avoid code duplication and ensure consistent testing patterns.
 """
 
+from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -56,14 +58,14 @@ def load_variables_from_config(config_path: Path) -> list[VariableDef]:
     return [VariableDef(**var_data) for var_data in data["variables"]]
 
 
-def load_exposures_from_config(config_path: Path) -> dict:
+def load_exposures_from_config(config_path: Path) -> list[dict[str, Any]]:
     """Load observation exposure configuration from variables_reference.yaml.
 
     Args:
         config_path: Path to config pack directory
 
     Returns:
-        Dict mapping variable_id to exposure config (normalization, etc.)
+        List of exposure entries (each mirrors YAML exposed_observations schema)
     """
     variables_file = config_path / "variables_reference.yaml"
 
@@ -73,31 +75,38 @@ def load_exposures_from_config(config_path: Path) -> dict:
     with open(variables_file) as f:
         data = yaml.safe_load(f)
 
-    exposures = {}
+    exposures: list[dict[str, Any]]
 
     if "exposed_observations" in data:
-        # Use explicit exposure configuration
-        for obs in data["exposed_observations"]:
-            var_id = obs["source_variable"]
-            exposures[var_id] = {
-                "normalization": obs.get("normalization"),
-            }
+        # Use explicit exposure configuration (deep copy to avoid caller mutation)
+        exposures = [deepcopy(obs) for obs in data["exposed_observations"]]
     else:
         # Fallback: expose all agent-readable variables
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
-        for var in variables:
-            if "agent" in var.readable_by:
-                exposures[var.id] = {"normalization": None}
+        exposures = [
+            {
+                "id": f"obs_{var.id}",
+                "source_variable": var.id,
+                "exposed_to": ["agent"],
+                "normalization": None,
+            }
+            for var in variables
+            if "agent" in var.readable_by
+        ]
 
     return exposures
 
 
-def calculate_vfs_observation_dim(variables: list[VariableDef], exposures: dict, partial_observability: bool = False) -> int:
+def calculate_vfs_observation_dim(
+    variables: list[VariableDef],
+    exposures: list[dict[str, Any]] | dict[str, dict[str, Any]],
+    partial_observability: bool = False,
+) -> int:
     """Calculate total observation dimension from VFS specification.
 
     Args:
         variables: List of variable definitions
-        exposures: Dict of exposure configurations
+        exposures: Exposure configuration (list or legacy dict form)
         partial_observability: If True, filter for POMDP mode (exclude grid_encoding)
 
     Returns:

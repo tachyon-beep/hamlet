@@ -794,6 +794,97 @@ class TestGetObservations:
         assert torch.all(obs >= 0.0).item()
         assert torch.all(obs <= 1.0).item() or torch.all(obs <= 15.0).item()  # One-hot can be > 1
 
+    def test_get_observations_uses_substrate_position_encoder(self, monkeypatch):
+        """Position variable should use substrate-specific encoder when available."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        expected = torch.full((env.num_agents, env.substrate.position_dim), 0.42, device=env.device)
+
+        def fake_encoder(positions, affordances):
+            return expected
+
+        def fail_normalize(_):
+            raise AssertionError("normalize_positions should not be called when encoder exists")
+
+        monkeypatch.setattr(env.substrate, "_encode_position_features", fake_encoder)
+        monkeypatch.setattr(env.substrate, "normalize_positions", fail_normalize, raising=False)
+
+        env._get_observations()
+
+        stored = env.vfs_registry.get("position", reader="agent")
+        assert torch.allclose(stored, expected)
+
+    def test_get_observations_falls_back_to_encode_observation(self, monkeypatch):
+        """Continuous substrates without private encoder should use encode_observation."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=1,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+            config_pack_path=Path("configs/L1_continuous_2D"),
+        )
+        env.reset()
+
+        expected = torch.full((env.num_agents, env.substrate.position_dim), 0.25, device=env.device)
+
+        def fake_encode_observation(positions, affordances):
+            return expected
+
+        def fail_normalize(_):
+            raise AssertionError("normalize_positions fallback should not trigger when encode_observation exists")
+
+        monkeypatch.setattr(env.substrate, "encode_observation", fake_encode_observation)
+        monkeypatch.setattr(env.substrate, "normalize_positions", fail_normalize, raising=False)
+
+        env._get_observations()
+
+        stored = env.vfs_registry.get("position", reader="agent")
+        assert torch.allclose(stored, expected)
+
+    def test_get_observations_handles_agent_private_scope(self):
+        """Agent-private variables should still be delivered to agents."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        env = VectorizedHamletEnv(
+            num_agents=2,
+            grid_size=8,
+            partial_observability=False,
+            vision_range=2,
+            enable_temporal_mechanics=False,
+            move_energy_cost=0.005,
+            wait_energy_cost=0.004,
+            interact_energy_cost=0.003,
+            agent_lifespan=1000,
+        )
+        env.reset()
+
+        # Force energy variable to be treated as agent_private
+        env.vfs_registry.variables["energy"].scope = "agent_private"
+
+        obs = env._get_observations()
+
+        assert obs.shape[0] == env.num_agents
+
 
 class TestGetActionMasks:
     """Test VectorizedHamletEnv.get_action_masks() method."""

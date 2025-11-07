@@ -97,7 +97,7 @@ class TestVFSLegacyEquivalence:
         agent_readable_ids = {var.id for var in variables if "agent" in var.readable_by}
 
         # Get all exposed variable IDs
-        exposed_ids = set(exposures.keys())
+        exposed_ids = {obs["source_variable"] for obs in exposures}
 
         # All agent-readable variables should be exposed
         # (or have explicit reason not to be)

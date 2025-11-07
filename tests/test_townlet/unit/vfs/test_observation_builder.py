@@ -348,6 +348,15 @@ class TestObservationSpecBuilderErrorHandling:
 
         assert len(spec) == 0
 
+    def test_missing_source_variable_metadata_raises(self, sample_variables):
+        """Exposure entries without source_variable should raise."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = [{"id": "broken_obs"}]
+
+        with pytest.raises(ValueError, match="missing 'source_variable'"):
+            builder.build_observation_spec(sample_variables, exposures)
+
 
 class TestObservationFieldProperties:
     """Test generated ObservationField properties."""
@@ -385,3 +394,46 @@ class TestObservationFieldProperties:
         spec = builder.build_observation_spec(sample_variables, exposures)
 
         assert spec[0].source_variable == "position"
+
+    def test_preserves_configured_metadata(self, sample_variables):
+        """Builder should honor id, exposed_to, and shape from config."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = [
+            {
+                "id": "custom_position_obs",
+                "source_variable": "position",
+                "exposed_to": ["agent", "acs"],
+                "shape": [4],  # Should override inferred shape
+                "normalization": None,
+            }
+        ]
+
+        spec = builder.build_observation_spec(sample_variables, exposures)
+        assert spec[0].id == "custom_position_obs"
+        assert spec[0].exposed_to == ["agent", "acs"]
+        assert spec[0].shape == [4]
+
+    def test_allows_duplicate_source_variables(self, sample_variables):
+        """Builder should not deduplicate repeated source_variable exposures."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = [
+            {
+                "id": "obs_energy_agent",
+                "source_variable": "energy",
+                "exposed_to": ["agent"],
+                "shape": [],
+            },
+            {
+                "id": "obs_energy_acs",
+                "source_variable": "energy",
+                "exposed_to": ["acs"],
+                "shape": [],
+            },
+        ]
+
+        spec = builder.build_observation_spec(sample_variables, exposures)
+        energy_fields = [field for field in spec if field.source_variable == "energy"]
+        assert len(energy_fields) == 2
+        assert {field.id for field in energy_fields} == {"obs_energy_agent", "obs_energy_acs"}
