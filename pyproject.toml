@@ -58,6 +58,8 @@ dependencies = [
     "mlflow>=2.9.0",
     "tensorboard>=2.15.0",
     "tensorflow>=2.20.0",
+    "msgpack>=1.1.2",
+    "lz4>=4.4.5",
 ]
 
 [project.urls]

@@ -120,6 +120,50 @@ def cpu_device() -> torch.device:
 
 
 # =============================================================================
+# TEMPFILE FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def temp_test_dir(tmp_path: Path) -> Path:
+    """Provide temporary directory for test files.
+
+    This fixture eliminates the need for repetitive tempfile.TemporaryDirectory()
+    context managers throughout the test suite.
+
+    Args:
+        tmp_path: pytest's built-in temporary directory fixture
+
+    Returns:
+        Path to temporary directory (cleaned up after test)
+
+    Usage:
+        def test_something(temp_test_dir):
+            config_path = temp_test_dir / "test.yaml"
+            # Test logic
+    """
+    return tmp_path
+
+
+@pytest.fixture
+def temp_yaml_file(temp_test_dir: Path) -> Path:
+    """Provide temporary YAML file path.
+
+    Common pattern for config tests that need to write YAML files.
+
+    Returns:
+        Path to temporary YAML file
+
+    Usage:
+        def test_yaml_loading(temp_yaml_file):
+            with open(temp_yaml_file, 'w') as f:
+                yaml.dump(config_data, f)
+            # Test loading
+    """
+    return temp_test_dir / "test.yaml"
+
+
+# =============================================================================
 # ENVIRONMENT FIXTURES
 # =============================================================================
 

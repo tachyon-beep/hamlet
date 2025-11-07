@@ -12,6 +12,8 @@ from pathlib import Path
 
 import torch
 
+from tests.test_townlet.utils import wait_for_condition
+
 
 class TestEpisodeRecorder:
     """Test EpisodeRecorder queue and threading."""
@@ -389,8 +391,8 @@ class TestRecordingWriter:
             )
             test_queue.put(step)
 
-            # Give writer time to process
-            time.sleep(0.2)
+            # Wait for writer to process (proper synchronization, not arbitrary sleep)
+            assert wait_for_condition(lambda: len(writer.episode_buffer) == 1, timeout=2.0), "Writer did not process step within timeout"
 
             # Verify step was buffered
             assert len(writer.episode_buffer) == 1
@@ -452,8 +454,8 @@ class TestRecordingWriter:
             marker = EpisodeEndMarker(metadata=metadata)
             test_queue.put(marker)
 
-            # Give writer time to process
-            time.sleep(0.5)
+            # Wait for writer to process episode end and clear buffer
+            assert wait_for_condition(lambda: len(writer.episode_buffer) == 0, timeout=2.0), "Writer did not clear buffer within timeout"
 
             # Buffer should be cleared
             assert len(writer.episode_buffer) == 0
