@@ -190,7 +190,6 @@ class TestExportEpisodeVideo:
         """Should return False when step data retrieval fails."""
         from townlet.recording.video_export import export_episode_video
 
-
         mock_replay = Mock()
         mock_replay_class.return_value = mock_replay
         mock_replay.load_episode.return_value = True
@@ -219,7 +218,6 @@ class TestExportEpisodeVideo:
     ):
         """Should return False when ffmpeg encoding fails."""
         from townlet.recording.video_export import export_episode_video
-
 
         mock_replay = Mock()
         mock_replay_class.return_value = mock_replay
@@ -332,13 +330,10 @@ class TestEncodeVideoFFmpeg:
         """Should return False when ffmpeg is not installed."""
         from townlet.recording.video_export import _encode_video_ffmpeg
 
-
         # Mock ffmpeg not found
         mock_run.side_effect = FileNotFoundError("ffmpeg not found")
 
-        result = _encode_video_ffmpeg(
-            temp_test_dir / "frames", temp_test_dir / "output.mp4"
-        )
+        result = _encode_video_ffmpeg(temp_test_dir / "frames", temp_test_dir / "output.mp4")
 
         assert result is False
 
@@ -347,13 +342,10 @@ class TestEncodeVideoFFmpeg:
         """Should return False when ffmpeg version check fails."""
         from townlet.recording.video_export import _encode_video_ffmpeg
 
-
         # Mock ffmpeg version check failure
         mock_run.side_effect = subprocess.CalledProcessError(1, "ffmpeg")
 
-        result = _encode_video_ffmpeg(
-            temp_test_dir / "frames", temp_test_dir / "output.mp4"
-        )
+        result = _encode_video_ffmpeg(temp_test_dir / "frames", temp_test_dir / "output.mp4")
 
         assert result is False
 
@@ -362,16 +354,13 @@ class TestEncodeVideoFFmpeg:
         """Should return False when ffmpeg encoding fails."""
         from townlet.recording.video_export import _encode_video_ffmpeg
 
-
         # Mock version check success, encoding failure
         mock_run.side_effect = [
             Mock(returncode=0),  # Version check
             subprocess.CalledProcessError(1, "ffmpeg", stderr="Encoding error"),
         ]
 
-        result = _encode_video_ffmpeg(
-            temp_test_dir / "frames", temp_test_dir / "output.mp4"
-        )
+        result = _encode_video_ffmpeg(temp_test_dir / "frames", temp_test_dir / "output.mp4")
 
         assert result is False
 
@@ -379,7 +368,6 @@ class TestEncodeVideoFFmpeg:
     def test_encode_speed_adjustment(self, mock_run, temp_test_dir):
         """Should adjust FPS based on speed multiplier."""
         from townlet.recording.video_export import _encode_video_ffmpeg
-
 
         mock_run.side_effect = [
             Mock(returncode=0),  # Version check
@@ -403,7 +391,6 @@ class TestEncodeVideoFFmpeg:
     def test_encode_custom_fps(self, mock_run, temp_test_dir):
         """Should use custom FPS value."""
         from townlet.recording.video_export import _encode_video_ffmpeg
-
 
         mock_run.side_effect = [
             Mock(returncode=0),
@@ -437,7 +424,6 @@ class TestBatchExportVideos:
         """Should export multiple episodes and return success count."""
         from townlet.recording.video_export import batch_export_videos
 
-
         # Mock database
         mock_db = Mock()
         mock_db_class.return_value = mock_db
@@ -469,7 +455,6 @@ class TestBatchExportVideos:
         """Should count only successful exports."""
         from townlet.recording.video_export import batch_export_videos
 
-
         mock_db = Mock()
         mock_db_class.return_value = mock_db
         mock_db.list_recordings.return_value = [
@@ -495,7 +480,6 @@ class TestBatchExportVideos:
     def test_batch_export_with_filters(self, mock_export, mock_db_class, temp_test_dir):
         """Should pass filters to database query."""
         from townlet.recording.video_export import batch_export_videos
-
 
         mock_db = Mock()
         mock_db_class.return_value = mock_db
@@ -527,7 +511,6 @@ class TestBatchExportVideos:
         """Should pass custom rendering parameters to export function."""
         from townlet.recording.video_export import batch_export_videos
 
-
         mock_db = Mock()
         mock_db_class.return_value = mock_db
         mock_db.list_recordings.return_value = [{"episode_id": 100}]
@@ -556,7 +539,6 @@ class TestBatchExportVideos:
         """Should generate correct output filenames."""
         from townlet.recording.video_export import batch_export_videos
 
-
         mock_db = Mock()
         mock_db_class.return_value = mock_db
         mock_db.list_recordings.return_value = [
@@ -580,7 +562,6 @@ class TestBatchExportVideos:
     def test_batch_export_no_recordings_found(self, mock_db_class, temp_test_dir):
         """Should return 0 when no recordings match filters."""
         from townlet.recording.video_export import batch_export_videos
-
 
         mock_db = Mock()
         mock_db_class.return_value = mock_db

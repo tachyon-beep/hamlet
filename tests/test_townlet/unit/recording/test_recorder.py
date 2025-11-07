@@ -238,9 +238,7 @@ class TestRecordingWriterProcessing:
             )
 
             # Add some steps first
-            writer.episode_buffer.append(
-                make_test_recorded_step()
-            )
+            writer.episode_buffer.append(make_test_recorded_step())
 
             metadata = make_test_episode_metadata()
 
@@ -276,9 +274,7 @@ class TestRecordingWriterProcessing:
             )
 
             # Add a step to buffer
-            writer.episode_buffer.append(
-                make_test_recorded_step()
-            )
+            writer.episode_buffer.append(make_test_recorded_step())
 
             metadata = EpisodeMetadata(
                 episode_id=100,  # Matches periodic criterion (100 % 100 == 0)
@@ -436,9 +432,7 @@ class TestRecordingWriterProcessing:
             )
 
             # Add step to buffer
-            writer.episode_buffer.append(
-                make_test_recorded_step()
-            )
+            writer.episode_buffer.append(make_test_recorded_step())
 
             metadata = make_test_episode_metadata(episode_id=42)
 
@@ -465,9 +459,7 @@ class TestRecordingWriterProcessing:
                 curriculum=None,
             )
 
-            writer.episode_buffer.append(
-                make_test_recorded_step()
-            )
+            writer.episode_buffer.append(make_test_recorded_step())
 
             metadata = make_test_episode_metadata(episode_id=99)
 
@@ -495,9 +487,7 @@ class TestRecordingWriterProcessing:
                 curriculum=None,
             )
 
-            writer.episode_buffer.append(
-                make_test_recorded_step()
-            )
+            writer.episode_buffer.append(make_test_recorded_step())
 
             metadata = make_test_episode_metadata(episode_id=55)
 

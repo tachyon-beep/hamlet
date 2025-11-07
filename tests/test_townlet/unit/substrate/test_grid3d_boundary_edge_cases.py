@@ -308,7 +308,7 @@ class TestGrid3DObservationEncoding:
         last_6 = encoded[0, -6:]
 
         # Normalized: [3/7, 4/7, 5/7]
-        assert torch.allclose(last_6[:3], torch.tensor([3/7, 4/7, 5/7]))
+        assert torch.allclose(last_6[:3], torch.tensor([3 / 7, 4 / 7, 5 / 7]))
 
         # Range sizes: [8.0, 8.0, 8.0]
         assert torch.allclose(last_6[3:], torch.tensor([8.0, 8.0, 8.0]))
@@ -427,7 +427,7 @@ class TestGrid3DPartialObservationEdgeCases:
         encoded = substrate.encode_partial_observation(positions, affordances, vision_range=2)
 
         window_size = 2 * 2 + 1  # 5
-        expected_cells = window_size ** 3  # 125
+        expected_cells = window_size**3  # 125
 
         assert encoded.shape == (1, expected_cells), f"Should return {expected_cells}-dim local cube"
 
@@ -448,7 +448,7 @@ class TestGrid3DPartialObservationEdgeCases:
         positions = torch.tensor([[5, 5, 5]], dtype=torch.long)
         affordances = {
             "NearBed": torch.tensor([5, 5, 5], dtype=torch.long),  # At agent
-            "FarBed": torch.tensor([0, 0, 0], dtype=torch.long),   # Outside cube
+            "FarBed": torch.tensor([0, 0, 0], dtype=torch.long),  # Outside cube
         }
 
         encoded = substrate.encode_partial_observation(positions, affordances, vision_range=2)

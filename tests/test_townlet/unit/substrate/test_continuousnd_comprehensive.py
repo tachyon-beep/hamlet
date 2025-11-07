@@ -232,9 +232,7 @@ class TestContinuousNDBounceEdgeCases:
         new_positions = substrate.apply_movement(positions, deltas)
 
         # x = 12 → reflects to x = 2*10 - 12 = 8
-        assert torch.allclose(
-            new_positions[0, 0], torch.tensor(8.0), atol=1e-5
-        ), f"Expected 8.0, got {new_positions[0, 0].item()}"
+        assert torch.allclose(new_positions[0, 0], torch.tensor(8.0), atol=1e-5), f"Expected 8.0, got {new_positions[0, 0].item()}"
 
     def test_bounce_boundary_negative_direction_4d(self):
         """Bounce should handle negative reflections in 4D space."""
@@ -253,9 +251,7 @@ class TestContinuousNDBounceEdgeCases:
         new_positions = substrate.apply_movement(positions, deltas)
 
         # x = -2 → reflects to x = 0 - (-2) = 2
-        assert torch.allclose(
-            new_positions[0, 0], torch.tensor(2.0), atol=1e-5
-        ), f"Expected 2.0, got {new_positions[0, 0].item()}"
+        assert torch.allclose(new_positions[0, 0], torch.tensor(2.0), atol=1e-5), f"Expected 2.0, got {new_positions[0, 0].item()}"
 
 
 # =============================================================================
@@ -291,9 +287,7 @@ class TestContinuousNDNormalizePositions:
         # Max corner → [1, 1, 1, 1]
         assert torch.allclose(normalized[1], torch.ones(4))
         # Mixed → [0.5, 0.25, 0.75, 0.1]
-        assert torch.allclose(
-            normalized[2], torch.tensor([0.5, 0.25, 0.75, 0.1]), atol=1e-5
-        )
+        assert torch.allclose(normalized[2], torch.tensor([0.5, 0.25, 0.75, 0.1]), atol=1e-5)
 
     def test_normalize_positions_asymmetric_bounds(self):
         """normalize_positions should handle asymmetric bounds correctly."""
@@ -428,14 +422,10 @@ class TestContinuousNDCoordinateSemantics:
             interaction_radius=0.5,
         )
 
-        base_position = torch.tensor(
-            [[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]], dtype=torch.float32
-        )
+        base_position = torch.tensor([[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]], dtype=torch.float32)
 
         # Move in dimension 6 (last dimension)
-        delta_dim6 = torch.tensor(
-            [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0]], dtype=torch.float32
-        )
+        delta_dim6 = torch.tensor([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0]], dtype=torch.float32)
         new_pos = substrate.apply_movement(base_position, delta_dim6)
         expected = torch.tensor([[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 8.0]])
         assert torch.allclose(new_pos, expected)

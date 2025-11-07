@@ -109,7 +109,7 @@ class TestVectorizedHamletEnvInitialization:
 
         # Verify substrate was created
         assert env.substrate is not None
-        assert hasattr(env.substrate, 'position_dim')
+        assert hasattr(env.substrate, "position_dim")
 
     def test_init_loads_affordances_from_config(self):
         """Should load affordances.yaml and create affordance engine."""
@@ -129,7 +129,7 @@ class TestVectorizedHamletEnvInitialization:
 
         # Verify affordance engine was created
         assert env.affordance_engine is not None
-        assert hasattr(env.affordance_engine, 'affordances')
+        assert hasattr(env.affordance_engine, "affordances")
 
     def test_init_initializes_state_tensors(self):
         """Should initialize positions, meters, lifetimes, and dones tensors."""
@@ -332,7 +332,7 @@ class TestVectorizedHamletEnvReset:
         env.reset()
 
         # Should initialize time_of_day
-        assert hasattr(env, 'time_of_day')
+        assert hasattr(env, "time_of_day")
         assert env.time_of_day == 0
 
 
@@ -946,9 +946,9 @@ class TestHandleInteractions:
         env.reset()
 
         # Multi-tick mode should initialize progress tracking
-        assert hasattr(env, 'interaction_progress')
-        assert hasattr(env, 'last_interaction_affordance')
-        assert hasattr(env, 'last_interaction_position')
+        assert hasattr(env, "interaction_progress")
+        assert hasattr(env, "last_interaction_affordance")
+        assert hasattr(env, "last_interaction_position")
 
     def test_handle_interactions_returns_empty_when_no_interact(self):
         """Should return empty dict when no agents interact."""

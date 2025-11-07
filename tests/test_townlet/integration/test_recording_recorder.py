@@ -12,30 +12,7 @@ from pathlib import Path
 
 import torch
 
-
-def wait_for_condition(condition_fn, timeout=2.0, poll_interval=0.01):
-    """Wait for a condition to become true with timeout.
-
-    This is a proper way to wait for background thread processing in tests,
-    avoiding flaky time.sleep() calls.
-
-    Args:
-        condition_fn: Callable that returns True when condition is met
-        timeout: Maximum time to wait in seconds
-        poll_interval: How often to check the condition
-
-    Returns:
-        True if condition was met, False if timeout occurred
-
-    Example:
-        assert wait_for_condition(lambda: len(writer.episode_buffer) == 1, timeout=2.0)
-    """
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        if condition_fn():
-            return True
-        time.sleep(poll_interval)
-    return False
+from tests.test_townlet.utils import wait_for_condition
 
 
 class TestEpisodeRecorder:
@@ -415,9 +392,7 @@ class TestRecordingWriter:
             test_queue.put(step)
 
             # Wait for writer to process (proper synchronization, not arbitrary sleep)
-            assert wait_for_condition(
-                lambda: len(writer.episode_buffer) == 1, timeout=2.0
-            ), "Writer did not process step within timeout"
+            assert wait_for_condition(lambda: len(writer.episode_buffer) == 1, timeout=2.0), "Writer did not process step within timeout"
 
             # Verify step was buffered
             assert len(writer.episode_buffer) == 1
@@ -480,9 +455,7 @@ class TestRecordingWriter:
             test_queue.put(marker)
 
             # Wait for writer to process episode end and clear buffer
-            assert wait_for_condition(
-                lambda: len(writer.episode_buffer) == 0, timeout=2.0
-            ), "Writer did not clear buffer within timeout"
+            assert wait_for_condition(lambda: len(writer.episode_buffer) == 0, timeout=2.0), "Writer did not clear buffer within timeout"
 
             # Buffer should be cleared
             assert len(writer.episode_buffer) == 0
