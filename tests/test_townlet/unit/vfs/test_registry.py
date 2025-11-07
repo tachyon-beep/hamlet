@@ -549,3 +549,75 @@ class TestRegistryScopeSemantics:
 
         value = registry.get("private_vec", reader="engine")
         assert value.shape == torch.Size([10, 2])  # [num_agents, dims]
+
+
+class TestRegistryVariablesProperty:
+    """Test the public variables property for introspection."""
+
+    def test_variables_property_exposes_definitions(self):
+        """Registry.variables property exposes variable definitions."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="energy",
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=1.0,
+            ),
+            VariableDef(
+                id="position",
+                scope="agent",
+                type="vecNf",
+                dims=2,
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=[0.0, 0.0],
+            ),
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=4, device=torch.device("cpu"))
+
+        # Variables property should expose definitions dict
+        assert "energy" in registry.variables
+        assert "position" in registry.variables
+        assert len(registry.variables) == 2
+
+    def test_variables_property_returns_dict(self):
+        """Registry.variables returns dictionary mapping IDs to definitions."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="energy",
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=1.0,
+            ),
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=4, device=torch.device("cpu"))
+
+        # Check type and structure
+        assert isinstance(registry.variables, dict)
+        assert registry.variables["energy"].id == "energy"
+        assert registry.variables["energy"].scope == "agent"
+        assert registry.variables["energy"].type == "scalar"
+
+    def test_variables_property_empty_registry(self):
+        """Registry.variables works with empty registry."""
+        from townlet.vfs.registry import VariableRegistry
+
+        registry = VariableRegistry(variables=[], num_agents=4, device=torch.device("cpu"))
+
+        assert isinstance(registry.variables, dict)
+        assert len(registry.variables) == 0

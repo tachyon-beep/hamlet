@@ -58,6 +58,25 @@ class VariableRegistry:
         self._storage: dict[str, torch.Tensor] = {}
         self._initialize_storage()
 
+    @property
+    def variables(self) -> dict[str, VariableDef]:
+        """Get variable definitions dictionary.
+
+        Returns:
+            Dictionary mapping variable IDs to their definitions.
+
+        Examples:
+            # Check if variable exists
+            if "energy" in registry.variables:
+                var_def = registry.variables["energy"]
+                print(f"Energy type: {var_def.type}")
+
+            # Iterate over all variables
+            for var_id, var_def in registry.variables.items():
+                print(f"{var_id}: {var_def.scope}")
+        """
+        return self._definitions
+
     def _initialize_storage(self) -> None:
         """Initialize storage tensors with default values for all variables."""
         for var_id, var_def in self._definitions.items():
