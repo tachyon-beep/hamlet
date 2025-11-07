@@ -13,57 +13,30 @@ Reference Dimensions (from Cycle 0.4 manual validation):
 
 from pathlib import Path
 
-import pytest
-import yaml
-
+from tests.test_townlet.unit.vfs.test_helpers import (
+    CONFIG_PATHS,
+    EXPECTED_DIMENSIONS,
+    assert_dimension_equivalence,
+    load_variables_from_config,
+)
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
-from townlet.vfs.schema import VariableDef
 
 
-def load_reference_variables(config_path: Path) -> list[VariableDef]:
-    """Load reference variables.yaml from config pack.
+def compute_vfs_observation_dim_from_agent_readable(config_path: Path) -> int:
+    """Compute observation_dim using only agent-readable variables.
+
+    This differs from the helper function by building exposures from
+    agent-readable variables rather than using explicit exposure config.
 
     Args:
         config_path: Path to config pack directory
 
     Returns:
-        List of VariableDef objects
-    """
-    variables_file = config_path / "variables_reference.yaml"
-    if not variables_file.exists():
-        pytest.skip(f"Reference variables not found: {variables_file}")
-
-    with open(variables_file) as f:
-        data = yaml.safe_load(f)
-
-    variables = []
-    for var_data in data["variables"]:
-        variables.append(VariableDef(**var_data))
-
-    return variables
-
-
-# Expected dimensions from Cycle 0 manual validation
-EXPECTED_DIMENSIONS = {
-    "L0_0_minimal": 38,
-    "L0_5_dual_resource": 78,
-    "L1_full_observability": 93,
-    "L2_partial_observability": 54,
-    "L3_temporal_mechanics": 93,
-}
-
-
-def compute_vfs_observation_dim(variables: list[VariableDef]) -> int:
-    """Compute observation_dim using VFS observation spec builder.
-
-    This is how BAC compiler will calculate dimensions.
-
-    Args:
-        variables: List of variable definitions
-
-    Returns:
         VFS-calculated observation dimension
     """
+    # Load variables
+    variables = load_variables_from_config(config_path)
+
     # Build exposures from all variables marked as readable by agent
     exposures = {}
     for var in variables:
@@ -91,32 +64,25 @@ class TestObservationDimensionRegressionL0:
 
     def test_l0_0_minimal_dimension(self):
         """L0_0_minimal: VFS dims must match current implementation (38 dims)."""
-        config_path = Path("configs/L0_0_minimal")
+        config_path = CONFIG_PATHS["L0_0_minimal"]
         expected_dim = EXPECTED_DIMENSIONS["L0_0_minimal"]
 
         # VFS calculation from reference variables
-        variables = load_reference_variables(config_path)
-        vfs_dim = compute_vfs_observation_dim(variables)
+        vfs_dim = compute_vfs_observation_dim_from_agent_readable(config_path)
 
         # CRITICAL: Must match exactly
-        assert vfs_dim == expected_dim, (
-            f"L0_0_minimal: VFS dim {vfs_dim} != expected dim {expected_dim}. " f"CHECKPOINT INCOMPATIBILITY! Check reference variables."
-        )
+        assert_dimension_equivalence("L0_0_minimal", vfs_dim, expected_dim)
 
     def test_l0_5_dual_resource_dimension(self):
         """L0_5_dual_resource: VFS dims must match current implementation (78 dims)."""
-        config_path = Path("configs/L0_5_dual_resource")
+        config_path = CONFIG_PATHS["L0_5_dual_resource"]
         expected_dim = EXPECTED_DIMENSIONS["L0_5_dual_resource"]
 
         # VFS calculation from reference variables
-        variables = load_reference_variables(config_path)
-        vfs_dim = compute_vfs_observation_dim(variables)
+        vfs_dim = compute_vfs_observation_dim_from_agent_readable(config_path)
 
         # CRITICAL: Must match exactly
-        assert vfs_dim == expected_dim, (
-            f"L0_5_dual_resource: VFS dim {vfs_dim} != expected dim {expected_dim}. "
-            f"CHECKPOINT INCOMPATIBILITY! Check reference variables."
-        )
+        assert_dimension_equivalence("L0_5_dual_resource", vfs_dim, expected_dim)
 
 
 class TestObservationDimensionRegressionL1:
@@ -124,18 +90,14 @@ class TestObservationDimensionRegressionL1:
 
     def test_l1_full_observability_dimension(self):
         """L1_full_observability: VFS dims must match current implementation (93 dims)."""
-        config_path = Path("configs/L1_full_observability")
+        config_path = CONFIG_PATHS["L1_full_observability"]
         expected_dim = EXPECTED_DIMENSIONS["L1_full_observability"]
 
         # VFS calculation from reference variables
-        variables = load_reference_variables(config_path)
-        vfs_dim = compute_vfs_observation_dim(variables)
+        vfs_dim = compute_vfs_observation_dim_from_agent_readable(config_path)
 
         # CRITICAL: Must match exactly
-        assert vfs_dim == expected_dim, (
-            f"L1_full_observability: VFS dim {vfs_dim} != expected dim {expected_dim}. "
-            f"CHECKPOINT INCOMPATIBILITY! Check reference variables."
-        )
+        assert_dimension_equivalence("L1_full_observability", vfs_dim, expected_dim)
 
 
 class TestObservationDimensionRegressionL2:
@@ -143,18 +105,14 @@ class TestObservationDimensionRegressionL2:
 
     def test_l2_partial_observability_dimension(self):
         """L2_partial_observability: VFS dims must match current implementation (54 dims)."""
-        config_path = Path("configs/L2_partial_observability")
+        config_path = CONFIG_PATHS["L2_partial_observability"]
         expected_dim = EXPECTED_DIMENSIONS["L2_partial_observability"]
 
         # VFS calculation from reference variables
-        variables = load_reference_variables(config_path)
-        vfs_dim = compute_vfs_observation_dim(variables)
+        vfs_dim = compute_vfs_observation_dim_from_agent_readable(config_path)
 
         # CRITICAL: Must match exactly
-        assert vfs_dim == expected_dim, (
-            f"L2_partial_observability: VFS dim {vfs_dim} != expected dim {expected_dim}. "
-            f"CHECKPOINT INCOMPATIBILITY! Check reference variables."
-        )
+        assert_dimension_equivalence("L2_partial_observability", vfs_dim, expected_dim)
 
 
 class TestObservationDimensionRegressionL3:
@@ -162,18 +120,14 @@ class TestObservationDimensionRegressionL3:
 
     def test_l3_temporal_mechanics_dimension(self):
         """L3_temporal_mechanics: VFS dims must match current implementation (93 dims)."""
-        config_path = Path("configs/L3_temporal_mechanics")
+        config_path = CONFIG_PATHS["L3_temporal_mechanics"]
         expected_dim = EXPECTED_DIMENSIONS["L3_temporal_mechanics"]
 
         # VFS calculation from reference variables
-        variables = load_reference_variables(config_path)
-        vfs_dim = compute_vfs_observation_dim(variables)
+        vfs_dim = compute_vfs_observation_dim_from_agent_readable(config_path)
 
         # CRITICAL: Must match exactly
-        assert vfs_dim == expected_dim, (
-            f"L3_temporal_mechanics: VFS dim {vfs_dim} != expected dim {expected_dim}. "
-            f"CHECKPOINT INCOMPATIBILITY! Check reference variables."
-        )
+        assert_dimension_equivalence("L3_temporal_mechanics", vfs_dim, expected_dim)
 
 
 class TestObservationDimensionBreakdown:
@@ -196,8 +150,8 @@ class TestObservationDimensionBreakdown:
         - Affordance: 15 one-hot (14 affordance types + none)
         - Temporal: 4 scalars (time_sin, time_cos, interaction_progress, lifetime_progress)
         """
-        config_path = Path("configs/L1_full_observability")
-        variables = load_reference_variables(config_path)
+        config_path = CONFIG_PATHS["L1_full_observability"]
+        variables = load_variables_from_config(config_path)
 
         # Group variables by category
         substrate_vars = [v for v in variables if v.id.startswith("grid_encoding") or v.id == "position"]

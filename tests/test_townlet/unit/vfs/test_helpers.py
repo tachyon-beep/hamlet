@@ -1,0 +1,134 @@
+"""Shared test utilities for VFS (Variable & Feature System) tests.
+
+This module provides common helper functions used across VFS unit and integration
+tests to avoid code duplication and ensure consistent testing patterns.
+"""
+
+from pathlib import Path
+
+import pytest
+import yaml
+
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+from townlet.vfs.schema import VariableDef
+
+# Expected observation dimensions for all curriculum levels
+# These values MUST match the current production environment to ensure
+# checkpoint compatibility. If these change, checkpoints will be incompatible!
+EXPECTED_DIMENSIONS = {
+    "L0_0_minimal": 38,
+    "L0_5_dual_resource": 78,
+    "L1_full_observability": 93,
+    "L2_partial_observability": 54,
+    "L3_temporal_mechanics": 93,
+}
+
+# Config pack paths (relative to project root)
+CONFIG_PATHS = {
+    "L0_0_minimal": Path("configs/L0_0_minimal"),
+    "L0_5_dual_resource": Path("configs/L0_5_dual_resource"),
+    "L1_full_observability": Path("configs/L1_full_observability"),
+    "L2_partial_observability": Path("configs/L2_partial_observability"),
+    "L3_temporal_mechanics": Path("configs/L3_temporal_mechanics"),
+}
+
+
+def load_variables_from_config(config_path: Path) -> list[VariableDef]:
+    """Load VFS variables from config pack's variables_reference.yaml.
+
+    Args:
+        config_path: Path to config pack directory
+
+    Returns:
+        List of VariableDef objects
+
+    Raises:
+        FileNotFoundError: If variables_reference.yaml not found
+    """
+    variables_file = config_path / "variables_reference.yaml"
+
+    if not variables_file.exists():
+        pytest.skip(f"variables_reference.yaml not found: {variables_file}")
+
+    with open(variables_file) as f:
+        data = yaml.safe_load(f)
+
+    return [VariableDef(**var_data) for var_data in data["variables"]]
+
+
+def load_exposures_from_config(config_path: Path) -> dict:
+    """Load observation exposure configuration from variables_reference.yaml.
+
+    Args:
+        config_path: Path to config pack directory
+
+    Returns:
+        Dict mapping variable_id to exposure config (normalization, etc.)
+    """
+    variables_file = config_path / "variables_reference.yaml"
+
+    if not variables_file.exists():
+        pytest.skip(f"variables_reference.yaml not found: {variables_file}")
+
+    with open(variables_file) as f:
+        data = yaml.safe_load(f)
+
+    exposures = {}
+
+    if "exposed_observations" in data:
+        # Use explicit exposure configuration
+        for obs in data["exposed_observations"]:
+            var_id = obs["source_variable"]
+            exposures[var_id] = {
+                "normalization": obs.get("normalization"),
+            }
+    else:
+        # Fallback: expose all agent-readable variables
+        variables = [VariableDef(**var_data) for var_data in data["variables"]]
+        for var in variables:
+            if "agent" in var.readable_by:
+                exposures[var.id] = {"normalization": None}
+
+    return exposures
+
+
+def calculate_vfs_observation_dim(variables: list[VariableDef], exposures: dict) -> int:
+    """Calculate total observation dimension from VFS specification.
+
+    Args:
+        variables: List of variable definitions
+        exposures: Dict of exposure configurations
+
+    Returns:
+        Total observation dimension (sum of all field dimensions)
+    """
+    builder = VFSObservationSpecBuilder()
+    obs_spec = builder.build_observation_spec(variables, exposures)
+
+    total_dims = 0
+    for field in obs_spec:
+        if field.shape:
+            total_dims += field.shape[0]
+        else:
+            total_dims += 1
+
+    return total_dims
+
+
+def assert_dimension_equivalence(config_name: str, vfs_dim: int, expected_dim: int) -> None:
+    """Assert VFS dimension matches expected dimension with helpful error message.
+
+    Args:
+        config_name: Name of curriculum level (e.g., "L1_full_observability")
+        vfs_dim: Calculated VFS dimension
+        expected_dim: Expected dimension from legacy system
+
+    Raises:
+        AssertionError: If dimensions don't match (checkpoint incompatibility)
+    """
+    assert vfs_dim == expected_dim, (
+        f"{config_name}: VFS dimension {vfs_dim} != expected {expected_dim}. "
+        f"CHECKPOINT INCOMPATIBILITY! "
+        f"This will break existing checkpoints. "
+        f"Check variables_reference.yaml in configs/{config_name}/"
+    )
