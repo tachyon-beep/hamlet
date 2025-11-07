@@ -11,10 +11,10 @@ Reference Dimensions (from Cycle 0.4 manual validation):
 - L3_temporal_mechanics: 93 dims (8x8 grid)
 """
 
-import yaml
 from pathlib import Path
 
 import pytest
+import yaml
 
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 from townlet.vfs.schema import VariableDef
@@ -33,7 +33,7 @@ def load_reference_variables(config_path: Path) -> list[VariableDef]:
     if not variables_file.exists():
         pytest.skip(f"Reference variables not found: {variables_file}")
 
-    with open(variables_file, "r") as f:
+    with open(variables_file) as f:
         data = yaml.safe_load(f)
 
     variables = []
@@ -100,8 +100,7 @@ class TestObservationDimensionRegressionL0:
 
         # CRITICAL: Must match exactly
         assert vfs_dim == expected_dim, (
-            f"L0_0_minimal: VFS dim {vfs_dim} != expected dim {expected_dim}. "
-            f"CHECKPOINT INCOMPATIBILITY! Check reference variables."
+            f"L0_0_minimal: VFS dim {vfs_dim} != expected dim {expected_dim}. " f"CHECKPOINT INCOMPATIBILITY! Check reference variables."
         )
 
     def test_l0_5_dual_resource_dimension(self):
@@ -209,15 +208,9 @@ class TestObservationDimensionBreakdown:
         # Calculate dimensions per category
         builder = VFSObservationSpecBuilder()
 
-        substrate_dim = sum(
-            builder._infer_shape(v)[0] if builder._infer_shape(v) else 1
-            for v in substrate_vars
-        )
+        substrate_dim = sum(builder._infer_shape(v)[0] if builder._infer_shape(v) else 1 for v in substrate_vars)
         meter_dim = len(meter_vars)  # All scalars
-        affordance_dim = sum(
-            builder._infer_shape(v)[0] if builder._infer_shape(v) else 1
-            for v in affordance_vars
-        )
+        affordance_dim = sum(builder._infer_shape(v)[0] if builder._infer_shape(v) else 1 for v in affordance_vars)
         temporal_dim = len(temporal_vars)  # All scalars
 
         total = substrate_dim + meter_dim + affordance_dim + temporal_dim

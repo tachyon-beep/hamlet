@@ -13,11 +13,11 @@ Test Coverage:
 - Registry initialization with config-loaded variables
 """
 
-import yaml
 from pathlib import Path
 
 import pytest
 import torch
+import yaml
 
 from townlet.vfs import (
     NormalizationSpec,
@@ -39,7 +39,7 @@ class TestVFSYAMLLoading:
         if not config_path.exists():
             pytest.skip(f"Reference variables not found: {config_path}")
 
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         # Validate YAML structure
@@ -77,7 +77,7 @@ class TestVFSYAMLLoading:
             if not config_path.exists():
                 pytest.skip(f"Reference variables not found: {config_path}")
 
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 data = yaml.safe_load(f)
 
             variables = []
@@ -99,7 +99,7 @@ class TestVFSObservationPipeline:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load variables from YAML
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = []
@@ -134,7 +134,7 @@ class TestVFSObservationPipeline:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load and build observation spec
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -161,7 +161,7 @@ class TestVFSObservationPipeline:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load variables
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         # Check if exposed_observations are defined
@@ -195,7 +195,7 @@ class TestVFSRegistryIntegration:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load variables
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -216,7 +216,7 @@ class TestVFSRegistryIntegration:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load variables
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -248,7 +248,7 @@ class TestVFSRegistryIntegration:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load variables
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -282,7 +282,7 @@ class TestVFSEndToEndPipeline:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Step 1: Load variables from YAML
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -309,8 +309,7 @@ class TestVFSEndToEndPipeline:
 
         # Verify all observation sources exist in registry
         for field in obs_spec:
-            assert field.source_variable in registry.variables, \
-                f"Source variable {field.source_variable} not in registry"
+            assert field.source_variable in registry.variables, f"Source variable {field.source_variable} not in registry"
 
         # Verify we can read all observation sources
         for field in obs_spec:
@@ -334,7 +333,7 @@ class TestVFSEndToEndPipeline:
                 pytest.skip(f"Reference variables not found: {config_path}")
 
             # Load variables
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 data = yaml.safe_load(f)
 
             variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -352,13 +351,11 @@ class TestVFSEndToEndPipeline:
             obs_dim = sum(field.shape[0] if field.shape else 1 for field in obs_spec)
 
             # Validate
-            assert obs_dim == expected_dim, \
-                f"{config_name}: Expected {expected_dim} dims, got {obs_dim}"
+            assert obs_dim == expected_dim, f"{config_name}: Expected {expected_dim} dims, got {obs_dim}"
 
             # Initialize registry (verify no crashes)
             registry = VariableRegistry(variables, num_agents=4, device=torch.device("cpu"))
-            assert len(registry.variables) == len(variables), \
-                f"{config_name}: Registry should contain all variables"
+            assert len(registry.variables) == len(variables), f"{config_name}: Registry should contain all variables"
 
 
 class TestVFSActionConfigIntegration:
@@ -374,7 +371,7 @@ class TestVFSActionConfigIntegration:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load variables
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -411,7 +408,7 @@ class TestVFSActionConfigIntegration:
             pytest.skip(f"Reference variables not found: {config_path}")
 
         # Load variables
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
@@ -439,8 +436,7 @@ class TestVFSActionConfigIntegration:
 
         # Validate writes references exist
         for write_spec in action.writes:
-            assert write_spec.variable_id in var_ids, \
-                f"Action writes variable '{write_spec.variable_id}' which doesn't exist in config"
+            assert write_spec.variable_id in var_ids, f"Action writes variable '{write_spec.variable_id}' which doesn't exist in config"
 
 
 # ========================================

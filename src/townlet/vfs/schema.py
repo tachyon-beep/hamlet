@@ -9,6 +9,7 @@ Phase 2: Derivation graphs, complex types, expression parsing
 """
 
 from typing import Any, Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 __all__ = [
@@ -37,9 +38,7 @@ class NormalizationSpec(BaseModel):
         NormalizationSpec(kind="zscore", mean=0.5, std=0.2)
     """
 
-    kind: Literal["minmax", "zscore"] = Field(
-        description="Normalization method: minmax or zscore"
-    )
+    kind: Literal["minmax", "zscore"] = Field(description="Normalization method: minmax or zscore")
 
     # MinMax parameters (can be scalar or list)
     min: float | list[float] | None = Field(
@@ -244,13 +243,9 @@ class VariableDef(BaseModel):
         """Validate that vecNi/vecNf have dims field, scalar/bool do not."""
         if self.type in ("vecNi", "vecNf"):
             if self.dims is None:
-                raise ValueError(
-                    f"Variable '{self.id}' with type '{self.type}' requires 'dims' field"
-                )
+                raise ValueError(f"Variable '{self.id}' with type '{self.type}' requires 'dims' field")
         elif self.type in ("scalar", "bool"):
             if self.dims is not None:
-                raise ValueError(
-                    f"Variable '{self.id}' with type '{self.type}' should not have 'dims' field"
-                )
+                raise ValueError(f"Variable '{self.id}' with type '{self.type}' should not have 'dims' field")
         # vec2i, vec3i have implicit dims (2, 3) - no dims field needed
         return self

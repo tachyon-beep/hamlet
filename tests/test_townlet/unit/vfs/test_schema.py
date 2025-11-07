@@ -33,7 +33,7 @@ class TestVariableDef:
         assert var.writable_by == ["engine"]
         assert var.default == 1.0
 
-    def test_vecNf_variable_valid(self):
+    def test_vecNf_variable_valid(self):  # noqa: N802
         """N-dimensional float vector with dims specified."""
         from townlet.vfs.schema import VariableDef
 
@@ -52,7 +52,7 @@ class TestVariableDef:
         assert var.dims == 2
         assert var.default == [0.0, 0.0]
 
-    def test_vecNi_variable_valid(self):
+    def test_vecNi_variable_valid(self):  # noqa: N802
         """N-dimensional int vector with dims specified."""
         from townlet.vfs.schema import VariableDef
 
@@ -150,7 +150,7 @@ class TestVariableDef:
                 default=0.0,
             )
 
-    def test_vecNf_without_dims_rejected(self):
+    def test_vecNf_without_dims_rejected(self):  # noqa: N802
         """vecNf type requires dims field."""
         from townlet.vfs.schema import VariableDef
 
@@ -299,7 +299,7 @@ class TestObservationField:
 
     def test_observation_with_normalization_valid(self):
         """Observation field with normalization spec."""
-        from townlet.vfs.schema import ObservationField, NormalizationSpec
+        from townlet.vfs.schema import NormalizationSpec, ObservationField
 
         obs = ObservationField(
             id="obs_energy",

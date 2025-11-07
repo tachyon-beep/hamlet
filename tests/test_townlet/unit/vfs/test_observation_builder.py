@@ -12,7 +12,7 @@ NOTE: This is NOT the same as environment.observation_builder.ObservationBuilder
 import pytest
 
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
-from townlet.vfs.schema import NormalizationSpec, VariableDef
+from townlet.vfs.schema import VariableDef
 
 
 @pytest.fixture
@@ -136,7 +136,7 @@ class TestObservationSpecBuilderVectorTypes:
         assert spec[0].source_variable == "velocity"
         assert spec[0].shape == [3]  # vec3i has 3 dimensions
 
-    def test_build_spec_for_vecNi_variable(self, sample_variables):
+    def test_build_spec_for_vecNi_variable(self, sample_variables):  # noqa: N802
         """Build observation spec for vecNi variable (N-dimensional integer vector)."""
         builder = VFSObservationSpecBuilder()
 
@@ -148,7 +148,7 @@ class TestObservationSpecBuilderVectorTypes:
         assert spec[0].source_variable == "position_7d"
         assert spec[0].shape == [7]  # vecNi with dims=7
 
-    def test_build_spec_for_vecNf_variable(self, sample_variables):
+    def test_build_spec_for_vecNf_variable(self, sample_variables):  # noqa: N802
         """Build observation spec for vecNf variable (N-dimensional float vector)."""
         builder = VFSObservationSpecBuilder()
 

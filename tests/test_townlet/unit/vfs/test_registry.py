@@ -11,7 +11,6 @@ Scope patterns:
 
 import pytest
 import torch
-from pydantic import ValidationError
 
 
 class TestRegistryInitialization:

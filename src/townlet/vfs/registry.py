@@ -8,8 +8,8 @@ and scope semantics. It handles three scope patterns:
 - agent_private: Per-agent values, observable only by owner (shape [num_agents] or [num_agents, dims])
 """
 
+
 import torch
-from typing import Any
 
 from townlet.vfs.schema import VariableDef
 
@@ -81,7 +81,7 @@ class VariableRegistry:
         """Initialize storage tensors with default values for all variables."""
         for var_id, var_def in self._definitions.items():
             # Determine tensor shape based on scope and type
-            shape = self._compute_shape(var_def)
+            self._compute_shape(var_def)
 
             # Initialize tensor with default value
             if var_def.type == "scalar":
@@ -164,6 +164,9 @@ class VariableRegistry:
         elif var_def.type == "vec3i":
             dims = 3
         elif var_def.type in ("vecNi", "vecNf"):
+            assert (
+                var_def.dims is not None
+            ), f"vecNi/vecNf variable {var_def.id} must have dims field"
             dims = var_def.dims
         else:
             raise ValueError(f"Unsupported variable type: {var_def.type}")
@@ -204,10 +207,7 @@ class VariableRegistry:
 
         # Check read permission
         if reader not in var_def.readable_by:
-            raise PermissionError(
-                f"'{reader}' is not allowed to read variable '{variable_id}'. "
-                f"Readable by: {var_def.readable_by}"
-            )
+            raise PermissionError(f"'{reader}' is not allowed to read variable '{variable_id}'. " f"Readable by: {var_def.readable_by}")
 
         return self._storage[variable_id]
 
@@ -238,10 +238,7 @@ class VariableRegistry:
 
         # Check write permission
         if writer not in var_def.writable_by:
-            raise PermissionError(
-                f"'{writer}' is not allowed to write variable '{variable_id}'. "
-                f"Writable by: {var_def.writable_by}"
-            )
+            raise PermissionError(f"'{writer}' is not allowed to write variable '{variable_id}'. " f"Writable by: {var_def.writable_by}")
 
         # Update storage
         self._storage[variable_id] = value.to(self.device)
