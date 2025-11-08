@@ -4,9 +4,11 @@ Philosophy: All behavioral parameters must be explicitly specified.
 No implicit defaults. Operator accountability.
 
 Design Decision (TASK-003):
-- Renamed DTOs to avoid conflicts with existing cascade_config/affordance_config
-- TrainingEnvironmentConfig (not EnvironmentConfig) - for grid_size, vision_range
-- Dropped Bar/Cascade/Affordance DTOs - use existing cascade_config versions
+- Created 8 core DTOs: Training, Environment, Population, Curriculum, Exploration, Bar, Cascade, Affordance
+- TrainingEnvironmentConfig (not EnvironmentConfig) - avoids conflict with cascade_config.EnvironmentConfig
+- BarConfig, CascadeConfig, AffordanceConfig - BASIC structural validation (TASK-003)
+  - Cross-file validation (meter references) deferred to TASK-004A
+  - Advanced features (capabilities, effect pipelines) deferred to TASK-004B
 - Added ExplorationConfig - found in all config packs but missing from original plan
 
 Naming Strategy:
@@ -26,6 +28,9 @@ from townlet.config.environment import TrainingEnvironmentConfig, load_environme
 from townlet.config.population import PopulationConfig, load_population_config
 from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
 from townlet.config.exploration import ExplorationConfig, load_exploration_config
+from townlet.config.bar import BarConfig, load_bars_config
+from townlet.config.cascade import CascadeConfig, load_cascades_config
+from townlet.config.affordance import AffordanceConfig, load_affordances_config
 from townlet.config.hamlet import HamletConfig
 
 __all__ = [
@@ -40,5 +45,11 @@ __all__ = [
     "load_curriculum_config",
     "ExplorationConfig",
     "load_exploration_config",
+    "BarConfig",
+    "load_bars_config",
+    "CascadeConfig",
+    "load_cascades_config",
+    "AffordanceConfig",
+    "load_affordances_config",
     "HamletConfig",  # Master config - primary entry point
 ]
