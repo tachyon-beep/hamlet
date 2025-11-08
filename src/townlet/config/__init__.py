@@ -20,6 +20,11 @@ from pathlib import Path
 # Version tracking for schema evolution
 CONFIG_SCHEMA_VERSION = "1.0.0"
 
+# Import DTOs for convenient access
+from townlet.config.training import TrainingConfig, load_training_config
+
 __all__ = [
     "CONFIG_SCHEMA_VERSION",
+    "TrainingConfig",
+    "load_training_config",
 ]
