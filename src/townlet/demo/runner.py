@@ -9,6 +9,7 @@ from pathlib import Path
 import torch
 import yaml
 
+from townlet.config import HamletConfig
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -18,36 +19,6 @@ from townlet.training.state import BatchedAgentState
 from townlet.training.tensorboard_logger import TensorBoardLogger
 
 logger = logging.getLogger(__name__)
-
-
-def _validate_required_params(config: dict, section: str, required_params: list[str]) -> None:
-    """
-    Validate that all required parameters are present in config section.
-
-    This enforces the no-defaults principle (PDR-002): all UAC/BAC parameters
-    must be explicitly specified in config files.
-
-    Args:
-        config: Full config dict
-        section: Section name (e.g., "environment", "population")
-        required_params: List of required parameter names
-
-    Raises:
-        ValueError: If any required parameter is missing, with clear error
-                   message showing what's missing and how to fix it.
-    """
-    section_config = config.get(section, {})
-    missing_params = [param for param in required_params if param not in section_config]
-
-    if missing_params:
-        # Create helpful error message with example
-        example = "\n".join(f"  {param}: [value]" for param in missing_params)
-        raise ValueError(
-            f"Missing required parameters in '{section}' section of config:\n"
-            f"{example}\n\n"
-            f"Add these parameters to your training.yaml under '{section}:'.\n"
-            f"See configs/L0_0_minimal/training.yaml for example."
-        )
 
 
 class DemoRunner:
@@ -105,23 +76,18 @@ class DemoRunner:
             flush_every=10,
         )
 
-        # Load config
-        with open(self.training_config_path) as f:
-            self.config = yaml.safe_load(f)
+        # Load config using HamletConfig DTO (enforces no-defaults validation)
+        self.config = HamletConfig.load(self.config_dir)
 
-        # Set max_episodes: use provided value, otherwise read from config (required)
+        # Also load raw YAML for optional sections (e.g., recording) not in core DTOs
+        with open(self.training_config_path) as f:
+            self.raw_config = yaml.safe_load(f)
+
+        # Set max_episodes: use provided value, otherwise read from config
         if max_episodes is not None:
             self.max_episodes = max_episodes
         else:
-            training_cfg = self.config.get("training", {})
-            if "max_episodes" not in training_cfg:
-                raise ValueError(
-                    "Missing required parameter 'max_episodes' in training section.\n"
-                    "Add to your training.yaml:\n"
-                    "training:\n"
-                    "  max_episodes: 5000"
-                )
-            self.max_episodes = training_cfg["max_episodes"]
+            self.max_episodes = self.config.training.max_episodes
 
         self.current_episode = 0
 
@@ -348,59 +314,26 @@ class DemoRunner:
         logger.info(f"Database: {self.db_path}")
         logger.info(f"Checkpoints: {self.checkpoint_dir}")
 
-        # PDR-002: Validate all required config parameters (no-defaults principle)
-        _validate_required_params(
-            self.config,
-            "environment",
-            [
-                "grid_size",
-                "partial_observability",
-                "vision_range",
-                "energy_move_depletion",
-                "energy_wait_depletion",
-                "energy_interact_depletion",
-            ],
-        )
-        _validate_required_params(
-            self.config, "population", ["num_agents", "learning_rate", "gamma", "replay_buffer_capacity", "network_type"]
-        )
-        _validate_required_params(
-            self.config,
-            "curriculum",
-            ["max_steps_per_episode", "survival_advance_threshold", "survival_retreat_threshold", "entropy_gate", "min_steps_at_stage"],
-        )
-        _validate_required_params(
-            self.config, "exploration", ["embed_dim", "initial_intrinsic_weight", "variance_threshold", "survival_window"]
-        )
-        _validate_required_params(
-            self.config,
-            "training",
-            ["device", "train_frequency", "target_update_frequency", "max_grad_norm", "epsilon_start", "epsilon_decay", "epsilon_min"],
-        )
+        # PDR-002: No-defaults validation done automatically by HamletConfig DTO
+        # All required parameters validated at load time (lines 109-110)
 
         # Initialize training components
-        device_str = self.config["training"]["device"]
+        device_str = self.config.training.device
         device = torch.device(device_str if torch.cuda.is_available() else "cpu")
         if device_str == "cuda" and not torch.cuda.is_available():
             logger.warning("CUDA requested but not available, falling back to CPU")
 
-        # Extract config parameters (validated above)
-        curriculum_cfg = self.config["curriculum"]
-        exploration_cfg = self.config["exploration"]
-        population_cfg = self.config["population"]
-        environment_cfg = self.config["environment"]
-
-        # Get environment parameters from config (all required per PDR-002)
-        num_agents = population_cfg["num_agents"]
-        grid_size = environment_cfg["grid_size"]
-        partial_observability = environment_cfg["partial_observability"]
-        vision_range = environment_cfg["vision_range"]
+        # Extract config parameters from DTOs (all required, validated at load time)
+        num_agents = self.config.population.num_agents
+        grid_size = self.config.environment.grid_size
+        partial_observability = self.config.environment.partial_observability
+        vision_range = self.config.environment.vision_range
         # enabled_affordances: None = all affordances (semantic meaning)
-        enabled_affordances = environment_cfg.get("enabled_affordances", None)
-        enable_temporal_mechanics = environment_cfg.get("enable_temporal_mechanics", False)  # Default False for backwards compatibility
-        move_energy_cost = environment_cfg["energy_move_depletion"]
-        wait_energy_cost = environment_cfg["energy_wait_depletion"]
-        interact_energy_cost = environment_cfg["energy_interact_depletion"]
+        enabled_affordances = self.config.environment.enabled_affordances
+        enable_temporal_mechanics = self.config.environment.enable_temporal_mechanics
+        move_energy_cost = self.config.environment.energy_move_depletion
+        wait_energy_cost = self.config.environment.energy_wait_depletion
+        interact_energy_cost = self.config.environment.energy_interact_depletion
 
         # TODO(UAC): agent_lifespan should be in config (TASK-006: BRAIN_AS_CODE)
         # For now, use constant 1000 (standard test value)
@@ -428,45 +361,40 @@ class DemoRunner:
 
         # Create curriculum (all params required per PDR-002)
         self.curriculum = AdversarialCurriculum(
-            max_steps_per_episode=curriculum_cfg["max_steps_per_episode"],
-            survival_advance_threshold=curriculum_cfg["survival_advance_threshold"],
-            survival_retreat_threshold=curriculum_cfg["survival_retreat_threshold"],
-            entropy_gate=curriculum_cfg["entropy_gate"],
-            min_steps_at_stage=curriculum_cfg["min_steps_at_stage"],
+            max_steps_per_episode=self.config.curriculum.max_steps_per_episode,
+            survival_advance_threshold=self.config.curriculum.survival_advance_threshold,
+            survival_retreat_threshold=self.config.curriculum.survival_retreat_threshold,
+            entropy_gate=self.config.curriculum.entropy_gate,
+            min_steps_at_stage=self.config.curriculum.min_steps_at_stage,
             device=device,
         )
-
-        # Get training parameters from config (validated above)
-        training_cfg = self.config["training"]
 
         # Create exploration (all params required per PDR-002)
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
-            embed_dim=exploration_cfg["embed_dim"],
-            initial_intrinsic_weight=exploration_cfg["initial_intrinsic_weight"],
-            variance_threshold=exploration_cfg["variance_threshold"],
-            survival_window=exploration_cfg["survival_window"],
-            epsilon_start=training_cfg["epsilon_start"],
-            epsilon_decay=training_cfg["epsilon_decay"],
-            epsilon_min=training_cfg["epsilon_min"],
+            embed_dim=self.config.exploration.embed_dim,
+            initial_intrinsic_weight=self.config.exploration.initial_intrinsic_weight,
+            variance_threshold=self.config.exploration.variance_threshold,
+            survival_window=self.config.exploration.survival_window,
+            epsilon_start=self.config.training.epsilon_start,
+            epsilon_decay=self.config.training.epsilon_decay,
+            epsilon_min=self.config.training.epsilon_min,
             device=device,
         )
 
         # Get population parameters from config (all required per PDR-002)
-        learning_rate = population_cfg["learning_rate"]
-        gamma = population_cfg["gamma"]
-        replay_buffer_capacity = population_cfg["replay_buffer_capacity"]
-        network_type = population_cfg["network_type"]  # 'simple' or 'recurrent'
+        learning_rate = self.config.population.learning_rate
+        gamma = self.config.population.gamma
+        replay_buffer_capacity = self.config.population.replay_buffer_capacity
+        network_type = self.config.population.network_type  # 'simple' or 'recurrent'
         vision_window_size = 2 * vision_range + 1  # 5 for vision_range=2
 
         # Get training hyperparameters from config (all required per PDR-002)
-        train_frequency = training_cfg["train_frequency"]
-        target_update_frequency = training_cfg["target_update_frequency"]
-        # batch_size: optional (None = auto-select based on network type)
-        batch_size = training_cfg.get("batch_size", None)
-        # sequence_length: optional (only used for recurrent networks)
-        sequence_length = training_cfg.get("sequence_length", 8)
-        max_grad_norm = training_cfg["max_grad_norm"]
+        train_frequency = self.config.training.train_frequency
+        target_update_frequency = self.config.training.target_update_frequency
+        batch_size = self.config.training.batch_size
+        sequence_length = self.config.training.sequence_length
+        max_grad_norm = self.config.training.max_grad_norm
 
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
@@ -496,7 +424,7 @@ class DemoRunner:
         self.curriculum.initialize_population(num_agents)
 
         # Initialize episode recorder if enabled
-        recording_cfg = self.config.get("recording", {})
+        recording_cfg = self.raw_config.get("recording", {})
         if recording_cfg.get("enabled", False):
             from townlet.recording.recorder import EpisodeRecorder
 
@@ -525,13 +453,13 @@ class DemoRunner:
             "gamma": gamma,
             "network_type": network_type,
             "replay_buffer_capacity": replay_buffer_capacity,
-            "grid_size": environment_cfg["grid_size"],
-            "partial_observability": environment_cfg["partial_observability"],
+            "grid_size": grid_size,
+            "partial_observability": partial_observability,
             "vision_range": vision_range,
-            "enable_temporal": environment_cfg.get("enable_temporal_mechanics", False),
-            "initial_intrinsic_weight": exploration_cfg["initial_intrinsic_weight"],
-            "variance_threshold": exploration_cfg["variance_threshold"],
-            "max_steps_per_episode": curriculum_cfg["max_steps_per_episode"],
+            "enable_temporal": enable_temporal_mechanics,
+            "initial_intrinsic_weight": self.config.exploration.initial_intrinsic_weight,
+            "variance_threshold": self.config.exploration.variance_threshold,
+            "max_steps_per_episode": self.config.curriculum.max_steps_per_episode,
         }
         # Note: final metrics will be logged at end of training
         self.tb_logger.log_hyperparameters(hparams=self.hparams, metrics={})
