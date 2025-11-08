@@ -201,13 +201,18 @@ class UniverseCompiler:
 ```python
 @dataclass
 class RawConfigs:
-    """Container for raw config objects loaded from YAML."""
-    bars: BarsConfig
-    cascades: CascadesConfig
-    affordances: AffordanceConfigCollection
-    cues: CuesConfig  # NEW: Per COMPILER_ARCHITECTURE.md §2.1
-    training: TrainingConfig
-    # Future: substrate, actions when TASK-002A/003 implemented
+    """Container for raw config objects loaded from YAML.
+
+    Per COMPILER_ARCHITECTURE.md §2.1: All core universe configs.
+    """
+    substrate: SubstrateConfig  # Spatial structure (grid, continuous, aspatial)
+    variables: VariablesConfig  # VFS variable definitions
+    bars: BarsConfig  # Meter definitions
+    cascades: CascadesConfig  # Meter relationships
+    affordances: AffordanceConfigCollection  # Interaction definitions
+    cues: CuesConfig  # Theory of Mind cue definitions
+    actions: ActionSpaceConfig  # Global action vocabulary (substrate + custom)
+    training: TrainingConfig  # Training hyperparameters
 
 
 def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
@@ -242,15 +247,23 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
             hints=["Check field types and constraints"]
         )
 
-    # Same for cascades, affordances, training
+    # Load all core configs (Per COMPILER_ARCHITECTURE.md §2.3 Stage 1)
+    substrate = load_substrate_config(config_dir / "substrate.yaml")
+    variables = load_variables_config(config_dir / "variables.yaml")
     cascades = load_cascades_config(config_dir / "cascades.yaml")
     affordances = load_affordance_config(config_dir / "affordances.yaml")
+    cues = load_cues_config(config_dir / "cues.yaml")
+    actions = load_action_space_config(config_dir / "global_actions.yaml")
     training = load_training_config(config_dir / "training.yaml")
 
     return RawConfigs(
+        substrate=substrate,
+        variables=variables,
         bars=bars,
         cascades=cascades,
         affordances=affordances,
+        cues=cues,
+        actions=actions,
         training=training,
     )
 ```
@@ -276,13 +289,17 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
 
 ```python
 class UniverseSymbolTable:
-    """Central registry of all named entities in universe."""
+    """Central registry of all named entities in universe.
+
+    Per COMPILER_ARCHITECTURE.md §2.3: Symbol table for Stage 2.
+    """
 
     def __init__(self):
-        self.meters: dict[str, BarConfig] = {}
-        self.affordances: dict[str, AffordanceConfig] = {}
-        self.cues: dict[str, CueConfig] = {}  # NEW: Per COMPILER_ARCHITECTURE.md
-        # Future: actions, stages when TASK-002A (Action Space) implemented
+        self.variables: dict[str, VariableDef] = {}  # VFS variables
+        self.meters: dict[str, BarConfig] = {}  # Meters (subset of variables)
+        self.affordances: dict[str, AffordanceConfig] = {}  # Interactions
+        self.cues: dict[str, CueConfig] = {}  # Theory of Mind cues
+        self.actions: dict[str, ActionConfig] = {}  # Global action vocabulary
 
     def register_meter(self, name: str, config: BarConfig):
         """Register meter for later reference resolution."""
@@ -305,7 +322,7 @@ class UniverseSymbolTable:
         self.affordances[id] = config
 
     def register_cue(self, meter_name: str, config: CueConfig):
-        """Register cue for later validation (NEW)."""
+        """Register cue for later validation."""
         if meter_name in self.cues:
             raise CompilationError(
                 stage="Stage 2: Symbol Registration",
@@ -313,6 +330,26 @@ class UniverseSymbolTable:
                 hints=["Each meter can have at most one cue definition"]
             )
         self.cues[meter_name] = config
+
+    def register_variable(self, var_id: str, config: VariableDef):
+        """Register VFS variable for later reference resolution."""
+        if var_id in self.variables:
+            raise CompilationError(
+                stage="Stage 2: Symbol Registration",
+                errors=[f"Duplicate variable ID: '{var_id}'"],
+                hints=["Each variable must have unique ID"]
+            )
+        self.variables[var_id] = config
+
+    def register_action(self, action_id: int, config: ActionConfig):
+        """Register action for later reference resolution."""
+        if action_id in self.actions:
+            raise CompilationError(
+                stage="Stage 2: Symbol Registration",
+                errors=[f"Duplicate action ID: {action_id}"],
+                hints=["Each action must have unique ID"]
+            )
+        self.actions[action_id] = config
 
     def resolve_meter_reference(self, name: str, location: str) -> BarConfig:
         """
@@ -353,17 +390,29 @@ def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbo
     """
     Stage 2: Build symbol tables from raw configs.
 
-    Registers all named entities for reference resolution.
+    Per COMPILER_ARCHITECTURE.md §2.3 Stage 2: Register all named entities.
     """
     symbol_table = UniverseSymbolTable()
 
-    # Register meters
+    # Register VFS variables
+    for var in raw_configs.variables.variables:
+        symbol_table.register_variable(var.id, var)
+
+    # Register meters (subset of variables)
     for bar in raw_configs.bars.bars:
         symbol_table.register_meter(bar.name, bar)
 
     # Register affordances
     for aff in raw_configs.affordances.affordances:
         symbol_table.register_affordance(aff.id, aff)
+
+    # Register cues
+    for meter_name, cue in raw_configs.cues.items():
+        symbol_table.register_cue(meter_name, cue)
+
+    # Register actions
+    for action in raw_configs.actions.actions:
+        symbol_table.register_action(action.id, action)
 
     return symbol_table
 ```
