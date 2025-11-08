@@ -13,6 +13,8 @@ environment:
   grid_size: 8
   partial_observability: false  # LEVEL 1: Agent sees full grid
   vision_range: 8
+  enable_temporal_mechanics: false
+  enabled_affordances: null  # All 14 affordances
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
@@ -39,11 +41,16 @@ exploration:
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
   survival_window: 50  # Reduced from 100
-  epsilon_start: 1.0
-  epsilon_min: 0.1  # Higher min for faster convergence
-  epsilon_decay: 0.99
 
 # Training configuration
 training:
   device: cuda
   max_episodes: 200  # Integration test: ~5 minutes
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 64
+  sequence_length: 8
+  max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_decay: 0.99
+  epsilon_min: 0.1  # Higher min for faster convergence
