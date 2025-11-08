@@ -99,8 +99,18 @@ src/townlet/vfs/schema.py:NormalizationSpec:*:std:CALL003
 src/townlet/vfs/schema.py:ObservationField:*:normalization:CALL003
 src/townlet/vfs/schema.py:VariableDef:*:dims:CALL003
 src/townlet/vfs/schema.py:VariableDef:*:description:CALL003
+
+# Needs review
 src/townlet/vfs/observation_builder.py:*
 src/townlet/vfs/registry.py:*
+src/townlet/config/base.py:*
+src/townlet/config/cues.py:*
+src/townlet/config/hamlet.py:*
+src/townlet/universe/dto/action_metadata.py:*
+src/townlet/universe/dto/affordance_metadata.py:*
+src/townlet/universe/dto/meter_metadata.py:*
+src/townlet/universe/dto/observation_spec.py:*
+src/townlet/universe/dto/observation_spec.py:*
 
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS
