@@ -110,7 +110,7 @@ src/townlet/universe/dto/action_metadata.py:*
 src/townlet/universe/dto/affordance_metadata.py:*
 src/townlet/universe/dto/meter_metadata.py:*
 src/townlet/universe/dto/observation_spec.py:*
-src/townlet/universe/dto/observation_spec.py:*
+ src/townlet/config/training.py:*
 
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS
