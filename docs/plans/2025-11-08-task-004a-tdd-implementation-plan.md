@@ -3,9 +3,10 @@
 
 **Task**: TASK-004A Universe Compiler Implementation
 **Priority**: CRITICAL (Blocks TASK-005 BAC, TASK-006 Visualization)
-**Effort**: 40-55 hours (includes TDD, integration testing, validation)
-**Status**: Ready for TDD
+**Effort**: 60-82 hours (includes TDD, integration testing, validation, 50% complexity buffer)
+**Status**: Ready for TDD (Post-Peer-Review)
 **Created**: 2025-11-08
+**Updated**: 2025-11-08 (Post peer review - time estimates, test specs, cache versioning)
 **Method**: Test-Driven Development with RED-GREEN-REFACTOR cycles
 
 **Keywords**: Universe Compiler, UAC, 7-stage pipeline, TDD, Pydantic, immutability, hash-based caching, ObservationSpec, CompiledUniverse
@@ -26,10 +27,56 @@
 
 - **Implementation Approach**: Bottom-up TDD (data structures → stages → pipeline → integration)
 - **Test Coverage Goal**: 90%+ unit, 100% integration (all 6 reference configs)
-- **Phases**: 10 phases over 40-55 hours
-- **Risk Level**: Medium (complex cross-validation logic, backward compatibility)
+- **Phases**: 10 phases over 60-82 hours (includes 50% complexity buffer)
+- **Risk Level**: Medium-High (graph algorithms, cross-validation, backward compatibility)
 
 **Decision Point**: If you're not implementing the Universe Compiler, STOP READING HERE.
+
+---
+
+## Review-Driven Updates (2025-11-08)
+
+This plan was reviewed by an independent peer reviewer and updated to address critical findings:
+
+### ✅ Issue 1: Time Estimates 30-50% Optimistic - RESOLVED
+
+- **Problem**: Original estimates (40-55h) assumed zero blockers/rework, unrealistic for complex compiler
+- **Fix**: Increased to 60-82 hours (50% buffer for graph algorithms, cross-validation complexity)
+- **Time Impact**: +20-27 hours
+
+### ✅ Issue 2: Missing Circular Cascade Test Specifications - RESOLVED
+
+- **Problem**: DFS implementation shown but no edge case tests for cycle detection
+- **Fix**: Added comprehensive test suite in Phase 6 (self-loops, complex cycles, disconnected graphs)
+- **Impact**: Prevents silent bugs in cycle detection
+
+### ✅ Issue 3: Missing Cue Range Validation Test Specifications - RESOLVED
+
+- **Problem**: Helper methods shown but no mathematical edge cases specified
+- **Fix**: Added test suite for gaps, overlaps, floating point boundaries in Phase 6
+- **Impact**: Ensures correct validation of meter ranges
+
+### ✅ Issue 4: Cache Versioning Not Addressed - RESOLVED
+
+- **Problem**: MessagePack serialization without version field → cache corruption on schema changes
+- **Fix**: Added `cache_version` field + invalidation logic in Phase 9
+- **Impact**: Prevents cache corruption on future schema evolution
+
+### ✅ Issue 5: ObservationSpec Class Underspecified - RESOLVED
+
+- **Problem**: Usage shown but complete class definition missing
+- **Fix**: Added full class specification with `total_dims` property and query methods in Phase 7
+- **Impact**: Clear API for implementer
+
+### Additional Improvements
+
+- ✅ **Pre-Implementation Verification**: Added script to verify all TASK-003 load functions and VFS builder API
+- ✅ **Error Message Testing**: Added assertions on error content (not just error type)
+- ✅ **Dimension Regression Tests**: Added explicit validation of observation_dim for each config
+
+**Review Score**: 6.5/10 → 8.5/10 after revisions (Risk: Medium-High → Medium with buffer)
+
+**Peer Review Summary**: Plan is architecturally sound with clear TDD approach. Original estimates were optimistic but now realistic with 50% buffer. Missing test specifications added for complex algorithms. Cache versioning added to prevent corruption. Plan is ready for implementation.
 
 ---
 
@@ -101,17 +148,19 @@ The Universe Compiler transforms 8 YAML config files into a single immutable `Co
 4. **Config Validation**: Test against all 6 reference configs (L0_0, L0_5, L1, L2, L3, templates)
 5. **Backward Compatibility**: Ensure DemoRunner continues to work without changes
 
-**Effort Breakdown**:
-- Phase 0: Pre-implementation setup (1h)
-- Phase 1: Infrastructure (3-4h)
-- Phase 2: Symbol Tables (4-5h)
-- Phase 3: Reference Resolution (5-7h)
-- Phase 4: Cross-Validation (6-8h)
-- Phase 5: Metadata Computation (8-10h)
-- Phase 6: Optimization & CompiledUniverse (4-6h)
-- Phase 7: Caching (4-5h)
-- Phase 8: Integration & Validation (5-7h)
-- **Total**: 40-55 hours
+**Effort Breakdown** (includes 50% complexity buffer):
+- Phase 0: Pre-implementation setup (1-2h)
+- Phase 1: Infrastructure (4-6h)
+- Phase 2: Symbol Tables (6-8h)
+- Phase 3: RawConfigs & Stage 1 Parse (4-6h)
+- Phase 4: Stage 2 Build Symbol Tables (4-6h)
+- Phase 5: Stage 3 Resolve References (8-12h)
+- Phase 6: Stage 4 Cross-Validate (10-14h) - includes circular cascade + cue validation tests
+- Phase 7: Stage 5 Compute Metadata (12-16h) - includes ObservationSpec wrapper + rich metadata
+- Phase 8: Stage 6/7 Optimize & Emit (6-10h)
+- Phase 9: Caching with versioning (6-8h)
+- Phase 10: Integration & Validation (8-12h)
+- **Total**: 60-82 hours (50% buffer over original 40-55h estimate)
 
 ---
 
@@ -241,7 +290,7 @@ def __init__(self, config_dir: Path, ...):
 
 ---
 
-## Phase 0: Pre-Implementation Setup (1 hour)
+## Phase 0: Pre-Implementation Setup (1-2 hours)
 
 ### Backup Strategy
 
@@ -278,25 +327,158 @@ mkdir -p tests/test_townlet/integration/universe
 
 ### Dependency Verification
 
-**Verify TASK-003 Complete** (DTOs must exist):
+**Critical**: Run comprehensive verification script BEFORE starting Phase 1
+
+**File**: `scripts/verify_compiler_dependencies.py` (create this)
+
+```python
+"""Pre-implementation verification for TASK-004A Universe Compiler.
+
+Verifies all dependencies are in place:
+- TASK-003 DTOs exist and load correctly
+- VFS ObservationSpecBuilder exists and API is correct
+- All load functions exist with expected signatures
+"""
+import sys
+from pathlib import Path
+
+
+def verify_dto_files():
+    """Verify all DTO files exist."""
+    print("Verifying DTO files...")
+    required_files = [
+        "src/townlet/config/training.py",
+        "src/townlet/config/environment.py",
+        "src/townlet/config/population.py",
+        "src/townlet/config/curriculum.py",
+        "src/townlet/config/bar.py",
+        "src/townlet/config/cascade.py",
+        "src/townlet/config/affordance.py",
+        "src/townlet/config/cue.py",
+        "src/townlet/config/hamlet.py",
+    ]
+    for file_path in required_files:
+        if not Path(file_path).exists():
+            print(f"  ❌ Missing: {file_path}")
+            return False
+    print("  ✅ All DTO files exist")
+    return True
+
+
+def verify_load_functions():
+    """Verify all load functions exist and have correct signatures."""
+    print("\nVerifying load functions...")
+
+    try:
+        from townlet.config.training import load_training_config
+        from townlet.config.bar import load_bars_config
+        from townlet.config.cascade import load_cascades_config
+        from townlet.config.affordance import load_affordances_config
+        from townlet.config.cue import load_cues_config
+        from townlet.substrate.config import load_substrate_config
+        from townlet.environment.action_config import load_action_space_config
+        from townlet.vfs.schema import load_variables_config
+
+        print("  ✅ All load functions imported successfully")
+
+        # Verify signatures by inspecting
+        test_config = Path("configs/L0_0_minimal")
+        if test_config.exists():
+            print(f"\n  Testing load functions with {test_config}...")
+            bars = load_bars_config(test_config / "bars.yaml")
+            print(f"    ✅ load_bars_config returned {type(bars).__name__}")
+
+            substrate = load_substrate_config(test_config / "substrate.yaml")
+            print(f"    ✅ load_substrate_config returned {type(substrate).__name__}")
+        else:
+            print(f"  ⚠️  Config {test_config} not found, skipping signature test")
+
+        return True
+    except ImportError as e:
+        print(f"  ❌ Import error: {e}")
+        return False
+    except Exception as e:
+        print(f"  ❌ Unexpected error: {e}")
+        return False
+
+
+def verify_vfs_builder():
+    """Verify VFS ObservationSpecBuilder exists and API is correct."""
+    print("\nVerifying VFS ObservationSpecBuilder...")
+
+    try:
+        from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+        from townlet.vfs.schema import ObservationField
+
+        print("  ✅ VFSObservationSpecBuilder imported successfully")
+
+        # Check API
+        builder = VFSObservationSpecBuilder.__init__.__code__
+        print(f"  ✅ VFSObservationSpecBuilder.__init__ exists")
+
+        # Check if build_spec method exists
+        if hasattr(VFSObservationSpecBuilder, 'build_spec'):
+            print("  ✅ VFSObservationSpecBuilder.build_spec exists")
+        elif hasattr(VFSObservationSpecBuilder, 'build_observation_spec'):
+            print("  ✅ VFSObservationSpecBuilder.build_observation_spec exists")
+        else:
+            print("  ❌ VFSObservationSpecBuilder missing build method")
+            return False
+
+        print("  ✅ ObservationField class imported successfully")
+        return True
+    except ImportError as e:
+        print(f"  ❌ Import error: {e}")
+        return False
+    except Exception as e:
+        print(f"  ❌ Unexpected error: {e}")
+        return False
+
+
+def main():
+    """Run all verification checks."""
+    print("=" * 60)
+    print("TASK-004A Pre-Implementation Dependency Verification")
+    print("=" * 60)
+
+    results = {
+        "DTO Files": verify_dto_files(),
+        "Load Functions": verify_load_functions(),
+        "VFS Builder": verify_vfs_builder(),
+    }
+
+    print("\n" + "=" * 60)
+    print("VERIFICATION SUMMARY")
+    print("=" * 60)
+    for check, passed in results.items():
+        status = "✅ PASS" if passed else "❌ FAIL"
+        print(f"{check}: {status}")
+
+    if all(results.values()):
+        print("\n🎉 All dependencies verified - ready for implementation!")
+        sys.exit(0)
+    else:
+        print("\n⚠️  Some dependencies missing - fix before starting Phase 1")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+**Run Verification**:
 
 ```bash
-# Check DTO files exist
-ls src/townlet/config/training.py
-ls src/townlet/config/environment.py
-ls src/townlet/config/population.py
-ls src/townlet/config/curriculum.py
-ls src/townlet/config/bar.py
-ls src/townlet/config/cascade.py
-ls src/townlet/config/affordance.py
-ls src/townlet/config/cue.py
-ls src/townlet/config/hamlet.py
+# Create and run verification script
+uv run python scripts/verify_compiler_dependencies.py
 
-# Run DTO tests
+# Also run DTO tests
 uv run pytest tests/test_townlet/unit/config/ -v
 ```
 
-**Expected**: All DTO tests pass ✅
+**Expected**: All checks pass ✅
+
+**If verification fails**, STOP and fix dependencies before proceeding to Phase 1.
 
 ---
 
@@ -1089,33 +1271,39 @@ Due to length constraints, the remaining phases follow the same TDD pattern:
 - GREEN: Implement `_stage_3_resolve_references()`
 - REFACTOR: Add reference graph visualization
 
-### Phase 6: Stage 4 (Cross-Validate) (6-8 hours)
+### Phase 6: Stage 4 (Cross-Validate) (10-14 hours)
 - RED: Test semantic validation (circular deps, operating hours, etc.)
+- **RED: Comprehensive circular cascade test suite** (self-loops, complex cycles, disconnected graphs) **[NEW]**
+- **RED: Comprehensive cue range validation test suite** (gaps, overlaps, boundaries) **[NEW]**
 - GREEN: Implement `_stage_4_cross_validate()`
 - REFACTOR: Extract validators into reusable functions
 
-### Phase 7: Stage 5 (Compute Metadata) (8-10 hours)
+### Phase 7: Stage 5 (Compute Metadata) (12-16 hours)
 - RED: Test UniverseMetadata computation (19 fields)
+- **RED: Test ObservationSpec wrapper class** (total_dims property, query methods) **[NEW]**
 - RED: Test ObservationSpec generation from VFS
 - RED: Test Rich Metadata structures (ActionSpaceMetadata, MeterMetadata, AffordanceMetadata)
 - GREEN: Implement `_stage_5_compute_metadata()` and `_stage_5_build_rich_metadata()`
 - REFACTOR: Extract config hash computation
 
-### Phase 8: Stage 6 (Optimize) & CompiledUniverse (4-6 hours)
+### Phase 8: Stage 6 (Optimize) & CompiledUniverse (6-10 hours)
 - RED: Test OptimizationData pre-computation
 - RED: Test CompiledUniverse immutability
 - GREEN: Implement `_stage_6_optimize()` and `_stage_7_emit_compiled_universe()`
 - REFACTOR: Add CompiledUniverse helper methods
 
-### Phase 9: Caching (4-5 hours)
+### Phase 9: Caching with Versioning (6-8 hours)
 - RED: Test hash-based cache key generation
+- **RED: Test cache versioning and invalidation** (version mismatch, schema changes) **[NEW]**
 - RED: Test MessagePack serialization/deserialization
-- GREEN: Implement caching layer
+- **RED: Test cache corruption recovery** (corrupted files, truncated data) **[NEW]**
+- GREEN: Implement caching layer with `cache_version` field
 - REFACTOR: Add cache invalidation logic
 
-### Phase 10: Integration & Validation (5-7 hours)
+### Phase 10: Integration & Validation (8-12 hours)
 - RED: Test main `compile()` pipeline
 - RED: Test all 6 reference configs
+- **RED: Dimension regression tests** (explicit validation of observation_dim) **[NEW]**
 - GREEN: Wire all stages together
 - REFACTOR: Add performance benchmarks
 
@@ -1203,6 +1391,497 @@ def test_observation_dimensions_match_current():
         universe = compiler.compile(Path(f"configs/{config_name}"))
         assert universe.metadata.observation_dim == expected_dim, \
             f"{config_name}: Expected {expected_dim}, got {universe.metadata.observation_dim}"
+```
+
+### Critical Test Specifications (Added Post-Review)
+
+**NEW**: These comprehensive test suites address peer review findings and must be implemented BEFORE corresponding GREEN phases.
+
+#### 1. Circular Cascade Detection Test Suite (Phase 6)
+
+**File**: `tests/test_townlet/unit/universe/test_circular_cascades.py`
+
+```python
+"""Comprehensive test suite for circular cascade detection.
+
+Tests DFS-based cycle detection for all edge cases.
+"""
+import pytest
+from townlet.universe.compiler import UniverseCompiler
+from townlet.config.cascade import CascadeConfig, ModulationConfig
+
+
+def test_self_loop_cascade():
+    """Verify detection of self-loop (A → A)."""
+    cascades = CascadesConfig(
+        cascades=[],
+        modulations=[ModulationConfig(source="energy", target="energy", ...)]
+    )
+
+    compiler = UniverseCompiler()
+    errors = CompilationErrorCollector()
+
+    compiler._validate_no_circular_cascades(cascades, symbol_table, errors)
+
+    assert errors.has_errors()
+    assert "circular" in str(errors.errors[0]).lower()
+    assert "energy → energy" in str(errors.errors[0])
+
+
+def test_simple_cycle():
+    """Verify detection of simple cycle (A → B → A)."""
+    cascades = CascadesConfig(
+        cascades=[],
+        modulations=[
+            ModulationConfig(source="energy", target="mood", ...),
+            ModulationConfig(source="mood", target="energy", ...),
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_no_circular_cascades(cascades, symbol_table, errors)
+
+    assert errors.has_errors()
+    assert "energy → mood → energy" in str(errors.errors[0]) or \
+           "mood → energy → mood" in str(errors.errors[0])
+
+
+def test_complex_cycle():
+    """Verify detection of complex cycle (A → B → C → D → A)."""
+    cascades = CascadesConfig(
+        cascades=[],
+        modulations=[
+            ModulationConfig(source="energy", target="mood", ...),
+            ModulationConfig(source="mood", target="health", ...),
+            ModulationConfig(source="health", target="satiation", ...),
+            ModulationConfig(source="satiation", target="energy", ...),
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_no_circular_cascades(cascades, symbol_table, errors)
+
+    assert errors.has_errors()
+    assert "circular" in str(errors.errors[0]).lower()
+
+
+def test_multiple_disconnected_cycles():
+    """Verify detection of multiple independent cycles."""
+    cascades = CascadesConfig(
+        cascades=[],
+        modulations=[
+            # Cycle 1: energy → mood → energy
+            ModulationConfig(source="energy", target="mood", ...),
+            ModulationConfig(source="mood", target="energy", ...),
+            # Cycle 2: health → satiation → health
+            ModulationConfig(source="health", target="satiation", ...),
+            ModulationConfig(source="satiation", target="health", ...),
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_no_circular_cascades(cascades, symbol_table, errors)
+
+    assert errors.has_errors()
+    assert len(errors.errors) == 2  # Both cycles detected
+
+
+def test_acyclic_with_shared_nodes():
+    """Verify acyclic graph accepted (A → C ← B)."""
+    cascades = CascadesConfig(
+        cascades=[],
+        modulations=[
+            ModulationConfig(source="energy", target="mood", ...),
+            ModulationConfig(source="health", target="mood", ...),  # Both → mood
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_no_circular_cascades(cascades, symbol_table, errors)
+
+    assert not errors.has_errors()  # Acyclic - should pass
+
+
+def test_empty_cascade_graph():
+    """Verify empty graph accepted."""
+    cascades = CascadesConfig(cascades=[], modulations=[])
+
+    errors = CompilationErrorCollector()
+    compiler._validate_no_circular_cascades(cascades, symbol_table, errors)
+
+    assert not errors.has_errors()
+```
+
+#### 2. Cue Range Validation Test Suite (Phase 6)
+
+**File**: `tests/test_townlet/unit/universe/test_cue_range_validation.py`
+
+```python
+"""Comprehensive test suite for cue range validation.
+
+Tests mathematical validation of meter ranges: coverage, gaps, overlaps.
+"""
+import pytest
+from townlet.universe.compiler import UniverseCompiler
+from townlet.config.cue import CueConfig
+
+
+def test_full_coverage_accepted():
+    """Verify full coverage [0.0, 1.0] accepted."""
+    cues = CuesConfig(
+        cues=[
+            CueConfig(name="Low", meter="energy", range=(0.0, 0.5), ...),
+            CueConfig(name="High", meter="energy", range=(0.5, 1.0), ...),
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_cue_ranges(cues, symbol_table, errors)
+
+    assert not errors.has_errors()
+
+
+def test_gap_detected():
+    """Verify gap [0.5, 0.6] detected."""
+    cues = CuesConfig(
+        cues=[
+            CueConfig(name="Low", meter="energy", range=(0.0, 0.5), ...),
+            CueConfig(name="High", meter="energy", range=(0.6, 1.0), ...),  # Gap!
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_cue_ranges(cues, symbol_table, errors)
+
+    assert errors.has_errors()
+    assert "gap" in str(errors.errors[0]).lower()
+    assert "0.5" in str(errors.errors[0]) and "0.6" in str(errors.errors[0])
+
+
+def test_overlap_detected():
+    """Verify overlap [0.4, 0.5] detected."""
+    cues = CuesConfig(
+        cues=[
+            CueConfig(name="Low", meter="energy", range=(0.0, 0.5), ...),
+            CueConfig(name="Med", meter="energy", range=(0.4, 0.8), ...),  # Overlaps Low!
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_cue_ranges(cues, symbol_table, errors)
+
+    assert errors.has_errors()
+    assert "overlap" in str(errors.errors[0]).lower()
+
+
+def test_floating_point_boundary_accepted():
+    """Verify floating point boundaries handled correctly."""
+    cues = CuesConfig(
+        cues=[
+            CueConfig(name="Low", meter="energy", range=(0.0, 0.33333), ...),
+            CueConfig(name="Med", meter="energy", range=(0.33333, 0.66667), ...),
+            CueConfig(name="High", meter="energy", range=(0.66667, 1.0), ...),
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_cue_ranges(cues, symbol_table, errors)
+
+    # Should accept despite floating point (boundaries match within epsilon)
+    assert not errors.has_errors()
+
+
+def test_single_range_full_domain():
+    """Verify single range covering full domain accepted."""
+    cues = CuesConfig(
+        cues=[CueConfig(name="All", meter="energy", range=(0.0, 1.0), ...)]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_cue_ranges(cues, symbol_table, errors)
+
+    assert not errors.has_errors()
+
+
+def test_empty_cue_list_accepted():
+    """Verify empty cue list accepted (no cues defined)."""
+    cues = CuesConfig(cues=[])
+
+    errors = CompilationErrorCollector()
+    compiler._validate_cue_ranges(cues, symbol_table, errors)
+
+    assert not errors.has_errors()
+
+
+def test_unsorted_ranges_sorted_automatically():
+    """Verify unsorted ranges handled correctly."""
+    cues = CuesConfig(
+        cues=[
+            CueConfig(name="High", meter="energy", range=(0.5, 1.0), ...),  # Out of order
+            CueConfig(name="Low", meter="energy", range=(0.0, 0.5), ...),
+        ]
+    )
+
+    errors = CompilationErrorCollector()
+    compiler._validate_cue_ranges(cues, symbol_table, errors)
+
+    # Should sort internally and validate correctly
+    assert not errors.has_errors()
+```
+
+#### 3. ObservationSpec Wrapper Class Specification (Phase 7)
+
+**File**: `src/townlet/universe/observation_spec.py` (NEW)
+
+```python
+"""ObservationSpec wrapper class for VFS integration.
+
+Provides query interface over list[ObservationField] from VFSObservationSpecBuilder.
+"""
+from dataclasses import dataclass
+from typing import Literal
+
+from townlet.vfs.schema import ObservationField
+
+
+@dataclass(frozen=True)
+class ObservationSpec:
+    """Immutable observation specification with query methods.
+
+    Wraps list[ObservationField] from VFSObservationSpecBuilder with:
+    - Computed total_dims property
+    - Query methods for field lookup
+    - Semantic type filtering
+
+    Per COMPILER_ARCHITECTURE.md §3.2: UAC → BAC data contract.
+    """
+
+    fields: list[ObservationField]
+
+    @property
+    def total_dims(self) -> int:
+        """Total observation dimensions (sum of all field dims)."""
+        return sum(field.shape[0] if field.shape else 1 for field in self.fields)
+
+    def get_field_by_name(self, name: str) -> ObservationField:
+        """Lookup observation field by name.
+
+        Args:
+            name: Field name (e.g., "position", "energy", "affordance_at_position")
+
+        Returns:
+            ObservationField
+
+        Raises:
+            KeyError: If field not found
+        """
+        for field in self.fields:
+            if field.id == name:
+                return field
+        raise KeyError(f"Observation field '{name}' not found")
+
+    def get_fields_by_semantic_type(self, semantic_type: str) -> list[ObservationField]:
+        """Get all fields with specific semantic type.
+
+        Args:
+            semantic_type: Semantic type (e.g., "position", "meter", "affordance", "temporal")
+
+        Returns:
+            List of matching fields (may be empty)
+        """
+        # Assuming ObservationField has semantic_type attribute
+        # (may need to add this to VFS schema)
+        return [f for f in self.fields if f.semantic_type == semantic_type]
+
+    def get_start_index(self, field_name: str) -> int:
+        """Get start index of field in observation vector.
+
+        Args:
+            field_name: Field name
+
+        Returns:
+            Start index (0-based)
+
+        Raises:
+            KeyError: If field not found
+        """
+        field = self.get_field_by_name(field_name)
+        return field.start_idx
+
+    def get_end_index(self, field_name: str) -> int:
+        """Get end index of field in observation vector (exclusive).
+
+        Args:
+            field_name: Field name
+
+        Returns:
+            End index (exclusive)
+
+        Raises:
+            KeyError: If field not found
+        """
+        field = self.get_field_by_name(field_name)
+        return field.end_idx
+```
+
+**Test File**: `tests/test_townlet/unit/universe/test_observation_spec.py`
+
+```python
+"""Test ObservationSpec wrapper class."""
+import pytest
+from townlet.universe.observation_spec import ObservationSpec
+from townlet.vfs.schema import ObservationField
+
+
+def test_total_dims_computed():
+    """Verify total_dims sums all field dimensions."""
+    spec = ObservationSpec(fields=[
+        ObservationField(id="position", shape=(2,), start_idx=0, end_idx=2, ...),
+        ObservationField(id="meters", shape=(8,), start_idx=2, end_idx=10, ...),
+    ])
+
+    assert spec.total_dims == 10  # 2 + 8
+
+
+def test_get_field_by_name():
+    """Verify field lookup by name."""
+    position_field = ObservationField(id="position", shape=(2,), ...)
+    spec = ObservationSpec(fields=[position_field])
+
+    assert spec.get_field_by_name("position") == position_field
+
+
+def test_get_field_by_name_missing_raises():
+    """Verify missing field raises KeyError."""
+    spec = ObservationSpec(fields=[])
+
+    with pytest.raises(KeyError, match="invalid"):
+        spec.get_field_by_name("invalid")
+```
+
+#### 4. Cache Versioning Test Suite (Phase 9)
+
+**File**: `tests/test_townlet/unit/universe/test_cache_versioning.py`
+
+```python
+"""Test cache versioning and invalidation."""
+import pytest
+from pathlib import Path
+
+
+def test_cache_with_version():
+    """Verify cache includes version field."""
+    compiler = UniverseCompiler()
+    universe = compiler.compile(config_dir, use_cache=False)
+
+    cache_path = compiler._get_cache_path(config_dir)
+    assert cache_path.exists()
+
+    import msgpack
+    with open(cache_path, "rb") as f:
+        cached = msgpack.unpackb(f.read())
+
+    assert "cache_version" in cached
+    assert cached["cache_version"] == "1.0"
+
+
+def test_cache_version_mismatch_invalidates():
+    """Verify version mismatch triggers recompile."""
+    compiler = UniverseCompiler()
+
+    # First compile (creates cache v1.0)
+    universe1 = compiler.compile(config_dir, use_cache=False)
+
+    # Manually corrupt cache version
+    cache_path = compiler._get_cache_path(config_dir)
+    import msgpack
+    with open(cache_path, "rb") as f:
+        cached = msgpack.unpackb(f.read())
+
+    cached["cache_version"] = "0.9"  # Old version
+
+    with open(cache_path, "wb") as f:
+        f.write(msgpack.packb(cached))
+
+    # Second compile should detect version mismatch and recompile
+    universe2 = compiler.compile(config_dir, use_cache=True)
+
+    assert universe2 is not None  # Recompiled successfully
+
+
+def test_cache_corruption_recovers():
+    """Verify corrupted cache falls back to recompile."""
+    compiler = UniverseCompiler()
+
+    # Create valid cache
+    universe1 = compiler.compile(config_dir, use_cache=False)
+
+    # Corrupt cache file
+    cache_path = compiler._get_cache_path(config_dir)
+    cache_path.write_bytes(b"corrupted data!!!")
+
+    # Should recover by recompiling
+    universe2 = compiler.compile(config_dir, use_cache=True)
+
+    assert universe2 is not None
+    assert universe2.metadata.universe_name == config_dir.name
+```
+
+#### 5. Dimension Regression Test Suite (Phase 10)
+
+**File**: `tests/test_townlet/integration/universe/test_dimension_regression.py`
+
+```python
+"""Regression tests for observation dimensions.
+
+Ensures compiled dimensions match current hardcoded expectations.
+Prevents checkpoint incompatibility from accidental dimension changes.
+"""
+import pytest
+from pathlib import Path
+from townlet.universe.compiler import UniverseCompiler
+
+
+@pytest.mark.parametrize("config_name,expected_dim,expected_actions", [
+    ("L0_0_minimal", 29, 8),
+    ("L0_5_dual_resource", 29, 8),
+    ("L1_full_observability", 29, 8),
+    ("L2_partial_observability", 54, 8),  # POMDP: 25 local + 2 pos + 8 meters + 15 aff + 4 temporal
+    ("L3_temporal_mechanics", 29, 8),
+])
+def test_dimension_regression(config_name, expected_dim, expected_actions):
+    """Verify observation_dim and action_count match expectations."""
+    compiler = UniverseCompiler()
+    config_dir = Path(f"configs/{config_name}")
+
+    universe = compiler.compile(config_dir, use_cache=False)
+
+    # Critical: These dimensions MUST NOT change (breaks checkpoints)
+    assert universe.metadata.observation_dim == expected_dim, \
+        f"{config_name}: observation_dim changed! Expected {expected_dim}, got {universe.metadata.observation_dim}"
+
+    assert universe.metadata.action_count == expected_actions, \
+        f"{config_name}: action_count changed! Expected {expected_actions}, got {universe.metadata.action_count}"
+
+
+def test_dimension_breakdown_l1():
+    """Verify L1 observation dimension breakdown."""
+    compiler = UniverseCompiler()
+    universe = compiler.compile(Path("configs/L1_full_observability"))
+
+    # L1 breakdown: 2 pos + 8 meters + 15 affordance + 4 temporal = 29
+    obs_spec = universe.observation_spec
+
+    position_dims = sum(f.shape[0] for f in obs_spec.get_fields_by_semantic_type("position"))
+    meter_dims = sum(f.shape[0] for f in obs_spec.get_fields_by_semantic_type("meter"))
+    affordance_dims = sum(f.shape[0] for f in obs_spec.get_fields_by_semantic_type("affordance"))
+    temporal_dims = sum(f.shape[0] for f in obs_spec.get_fields_by_semantic_type("temporal"))
+
+    assert position_dims == 2
+    assert meter_dims == 8
+    assert affordance_dims == 15
+    assert temporal_dims == 4
+    assert position_dims + meter_dims + affordance_dims + temporal_dims == 29
 ```
 
 ---
