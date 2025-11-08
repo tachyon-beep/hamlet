@@ -15,8 +15,8 @@
 # - Enables strategic deception and cooperation behaviors
 
 version: "1.0"
-description: "Public cue mappings for multi-agent opponent modeling"
-status: "TEMPLATE - Awaiting Level 4 multi-agent implementation"
+description: "Integration-test cue mappings to keep DTO coverage realistic"
+status: "TEST"
 
 # ============================================================================
 # SIMPLE CUES (Single Condition)

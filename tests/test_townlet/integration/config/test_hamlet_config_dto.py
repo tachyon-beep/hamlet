@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 # Add src to path for imports (integration tests may run standalone)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / "src"))
@@ -101,6 +102,30 @@ class TestHamletConfigComposition:
 
         config = HamletConfig.load(config_dir)
         assert config.cues is None
+
+    def test_training_section_can_be_overridden_via_explicit_path(self, tmp_path):
+        """training_config_path override must control training hyperparameters."""
+        config_dir = prepare_config_dir(tmp_path)
+        _apply_valid_sections(config_dir)
+
+        override_path = tmp_path / "custom_training.yaml"
+        with open(config_dir / "training.yaml") as f:
+            data = yaml.safe_load(f)
+
+        data["training"]["max_episodes"] = 123
+        data["training"]["epsilon_start"] = 0.5
+        # Mutate environment on override file to ensure only training section is overridden
+        data["environment"]["grid_size"] = 42
+
+        with open(override_path, "w") as f:
+            yaml.safe_dump(data, f)
+
+        config = HamletConfig.load(config_dir, training_config_path=override_path)
+
+        assert config.training.max_episodes == 123
+        assert config.training.epsilon_start == 0.5
+        # Environment comes from config_dir (not override file)
+        assert config.environment.grid_size == VALID_ENVIRONMENT_PARAMS["grid_size"]
 
 
 class TestHamletConfigCrossValidation:

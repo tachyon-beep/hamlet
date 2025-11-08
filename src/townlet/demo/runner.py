@@ -77,7 +77,7 @@ class DemoRunner:
         )
 
         # Load config using HamletConfig DTO (enforces no-defaults validation)
-        self.hamlet_config = HamletConfig.load(self.config_dir)
+        self.hamlet_config = HamletConfig.load(self.config_dir, training_config_path=self.training_config_path)
 
         # Also load raw YAML for backward compatibility and optional sections (e.g., recording)
         with open(self.training_config_path) as f:

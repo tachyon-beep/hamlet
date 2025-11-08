@@ -140,14 +140,17 @@ class HamletConfig(BaseModel):
         return self
 
     @classmethod
-    def load(cls, config_dir: Path) -> "HamletConfig":
+    def load(cls, config_dir: Path, training_config_path: Path | None = None) -> "HamletConfig":
         """Load complete HAMLET configuration from directory.
 
         This is the preferred method for loading configs. Reads all sections
-        from training.yaml and composes into validated HamletConfig.
+        from training.yaml and composes into validated HamletConfig. The training
+        section can optionally be supplied from an explicit path to support CLI
+        overrides (e.g., `--config /tmp/custom_training.yaml`).
 
         Args:
             config_dir: Directory containing training.yaml (e.g., configs/L0_0_minimal)
+            training_config_path: Optional explicit training.yaml path overriding config_dir/training.yaml
 
         Returns:
             Validated HamletConfig with all sections loaded
@@ -161,7 +164,7 @@ class HamletConfig(BaseModel):
             >>> print(f"Grid: {config.environment.grid_size}×{config.environment.grid_size}")
             Grid: 3×3
         """
-        training = load_training_config(config_dir)
+        training = load_training_config(config_dir, training_config_path=training_config_path)
         environment = load_environment_config(config_dir)
         population = load_population_config(config_dir)
         curriculum = load_curriculum_config(config_dir)

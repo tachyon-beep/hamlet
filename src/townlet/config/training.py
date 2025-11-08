@@ -129,11 +129,12 @@ class TrainingConfig(BaseModel):
         return self
 
 
-def load_training_config(config_dir: Path) -> TrainingConfig:
+def load_training_config(config_dir: Path, training_config_path: Path | None = None) -> TrainingConfig:
     """Load and validate training configuration.
 
     Args:
-        config_dir: Directory containing training.yaml
+        config_dir: Directory containing training.yaml (default source)
+        training_config_path: Optional explicit training.yaml path overriding config_dir
 
     Returns:
         Validated TrainingConfig
@@ -146,9 +147,25 @@ def load_training_config(config_dir: Path) -> TrainingConfig:
         >>> config = load_training_config(Path("configs/L0_0_minimal"))
         >>> print(f"Device: {config.device}, Episodes: {config.max_episodes}")
         Device: cuda, Episodes: 500
+
+        >>> override = Path("/tmp/custom_training.yaml")
+        >>> config = load_training_config(Path("configs/L0_0_minimal"), training_config_path=override)
+        >>> print(config.training.max_episodes)
+        42
     """
+    config_dir = Path(config_dir)
+    if training_config_path is not None:
+        training_config_path = Path(training_config_path)
+        section_dir = training_config_path.parent
+        filename = training_config_path.name
+        context_label = str(training_config_path)
+    else:
+        section_dir = config_dir
+        filename = "training.yaml"
+        context_label = "training.yaml"
+
     try:
-        data = load_yaml_section(config_dir, "training.yaml", "training")
+        data = load_yaml_section(section_dir, filename, "training")
         return TrainingConfig(**data)
     except ValidationError as e:
-        raise ValueError(format_validation_error(e, "training.yaml")) from e
+        raise ValueError(format_validation_error(e, context_label)) from e

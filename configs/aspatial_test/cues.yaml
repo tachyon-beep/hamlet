@@ -1,31 +1,85 @@
 version: "1.0"
-description: "Minimal UI cues for aspatial testing"
+description: "Minimal public cues for the aspatial substrate smoke test"
+status: "TEST"
 
-cues:
-  meters:
-    energy:
-      color: "#fbbf24"
-      icon: "⚡"
-    health:
-      color: "#ef4444"
-      icon: "❤️"
-    money:
-      color: "#22c55e"
-      icon: "💰"
-    mood:
-      color: "#a78bfa"
-      icon: "😊"
+simple_cues:
+  - cue_id: "aspatial_low_energy"
+    name: "Breathing Heavily"
+    category: "energy"
+    visibility: "public"
+    condition:
+      meter: "energy"
+      operator: "<"
+      threshold: 0.30
+    description: "Avatar appears winded even without spatial movement."
+    teaching_note: "Keeps energy management observable in the aspatial sandbox."
+    strategic_value: "Signals the agent is about to spend turns recovering."
 
-  affordances:
-    Bed:
-      icon: "🛏️"
-      color: "#6366f1"
-    Hospital:
-      icon: "🏥"
-      color: "#991b1b"
-    HomeMeal:
-      icon: "🍽️"
-      color: "#f59e0b"
-    Job:
-      icon: "💼"
-      color: "#8b5cf6"
+  - cue_id: "aspatial_unhealthy"
+    name: "Looks Pale"
+    category: "health"
+    visibility: "public"
+    condition:
+      meter: "health"
+      operator: "<"
+      threshold: 0.40
+    description: "Health is visibly deteriorating."
+    teaching_note: "Highlights pivotal health drops even without locomotion."
+    strategic_value: "Encourages medical affordance use before collapse."
+
+  - cue_id: "aspatial_unpaid"
+    name: "Mentions Bills"
+    category: "money"
+    visibility: "public"
+    condition:
+      meter: "money"
+      operator: "<"
+      threshold: 0.25
+    description: "Agent talks about overdue bills and scarcity."
+    teaching_note: "Ties intrinsic motivation to the income affordance."
+    strategic_value: "Predicts imminent visits to the Job affordance."
+
+  - cue_id: "aspatial_melancholy"
+    name: "Seems Melancholy"
+    category: "mood"
+    visibility: "public"
+    condition:
+      meter: "mood"
+      operator: "<"
+      threshold: 0.35
+    description: "Agent talks slowly and avoids interactions."
+    teaching_note: "Demonstrates secondary meter feedback loops."
+    strategic_value: "Warns that mood may begin draining energy."
+
+compound_cues:
+  - cue_id: "aspatial_shutdown_imminent"
+    name: "Shutdown Imminent"
+    category: "emergency"
+    visibility: "public"
+    logic: "all_of"
+    conditions:
+      - meter: "energy"
+        operator: "<"
+        threshold: 0.25
+      - meter: "health"
+        operator: "<"
+        threshold: 0.35
+    description: "Low energy and health combine into a cascading failure."
+    teaching_note: "Mirrors the pivotal-pivotal coupling used in production packs."
+    strategic_value: "Signals that external intervention is required immediately."
+
+  - cue_id: "aspatial_burnout"
+    name: "Burnout Brewing"
+    category: "stress"
+    visibility: "public"
+    logic: "any_of"
+    conditions:
+      - meter: "mood"
+        operator: "<"
+        threshold: 0.30
+      - meter: "money"
+        operator: "<"
+        threshold: 0.20
+    description: "Either low mood or money begins to spiral."
+    teaching_note: "Demonstrates that financial stress can mimic emotional stress."
+    strategic_value: "Encourages proactive scheduling of rest or income affordances."
