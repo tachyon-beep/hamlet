@@ -9,6 +9,8 @@ NOTE: This is NOT the same as environment.observation_builder.ObservationBuilder
 - vfs.VFSObservationSpecBuilder: Compile-time spec generation (schemas for BAC)
 """
 
+from typing import Any
+
 import pytest
 
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
@@ -78,6 +80,17 @@ def sample_variables():
     ]
 
 
+def exposures_from_dict(mapping: dict[str, dict[str, Any] | None]) -> list[dict[str, Any]]:
+    """Convert legacy mapping-style exposure definitions into list form."""
+    exposures: list[dict[str, Any]] = []
+    for var_id, config in mapping.items():
+        entry: dict[str, Any] = {"source_variable": var_id}
+        if config:
+            entry.update(config)
+        exposures.append(entry)
+    return exposures
+
+
 class TestObservationSpecBuilderScalarTypes:
     """Test observation spec generation for scalar types."""
 
@@ -86,6 +99,7 @@ class TestObservationSpecBuilderScalarTypes:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"energy": {"normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -101,6 +115,7 @@ class TestObservationSpecBuilderScalarTypes:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"is_alive": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -117,6 +132,7 @@ class TestObservationSpecBuilderVectorTypes:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"position": {"normalization": {"kind": "minmax", "min": [0, 0], "max": [7, 7]}}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -129,6 +145,7 @@ class TestObservationSpecBuilderVectorTypes:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"velocity": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -141,6 +158,7 @@ class TestObservationSpecBuilderVectorTypes:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"position_7d": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -152,7 +170,16 @@ class TestObservationSpecBuilderVectorTypes:
         """Build observation spec for vecNf variable (N-dimensional float vector)."""
         builder = VFSObservationSpecBuilder()
 
-        exposures = {"grid_encoding": {"normalization": {"kind": "zscore", "mean": 0.0, "std": 1.0}}}
+        exposures = {
+            "grid_encoding": {
+                "normalization": {
+                    "kind": "zscore",
+                    "mean": [0.0] * 64,
+                    "std": [1.0] * 64,
+                }
+            }
+        }
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -173,6 +200,7 @@ class TestObservationSpecBuilderMultipleVariables:
             "energy": {"normalization": None},
             "position": {"normalization": None},
         }
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -192,12 +220,81 @@ class TestObservationSpecBuilderMultipleVariables:
             "grid_encoding": {"normalization": None},
             "is_alive": {"normalization": None},
         }
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
         assert len(spec) == 6
         source_vars = {field.source_variable for field in spec}
         assert source_vars == {"energy", "position", "velocity", "position_7d", "grid_encoding", "is_alive"}
+
+
+class TestObservationSpecBuilderValidation:
+    """Validation-focused tests for observation spec builder."""
+
+    def test_dict_exposures_are_rejected(self, sample_variables):
+        """Legacy dict exposure format is no longer accepted."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {"energy": {"normalization": None}}
+
+        with pytest.raises(TypeError, match="list"):
+            builder.build_observation_spec(sample_variables, exposures)  # type: ignore[arg-type]
+
+    def test_vector_normalization_length_mismatch_raises(self, sample_variables):
+        """Normalization list length must match flattened observation shape."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {
+            "position": {
+                "normalization": {
+                    "kind": "minmax",
+                    "min": [0, 0, 0],  # Wrong length for vec2i
+                    "max": [7, 7, 7],
+                }
+            }
+        }
+        exposures = exposures_from_dict(exposures)
+
+        with pytest.raises(ValueError, match="must provide 2 values"):
+            builder.build_observation_spec(sample_variables, exposures)
+
+    def test_vector_normalization_scalar_values_rejected(self, sample_variables):
+        """Vector observations require per-dimension normalization arrays."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {
+            "position": {
+                "normalization": {
+                    "kind": "minmax",
+                    "min": 0.0,
+                    "max": 1.0,
+                }
+            }
+        }
+        exposures = exposures_from_dict(exposures)
+
+        with pytest.raises(ValueError, match="must be a list of length 2"):
+            builder.build_observation_spec(sample_variables, exposures)
+
+    def test_scalar_normalization_allows_scalar_values(self, sample_variables):
+        """Scalar observations may use scalar normalization params."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = {
+            "energy": {
+                "normalization": {
+                    "kind": "minmax",
+                    "min": 0.0,
+                    "max": 1.0,
+                }
+            }
+        }
+        exposures = exposures_from_dict(exposures)
+
+        spec = builder.build_observation_spec(sample_variables, exposures)
+        assert len(spec) == 1
+        assert spec[0].source_variable == "energy"
 
 
 class TestObservationDimensionCalculation:
@@ -208,6 +305,7 @@ class TestObservationDimensionCalculation:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"energy": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -220,6 +318,7 @@ class TestObservationDimensionCalculation:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"position": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -237,6 +336,7 @@ class TestObservationDimensionCalculation:
             "velocity": {"normalization": None},  # 3 dims (vec3i)
             "position_7d": {"normalization": None},  # 7 dims (vecNi)
         }
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -252,6 +352,7 @@ class TestObservationDimensionCalculation:
             "energy": {"normalization": None},  # 1 dim
             "grid_encoding": {"normalization": None},  # 64 dims
         }
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -268,6 +369,7 @@ class TestObservationSpecBuilderNormalization:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"energy": {"normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -280,37 +382,34 @@ class TestObservationSpecBuilderNormalization:
         """Build observation spec with zscore normalization."""
         builder = VFSObservationSpecBuilder()
 
-        exposures = {"grid_encoding": {"normalization": {"kind": "zscore", "mean": 0.0, "std": 1.0}}}
+        exposures = {
+            "grid_encoding": {
+                "normalization": {
+                    "kind": "zscore",
+                    "mean": [0.0] * 64,
+                    "std": [1.0] * 64,
+                }
+            }
+        }
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
         assert spec[0].normalization is not None
         assert spec[0].normalization.kind == "zscore"
-        assert spec[0].normalization.mean == 0.0
-        assert spec[0].normalization.std == 1.0
+        assert spec[0].normalization.mean == [0.0] * 64
+        assert spec[0].normalization.std == [1.0] * 64
 
     def test_build_spec_without_normalization(self, sample_variables):
         """Build observation spec without normalization."""
         builder = VFSObservationSpecBuilder()
 
         exposures = {"energy": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
         assert spec[0].normalization is None
-
-    def test_build_spec_vector_normalization_scalar_params(self, sample_variables):
-        """Build observation spec with vector using scalar normalization params."""
-        builder = VFSObservationSpecBuilder()
-
-        # Vec2i with scalar normalization (applies same to all dims)
-        exposures = {"position": {"normalization": {"kind": "minmax", "min": 0.0, "max": 7.0}}}
-
-        spec = builder.build_observation_spec(sample_variables, exposures)
-
-        assert spec[0].normalization is not None
-        assert spec[0].normalization.min == 0.0
-        assert spec[0].normalization.max == 7.0
 
     def test_build_spec_vector_normalization_list_params(self, sample_variables):
         """Build observation spec with vector using list normalization params."""
@@ -318,6 +417,7 @@ class TestObservationSpecBuilderNormalization:
 
         # Vec2i with per-dimension normalization
         exposures = {"position": {"normalization": {"kind": "minmax", "min": [0, 0], "max": [7, 10]}}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -334,6 +434,7 @@ class TestObservationSpecBuilderErrorHandling:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"nonexistent_var": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         with pytest.raises(ValueError, match="Variable nonexistent_var not found"):
             builder.build_observation_spec(sample_variables, exposures)
@@ -342,11 +443,20 @@ class TestObservationSpecBuilderErrorHandling:
         """Build observation spec with empty exposures returns empty list."""
         builder = VFSObservationSpecBuilder()
 
-        exposures = {}
+        exposures: list[dict[str, Any]] = []
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
         assert len(spec) == 0
+
+    def test_missing_source_variable_metadata_raises(self, sample_variables):
+        """Exposure entries without source_variable should raise."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = [{"id": "broken_obs"}]
+
+        with pytest.raises(ValueError, match="missing 'source_variable'"):
+            builder.build_observation_spec(sample_variables, exposures)
 
 
 class TestObservationFieldProperties:
@@ -360,6 +470,7 @@ class TestObservationFieldProperties:
             "energy": {"normalization": None},
             "position": {"normalization": None},
         }
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -371,6 +482,7 @@ class TestObservationFieldProperties:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"energy": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
@@ -381,7 +493,51 @@ class TestObservationFieldProperties:
         builder = VFSObservationSpecBuilder()
 
         exposures = {"position": {"normalization": None}}
+        exposures = exposures_from_dict(exposures)
 
         spec = builder.build_observation_spec(sample_variables, exposures)
 
         assert spec[0].source_variable == "position"
+
+    def test_preserves_configured_metadata(self, sample_variables):
+        """Builder should honor id, exposed_to, and shape from config."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = [
+            {
+                "id": "custom_position_obs",
+                "source_variable": "position",
+                "exposed_to": ["agent", "acs"],
+                "shape": [4],  # Should override inferred shape
+                "normalization": None,
+            }
+        ]
+
+        spec = builder.build_observation_spec(sample_variables, exposures)
+        assert spec[0].id == "custom_position_obs"
+        assert spec[0].exposed_to == ["agent", "acs"]
+        assert spec[0].shape == [4]
+
+    def test_allows_duplicate_source_variables(self, sample_variables):
+        """Builder should not deduplicate repeated source_variable exposures."""
+        builder = VFSObservationSpecBuilder()
+
+        exposures = [
+            {
+                "id": "obs_energy_agent",
+                "source_variable": "energy",
+                "exposed_to": ["agent"],
+                "shape": [],
+            },
+            {
+                "id": "obs_energy_acs",
+                "source_variable": "energy",
+                "exposed_to": ["acs"],
+                "shape": [],
+            },
+        ]
+
+        spec = builder.build_observation_spec(sample_variables, exposures)
+        energy_fields = [field for field in spec if field.source_variable == "energy"]
+        assert len(energy_fields) == 2
+        assert {field.id for field in energy_fields} == {"obs_energy_agent", "obs_energy_acs"}

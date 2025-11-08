@@ -131,16 +131,15 @@ except PermissionError as e:
 from townlet.vfs import VFSObservationSpecBuilder
 
 # Build exposures from config or programmatically
-exposures = {}
+exposures = []
 for var in variables:
     if "agent" in var.readable_by:
-        exposures[var.id] = {
-            "normalization": {
-                "kind": "minmax",
-                "min": 0.0,
-                "max": 1.0,
-            } if var.type == "scalar" else None
-        }
+        entry = {"source_variable": var.id}
+        if var.type == "scalar":
+            entry["normalization"] = {"kind": "minmax", "min": 0.0, "max": 1.0}
+        else:
+            entry["normalization"] = None
+        exposures.append(entry)
 
 # Build observation spec
 builder = VFSObservationSpecBuilder()

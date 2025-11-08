@@ -3,8 +3,10 @@
 **Status**: Planned
 **Priority**: HIGH (foundational)
 **Estimated Effort**: 7-12 hours
-**Dependencies**: None
-**Enables**: TASK-002A (SubstrateConfig), TASK-002B (ActionConfig), TASK-004A (core schemas), TASK-004B (extends AffordanceConfig)
+**Dependencies**:
+  - TASK-002A (SubstrateConfig) – ✅ already landed; use the existing module in `src/townlet/substrate/config.py`
+  - TASK-002B (ActionConfig) – ✅ already landed; reuse `src/townlet/environment/action_config.py`
+**Enables**: TASK-004A (cross-file validation, universe compiler), TASK-004B (capabilities/extensions for affordances)
 
 ---
 
@@ -92,20 +94,27 @@ Use **Pydantic data transfer objects (DTOs)** as the single source of truth for 
 
 ### Core DTOs to Implement
 
-This task creates the foundational DTOs for HAMLET's configuration system:
+This task creates the foundational DTOs that **do not already exist** in mainline.
 
+Already implemented (reuse, do not rewrite):
+- **SubstrateConfig** (TASK-002A) — see `src/townlet/substrate/config.py`
+- **ActionConfig** (TASK-002B) — see `src/townlet/environment/action_config.py`
+
+New DTOs to deliver in TASK-003:
 1. **TrainingConfig** - Training hyperparameters (epsilon-greedy, Q-learning, etc.)
 2. **EnvironmentConfig** - Environment setup (grid size, vision range, enabled affordances)
 3. **CurriculumConfig** - Curriculum progression (survival thresholds, stage gates)
 4. **PopulationConfig** - Population parameters (learning rate, gamma, network type)
-5. **SubstrateConfig** - Spatial substrate configuration (TASK-002A integration)
-6. **BarConfig** - Meter definitions (energy, health, etc.) - BASIC version
-7. **CascadeConfig** - Meter relationships - BASIC version
-8. **ActionConfig** - Action space definitions - BASIC version (TASK-002B integration)
-9. **AffordanceConfig** - Interaction definitions - BASIC version (WITHOUT capabilities)
-10. **HamletConfig** - Master config composing all sub-configs
+5. **BarConfig** - Meter definitions (energy, health, etc.) - BASIC version
+6. **CascadeConfig** - Meter relationships - BASIC version
+7. **AffordanceConfig** - Interaction definitions - BASIC version (WITHOUT capabilities)
+8. **HamletConfig** - Master config composing all sub-configs
 
-**Note**: AffordanceConfig is implemented in BASIC form here (core fields only). TASK-004B extends it with capabilities, effect pipelines, and availability masking.
+**Note**: AffordanceConfig is implemented in BASIC form here (core fields only). TASK-004B extends it with capabilities, effect pipelines, and availability masking. VFS schemas/registry/spec builder already exist in `src/townlet/vfs/` and are inputs—not deliverables—of this task. SubstrateConfig and ActionConfig already ship in `src/townlet/substrate/config.py` and `src/townlet/environment/action_config.py`; this task references them but does not recreate them.
+
+### Backward Compatibility
+
+We are still pre-release and have no external configs to preserve. Once these DTOs land, all config packs must conform immediately; there is no legacy fallback or dual-loading path. Runner/tests should fail fast if a config doesn’t validate.
 
 ---
 
@@ -396,103 +405,16 @@ def load_hamlet_config(config_dir: Path) -> HamletConfig:
 
 ---
 
-## Extension: TASK-002A Integration (SubstrateConfig)
+## Reference: Existing SubstrateConfig (TASK-002A)
 
-**Context**: TASK-002A (Configurable Spatial Substrates) introduces new spatial configuration that needs DTO validation.
+`src/townlet/substrate/config.py` already provides the substrate DTOs used in production:
 
-**Deliverable**: `src/townlet/environment/substrate_config.py`
+- `GridConfig` – explicit `topology` (`"square"` or `"cubic"`), `width`, `height`, optional `depth`, `boundary`, `distance_metric`, and `observation_encoding` (`"relative" | "scaled" | "absolute"`). Validators enforce that cubic grids provide a depth and square grids do not.
+- `GridNDConfig` – handles ≥4D grids with `dimension_sizes`, shared boundary/metric fields, and the same observation encodings.
+- `ContinuousConfig` / `ContinuousNDConfig` – float-space substrates with `dimensions`, per-dimension bounds, movement parameters, and observation encoding.
+- `SubstrateConfig` – top-level selector with `type: Literal["grid", "gridnd", "continuous", "continuousnd", "aspatial"]` and mutually exclusive child configs.
 
-```python
-from pydantic import BaseModel, field_validator, model_validator
-from typing import Literal
-
-class GridConfig(BaseModel):
-    """Grid substrate configuration."""
-    topology: Literal["square", "cubic", "hexagonal"]  # Required
-    dimensions: list[int]  # Required: [width, height] or [width, height, depth]
-    boundary: Literal["clamp", "wrap", "bounce"]  # Required
-    distance_metric: Literal["manhattan", "euclidean", "chebyshev"]  # Required
-    position_encoding: Literal["auto", "onehot", "coords", "fourier"] = "auto"  # Optional (default: auto)
-
-    @field_validator("dimensions")
-    @classmethod
-    def validate_dimensions(cls, v: list[int]) -> list[int]:
-        if len(v) not in [2, 3]:
-            raise ValueError(f"Grid dimensions must be 2D or 3D, got {len(v)}D")
-
-        if any(dim < 1 for dim in v):
-            raise ValueError(f"All dimensions must be >= 1, got {v}")
-
-        if any(dim > 64 for dim in v):
-            raise ValueError(f"Dimensions too large (max 64), got {v}")
-
-        return v
-
-    @model_validator(mode="after")
-    def validate_encoding_for_3d(self) -> "GridConfig":
-        """Forbid one-hot encoding for 3D grids (would be 512+ dimensions)."""
-        if len(self.dimensions) == 3 and self.position_encoding == "onehot":
-            raise ValueError(
-                "One-hot encoding not supported for 3D grids (512+ dimensions). "
-                "Use 'coords' or 'fourier' instead."
-            )
-        return self
-
-class SubstrateConfig(BaseModel):
-    """Spatial substrate configuration."""
-    type: Literal["grid", "graph", "continuous", "aspatial"]  # Required
-    grid: GridConfig | None = None  # Required if type="grid"
-
-    @field_validator("grid")
-    @classmethod
-    def validate_grid_required(cls, v, info):
-        substrate_type = info.data.get("type")
-        if substrate_type == "grid" and v is None:
-            raise ValueError("substrate.grid is required when type='grid'")
-        if substrate_type != "grid" and v is not None:
-            raise ValueError(f"substrate.grid not allowed for type='{substrate_type}'")
-        return v
-```
-
-**Example valid config**:
-
-```yaml
-# configs/L1_full_observability/substrate.yaml
-substrate:
-  type: "grid"
-  grid:
-    topology: "square"
-    dimensions: [8, 8]
-    boundary: "clamp"
-    distance_metric: "manhattan"
-    position_encoding: "auto"  # Optional - defaults to "auto"
-```
-
-**Example invalid config (caught at compile time)**:
-
-```yaml
-# configs/my_3d_house/substrate.yaml
-substrate:
-  type: "grid"
-  grid:
-    topology: "cubic"
-    dimensions: [8, 8, 3]
-    boundary: "clamp"
-    distance_metric: "manhattan"
-    position_encoding: "onehot"  # ❌ ERROR: One-hot not supported for 3D
-```
-
-**Error message**:
-
-```
-❌ SUBSTRATE COMPILATION FAILED
-ValidationError: substrate.grid.position_encoding
-  One-hot encoding not supported for 3D grids (512+ dimensions).
-  Use 'coords' or 'fourier' instead.
-
-  Fix:
-  position_encoding: "coords"  # 512 dims → 3 dims
-```
+These DTOs already satisfy the no-defaults requirement and are reused by TASK-003 (e.g., when wiring `HamletConfig`). No additional substrate work is required here—treat this section as reference material when composing the master config or templates.
 
 ---
 
@@ -1318,11 +1240,9 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 - [ ] EnvironmentConfig DTO created with no-defaults enforcement
 - [ ] CurriculumConfig DTO created with no-defaults enforcement
 - [ ] PopulationConfig DTO created with no-defaults enforcement
-- [ ] SubstrateConfig DTO created (TASK-002A integration)
 - [ ] AffordanceConfig DTO created (BASIC - without capabilities)
 - [ ] BarConfig DTO created
 - [ ] CascadeConfig DTO created
-- [ ] ActionConfig DTO created (TASK-002B integration)
 - [ ] HamletConfig DTO created (master config)
 
 **Compiler Artifact DTOs (Phase 5)**:
@@ -1349,6 +1269,22 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 - [ ] **Validation Scope**: Core DTOs validate structural integrity (types, ranges, constraints)
 - [ ] **Cross-file validation** (meter references, affordance IDs) deferred to TASK-004A
 
+## Config Pack Migration Checklist
+
+Track completion of DTO migration for every config pack. Update this list (and the plan’s Cycle 6 notes) as you validate each pack with `HamletConfig`.
+
+- [ ] `configs/L0_0_minimal`
+- [ ] `configs/L0_5_dual_resource`
+- [ ] `configs/L1_full_observability`
+- [ ] `configs/L2_partial_observability`
+- [ ] `configs/L3_temporal_mechanics`
+- [ ] `configs/L1_3D_house`
+- [ ] `configs/L1_continuous_1D`
+- [ ] `configs/L1_continuous_2D`
+- [ ] `configs/L1_continuous_3D`
+- [ ] `configs/aspatial_test`
+- [ ] `configs/test`
+
 ---
 
 ## Estimated Effort: 10-17 hours
@@ -1370,14 +1306,13 @@ The compiler validates **structure and constraints**, not **effectiveness**.
 
 ## Dependencies
 
-**None** - This is a foundational task.
+- TASK-002A (Spatial Substrates) – ✅ SubstrateConfig already lives in `townlet.substrate.config`; reuse it when composing HamletConfig.
+- TASK-002B (Composable Action Space) – ✅ ActionConfig already lives in `townlet.environment.action_config`.
 
 **Enables**:
 
-- TASK-002A (Spatial Substrates) - Needs SubstrateConfig
-- TASK-002B (Action Space) - Needs ActionConfig
-- TASK-004A (Compiler) - Needs core schemas
-- TASK-004B (Capabilities) - Extends AffordanceConfig
+- TASK-004A (Universe Compiler / cross-file validation)
+- TASK-004B (Capabilities & extended AffordanceConfig)
 
 ---
 

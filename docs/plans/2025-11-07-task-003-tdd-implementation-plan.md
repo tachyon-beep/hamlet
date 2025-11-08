@@ -7,11 +7,11 @@
 **Approach**: Test-Driven Development (Red-Green-Refactor)
 
 **Key Changes from Original Task**:
-- SubstrateConfig marked as "✅ Already done (TASK-002A)"
-- ActionConfig marked as "✅ Already done (TASK-002B)"
-- Reduced scope from 10 DTOs to 8 DTOs
+- SubstrateConfig marked as "✅ Already done" (reuse `src/townlet/substrate/config.py`)
+- ActionConfig marked as "✅ Already done" (reuse `src/townlet/environment/action_config.py`)
+- Reduced scope from 10 DTOs to the 8 new ones (Training/Environment/Population/Curriculum/Bar/Cascade/Affordance/Hamlet)
 - Added incremental delivery strategy
-- Added backward compatibility migration path
+- Explicitly **drop backward-compatibility requirements** (pre-release) — runner/tests must load configs via DTOs only
 
 ---
 
@@ -1384,12 +1384,13 @@ def load_hamlet_config(config_dir: Path) -> HamletConfig:
 
 ### Process
 
-For each config pack (L0_0_minimal, L0_5_dual_resource, L1, L2, L3):
+For each config pack (L0_0_minimal, L0_5_dual_resource, L1_full_observability, L2_partial_observability, L3_temporal_mechanics, L1_3D_house, L1_continuous_*, aspatial_test, test):
 
-1. **Test current config**: `python -m townlet.config.validate configs/L0_0_minimal`
+1. **Test current config**: `python scripts/validate_configs.py --config-pack L0_0_minimal`
 2. **Fix missing fields**: Add required parameters
 3. **Verify fixes**: Run validator again
 4. **Test training**: Run 1 episode to ensure nothing broken
+5. **Update checklist**: Mark the pack as completed in `docs/tasks/TASK-003-UAC-CORE-DTOS.md` (Config Pack Migration Checklist)
 
 **Deliverables**:
 - Updated `configs/L0_0_minimal/training.yaml`
@@ -1404,37 +1405,24 @@ For each config pack (L0_0_minimal, L0_5_dual_resource, L1, L2, L3):
 
 ## Cycle 7: runner.py Integration (2-3 hours)
 
-**Goal**: Replace dict access with DTO access in runner.py
+**Goal**: Replace dict access with DTO access in runner.py (no legacy fallback)
 
-### Strategy: Gradual Migration
-
-**Phase 1**: Add DTO loading with fallback
+Because we are pre-release with no external users, we eliminate the old dictionary-based config path entirely. `runner.py` should instantiate `HamletConfig` up-front and fail fast if validation fails. All downstream code reads from DTOs only.
 
 ```python
-# Load config through DTOs
-try:
-    hamlet_config = load_hamlet_config(config_dir)
-    use_dtos = True
-except Exception as e:
-    logger.warning(f"Failed to load DTOs, using legacy: {e}")
-    use_dtos = False
+from townlet.config.hamlet import load_hamlet_config
 
-# Use DTOs if available, fall back to legacy
-if use_dtos:
-    epsilon_start = hamlet_config.training.epsilon_start
-else:
-    epsilon_start = training_cfg.get("epsilon_start", 1.0)
-```
-
-**Phase 2**: Remove fallbacks (after all configs pass)
-
-```python
-# Load config through DTOs (must succeed)
 hamlet_config = load_hamlet_config(config_dir)
-epsilon_start = hamlet_config.training.epsilon_start
+training_cfg = hamlet_config.training
+env_cfg = hamlet_config.environment
+pop_cfg = hamlet_config.population
+
+epsilon_start = training_cfg.epsilon_start
+epsilon_decay = training_cfg.epsilon_decay
+# ... rest of runner uses DTO fields directly ...
 ```
 
-**COMMIT**: `refactor(runner): Use DTOs for config loading (BREAKING)`
+**COMMIT**: `refactor(runner): Require DTO config loading`
 
 ---
 
@@ -1478,10 +1466,10 @@ epsilon_start = hamlet_config.training.epsilon_start
 | 3 | CurriculumConfig DTO | 1-2h |
 | 4 | Basic DTOs (Bar, Cascade, Affordance) | 2-3h |
 | 5 | HamletConfig master | 1-2h |
-| 6 | Config pack updates | 2-3h |
-| 7 | runner.py integration | 2-3h |
+| 6 | Config pack updates (bring all packs onto DTO schema) | 2-3h |
+| 7 | runner.py integration (DTO-only path) | 1-2h |
 | 8 | CI & documentation | 1-2h |
-| **Total** | | **14-23h** |
+| **Total** | | **11-18h** |
 
 **Includes**: Plan creation (1h), testing time, refactoring, documentation
 

@@ -922,15 +922,26 @@ Tests focus on:
 
 ---
 
-### No-Defaults Principle
+### No-Defaults Principle & DTOs
 
-**All behavioral parameters must be explicitly specified in config files.** No implicit defaults allowed.
+**All behavioral parameters must be explicitly specified in config files.** No implicit defaults allowed. The new DTO layer (TASK-003) enforces this across:
 
-**Why**: Hidden defaults create non-reproducible configs, operator doesn't know what values are being used, and changing code defaults silently breaks old configs.
+- `townlet.config.training.TrainingConfig`
+- `townlet.config.environment.EnvironmentConfig`
+- `townlet.config.population.PopulationConfig`
+- `townlet.config.curriculum.CurriculumConfig`
+- `townlet.config.bar.BarConfig`
+- `townlet.config.cascade.CascadeConfig`
+- `townlet.config.affordance.AffordanceConfig`
+- `townlet.config.hamlet.HamletConfig` (master)
 
-**Exemptions**: Only truly optional features (cues.yaml for visualization), metadata (descriptions), and computed values (observation_dim).
+Existing DTOs already cover Substrate (`townlet.substrate.config.SubstrateConfig`) and Actions (`townlet.environment.action_config.ActionConfig`).
 
-**Enforcement**: Pydantic DTOs require all fields. Missing field → clear compilation error with example.
+**Why**: Hidden defaults create non-reproducible configs, operators don’t know what values are being used, and changing code defaults silently breaks old configs.
+
+**Exemptions**: Only truly optional features (cues.yaml for visualization), metadata (descriptions), and computed values (e.g., observation_dim).
+
+**Enforcement**: DTOs are used at load time (runner.py instantiates `HamletConfig`). Missing/invalid fields raise descriptive validation errors; CI will run `scripts/validate_configs.py` to catch inconsistent packs.
 
 ---
 

@@ -548,3 +548,7 @@ class Grid3DSubstrate(SpatialSubstrate):
 
         # Flatten local grids: [num_agents, W, W, W] → [num_agents, W³]
         return local_grids.reshape(num_agents, -1)
+
+    def supports_enumerable_positions(self) -> bool:
+        """Grid3D has a finite set of discrete cells that can be enumerated."""
+        return True

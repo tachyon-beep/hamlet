@@ -107,10 +107,7 @@ class TestVFSObservationPipeline:
             variables.append(VariableDef(**var_data))
 
         # Build exposures (expose all agent-readable variables)
-        exposures = {}
-        for var in variables:
-            if "agent" in var.readable_by:
-                exposures[var.id] = {"normalization": None}
+        exposures = [{"source_variable": var.id, "normalization": None} for var in variables if "agent" in var.readable_by]
 
         # Build observation spec
         builder = VFSObservationSpecBuilder()
@@ -139,10 +136,7 @@ class TestVFSObservationPipeline:
 
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
 
-        exposures = {}
-        for var in variables:
-            if "agent" in var.readable_by:
-                exposures[var.id] = {"normalization": None}
+        exposures = [{"source_variable": var.id, "normalization": None} for var in variables if "agent" in var.readable_by]
 
         builder = VFSObservationSpecBuilder()
         obs_spec = builder.build_observation_spec(variables, exposures)
@@ -288,10 +282,7 @@ class TestVFSEndToEndPipeline:
         variables = [VariableDef(**var_data) for var_data in data["variables"]]
 
         # Step 2: Build observation spec
-        exposures = {}
-        for var in variables:
-            if "agent" in var.readable_by:
-                exposures[var.id] = {"normalization": None}
+        exposures = [{"source_variable": var.id, "normalization": None} for var in variables if "agent" in var.readable_by]
 
         builder = VFSObservationSpecBuilder()
         obs_spec = builder.build_observation_spec(variables, exposures)
@@ -339,10 +330,7 @@ class TestVFSEndToEndPipeline:
             variables = [VariableDef(**var_data) for var_data in data["variables"]]
 
             # Build observation spec
-            exposures = {}
-            for var in variables:
-                if "agent" in var.readable_by:
-                    exposures[var.id] = {"normalization": None}
+            exposures = [{"source_variable": var.id, "normalization": None} for var in variables if "agent" in var.readable_by]
 
             builder = VFSObservationSpecBuilder()
             obs_spec = builder.build_observation_spec(variables, exposures)

@@ -7,8 +7,10 @@ environment with tensor operations [num_agents, ...].
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 import yaml
@@ -174,27 +176,31 @@ class VectorizedHamletEnv:
         self.vfs_variables = [VariableDef(**var_data) for var_data in variables_data["variables"]]
 
         # Build exposure configuration for observation spec
-        self.vfs_exposures = {}
-        if "exposed_observations" in variables_data:
-            for obs in variables_data["exposed_observations"]:
-                var_id = obs["source_variable"]
-                self.vfs_exposures[var_id] = {
-                    "normalization": obs.get("normalization"),
-                }
+        raw_exposures = variables_data.get("exposed_observations") or []
+        if raw_exposures:
+            self.vfs_exposures: list[dict[str, Any]] = [deepcopy(obs) for obs in raw_exposures]
         else:
-            # Fallback: expose all agent-readable variables
+            # Fallback: expose all agent-readable variables with default metadata
+            self.vfs_exposures = []
             for var in self.vfs_variables:
                 if "agent" in var.readable_by:
-                    self.vfs_exposures[var.id] = {"normalization": None}
+                    self.vfs_exposures.append(
+                        {
+                            "id": f"obs_{var.id}",
+                            "source_variable": var.id,
+                            "exposed_to": ["agent"],
+                            "normalization": None,
+                        }
+                    )
 
         # Filter exposures based on observability mode
         # Full obs uses grid_encoding, POMDP uses local_window
         if partial_observability:
             # POMDP: Remove grid_encoding if present (use local_window instead)
-            self.vfs_exposures.pop("grid_encoding", None)
+            self.vfs_exposures = [obs for obs in self.vfs_exposures if obs.get("source_variable") != "grid_encoding"]
         else:
             # Full obs: Remove local_window if present (use grid_encoding instead)
-            self.vfs_exposures.pop("local_window", None)
+            self.vfs_exposures = [obs for obs in self.vfs_exposures if obs.get("source_variable") != "local_window"]
 
         # Load affordance configuration to get FULL universe vocabulary
         # This must also happen before observation dimension calculation
@@ -498,13 +504,10 @@ class VectorizedHamletEnv:
             if "grid_encoding" in self.vfs_registry._definitions:
                 self.vfs_registry.set("grid_encoding", grid_encoding, writer="engine")
 
-        # Position (always normalized to [0,1] as per VFS schema)
-        # VFS variables_reference.yaml specifies position as "Normalized agent position (x, y) in [0, 1] range"
-        # Observation normalization (minmax with min=0, max=1) is a pass-through that expects [0,1] input
-        # Only set if position variable exists (aspatial substrates have no position)
-        if "position" in self.vfs_registry._definitions:
-            normalized_positions = self.substrate.normalize_positions(self.positions)
-            self.vfs_registry.set("position", normalized_positions, writer="engine")
+        # Position features (respect substrate observation_encoding/payload)
+        position_features = self._encode_position_observation()
+        if position_features is not None:
+            self.vfs_registry.set("position", position_features, writer="engine")
 
         # Meters (write each meter individually)
         for meter_name, meter_idx in self.meter_name_to_index.items():
@@ -517,8 +520,8 @@ class VectorizedHamletEnv:
         # Temporal features
         time_of_day = self.time_of_day if self.enable_temporal_mechanics else 0
         time_angle = (time_of_day / 24.0) * 2 * math.pi
-        time_sin = torch.full((self.num_agents,), math.sin(time_angle), device=self.device)
-        time_cos = torch.full((self.num_agents,), math.cos(time_angle), device=self.device)
+        time_sin = torch.tensor(math.sin(time_angle), device=self.device)
+        time_cos = torch.tensor(math.cos(time_angle), device=self.device)
 
         self.vfs_registry.set("time_sin", time_sin, writer="engine")
         self.vfs_registry.set("time_cos", time_cos, writer="engine")
@@ -533,8 +536,28 @@ class VectorizedHamletEnv:
 
         # Build observations from VFS registry according to observation spec
         observations = []
+        var_defs = self.vfs_registry.variables
         for field in self.vfs_observation_spec:
-            value = self.vfs_registry.get(field.source_variable, reader="agent")
+            var_def = var_defs[field.source_variable]
+
+            if "agent" not in var_def.readable_by:
+                raise PermissionError(
+                    f"Variable '{field.source_variable}' is exposed to agents but not readable_by them. "
+                    "Update variables_reference.yaml to include 'agent' in readable_by."
+                )
+
+            reader_role = "engine" if var_def.scope == "agent_private" else "agent"
+            value = self.vfs_registry.get(field.source_variable, reader=reader_role)
+
+            if var_def.scope == "agent_private" and value.shape[0] != self.num_agents:
+                raise ValueError(
+                    f"agent_private variable '{field.source_variable}' must have leading dimension num_agents="
+                    f"{self.num_agents}, got shape {tuple(value.shape)}"
+                )
+
+            # Broadcast global scalars to all agents
+            if value.ndim == 0:
+                value = value.expand(self.num_agents).clone()
 
             # Apply normalization if specified
             if field.normalization:
@@ -594,6 +617,39 @@ class VectorizedHamletEnv:
             # If affordance NOT deployed, agent can never be "on" it, stays as "none"
 
         return affordance_encoding
+
+    def _encode_position_observation(self) -> torch.Tensor | None:
+        """Encode position variable using substrate-native encoding metadata."""
+        if "position" not in self.vfs_registry._definitions:
+            return None
+
+        # Aspatial substrates have no positional encoding
+        if getattr(self.substrate, "position_dim", 0) == 0:
+            return None
+
+        encode_fn = Callable[[torch.Tensor, dict[str, torch.Tensor]], torch.Tensor]
+
+        encoder = getattr(self.substrate, "_encode_position_features", None)
+        if callable(encoder):
+            typed_encoder = cast(encode_fn, encoder)
+            return typed_encoder(self.positions, self.affordances)
+
+        public_encoder = getattr(self.substrate, "encode_position_features", None)
+        if callable(public_encoder):
+            typed_public = cast(encode_fn, public_encoder)
+            return typed_public(self.positions, self.affordances)
+
+        encode_observation = getattr(self.substrate, "encode_observation", None)
+        if callable(encode_observation):
+            typed_encode_obs = cast(encode_fn, encode_observation)
+            return typed_encode_obs(self.positions, self.affordances)
+
+        normalizer = getattr(self.substrate, "normalize_positions", None)
+        if callable(normalizer):
+            typed_normalizer = cast(Callable[[torch.Tensor], torch.Tensor], normalizer)
+            return typed_normalizer(self.positions)
+
+        return None
 
     def get_action_masks(self) -> torch.Tensor:
         """

@@ -50,11 +50,17 @@ class VariableRegistry:
         self.num_agents = num_agents
         self.device = device
 
-        # Store variable definitions by ID
-        self._definitions: dict[str, VariableDef] = {var.id: var for var in variables}
+        # Store variable definitions by ID, guarding against duplicate IDs
+        self._definitions: dict[str, VariableDef] = {}
+        for var in variables:
+            if var.id in self._definitions:
+                raise ValueError(f"Duplicate variable id '{var.id}' in registry initialization")
+            self._definitions[var.id] = var
 
         # Initialize storage tensors
         self._storage: dict[str, torch.Tensor] = {}
+        self._expected_shapes: dict[str, torch.Size] = {}
+        self._expected_dtypes: dict[str, torch.dtype] = {}
         self._initialize_storage()
 
     @property
@@ -87,7 +93,7 @@ class VariableRegistry:
                 # Scalar: default is a single float
                 if var_def.scope == "global":
                     # Global scalar: shape []
-                    tensor = torch.tensor(var_def.default, device=self.device)
+                    tensor = torch.tensor(var_def.default, device=self.device, dtype=torch.float32)
                 else:
                     # Agent/agent_private scalar: shape [num_agents]
                     tensor = torch.full(
@@ -97,28 +103,12 @@ class VariableRegistry:
                         dtype=torch.float32,
                     )
             elif var_def.type in ("vecNi", "vecNf", "vec2i", "vec3i"):
-                # Vector: default is a list
-                default_list = var_def.default
+                base_default = self._build_vector_default(var_def)
 
                 if var_def.scope == "global":
-                    # Global vector: shape [dims]
-                    tensor = torch.tensor(default_list, device=self.device)
-                    if var_def.type in ("vecNi", "vec2i", "vec3i"):
-                        tensor = tensor.long()
-                    else:
-                        tensor = tensor.float()
+                    tensor = base_default.clone()
                 else:
-                    # Agent/agent_private vector: shape [num_agents, dims]
-                    # Create [num_agents, dims] tensor filled with default
-                    dims = len(default_list)
-                    tensor = torch.zeros(
-                        (self.num_agents, dims),
-                        device=self.device,
-                        dtype=torch.long if var_def.type in ("vecNi", "vec2i", "vec3i") else torch.float32,
-                    )
-                    # Fill with default values
-                    for i, val in enumerate(default_list):
-                        tensor[:, i] = val
+                    tensor = base_default.unsqueeze(0).expand(self.num_agents, -1).clone()
             elif var_def.type == "bool":
                 # Bool: default is a boolean
                 if var_def.scope == "global":
@@ -136,6 +126,8 @@ class VariableRegistry:
                 raise ValueError(f"Unsupported variable type: {var_def.type}")
 
             self._storage[var_id] = tensor
+            self._expected_shapes[var_id] = tensor.shape
+            self._expected_dtypes[var_id] = tensor.dtype
 
     def _compute_shape(self, var_def: VariableDef) -> tuple[int, ...]:
         """Compute tensor shape for a variable definition.
@@ -163,7 +155,8 @@ class VariableRegistry:
         elif var_def.type == "vec3i":
             dims = 3
         elif var_def.type in ("vecNi", "vecNf"):
-            assert var_def.dims is not None, f"vecNi/vecNf variable {var_def.id} must have dims field"
+            if var_def.dims is None:
+                raise ValueError(f"vecNi/vecNf variable '{var_def.id}' must have dims field defined")
             dims = var_def.dims
         else:
             raise ValueError(f"Unsupported variable type: {var_def.type}")
@@ -206,7 +199,15 @@ class VariableRegistry:
         if reader not in var_def.readable_by:
             raise PermissionError(f"'{reader}' is not allowed to read variable '{variable_id}'. " f"Readable by: {var_def.readable_by}")
 
-        return self._storage[variable_id]
+        value = self._storage[variable_id]
+
+        if var_def.scope == "agent_private" and reader == "agent":
+            raise PermissionError(
+                f"'{reader}' is not allowed to read agent_private variable '{variable_id}'. "
+                "Only privileged readers (engine, acs, etc.) may access raw values."
+            )
+
+        return value.clone()
 
     def set(self, variable_id: str, value: torch.Tensor, writer: str) -> None:
         """Set variable value with access control.
@@ -237,5 +238,42 @@ class VariableRegistry:
         if writer not in var_def.writable_by:
             raise PermissionError(f"'{writer}' is not allowed to write variable '{variable_id}'. " f"Writable by: {var_def.writable_by}")
 
-        # Update storage
-        self._storage[variable_id] = value.to(self.device)
+        expected_shape = self._expected_shapes[variable_id]
+        expected_dtype = self._expected_dtypes[variable_id]
+
+        if value.shape != expected_shape:
+            raise ValueError(f"Value for '{variable_id}' has shape {tuple(value.shape)}, expected {tuple(expected_shape)}")
+
+        if value.dtype != expected_dtype:
+            raise ValueError(f"Value for '{variable_id}' has dtype {value.dtype}, expected {expected_dtype}")
+
+        # Update storage (defensive copy to avoid aliasing)
+        self._storage[variable_id] = value.to(self.device).clone()
+
+    def _get_vector_dims(self, var_def: VariableDef) -> int:
+        """Return expected dimensionality for vector variables."""
+        if var_def.type == "vec2i":
+            return 2
+        if var_def.type == "vec3i":
+            return 3
+        if var_def.type in ("vecNi", "vecNf"):
+            if var_def.dims is None:
+                raise ValueError(f"Variable '{var_def.id}' missing 'dims' for type '{var_def.type}'")
+            return var_def.dims
+        default_list = var_def.default
+        if isinstance(default_list, list):
+            return len(default_list)
+        raise ValueError(f"Variable '{var_def.id}' must provide default list for type '{var_def.type}'")
+
+    def _build_vector_default(self, var_def: VariableDef) -> torch.Tensor:
+        """Build default tensor for vector variables, padding if necessary."""
+        dims = self._get_vector_dims(var_def)
+        dtype = torch.long if var_def.type in ("vecNi", "vec2i", "vec3i") else torch.float32
+        tensor = torch.zeros(dims, device=self.device, dtype=dtype)
+
+        default_values = var_def.default
+        if isinstance(default_values, list) and default_values:
+            copy_len = min(len(default_values), dims)
+            default_tensor = torch.tensor(default_values[:copy_len], device=self.device, dtype=dtype)
+            tensor[:copy_len] = default_tensor
+        return tensor

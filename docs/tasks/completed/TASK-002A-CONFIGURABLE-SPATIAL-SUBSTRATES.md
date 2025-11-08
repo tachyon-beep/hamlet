@@ -437,81 +437,17 @@ class AspatialSubstrate(SpatialSubstrate):
 
 ### Phase 2: Create Substrate Config Schema
 
-**File**: `src/townlet/environment/substrate_config.py`
+**File**: `src/townlet/substrate/config.py`
 
-```python
-from pydantic import BaseModel, Field, model_validator
-from typing import Literal
+Task 002A ultimately landed the substrate DTOs in `townlet.substrate.config`. The shipped schema includes:
 
-class GridSubstrateConfig(BaseModel):
-    """Grid substrate configuration."""
-    topology: Literal["square", "hexagonal", "triangular", "cubic"]  # REQUIRED
-    dimensions: list[int] = Field(min_length=2, max_length=3)  # REQUIRED: [w, h] or [w, h, d]
-    boundary: Literal["clamp", "wrap", "bounce", "fail"]  # REQUIRED
-    distance_metric: Literal["manhattan", "euclidean", "chebyshev", "hexagonal"]  # REQUIRED
+- `GridConfig` with explicit `topology` (`"square"` or `"cubic"`), `width`, `height`, optional `depth`, `boundary`, `distance_metric`, and `observation_encoding` (`"relative" | "scaled" | "absolute"`).
+- `GridNDConfig` for ≥4D grids, with `dimension_sizes`, shared boundary/metric fields, observation encoding, and a `topology="hypercube"` marker.
+- `ContinuousConfig` / `ContinuousNDConfig` describing float-based substrates (bounds per dimension, movement parameters, observation encoding).
+- `AspatialSubstrateConfig` as a marker type.
+- `SubstrateConfig` tying everything together with `type: Literal["grid", "gridnd", "continuous", "continuousnd", "aspatial"]` and mutually exclusive child configs enforced via a validator.
 
-    @model_validator(mode="after")
-    def validate_dimensions(self) -> "GridSubstrateConfig":
-        if self.topology == "cubic" and len(self.dimensions) != 3:
-            raise ValueError("Cubic topology requires 3 dimensions [width, height, depth]")
-        if self.topology in ["square", "hexagonal", "triangular"] and len(self.dimensions) != 2:
-            raise ValueError(f"{self.topology} topology requires 2 dimensions [width, height]")
-        return self
-
-class ContinuousSubstrateConfig(BaseModel):
-    """Continuous substrate configuration."""
-    dimensions: int = Field(ge=2, le=3)  # REQUIRED: 2D or 3D
-    bounds: list[list[float]] = Field(min_length=2, max_length=3)  # REQUIRED: [[min, max], ...]
-    boundary: Literal["clamp", "wrap"]  # REQUIRED
-    discretization: float = Field(gt=0.0)  # REQUIRED: step size for actions
-
-class GraphSubstrateConfig(BaseModel):
-    """Graph substrate configuration."""
-    nodes: int = Field(gt=0)  # REQUIRED: number of nodes
-    adjacency: Literal["config", "complete", "random", "spatial"]  # REQUIRED
-    edges: list[list[int]] | None = None  # Required if adjacency="config"
-
-    @model_validator(mode="after")
-    def validate_edges(self) -> "GraphSubstrateConfig":
-        if self.adjacency == "config" and not self.edges:
-            raise ValueError("adjacency='config' requires explicit edge list")
-        return self
-
-class AspatialSubstrateConfig(BaseModel):
-    """Aspatial substrate configuration (no positioning)."""
-    enabled: bool = True
-
-class SubstrateConfig(BaseModel):
-    """Complete spatial substrate configuration."""
-    version: str  # REQUIRED
-    description: str  # REQUIRED (metadata)
-    type: Literal["grid", "continuous", "graph", "aspatial"]  # REQUIRED
-
-    # Substrate-specific configs (only one should be populated based on type)
-    grid: GridSubstrateConfig | None = None
-    continuous: ContinuousSubstrateConfig | None = None
-    graph: GraphSubstrateConfig | None = None
-    aspatial: AspatialSubstrateConfig | None = None
-
-    @model_validator(mode="after")
-    def validate_substrate_type(self) -> "SubstrateConfig":
-        """Ensure substrate config matches type."""
-        if self.type == "grid" and self.grid is None:
-            raise ValueError("type='grid' but grid config missing")
-        if self.type == "continuous" and self.continuous is None:
-            raise ValueError("type='continuous' but continuous config missing")
-        if self.type == "graph" and self.graph is None:
-            raise ValueError("type='graph' but graph config missing")
-        if self.type == "aspatial" and self.aspatial is None:
-            raise ValueError("type='aspatial' but aspatial config missing")
-        return self
-
-def load_substrate_config(config_path: Path) -> SubstrateConfig:
-    """Load and validate substrate configuration."""
-    with open(config_path) as f:
-        data = yaml.safe_load(f)
-    return SubstrateConfig(**data)
-```
+These DTOs are the ones referenced by VectorizedHamletEnv today; the original prototype (`environment/substrate_config.py`) was replaced during implementation.
 
 ### Phase 3: Update VectorizedEnv to Use Substrate
 

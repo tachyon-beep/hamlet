@@ -242,6 +242,12 @@ class LiveInferenceServer:
         """Cleanup on shutdown."""
         self.is_running = False
         logger.info("Live inference server shut down")
+        global qvalue_log_file
+        if qvalue_log_file:
+            try:
+                qvalue_log_file.close()
+            finally:
+                qvalue_log_file = None
 
     def _initialize_components(self):
         """Initialize environment and agent components."""

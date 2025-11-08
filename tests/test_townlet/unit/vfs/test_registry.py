@@ -195,6 +195,77 @@ class TestRegistryInitialization:
         home_pos = registry.get("home_pos", reader="engine")
         assert home_pos.shape == torch.Size([4, 2])
 
+    def test_duplicate_variable_ids_raise_error(self):
+        """Duplicate variable identifiers are rejected at construction time."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="energy",
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=1.0,
+            ),
+            VariableDef(
+                id="energy",  # Duplicate on purpose
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=0.5,
+            ),
+        ]
+
+        with pytest.raises(ValueError, match="Duplicate variable id 'energy'"):
+            VariableRegistry(variables=variables, num_agents=2, device=torch.device("cpu"))
+
+    def test_global_scalar_dtype_is_float32(self):
+        """Global scalar tensors are initialized with float32 dtype for consistency."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="time_sin",
+                scope="global",
+                type="scalar",
+                lifetime="tick",
+                readable_by=["engine"],
+                writable_by=["engine"],
+                default=0,  # Int default should still yield float tensor
+            )
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=1, device=torch.device("cpu"))
+        value = registry.get("time_sin", reader="engine")
+
+        assert value.dtype == torch.float32
+        assert value.shape == torch.Size([])
+
+    def test_missing_dims_for_vec_variables_raise_value_error(self):
+        """vecNi/vecNf variables without dims raise a descriptive error."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        bad_variable = VariableDef.model_construct(
+            id="grid",
+            scope="agent",
+            type="vecNf",
+            dims=None,
+            lifetime="episode",
+            readable_by=["agent"],
+            writable_by=["engine"],
+            default=[0.0, 0.0],
+        )
+
+        with pytest.raises(ValueError, match="must have dims field defined"):
+            VariableRegistry(variables=[bad_variable], num_agents=2, device=torch.device("cpu"))
+
 
 class TestRegistryAccessControl:
     """Test access control enforcement (readable_by/writable_by)."""
@@ -247,6 +318,50 @@ class TestRegistryAccessControl:
         # acs cannot read (not in readable_by)
         with pytest.raises(PermissionError, match="acs.*not allowed to read.*energy"):
             registry.get("energy", reader="acs")
+
+    def test_agent_cannot_read_agent_private(self):
+        """Agents should not directly read agent_private variables."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="secret",
+                scope="agent_private",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent", "engine"],
+                writable_by=["engine"],
+                default=0.5,
+            )
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=3, device=torch.device("cpu"))
+
+        with pytest.raises(PermissionError, match="agent_private"):
+            registry.get("secret", reader="agent")
+
+    def test_engine_can_read_agent_private(self):
+        """Privileged readers (engine) can access full agent_private tensors."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="secret",
+                scope="agent_private",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent", "engine"],
+                writable_by=["engine"],
+                default=0.5,
+            )
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=3, device=torch.device("cpu"))
+
+        value = registry.get("secret", reader="engine")
+        assert torch.all(value == 0.5)
 
     def test_write_allowed(self):
         """Write variable when writer is in writable_by list."""
@@ -382,6 +497,78 @@ class TestRegistryGetSet:
         # Verify update
         value = registry.get("position", reader="agent")
         assert torch.allclose(value, new_positions)
+
+    def test_get_returns_clone_for_readers(self):
+        """Readers should receive a clone they cannot mutate in-place."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="energy",
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent", "engine"],
+                writable_by=["engine"],
+                default=1.0,
+            )
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=2, device=torch.device("cpu"))
+
+        view = registry.get("energy", reader="agent")
+        view.fill_(0.0)
+
+        fresh = registry.get("energy", reader="agent")
+        assert torch.all(fresh == 1.0)
+
+    def test_set_validates_shape(self):
+        """Setting wrong-shaped tensors should raise ValueError."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="position",
+                scope="agent",
+                type="vecNf",
+                dims=2,
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=[0.0, 0.0],
+            )
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=2, device=torch.device("cpu"))
+
+        wrong_shape = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        with pytest.raises(ValueError, match="shape"):
+            registry.set("position", wrong_shape, writer="engine")
+
+    def test_set_validates_dtype(self):
+        """Setting tensors with wrong dtype should raise ValueError."""
+        from townlet.vfs.registry import VariableRegistry
+        from townlet.vfs.schema import VariableDef
+
+        variables = [
+            VariableDef(
+                id="energy",
+                scope="agent",
+                type="scalar",
+                lifetime="episode",
+                readable_by=["agent"],
+                writable_by=["engine"],
+                default=1.0,
+            )
+        ]
+
+        registry = VariableRegistry(variables=variables, num_agents=2, device=torch.device("cpu"))
+
+        wrong_dtype = torch.ones(2, dtype=torch.int64)
+        with pytest.raises(ValueError, match="dtype"):
+            registry.set("energy", wrong_dtype, writer="engine")
 
     def test_set_global_scalar_updates_single_value(self):
         """Set global scalar variable (single value)."""
