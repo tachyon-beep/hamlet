@@ -7,23 +7,24 @@ These tests verify that HamletConfig correctly:
 4. Provides clear error messages for validation failures
 """
 
-import pytest
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import pytest
 
 # Add src to path for imports (integration tests may run standalone)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / "src"))
 
-from townlet.config import HamletConfig
 from tests.test_townlet.unit.config.fixtures import (
     PRODUCTION_CONFIG_PACKS,
-    VALID_TRAINING_PARAMS,
-    VALID_ENVIRONMENT_PARAMS,
-    VALID_POPULATION_PARAMS,
     VALID_CURRICULUM_PARAMS,
+    VALID_ENVIRONMENT_PARAMS,
     VALID_EXPLORATION_PARAMS,
+    VALID_POPULATION_PARAMS,
+    VALID_TRAINING_PARAMS,
     make_temp_config_pack,
 )
+from townlet.config import HamletConfig
 
 
 class TestHamletConfigComposition:
@@ -73,11 +74,11 @@ class TestHamletConfigComposition:
 
     def test_config_sections_are_dtos_not_dicts(self, tmp_path):
         """Verify sections are DTO objects, not raw dicts."""
-        from townlet.config.training import TrainingConfig
-        from townlet.config.environment import TrainingEnvironmentConfig
-        from townlet.config.population import PopulationConfig
         from townlet.config.curriculum import CurriculumConfig
+        from townlet.config.environment import TrainingEnvironmentConfig
         from townlet.config.exploration import ExplorationConfig
+        from townlet.config.population import PopulationConfig
+        from townlet.config.training import TrainingConfig
 
         config_dir = make_temp_config_pack(tmp_path)
         config = HamletConfig.load(config_dir)
@@ -167,7 +168,7 @@ class TestHamletConfigCrossValidation:
 class TestHamletConfigProductionPacks:
     """Test loading from all production config packs."""
 
-    def test_load_L0_0_minimal(self):
+    def test_load_L0_0_minimal(self):  # noqa: N802
         """Load L0_0_minimal config pack."""
         config_dir = PRODUCTION_CONFIG_PACKS["L0_0_minimal"]
         if not config_dir.exists():
@@ -178,7 +179,7 @@ class TestHamletConfigProductionPacks:
         assert config.environment.grid_size == 3  # L0 is 3×3
         assert config.environment.enable_temporal_mechanics is False  # L0 has no temporal
 
-    def test_load_L0_5_dual_resource(self):
+    def test_load_L0_5_dual_resource(self):  # noqa: N802
         """Load L0_5_dual_resource config pack."""
         config_dir = PRODUCTION_CONFIG_PACKS["L0_5_dual_resource"]
         if not config_dir.exists():
@@ -188,7 +189,7 @@ class TestHamletConfigProductionPacks:
         assert config.environment.grid_size == 7  # L0.5 is 7×7
         assert config.environment.enable_temporal_mechanics is False
 
-    def test_load_L1_full_observability(self):
+    def test_load_L1_full_observability(self):  # noqa: N802
         """Load L1_full_observability config pack."""
         config_dir = PRODUCTION_CONFIG_PACKS["L1_full_observability"]
         if not config_dir.exists():
@@ -199,7 +200,7 @@ class TestHamletConfigProductionPacks:
         assert config.environment.partial_observability is False  # L1 is full obs
         assert config.population.network_type == "simple"  # L1 uses MLP
 
-    def test_load_L2_partial_observability(self):
+    def test_load_L2_partial_observability(self):  # noqa: N802
         """Load L2_partial_observability config pack."""
         config_dir = PRODUCTION_CONFIG_PACKS["L2_partial_observability"]
         if not config_dir.exists():
@@ -211,7 +212,7 @@ class TestHamletConfigProductionPacks:
         assert config.environment.vision_range == 2  # 5×5 window
         assert config.population.network_type == "recurrent"  # L2 uses LSTM
 
-    def test_load_L3_temporal_mechanics(self):
+    def test_load_L3_temporal_mechanics(self):  # noqa: N802
         """Load L3_temporal_mechanics config pack."""
         config_dir = PRODUCTION_CONFIG_PACKS["L3_temporal_mechanics"]
         if not config_dir.exists():

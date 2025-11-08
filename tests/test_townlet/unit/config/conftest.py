@@ -8,8 +8,9 @@ Fixtures:
     - production_configs: Paths to all production config packs
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture

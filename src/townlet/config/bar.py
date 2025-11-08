@@ -9,9 +9,9 @@ Cross-file validation (meter references) deferred to TASK-004A.
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator, model_validator, ValidationError, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
-from townlet.config.base import load_yaml_section, format_validation_error
+from townlet.config.base import format_validation_error, load_yaml_section
 
 
 class BarConfig(BaseModel):
@@ -57,10 +57,7 @@ class BarConfig(BaseModel):
     def validate_range_order(cls, v: list[float]) -> list[float]:
         """Ensure range[0] < range[1]."""
         if len(v) == 2 and v[0] >= v[1]:
-            raise ValueError(
-                f"range min ({v[0]}) must be < max ({v[1]}). "
-                f"Got reversed or equal bounds: {v}"
-            )
+            raise ValueError(f"range min ({v[0]}) must be < max ({v[1]}). " f"Got reversed or equal bounds: {v}")
         return v
 
     @model_validator(mode="after")

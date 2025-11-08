@@ -1,8 +1,7 @@
 """Tests for TrainingConfig DTO (Cycle 1)."""
 
+
 import pytest
-import math
-from pathlib import Path
 from pydantic import ValidationError
 
 from townlet.config.training import TrainingConfig, load_training_config
@@ -132,7 +131,7 @@ class TestTrainingConfigValidation:
                 max_grad_norm=10.0,
                 epsilon_start=0.01,  # Less than min
                 epsilon_decay=0.995,
-                epsilon_min=0.1,     # Greater than start
+                epsilon_min=0.1,  # Greater than start
                 sequence_length=8,
             )
 
@@ -147,6 +146,7 @@ class TestTrainingConfigWarnings:
     def test_slow_epsilon_decay_warning(self, caplog):
         """Warn if epsilon_decay is very slow (but allow it)."""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         config = TrainingConfig(
@@ -172,6 +172,7 @@ class TestTrainingConfigWarnings:
     def test_fast_epsilon_decay_warning(self, caplog):
         """Warn if epsilon_decay is very fast (but allow it)."""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         config = TrainingConfig(
@@ -201,7 +202,8 @@ class TestTrainingConfigLoading:
     def test_load_from_yaml(self, tmp_path):
         """Load TrainingConfig from YAML file."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 training:
   device: cuda
   max_episodes: 5000
@@ -213,7 +215,8 @@ training:
   epsilon_decay: 0.995
   epsilon_min: 0.01
   sequence_length: 8
-""")
+"""
+        )
 
         config = load_training_config(tmp_path)
 
@@ -225,12 +228,14 @@ training:
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 training:
   device: cuda
   max_episodes: 5000
   # Missing epsilon params!
-""")
+"""
+        )
 
         with pytest.raises(ValueError) as exc_info:
             load_training_config(tmp_path)
@@ -241,7 +246,8 @@ training:
     def test_load_invalid_device_error(self, tmp_path):
         """Invalid device value raises clear error."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 training:
   device: invalid
   max_episodes: 5000
@@ -253,7 +259,8 @@ training:
   epsilon_decay: 0.995
   epsilon_min: 0.01
   sequence_length: 8
-""")
+"""
+        )
 
         with pytest.raises(ValueError) as exc_info:
             load_training_config(tmp_path)
@@ -264,7 +271,8 @@ training:
     def test_load_cpu_device(self, tmp_path):
         """Load config with CPU device."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 training:
   device: cpu
   max_episodes: 1000
@@ -276,7 +284,8 @@ training:
   epsilon_decay: 0.99
   epsilon_min: 0.01
   sequence_length: 8
-""")
+"""
+        )
 
         config = load_training_config(tmp_path)
         assert config.device == "cpu"
@@ -285,7 +294,8 @@ training:
     def test_load_mps_device(self, tmp_path):
         """Load config with MPS (Apple Silicon) device."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 training:
   device: mps
   max_episodes: 2000
@@ -297,7 +307,8 @@ training:
   epsilon_decay: 0.995
   epsilon_min: 0.01
   sequence_length: 8
-""")
+"""
+        )
 
         config = load_training_config(tmp_path)
         assert config.device == "mps"

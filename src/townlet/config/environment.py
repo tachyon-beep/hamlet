@@ -14,13 +14,12 @@ Philosophy: All behavioral parameters must be explicitly specified.
 No implicit defaults. Operator accountability.
 """
 
-from pathlib import Path
-from typing import Literal
 import logging
+from pathlib import Path
 
-from pydantic import BaseModel, Field, model_validator, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from townlet.config.base import load_yaml_section, format_validation_error
+from townlet.config.base import format_validation_error, load_yaml_section
 
 logger = logging.getLogger(__name__)
 
@@ -50,43 +49,22 @@ class TrainingEnvironmentConfig(BaseModel):
     """
 
     # Grid parameters (REQUIRED)
-    grid_size: int = Field(
-        gt=0,
-        description="Grid dimensions (N×N square grid)"
-    )
+    grid_size: int = Field(gt=0, description="Grid dimensions (N×N square grid)")
 
     # Observability (REQUIRED)
-    partial_observability: bool = Field(
-        description="true = POMDP (local window), false = full grid visibility"
-    )
-    vision_range: int = Field(
-        ge=0,
-        description="Local window radius for POMDP (e.g., 2 = 5×5 window)"
-    )
+    partial_observability: bool = Field(description="true = POMDP (local window), false = full grid visibility")
+    vision_range: int = Field(ge=0, description="Local window radius for POMDP (e.g., 2 = 5×5 window)")
 
     # Temporal mechanics (REQUIRED)
-    enable_temporal_mechanics: bool = Field(
-        description="true = time-of-day, operating hours, multi-tick interactions"
-    )
+    enable_temporal_mechanics: bool = Field(description="true = time-of-day, operating hours, multi-tick interactions")
 
     # Enabled affordances (REQUIRED - null or list)
-    enabled_affordances: list[str] | None = Field(
-        description="null = all affordances enabled, or list of affordance names for curriculum"
-    )
+    enabled_affordances: list[str] | None = Field(description="null = all affordances enabled, or list of affordance names for curriculum")
 
     # Action energy costs (ALL REQUIRED)
-    energy_move_depletion: float = Field(
-        ge=0.0,
-        description="Energy cost per movement action (as fraction of energy meter)"
-    )
-    energy_wait_depletion: float = Field(
-        ge=0.0,
-        description="Energy cost per WAIT action (as fraction of energy meter)"
-    )
-    energy_interact_depletion: float = Field(
-        ge=0.0,
-        description="Energy cost per INTERACT action (as fraction of energy meter)"
-    )
+    energy_move_depletion: float = Field(ge=0.0, description="Energy cost per movement action (as fraction of energy meter)")
+    energy_wait_depletion: float = Field(ge=0.0, description="Energy cost per WAIT action (as fraction of energy meter)")
+    energy_interact_depletion: float = Field(ge=0.0, description="Energy cost per INTERACT action (as fraction of energy meter)")
 
     @model_validator(mode="after")
     def validate_enabled_affordances(self) -> "TrainingEnvironmentConfig":
@@ -119,10 +97,10 @@ class TrainingEnvironmentConfig(BaseModel):
                 )
             elif self.vision_range == 0:
                 logger.warning(
-                    f"POMDP vision_range=0 means agent sees only current cell (1×1 window). "
-                    f"This is extremely limited observability. "
-                    f"Typical POMDP: vision_range=2 (5×5 window). "
-                    f"This may be intentional for your experiment."
+                    "POMDP vision_range=0 means agent sees only current cell (1×1 window). "
+                    "This is extremely limited observability. "
+                    "Typical POMDP: vision_range=2 (5×5 window). "
+                    "This may be intentional for your experiment."
                 )
 
         return self

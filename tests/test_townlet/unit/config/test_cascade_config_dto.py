@@ -1,4 +1,5 @@
 """Tests for CascadeConfig DTO."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -123,7 +124,8 @@ class TestCascadeConfigLoading:
         from townlet.config.cascade import load_cascades_config
 
         config_file = tmp_path / "cascades.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 version: "1.0"
 
 cascades:
@@ -142,7 +144,8 @@ cascades:
     target: "energy"
     threshold: 0.3
     strength: 0.005
-""")
+"""
+        )
 
         cascades = load_cascades_config(tmp_path)
         assert len(cascades) == 2
@@ -155,13 +158,15 @@ cascades:
         from townlet.config.cascade import load_cascades_config
 
         config_file = tmp_path / "cascades.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 version: "1.0"
 
 cascades:
   - name: "test"
     # Missing description, source, target, threshold, strength!
-""")
+"""
+        )
 
         with pytest.raises(ValueError) as exc_info:
             load_cascades_config(tmp_path)

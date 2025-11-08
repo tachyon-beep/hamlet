@@ -1,16 +1,16 @@
 """Tests for ExplorationConfig DTO (Cycle 5)."""
 
+
 import pytest
-from pathlib import Path
 from pydantic import ValidationError
 
-from townlet.config.exploration import ExplorationConfig, load_exploration_config
 from tests.test_townlet.unit.config.fixtures import (
-    VALID_EXPLORATION_PARAMS,
-    make_valid_params,
-    make_temp_yaml,
     PRODUCTION_CONFIG_PACKS,
+    VALID_EXPLORATION_PARAMS,
+    make_temp_yaml,
+    make_valid_params,
 )
+from townlet.config.exploration import ExplorationConfig, load_exploration_config
 
 
 class TestExplorationConfigValidation:
@@ -116,7 +116,7 @@ class TestExplorationConfigLoading:
         assert config.variance_threshold == VALID_EXPLORATION_PARAMS["variance_threshold"]
         assert config.survival_window == VALID_EXPLORATION_PARAMS["survival_window"]
 
-    def test_load_from_real_config_L0(self):
+    def test_load_from_real_config_L0(self):  # noqa: N802
         """Load exploration config from real L0_0_minimal config pack."""
         config_dir = PRODUCTION_CONFIG_PACKS["L0_0_minimal"]
         if not config_dir.exists():

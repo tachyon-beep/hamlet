@@ -11,7 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 
-def load_yaml_section(config_dir: Path, filename: str, section: str) -> dict[str, Any]:
+def load_yaml_section(config_dir: Path, filename: str, section: str) -> Any:
     """Load a section from a YAML file.
 
     Args:
@@ -20,7 +20,7 @@ def load_yaml_section(config_dir: Path, filename: str, section: str) -> dict[str
         section: Top-level section name (e.g., "training", "environment")
 
     Returns:
-        Dict of configuration data from the specified section
+        Configuration data from the specified section (dict, list, or scalar)
 
     Raises:
         FileNotFoundError: If file doesn't exist with helpful path information
@@ -48,9 +48,7 @@ def load_yaml_section(config_dir: Path, filename: str, section: str) -> dict[str
     if section not in data:
         available_sections = list(data.keys()) if isinstance(data, dict) else []
         raise KeyError(
-            f"Section '{section}' not found in {filename}\n"
-            f"Available sections: {available_sections}\n"
-            f"File path: {config_file}"
+            f"Section '{section}' not found in {filename}\n" f"Available sections: {available_sections}\n" f"File path: {config_file}"
         )
 
     return data[section]

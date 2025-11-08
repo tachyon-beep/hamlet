@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
-from townlet.config.base import load_yaml_section, format_validation_error
+from townlet.config.base import format_validation_error, load_yaml_section
 
 
 class ExplorationConfig(BaseModel):
@@ -32,24 +32,14 @@ class ExplorationConfig(BaseModel):
     """
 
     # RND parameters (REQUIRED)
-    embed_dim: int = Field(
-        gt=0,
-        description="Embedding dimension for RND predictor network"
-    )
+    embed_dim: int = Field(gt=0, description="Embedding dimension for RND predictor network")
 
     # Intrinsic reward parameters (ALL REQUIRED)
     initial_intrinsic_weight: float = Field(
-        ge=0.0,
-        description="Initial weight for intrinsic rewards (vs extrinsic). 1.0 = exploration priority"
+        ge=0.0, description="Initial weight for intrinsic rewards (vs extrinsic). 1.0 = exploration priority"
     )
-    variance_threshold: float = Field(
-        gt=0.0,
-        description="Survival variance threshold for annealing (higher = slower annealing)"
-    )
-    survival_window: int = Field(
-        gt=0,
-        description="Window size for tracking survival consistency (episodes)"
-    )
+    variance_threshold: float = Field(gt=0.0, description="Survival variance threshold for annealing (higher = slower annealing)")
+    survival_window: int = Field(gt=0, description="Window size for tracking survival consistency (episodes)")
 
 
 def load_exploration_config(config_dir: Path) -> ExplorationConfig:

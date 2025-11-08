@@ -9,16 +9,16 @@ exploration) and performs cross-config validation to ensure internal consistency
 This is the single entry point for loading complete training configurations.
 """
 
-from pathlib import Path
 import logging
+from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
-from townlet.config.training import TrainingConfig, load_training_config
-from townlet.config.environment import TrainingEnvironmentConfig, load_environment_config
-from townlet.config.population import PopulationConfig, load_population_config
 from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
+from townlet.config.environment import TrainingEnvironmentConfig, load_environment_config
 from townlet.config.exploration import ExplorationConfig, load_exploration_config
+from townlet.config.population import PopulationConfig, load_population_config
+from townlet.config.training import TrainingConfig, load_training_config
 
 logger = logging.getLogger(__name__)
 
@@ -40,21 +40,11 @@ class HamletConfig(BaseModel):
     """
 
     # Section configs (ALL REQUIRED)
-    training: TrainingConfig = Field(
-        description="Training hyperparameters (device, episodes, epsilon, batch size)"
-    )
-    environment: TrainingEnvironmentConfig = Field(
-        description="Environment parameters (grid, observability, affordances, energy costs)"
-    )
-    population: PopulationConfig = Field(
-        description="Population parameters (agents, learning rate, replay buffer, network type)"
-    )
-    curriculum: CurriculumConfig = Field(
-        description="Curriculum parameters (episode length, advancement thresholds)"
-    )
-    exploration: ExplorationConfig = Field(
-        description="Exploration parameters (RND, intrinsic motivation, annealing)"
-    )
+    training: TrainingConfig = Field(description="Training hyperparameters (device, episodes, epsilon, batch size)")
+    environment: TrainingEnvironmentConfig = Field(description="Environment parameters (grid, observability, affordances, energy costs)")
+    population: PopulationConfig = Field(description="Population parameters (agents, learning rate, replay buffer, network type)")
+    curriculum: CurriculumConfig = Field(description="Curriculum parameters (episode length, advancement thresholds)")
+    exploration: ExplorationConfig = Field(description="Exploration parameters (RND, intrinsic motivation, annealing)")
 
     @model_validator(mode="after")
     def validate_batch_size_vs_buffer(self) -> "HamletConfig":
@@ -110,7 +100,7 @@ class HamletConfig(BaseModel):
         NOTE: This is a HINT for operator convenience, not strict enforcement.
         Operators may intentionally create crowded grids for challenge.
         """
-        grid_cells = self.environment.grid_size ** 2
+        grid_cells = self.environment.grid_size**2
         num_agents = self.population.num_agents
 
         # Estimate affordance count

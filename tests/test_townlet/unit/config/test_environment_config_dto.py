@@ -11,8 +11,8 @@ This DTO covers training.yaml's 'environment' section:
 - Energy costs (action depletion rates)
 """
 
+
 import pytest
-from pathlib import Path
 from pydantic import ValidationError
 
 from townlet.config.environment import TrainingEnvironmentConfig, load_environment_config
@@ -172,8 +172,6 @@ class TestTrainingEnvironmentConfigCrossFieldValidation:
 
     def test_pomdp_requires_reasonable_vision_range(self):
         """POMDP should have vision_range <= grid_size (warning, not error)."""
-        import logging
-        import warnings
 
         # This should succeed but warn
         config = TrainingEnvironmentConfig(
@@ -213,7 +211,8 @@ class TestTrainingEnvironmentConfigLoading:
     def test_load_from_yaml_full_obs(self, tmp_path):
         """Load full observability config from YAML."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 environment:
   grid_size: 8
   partial_observability: false
@@ -223,7 +222,8 @@ environment:
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
-""")
+"""
+        )
 
         config = load_environment_config(tmp_path)
 
@@ -234,7 +234,8 @@ environment:
     def test_load_from_yaml_pomdp(self, tmp_path):
         """Load POMDP config from YAML."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 environment:
   grid_size: 8
   partial_observability: true
@@ -244,7 +245,8 @@ environment:
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
-""")
+"""
+        )
 
         config = load_environment_config(tmp_path)
 
@@ -254,7 +256,8 @@ environment:
     def test_load_from_yaml_with_affordance_list(self, tmp_path):
         """Load config with enabled affordances list."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 environment:
   grid_size: 3
   partial_observability: false
@@ -265,7 +268,8 @@ environment:
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.003
   energy_interact_depletion: 0.0029
-""")
+"""
+        )
 
         config = load_environment_config(tmp_path)
 
@@ -274,7 +278,8 @@ environment:
     def test_load_from_yaml_temporal_mechanics(self, tmp_path):
         """Load config with temporal mechanics enabled."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 environment:
   grid_size: 8
   partial_observability: false
@@ -284,7 +289,8 @@ environment:
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
-""")
+"""
+        )
 
         config = load_environment_config(tmp_path)
 
@@ -293,12 +299,14 @@ environment:
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 environment:
   grid_size: 8
   partial_observability: false
   # Missing other required fields
-""")
+"""
+        )
 
         with pytest.raises(ValueError) as exc_info:
             load_environment_config(tmp_path)
@@ -309,7 +317,8 @@ environment:
     def test_load_invalid_grid_size_error(self, tmp_path):
         """Invalid grid_size raises clear error."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 environment:
   grid_size: -1
   partial_observability: false
@@ -319,7 +328,8 @@ environment:
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
-""")
+"""
+        )
 
         with pytest.raises(ValueError) as exc_info:
             load_environment_config(tmp_path)

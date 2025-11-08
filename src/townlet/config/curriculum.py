@@ -8,9 +8,9 @@ Design: Validates adversarial curriculum parameters for difficulty progression.
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field, model_validator, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from townlet.config.base import load_yaml_section, format_validation_error
+from townlet.config.base import format_validation_error, load_yaml_section
 
 
 class CurriculumConfig(BaseModel):
@@ -29,31 +29,13 @@ class CurriculumConfig(BaseModel):
     """
 
     # Stage parameters (REQUIRED)
-    max_steps_per_episode: int = Field(
-        gt=0,
-        description="Episode length limit (truncation)"
-    )
+    max_steps_per_episode: int = Field(gt=0, description="Episode length limit (truncation)")
 
     # Advancement thresholds (ALL REQUIRED)
-    survival_advance_threshold: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Advance to next stage if survival rate >= this threshold"
-    )
-    survival_retreat_threshold: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Retreat to previous stage if survival rate < this threshold"
-    )
-    entropy_gate: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Minimum policy entropy to advance (prevents premature advancement)"
-    )
-    min_steps_at_stage: int = Field(
-        gt=0,
-        description="Minimum training steps before stage change allowed"
-    )
+    survival_advance_threshold: float = Field(ge=0.0, le=1.0, description="Advance to next stage if survival rate >= this threshold")
+    survival_retreat_threshold: float = Field(ge=0.0, le=1.0, description="Retreat to previous stage if survival rate < this threshold")
+    entropy_gate: float = Field(ge=0.0, le=1.0, description="Minimum policy entropy to advance (prevents premature advancement)")
+    min_steps_at_stage: int = Field(gt=0, description="Minimum training steps before stage change allowed")
 
     @model_validator(mode="after")
     def validate_threshold_order(self) -> "CurriculumConfig":

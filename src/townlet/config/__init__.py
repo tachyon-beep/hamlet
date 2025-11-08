@@ -17,21 +17,22 @@ Naming Strategy:
 - Prevents import conflicts and clarifies purpose
 """
 
-from pathlib import Path
+# Import DTOs for convenient access
+from townlet.config.affordance import AffordanceConfig, load_affordances_config
+from townlet.config.bar import BarConfig, load_bars_config
+from townlet.config.cascade import CascadeConfig, load_cascades_config
+from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
+from townlet.config.environment import (
+    TrainingEnvironmentConfig,
+    load_environment_config,
+)
+from townlet.config.exploration import ExplorationConfig, load_exploration_config
+from townlet.config.hamlet import HamletConfig
+from townlet.config.population import PopulationConfig, load_population_config
+from townlet.config.training import TrainingConfig, load_training_config
 
 # Version tracking for schema evolution
 CONFIG_SCHEMA_VERSION = "1.0.0"
-
-# Import DTOs for convenient access
-from townlet.config.training import TrainingConfig, load_training_config
-from townlet.config.environment import TrainingEnvironmentConfig, load_environment_config
-from townlet.config.population import PopulationConfig, load_population_config
-from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
-from townlet.config.exploration import ExplorationConfig, load_exploration_config
-from townlet.config.bar import BarConfig, load_bars_config
-from townlet.config.cascade import CascadeConfig, load_cascades_config
-from townlet.config.affordance import AffordanceConfig, load_affordances_config
-from townlet.config.hamlet import HamletConfig
 
 __all__ = [
     "CONFIG_SCHEMA_VERSION",

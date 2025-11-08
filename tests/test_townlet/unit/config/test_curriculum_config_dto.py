@@ -1,16 +1,16 @@
 """Tests for CurriculumConfig DTO (Cycle 4)."""
 
+
 import pytest
-from pathlib import Path
 from pydantic import ValidationError
 
-from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
 from tests.test_townlet.unit.config.fixtures import (
-    VALID_CURRICULUM_PARAMS,
-    make_valid_params,
-    make_temp_yaml,
     PRODUCTION_CONFIG_PACKS,
+    VALID_CURRICULUM_PARAMS,
+    make_temp_yaml,
+    make_valid_params,
 )
+from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
 
 
 class TestCurriculumConfigValidation:
@@ -78,11 +78,9 @@ class TestCurriculumConfigValidation:
     def test_thresholds_at_boundaries(self):
         """Thresholds at exactly 0.0 and 1.0 are valid."""
         # advance=1.0, retreat=0.0 (maximum spread)
-        config = CurriculumConfig(**make_valid_params(
-            VALID_CURRICULUM_PARAMS,
-            survival_advance_threshold=1.0,
-            survival_retreat_threshold=0.0
-        ))
+        config = CurriculumConfig(
+            **make_valid_params(VALID_CURRICULUM_PARAMS, survival_advance_threshold=1.0, survival_retreat_threshold=0.0)
+        )
         assert config.survival_advance_threshold == 1.0
         assert config.survival_retreat_threshold == 0.0
 
@@ -98,30 +96,20 @@ class TestCurriculumConfigValidation:
         """advance_threshold must be > retreat_threshold."""
         # advance < retreat (invalid)
         with pytest.raises(ValidationError) as exc_info:
-            CurriculumConfig(**make_valid_params(
-                VALID_CURRICULUM_PARAMS,
-                survival_advance_threshold=0.3,
-                survival_retreat_threshold=0.7
-            ))
+            CurriculumConfig(**make_valid_params(VALID_CURRICULUM_PARAMS, survival_advance_threshold=0.3, survival_retreat_threshold=0.7))
         error = str(exc_info.value)
         assert "advance" in error.lower() or "retreat" in error.lower()
 
         # advance == retreat (invalid - must be strictly greater)
         with pytest.raises(ValidationError):
-            CurriculumConfig(**make_valid_params(
-                VALID_CURRICULUM_PARAMS,
-                survival_advance_threshold=0.5,
-                survival_retreat_threshold=0.5
-            ))
+            CurriculumConfig(**make_valid_params(VALID_CURRICULUM_PARAMS, survival_advance_threshold=0.5, survival_retreat_threshold=0.5))
 
     def test_advance_barely_greater_than_retreat(self):
         """advance_threshold can be just epsilon greater than retreat_threshold."""
         # Minimum valid spread (0.5 vs 0.49)
-        config = CurriculumConfig(**make_valid_params(
-            VALID_CURRICULUM_PARAMS,
-            survival_advance_threshold=0.5,
-            survival_retreat_threshold=0.49
-        ))
+        config = CurriculumConfig(
+            **make_valid_params(VALID_CURRICULUM_PARAMS, survival_advance_threshold=0.5, survival_retreat_threshold=0.49)
+        )
         assert config.survival_advance_threshold == 0.5
         assert config.survival_retreat_threshold == 0.49
 
@@ -142,7 +130,7 @@ class TestCurriculumConfigLoading:
         assert config.survival_advance_threshold == VALID_CURRICULUM_PARAMS["survival_advance_threshold"]
         assert config.entropy_gate == VALID_CURRICULUM_PARAMS["entropy_gate"]
 
-    def test_load_from_real_config_L0(self):
+    def test_load_from_real_config_L0(self):  # noqa: N802
         """Load curriculum config from real L0_0_minimal config pack."""
         config_dir = PRODUCTION_CONFIG_PACKS["L0_0_minimal"]
         if not config_dir.exists():
@@ -166,8 +154,7 @@ class TestCurriculumConfigLoading:
             assert config.max_steps_per_episode > 0, f"{pack_name}: max_steps must be positive"
             assert config.min_steps_at_stage > 0, f"{pack_name}: min_steps must be positive"
             assert 0.0 <= config.entropy_gate <= 1.0, f"{pack_name}: entropy_gate must be in [0, 1]"
-            assert config.survival_advance_threshold > config.survival_retreat_threshold, \
-                f"{pack_name}: advance must be > retreat"
+            assert config.survival_advance_threshold > config.survival_retreat_threshold, f"{pack_name}: advance must be > retreat"
 
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""

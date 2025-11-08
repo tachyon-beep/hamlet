@@ -1,4 +1,5 @@
 """Tests for AffordanceConfig DTO."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -114,7 +115,7 @@ class TestAffordanceConfigValidation:
             costs=[{"meter": "money", "amount": 0.10}],
             effects=[
                 {"meter": "satiation", "amount": 0.45},  # Positive
-                {"meter": "health", "amount": -0.02},    # Negative (penalty)
+                {"meter": "health", "amount": -0.02},  # Negative (penalty)
             ],
         )
         assert config.effects[1]["amount"] == -0.02
@@ -128,7 +129,8 @@ class TestAffordanceConfigLoading:
         from townlet.config.affordance import load_affordances_config
 
         config_file = tmp_path / "affordances.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 version: "1.0"
 
 affordances:
@@ -148,7 +150,8 @@ affordances:
     effects:
       - { meter: "money", amount: 0.225 }
       - { meter: "energy", amount: -0.15 }
-""")
+"""
+        )
 
         affordances = load_affordances_config(tmp_path)
         assert len(affordances) == 2
@@ -161,13 +164,15 @@ affordances:
         from townlet.config.affordance import load_affordances_config
 
         config_file = tmp_path / "affordances.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 version: "1.0"
 
 affordances:
   - id: "0"
     # Missing name, costs, effects!
-""")
+"""
+        )
 
         with pytest.raises(ValueError) as exc_info:
             load_affordances_config(tmp_path)

@@ -1,7 +1,7 @@
 """Tests for PopulationConfig DTO (Cycle 3)."""
 
+
 import pytest
-from pathlib import Path
 from pydantic import ValidationError
 
 from townlet.config.population import PopulationConfig, load_population_config
@@ -101,14 +101,16 @@ class TestPopulationConfigLoading:
     def test_load_from_yaml_simple_network(self, tmp_path):
         """Load simple network config."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 population:
   num_agents: 1
   learning_rate: 0.00025
   gamma: 0.99
   replay_buffer_capacity: 10000
   network_type: simple
-""")
+"""
+        )
 
         config = load_population_config(tmp_path)
         assert config.num_agents == 1
@@ -117,14 +119,16 @@ population:
     def test_load_from_yaml_recurrent_network(self, tmp_path):
         """Load recurrent network config."""
         config_file = tmp_path / "training.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 population:
   num_agents: 1
   learning_rate: 0.0001
   gamma: 0.99
   replay_buffer_capacity: 10000
   network_type: recurrent
-""")
+"""
+        )
 
         config = load_population_config(tmp_path)
         assert config.network_type == "recurrent"

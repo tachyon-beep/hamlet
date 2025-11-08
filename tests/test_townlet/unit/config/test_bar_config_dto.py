@@ -1,4 +1,5 @@
 """Tests for BarConfig DTO."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -151,7 +152,8 @@ class TestBarConfigLoading:
         from townlet.config.bar import load_bars_config
 
         config_file = tmp_path / "bars.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 version: "1.0"
 
 bars:
@@ -170,7 +172,8 @@ bars:
     initial: 1.0
     base_depletion: 0.0
     description: "Health level"
-""")
+"""
+        )
 
         bars = load_bars_config(tmp_path)
         assert len(bars) == 2
@@ -183,13 +186,15 @@ bars:
         from townlet.config.bar import load_bars_config
 
         config_file = tmp_path / "bars.yaml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 version: "1.0"
 
 bars:
   - name: "energy"
     # Missing index, tier, range, initial, base_depletion!
-""")
+"""
+        )
 
         with pytest.raises(ValueError) as exc_info:
             load_bars_config(tmp_path)

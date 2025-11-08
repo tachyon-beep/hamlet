@@ -11,9 +11,9 @@ Cross-file validation (meter references) deferred to TASK-004A.
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, ValidationError, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from townlet.config.base import load_yaml_section, format_validation_error
+from townlet.config.base import format_validation_error, load_yaml_section
 
 
 class AffordanceConfig(BaseModel):

@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from townlet.config.base import load_yaml_section, format_validation_error
+from townlet.config.base import format_validation_error, load_yaml_section
 
 
 class PopulationConfig(BaseModel):
@@ -30,30 +30,15 @@ class PopulationConfig(BaseModel):
     """
 
     # Agent count (REQUIRED)
-    num_agents: int = Field(
-        gt=0,
-        description="Number of agents to train (typically 1 for single-agent RL)"
-    )
+    num_agents: int = Field(gt=0, description="Number of agents to train (typically 1 for single-agent RL)")
 
     # Q-learning parameters (ALL REQUIRED)
-    learning_rate: float = Field(
-        gt=0.0,
-        description="Adam optimizer learning rate (Atari DQN: 0.00025)"
-    )
-    gamma: float = Field(
-        gt=0.0,
-        le=1.0,
-        description="Q-learning discount factor (future reward importance)"
-    )
-    replay_buffer_capacity: int = Field(
-        gt=0,
-        description="Experience replay buffer size (number of transitions)"
-    )
+    learning_rate: float = Field(gt=0.0, description="Adam optimizer learning rate (Atari DQN: 0.00025)")
+    gamma: float = Field(gt=0.0, le=1.0, description="Q-learning discount factor (future reward importance)")
+    replay_buffer_capacity: int = Field(gt=0, description="Experience replay buffer size (number of transitions)")
 
     # Network architecture (REQUIRED)
-    network_type: Literal["simple", "recurrent"] = Field(
-        description="'simple' (MLP for full obs) or 'recurrent' (LSTM for POMDP)"
-    )
+    network_type: Literal["simple", "recurrent"] = Field(description="'simple' (MLP for full obs) or 'recurrent' (LSTM for POMDP)")
 
 
 def load_population_config(config_dir: Path) -> PopulationConfig:

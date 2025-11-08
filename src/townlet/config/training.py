@@ -7,14 +7,14 @@ Design: Validates Q-learning hyperparameters, epsilon-greedy exploration,
 and training infrastructure settings. Warnings guide operators without blocking.
 """
 
+import logging
+import math
 from pathlib import Path
 from typing import Literal
-import math
-import logging
 
-from pydantic import BaseModel, Field, model_validator, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from townlet.config.base import load_yaml_section, format_validation_error
+from townlet.config.base import format_validation_error, load_yaml_section
 
 logger = logging.getLogger(__name__)
 
@@ -43,56 +43,24 @@ class TrainingConfig(BaseModel):
     """
 
     # Compute device (REQUIRED)
-    device: Literal["cpu", "cuda", "mps"] = Field(
-        description="Compute device: 'cuda' (GPU), 'cpu' (CPU-only), 'mps' (Apple Silicon)"
-    )
+    device: Literal["cpu", "cuda", "mps"] = Field(description="Compute device: 'cuda' (GPU), 'cpu' (CPU-only), 'mps' (Apple Silicon)")
 
     # Training duration (REQUIRED)
-    max_episodes: int = Field(
-        gt=0,
-        description="Total episodes to train"
-    )
+    max_episodes: int = Field(gt=0, description="Total episodes to train")
 
     # Q-learning hyperparameters (ALL REQUIRED)
-    train_frequency: int = Field(
-        gt=0,
-        description="Train Q-network every N steps"
-    )
-    target_update_frequency: int = Field(
-        gt=0,
-        description="Update target network every N training steps"
-    )
-    batch_size: int = Field(
-        gt=0,
-        description="Experience replay batch size"
-    )
-    max_grad_norm: float = Field(
-        gt=0,
-        description="Gradient clipping threshold (prevents exploding gradients)"
-    )
+    train_frequency: int = Field(gt=0, description="Train Q-network every N steps")
+    target_update_frequency: int = Field(gt=0, description="Update target network every N training steps")
+    batch_size: int = Field(gt=0, description="Experience replay batch size")
+    max_grad_norm: float = Field(gt=0, description="Gradient clipping threshold (prevents exploding gradients)")
 
     # Epsilon-greedy exploration (ALL REQUIRED)
-    epsilon_start: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Initial exploration rate (1.0 = 100% random)"
-    )
-    epsilon_decay: float = Field(
-        gt=0.0,
-        lt=1.0,
-        description="Decay per episode (< 1.0)"
-    )
-    epsilon_min: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Minimum exploration rate (floor)"
-    )
+    epsilon_start: float = Field(ge=0.0, le=1.0, description="Initial exploration rate (1.0 = 100% random)")
+    epsilon_decay: float = Field(gt=0.0, lt=1.0, description="Decay per episode (< 1.0)")
+    epsilon_min: float = Field(ge=0.0, le=1.0, description="Minimum exploration rate (floor)")
 
     # Recurrent-specific (REQUIRED for all configs, used when network_type=recurrent)
-    sequence_length: int = Field(
-        gt=0,
-        description="Length of sequences for LSTM training (recurrent networks only)"
-    )
+    sequence_length: int = Field(gt=0, description="Length of sequences for LSTM training (recurrent networks only)")
 
     @model_validator(mode="after")
     def validate_epsilon_order(self) -> "TrainingConfig":
