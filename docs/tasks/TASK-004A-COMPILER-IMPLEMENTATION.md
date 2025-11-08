@@ -967,7 +967,18 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class UniverseMetadata:
-    """Derived metadata about compiled universe."""
+    """Derived metadata about compiled universe.
+
+    Per COMPILER_ARCHITECTURE.md §3.1: Core metadata contract.
+    """
+
+    # Universe identification (NEW - Per §3.1)
+    universe_name: str  # e.g., "L1_full_observability"
+    schema_version: str  # UAC schema version (e.g., "1.0")
+
+    # Substrate metadata (NEW - Per §3.1)
+    substrate_type: str  # e.g., "grid2d", "continuous3d", "aspatial"
+    position_dim: int  # Substrate dimensionality (0 for aspatial, 2 for grid2d, 3 for grid3d, etc.)
 
     # Meter metadata
     meter_count: int
@@ -979,15 +990,15 @@ class UniverseMetadata:
     affordance_ids: list[str]
     affordance_id_to_index: dict[str, int]
 
-    # Action metadata
-    action_count: int  # Currently hardcoded to 6
+    # Action metadata (FIXED - was hardcoded)
+    action_count: int  # Composed from substrate + custom actions
 
-    # Observation space metadata
-    observation_dim: int  # Computed from grid, meters, affordances
+    # Observation space metadata (FIXED - was computed from training params)
+    observation_dim: int  # Built from VFS ObservationSpecBuilder
 
-    # Spatial metadata
-    grid_size: int
-    grid_cells: int
+    # Spatial metadata (legacy - can be removed if substrate provides)
+    grid_size: int | None = None  # Only for grid substrates
+    grid_cells: int | None = None  # Only for grid substrates
 
     # Economic metadata
     max_sustainable_income: float
@@ -1393,19 +1404,34 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class CompiledUniverse:
-    """Immutable artifact representing a fully validated universe."""
+    """Immutable artifact representing a fully validated universe.
 
-    # Config components
-    bars: BarsConfig
-    cascades: CascadesConfig
-    affordances: AffordanceConfigCollection
-    training: TrainingConfig
+    Per COMPILER_ARCHITECTURE.md §3.3: Complete training hand-off contract.
+    """
 
-    # Computed metadata
-    metadata: UniverseMetadata
+    # Core config components (Per §3.3)
+    substrate: SubstrateConfig  # Spatial structure
+    variables: VariablesConfig  # VFS variable definitions
+    bars: BarsConfig  # Meter definitions
+    cascades: CascadesConfig  # Meter relationships
+    affordances: AffordanceConfigCollection  # Interactions
+    cues: CuesConfig  # Theory of Mind cues
+    actions: ActionSpaceConfig  # Global action vocabulary
+    training: TrainingConfig  # Training hyperparameters
 
-    # Pre-computed optimization data
-    optimization_data: OptimizationData
+    # Computed metadata (Per §3.1)
+    metadata: UniverseMetadata  # Core metadata contract
+
+    # UAC → BAC data contracts (Per §3.2)
+    observation_spec: ObservationSpec  # Observation field metadata for custom encoders
+
+    # UAC → Training data contracts (Per §3.3)
+    action_space_metadata: ActionSpaceMetadata  # Action costs and labels
+    meter_metadata: MeterMetadata  # Meter ranges and semantic info
+    affordance_metadata: AffordanceMetadata  # Affordance descriptions and categories
+
+    # Pre-computed optimization data (legacy)
+    optimization_data: OptimizationData  # Tensors for fast meter dynamics
 
     def __post_init__(self):
         """Validate universe is complete and consistent."""
@@ -1427,6 +1453,68 @@ class CompiledUniverse:
             raise ValueError(
                 f"Action count must be positive, got {self.metadata.action_count}"
             )
+
+    def create_environment(self, num_agents: int, device: str = "cuda"):
+        """
+        Create VectorizedHamletEnv from compiled universe.
+
+        Per COMPILER_ARCHITECTURE.md §3.3: Training hand-off helper.
+
+        Args:
+            num_agents: Number of agents to simulate
+            device: Device for tensors ("cuda" or "cpu")
+
+        Returns:
+            Configured VectorizedHamletEnv instance
+        """
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        return VectorizedHamletEnv(
+            universe=self,
+            num_agents=num_agents,
+            device=device
+        )
+
+    def check_checkpoint_compatibility(self, checkpoint: dict) -> tuple[bool, str]:
+        """
+        Check if checkpoint is compatible with this universe.
+
+        Per COMPILER_ARCHITECTURE.md §6.2: Checkpoint validation helper.
+
+        Args:
+            checkpoint: Loaded checkpoint dict
+
+        Returns:
+            (is_compatible, message) tuple
+        """
+        # Check config hash
+        if checkpoint['config_hash'] != self.metadata.config_hash:
+            return (
+                False,
+                f"Config hash mismatch:\n"
+                f"  Checkpoint: {checkpoint['config_hash'][:16]}...\n"
+                f"  Current:    {self.metadata.config_hash[:16]}...\n"
+                f"Transfer learning may fail if configs differ significantly."
+            )
+
+        # Check architecture dimensions
+        if checkpoint['observation_dim'] != self.metadata.observation_dim:
+            return (
+                False,
+                f"Observation dim mismatch: "
+                f"checkpoint={checkpoint['observation_dim']}, "
+                f"current={self.metadata.observation_dim}"
+            )
+
+        if checkpoint['action_dim'] != self.metadata.action_count:
+            return (
+                False,
+                f"Action dim mismatch: "
+                f"checkpoint={checkpoint['action_dim']}, "
+                f"current={self.metadata.action_count}"
+            )
+
+        return (True, "Checkpoint compatible")
 ```
 
 #### 6.4: Implement Stage 7 (Emit)
@@ -1436,19 +1524,31 @@ def _stage_7_emit_compiled_universe(
     self,
     raw_configs: RawConfigs,
     metadata: UniverseMetadata,
+    observation_spec: ObservationSpec,
+    action_space_metadata: ActionSpaceMetadata,
+    meter_metadata: MeterMetadata,
+    affordance_metadata: AffordanceMetadata,
     optimization_data: OptimizationData
 ) -> CompiledUniverse:
     """
     Stage 7: Emit immutable compiled universe.
 
-    Creates frozen dataclass that cannot be modified.
+    Per COMPILER_ARCHITECTURE.md §2.3 Stage 7: Create frozen artifact.
     """
     universe = CompiledUniverse(
+        substrate=raw_configs.substrate,
+        variables=raw_configs.variables,
         bars=raw_configs.bars,
         cascades=raw_configs.cascades,
         affordances=raw_configs.affordances,
+        cues=raw_configs.cues,
+        actions=raw_configs.actions,
         training=raw_configs.training,
         metadata=metadata,
+        observation_spec=observation_spec,
+        action_space_metadata=action_space_metadata,
+        meter_metadata=meter_metadata,
+        affordance_metadata=affordance_metadata,
         optimization_data=optimization_data,
     )
 
