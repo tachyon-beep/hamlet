@@ -124,7 +124,8 @@ class TestFormatValidationError:
             TestConfig()  # Missing required field
         except ValidationError as e:
             formatted = format_validation_error(e, "test.yaml")
-            assert "test.yaml" in formatted.upper()
+            # Check context appears with exact casing preserved
+            assert "test.yaml" in formatted
             assert "VALIDATION FAILED" in formatted
 
     def test_format_includes_error_details(self):
@@ -164,7 +165,8 @@ class TestFormatValidationError:
             TestConfig(number_field="not_a_number")
         except ValidationError as e:
             formatted = format_validation_error(e, "training.yaml")
-            assert "TRAINING.YAML" in formatted
+            # Check context appears with exact casing preserved
+            assert "training.yaml" in formatted
             assert "number_field" in formatted
 
     def test_format_with_range_error(self):
@@ -178,5 +180,6 @@ class TestFormatValidationError:
             TestConfig(probability=1.5)
         except ValidationError as e:
             formatted = format_validation_error(e, "config section")
-            assert "CONFIG SECTION" in formatted
+            # Check context appears with exact casing preserved
+            assert "config section" in formatted
             assert "probability" in formatted

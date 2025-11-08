@@ -80,7 +80,7 @@ def format_validation_error(error: ValidationError, context: str) -> str:
         See configs/templates/training.yaml for reference.
     """
     lines = [
-        f"❌ {context.upper()} VALIDATION FAILED",
+        f"❌ {context} VALIDATION FAILED",
         "",
         str(error),
         "",
