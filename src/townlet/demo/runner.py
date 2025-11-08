@@ -87,7 +87,7 @@ class DemoRunner:
         if max_episodes is not None:
             self.max_episodes = max_episodes
         else:
-            self.max_episodes = self.config["training"]["max_episodes"]
+            self.max_episodes = self.hamlet_config.training.max_episodes
 
         self.current_episode = 0
 
@@ -504,7 +504,7 @@ class DemoRunner:
 
                 # Run episode
                 num_agents = self.population.num_agents
-                max_steps = self.config["curriculum"]["max_steps_per_episode"]
+                max_steps = self.hamlet_config.curriculum.max_steps_per_episode
                 episode_reward = torch.zeros(num_agents, device=self.env.device)
                 episode_extrinsic_reward = torch.zeros(num_agents, device=self.env.device)
                 episode_intrinsic_reward = torch.zeros(num_agents, device=self.env.device)

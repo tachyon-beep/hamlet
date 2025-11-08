@@ -83,23 +83,48 @@ class TrainingConfig(BaseModel):
         Follows permissive semantics: allow unusual values but warn the operator.
         """
         # Calculate episodes to reach ε=0.1 from ε=1.0
-        episodes_to_01 = math.log(0.1) / math.log(self.epsilon_decay)
+        try:
+            episodes_to_01 = math.log(0.1) / math.log(self.epsilon_decay)
+        except (ZeroDivisionError, ValueError) as exc:
+            logger.warning(
+                "epsilon_decay=%s produced invalid episodes_to_01 calculation (%s). " "Skipping exact episode estimate.",
+                self.epsilon_decay,
+                exc,
+            )
+            episodes_to_01 = None
 
         if self.epsilon_decay > 0.999:
-            logger.warning(
-                f"epsilon_decay={self.epsilon_decay} is very slow. "
-                f"Will take {episodes_to_01:.0f} episodes to reach ε=0.1 from ε=1.0. "
-                f"Typical values: 0.99 (L0 fast), 0.995 (L0.5/L1 moderate), "
-                f"0.998 (L2 POMDP slow). "
-                f"This may be intentional for your experiment."
-            )
+            if episodes_to_01 is not None:
+                logger.warning(
+                    f"epsilon_decay={self.epsilon_decay} is very slow. "
+                    f"Will take {episodes_to_01:.0f} episodes to reach ε=0.1 from ε=1.0. "
+                    f"Typical values: 0.99 (L0 fast), 0.995 (L0.5/L1 moderate), "
+                    f"0.998 (L2 POMDP slow). "
+                    f"This may be intentional for your experiment."
+                )
+            else:
+                logger.warning(
+                    f"epsilon_decay={self.epsilon_decay} is very slow. "
+                    f"Could not estimate episodes_to_01 due to invalid epsilon_decay value. "
+                    f"Typical values: 0.99 (L0 fast), 0.995 (L0.5/L1 moderate), "
+                    f"0.998 (L2 POMDP slow). "
+                    f"This may be intentional for your experiment."
+                )
         elif self.epsilon_decay < 0.95:
-            logger.warning(
-                f"epsilon_decay={self.epsilon_decay} is very fast. "
-                f"Will reach ε=0.1 in {episodes_to_01:.0f} episodes from ε=1.0. "
-                f"Agent may not explore enough before exploitation. "
-                f"This may be intentional for your experiment."
-            )
+            if episodes_to_01 is not None:
+                logger.warning(
+                    f"epsilon_decay={self.epsilon_decay} is very fast. "
+                    f"Will reach ε=0.1 in {episodes_to_01:.0f} episodes from ε=1.0. "
+                    f"Agent may not explore enough before exploitation. "
+                    f"This may be intentional for your experiment."
+                )
+            else:
+                logger.warning(
+                    f"epsilon_decay={self.epsilon_decay} is very fast. "
+                    f"Could not estimate episodes_to_01 due to invalid epsilon_decay value. "
+                    f"Agent may not explore enough before exploitation. "
+                    f"This may be intentional for your experiment."
+                )
 
         return self
 
