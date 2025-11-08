@@ -1073,8 +1073,9 @@ class ObservationSpec:
 # In Stage 5 implementation:
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 
+# FIXED: Use raw_configs.variables instead of raw_configs.vfs_registry
 obs_spec_builder = VFSObservationSpecBuilder(
-    variable_registry=raw_configs.vfs_registry,
+    variable_registry=raw_configs.variables,
     substrate=raw_configs.substrate,
 )
 observation_spec = obs_spec_builder.build_spec()
@@ -1082,24 +1083,39 @@ observation_spec = obs_spec_builder.build_spec()
 
 #### 5.2: Implement Stage 5 (Compute Metadata)
 
+**FIXED**: Added config_dir parameter and proper metadata field population.
+
 ```python
 from datetime import datetime
 
 
 def _stage_5_compute_metadata(
     self,
+    config_dir: Path,  # FIXED: Added config_dir parameter
     raw_configs: RawConfigs,
     symbol_table: UniverseSymbolTable
-) -> UniverseMetadata:
+) -> tuple[UniverseMetadata, ObservationSpec]:  # FIXED: Return ObservationSpec
     """
     Stage 5: Compute metadata from validated configs.
 
+    Per COMPILER_ARCHITECTURE.md §3.1: Build complete metadata contract.
+
     Calculates:
+    - Universe identification (name, schema version)
+    - Substrate metadata (type, position dimensionality)
     - Meter count (dynamic based on bars.yaml)
-    - Observation dimension (depends on meter count)
-    - Action count (currently hardcoded to 6)
+    - Action count (composed from substrate + custom actions)
+    - Observation dimension (built from VFS ObservationSpecBuilder)
     - Economic metadata (income, costs, balance)
     """
+    # Universe identification (FIXED - was missing)
+    universe_name = config_dir.name  # e.g., "L1_full_observability"
+    schema_version = "1.0"  # UAC schema version
+
+    # Substrate metadata (FIXED - was missing)
+    substrate_type = raw_configs.substrate.type  # e.g., "grid2d", "continuous3d", "aspatial"
+    position_dim = raw_configs.substrate.get_position_dim()  # 0 for aspatial, 2 for grid2d, etc.
+
     # Meter metadata
     meter_count = len(raw_configs.bars.bars)
     meter_names = [
@@ -1116,34 +1132,28 @@ def _stage_5_compute_metadata(
         for i, aff in enumerate(raw_configs.affordances.affordances)
     }
 
-    # Action metadata (currently hardcoded, will be dynamic after TASK-002A Action Space)
-    action_count = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+    # Action metadata (FIXED - now composed from substrate + custom actions)
+    action_count = len(raw_configs.actions.actions)  # Total actions (substrate + custom)
 
-    # Observation dimension (complex calculation)
-    grid_size = raw_configs.training.grid_size
+    # Observation dimension (FIXED - now built from VFS ObservationSpecBuilder)
+    from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 
-    if raw_configs.training.partial_observability:
-        # POMDP: local window + position + meters + affordance + extras
-        vision_range = raw_configs.training.vision_range
-        window_size = 2 * vision_range + 1
-        obs_dim = (
-            window_size * window_size +  # Local grid
-            2 +                           # Agent position (x, y)
-            meter_count +                 # DYNAMIC meter count!
-            affordance_count + 1 +        # Affordance at position (+ "none")
-            4                             # Temporal extras
-        )
-    else:
-        # Full observability: full grid + meters + affordance + extras
-        obs_dim = (
-            grid_size * grid_size +       # Full grid
-            meter_count +                 # DYNAMIC meter count!
-            affordance_count + 1 +        # Affordance at position
-            4                             # Temporal extras
-        )
+    obs_spec_builder = VFSObservationSpecBuilder(
+        variable_registry=raw_configs.variables,
+        substrate=raw_configs.substrate,
+    )
+    observation_spec = obs_spec_builder.build_spec()
+    obs_dim = observation_spec.total_dims  # Built from VFS, not hardcoded!
 
-    # Spatial metadata
-    grid_cells = grid_size * grid_size
+    # Spatial metadata (legacy - only for grid substrates)
+    grid_size = None
+    grid_cells = None
+    if substrate_type in ["grid2d", "grid3d", "gridnd"]:
+        # Extract grid dimensions from substrate config
+        if substrate_type == "grid2d":
+            grid_size = raw_configs.substrate.grid.width  # Assume square grid
+            grid_cells = grid_size * raw_configs.substrate.grid.height
+        # For grid3d/gridnd, grid_size/grid_cells are less meaningful
 
     # Economic metadata
     max_income = self._compute_max_income(raw_configs.affordances)
@@ -1158,7 +1168,13 @@ def _stage_5_compute_metadata(
     # Config hash (for checkpoint compatibility - Per COMPILER_ARCHITECTURE.md §4.2)
     config_hash = self._compute_config_hash(config_dir)
 
-    return UniverseMetadata(
+    metadata = UniverseMetadata(
+        # NEW FIELDS (FIXED - were missing)
+        universe_name=universe_name,
+        schema_version=schema_version,
+        substrate_type=substrate_type,
+        position_dim=position_dim,
+        # EXISTING FIELDS
         meter_count=meter_count,
         meter_names=meter_names,
         meter_name_to_index=meter_name_to_index,
@@ -1178,6 +1194,82 @@ def _stage_5_compute_metadata(
         compiled_at=compiled_at,
         config_hash=config_hash,
     )
+
+    return (metadata, observation_spec)  # FIXED: Return both
+```
+
+#### 5.3: Build Rich Metadata Structures (NEW - Per §3.3)
+
+**Per COMPILER_ARCHITECTURE.md §3.3**: Build training-facing metadata for logging and metrics.
+
+```python
+def _stage_5_build_rich_metadata(
+    self,
+    raw_configs: RawConfigs
+) -> tuple[ActionSpaceMetadata, MeterMetadata, AffordanceMetadata]:
+    """
+    Build rich metadata structures for training system integration.
+
+    Returns:
+        (action_space_metadata, meter_metadata, affordance_metadata)
+    """
+    # 1. ActionSpaceMetadata
+    action_infos = []
+    for action in raw_configs.actions.actions:
+        action_info = ActionInfo(
+            id=action.id,
+            name=action.name,
+            type=action.type,  # "movement", "interaction", "passive"
+            costs={cost.meter: cost.amount for cost in action.costs},
+            description=action.description or f"{action.name} action"
+        )
+        action_infos.append(action_info)
+
+    action_space_metadata = ActionSpaceMetadata(
+        actions=action_infos,
+        total_count=len(action_infos)
+    )
+
+    # 2. MeterMetadata
+    meter_infos = []
+    for bar in raw_configs.bars.bars:
+        meter_info = MeterInfo(
+            index=bar.index,
+            name=bar.name,
+            range_min=bar.range[0],
+            range_max=bar.range[1],
+            initial=bar.initial,
+            base_depletion=bar.base_depletion,
+            semantic_type="resource",  # Could be extended with bar.category
+            description=bar.description or f"{bar.name} resource meter"
+        )
+        meter_infos.append(meter_info)
+
+    meter_metadata = MeterMetadata(
+        meters=sorted(meter_infos, key=lambda m: m.index),
+        total_count=len(meter_infos)
+    )
+
+    # 3. AffordanceMetadata
+    affordance_infos = []
+    for aff in raw_configs.affordances.affordances:
+        affordance_info = AffordanceInfo(
+            id=aff.id,
+            name=aff.name,
+            category=aff.category,
+            costs={cost.meter: cost.amount for cost in aff.costs},
+            effects={eff.meter: eff.amount for eff in aff.effects},
+            operating_hours=aff.operating_hours,
+            description=aff.description or f"{aff.name} affordance"
+        )
+        affordance_infos.append(affordance_info)
+
+    affordance_metadata = AffordanceMetadata(
+        affordances=affordance_infos,
+        total_count=len(affordance_infos)
+    )
+
+    return (action_space_metadata, meter_metadata, affordance_metadata)
 ```
 
 **Success Criteria**:
@@ -1196,6 +1288,11 @@ def _stage_5_compute_metadata(
   - [ ] All observation fields have correct start/end indices
   - [ ] VFS integration uses existing VFSObservationSpecBuilder
   - [ ] ObservationSpec enables custom neural encoders (BLOCKS TASK-005)
+- [ ] **Rich metadata built correctly** (NEW - Per COMPILER_ARCHITECTURE.md §3.3)
+  - [ ] ActionSpaceMetadata contains all actions with costs
+  - [ ] MeterMetadata contains all meters sorted by index
+  - [ ] AffordanceMetadata contains all affordances with categories
+  - [ ] Training system can query metadata for logging/metrics
 
 ---
 
@@ -1481,36 +1578,51 @@ class CompiledUniverse:
 
         Per COMPILER_ARCHITECTURE.md §6.2: Checkpoint validation helper.
 
+        FIXED: Uses .get() for backward compatibility with legacy checkpoints.
+
         Args:
             checkpoint: Loaded checkpoint dict
 
         Returns:
             (is_compatible, message) tuple
         """
-        # Check config hash
-        if checkpoint['config_hash'] != self.metadata.config_hash:
+        # Check config hash (FIXED: Backward compatible with legacy checkpoints)
+        checkpoint_hash = checkpoint.get('config_hash')
+        if checkpoint_hash is None:
+            # Legacy checkpoint without config_hash - emit warning
+            return (
+                False,
+                "⚠️ Legacy checkpoint detected (no config_hash):\n"
+                "  This checkpoint predates hash-based validation.\n"
+                "  Transfer learning may fail if configs differ.\n"
+                "  Recommendation: Retrain from scratch with current config."
+            )
+
+        if checkpoint_hash != self.metadata.config_hash:
             return (
                 False,
                 f"Config hash mismatch:\n"
-                f"  Checkpoint: {checkpoint['config_hash'][:16]}...\n"
+                f"  Checkpoint: {checkpoint_hash[:16]}...\n"
                 f"  Current:    {self.metadata.config_hash[:16]}...\n"
                 f"Transfer learning may fail if configs differ significantly."
             )
 
-        # Check architecture dimensions
-        if checkpoint['observation_dim'] != self.metadata.observation_dim:
+        # Check architecture dimensions (FIXED: Use .get() for backward compatibility)
+        checkpoint_obs_dim = checkpoint.get('observation_dim')
+        if checkpoint_obs_dim is not None and checkpoint_obs_dim != self.metadata.observation_dim:
             return (
                 False,
                 f"Observation dim mismatch: "
-                f"checkpoint={checkpoint['observation_dim']}, "
+                f"checkpoint={checkpoint_obs_dim}, "
                 f"current={self.metadata.observation_dim}"
             )
 
-        if checkpoint['action_dim'] != self.metadata.action_count:
+        checkpoint_action_dim = checkpoint.get('action_dim')
+        if checkpoint_action_dim is not None and checkpoint_action_dim != self.metadata.action_count:
             return (
                 False,
                 f"Action dim mismatch: "
-                f"checkpoint={checkpoint['action_dim']}, "
+                f"checkpoint={checkpoint_action_dim}, "
                 f"current={self.metadata.action_count}"
             )
 
@@ -1552,13 +1664,28 @@ def _stage_7_emit_compiled_universe(
         optimization_data=optimization_data,
     )
 
-    # Validate immutability
-    if not universe.__dataclass_fields__['bars'].frozen:
+    # Validate immutability (FIXED: Proper check for frozen dataclass)
+    import dataclasses
+    if not dataclasses.is_dataclass(universe):
+        raise CompilationError(
+            stage="Stage 7: Emit",
+            errors=["CompiledUniverse must be a dataclass"],
+            hints=["Check @dataclass decorator"]
+        )
+
+    # Check if dataclass is frozen by attempting to set an attribute
+    try:
+        # This will raise FrozenInstanceError if frozen
+        object.__setattr__(universe, '_test_frozen', True)
+        # If we get here, it's not frozen!
         raise CompilationError(
             stage="Stage 7: Emit",
             errors=["CompiledUniverse must be frozen (immutable)"],
             hints=["Check @dataclass(frozen=True) decorator"]
         )
+    except dataclasses.FrozenInstanceError:
+        # Expected - universe is correctly frozen
+        pass
 
     return universe
 ```
