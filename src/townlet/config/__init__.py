@@ -26,6 +26,7 @@ from townlet.config.environment import TrainingEnvironmentConfig, load_environme
 from townlet.config.population import PopulationConfig, load_population_config
 from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
 from townlet.config.exploration import ExplorationConfig, load_exploration_config
+from townlet.config.hamlet import HamletConfig
 
 __all__ = [
     "CONFIG_SCHEMA_VERSION",
@@ -39,4 +40,5 @@ __all__ = [
     "load_curriculum_config",
     "ExplorationConfig",
     "load_exploration_config",
+    "HamletConfig",  # Master config - primary entry point
 ]
