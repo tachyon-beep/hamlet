@@ -1,14 +1,42 @@
 # TASK-004A: Universe Compiler Implementation
 
-**Status**: Planned (Aligned with COMPILER_ARCHITECTURE.md v1.0)
+**Status**: Blocked (Prerequisites Required - See Below)
 **Priority**: HIGH (Foundational for UAC system integrity)
 **Estimated Effort**: 52-72 hours (6.5-9 days)
   - **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
   - **Additions**: CuesCompiler (+3-4h), Capability Validation (+6-8h), ObservationSpec (+2h), Rich Metadata (+4h)
   - **Total additions**: +15-18h (+40-33% increase)
-**Dependencies**: TASK-003 (UAC Core DTOs - COMPLETE)
+**Dependencies**: TASK-003 (UAC Core DTOs - COMPLETE) + **TASK-004A-PREREQUISITES (REQUIRED)**
 **Enables**: All future UAC work + TASK-005 (BAC - requires ObservationSpec)
 **Authoritative Reference**: `docs/architecture/COMPILER_ARCHITECTURE.md`
+
+---
+
+## ⚠️ CRITICAL: PREREQUISITES REQUIRED
+
+**🛑 STOP: Do NOT proceed with implementation until prerequisites are complete.**
+
+This task has **5 critical blockers** where the implementation plan assumptions don't match repository reality. These must be resolved first.
+
+**You MUST complete:** **[TASK-004A-PREREQUISITES.md](./TASK-004A-PREREQUISITES.md)**
+
+**Prerequisites Overview** (8-12 hours):
+1. **Config Schema Alignment** (3-4h): Create `load_variables_reference_config()` and `load_global_actions_config()`
+2. **DTO Consolidation** (2-3h): Add type aliases for BarsConfig, create ActionSpaceConfig wrapper
+3. **ObservationSpec Adapter** (2-3h): Build VFS-to-Universe DTO adapter
+4. **HamletConfig Integration** (1-2h): Document compiler builds on HamletConfig
+5. **Update TASK-004A Spec** (1-2h): Correct imports, update effort estimates
+
+**Why Prerequisites Are Critical**:
+- Plan expects `variables.yaml`, repo has `variables_reference.yaml`
+- Plan expects `BarsConfig` in `townlet.config.bar`, actually in `townlet.environment.cascade_config`
+- Plan expects `load_variables_config()` that doesn't exist
+- VFS ObservationField incompatible with Universe ObservationSpec (needs adapter)
+- Unclear how compiler relates to existing HamletConfig
+
+**DO NOT SKIP THIS STEP.** Implementing without prerequisites will result in import errors, missing functions, and incompatible data contracts.
+
+Once prerequisites are complete, return here and continue with Phase 0 verification.
 
 ---
 
@@ -146,8 +174,10 @@ Start training (all errors caught upfront)
 from dataclasses import dataclass
 from pathlib import Path
 
-from townlet.environment.cascade_config import load_bars_config, load_cascades_config
-from townlet.environment.affordance_config import load_affordance_config
+# CORRECTED IMPORTS (per TASK-004A-PREREQUISITES)
+from townlet.config.bar import load_bars_config, BarsConfig  # BarsConfig is type alias
+from townlet.environment.cascade_config import load_cascades_config, CascadesConfig
+from townlet.environment.affordance_config import load_affordance_config, AffordanceConfigCollection
 
 
 class UniverseCompiler:
@@ -216,20 +246,46 @@ class RawConfigs:
     """Container for raw config objects loaded from YAML.
 
     Per COMPILER_ARCHITECTURE.md §2.1: All core universe configs.
+
+    UPDATED (per TASK-004A-PREREQUISITES Part 4):
+    Compiler builds on HamletConfig (existing master configuration).
     """
-    substrate: SubstrateConfig  # Spatial structure (grid, continuous, aspatial)
-    variables: VariablesConfig  # VFS variable definitions
-    bars: BarsConfig  # Meter definitions
-    cascades: CascadesConfig  # Meter relationships
-    affordances: AffordanceConfigCollection  # Interaction definitions
-    cues: CuesConfig  # Theory of Mind cue definitions
-    actions: ActionSpaceConfig  # Global action vocabulary (substrate + custom)
-    training: TrainingConfig  # Training hyperparameters
+    hamlet_config: HamletConfig  # Master configuration (loads all files)
+    variables_reference: list[VariableDef]  # VFS variables from variables_reference.yaml
+    global_actions: ActionSpaceConfig  # Global action vocabulary from configs/global_actions.yaml
+
+    # Convenience properties for accessing HamletConfig sections
+    @property
+    def substrate(self) -> SubstrateConfig:
+        return self.hamlet_config.substrate
+
+    @property
+    def bars(self) -> BarsConfig:
+        return self.hamlet_config.bars  # BarsConfig is type alias from TASK-004A-PREREQUISITES Part 2
+
+    @property
+    def cascades(self) -> CascadesConfig:
+        return self.hamlet_config.cascades
+
+    @property
+    def affordances(self) -> AffordanceConfigCollection:
+        return self.hamlet_config.affordances
+
+    @property
+    def cues(self) -> CuesConfig:
+        return self.hamlet_config.cues
+
+    @property
+    def training(self) -> TrainingConfig:
+        return self.hamlet_config.training
 
 
 def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
     """
     Stage 1: Load and validate individual YAML files.
+
+    UPDATED (per TASK-004A-PREREQUISITES Part 4):
+    Uses HamletConfig.load() as primary loader + additional loaders for VFS/actions.
 
     Validates:
     - File exists
@@ -239,44 +295,51 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
     Does NOT validate cross-file references (Stage 3).
     """
     try:
-        bars = load_bars_config(config_dir / "bars.yaml")
-    except FileNotFoundError:
+        # PRIMARY LOADER: HamletConfig loads substrate, bars, cascades, affordances, cues, training
+        # (per TASK-004A-PREREQUISITES Part 4: Compiler builds on HamletConfig)
+        hamlet_config = HamletConfig.load(config_dir)
+
+        # ADDITIONAL LOADERS: VFS variables and global actions
+        # (per TASK-004A-PREREQUISITES Part 1)
+        from townlet.vfs.schema import load_variables_reference_config
+        from townlet.environment.action_space_builder import load_global_actions_config
+
+        variables_reference = load_variables_reference_config(config_dir)  # From variables_reference.yaml
+        global_actions = load_global_actions_config()  # From configs/global_actions.yaml (shared)
+
+    except FileNotFoundError as e:
         raise CompilationError(
             stage="Stage 1: Parse",
-            errors=[f"bars.yaml not found in {config_dir}"],
-            hints=["Ensure config pack contains bars.yaml"]
+            errors=[f"Required config file not found: {e}"],
+            hints=[
+                "Ensure config pack contains all required files:",
+                "  - substrate.yaml",
+                "  - bars.yaml",
+                "  - cascades.yaml",
+                "  - affordances.yaml",
+                "  - cues.yaml",
+                "  - training.yaml",
+                "  - variables_reference.yaml",
+                "And that configs/global_actions.yaml exists (shared across all configs)"
+            ]
         )
     except yaml.YAMLError as e:
         raise CompilationError(
             stage="Stage 1: Parse",
-            errors=[f"bars.yaml is malformed: {e}"],
+            errors=[f"YAML syntax error: {e}"],
             hints=["Check YAML syntax with a validator"]
         )
     except ValidationError as e:
         raise CompilationError(
             stage="Stage 1: Parse",
-            errors=[f"bars.yaml validation failed: {e}"],
-            hints=["Check field types and constraints"]
+            errors=[f"Schema validation failed: {e}"],
+            hints=["Check field types and constraints match schema"]
         )
 
-    # Load all core configs (Per COMPILER_ARCHITECTURE.md §2.3 Stage 1)
-    substrate = load_substrate_config(config_dir / "substrate.yaml")
-    variables = load_variables_config(config_dir / "variables.yaml")
-    cascades = load_cascades_config(config_dir / "cascades.yaml")
-    affordances = load_affordance_config(config_dir / "affordances.yaml")
-    cues = load_cues_config(config_dir / "cues.yaml")
-    actions = load_action_space_config(config_dir / "global_actions.yaml")
-    training = load_training_config(config_dir / "training.yaml")
-
     return RawConfigs(
-        substrate=substrate,
-        variables=variables,
-        bars=bars,
-        cascades=cascades,
-        affordances=affordances,
-        cues=cues,
-        actions=actions,
-        training=training,
+        hamlet_config=hamlet_config,
+        variables_reference=variables_reference,
+        global_actions=global_actions,
     )
 ```
 
@@ -403,14 +466,18 @@ def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbo
     Stage 2: Build symbol tables from raw configs.
 
     Per COMPILER_ARCHITECTURE.md §2.3 Stage 2: Register all named entities.
+
+    UPDATED (per TASK-004A-PREREQUISITES):
+    Uses corrected field names from RawConfigs.
     """
     symbol_table = UniverseSymbolTable()
 
-    # Register VFS variables
-    for var in raw_configs.variables.variables:
+    # Register VFS variables (CORRECTED: variables_reference instead of variables.variables)
+    for var in raw_configs.variables_reference:
         symbol_table.register_variable(var.id, var)
 
     # Register meters (subset of variables)
+    # CORRECTED: raw_configs.bars uses BarsConfig type alias (per TASK-004A-PREREQUISITES Part 2)
     for bar in raw_configs.bars.bars:
         symbol_table.register_meter(bar.name, bar)
 
@@ -422,8 +489,8 @@ def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbo
     for meter_name, cue in raw_configs.cues.items():
         symbol_table.register_cue(meter_name, cue)
 
-    # Register actions
-    for action in raw_configs.actions.actions:
+    # Register actions (CORRECTED: global_actions instead of actions)
+    for action in raw_configs.global_actions.actions:
         symbol_table.register_action(action.id, action)
 
     return symbol_table
@@ -496,7 +563,8 @@ def _stage_3_resolve_references(
             )
 
     # Resolve action cost meter references (NEW - from research Gap 2)
-    for action in raw_configs.actions.actions:
+    # CORRECTED: global_actions instead of actions
+    for action in raw_configs.global_actions.actions:
         for cost in action.costs:
             try:
                 symbol_table.resolve_meter_reference(
@@ -1079,18 +1147,32 @@ class ObservationSpec:
         return [f for f in self.fields if f.semantic_type == semantic]
 ```
 
-**Integration**: Use existing VFS `VFSObservationSpecBuilder` - infrastructure already exists!
+**Integration**: Use existing VFS `VFSObservationSpecBuilder` + adapter for Universe DTO compatibility
 
 ```python
 # In Stage 5 implementation:
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+from townlet.universe.adapters.vfs_adapter import vfs_to_universe_observation_spec
 
-# FIXED: Use raw_configs.variables instead of raw_configs.vfs_registry
+# Build VFS observation spec
+# CORRECTED (per TASK-004A-PREREQUISITES Part 3):
+# VFSObservationSpecBuilder needs VariableRegistry, not list[VariableDef]
+# We must construct a temporary registry from variables_reference
+from townlet.vfs.registry import VariableRegistry
+
+temp_registry = VariableRegistry()
+for var_def in raw_configs.variables_reference:
+    temp_registry.register(var_def)
+
 obs_spec_builder = VFSObservationSpecBuilder(
-    variable_registry=raw_configs.variables,
+    variable_registry=temp_registry,
     substrate=raw_configs.substrate,
 )
-observation_spec = obs_spec_builder.build_spec()
+vfs_observation_fields = obs_spec_builder.build_spec()
+
+# Convert VFS ObservationField list to Universe ObservationSpec
+# (per TASK-004A-PREREQUISITES Part 3: Adapter required for DTO compatibility)
+observation_spec = vfs_to_universe_observation_spec(vfs_observation_fields)
 ```
 
 #### 5.2: Implement Stage 5 (Compute Metadata)
@@ -1145,16 +1227,29 @@ def _stage_5_compute_metadata(
     }
 
     # Action metadata (FIXED - now composed from substrate + custom actions)
-    action_count = len(raw_configs.actions.actions)  # Total actions (substrate + custom)
+    # CORRECTED: global_actions instead of actions
+    action_count = len(raw_configs.global_actions.actions)  # Total actions (substrate + custom)
 
-    # Observation dimension (FIXED - now built from VFS ObservationSpecBuilder)
+    # Observation dimension (FIXED - now built from VFS ObservationSpecBuilder + adapter)
+    # CORRECTED (per TASK-004A-PREREQUISITES Part 3):
+    # VFSObservationSpecBuilder needs VariableRegistry, plus adapter for Universe DTO
     from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+    from townlet.vfs.registry import VariableRegistry
+    from townlet.universe.adapters.vfs_adapter import vfs_to_universe_observation_spec
+
+    # Build temporary registry from variables_reference
+    temp_registry = VariableRegistry()
+    for var_def in raw_configs.variables_reference:
+        temp_registry.register(var_def)
 
     obs_spec_builder = VFSObservationSpecBuilder(
-        variable_registry=raw_configs.variables,
+        variable_registry=temp_registry,
         substrate=raw_configs.substrate,
     )
-    observation_spec = obs_spec_builder.build_spec()
+    vfs_observation_fields = obs_spec_builder.build_spec()
+
+    # Convert VFS fields to Universe ObservationSpec DTO (adapter required)
+    observation_spec = vfs_to_universe_observation_spec(vfs_observation_fields)
     obs_dim = observation_spec.total_dims  # Built from VFS, not hardcoded!
 
     # Spatial metadata (legacy - only for grid substrates)
@@ -1226,8 +1321,9 @@ def _stage_5_build_rich_metadata(
         (action_space_metadata, meter_metadata, affordance_metadata)
     """
     # 1. ActionSpaceMetadata
+    # CORRECTED: global_actions instead of actions
     action_metadatas = []
-    for action in raw_configs.actions.actions:
+    for action in raw_configs.global_actions.actions:
         action_metadata = ActionMetadata(
             id=action.id,
             name=action.name,
@@ -1512,17 +1608,41 @@ class CompiledUniverse:
     """Immutable artifact representing a fully validated universe.
 
     Per COMPILER_ARCHITECTURE.md §3.3: Complete training hand-off contract.
+
+    UPDATED (per TASK-004A-PREREQUISITES):
+    Uses HamletConfig as primary config container + additional VFS/action configs.
     """
 
     # Core config components (Per §3.3)
-    substrate: SubstrateConfig  # Spatial structure
-    variables: VariablesConfig  # VFS variable definitions
-    bars: BarsConfig  # Meter definitions
-    cascades: CascadesConfig  # Meter relationships
-    affordances: AffordanceConfigCollection  # Interactions
-    cues: CuesConfig  # Theory of Mind cues
-    actions: ActionSpaceConfig  # Global action vocabulary
-    training: TrainingConfig  # Training hyperparameters
+    # UPDATED (per TASK-004A-PREREQUISITES Part 4):
+    hamlet_config: HamletConfig  # Master configuration (substrate, bars, cascades, affordances, cues, training)
+    variables_reference: list[VariableDef]  # VFS variable definitions from variables_reference.yaml
+    global_actions: ActionSpaceConfig  # Global action vocabulary from configs/global_actions.yaml
+
+    # Convenience properties for accessing HamletConfig sections
+    @property
+    def substrate(self) -> SubstrateConfig:
+        return self.hamlet_config.substrate
+
+    @property
+    def bars(self) -> BarsConfig:
+        return self.hamlet_config.bars
+
+    @property
+    def cascades(self) -> CascadesConfig:
+        return self.hamlet_config.cascades
+
+    @property
+    def affordances(self) -> AffordanceConfigCollection:
+        return self.hamlet_config.affordances
+
+    @property
+    def cues(self) -> CuesConfig:
+        return self.hamlet_config.cues
+
+    @property
+    def training(self) -> TrainingConfig:
+        return self.hamlet_config.training
 
     # Computed metadata (Per §3.1)
     metadata: UniverseMetadata  # Core metadata contract
@@ -1539,8 +1659,13 @@ class CompiledUniverse:
     optimization_data: OptimizationData  # Tensors for fast meter dynamics
 
     def __post_init__(self):
-        """Validate universe is complete and consistent."""
+        """Validate universe is complete and consistent.
+
+        UPDATED (per TASK-004A-PREREQUISITES):
+        Uses property accessors to get HamletConfig sections.
+        """
         # Validate meter count matches
+        # CORRECTED: Use property accessor for bars
         if self.metadata.meter_count != len(self.bars.bars):
             raise ValueError(
                 f"Metadata meter_count ({self.metadata.meter_count}) "
@@ -1654,16 +1779,17 @@ def _stage_7_emit_compiled_universe(
     Stage 7: Emit immutable compiled universe.
 
     Per COMPILER_ARCHITECTURE.md §2.3 Stage 7: Create frozen artifact.
+
+    UPDATED (per TASK-004A-PREREQUISITES):
+    Uses HamletConfig as primary config container.
     """
     universe = CompiledUniverse(
-        substrate=raw_configs.substrate,
-        variables=raw_configs.variables,
-        bars=raw_configs.bars,
-        cascades=raw_configs.cascades,
-        affordances=raw_configs.affordances,
-        cues=raw_configs.cues,
-        actions=raw_configs.actions,
-        training=raw_configs.training,
+        # CORRECTED (per TASK-004A-PREREQUISITES Part 4):
+        # CompiledUniverse stores HamletConfig + additional configs
+        hamlet_config=raw_configs.hamlet_config,
+        variables_reference=raw_configs.variables_reference,
+        global_actions=raw_configs.global_actions,
+        # Metadata and optimization data
         metadata=metadata,
         observation_spec=observation_spec,
         action_space_metadata=action_space_metadata,
@@ -2240,7 +2366,7 @@ All future UAC work depends on robust compilation:
 - **Phase 7** (Caching): 4-6 hours
 - **Phase 8** (Environment Refactor): 3-4 hours
 
-**Total**: 52-72 hours (6.5-9 days)
+**Total**: 52-72 hours (6.5-9 days) **+ 8-12 hours (prerequisites) = 60-84 hours total**
 
 **Note**: +15-18h increase from original 37-54h estimate (+40-33%) due to:
 - CuesCompiler integration (+3-4h)
@@ -2248,9 +2374,18 @@ All future UAC work depends on robust compilation:
 - Rich Metadata structures (+4h)
 - Capability system validation (+6-8h)
 
-**Updated per COMPILER_ARCHITECTURE.md (authoritative reference)**
+**UPDATED (per TASK-004A-PREREQUISITES)**:
+- **Prerequisites MUST be completed first** (+8-12h)
+- Implementation plan corrected to use:
+  - `HamletConfig.load()` as primary loader (Part 4)
+  - `load_variables_reference_config()` and `load_global_actions_config()` (Part 1)
+  - `BarsConfig` type alias from `townlet.config.bar` (Part 2)
+  - `vfs_to_universe_observation_spec()` adapter (Part 3)
+- All imports and field names corrected throughout
 
-**Confidence**: High (well-defined scope, clear interfaces, aligned with architecture)
+**Updated per COMPILER_ARCHITECTURE.md (authoritative reference) + TASK-004A-PREREQUISITES**
+
+**Confidence**: High (well-defined scope, clear interfaces, aligned with architecture, prerequisites resolve blockers)
 
 ---
 
