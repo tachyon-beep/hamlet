@@ -144,9 +144,12 @@ class TestCurriculumConfigLoading:
 
     def test_load_from_all_production_configs(self):
         """Verify all production config packs have valid curriculum sections."""
+        missing_packs = []
+        validated_packs = 0
         for pack_name, config_dir in PRODUCTION_CONFIG_PACKS.items():
             if not config_dir.exists():
-                pytest.skip(f"Config pack not found: {config_dir}")
+                missing_packs.append(pack_name)
+                continue
 
             # Should load without errors
             config = load_curriculum_config(config_dir)
@@ -154,6 +157,11 @@ class TestCurriculumConfigLoading:
             assert config.min_steps_at_stage > 0, f"{pack_name}: min_steps must be positive"
             assert 0.0 <= config.entropy_gate <= 1.0, f"{pack_name}: entropy_gate must be in [0, 1]"
             assert config.survival_advance_threshold > config.survival_retreat_threshold, f"{pack_name}: advance must be > retreat"
+            validated_packs += 1
+
+        if validated_packs == 0:
+            missing = ", ".join(sorted(missing_packs)) if missing_packs else "unknown packs"
+            pytest.skip(f"No production config packs available for curriculum validation: {missing}")
 
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""

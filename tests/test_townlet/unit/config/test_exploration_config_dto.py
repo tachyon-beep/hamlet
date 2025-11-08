@@ -130,15 +130,23 @@ class TestExplorationConfigLoading:
 
     def test_load_from_all_production_configs(self):
         """Verify all production config packs have valid exploration sections."""
+        missing_packs = []
+        validated_packs = 0
         for pack_name, config_dir in PRODUCTION_CONFIG_PACKS.items():
             if not config_dir.exists():
-                pytest.skip(f"Config pack not found: {config_dir}")
+                missing_packs.append(pack_name)
+                continue
 
             # Should load without errors
             config = load_exploration_config(config_dir)
             assert config.embed_dim > 0, f"{pack_name}: embed_dim must be positive"
             assert config.variance_threshold > 0.0, f"{pack_name}: variance_threshold must be positive"
             assert config.survival_window > 0, f"{pack_name}: survival_window must be positive"
+            validated_packs += 1
+
+        if validated_packs == 0:
+            missing = ", ".join(sorted(missing_packs)) if missing_packs else "unknown packs"
+            pytest.skip(f"No production config packs available for exploration validation: {missing}")
 
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""
