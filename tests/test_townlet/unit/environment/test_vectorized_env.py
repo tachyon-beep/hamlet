@@ -613,6 +613,11 @@ class TestExecuteActions:
         )
         env.reset()
 
+        # Place agent away from borders so the UP action can't clamp back into the
+        # same cell, which previously made this test randomly fail when the
+        # sampled spawn started on y=0.
+        env.positions[0] = torch.tensor([3, 3], device=env.device, dtype=env.positions.dtype)
+
         initial_position = env.positions[0].clone()
 
         # Execute UP action (action 0 for Grid2D)

@@ -9,26 +9,12 @@ Tests verify that N-dimensional substrates work end-to-end with:
 Note: ObservationBuilder was removed in VFS integration.
 """
 
-from typing import TYPE_CHECKING
-
-import pytest
 import torch
 
 from townlet.substrate.config import SubstrateConfig
 from townlet.substrate.continuousnd import ContinuousNDSubstrate
 from townlet.substrate.factory import SubstrateFactory
 from townlet.substrate.gridnd import GridNDSubstrate
-
-# ObservationBuilder was removed in VFS integration but needed for skipped tests
-if TYPE_CHECKING:
-    from typing import Any as ObservationBuilder  # type: ignore[misc]
-else:
-
-    class ObservationBuilder:  # type: ignore[no-redef]
-        """Stub for removed ObservationBuilder (tests using it are skipped)."""
-
-        def __init__(self, *args, **kwargs):  # noqa: ARG002
-            raise NotImplementedError("ObservationBuilder removed - tests are skipped")
 
 
 class TestGridNDIntegration:
@@ -54,59 +40,6 @@ class TestGridNDIntegration:
         assert substrate.position_dim == 4
         assert substrate.action_space_size == 10  # 2*4 + 2
         assert substrate.get_observation_dim() == 4
-
-    @pytest.mark.skip(reason="TODO VFS: ObservationBuilder removed - rewrite to test via environment")
-    def test_gridnd_with_observation_builder(self):
-        """Test GridND observation encoding with ObservationBuilder."""
-        substrate = GridNDSubstrate(
-            dimension_sizes=[5, 5, 5, 5],
-            boundary="clamp",
-            distance_metric="manhattan",
-            observation_encoding="relative",
-        )
-
-        # Mock affordance data
-        affordance_names = ["Bed", "Hospital", "Job", "Store"]
-        affordances = {
-            "Bed": torch.tensor([2, 2, 2, 2], dtype=torch.long),
-            "Job": torch.tensor([4, 4, 4, 4], dtype=torch.long),
-        }
-
-        # Create observation builder
-        builder = ObservationBuilder(
-            num_agents=2,
-            grid_size=5,
-            device=torch.device("cpu"),
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            num_affordance_types=len(affordance_names),
-            affordance_names=affordance_names,
-            substrate=substrate,
-        )
-
-        # Test positions
-        positions = torch.tensor(
-            [[1, 1, 1, 1], [2, 2, 2, 2]],  # Agent 1: not on affordance
-            dtype=torch.long,  # Agent 2: on Bed
-        )
-
-        # Build observations
-        meters = torch.ones((2, 8))
-        observations = builder.build_observations(
-            positions=positions,
-            meters=meters,
-            affordances=affordances,
-        )
-
-        # Verify observation shape
-        # substrate encoding (4) + meters (8) + affordance encoding (5) + temporal (4)
-        assert observations.shape == (2, 21)
-
-        # Verify agent 2 is on Bed affordance
-        # Bed is at index 0 in affordance_names
-        agent2_affordance_idx = 4 + 8  # After substrate + meters (before temporal)
-        assert observations[1, agent2_affordance_idx] == 1.0  # Bed is at index 0
 
     def test_gridnd_movement_integration(self):
         """Test GridND movement with action selection."""
@@ -297,61 +230,6 @@ class TestContinuousNDIntegration:
         assert substrate.position_dim == 4
         assert substrate.action_space_size == 10  # 2*4 + 2
         assert substrate.get_observation_dim() == 4
-
-    @pytest.mark.skip(reason="TODO VFS: ObservationBuilder removed - rewrite to test via environment")
-    def test_continuousnd_with_observation_builder(self):
-        """Test ContinuousND observation encoding with ObservationBuilder."""
-        substrate = ContinuousNDSubstrate(
-            bounds=[(0.0, 10.0), (0.0, 10.0), (0.0, 10.0), (0.0, 10.0)],
-            boundary="clamp",
-            movement_delta=0.5,
-            interaction_radius=1.0,
-            distance_metric="euclidean",
-            observation_encoding="relative",
-        )
-
-        # Mock affordance data
-        affordance_names = ["Bed", "Hospital", "Job", "Store"]
-        affordances = {
-            "Bed": torch.tensor([2.0, 2.0, 2.0, 2.0], dtype=torch.float32),
-            "Job": torch.tensor([8.0, 8.0, 8.0, 8.0], dtype=torch.float32),
-        }
-
-        # Create observation builder
-        builder = ObservationBuilder(
-            num_agents=2,
-            grid_size=10,  # Not used for continuous, but needed for builder
-            device=torch.device("cpu"),
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            num_affordance_types=len(affordance_names),
-            affordance_names=affordance_names,
-            substrate=substrate,
-        )
-
-        # Test positions
-        positions = torch.tensor(
-            [[1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0]],
-            dtype=torch.float32,
-        )
-
-        # Build observations
-        meters = torch.ones((2, 8))
-        observations = builder.build_observations(
-            positions=positions,
-            meters=meters,
-            affordances=affordances,
-        )
-
-        # Verify observation shape
-        # substrate encoding (4) + meters (8) + affordance encoding (5) + temporal (4)
-        assert observations.shape == (2, 21)
-
-        # Verify agent 2 is on Bed affordance (within interaction_radius=1.0)
-        # Euclidean distance from [2, 2, 2, 2] to [2, 2, 2, 2] is 0, so it's within radius
-        agent2_affordance_idx = 4 + 8  # After substrate + meters (before temporal)
-        assert observations[1, agent2_affordance_idx] == 1.0  # Bed is at index 0
 
     def test_continuousnd_movement_integration(self):
         """Test ContinuousND movement with action selection."""
