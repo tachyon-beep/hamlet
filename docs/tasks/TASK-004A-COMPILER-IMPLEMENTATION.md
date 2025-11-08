@@ -1,10 +1,14 @@
 # TASK-004A: Universe Compiler Implementation
 
-**Status**: Planned
+**Status**: Planned (Aligned with COMPILER_ARCHITECTURE.md v1.0)
 **Priority**: HIGH (Foundational for UAC system integrity)
-**Estimated Effort**: 46-66 hours (6-8 days) - UPDATED from 40-58h (+6-8h for capability system validation)
-**Dependencies**: TASK-005 (Variable-Size Meter System - recommended but not required)
-**Enables**: All future UAC work (robust compilation is foundation)
+**Estimated Effort**: 52-72 hours (6.5-9 days)
+  - **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
+  - **Additions**: CuesCompiler (+3-4h), Capability Validation (+6-8h), ObservationSpec (+2h), Rich Metadata (+4h)
+  - **Total additions**: +15-18h (+40-33% increase)
+**Dependencies**: TASK-003 (UAC Core DTOs - COMPLETE)
+**Enables**: All future UAC work + TASK-005 (BAC - requires ObservationSpec)
+**Authoritative Reference**: `docs/architecture/COMPILER_ARCHITECTURE.md`
 
 ---
 
@@ -201,6 +205,7 @@ class RawConfigs:
     bars: BarsConfig
     cascades: CascadesConfig
     affordances: AffordanceConfigCollection
+    cues: CuesConfig  # NEW: Per COMPILER_ARCHITECTURE.md §2.1
     training: TrainingConfig
     # Future: substrate, actions when TASK-002A/003 implemented
 
@@ -259,9 +264,11 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
 
 ---
 
-### Phase 2: Symbol Table & Reference Resolution (4-6 hours)
+### Phase 2: Symbol Table & Reference Resolution (7-10 hours)
 
 **Goal**: Implement cross-file reference resolution with clear error messages.
+
+**UPDATED** from 4-6h: Added cues loading and validation (+3-4h) per COMPILER_ARCHITECTURE.md §2.1
 
 #### 2.1: Create UniverseSymbolTable
 
@@ -274,6 +281,7 @@ class UniverseSymbolTable:
     def __init__(self):
         self.meters: dict[str, BarConfig] = {}
         self.affordances: dict[str, AffordanceConfig] = {}
+        self.cues: dict[str, CueConfig] = {}  # NEW: Per COMPILER_ARCHITECTURE.md
         # Future: actions, stages when TASK-002A (Action Space) implemented
 
     def register_meter(self, name: str, config: BarConfig):
@@ -295,6 +303,16 @@ class UniverseSymbolTable:
                 hints=["Each affordance must have unique ID"]
             )
         self.affordances[id] = config
+
+    def register_cue(self, meter_name: str, config: CueConfig):
+        """Register cue for later validation (NEW)."""
+        if meter_name in self.cues:
+            raise CompilationError(
+                stage="Stage 2: Symbol Registration",
+                errors=[f"Duplicate cue for meter: '{meter_name}'"],
+                hints=["Each meter can have at most one cue definition"]
+            )
+        self.cues[meter_name] = config
 
     def resolve_meter_reference(self, name: str, location: str) -> BarConfig:
         """
@@ -473,9 +491,11 @@ def _stage_3_resolve_references(
 **Success Criteria**:
 
 - [ ] Symbol table registers all meters and affordances
+- [ ] Symbol table registers all cues (NEW)
 - [ ] Duplicate names detected and reported
 - [ ] Dangling references caught with clear error messages
 - [ ] Error messages list valid alternatives
+- [ ] Cues loaded from cues.yaml and validated (NEW)
 
 ---
 
@@ -647,7 +667,32 @@ def _stage_4_cross_validate(
                             f"min ({constraint.min}) must be < max ({constraint.max})"
                         )
 
-    # 5. Capability conflicts (NEW - from research Finding 1)
+    # 5. Cues validation (NEW - Per COMPILER_ARCHITECTURE.md §5.3)
+    for meter_name, cue_config in raw_configs.cues.items():
+        # Validate cues reference valid meters
+        if meter_name not in symbol_table.meters:
+            errors.add_error(
+                f"cues.yaml:{meter_name}: References non-existent meter. "
+                f"Available meters: {list(symbol_table.meters.keys())}"
+            )
+            continue
+
+        # Validate ranges cover full [0.0, 1.0] domain
+        ranges = [(cue.min_value, cue.max_value) for cue in cue_config.visual_cues]
+        if not self._ranges_cover_domain(ranges, 0.0, 1.0):
+            errors.add_error(
+                f"cues.yaml:{meter_name}: Cue ranges don't cover full [0.0, 1.0] domain. "
+                f"Every meter value must map to exactly one cue."
+            )
+
+        # Check for overlapping ranges
+        if self._ranges_overlap(ranges):
+            errors.add_error(
+                f"cues.yaml:{meter_name}: Cue ranges overlap. "
+                f"Each meter value must map to exactly ONE cue."
+            )
+
+    # 6. Capability conflicts (NEW - from research Finding 1)
     for aff in raw_configs.affordances.affordances:
         if not aff.capabilities:
             continue
@@ -767,6 +812,68 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
             dfs(node, [])
 
     return cycles
+
+
+def _ranges_cover_domain(
+    self,
+    ranges: list[tuple[float, float]],
+    domain_min: float,
+    domain_max: float
+) -> bool:
+    """
+    Check if ranges cover the full domain without gaps.
+
+    Args:
+        ranges: List of (min, max) tuples
+        domain_min: Minimum value of domain (e.g., 0.0)
+        domain_max: Maximum value of domain (e.g., 1.0)
+
+    Returns:
+        True if ranges cover [domain_min, domain_max] without gaps
+    """
+    # Sort ranges by start value
+    sorted_ranges = sorted(ranges, key=lambda r: r[0])
+
+    # Check first range starts at domain_min
+    if sorted_ranges[0][0] != domain_min:
+        return False
+
+    # Check ranges are contiguous (no gaps)
+    for i in range(len(sorted_ranges) - 1):
+        current_end = sorted_ranges[i][1]
+        next_start = sorted_ranges[i + 1][0]
+        if current_end != next_start:
+            return False
+
+    # Check last range ends at domain_max
+    if sorted_ranges[-1][1] != domain_max:
+        return False
+
+    return True
+
+
+def _ranges_overlap(self, ranges: list[tuple[float, float]]) -> bool:
+    """
+    Check if any ranges overlap.
+
+    Args:
+        ranges: List of (min, max) tuples
+
+    Returns:
+        True if any ranges overlap
+    """
+    # Sort ranges by start value
+    sorted_ranges = sorted(ranges, key=lambda r: r[0])
+
+    # Check for overlaps
+    for i in range(len(sorted_ranges) - 1):
+        current_end = sorted_ranges[i][1]
+        next_start = sorted_ranges[i + 1][0]
+        # Overlap if current range extends past start of next range
+        if current_end > next_start:
+            return True
+
+    return False
 ```
 
 **Success Criteria**:
@@ -775,6 +882,11 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
 - [ ] Economic validation warns on poverty traps
 - [ ] Circularity detection catches cascade cycles
 - [ ] Temporal validation catches invalid operating hours
+- [ ] **Cues validation** (NEW - Per COMPILER_ARCHITECTURE.md §5.3)
+  - [ ] Validates cues reference valid meters
+  - [ ] Validates ranges cover full [0.0, 1.0] domain
+  - [ ] Detects overlapping ranges
+  - [ ] Helper methods `_ranges_cover_domain()` and `_ranges_overlap()` work correctly
 - [ ] **Substrate-action validation catches incompatible action spaces** (NEW)
   - [ ] Square grid requires 4-way movement
   - [ ] Cubic grid requires 6-way movement
@@ -790,9 +902,11 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
 
 ---
 
-### Phase 5: Metadata Computation (3-4 hours)
+### Phase 5: Metadata Computation (5-6 hours)
 
-**Goal**: Calculate derived properties (obs_dim, action_dim, etc.)
+**Goal**: Calculate derived properties (obs_dim, action_dim, etc.) + build ObservationSpec
+
+**UPDATED** from 3-4h: Added ObservationSpec (+2h) per COMPILER_ARCHITECTURE.md §3.2 (BLOCKS TASK-005 BAC)
 
 #### 5.1: Create UniverseMetadata
 
@@ -838,6 +952,71 @@ class UniverseMetadata:
     config_version: str
     compiler_version: str
     compiled_at: str  # ISO timestamp
+```
+
+#### 5.1b: Create ObservationSpec (NEW - Per COMPILER_ARCHITECTURE.md §3.2)
+
+**File**: `src/townlet/universe/observation_spec.py` (NEW)
+
+**Critical**: Required for UAC → BAC data contract. Without this, BAC can only build simple MLPs, not custom encoders.
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass
+class ObservationField:
+    """Single field in observation vector."""
+    name: str  # e.g., "energy", "position", "local_grid"
+    type: Literal["scalar", "vector", "categorical", "spatial_grid"]
+    dims: int  # Number of dimensions this field occupies
+    start_index: int  # Index in flat observation vector
+    end_index: int  # Exclusive end index (for slicing)
+    scope: Literal["global", "agent", "agent_private"]
+    description: str
+
+    # Semantic metadata for custom encoders
+    semantic_type: str | None = None  # "position", "meter", "affordance", "cue", "temporal", "vision"
+    categorical_labels: list[str] | None = None  # For one-hot encodings
+
+
+@dataclass
+class ObservationSpec:
+    """Complete observation specification (UAC → BAC contract)."""
+    total_dims: int  # Sum of all field dims (this is obs_dim)
+    fields: list[ObservationField]  # All observation fields
+    encoding_version: str = "1.0"  # For checkpoint compatibility
+
+    # === Query Methods ===
+
+    def get_field_by_name(self, name: str) -> ObservationField:
+        """Lookup field by name."""
+        for field in self.fields:
+            if field.name == name:
+                return field
+        raise KeyError(f"Field '{name}' not found in observation spec")
+
+    def get_fields_by_type(self, field_type: str) -> list[ObservationField]:
+        """Get all fields of given type (e.g., all 'spatial_grid' fields)."""
+        return [f for f in self.fields if f.type == field_type]
+
+    def get_fields_by_semantic_type(self, semantic: str) -> list[ObservationField]:
+        """Get fields by semantic meaning (e.g., all 'meter' fields)."""
+        return [f for f in self.fields if f.semantic_type == semantic]
+```
+
+**Integration**: Use existing VFS `VFSObservationSpecBuilder` - infrastructure already exists!
+
+```python
+# In Stage 5 implementation:
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+
+obs_spec_builder = VFSObservationSpecBuilder(
+    variable_registry=raw_configs.vfs_registry,
+    substrate=raw_configs.substrate,
+)
+observation_spec = obs_spec_builder.build_spec()
 ```
 
 #### 5.2: Implement Stage 5 (Compute Metadata)
@@ -942,12 +1121,19 @@ def _stage_5_compute_metadata(
 - [ ] Observation dim scales with meter_count
 - [ ] Observation dim correct for partial observability
 - [ ] Economic metadata computed correctly
+- [ ] **ObservationSpec built correctly** (NEW - Per COMPILER_ARCHITECTURE.md §3.2)
+  - [ ] ObservationSpec.total_dims matches computed observation_dim
+  - [ ] All observation fields have correct start/end indices
+  - [ ] VFS integration uses existing VFSObservationSpecBuilder
+  - [ ] ObservationSpec enables custom neural encoders (BLOCKS TASK-005)
 
 ---
 
-### Phase 6: Optimization & CompiledUniverse (4-6 hours)
+### Phase 6: Optimization & CompiledUniverse (8-10 hours)
 
-**Goal**: Pre-compute optimization data and emit immutable artifact.
+**Goal**: Pre-compute optimization data, build rich metadata, and emit immutable artifact.
+
+**UPDATED** from 4-6h: Added rich metadata structures (+4h) per COMPILER_ARCHITECTURE.md §3.3
 
 #### 6.1: Create OptimizationData
 
@@ -977,6 +1163,90 @@ class OptimizationData:
 
     # Affordance position map (populated at reset)
     affordance_position_map: dict[str, torch.Tensor | None]
+```
+
+#### 6.1b: Create Rich Metadata Structures (NEW - Per COMPILER_ARCHITECTURE.md §3.3)
+
+**File**: `src/townlet/universe/rich_metadata.py` (NEW)
+
+**Purpose**: Enable training system to log per-meter metrics, track affordance usage, apply action masks.
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass
+class MeterInfo:
+    """Single meter metadata."""
+    name: str
+    index: int  # Index in meters tensor
+    critical: bool  # Agent dies if reaches 0?
+    initial_value: float
+    observable: bool  # In observation space?
+    description: str
+
+
+@dataclass
+class MeterMetadata:
+    """Collection of all meter metadata."""
+    meters: list[MeterInfo]
+
+    def get_meter_by_name(self, name: str) -> MeterInfo:
+        """Lookup meter by name."""
+        for meter in self.meters:
+            if meter.name == name:
+                return meter
+        raise KeyError(f"Meter '{name}' not found")
+
+
+@dataclass
+class ActionMetadata:
+    """Metadata for single action."""
+    id: int
+    name: str
+    type: Literal["movement", "interaction", "passive", "custom"]
+    enabled: bool
+    source: Literal["substrate", "custom", "affordance"]
+    costs: dict[str, float]  # meter_name → cost
+    description: str
+
+
+@dataclass
+class ActionSpaceMetadata:
+    """Collection of all action metadata."""
+    actions: list[ActionMetadata]
+    action_dim: int  # Total actions (including disabled)
+
+    def get_action_by_id(self, action_id: int) -> ActionMetadata:
+        """Lookup action by ID."""
+        for action in self.actions:
+            if action.id == action_id:
+                return action
+        raise KeyError(f"Action ID {action_id} not found")
+
+
+@dataclass
+class AffordanceInfo:
+    """Single affordance metadata."""
+    name: str
+    id: str
+    index: int  # Index in affordance list
+    type: str  # "resource", "service", "hazard", etc.
+    description: str
+
+
+@dataclass
+class AffordanceMetadata:
+    """Collection of all affordance metadata."""
+    affordances: list[AffordanceInfo]
+
+    def get_affordance_by_id(self, aff_id: str) -> AffordanceInfo:
+        """Lookup affordance by ID."""
+        for aff in self.affordances:
+            if aff.id == aff_id:
+                return aff
+        raise KeyError(f"Affordance '{aff_id}' not found")
 ```
 
 #### 6.2: Implement Stage 6 (Optimize)
@@ -1141,6 +1411,12 @@ def _stage_7_emit_compiled_universe(
 - [ ] Action mask table has correct shape [24, num_affordances]
 - [ ] CompiledUniverse is frozen (immutable)
 - [ ] CompiledUniverse validates consistency
+- [ ] **Rich metadata structures built correctly** (NEW - Per COMPILER_ARCHITECTURE.md §3.3)
+  - [ ] MeterMetadata contains all meters with proper indexing
+  - [ ] ActionSpaceMetadata contains all actions with costs
+  - [ ] AffordanceMetadata contains all affordances with descriptions
+  - [ ] Metadata lookup methods work correctly (get_meter_by_name, get_action_by_id, etc.)
+  - [ ] Rich metadata enables training system integration
 
 ---
 
@@ -1541,21 +1817,47 @@ All future UAC work depends on robust compilation:
 - **Phase 8** (Environment Refactor): 3-4 hours
 - **Subtotal (Original)**: 37-54 hours
 
-**Research Integration Extensions**:
+**COMPILER_ARCHITECTURE.md Additions** (Aligned with authoritative reference):
 
+- **Phase 2 Extension** (CuesCompiler): +3-4 hours
+  - Cue loading from cues.yaml
+  - Cue registration in symbol table
+  - Cue meter reference validation
 - **Phase 4 Extension** (Capability system validation): +6-8 hours
   - Affordance availability validation (Gap 1)
   - Action cost meter references (Gap 2)
   - Capability conflict detection (Finding 1)
   - Effect pipeline consistency (Finding 1)
+  - Cues validation (range coverage, overlaps)
+- **Phase 5 Extension** (ObservationSpec): +2 hours
+  - UAC → BAC data contract (BLOCKS TASK-005)
+  - VFS integration with VFSObservationSpecBuilder
+- **Phase 6 Extension** (Rich Metadata): +4 hours
+  - MeterMetadata, ActionSpaceMetadata, AffordanceMetadata
+  - Training system integration structures
 
-**Total**: 43-62 hours → rounded to **46-66 hours** (6-8 days)
+**Updated Breakdown**:
 
-**Note**: +6-8h represents +16-15% increase from original estimate due to capability system complexity.
+- **Phase 1** (Core Compiler): 11-16 hours
+- **Phase 2** (Symbol Table + CuesCompiler): 7-10 hours
+- **Phase 3** (Error Collection): 4-6 hours
+- **Phase 4** (Cross-Validation + Cues): 10-14 hours
+- **Phase 5** (Metadata + ObservationSpec): 5-6 hours
+- **Phase 6** (Optimization + Rich Metadata): 8-10 hours
+- **Phase 7** (Caching): 4-6 hours
+- **Phase 8** (Environment Refactor): 3-4 hours
 
-**Updated from research estimate (40-58 hours) based on detailed breakdown**
+**Total**: 52-72 hours (6.5-9 days)
 
-**Confidence**: High (well-defined scope, clear interfaces)
+**Note**: +15-18h increase from original 37-54h estimate (+40-33%) due to:
+- CuesCompiler integration (+3-4h)
+- ObservationSpec UAC→BAC contract (+2h)
+- Rich Metadata structures (+4h)
+- Capability system validation (+6-8h)
+
+**Updated per COMPILER_ARCHITECTURE.md (authoritative reference)**
+
+**Confidence**: High (well-defined scope, clear interfaces, aligned with architecture)
 
 ---
 
