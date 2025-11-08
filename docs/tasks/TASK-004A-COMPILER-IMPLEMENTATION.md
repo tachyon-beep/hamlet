@@ -2320,6 +2320,814 @@ All future UAC work depends on robust compilation:
 
 ---
 
+### Phase 3 Enhancement: Error Codes & Source Maps (3-4 hours)
+
+**Goal**: Add searchable error codes and file:line references for better developer experience.
+
+**Context**: From external review - improves debugging and error searchability.
+
+#### 3.1: Add Error Codes to CompilationError
+
+**File**: `src/townlet/universe/errors.py` (modify)
+
+```python
+class CompilationError(Exception):
+    """Raised when universe compilation fails."""
+
+    # Error code registry
+    ERROR_CODES = {
+        "UAC-PARSE-001": "File not found",
+        "UAC-PARSE-002": "Malformed YAML",
+        "UAC-PARSE-003": "Schema validation failed",
+        "UAC-SYM-001": "Duplicate symbol",
+        "UAC-RES-001": "Dangling reference",
+        "UAC-RES-002": "Circular dependency",
+        "UAC-VAL-001": "Spatial impossibility",
+        "UAC-VAL-002": "Economic imbalance",
+        "UAC-VAL-003": "Temporal conflict",
+        "UAC-VAL-004": "Capability conflict",
+        "UAC-VAL-005": "Economic infeasibility",
+        "UAC-VAL-006": "Security violation",
+    }
+
+    def __init__(
+        self,
+        code: str,  # NEW: e.g., "UAC-RES-001"
+        stage: str,
+        errors: list[str],
+        hints: list[str] | None = None,
+        locations: dict[str, tuple[str, int]] | None = None  # NEW: error → (file, line)
+    ):
+        self.code = code
+        self.stage = stage
+        self.errors = errors
+        self.hints = hints or []
+        self.locations = locations or {}
+
+        # Build comprehensive error message
+        message_parts = [
+            f"[{code}] Universe Compilation Failed ({stage})",
+            "",
+            f"Found {len(errors)} error(s):",
+            ""
+        ]
+
+        for i, error in enumerate(errors, 1):
+            # Add file:line if available
+            location_key = error.split(":")[0] if ":" in error else error
+            if location_key in self.locations:
+                file, line = self.locations[location_key]
+                message_parts.append(f"  {i}. {error} (at {file}:{line})")
+            else:
+                message_parts.append(f"  {i}. {error}")
+
+        if hints:
+            message_parts.append("")
+            message_parts.append("Hints:")
+            for hint in hints:
+                message_parts.append(f"  - {hint}")
+
+        message_parts.append("")
+        message_parts.append(f"Error code reference: {self.ERROR_CODES.get(code, 'Unknown')}")
+
+        super().__init__("\n".join(message_parts))
+```
+
+#### 3.2: Implement YAML Source Map Tracking
+
+**File**: `src/townlet/universe/source_map.py` (NEW)
+
+```python
+"""Source map tracking for YAML files."""
+from pathlib import Path
+import yaml
+
+
+class SourceMap:
+    """Track YAML keys to file:line mappings."""
+
+    def __init__(self):
+        self.key_locations: dict[str, tuple[str, int]] = {}
+
+    def track_yaml_file(self, yaml_path: Path, prefix: str = ""):
+        """
+        Parse YAML and track key locations.
+
+        Args:
+            yaml_path: Path to YAML file
+            prefix: Key prefix (e.g., "bars.yaml:")
+        """
+        # Simple line-based tracking (not perfect but good enough)
+        with open(yaml_path) as f:
+            lines = f.readlines()
+
+        current_key = None
+        for line_num, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            # Track top-level keys
+            if stripped and not stripped.startswith("#") and ":" in stripped:
+                key = stripped.split(":")[0].strip()
+                if key:
+                    full_key = f"{prefix}{key}"
+                    self.key_locations[full_key] = (str(yaml_path), line_num)
+
+    def get_location(self, key: str) -> tuple[str, int] | None:
+        """Get (file, line) for key."""
+        return self.key_locations.get(key)
+```
+
+#### 3.3: Update Error Raising to Include Codes
+
+**Example Usage** (in Stage 3):
+
+```python
+# Build source map during Stage 1
+source_map = SourceMap()
+source_map.track_yaml_file(config_dir / "cascades.yaml", prefix="cascades.yaml:")
+
+# Use in Stage 3
+for cascade in raw_configs.cascades.cascades:
+    try:
+        symbol_table.resolve_meter_reference(cascade.source, ...)
+    except ReferenceError as e:
+        key = f"cascades.yaml:{cascade.name}"
+        location = source_map.get_location(key)
+
+        raise CompilationError(
+            code="UAC-RES-001",
+            stage="Stage 3: Reference Resolution",
+            errors=[str(e)],
+            hints=["Check for typos in meter names (case-sensitive)"],
+            locations={key: location} if location else {}
+        )
+```
+
+**Success Criteria**:
+- [ ] All CompilationError instances have error codes
+- [ ] File:line shown in error messages when available
+- [ ] Error codes documented and searchable
+- [ ] Source map tracks YAML key locations
+
+---
+
+### Phase 4 Expansion: Security Hardening (1-2 hours)
+
+**Goal**: Prevent config injection and silent failures from typos.
+
+**Context**: From external review - critical for production deployments.
+
+#### 4.1: Add Pydantic Strict Mode
+
+**Files**: All DTO configs
+
+```python
+# In ALL Pydantic models
+from pydantic import BaseModel, ConfigDict
+
+class BarConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # NEW: Reject unknown fields
+
+    name: str
+    index: int
+    # ... existing fields
+```
+
+Apply to:
+- `src/townlet/config/bar.py`: `BarConfig`
+- `src/townlet/config/training.py`: `TrainingConfig`
+- `src/townlet/config/population.py`: `PopulationConfig`
+- `src/townlet/config/curriculum.py`: `CurriculumConfig`
+- `src/townlet/environment/cascade_config.py`: `CascadeConfig`, `BarsConfig`, `CascadesConfig`
+- `src/townlet/environment/affordance_config.py`: `AffordanceConfig`, `AffordanceConfigCollection`
+- `src/townlet/config/cues.py`: `CueConfig`, `CuesConfig`
+- `src/townlet/vfs/schema.py`: `VariableDef`, `ObservationField`
+- All Universe DTOs
+
+#### 4.2: Add Safety Limits Validation
+
+**File**: `src/townlet/universe/compiler.py` (in Stage 4)
+
+```python
+def _stage_4_cross_validate(
+    self,
+    raw_configs: RawConfigs,
+    symbol_table: UniverseSymbolTable,
+    errors: CompilationErrorCollector
+):
+    """Stage 4: Validate cross-file constraints."""
+
+    # NEW: Safety limits (prevent pathological configs)
+    MAX_METERS = 100
+    MAX_AFFORDANCES = 100
+    MAX_CASCADES = 500
+    MAX_ACTIONS = 50
+    MAX_VARIABLES = 200
+
+    if len(raw_configs.bars.bars) > MAX_METERS:
+        raise CompilationError(
+            code="UAC-VAL-006",
+            stage="Stage 4: Security Validation",
+            errors=[
+                f"Too many meters: {len(raw_configs.bars.bars)} > {MAX_METERS}. "
+                "This may indicate config injection or accidental duplication."
+            ],
+            hints=["Review bars.yaml for duplicates or malicious content"]
+        )
+
+    if len(raw_configs.affordances.affordances) > MAX_AFFORDANCES:
+        raise CompilationError(
+            code="UAC-VAL-006",
+            stage="Stage 4: Security Validation",
+            errors=[
+                f"Too many affordances: {len(raw_configs.affordances.affordances)} > {MAX_AFFORDANCES}. "
+                "This may indicate config injection."
+            ],
+            hints=["Review affordances.yaml for suspicious entries"]
+        )
+
+    if len(raw_configs.cascades.cascades) > MAX_CASCADES:
+        raise CompilationError(
+            code="UAC-VAL-006",
+            stage="Stage 4: Security Validation",
+            errors=[
+                f"Too many cascades: {len(raw_configs.cascades.cascades)} > {MAX_CASCADES}. "
+                "This may cause performance issues or memory exhaustion."
+            ],
+            hints=["Simplify cascade relationships"]
+        )
+
+    # ... existing validation
+```
+
+**Success Criteria**:
+- [ ] All Pydantic models use `extra="forbid"`
+- [ ] Unknown fields in YAML raise clear errors
+- [ ] Safety limits enforced (meters, affordances, cascades)
+- [ ] Error messages indicate security concern
+
+---
+
+### Phase 4 Expansion: Economic Feasibility (4-6 hours)
+
+**Goal**: Ensure configs are not just balanced, but actually winnable.
+
+**Context**: From external review - simple "income >= costs" check insufficient.
+
+#### 4.1: Add Feasibility Checks
+
+**File**: `src/townlet/universe/compiler.py` (expand Stage 4)
+
+```python
+def _validate_economic_feasibility(
+    self,
+    raw_configs: RawConfigs,
+    symbol_table: UniverseSymbolTable,
+    errors: CompilationErrorCollector
+):
+    """
+    Validate universe is economically feasible (winnable).
+
+    Checks:
+    1. Basic balance: income >= costs
+    2. Operating hours: income-generating affordances have sufficient uptime
+    3. Depletion sustainability: restoration exceeds baseline decay
+    4. Capacity constraints: multiple agents can access critical resources
+    """
+    # 1. Basic balance (existing)
+    total_income = self._compute_max_income(raw_configs.affordances)
+    total_costs = self._compute_total_costs(raw_configs.affordances)
+
+    if total_income < total_costs:
+        errors.add_error(
+            f"[UAC-VAL-002] Economic imbalance: Income ({total_income:.2f}) < "
+            f"Costs ({total_costs:.2f}). Universe is a poverty trap."
+        )
+
+    # 2. Operating hours feasibility (NEW)
+    income_hours_per_day = self._count_income_hours(raw_configs.affordances)
+    cost_hours_per_day = 24  # Costs accrue continuously
+
+    if income_hours_per_day < cost_hours_per_day * 0.5:
+        errors.add_warning(
+            f"[UAC-VAL-002] Economic stress: Income available {income_hours_per_day}h/day, "
+            f"costs accrue 24h/day. Agents may struggle to sustain."
+        )
+
+    # 3. Depletion sustainability (NEW)
+    critical_meters = [bar for bar in raw_configs.bars.bars if bar.critical]
+
+    for bar in critical_meters:
+        depletion_per_tick = bar.base_depletion
+        max_restoration_per_tick = self._compute_max_restoration_for_meter(
+            bar.name, raw_configs.affordances
+        )
+
+        if depletion_per_tick > max_restoration_per_tick:
+            errors.add_error(
+                f"[UAC-VAL-005] Meter '{bar.name}' unsustainable: "
+                f"Depletion ({depletion_per_tick:.4f}/tick) > "
+                f"Max restoration ({max_restoration_per_tick:.4f}/tick). "
+                f"Agent will inevitably die."
+            )
+
+    # 4. Capacity constraints (NEW)
+    if raw_configs.training.num_agents > 1:
+        critical_affordances = self._find_critical_path_affordances(raw_configs)
+
+        for aff_id in critical_affordances:
+            aff = symbol_table.affordances[aff_id]
+            capacity = getattr(aff, 'capacity', None)
+
+            if capacity and capacity < raw_configs.training.num_agents:
+                errors.add_warning(
+                    f"[UAC-VAL-005] Affordance '{aff_id}' has capacity {capacity} "
+                    f"but {raw_configs.training.num_agents} agents. "
+                    f"Contention may cause starvation."
+                )
+
+
+def _count_income_hours(self, affordances: AffordanceConfigCollection) -> float:
+    """Count hours per day when income-generating affordances are available."""
+    income_affordances = [
+        aff for aff in affordances.affordances
+        if any(effect.meter == "money" and effect.delta > 0
+               for effect in aff.effects)
+    ]
+
+    if not income_affordances:
+        return 0.0
+
+    # Compute union of operating hours
+    total_hours = 0.0
+    for aff in income_affordances:
+        if hasattr(aff, 'operating_hours'):
+            open_hour, close_hour = aff.operating_hours
+            hours = (close_hour - open_hour) % 24
+            total_hours = max(total_hours, hours)
+        else:
+            total_hours = 24.0  # Always available
+
+    return total_hours
+
+
+def _compute_max_restoration_for_meter(
+    self,
+    meter_name: str,
+    affordances: AffordanceConfigCollection
+) -> float:
+    """Compute maximum restoration per tick for a meter."""
+    max_restoration = 0.0
+
+    for aff in affordances.affordances:
+        for effect in aff.effects:
+            if effect.meter == meter_name and effect.delta > 0:
+                max_restoration = max(max_restoration, effect.delta)
+
+    return max_restoration
+
+
+def _find_critical_path_affordances(self, raw_configs: RawConfigs) -> list[str]:
+    """Identify affordances on critical path for survival."""
+    # Simple heuristic: affordances that restore critical meters
+    critical_meters = {bar.name for bar in raw_configs.bars.bars if bar.critical}
+    critical_affordances = set()
+
+    for aff in raw_configs.affordances.affordances:
+        restores_critical = any(
+            effect.meter in critical_meters and effect.delta > 0
+            for effect in aff.effects
+        )
+        if restores_critical:
+            critical_affordances.add(aff.id)
+
+    return list(critical_affordances)
+```
+
+**Success Criteria**:
+- [ ] Operating hours feasibility checked
+- [ ] Depletion sustainability validated
+- [ ] Capacity constraints checked for multi-agent
+- [ ] Clear error messages for infeasible configs
+- [ ] Warnings for stressed but possible configs
+
+---
+
+### Phase 5 Enhancement: Provenance Tracking (2-3 hours)
+
+**Goal**: Track not just config hash, but compiler version, code commit, and library versions.
+
+**Context**: From external review - critical for reproducibility and debugging.
+
+#### 5.1: Expand UniverseMetadata with Provenance
+
+**File**: `src/townlet/universe/metadata.py` (modify)
+
+```python
+@dataclass(frozen=True)
+class UniverseMetadata:
+    """Derived metadata about compiled universe."""
+
+    # Existing fields...
+    config_hash: str  # SHA-256 of normalized YAML contents
+    config_version: str
+    compiler_version: str
+    compiled_at: str
+
+    # NEW: Provenance tracking (from external review)
+    provenance_id: str  # SHA-256 of (config + compiler + code + deps)
+    compiler_git_sha: str  # Git commit that built compiler
+    python_version: str  # e.g., "3.11.5"
+    torch_version: str  # e.g., "2.1.0"
+    pydantic_version: str  # e.g., "2.5.0"
+
+    # Existing fields...
+```
+
+#### 5.2: Implement Provenance Computation
+
+**File**: `src/townlet/universe/compiler.py` (in Stage 5)
+
+```python
+def _compute_provenance_id(
+    self,
+    config_hash: str,
+    compiler_version: str,
+    git_sha: str,
+    python_version: str,
+    torch_version: str,
+    pydantic_version: str
+) -> str:
+    """
+    Compute provenance ID from all inputs that affect semantics.
+
+    Provenance ID = SHA-256(config + compiler + code + deps)
+
+    This ensures that ANY change to config, compiler code, or library
+    versions produces a different provenance ID, enabling true reproducibility.
+    """
+    import hashlib
+
+    components = "|".join([
+        config_hash,
+        compiler_version,
+        git_sha,
+        python_version,
+        torch_version,
+        pydantic_version
+    ])
+
+    return hashlib.sha256(components.encode("utf-8")).hexdigest()
+
+
+def _get_git_sha(self) -> str:
+    """Get current git commit SHA."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except:
+        return "unknown"
+
+
+def _stage_5_compute_metadata(
+    self,
+    config_dir: Path,
+    raw_configs: RawConfigs,
+    symbol_table: UniverseSymbolTable
+) -> tuple[UniverseMetadata, ObservationSpec]:
+    """Stage 5: Compute metadata from validated configs."""
+
+    # Existing metadata computation...
+
+    # NEW: Provenance tracking
+    import sys
+    import torch
+    import pydantic
+
+    compiler_git_sha = self._get_git_sha()
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    torch_version = torch.__version__
+    pydantic_version = pydantic.__version__
+
+    provenance_id = self._compute_provenance_id(
+        config_hash=config_hash,
+        compiler_version=compiler_version,
+        git_sha=compiler_git_sha,
+        python_version=python_version,
+        torch_version=torch_version,
+        pydantic_version=pydantic_version
+    )
+
+    metadata = UniverseMetadata(
+        # Existing fields...
+        config_hash=config_hash,
+        config_version=config_version,
+        compiler_version=compiler_version,
+        compiled_at=compiled_at,
+        # NEW: Provenance fields
+        provenance_id=provenance_id,
+        compiler_git_sha=compiler_git_sha,
+        python_version=python_version,
+        torch_version=torch_version,
+        pydantic_version=pydantic_version,
+        # ... rest of fields
+    )
+
+    return (metadata, observation_spec)
+```
+
+**Success Criteria**:
+- [ ] Provenance ID computed from all semantic inputs
+- [ ] Git SHA captured (or "unknown" if not in repo)
+- [ ] Library versions captured
+- [ ] Provenance ID stored in metadata
+- [ ] Checkpoints include provenance for debugging
+
+---
+
+### Phase 5 Enhancement: ObservationSpec Field UUIDs (2-3 hours)
+
+**Goal**: Protect against silent field reordering breaking checkpoints.
+
+**Context**: From external review - field indices can drift, causing networks to read wrong features.
+
+#### 5.1: Add UUID Field to ObservationField
+
+**File**: `src/townlet/universe/dto/observation_spec.py` (modify)
+
+```python
+@dataclass(frozen=True)
+class ObservationField:
+    """Single field in flattened observation vector."""
+
+    uuid: str  # NEW: Stable identifier (semantic-based, not index-based)
+    name: str
+    type: str
+    dims: int
+    start_index: int
+    end_index: int
+    scope: str
+    description: str
+    semantic_type: str | None = None
+    categorical_labels: tuple[str, ...] | None = None
+```
+
+#### 5.2: Generate Stable UUIDs in Adapter
+
+**File**: `src/townlet/universe/adapters/vfs_adapter.py` (modify)
+
+```python
+def _generate_field_uuid(field_id: str, source_variable: str, scope: str) -> str:
+    """
+    Generate deterministic UUID from field semantics.
+
+    UUID is based on semantic identity (variable + field + scope),
+    NOT position. This ensures UUIDs remain stable across field reordering.
+
+    Args:
+        field_id: Field identifier (e.g., "obs_energy")
+        source_variable: Source variable (e.g., "energy")
+        scope: Variable scope (e.g., "agent")
+
+    Returns:
+        16-character hex UUID
+    """
+    import hashlib
+
+    # Semantic key (NOT index-based)
+    semantic_key = f"{scope}.{source_variable}.{field_id}"
+
+    # Deterministic hash
+    return hashlib.sha256(semantic_key.encode()).hexdigest()[:16]
+
+
+def vfs_to_universe_observation_spec(
+    vfs_fields: list[VFSObservationField]
+) -> UniverseObservationSpec:
+    """Convert VFS ObservationField list to Universe ObservationSpec."""
+
+    universe_fields = []
+    current_index = 0
+
+    for vfs_field in vfs_fields:
+        dims = _flatten_shape(vfs_field.shape)
+        start_index = current_index
+        end_index = current_index + dims
+        semantic_type = _infer_semantic_type(vfs_field.id, vfs_field.source_variable)
+
+        # NEW: Generate stable UUID
+        field_uuid = _generate_field_uuid(
+            vfs_field.id,
+            vfs_field.source_variable,
+            vfs_field.scope
+        )
+
+        universe_fields.append(ObservationField(
+            uuid=field_uuid,  # NEW
+            name=vfs_field.id,
+            type=_infer_field_type(vfs_field.shape, semantic_type),
+            dims=dims,
+            start_index=start_index,
+            end_index=end_index,
+            scope=vfs_field.scope,
+            description=vfs_field.description or f"{vfs_field.id} field",
+            semantic_type=semantic_type
+        ))
+
+        current_index = end_index
+
+    return UniverseObservationSpec.from_fields(universe_fields)
+```
+
+#### 5.3: Update Checkpoint Validation to Use UUIDs
+
+**File**: `src/townlet/universe/compiled.py` (modify)
+
+```python
+def check_checkpoint_compatibility(
+    self,
+    checkpoint: dict
+) -> tuple[bool, str]:
+    """Check if checkpoint is compatible with this universe."""
+
+    # Existing hash check...
+
+    # NEW: Field UUID check (if checkpoint has field manifest)
+    checkpoint_field_uuids = checkpoint.get('field_uuids')
+    if checkpoint_field_uuids is not None:
+        current_field_uuids = [f.uuid for f in self.observation_spec.fields]
+
+        if checkpoint_field_uuids != current_field_uuids:
+            return (
+                False,
+                f"Observation field mismatch (field UUIDs differ):\n"
+                f"  Checkpoint has {len(checkpoint_field_uuids)} fields\n"
+                f"  Current has {len(current_field_uuids)} fields\n"
+                f"  Fields may have been reordered or changed.\n"
+                f"  Use strict ordering or rebuild checkpoint."
+            )
+
+    return (True, "Checkpoint compatible")
+```
+
+**Success Criteria**:
+- [ ] ObservationField has uuid field
+- [ ] UUIDs generated from semantics (not indices)
+- [ ] UUIDs stable across field reordering
+- [ ] Checkpoints store field UUIDs
+- [ ] Checkpoint validation checks UUID compatibility
+
+---
+
+### Phase 7 Enhancement: YAML Normalization (2-3 hours)
+
+**Goal**: Normalize YAML before hashing to prevent cache invalidation on cosmetic changes.
+
+**Context**: From external review - whitespace, key order, comments shouldn't invalidate cache.
+
+#### 7.1: Implement YAML Normalizer
+
+**File**: `src/townlet/universe/yaml_normalizer.py` (NEW)
+
+```python
+"""YAML normalization for deterministic hashing."""
+from pathlib import Path
+import yaml
+
+
+def normalize_yaml_for_hash(yaml_path: Path) -> dict:
+    """
+    Load YAML and normalize to canonical form.
+
+    Normalization ensures:
+    - Keys sorted alphabetically
+    - Comments stripped
+    - Anchors/aliases resolved
+    - Whitespace normalized
+    - Numbers canonicalized (1.0 == 1)
+
+    Args:
+        yaml_path: Path to YAML file
+
+    Returns:
+        Normalized dict (ready for JSON serialization + hashing)
+    """
+    with open(yaml_path) as f:
+        data = yaml.safe_load(f)  # Resolves anchors automatically
+
+    return _normalize_recursive(data)
+
+
+def _normalize_recursive(obj):
+    """Recursively normalize data structure."""
+    if isinstance(obj, dict):
+        # Sort keys, recursively normalize values
+        return {k: _normalize_recursive(obj[k]) for k in sorted(obj.keys())}
+    elif isinstance(obj, list):
+        # Recursively normalize list items
+        return [_normalize_recursive(x) for x in obj]
+    elif isinstance(obj, float):
+        # Canonicalize floats (1.0 → 1.0, not "1.0" vs "1")
+        if obj == int(obj):
+            return int(obj)
+        return obj
+    else:
+        # Strings, ints, bools, None pass through
+        return obj
+```
+
+#### 7.2: Update Config Hash Computation
+
+**File**: `src/townlet/universe/compiler.py` (modify)
+
+```python
+def _compute_config_hash(self, config_dir: Path) -> str:
+    """
+    Compute SHA-256 hash of normalized YAML contents.
+
+    Uses canonical normalization (sorted keys, no comments, resolved anchors)
+    so that cosmetic changes (whitespace, key order, comments) don't
+    invalidate the cache.
+    """
+    import hashlib
+    import json
+    from townlet.universe.yaml_normalizer import normalize_yaml_for_hash
+
+    yaml_files = sorted(config_dir.glob("*.yaml"))
+    normalized_data = []
+
+    for yaml_file in yaml_files:
+        normalized_content = normalize_yaml_for_hash(yaml_file)
+        normalized_data.append({
+            "file": yaml_file.name,
+            "content": normalized_content
+        })
+
+    # Serialize with sorted keys for determinism
+    blob = json.dumps(normalized_data, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+```
+
+#### 7.3: Update Cache Key to Include Compiler Version
+
+**File**: `src/townlet/universe/compiler.py` (modify)
+
+```python
+def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
+    """Compile universe with hash-based cache invalidation."""
+
+    cache_path = config_dir / ".compiled" / "universe.msgpack"
+
+    if use_cache and cache_path.exists():
+        try:
+            cached_universe = CompiledUniverse.load_from_cache(cache_path)
+
+            # Compute current hashes
+            current_config_hash = self._compute_config_hash(config_dir)
+            current_compiler_version = "1.0.0"  # Or from __version__
+
+            # NEW: Check BOTH config hash AND compiler version
+            if (cached_universe.metadata.config_hash == current_config_hash and
+                cached_universe.metadata.compiler_version == current_compiler_version):
+
+                logger.info(
+                    f"Loading cached universe\n"
+                    f"  Config hash: {current_config_hash[:8]}...\n"
+                    f"  Compiler:    {current_compiler_version}"
+                )
+                return cached_universe
+            else:
+                logger.info(
+                    f"Cache stale:\n"
+                    f"  Config: {cached_universe.metadata.config_hash[:8]}... → "
+                    f"{current_config_hash[:8]}...\n"
+                    f"  Compiler: {cached_universe.metadata.compiler_version} → "
+                    f"{current_compiler_version}\n"
+                    f"Recompiling..."
+                )
+
+        except Exception as e:
+            logger.warning(f"Cache load failed ({e}), recompiling from source")
+
+    # Cache miss or stale, do full compilation
+    ...
+```
+
+**Success Criteria**:
+- [ ] YAML normalized before hashing
+- [ ] Cosmetic changes (whitespace, comments, key order) don't change hash
+- [ ] Cache key includes compiler version
+- [ ] Cache invalidated on compiler upgrade
+- [ ] Tests verify hash stability
+
+---
+
 ## Effort Estimate
 
 ### Breakdown
@@ -2355,37 +3163,79 @@ All future UAC work depends on robust compilation:
   - MeterMetadata, ActionSpaceMetadata, AffordanceMetadata
   - Training system integration structures
 
-**Updated Breakdown**:
+**Updated Breakdown (with External Review Additions)**:
 
 - **Phase 1** (Core Compiler): 11-16 hours
 - **Phase 2** (Symbol Table + CuesCompiler): 7-10 hours
-- **Phase 3** (Error Collection): 4-6 hours
-- **Phase 4** (Cross-Validation + Cues): 10-14 hours
-- **Phase 5** (Metadata + ObservationSpec): 5-6 hours
+- **Phase 3** (Error Collection + Error Codes): 7-10 hours (+3-4h for error codes)
+- **Phase 4** (Cross-Validation + Cues + Security + Economics): 15-22 hours
+  - Original validation + Cues: 10-14h
+  - Security hardening: +1-2h
+  - Economic feasibility: +4-6h
+- **Phase 5** (Metadata + ObservationSpec + Provenance + UUIDs): 9-12 hours
+  - Original: 5-6h
+  - Provenance tracking: +2-3h
+  - Field UUIDs: +2-3h
 - **Phase 6** (Optimization + Rich Metadata): 8-10 hours
-- **Phase 7** (Caching): 4-6 hours
+- **Phase 7** (Caching + YAML Normalization): 6-9 hours (+2-3h for normalization)
 - **Phase 8** (Environment Refactor): 3-4 hours
 
-**Total**: 52-72 hours (6.5-9 days) **+ 8-12 hours (prerequisites) = 60-84 hours total**
+**Subtotal (Implementation)**: **66-93 hours** (8-12 days)
 
-**Note**: +15-18h increase from original 37-54h estimate (+40-33%) due to:
-- CuesCompiler integration (+3-4h)
-- ObservationSpec UAC→BAC contract (+2h)
-- Rich Metadata structures (+4h)
-- Capability system validation (+6-8h)
+**Prerequisites (MUST be completed first)**: **8-12 hours**
 
-**UPDATED (per TASK-004A-PREREQUISITES)**:
-- **Prerequisites MUST be completed first** (+8-12h)
-- Implementation plan corrected to use:
-  - `HamletConfig.load()` as primary loader (Part 4)
-  - `load_variables_reference_config()` and `load_global_actions_config()` (Part 1)
-  - `BarsConfig` type alias from `townlet.config.bar` (Part 2)
-  - `vfs_to_universe_observation_spec()` adapter (Part 3)
-- All imports and field names corrected throughout
+**Grand Total**: **74-105 hours** (9-13 days)
 
-**Updated per COMPILER_ARCHITECTURE.md (authoritative reference) + TASK-004A-PREREQUISITES**
+---
 
-**Confidence**: High (well-defined scope, clear interfaces, aligned with architecture, prerequisites resolve blockers)
+**Breakdown by Source**:
+
+**Original Core** (37-54h):
+- Basic compiler pipeline (7 stages)
+- Error collection
+- Basic validation
+- Caching
+
+**COMPILER_ARCHITECTURE.md Additions** (+15-18h):
+- CuesCompiler integration: +3-4h
+- ObservationSpec UAC→BAC contract: +2h
+- Rich Metadata structures: +4h
+- Capability system validation: +6-8h
+
+**External Review Additions** (+14-21h):
+- Error codes & source maps: +3-4h
+- Security hardening: +1-2h
+- Economic feasibility checks: +4-6h
+- Provenance tracking: +2-3h
+- ObservationSpec field UUIDs: +2-3h
+- YAML normalization: +2-3h
+
+**TASK-004A-PREREQUISITES** (+8-12h):
+- Config schema alignment
+- DTO consolidation
+- ObservationSpec adapter
+- HamletConfig integration
+- Spec updates
+
+---
+
+**Total Increase from Original**: +37-51h (+100-134% from 37-54h baseline)
+
+**Why Worth It**:
+- Transforms compiler from **research-grade → audit-grade**
+- Prevents irreproducible runs (provenance)
+- Prevents silent failures (security hardening)
+- Prevents unwinnable configs (feasibility checks)
+- Prevents cache churn (YAML normalization)
+- Prevents checkpoint corruption (field UUIDs)
+- Dramatically improves debugging (error codes, source maps)
+
+**UPDATED per**:
+- COMPILER_ARCHITECTURE.md (authoritative reference)
+- TASK-004A-PREREQUISITES (integration blockers)
+- External Review 2025-11-08 (production hardening)
+
+**Confidence**: High (well-defined scope, clear interfaces, aligned with architecture, prerequisites resolve blockers, external review validates approach)
 
 ---
 
