@@ -55,3 +55,15 @@ exploration:
 training:
   device: cuda
   max_episodes: 10000  # Total episodes for this training run
+
+  # Q-learning hyperparameters
+  train_frequency: 4  # Train Q-network every N steps
+  target_update_frequency: 100  # Update target network every N training steps
+  batch_size: 16  # Smaller batch for LSTM (recurrent: 16, feedforward: 64)
+  sequence_length: 8  # Length of sequences for LSTM training
+  max_grad_norm: 10.0  # Gradient clipping threshold
+
+  # Epsilon-greedy exploration (moderate decay)
+  epsilon_start: 1.0  # Initial exploration rate
+  epsilon_decay: 0.995  # Moderate decay for temporal mechanics
+  epsilon_min: 0.01  # Minimum exploration rate

@@ -1,33 +1,44 @@
+# Aspatial Test Configuration
+# Minimal config for testing aspatial substrate (no spatial positioning)
+
 environment:
-  substrate_type: "aspatial"  # No grid
-  enabled_affordances: ["Bed", "Hospital", "HomeMeal", "Job"]
+  grid_size: 1  # Not used for aspatial (required by runner, will be ignored)
+  partial_observability: false
+  vision_range: 1  # Not used for aspatial substrates
   enable_temporal_mechanics: false
-  move_energy_cost: 0.0  # No movement in aspatial
-  wait_energy_cost: 0.001
-  interact_energy_cost: 0.0
-  agent_lifespan: 1000
+  enabled_affordances: ["Bed", "Hospital", "HomeMeal", "Job"]
+  energy_move_depletion: 0.0  # No movement in aspatial
+  energy_wait_depletion: 0.001
+  energy_interact_depletion: 0.0
 
 population:
   num_agents: 1
   learning_rate: 0.00025
   gamma: 0.99
-  network_type: "simple"  # MLP for aspatial (no LSTM needed)
   replay_buffer_capacity: 1000
-  batch_size: 32
+  network_type: simple  # MLP for aspatial (no LSTM needed)
 
 curriculum:
-  type: "static"  # Simple static curriculum for testing
   max_steps_per_episode: 200
+  survival_advance_threshold: 0.7
+  survival_retreat_threshold: 0.3
+  entropy_gate: 0.5
+  min_steps_at_stage: 100
 
 exploration:
-  type: "epsilon_greedy"
-  epsilon_start: 1.0
-  epsilon_decay: 0.995
-  epsilon_min: 0.01
+  embed_dim: 128
+  initial_intrinsic_weight: 1.0
+  variance_threshold: 100.0
+  survival_window: 50
 
 training:
-  device: "cuda"
+  device: cuda
   max_episodes: 100
   train_frequency: 4
   target_update_frequency: 100
+  batch_size: 32
+  sequence_length: 8
   max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_decay: 0.995
+  epsilon_min: 0.01

@@ -1,10 +1,42 @@
 # TASK-004A: Universe Compiler Implementation
 
-**Status**: Planned
+**Status**: Blocked (Prerequisites Required - See Below)
 **Priority**: HIGH (Foundational for UAC system integrity)
-**Estimated Effort**: 46-66 hours (6-8 days) - UPDATED from 40-58h (+6-8h for capability system validation)
-**Dependencies**: TASK-005 (Variable-Size Meter System - recommended but not required)
-**Enables**: All future UAC work (robust compilation is foundation)
+**Estimated Effort**: 52-72 hours (6.5-9 days)
+  - **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
+  - **Additions**: CuesCompiler (+3-4h), Capability Validation (+6-8h), ObservationSpec (+2h), Rich Metadata (+4h)
+  - **Total additions**: +15-18h (+40-33% increase)
+**Dependencies**: TASK-003 (UAC Core DTOs - COMPLETE) + **TASK-004A-PREREQUISITES (REQUIRED)**
+**Enables**: All future UAC work + TASK-005 (BAC - requires ObservationSpec)
+**Authoritative Reference**: `docs/architecture/COMPILER_ARCHITECTURE.md`
+
+---
+
+## ⚠️ CRITICAL: PREREQUISITES REQUIRED
+
+**🛑 STOP: Do NOT proceed with implementation until prerequisites are complete.**
+
+This task has **5 critical blockers** where the implementation plan assumptions don't match repository reality. These must be resolved first.
+
+**You MUST complete:** **[TASK-004A-PREREQUISITES.md](./TASK-004A-PREREQUISITES.md)**
+
+**Prerequisites Overview** (8-12 hours):
+1. **Config Schema Alignment** (3-4h): Create `load_variables_reference_config()` and `load_global_actions_config()`
+2. **DTO Consolidation** (2-3h): Add type aliases for BarsConfig, create ActionSpaceConfig wrapper
+3. **ObservationSpec Adapter** (2-3h): Build VFS-to-Universe DTO adapter
+4. **HamletConfig Integration** (1-2h): Document compiler builds on HamletConfig
+5. **Update TASK-004A Spec** (1-2h): Correct imports, update effort estimates
+
+**Why Prerequisites Are Critical**:
+- Plan expects `variables.yaml`, repo has `variables_reference.yaml`
+- Plan expects `BarsConfig` in `townlet.config.bar`, actually in `townlet.environment.cascade_config`
+- Plan expects `load_variables_config()` that doesn't exist
+- VFS ObservationField incompatible with Universe ObservationSpec (needs adapter)
+- Unclear how compiler relates to existing HamletConfig
+
+**DO NOT SKIP THIS STEP.** Implementing without prerequisites will result in import errors, missing functions, and incompatible data contracts.
+
+Once prerequisites are complete, return here and continue with Phase 0 verification.
 
 ---
 
@@ -142,8 +174,10 @@ Start training (all errors caught upfront)
 from dataclasses import dataclass
 from pathlib import Path
 
-from townlet.environment.cascade_config import load_bars_config, load_cascades_config
-from townlet.environment.affordance_config import load_affordance_config
+# CORRECTED IMPORTS (per TASK-004A-PREREQUISITES)
+from townlet.config.bar import load_bars_config, BarsConfig  # BarsConfig is type alias
+from townlet.environment.cascade_config import load_cascades_config, CascadesConfig
+from townlet.environment.affordance_config import load_affordance_config, AffordanceConfigCollection
 
 
 class UniverseCompiler:
@@ -179,14 +213,26 @@ class UniverseCompiler:
         errors.check_and_raise("Stage 4: Cross-Validation")
 
         # Stage 5: Compute metadata
-        metadata = self._stage_5_compute_metadata(raw_configs, symbol_table)
+        metadata, observation_spec = self._stage_5_compute_metadata(
+            config_dir, raw_configs, symbol_table
+        )
+
+        # Stage 5.3: Build rich metadata structures
+        action_space_metadata, meter_metadata, affordance_metadata = \
+            self._stage_5_build_rich_metadata(raw_configs)
 
         # Stage 6: Optimize (pre-compute)
         optimization_data = self._stage_6_optimize(raw_configs, metadata)
 
         # Stage 7: Emit compiled universe
         universe = self._stage_7_emit_compiled_universe(
-            raw_configs, metadata, optimization_data
+            raw_configs,
+            metadata,
+            observation_spec,
+            action_space_metadata,
+            meter_metadata,
+            affordance_metadata,
+            optimization_data
         )
 
         return universe
@@ -197,17 +243,49 @@ class UniverseCompiler:
 ```python
 @dataclass
 class RawConfigs:
-    """Container for raw config objects loaded from YAML."""
-    bars: BarsConfig
-    cascades: CascadesConfig
-    affordances: AffordanceConfigCollection
-    training: TrainingConfig
-    # Future: substrate, actions when TASK-002A/003 implemented
+    """Container for raw config objects loaded from YAML.
+
+    Per COMPILER_ARCHITECTURE.md §2.1: All core universe configs.
+
+    UPDATED (per TASK-004A-PREREQUISITES Part 4):
+    Compiler builds on HamletConfig (existing master configuration).
+    """
+    hamlet_config: HamletConfig  # Master configuration (loads all files)
+    variables_reference: list[VariableDef]  # VFS variables from variables_reference.yaml
+    global_actions: ActionSpaceConfig  # Global action vocabulary from configs/global_actions.yaml
+
+    # Convenience properties for accessing HamletConfig sections
+    @property
+    def substrate(self) -> SubstrateConfig:
+        return self.hamlet_config.substrate
+
+    @property
+    def bars(self) -> BarsConfig:
+        return self.hamlet_config.bars  # BarsConfig is type alias from TASK-004A-PREREQUISITES Part 2
+
+    @property
+    def cascades(self) -> CascadesConfig:
+        return self.hamlet_config.cascades
+
+    @property
+    def affordances(self) -> AffordanceConfigCollection:
+        return self.hamlet_config.affordances
+
+    @property
+    def cues(self) -> CuesConfig:
+        return self.hamlet_config.cues
+
+    @property
+    def training(self) -> TrainingConfig:
+        return self.hamlet_config.training
 
 
 def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
     """
     Stage 1: Load and validate individual YAML files.
+
+    UPDATED (per TASK-004A-PREREQUISITES Part 4):
+    Uses HamletConfig.load() as primary loader + additional loaders for VFS/actions.
 
     Validates:
     - File exists
@@ -217,36 +295,51 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
     Does NOT validate cross-file references (Stage 3).
     """
     try:
-        bars = load_bars_config(config_dir / "bars.yaml")
-    except FileNotFoundError:
+        # PRIMARY LOADER: HamletConfig loads substrate, bars, cascades, affordances, cues, training
+        # (per TASK-004A-PREREQUISITES Part 4: Compiler builds on HamletConfig)
+        hamlet_config = HamletConfig.load(config_dir)
+
+        # ADDITIONAL LOADERS: VFS variables and global actions
+        # (per TASK-004A-PREREQUISITES Part 1)
+        from townlet.vfs.schema import load_variables_reference_config
+        from townlet.environment.action_space_builder import load_global_actions_config
+
+        variables_reference = load_variables_reference_config(config_dir)  # From variables_reference.yaml
+        global_actions = load_global_actions_config()  # From configs/global_actions.yaml (shared)
+
+    except FileNotFoundError as e:
         raise CompilationError(
             stage="Stage 1: Parse",
-            errors=[f"bars.yaml not found in {config_dir}"],
-            hints=["Ensure config pack contains bars.yaml"]
+            errors=[f"Required config file not found: {e}"],
+            hints=[
+                "Ensure config pack contains all required files:",
+                "  - substrate.yaml",
+                "  - bars.yaml",
+                "  - cascades.yaml",
+                "  - affordances.yaml",
+                "  - cues.yaml",
+                "  - training.yaml",
+                "  - variables_reference.yaml",
+                "And that configs/global_actions.yaml exists (shared across all configs)"
+            ]
         )
     except yaml.YAMLError as e:
         raise CompilationError(
             stage="Stage 1: Parse",
-            errors=[f"bars.yaml is malformed: {e}"],
+            errors=[f"YAML syntax error: {e}"],
             hints=["Check YAML syntax with a validator"]
         )
     except ValidationError as e:
         raise CompilationError(
             stage="Stage 1: Parse",
-            errors=[f"bars.yaml validation failed: {e}"],
-            hints=["Check field types and constraints"]
+            errors=[f"Schema validation failed: {e}"],
+            hints=["Check field types and constraints match schema"]
         )
 
-    # Same for cascades, affordances, training
-    cascades = load_cascades_config(config_dir / "cascades.yaml")
-    affordances = load_affordance_config(config_dir / "affordances.yaml")
-    training = load_training_config(config_dir / "training.yaml")
-
     return RawConfigs(
-        bars=bars,
-        cascades=cascades,
-        affordances=affordances,
-        training=training,
+        hamlet_config=hamlet_config,
+        variables_reference=variables_reference,
+        global_actions=global_actions,
     )
 ```
 
@@ -259,9 +352,11 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
 
 ---
 
-### Phase 2: Symbol Table & Reference Resolution (4-6 hours)
+### Phase 2: Symbol Table & Reference Resolution (7-10 hours)
 
 **Goal**: Implement cross-file reference resolution with clear error messages.
+
+**UPDATED** from 4-6h: Added cues loading and validation (+3-4h) per COMPILER_ARCHITECTURE.md §2.1
 
 #### 2.1: Create UniverseSymbolTable
 
@@ -269,12 +364,17 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
 
 ```python
 class UniverseSymbolTable:
-    """Central registry of all named entities in universe."""
+    """Central registry of all named entities in universe.
+
+    Per COMPILER_ARCHITECTURE.md §2.3: Symbol table for Stage 2.
+    """
 
     def __init__(self):
-        self.meters: dict[str, BarConfig] = {}
-        self.affordances: dict[str, AffordanceConfig] = {}
-        # Future: actions, stages when TASK-002A (Action Space) implemented
+        self.variables: dict[str, VariableDef] = {}  # VFS variables
+        self.meters: dict[str, BarConfig] = {}  # Meters (subset of variables)
+        self.affordances: dict[str, AffordanceConfig] = {}  # Interactions
+        self.cues: dict[str, CueConfig] = {}  # Theory of Mind cues
+        self.actions: dict[str, ActionConfig] = {}  # Global action vocabulary
 
     def register_meter(self, name: str, config: BarConfig):
         """Register meter for later reference resolution."""
@@ -295,6 +395,36 @@ class UniverseSymbolTable:
                 hints=["Each affordance must have unique ID"]
             )
         self.affordances[id] = config
+
+    def register_cue(self, meter_name: str, config: CueConfig):
+        """Register cue for later validation."""
+        if meter_name in self.cues:
+            raise CompilationError(
+                stage="Stage 2: Symbol Registration",
+                errors=[f"Duplicate cue for meter: '{meter_name}'"],
+                hints=["Each meter can have at most one cue definition"]
+            )
+        self.cues[meter_name] = config
+
+    def register_variable(self, var_id: str, config: VariableDef):
+        """Register VFS variable for later reference resolution."""
+        if var_id in self.variables:
+            raise CompilationError(
+                stage="Stage 2: Symbol Registration",
+                errors=[f"Duplicate variable ID: '{var_id}'"],
+                hints=["Each variable must have unique ID"]
+            )
+        self.variables[var_id] = config
+
+    def register_action(self, action_id: int, config: ActionConfig):
+        """Register action for later reference resolution."""
+        if action_id in self.actions:
+            raise CompilationError(
+                stage="Stage 2: Symbol Registration",
+                errors=[f"Duplicate action ID: {action_id}"],
+                hints=["Each action must have unique ID"]
+            )
+        self.actions[action_id] = config
 
     def resolve_meter_reference(self, name: str, location: str) -> BarConfig:
         """
@@ -335,17 +465,33 @@ def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbo
     """
     Stage 2: Build symbol tables from raw configs.
 
-    Registers all named entities for reference resolution.
+    Per COMPILER_ARCHITECTURE.md §2.3 Stage 2: Register all named entities.
+
+    UPDATED (per TASK-004A-PREREQUISITES):
+    Uses corrected field names from RawConfigs.
     """
     symbol_table = UniverseSymbolTable()
 
-    # Register meters
+    # Register VFS variables (CORRECTED: variables_reference instead of variables.variables)
+    for var in raw_configs.variables_reference:
+        symbol_table.register_variable(var.id, var)
+
+    # Register meters (subset of variables)
+    # CORRECTED: raw_configs.bars uses BarsConfig type alias (per TASK-004A-PREREQUISITES Part 2)
     for bar in raw_configs.bars.bars:
         symbol_table.register_meter(bar.name, bar)
 
     # Register affordances
     for aff in raw_configs.affordances.affordances:
         symbol_table.register_affordance(aff.id, aff)
+
+    # Register cues
+    for meter_name, cue in raw_configs.cues.items():
+        symbol_table.register_cue(meter_name, cue)
+
+    # Register actions (CORRECTED: global_actions instead of actions)
+    for action in raw_configs.global_actions.actions:
+        symbol_table.register_action(action.id, action)
 
     return symbol_table
 ```
@@ -417,7 +563,8 @@ def _stage_3_resolve_references(
             )
 
     # Resolve action cost meter references (NEW - from research Gap 2)
-    for action in raw_configs.actions.actions:
+    # CORRECTED: global_actions instead of actions
+    for action in raw_configs.global_actions.actions:
         for cost in action.costs:
             try:
                 symbol_table.resolve_meter_reference(
@@ -473,9 +620,11 @@ def _stage_3_resolve_references(
 **Success Criteria**:
 
 - [ ] Symbol table registers all meters and affordances
+- [ ] Symbol table registers all cues (NEW)
 - [ ] Duplicate names detected and reported
 - [ ] Dangling references caught with clear error messages
 - [ ] Error messages list valid alternatives
+- [ ] Cues loaded from cues.yaml and validated (NEW)
 
 ---
 
@@ -647,7 +796,32 @@ def _stage_4_cross_validate(
                             f"min ({constraint.min}) must be < max ({constraint.max})"
                         )
 
-    # 5. Capability conflicts (NEW - from research Finding 1)
+    # 5. Cues validation (NEW - Per COMPILER_ARCHITECTURE.md §5.3)
+    for meter_name, cue_config in raw_configs.cues.items():
+        # Validate cues reference valid meters
+        if meter_name not in symbol_table.meters:
+            errors.add_error(
+                f"cues.yaml:{meter_name}: References non-existent meter. "
+                f"Available meters: {list(symbol_table.meters.keys())}"
+            )
+            continue
+
+        # Validate ranges cover full [0.0, 1.0] domain
+        ranges = [(cue.min_value, cue.max_value) for cue in cue_config.visual_cues]
+        if not self._ranges_cover_domain(ranges, 0.0, 1.0):
+            errors.add_error(
+                f"cues.yaml:{meter_name}: Cue ranges don't cover full [0.0, 1.0] domain. "
+                f"Every meter value must map to exactly one cue."
+            )
+
+        # Check for overlapping ranges
+        if self._ranges_overlap(ranges):
+            errors.add_error(
+                f"cues.yaml:{meter_name}: Cue ranges overlap. "
+                f"Each meter value must map to exactly ONE cue."
+            )
+
+    # 6. Capability conflicts (NEW - from research Finding 1)
     for aff in raw_configs.affordances.affordances:
         if not aff.capabilities:
             continue
@@ -767,6 +941,68 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
             dfs(node, [])
 
     return cycles
+
+
+def _ranges_cover_domain(
+    self,
+    ranges: list[tuple[float, float]],
+    domain_min: float,
+    domain_max: float
+) -> bool:
+    """
+    Check if ranges cover the full domain without gaps.
+
+    Args:
+        ranges: List of (min, max) tuples
+        domain_min: Minimum value of domain (e.g., 0.0)
+        domain_max: Maximum value of domain (e.g., 1.0)
+
+    Returns:
+        True if ranges cover [domain_min, domain_max] without gaps
+    """
+    # Sort ranges by start value
+    sorted_ranges = sorted(ranges, key=lambda r: r[0])
+
+    # Check first range starts at domain_min
+    if sorted_ranges[0][0] != domain_min:
+        return False
+
+    # Check ranges are contiguous (no gaps)
+    for i in range(len(sorted_ranges) - 1):
+        current_end = sorted_ranges[i][1]
+        next_start = sorted_ranges[i + 1][0]
+        if current_end != next_start:
+            return False
+
+    # Check last range ends at domain_max
+    if sorted_ranges[-1][1] != domain_max:
+        return False
+
+    return True
+
+
+def _ranges_overlap(self, ranges: list[tuple[float, float]]) -> bool:
+    """
+    Check if any ranges overlap.
+
+    Args:
+        ranges: List of (min, max) tuples
+
+    Returns:
+        True if any ranges overlap
+    """
+    # Sort ranges by start value
+    sorted_ranges = sorted(ranges, key=lambda r: r[0])
+
+    # Check for overlaps
+    for i in range(len(sorted_ranges) - 1):
+        current_end = sorted_ranges[i][1]
+        next_start = sorted_ranges[i + 1][0]
+        # Overlap if current range extends past start of next range
+        if current_end > next_start:
+            return True
+
+    return False
 ```
 
 **Success Criteria**:
@@ -775,6 +1011,11 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
 - [ ] Economic validation warns on poverty traps
 - [ ] Circularity detection catches cascade cycles
 - [ ] Temporal validation catches invalid operating hours
+- [ ] **Cues validation** (NEW - Per COMPILER_ARCHITECTURE.md §5.3)
+  - [ ] Validates cues reference valid meters
+  - [ ] Validates ranges cover full [0.0, 1.0] domain
+  - [ ] Detects overlapping ranges
+  - [ ] Helper methods `_ranges_cover_domain()` and `_ranges_overlap()` work correctly
 - [ ] **Substrate-action validation catches incompatible action spaces** (NEW)
   - [ ] Square grid requires 4-way movement
   - [ ] Cubic grid requires 6-way movement
@@ -790,9 +1031,11 @@ def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
 
 ---
 
-### Phase 5: Metadata Computation (3-4 hours)
+### Phase 5: Metadata Computation (5-6 hours)
 
-**Goal**: Calculate derived properties (obs_dim, action_dim, etc.)
+**Goal**: Calculate derived properties (obs_dim, action_dim, etc.) + build ObservationSpec
+
+**UPDATED** from 3-4h: Added ObservationSpec (+2h) per COMPILER_ARCHITECTURE.md §3.2 (BLOCKS TASK-005 BAC)
 
 #### 5.1: Create UniverseMetadata
 
@@ -804,7 +1047,18 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class UniverseMetadata:
-    """Derived metadata about compiled universe."""
+    """Derived metadata about compiled universe.
+
+    Per COMPILER_ARCHITECTURE.md §3.1: Core metadata contract.
+    """
+
+    # Universe identification (NEW - Per §3.1)
+    universe_name: str  # e.g., "L1_full_observability"
+    schema_version: str  # UAC schema version (e.g., "1.0")
+
+    # Substrate metadata (NEW - Per §3.1)
+    substrate_type: str  # e.g., "grid2d", "continuous3d", "aspatial"
+    position_dim: int  # Substrate dimensionality (0 for aspatial, 2 for grid2d, 3 for grid3d, etc.)
 
     # Meter metadata
     meter_count: int
@@ -816,15 +1070,15 @@ class UniverseMetadata:
     affordance_ids: list[str]
     affordance_id_to_index: dict[str, int]
 
-    # Action metadata
-    action_count: int  # Currently hardcoded to 6
+    # Action metadata (FIXED - was hardcoded)
+    action_count: int  # Composed from substrate + custom actions
 
-    # Observation space metadata
-    observation_dim: int  # Computed from grid, meters, affordances
+    # Observation space metadata (FIXED - was computed from training params)
+    observation_dim: int  # Built from VFS ObservationSpecBuilder
 
-    # Spatial metadata
-    grid_size: int
-    grid_cells: int
+    # Spatial metadata (legacy - can be removed if substrate provides)
+    grid_size: int | None = None  # Only for grid substrates
+    grid_cells: int | None = None  # Only for grid substrates
 
     # Economic metadata
     max_sustainable_income: float
@@ -838,9 +1092,92 @@ class UniverseMetadata:
     config_version: str
     compiler_version: str
     compiled_at: str  # ISO timestamp
+    config_hash: str  # SHA-256 hash of all config file contents (for checkpoint compatibility)
+```
+
+#### 5.1b: Create ObservationSpec (NEW - Per COMPILER_ARCHITECTURE.md §3.2)
+
+**File**: `src/townlet/universe/observation_spec.py` (NEW)
+
+**Critical**: Required for UAC → BAC data contract. Without this, BAC can only build simple MLPs, not custom encoders.
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass
+class ObservationField:
+    """Single field in observation vector."""
+    name: str  # e.g., "energy", "position", "local_grid"
+    type: Literal["scalar", "vector", "categorical", "spatial_grid"]
+    dims: int  # Number of dimensions this field occupies
+    start_index: int  # Index in flat observation vector
+    end_index: int  # Exclusive end index (for slicing)
+    scope: Literal["global", "agent", "agent_private"]
+    description: str
+
+    # Semantic metadata for custom encoders
+    semantic_type: str | None = None  # "position", "meter", "affordance", "cue", "temporal", "vision"
+    categorical_labels: list[str] | None = None  # For one-hot encodings
+
+
+@dataclass
+class ObservationSpec:
+    """Complete observation specification (UAC → BAC contract)."""
+    total_dims: int  # Sum of all field dims (this is obs_dim)
+    fields: list[ObservationField]  # All observation fields
+    encoding_version: str = "1.0"  # For checkpoint compatibility
+
+    # === Query Methods ===
+
+    def get_field_by_name(self, name: str) -> ObservationField:
+        """Lookup field by name."""
+        for field in self.fields:
+            if field.name == name:
+                return field
+        raise KeyError(f"Field '{name}' not found in observation spec")
+
+    def get_fields_by_type(self, field_type: str) -> list[ObservationField]:
+        """Get all fields of given type (e.g., all 'spatial_grid' fields)."""
+        return [f for f in self.fields if f.type == field_type]
+
+    def get_fields_by_semantic_type(self, semantic: str) -> list[ObservationField]:
+        """Get fields by semantic meaning (e.g., all 'meter' fields)."""
+        return [f for f in self.fields if f.semantic_type == semantic]
+```
+
+**Integration**: Use existing VFS `VFSObservationSpecBuilder` + adapter for Universe DTO compatibility
+
+```python
+# In Stage 5 implementation:
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+from townlet.universe.adapters.vfs_adapter import vfs_to_universe_observation_spec
+
+# Build VFS observation spec
+# CORRECTED (per TASK-004A-PREREQUISITES Part 3):
+# VFSObservationSpecBuilder needs VariableRegistry, not list[VariableDef]
+# We must construct a temporary registry from variables_reference
+from townlet.vfs.registry import VariableRegistry
+
+temp_registry = VariableRegistry()
+for var_def in raw_configs.variables_reference:
+    temp_registry.register(var_def)
+
+obs_spec_builder = VFSObservationSpecBuilder(
+    variable_registry=temp_registry,
+    substrate=raw_configs.substrate,
+)
+vfs_observation_fields = obs_spec_builder.build_spec()
+
+# Convert VFS ObservationField list to Universe ObservationSpec
+# (per TASK-004A-PREREQUISITES Part 3: Adapter required for DTO compatibility)
+observation_spec = vfs_to_universe_observation_spec(vfs_observation_fields)
 ```
 
 #### 5.2: Implement Stage 5 (Compute Metadata)
+
+**FIXED**: Added config_dir parameter and proper metadata field population.
 
 ```python
 from datetime import datetime
@@ -848,18 +1185,31 @@ from datetime import datetime
 
 def _stage_5_compute_metadata(
     self,
+    config_dir: Path,  # FIXED: Added config_dir parameter
     raw_configs: RawConfigs,
     symbol_table: UniverseSymbolTable
-) -> UniverseMetadata:
+) -> tuple[UniverseMetadata, ObservationSpec]:  # FIXED: Return ObservationSpec
     """
     Stage 5: Compute metadata from validated configs.
 
+    Per COMPILER_ARCHITECTURE.md §3.1: Build complete metadata contract.
+
     Calculates:
+    - Universe identification (name, schema version)
+    - Substrate metadata (type, position dimensionality)
     - Meter count (dynamic based on bars.yaml)
-    - Observation dimension (depends on meter count)
-    - Action count (currently hardcoded to 6)
+    - Action count (composed from substrate + custom actions)
+    - Observation dimension (built from VFS ObservationSpecBuilder)
     - Economic metadata (income, costs, balance)
     """
+    # Universe identification (FIXED - was missing)
+    universe_name = config_dir.name  # e.g., "L1_full_observability"
+    schema_version = "1.0"  # UAC schema version
+
+    # Substrate metadata (FIXED - was missing)
+    substrate_type = raw_configs.substrate.type  # e.g., "grid2d", "continuous3d", "aspatial"
+    position_dim = raw_configs.substrate.get_position_dim()  # 0 for aspatial, 2 for grid2d, etc.
+
     # Meter metadata
     meter_count = len(raw_configs.bars.bars)
     meter_names = [
@@ -876,34 +1226,41 @@ def _stage_5_compute_metadata(
         for i, aff in enumerate(raw_configs.affordances.affordances)
     }
 
-    # Action metadata (currently hardcoded, will be dynamic after TASK-002A Action Space)
-    action_count = 6  # UP, DOWN, LEFT, RIGHT, INTERACT, WAIT
+    # Action metadata (FIXED - now composed from substrate + custom actions)
+    # CORRECTED: global_actions instead of actions
+    action_count = len(raw_configs.global_actions.actions)  # Total actions (substrate + custom)
 
-    # Observation dimension (complex calculation)
-    grid_size = raw_configs.training.grid_size
+    # Observation dimension (FIXED - now built from VFS ObservationSpecBuilder + adapter)
+    # CORRECTED (per TASK-004A-PREREQUISITES Part 3):
+    # VFSObservationSpecBuilder needs VariableRegistry, plus adapter for Universe DTO
+    from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+    from townlet.vfs.registry import VariableRegistry
+    from townlet.universe.adapters.vfs_adapter import vfs_to_universe_observation_spec
 
-    if raw_configs.training.partial_observability:
-        # POMDP: local window + position + meters + affordance + extras
-        vision_range = raw_configs.training.vision_range
-        window_size = 2 * vision_range + 1
-        obs_dim = (
-            window_size * window_size +  # Local grid
-            2 +                           # Agent position (x, y)
-            meter_count +                 # DYNAMIC meter count!
-            affordance_count + 1 +        # Affordance at position (+ "none")
-            4                             # Temporal extras
-        )
-    else:
-        # Full observability: full grid + meters + affordance + extras
-        obs_dim = (
-            grid_size * grid_size +       # Full grid
-            meter_count +                 # DYNAMIC meter count!
-            affordance_count + 1 +        # Affordance at position
-            4                             # Temporal extras
-        )
+    # Build temporary registry from variables_reference
+    temp_registry = VariableRegistry()
+    for var_def in raw_configs.variables_reference:
+        temp_registry.register(var_def)
 
-    # Spatial metadata
-    grid_cells = grid_size * grid_size
+    obs_spec_builder = VFSObservationSpecBuilder(
+        variable_registry=temp_registry,
+        substrate=raw_configs.substrate,
+    )
+    vfs_observation_fields = obs_spec_builder.build_spec()
+
+    # Convert VFS fields to Universe ObservationSpec DTO (adapter required)
+    observation_spec = vfs_to_universe_observation_spec(vfs_observation_fields)
+    obs_dim = observation_spec.total_dims  # Built from VFS, not hardcoded!
+
+    # Spatial metadata (legacy - only for grid substrates)
+    grid_size = None
+    grid_cells = None
+    if substrate_type in ["grid2d", "grid3d", "gridnd"]:
+        # Extract grid dimensions from substrate config
+        if substrate_type == "grid2d":
+            grid_size = raw_configs.substrate.grid.width  # Assume square grid
+            grid_cells = grid_size * raw_configs.substrate.grid.height
+        # For grid3d/gridnd, grid_size/grid_cells are less meaningful
 
     # Economic metadata
     max_income = self._compute_max_income(raw_configs.affordances)
@@ -915,7 +1272,16 @@ def _stage_5_compute_metadata(
     compiler_version = "1.0.0"
     compiled_at = datetime.now().isoformat()
 
-    return UniverseMetadata(
+    # Config hash (for checkpoint compatibility - Per COMPILER_ARCHITECTURE.md §4.2)
+    config_hash = self._compute_config_hash(config_dir)
+
+    metadata = UniverseMetadata(
+        # NEW FIELDS (FIXED - were missing)
+        universe_name=universe_name,
+        schema_version=schema_version,
+        substrate_type=substrate_type,
+        position_dim=position_dim,
+        # EXISTING FIELDS
         meter_count=meter_count,
         meter_names=meter_names,
         meter_name_to_index=meter_name_to_index,
@@ -933,7 +1299,81 @@ def _stage_5_compute_metadata(
         config_version=config_version,
         compiler_version=compiler_version,
         compiled_at=compiled_at,
+        config_hash=config_hash,
     )
+
+    return (metadata, observation_spec)  # FIXED: Return both
+```
+
+#### 5.3: Build Rich Metadata Structures (NEW - Per §3.3)
+
+**Per COMPILER_ARCHITECTURE.md §3.3**: Build training-facing metadata for logging and metrics.
+
+```python
+def _stage_5_build_rich_metadata(
+    self,
+    raw_configs: RawConfigs
+) -> tuple[ActionSpaceMetadata, MeterMetadata, AffordanceMetadata]:
+    """
+    Build rich metadata structures for training system integration.
+
+    Returns:
+        (action_space_metadata, meter_metadata, affordance_metadata)
+    """
+    # 1. ActionSpaceMetadata
+    # CORRECTED: global_actions instead of actions
+    action_metadatas = []
+    for action in raw_configs.global_actions.actions:
+        action_metadata = ActionMetadata(
+            id=action.id,
+            name=action.name,
+            type=action.type,  # "movement", "interaction", "passive", "custom"
+            enabled=True,  # Could be extended with training.enabled_actions
+            source="substrate" if action.source == "substrate" else "custom",
+            costs={cost.meter: cost.amount for cost in action.costs},
+            description=action.description or f"{action.name} action"
+        )
+        action_metadatas.append(action_metadata)
+
+    action_space_metadata = ActionSpaceMetadata(
+        actions=action_metadatas,
+        action_dim=len(action_metadatas)
+    )
+
+    # 2. MeterMetadata
+    meter_infos = []
+    for bar in raw_configs.bars.bars:
+        meter_info = MeterInfo(
+            name=bar.name,
+            index=bar.index,
+            critical=bar.critical,
+            initial_value=bar.initial,
+            observable=True,  # All meters observable by default
+            description=bar.description or f"{bar.name} resource meter"
+        )
+        meter_infos.append(meter_info)
+
+    meter_metadata = MeterMetadata(
+        meters=sorted(meter_infos, key=lambda m: m.index)
+    )
+
+    # 3. AffordanceMetadata
+    affordance_infos = []
+    for idx, aff in enumerate(raw_configs.affordances.affordances):
+        affordance_info = AffordanceInfo(
+            name=aff.name,
+            id=aff.id,
+            index=idx,
+            type=aff.category,  # "resource", "service", "hazard", etc.
+            description=aff.description or f"{aff.name} affordance"
+        )
+        affordance_infos.append(affordance_info)
+
+    affordance_metadata = AffordanceMetadata(
+        affordances=affordance_infos
+    )
+
+    return (action_space_metadata, meter_metadata, affordance_metadata)
 ```
 
 **Success Criteria**:
@@ -942,12 +1382,29 @@ def _stage_5_compute_metadata(
 - [ ] Observation dim scales with meter_count
 - [ ] Observation dim correct for partial observability
 - [ ] Economic metadata computed correctly
+- [ ] **Config hash computed correctly** (NEW - Per COMPILER_ARCHITECTURE.md §4.2)
+  - [ ] SHA-256 hash includes all config YAML file contents
+  - [ ] Identical configs produce identical hashes
+  - [ ] Any config change produces different hash
+  - [ ] Hash enables checkpoint compatibility validation
+- [ ] **ObservationSpec built correctly** (NEW - Per COMPILER_ARCHITECTURE.md §3.2)
+  - [ ] ObservationSpec.total_dims matches computed observation_dim
+  - [ ] All observation fields have correct start/end indices
+  - [ ] VFS integration uses existing VFSObservationSpecBuilder
+  - [ ] ObservationSpec enables custom neural encoders (BLOCKS TASK-005)
+- [ ] **Rich metadata built correctly** (NEW - Per COMPILER_ARCHITECTURE.md §3.3)
+  - [ ] ActionSpaceMetadata contains all actions with costs
+  - [ ] MeterMetadata contains all meters sorted by index
+  - [ ] AffordanceMetadata contains all affordances with categories
+  - [ ] Training system can query metadata for logging/metrics
 
 ---
 
-### Phase 6: Optimization & CompiledUniverse (4-6 hours)
+### Phase 6: Optimization & CompiledUniverse (8-10 hours)
 
-**Goal**: Pre-compute optimization data and emit immutable artifact.
+**Goal**: Pre-compute optimization data, build rich metadata, and emit immutable artifact.
+
+**UPDATED** from 4-6h: Added rich metadata structures (+4h) per COMPILER_ARCHITECTURE.md §3.3
 
 #### 6.1: Create OptimizationData
 
@@ -977,6 +1434,90 @@ class OptimizationData:
 
     # Affordance position map (populated at reset)
     affordance_position_map: dict[str, torch.Tensor | None]
+```
+
+#### 6.1b: Create Rich Metadata Structures (NEW - Per COMPILER_ARCHITECTURE.md §3.3)
+
+**File**: `src/townlet/universe/rich_metadata.py` (NEW)
+
+**Purpose**: Enable training system to log per-meter metrics, track affordance usage, apply action masks.
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass
+class MeterInfo:
+    """Single meter metadata."""
+    name: str
+    index: int  # Index in meters tensor
+    critical: bool  # Agent dies if reaches 0?
+    initial_value: float
+    observable: bool  # In observation space?
+    description: str
+
+
+@dataclass
+class MeterMetadata:
+    """Collection of all meter metadata."""
+    meters: list[MeterInfo]
+
+    def get_meter_by_name(self, name: str) -> MeterInfo:
+        """Lookup meter by name."""
+        for meter in self.meters:
+            if meter.name == name:
+                return meter
+        raise KeyError(f"Meter '{name}' not found")
+
+
+@dataclass
+class ActionMetadata:
+    """Metadata for single action."""
+    id: int
+    name: str
+    type: Literal["movement", "interaction", "passive", "custom"]
+    enabled: bool
+    source: Literal["substrate", "custom", "affordance"]
+    costs: dict[str, float]  # meter_name → cost
+    description: str
+
+
+@dataclass
+class ActionSpaceMetadata:
+    """Collection of all action metadata."""
+    actions: list[ActionMetadata]
+    action_dim: int  # Total actions (including disabled)
+
+    def get_action_by_id(self, action_id: int) -> ActionMetadata:
+        """Lookup action by ID."""
+        for action in self.actions:
+            if action.id == action_id:
+                return action
+        raise KeyError(f"Action ID {action_id} not found")
+
+
+@dataclass
+class AffordanceInfo:
+    """Single affordance metadata."""
+    name: str
+    id: str
+    index: int  # Index in affordance list
+    type: str  # "resource", "service", "hazard", etc.
+    description: str
+
+
+@dataclass
+class AffordanceMetadata:
+    """Collection of all affordance metadata."""
+    affordances: list[AffordanceInfo]
+
+    def get_affordance_by_id(self, aff_id: str) -> AffordanceInfo:
+        """Lookup affordance by ID."""
+        for aff in self.affordances:
+            if aff.id == aff_id:
+                return aff
+        raise KeyError(f"Affordance '{aff_id}' not found")
 ```
 
 #### 6.2: Implement Stage 6 (Optimize)
@@ -1064,23 +1605,67 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class CompiledUniverse:
-    """Immutable artifact representing a fully validated universe."""
+    """Immutable artifact representing a fully validated universe.
 
-    # Config components
-    bars: BarsConfig
-    cascades: CascadesConfig
-    affordances: AffordanceConfigCollection
-    training: TrainingConfig
+    Per COMPILER_ARCHITECTURE.md §3.3: Complete training hand-off contract.
 
-    # Computed metadata
-    metadata: UniverseMetadata
+    UPDATED (per TASK-004A-PREREQUISITES):
+    Uses HamletConfig as primary config container + additional VFS/action configs.
+    """
 
-    # Pre-computed optimization data
-    optimization_data: OptimizationData
+    # Core config components (Per §3.3)
+    # UPDATED (per TASK-004A-PREREQUISITES Part 4):
+    hamlet_config: HamletConfig  # Master configuration (substrate, bars, cascades, affordances, cues, training)
+    variables_reference: list[VariableDef]  # VFS variable definitions from variables_reference.yaml
+    global_actions: ActionSpaceConfig  # Global action vocabulary from configs/global_actions.yaml
+
+    # Convenience properties for accessing HamletConfig sections
+    @property
+    def substrate(self) -> SubstrateConfig:
+        return self.hamlet_config.substrate
+
+    @property
+    def bars(self) -> BarsConfig:
+        return self.hamlet_config.bars
+
+    @property
+    def cascades(self) -> CascadesConfig:
+        return self.hamlet_config.cascades
+
+    @property
+    def affordances(self) -> AffordanceConfigCollection:
+        return self.hamlet_config.affordances
+
+    @property
+    def cues(self) -> CuesConfig:
+        return self.hamlet_config.cues
+
+    @property
+    def training(self) -> TrainingConfig:
+        return self.hamlet_config.training
+
+    # Computed metadata (Per §3.1)
+    metadata: UniverseMetadata  # Core metadata contract
+
+    # UAC → BAC data contracts (Per §3.2)
+    observation_spec: ObservationSpec  # Observation field metadata for custom encoders
+
+    # UAC → Training data contracts (Per §3.3)
+    action_space_metadata: ActionSpaceMetadata  # Action costs and labels
+    meter_metadata: MeterMetadata  # Meter ranges and semantic info
+    affordance_metadata: AffordanceMetadata  # Affordance descriptions and categories
+
+    # Pre-computed optimization data (legacy)
+    optimization_data: OptimizationData  # Tensors for fast meter dynamics
 
     def __post_init__(self):
-        """Validate universe is complete and consistent."""
+        """Validate universe is complete and consistent.
+
+        UPDATED (per TASK-004A-PREREQUISITES):
+        Uses property accessors to get HamletConfig sections.
+        """
         # Validate meter count matches
+        # CORRECTED: Use property accessor for bars
         if self.metadata.meter_count != len(self.bars.bars):
             raise ValueError(
                 f"Metadata meter_count ({self.metadata.meter_count}) "
@@ -1098,6 +1683,83 @@ class CompiledUniverse:
             raise ValueError(
                 f"Action count must be positive, got {self.metadata.action_count}"
             )
+
+    def create_environment(self, num_agents: int, device: str = "cuda"):
+        """
+        Create VectorizedHamletEnv from compiled universe.
+
+        Per COMPILER_ARCHITECTURE.md §3.3: Training hand-off helper.
+
+        Args:
+            num_agents: Number of agents to simulate
+            device: Device for tensors ("cuda" or "cpu")
+
+        Returns:
+            Configured VectorizedHamletEnv instance
+        """
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        return VectorizedHamletEnv(
+            universe=self,
+            num_agents=num_agents,
+            device=device
+        )
+
+    def check_checkpoint_compatibility(self, checkpoint: dict) -> tuple[bool, str]:
+        """
+        Check if checkpoint is compatible with this universe.
+
+        Per COMPILER_ARCHITECTURE.md §6.2: Checkpoint validation helper.
+
+        FIXED: Uses .get() for backward compatibility with legacy checkpoints.
+
+        Args:
+            checkpoint: Loaded checkpoint dict
+
+        Returns:
+            (is_compatible, message) tuple
+        """
+        # Check config hash (FIXED: Backward compatible with legacy checkpoints)
+        checkpoint_hash = checkpoint.get('config_hash')
+        if checkpoint_hash is None:
+            # Legacy checkpoint without config_hash - emit warning
+            return (
+                False,
+                "⚠️ Legacy checkpoint detected (no config_hash):\n"
+                "  This checkpoint predates hash-based validation.\n"
+                "  Transfer learning may fail if configs differ.\n"
+                "  Recommendation: Retrain from scratch with current config."
+            )
+
+        if checkpoint_hash != self.metadata.config_hash:
+            return (
+                False,
+                f"Config hash mismatch:\n"
+                f"  Checkpoint: {checkpoint_hash[:16]}...\n"
+                f"  Current:    {self.metadata.config_hash[:16]}...\n"
+                f"Transfer learning may fail if configs differ significantly."
+            )
+
+        # Check architecture dimensions (FIXED: Use .get() for backward compatibility)
+        checkpoint_obs_dim = checkpoint.get('observation_dim')
+        if checkpoint_obs_dim is not None and checkpoint_obs_dim != self.metadata.observation_dim:
+            return (
+                False,
+                f"Observation dim mismatch: "
+                f"checkpoint={checkpoint_obs_dim}, "
+                f"current={self.metadata.observation_dim}"
+            )
+
+        checkpoint_action_dim = checkpoint.get('action_dim')
+        if checkpoint_action_dim is not None and checkpoint_action_dim != self.metadata.action_count:
+            return (
+                False,
+                f"Action dim mismatch: "
+                f"checkpoint={checkpoint_action_dim}, "
+                f"current={self.metadata.action_count}"
+            )
+
+        return (True, "Checkpoint compatible")
 ```
 
 #### 6.4: Implement Stage 7 (Emit)
@@ -1107,29 +1769,57 @@ def _stage_7_emit_compiled_universe(
     self,
     raw_configs: RawConfigs,
     metadata: UniverseMetadata,
+    observation_spec: ObservationSpec,
+    action_space_metadata: ActionSpaceMetadata,
+    meter_metadata: MeterMetadata,
+    affordance_metadata: AffordanceMetadata,
     optimization_data: OptimizationData
 ) -> CompiledUniverse:
     """
     Stage 7: Emit immutable compiled universe.
 
-    Creates frozen dataclass that cannot be modified.
+    Per COMPILER_ARCHITECTURE.md §2.3 Stage 7: Create frozen artifact.
+
+    UPDATED (per TASK-004A-PREREQUISITES):
+    Uses HamletConfig as primary config container.
     """
     universe = CompiledUniverse(
-        bars=raw_configs.bars,
-        cascades=raw_configs.cascades,
-        affordances=raw_configs.affordances,
-        training=raw_configs.training,
+        # CORRECTED (per TASK-004A-PREREQUISITES Part 4):
+        # CompiledUniverse stores HamletConfig + additional configs
+        hamlet_config=raw_configs.hamlet_config,
+        variables_reference=raw_configs.variables_reference,
+        global_actions=raw_configs.global_actions,
+        # Metadata and optimization data
         metadata=metadata,
+        observation_spec=observation_spec,
+        action_space_metadata=action_space_metadata,
+        meter_metadata=meter_metadata,
+        affordance_metadata=affordance_metadata,
         optimization_data=optimization_data,
     )
 
-    # Validate immutability
-    if not universe.__dataclass_fields__['bars'].frozen:
+    # Validate immutability (FIXED: Proper check for frozen dataclass)
+    import dataclasses
+    if not dataclasses.is_dataclass(universe):
+        raise CompilationError(
+            stage="Stage 7: Emit",
+            errors=["CompiledUniverse must be a dataclass"],
+            hints=["Check @dataclass decorator"]
+        )
+
+    # Check if dataclass is frozen by attempting to set an attribute
+    try:
+        # This will raise FrozenInstanceError if frozen
+        object.__setattr__(universe, '_test_frozen', True)
+        # If we get here, it's not frozen!
         raise CompilationError(
             stage="Stage 7: Emit",
             errors=["CompiledUniverse must be frozen (immutable)"],
             hints=["Check @dataclass(frozen=True) decorator"]
         )
+    except dataclasses.FrozenInstanceError:
+        # Expected - universe is correctly frozen
+        pass
 
     return universe
 ```
@@ -1141,6 +1831,12 @@ def _stage_7_emit_compiled_universe(
 - [ ] Action mask table has correct shape [24, num_affordances]
 - [ ] CompiledUniverse is frozen (immutable)
 - [ ] CompiledUniverse validates consistency
+- [ ] **Rich metadata structures built correctly** (NEW - Per COMPILER_ARCHITECTURE.md §3.3)
+  - [ ] MeterMetadata contains all meters with proper indexing
+  - [ ] ActionSpaceMetadata contains all actions with costs
+  - [ ] AffordanceMetadata contains all affordances with descriptions
+  - [ ] Metadata lookup methods work correctly (get_meter_by_name, get_action_by_id, etc.)
+  - [ ] Rich metadata enables training system integration
 
 ---
 
@@ -1214,29 +1910,72 @@ class CompiledUniverse:
         )
 ```
 
-#### 7.2: Implement Cache Invalidation
+#### 7.2: Implement Hash-Based Cache Invalidation
+
+**Per COMPILER_ARCHITECTURE.md §4.2**: Use SHA-256 hash of config file contents for robust cache invalidation.
+
+**Why hash-based over mtime-based:**
+- **Robust across filesystems**: mtime can be unreliable (git checkout, CI runners, network filesystems)
+- **Content-aware**: Only invalidates when config *actually* changes, not just timestamps
+- **Portable**: Works across different machines and deployment environments
+- **Deterministic**: Same content always produces same hash
 
 ```python
+import hashlib
+from pathlib import Path
+
+
 class UniverseCompiler:
+    def _compute_config_hash(self, config_dir: Path) -> str:
+        """
+        Compute SHA-256 hash of all config file contents.
+
+        Args:
+            config_dir: Directory containing YAML config files
+
+        Returns:
+            Hexadecimal SHA-256 hash string
+
+        Note: Per COMPILER_ARCHITECTURE.md §4.2
+        """
+        hasher = hashlib.sha256()
+
+        # Get all YAML files in sorted order (for determinism)
+        yaml_files = sorted(config_dir.glob("*.yaml"))
+
+        for yaml_file in yaml_files:
+            # Hash filename (for uniqueness)
+            hasher.update(yaml_file.name.encode('utf-8'))
+
+            # Hash file contents
+            with open(yaml_file, 'rb') as f:
+                hasher.update(f.read())
+
+        return hasher.hexdigest()
+
     def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
-        """Compile universe with mtime-based cache invalidation."""
+        """Compile universe with hash-based cache invalidation."""
         cache_path = config_dir / ".compiled" / "universe.msgpack"
 
         if use_cache and cache_path.exists():
             try:
-                # Get cache modification time
-                cache_mtime = cache_path.stat().st_mtime
+                # Load cached universe
+                cached_universe = CompiledUniverse.load_from_cache(cache_path)
 
-                # Get all YAML modification times
-                yaml_files = list(config_dir.glob("*.yaml"))
-                yaml_mtimes = [f.stat().st_mtime for f in yaml_files]
+                # Compute current config hash
+                current_hash = self._compute_config_hash(config_dir)
 
-                # Cache is fresh if newer than ALL source files
-                if all(yaml_mtime < cache_mtime for yaml_mtime in yaml_mtimes):
-                    logger.info(f"Loading cached universe from {cache_path}")
-                    return CompiledUniverse.load_from_cache(cache_path)
+                # Compare hashes
+                if cached_universe.metadata.config_hash == current_hash:
+                    logger.info(f"Loading cached universe (hash={current_hash[:8]}...)")
+                    return cached_universe
                 else:
-                    logger.info("Cache stale (source YAML modified), recompiling...")
+                    logger.info(
+                        f"Cache stale (config changed):\n"
+                        f"  Cached:  {cached_universe.metadata.config_hash[:8]}...\n"
+                        f"  Current: {current_hash[:8]}...\n"
+                        f"Recompiling..."
+                    )
 
             except Exception as e:
                 # Cache corrupted, fall back to full compilation
@@ -1250,7 +1989,10 @@ class UniverseCompiler:
         try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             universe.save_to_cache(cache_path)
-            logger.info(f"Saved compiled universe to {cache_path}")
+            logger.info(
+                f"Saved compiled universe to {cache_path}\n"
+                f"  Hash: {universe.metadata.config_hash[:16]}..."
+            )
         except Exception as e:
             logger.warning(f"Cache save failed ({e}), continuing without cache")
 
@@ -1264,9 +2006,13 @@ class UniverseCompiler:
 
 **Success Criteria**:
 
-- [ ] First compile saves cache
+- [ ] First compile saves cache with config_hash
 - [ ] Second compile loads from cache (10-100x faster)
-- [ ] Cache invalidated when YAML modified
+- [ ] **Hash-based invalidation** (NEW - Per COMPILER_ARCHITECTURE.md §4.2)
+  - [ ] Cache invalidated when config content changes (not just mtime)
+  - [ ] Identical configs produce identical hashes (deterministic)
+  - [ ] Hash comparison works across filesystems and git operations
+  - [ ] `_compute_config_hash()` includes all YAML files in sorted order
 - [ ] Cache corruption handled gracefully
 
 ---
@@ -1350,12 +2096,61 @@ env = VectorizedHamletEnv(
 )
 ```
 
+#### 8.3: Checkpoint Compatibility Validation (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
+
+**Critical**: Use `universe.metadata.config_hash` to validate checkpoint compatibility during transfer learning.
+
+```python
+class TrainingRunner:
+    def save_checkpoint(self, universe: CompiledUniverse, q_network, path: Path):
+        """Save checkpoint with config_hash for compatibility checking."""
+        torch.save({
+            'q_network_state': q_network.state_dict(),
+            'config_hash': universe.metadata.config_hash,  # NEW: Store hash
+            'observation_dim': universe.metadata.observation_dim,
+            'action_dim': universe.metadata.action_count,
+            'meter_count': universe.metadata.meter_count,
+        }, path)
+
+    def load_checkpoint(self, universe: CompiledUniverse, q_network, path: Path):
+        """Load checkpoint with soft-warning for config mismatches."""
+        checkpoint = torch.load(path)
+
+        # Soft-warning for config mismatch (Per COMPILER_ARCHITECTURE.md §6.2)
+        if checkpoint['config_hash'] != universe.metadata.config_hash:
+            logger.warning(
+                f"⚠️  Checkpoint config mismatch (transfer learning):\n"
+                f"  Checkpoint hash: {checkpoint['config_hash'][:16]}...\n"
+                f"  Current hash:    {universe.metadata.config_hash[:16]}...\n"
+                f"  This may cause training issues if configs differ significantly.\n"
+                f"  Recommendation: Use checkpoints trained on identical configs."
+            )
+
+        # Load weights (may fail if architecture changed)
+        try:
+            q_network.load_state_dict(checkpoint['q_network_state'])
+        except RuntimeError as e:
+            raise ValueError(
+                f"Failed to load checkpoint (architecture mismatch):\n"
+                f"  Expected obs_dim={universe.metadata.observation_dim}, "
+                f"got {checkpoint['observation_dim']}\n"
+                f"  Expected action_dim={universe.metadata.action_count}, "
+                f"got {checkpoint['action_dim']}\n"
+                f"  Original error: {e}"
+            )
+```
+
 **Success Criteria**:
 
 - [ ] Environment accepts compiled universe
 - [ ] Environment reads metadata correctly
 - [ ] Environment behavior unchanged (integration test)
 - [ ] Training scripts updated
+- [ ] **Checkpoint compatibility validation** (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
+  - [ ] Checkpoints save config_hash from universe.metadata
+  - [ ] Soft-warning displayed when loading checkpoint with different config_hash
+  - [ ] Hard error when architecture dimensions mismatch
+  - [ ] Transfer learning warnings enable debugging config drift
 
 ---
 
@@ -1525,6 +2320,814 @@ All future UAC work depends on robust compilation:
 
 ---
 
+### Phase 3 Enhancement: Error Codes & Source Maps (3-4 hours)
+
+**Goal**: Add searchable error codes and file:line references for better developer experience.
+
+**Context**: From external review - improves debugging and error searchability.
+
+#### 3.1: Add Error Codes to CompilationError
+
+**File**: `src/townlet/universe/errors.py` (modify)
+
+```python
+class CompilationError(Exception):
+    """Raised when universe compilation fails."""
+
+    # Error code registry
+    ERROR_CODES = {
+        "UAC-PARSE-001": "File not found",
+        "UAC-PARSE-002": "Malformed YAML",
+        "UAC-PARSE-003": "Schema validation failed",
+        "UAC-SYM-001": "Duplicate symbol",
+        "UAC-RES-001": "Dangling reference",
+        "UAC-RES-002": "Circular dependency",
+        "UAC-VAL-001": "Spatial impossibility",
+        "UAC-VAL-002": "Economic imbalance",
+        "UAC-VAL-003": "Temporal conflict",
+        "UAC-VAL-004": "Capability conflict",
+        "UAC-VAL-005": "Economic infeasibility",
+        "UAC-VAL-006": "Security violation",
+    }
+
+    def __init__(
+        self,
+        code: str,  # NEW: e.g., "UAC-RES-001"
+        stage: str,
+        errors: list[str],
+        hints: list[str] | None = None,
+        locations: dict[str, tuple[str, int]] | None = None  # NEW: error → (file, line)
+    ):
+        self.code = code
+        self.stage = stage
+        self.errors = errors
+        self.hints = hints or []
+        self.locations = locations or {}
+
+        # Build comprehensive error message
+        message_parts = [
+            f"[{code}] Universe Compilation Failed ({stage})",
+            "",
+            f"Found {len(errors)} error(s):",
+            ""
+        ]
+
+        for i, error in enumerate(errors, 1):
+            # Add file:line if available
+            location_key = error.split(":")[0] if ":" in error else error
+            if location_key in self.locations:
+                file, line = self.locations[location_key]
+                message_parts.append(f"  {i}. {error} (at {file}:{line})")
+            else:
+                message_parts.append(f"  {i}. {error}")
+
+        if hints:
+            message_parts.append("")
+            message_parts.append("Hints:")
+            for hint in hints:
+                message_parts.append(f"  - {hint}")
+
+        message_parts.append("")
+        message_parts.append(f"Error code reference: {self.ERROR_CODES.get(code, 'Unknown')}")
+
+        super().__init__("\n".join(message_parts))
+```
+
+#### 3.2: Implement YAML Source Map Tracking
+
+**File**: `src/townlet/universe/source_map.py` (NEW)
+
+```python
+"""Source map tracking for YAML files."""
+from pathlib import Path
+import yaml
+
+
+class SourceMap:
+    """Track YAML keys to file:line mappings."""
+
+    def __init__(self):
+        self.key_locations: dict[str, tuple[str, int]] = {}
+
+    def track_yaml_file(self, yaml_path: Path, prefix: str = ""):
+        """
+        Parse YAML and track key locations.
+
+        Args:
+            yaml_path: Path to YAML file
+            prefix: Key prefix (e.g., "bars.yaml:")
+        """
+        # Simple line-based tracking (not perfect but good enough)
+        with open(yaml_path) as f:
+            lines = f.readlines()
+
+        current_key = None
+        for line_num, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            # Track top-level keys
+            if stripped and not stripped.startswith("#") and ":" in stripped:
+                key = stripped.split(":")[0].strip()
+                if key:
+                    full_key = f"{prefix}{key}"
+                    self.key_locations[full_key] = (str(yaml_path), line_num)
+
+    def get_location(self, key: str) -> tuple[str, int] | None:
+        """Get (file, line) for key."""
+        return self.key_locations.get(key)
+```
+
+#### 3.3: Update Error Raising to Include Codes
+
+**Example Usage** (in Stage 3):
+
+```python
+# Build source map during Stage 1
+source_map = SourceMap()
+source_map.track_yaml_file(config_dir / "cascades.yaml", prefix="cascades.yaml:")
+
+# Use in Stage 3
+for cascade in raw_configs.cascades.cascades:
+    try:
+        symbol_table.resolve_meter_reference(cascade.source, ...)
+    except ReferenceError as e:
+        key = f"cascades.yaml:{cascade.name}"
+        location = source_map.get_location(key)
+
+        raise CompilationError(
+            code="UAC-RES-001",
+            stage="Stage 3: Reference Resolution",
+            errors=[str(e)],
+            hints=["Check for typos in meter names (case-sensitive)"],
+            locations={key: location} if location else {}
+        )
+```
+
+**Success Criteria**:
+- [ ] All CompilationError instances have error codes
+- [ ] File:line shown in error messages when available
+- [ ] Error codes documented and searchable
+- [ ] Source map tracks YAML key locations
+
+---
+
+### Phase 4 Expansion: Security Hardening (1-2 hours)
+
+**Goal**: Prevent config injection and silent failures from typos.
+
+**Context**: From external review - critical for production deployments.
+
+#### 4.1: Add Pydantic Strict Mode
+
+**Files**: All DTO configs
+
+```python
+# In ALL Pydantic models
+from pydantic import BaseModel, ConfigDict
+
+class BarConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # NEW: Reject unknown fields
+
+    name: str
+    index: int
+    # ... existing fields
+```
+
+Apply to:
+- `src/townlet/config/bar.py`: `BarConfig`
+- `src/townlet/config/training.py`: `TrainingConfig`
+- `src/townlet/config/population.py`: `PopulationConfig`
+- `src/townlet/config/curriculum.py`: `CurriculumConfig`
+- `src/townlet/environment/cascade_config.py`: `CascadeConfig`, `BarsConfig`, `CascadesConfig`
+- `src/townlet/environment/affordance_config.py`: `AffordanceConfig`, `AffordanceConfigCollection`
+- `src/townlet/config/cues.py`: `CueConfig`, `CuesConfig`
+- `src/townlet/vfs/schema.py`: `VariableDef`, `ObservationField`
+- All Universe DTOs
+
+#### 4.2: Add Safety Limits Validation
+
+**File**: `src/townlet/universe/compiler.py` (in Stage 4)
+
+```python
+def _stage_4_cross_validate(
+    self,
+    raw_configs: RawConfigs,
+    symbol_table: UniverseSymbolTable,
+    errors: CompilationErrorCollector
+):
+    """Stage 4: Validate cross-file constraints."""
+
+    # NEW: Safety limits (prevent pathological configs)
+    MAX_METERS = 100
+    MAX_AFFORDANCES = 100
+    MAX_CASCADES = 500
+    MAX_ACTIONS = 50
+    MAX_VARIABLES = 200
+
+    if len(raw_configs.bars.bars) > MAX_METERS:
+        raise CompilationError(
+            code="UAC-VAL-006",
+            stage="Stage 4: Security Validation",
+            errors=[
+                f"Too many meters: {len(raw_configs.bars.bars)} > {MAX_METERS}. "
+                "This may indicate config injection or accidental duplication."
+            ],
+            hints=["Review bars.yaml for duplicates or malicious content"]
+        )
+
+    if len(raw_configs.affordances.affordances) > MAX_AFFORDANCES:
+        raise CompilationError(
+            code="UAC-VAL-006",
+            stage="Stage 4: Security Validation",
+            errors=[
+                f"Too many affordances: {len(raw_configs.affordances.affordances)} > {MAX_AFFORDANCES}. "
+                "This may indicate config injection."
+            ],
+            hints=["Review affordances.yaml for suspicious entries"]
+        )
+
+    if len(raw_configs.cascades.cascades) > MAX_CASCADES:
+        raise CompilationError(
+            code="UAC-VAL-006",
+            stage="Stage 4: Security Validation",
+            errors=[
+                f"Too many cascades: {len(raw_configs.cascades.cascades)} > {MAX_CASCADES}. "
+                "This may cause performance issues or memory exhaustion."
+            ],
+            hints=["Simplify cascade relationships"]
+        )
+
+    # ... existing validation
+```
+
+**Success Criteria**:
+- [ ] All Pydantic models use `extra="forbid"`
+- [ ] Unknown fields in YAML raise clear errors
+- [ ] Safety limits enforced (meters, affordances, cascades)
+- [ ] Error messages indicate security concern
+
+---
+
+### Phase 4 Expansion: Economic Feasibility (4-6 hours)
+
+**Goal**: Ensure configs are not just balanced, but actually winnable.
+
+**Context**: From external review - simple "income >= costs" check insufficient.
+
+#### 4.1: Add Feasibility Checks
+
+**File**: `src/townlet/universe/compiler.py` (expand Stage 4)
+
+```python
+def _validate_economic_feasibility(
+    self,
+    raw_configs: RawConfigs,
+    symbol_table: UniverseSymbolTable,
+    errors: CompilationErrorCollector
+):
+    """
+    Validate universe is economically feasible (winnable).
+
+    Checks:
+    1. Basic balance: income >= costs
+    2. Operating hours: income-generating affordances have sufficient uptime
+    3. Depletion sustainability: restoration exceeds baseline decay
+    4. Capacity constraints: multiple agents can access critical resources
+    """
+    # 1. Basic balance (existing)
+    total_income = self._compute_max_income(raw_configs.affordances)
+    total_costs = self._compute_total_costs(raw_configs.affordances)
+
+    if total_income < total_costs:
+        errors.add_error(
+            f"[UAC-VAL-002] Economic imbalance: Income ({total_income:.2f}) < "
+            f"Costs ({total_costs:.2f}). Universe is a poverty trap."
+        )
+
+    # 2. Operating hours feasibility (NEW)
+    income_hours_per_day = self._count_income_hours(raw_configs.affordances)
+    cost_hours_per_day = 24  # Costs accrue continuously
+
+    if income_hours_per_day < cost_hours_per_day * 0.5:
+        errors.add_warning(
+            f"[UAC-VAL-002] Economic stress: Income available {income_hours_per_day}h/day, "
+            f"costs accrue 24h/day. Agents may struggle to sustain."
+        )
+
+    # 3. Depletion sustainability (NEW)
+    critical_meters = [bar for bar in raw_configs.bars.bars if bar.critical]
+
+    for bar in critical_meters:
+        depletion_per_tick = bar.base_depletion
+        max_restoration_per_tick = self._compute_max_restoration_for_meter(
+            bar.name, raw_configs.affordances
+        )
+
+        if depletion_per_tick > max_restoration_per_tick:
+            errors.add_error(
+                f"[UAC-VAL-005] Meter '{bar.name}' unsustainable: "
+                f"Depletion ({depletion_per_tick:.4f}/tick) > "
+                f"Max restoration ({max_restoration_per_tick:.4f}/tick). "
+                f"Agent will inevitably die."
+            )
+
+    # 4. Capacity constraints (NEW)
+    if raw_configs.training.num_agents > 1:
+        critical_affordances = self._find_critical_path_affordances(raw_configs)
+
+        for aff_id in critical_affordances:
+            aff = symbol_table.affordances[aff_id]
+            capacity = getattr(aff, 'capacity', None)
+
+            if capacity and capacity < raw_configs.training.num_agents:
+                errors.add_warning(
+                    f"[UAC-VAL-005] Affordance '{aff_id}' has capacity {capacity} "
+                    f"but {raw_configs.training.num_agents} agents. "
+                    f"Contention may cause starvation."
+                )
+
+
+def _count_income_hours(self, affordances: AffordanceConfigCollection) -> float:
+    """Count hours per day when income-generating affordances are available."""
+    income_affordances = [
+        aff for aff in affordances.affordances
+        if any(effect.meter == "money" and effect.delta > 0
+               for effect in aff.effects)
+    ]
+
+    if not income_affordances:
+        return 0.0
+
+    # Compute union of operating hours
+    total_hours = 0.0
+    for aff in income_affordances:
+        if hasattr(aff, 'operating_hours'):
+            open_hour, close_hour = aff.operating_hours
+            hours = (close_hour - open_hour) % 24
+            total_hours = max(total_hours, hours)
+        else:
+            total_hours = 24.0  # Always available
+
+    return total_hours
+
+
+def _compute_max_restoration_for_meter(
+    self,
+    meter_name: str,
+    affordances: AffordanceConfigCollection
+) -> float:
+    """Compute maximum restoration per tick for a meter."""
+    max_restoration = 0.0
+
+    for aff in affordances.affordances:
+        for effect in aff.effects:
+            if effect.meter == meter_name and effect.delta > 0:
+                max_restoration = max(max_restoration, effect.delta)
+
+    return max_restoration
+
+
+def _find_critical_path_affordances(self, raw_configs: RawConfigs) -> list[str]:
+    """Identify affordances on critical path for survival."""
+    # Simple heuristic: affordances that restore critical meters
+    critical_meters = {bar.name for bar in raw_configs.bars.bars if bar.critical}
+    critical_affordances = set()
+
+    for aff in raw_configs.affordances.affordances:
+        restores_critical = any(
+            effect.meter in critical_meters and effect.delta > 0
+            for effect in aff.effects
+        )
+        if restores_critical:
+            critical_affordances.add(aff.id)
+
+    return list(critical_affordances)
+```
+
+**Success Criteria**:
+- [ ] Operating hours feasibility checked
+- [ ] Depletion sustainability validated
+- [ ] Capacity constraints checked for multi-agent
+- [ ] Clear error messages for infeasible configs
+- [ ] Warnings for stressed but possible configs
+
+---
+
+### Phase 5 Enhancement: Provenance Tracking (2-3 hours)
+
+**Goal**: Track not just config hash, but compiler version, code commit, and library versions.
+
+**Context**: From external review - critical for reproducibility and debugging.
+
+#### 5.1: Expand UniverseMetadata with Provenance
+
+**File**: `src/townlet/universe/metadata.py` (modify)
+
+```python
+@dataclass(frozen=True)
+class UniverseMetadata:
+    """Derived metadata about compiled universe."""
+
+    # Existing fields...
+    config_hash: str  # SHA-256 of normalized YAML contents
+    config_version: str
+    compiler_version: str
+    compiled_at: str
+
+    # NEW: Provenance tracking (from external review)
+    provenance_id: str  # SHA-256 of (config + compiler + code + deps)
+    compiler_git_sha: str  # Git commit that built compiler
+    python_version: str  # e.g., "3.11.5"
+    torch_version: str  # e.g., "2.1.0"
+    pydantic_version: str  # e.g., "2.5.0"
+
+    # Existing fields...
+```
+
+#### 5.2: Implement Provenance Computation
+
+**File**: `src/townlet/universe/compiler.py` (in Stage 5)
+
+```python
+def _compute_provenance_id(
+    self,
+    config_hash: str,
+    compiler_version: str,
+    git_sha: str,
+    python_version: str,
+    torch_version: str,
+    pydantic_version: str
+) -> str:
+    """
+    Compute provenance ID from all inputs that affect semantics.
+
+    Provenance ID = SHA-256(config + compiler + code + deps)
+
+    This ensures that ANY change to config, compiler code, or library
+    versions produces a different provenance ID, enabling true reproducibility.
+    """
+    import hashlib
+
+    components = "|".join([
+        config_hash,
+        compiler_version,
+        git_sha,
+        python_version,
+        torch_version,
+        pydantic_version
+    ])
+
+    return hashlib.sha256(components.encode("utf-8")).hexdigest()
+
+
+def _get_git_sha(self) -> str:
+    """Get current git commit SHA."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except:
+        return "unknown"
+
+
+def _stage_5_compute_metadata(
+    self,
+    config_dir: Path,
+    raw_configs: RawConfigs,
+    symbol_table: UniverseSymbolTable
+) -> tuple[UniverseMetadata, ObservationSpec]:
+    """Stage 5: Compute metadata from validated configs."""
+
+    # Existing metadata computation...
+
+    # NEW: Provenance tracking
+    import sys
+    import torch
+    import pydantic
+
+    compiler_git_sha = self._get_git_sha()
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    torch_version = torch.__version__
+    pydantic_version = pydantic.__version__
+
+    provenance_id = self._compute_provenance_id(
+        config_hash=config_hash,
+        compiler_version=compiler_version,
+        git_sha=compiler_git_sha,
+        python_version=python_version,
+        torch_version=torch_version,
+        pydantic_version=pydantic_version
+    )
+
+    metadata = UniverseMetadata(
+        # Existing fields...
+        config_hash=config_hash,
+        config_version=config_version,
+        compiler_version=compiler_version,
+        compiled_at=compiled_at,
+        # NEW: Provenance fields
+        provenance_id=provenance_id,
+        compiler_git_sha=compiler_git_sha,
+        python_version=python_version,
+        torch_version=torch_version,
+        pydantic_version=pydantic_version,
+        # ... rest of fields
+    )
+
+    return (metadata, observation_spec)
+```
+
+**Success Criteria**:
+- [ ] Provenance ID computed from all semantic inputs
+- [ ] Git SHA captured (or "unknown" if not in repo)
+- [ ] Library versions captured
+- [ ] Provenance ID stored in metadata
+- [ ] Checkpoints include provenance for debugging
+
+---
+
+### Phase 5 Enhancement: ObservationSpec Field UUIDs (2-3 hours)
+
+**Goal**: Protect against silent field reordering breaking checkpoints.
+
+**Context**: From external review - field indices can drift, causing networks to read wrong features.
+
+#### 5.1: Add UUID Field to ObservationField
+
+**File**: `src/townlet/universe/dto/observation_spec.py` (modify)
+
+```python
+@dataclass(frozen=True)
+class ObservationField:
+    """Single field in flattened observation vector."""
+
+    uuid: str  # NEW: Stable identifier (semantic-based, not index-based)
+    name: str
+    type: str
+    dims: int
+    start_index: int
+    end_index: int
+    scope: str
+    description: str
+    semantic_type: str | None = None
+    categorical_labels: tuple[str, ...] | None = None
+```
+
+#### 5.2: Generate Stable UUIDs in Adapter
+
+**File**: `src/townlet/universe/adapters/vfs_adapter.py` (modify)
+
+```python
+def _generate_field_uuid(field_id: str, source_variable: str, scope: str) -> str:
+    """
+    Generate deterministic UUID from field semantics.
+
+    UUID is based on semantic identity (variable + field + scope),
+    NOT position. This ensures UUIDs remain stable across field reordering.
+
+    Args:
+        field_id: Field identifier (e.g., "obs_energy")
+        source_variable: Source variable (e.g., "energy")
+        scope: Variable scope (e.g., "agent")
+
+    Returns:
+        16-character hex UUID
+    """
+    import hashlib
+
+    # Semantic key (NOT index-based)
+    semantic_key = f"{scope}.{source_variable}.{field_id}"
+
+    # Deterministic hash
+    return hashlib.sha256(semantic_key.encode()).hexdigest()[:16]
+
+
+def vfs_to_universe_observation_spec(
+    vfs_fields: list[VFSObservationField]
+) -> UniverseObservationSpec:
+    """Convert VFS ObservationField list to Universe ObservationSpec."""
+
+    universe_fields = []
+    current_index = 0
+
+    for vfs_field in vfs_fields:
+        dims = _flatten_shape(vfs_field.shape)
+        start_index = current_index
+        end_index = current_index + dims
+        semantic_type = _infer_semantic_type(vfs_field.id, vfs_field.source_variable)
+
+        # NEW: Generate stable UUID
+        field_uuid = _generate_field_uuid(
+            vfs_field.id,
+            vfs_field.source_variable,
+            vfs_field.scope
+        )
+
+        universe_fields.append(ObservationField(
+            uuid=field_uuid,  # NEW
+            name=vfs_field.id,
+            type=_infer_field_type(vfs_field.shape, semantic_type),
+            dims=dims,
+            start_index=start_index,
+            end_index=end_index,
+            scope=vfs_field.scope,
+            description=vfs_field.description or f"{vfs_field.id} field",
+            semantic_type=semantic_type
+        ))
+
+        current_index = end_index
+
+    return UniverseObservationSpec.from_fields(universe_fields)
+```
+
+#### 5.3: Update Checkpoint Validation to Use UUIDs
+
+**File**: `src/townlet/universe/compiled.py` (modify)
+
+```python
+def check_checkpoint_compatibility(
+    self,
+    checkpoint: dict
+) -> tuple[bool, str]:
+    """Check if checkpoint is compatible with this universe."""
+
+    # Existing hash check...
+
+    # NEW: Field UUID check (if checkpoint has field manifest)
+    checkpoint_field_uuids = checkpoint.get('field_uuids')
+    if checkpoint_field_uuids is not None:
+        current_field_uuids = [f.uuid for f in self.observation_spec.fields]
+
+        if checkpoint_field_uuids != current_field_uuids:
+            return (
+                False,
+                f"Observation field mismatch (field UUIDs differ):\n"
+                f"  Checkpoint has {len(checkpoint_field_uuids)} fields\n"
+                f"  Current has {len(current_field_uuids)} fields\n"
+                f"  Fields may have been reordered or changed.\n"
+                f"  Use strict ordering or rebuild checkpoint."
+            )
+
+    return (True, "Checkpoint compatible")
+```
+
+**Success Criteria**:
+- [ ] ObservationField has uuid field
+- [ ] UUIDs generated from semantics (not indices)
+- [ ] UUIDs stable across field reordering
+- [ ] Checkpoints store field UUIDs
+- [ ] Checkpoint validation checks UUID compatibility
+
+---
+
+### Phase 7 Enhancement: YAML Normalization (2-3 hours)
+
+**Goal**: Normalize YAML before hashing to prevent cache invalidation on cosmetic changes.
+
+**Context**: From external review - whitespace, key order, comments shouldn't invalidate cache.
+
+#### 7.1: Implement YAML Normalizer
+
+**File**: `src/townlet/universe/yaml_normalizer.py` (NEW)
+
+```python
+"""YAML normalization for deterministic hashing."""
+from pathlib import Path
+import yaml
+
+
+def normalize_yaml_for_hash(yaml_path: Path) -> dict:
+    """
+    Load YAML and normalize to canonical form.
+
+    Normalization ensures:
+    - Keys sorted alphabetically
+    - Comments stripped
+    - Anchors/aliases resolved
+    - Whitespace normalized
+    - Numbers canonicalized (1.0 == 1)
+
+    Args:
+        yaml_path: Path to YAML file
+
+    Returns:
+        Normalized dict (ready for JSON serialization + hashing)
+    """
+    with open(yaml_path) as f:
+        data = yaml.safe_load(f)  # Resolves anchors automatically
+
+    return _normalize_recursive(data)
+
+
+def _normalize_recursive(obj):
+    """Recursively normalize data structure."""
+    if isinstance(obj, dict):
+        # Sort keys, recursively normalize values
+        return {k: _normalize_recursive(obj[k]) for k in sorted(obj.keys())}
+    elif isinstance(obj, list):
+        # Recursively normalize list items
+        return [_normalize_recursive(x) for x in obj]
+    elif isinstance(obj, float):
+        # Canonicalize floats (1.0 → 1.0, not "1.0" vs "1")
+        if obj == int(obj):
+            return int(obj)
+        return obj
+    else:
+        # Strings, ints, bools, None pass through
+        return obj
+```
+
+#### 7.2: Update Config Hash Computation
+
+**File**: `src/townlet/universe/compiler.py` (modify)
+
+```python
+def _compute_config_hash(self, config_dir: Path) -> str:
+    """
+    Compute SHA-256 hash of normalized YAML contents.
+
+    Uses canonical normalization (sorted keys, no comments, resolved anchors)
+    so that cosmetic changes (whitespace, key order, comments) don't
+    invalidate the cache.
+    """
+    import hashlib
+    import json
+    from townlet.universe.yaml_normalizer import normalize_yaml_for_hash
+
+    yaml_files = sorted(config_dir.glob("*.yaml"))
+    normalized_data = []
+
+    for yaml_file in yaml_files:
+        normalized_content = normalize_yaml_for_hash(yaml_file)
+        normalized_data.append({
+            "file": yaml_file.name,
+            "content": normalized_content
+        })
+
+    # Serialize with sorted keys for determinism
+    blob = json.dumps(normalized_data, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+```
+
+#### 7.3: Update Cache Key to Include Compiler Version
+
+**File**: `src/townlet/universe/compiler.py` (modify)
+
+```python
+def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
+    """Compile universe with hash-based cache invalidation."""
+
+    cache_path = config_dir / ".compiled" / "universe.msgpack"
+
+    if use_cache and cache_path.exists():
+        try:
+            cached_universe = CompiledUniverse.load_from_cache(cache_path)
+
+            # Compute current hashes
+            current_config_hash = self._compute_config_hash(config_dir)
+            current_compiler_version = "1.0.0"  # Or from __version__
+
+            # NEW: Check BOTH config hash AND compiler version
+            if (cached_universe.metadata.config_hash == current_config_hash and
+                cached_universe.metadata.compiler_version == current_compiler_version):
+
+                logger.info(
+                    f"Loading cached universe\n"
+                    f"  Config hash: {current_config_hash[:8]}...\n"
+                    f"  Compiler:    {current_compiler_version}"
+                )
+                return cached_universe
+            else:
+                logger.info(
+                    f"Cache stale:\n"
+                    f"  Config: {cached_universe.metadata.config_hash[:8]}... → "
+                    f"{current_config_hash[:8]}...\n"
+                    f"  Compiler: {cached_universe.metadata.compiler_version} → "
+                    f"{current_compiler_version}\n"
+                    f"Recompiling..."
+                )
+
+        except Exception as e:
+            logger.warning(f"Cache load failed ({e}), recompiling from source")
+
+    # Cache miss or stale, do full compilation
+    ...
+```
+
+**Success Criteria**:
+- [ ] YAML normalized before hashing
+- [ ] Cosmetic changes (whitespace, comments, key order) don't change hash
+- [ ] Cache key includes compiler version
+- [ ] Cache invalidated on compiler upgrade
+- [ ] Tests verify hash stability
+
+---
+
 ## Effort Estimate
 
 ### Breakdown
@@ -1541,21 +3144,98 @@ All future UAC work depends on robust compilation:
 - **Phase 8** (Environment Refactor): 3-4 hours
 - **Subtotal (Original)**: 37-54 hours
 
-**Research Integration Extensions**:
+**COMPILER_ARCHITECTURE.md Additions** (Aligned with authoritative reference):
 
+- **Phase 2 Extension** (CuesCompiler): +3-4 hours
+  - Cue loading from cues.yaml
+  - Cue registration in symbol table
+  - Cue meter reference validation
 - **Phase 4 Extension** (Capability system validation): +6-8 hours
   - Affordance availability validation (Gap 1)
   - Action cost meter references (Gap 2)
   - Capability conflict detection (Finding 1)
   - Effect pipeline consistency (Finding 1)
+  - Cues validation (range coverage, overlaps)
+- **Phase 5 Extension** (ObservationSpec): +2 hours
+  - UAC → BAC data contract (BLOCKS TASK-005)
+  - VFS integration with VFSObservationSpecBuilder
+- **Phase 6 Extension** (Rich Metadata): +4 hours
+  - MeterMetadata, ActionSpaceMetadata, AffordanceMetadata
+  - Training system integration structures
 
-**Total**: 43-62 hours → rounded to **46-66 hours** (6-8 days)
+**Updated Breakdown (with External Review Additions)**:
 
-**Note**: +6-8h represents +16-15% increase from original estimate due to capability system complexity.
+- **Phase 1** (Core Compiler): 11-16 hours
+- **Phase 2** (Symbol Table + CuesCompiler): 7-10 hours
+- **Phase 3** (Error Collection + Error Codes): 7-10 hours (+3-4h for error codes)
+- **Phase 4** (Cross-Validation + Cues + Security + Economics): 15-22 hours
+  - Original validation + Cues: 10-14h
+  - Security hardening: +1-2h
+  - Economic feasibility: +4-6h
+- **Phase 5** (Metadata + ObservationSpec + Provenance + UUIDs): 9-12 hours
+  - Original: 5-6h
+  - Provenance tracking: +2-3h
+  - Field UUIDs: +2-3h
+- **Phase 6** (Optimization + Rich Metadata): 8-10 hours
+- **Phase 7** (Caching + YAML Normalization): 6-9 hours (+2-3h for normalization)
+- **Phase 8** (Environment Refactor): 3-4 hours
 
-**Updated from research estimate (40-58 hours) based on detailed breakdown**
+**Subtotal (Implementation)**: **66-93 hours** (8-12 days)
 
-**Confidence**: High (well-defined scope, clear interfaces)
+**Prerequisites (MUST be completed first)**: **8-12 hours**
+
+**Grand Total**: **74-105 hours** (9-13 days)
+
+---
+
+**Breakdown by Source**:
+
+**Original Core** (37-54h):
+- Basic compiler pipeline (7 stages)
+- Error collection
+- Basic validation
+- Caching
+
+**COMPILER_ARCHITECTURE.md Additions** (+15-18h):
+- CuesCompiler integration: +3-4h
+- ObservationSpec UAC→BAC contract: +2h
+- Rich Metadata structures: +4h
+- Capability system validation: +6-8h
+
+**External Review Additions** (+14-21h):
+- Error codes & source maps: +3-4h
+- Security hardening: +1-2h
+- Economic feasibility checks: +4-6h
+- Provenance tracking: +2-3h
+- ObservationSpec field UUIDs: +2-3h
+- YAML normalization: +2-3h
+
+**TASK-004A-PREREQUISITES** (+8-12h):
+- Config schema alignment
+- DTO consolidation
+- ObservationSpec adapter
+- HamletConfig integration
+- Spec updates
+
+---
+
+**Total Increase from Original**: +37-51h (+100-134% from 37-54h baseline)
+
+**Why Worth It**:
+- Transforms compiler from **research-grade → audit-grade**
+- Prevents irreproducible runs (provenance)
+- Prevents silent failures (security hardening)
+- Prevents unwinnable configs (feasibility checks)
+- Prevents cache churn (YAML normalization)
+- Prevents checkpoint corruption (field UUIDs)
+- Dramatically improves debugging (error codes, source maps)
+
+**UPDATED per**:
+- COMPILER_ARCHITECTURE.md (authoritative reference)
+- TASK-004A-PREREQUISITES (integration blockers)
+- External Review 2025-11-08 (production hardening)
+
+**Confidence**: High (well-defined scope, clear interfaces, aligned with architecture, prerequisites resolve blockers, external review validates approach)
 
 ---
 

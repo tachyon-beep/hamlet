@@ -1,0 +1,138 @@
+# Training Configuration Template (TASK-003)
+# ALL FIELDS REQUIRED - No defaults allowed
+#
+# This template shows ALL required parameters for a complete training configuration.
+# Copy sections to your training.yaml and customize values.
+#
+# Philosophy: If it affects the universe, it's in the config. No exceptions.
+
+# ============================================================================
+# TRAINING SECTION - Q-learning hyperparameters
+# ============================================================================
+training:
+  # Compute device (REQUIRED)
+  device: cuda  # Options: 'cuda' (GPU), 'cpu' (CPU-only), 'mps' (Apple Silicon)
+
+  # Training duration (REQUIRED)
+  max_episodes: 5000  # Total episodes to train
+
+  # Q-learning hyperparameters (ALL REQUIRED)
+  train_frequency: 4             # Train Q-network every N steps
+  target_update_frequency: 100   # Update target network every N training steps
+  batch_size: 64                 # Experience replay batch size (feedforward: 64, recurrent: 16)
+  max_grad_norm: 10.0            # Gradient clipping threshold (prevents exploding gradients)
+
+  # Epsilon-greedy exploration (ALL REQUIRED)
+  epsilon_start: 1.0   # Initial exploration rate (1.0 = 100% random)
+  epsilon_decay: 0.995 # Decay per episode (0.995 → ε=0.1 at ep 460)
+  epsilon_min: 0.01    # Minimum exploration rate (1% random floor)
+
+  # Recurrent-specific (REQUIRED if network_type: recurrent)
+  sequence_length: 8   # Length of sequences for LSTM training (recurrent only)
+
+# Decay formula: ε(n) = max(epsilon_start * epsilon_decay^n, epsilon_min)
+# Fast learning (L0):     epsilon_decay: 0.99  (reaches ε=0.1 at ep 229)
+# Moderate (L0.5/L1):     epsilon_decay: 0.995 (reaches ε=0.1 at ep 460)
+# Slow (L2 POMDP):        epsilon_decay: 0.998 (reaches ε=0.1 at ep 1150)
+
+# ============================================================================
+# ENVIRONMENT SECTION - Grid & observation parameters
+# ============================================================================
+environment:
+  # Grid parameters (REQUIRED)
+  grid_size: 8  # Grid dimensions (N×N square grid)
+
+  # Observability (REQUIRED)
+  partial_observability: false  # true = POMDP (5×5 window), false = full grid
+  vision_range: 2  # Local window radius for POMDP (5×5 = range 2)
+
+  # Temporal mechanics (REQUIRED)
+  enable_temporal_mechanics: false  # true = time-of-day, operating hours, multi-tick
+
+  # Enabled affordances (REQUIRED)
+  enabled_affordances: null  # null = all affordances, or list: ["Bed", "Hospital", "Job"]
+
+  # Action energy costs (REQUIRED)
+  energy_move_depletion: 0.005     # Energy cost per movement action (0.5%)
+  energy_wait_depletion: 0.001     # Energy cost per WAIT action (0.1%)
+  energy_interact_depletion: 0.0   # Energy cost per INTERACT action (0%)
+
+# Note: grid_size, partial_observability, vision_range control observation space
+# Enable all affordances (null) or specify subset for curriculum learning
+
+# ============================================================================
+# POPULATION SECTION - Agent & learning parameters
+# ============================================================================
+population:
+  # Agent count (REQUIRED)
+  num_agents: 1  # Number of agents to train (typically 1 for single-agent RL)
+
+  # Q-learning parameters (ALL REQUIRED)
+  learning_rate: 0.00025  # Adam optimizer learning rate (Atari DQN standard: 0.00025)
+  gamma: 0.99             # Q-learning discount factor (future reward importance)
+  replay_buffer_capacity: 10000  # Experience replay buffer size (transitions)
+
+  # Network architecture (REQUIRED)
+  network_type: simple  # Options: 'simple' (MLP for full obs), 'recurrent' (LSTM for POMDP)
+
+# Learning rate guidance:
+# - Standard (L0/L1): 0.00025 (Atari DQN)
+# - Fast learning (L0): 0.001 (higher LR for simpler problems)
+# - Recurrent (L2): 0.0001 (lower LR for LSTM stability)
+
+# ============================================================================
+# CURRICULUM SECTION - Adversarial difficulty adjustment
+# ============================================================================
+curriculum:
+  # Stage parameters (ALL REQUIRED)
+  max_steps_per_episode: 500  # Episode length limit (truncation)
+
+  # Advancement thresholds (ALL REQUIRED)
+  survival_advance_threshold: 0.7  # Advance to next stage if 70% survival rate
+  survival_retreat_threshold: 0.3  # Retreat to prev stage if <30% survival rate
+  entropy_gate: 0.5  # Minimum policy entropy to advance (prevents premature advancement)
+  min_steps_at_stage: 1000  # Minimum training steps before stage change allowed
+
+# Curriculum stages (automatically managed):
+# - Stage 0: 100 max_steps (easy)
+# - Stage 1: 200 max_steps
+# - Stage 2: 300 max_steps
+# - Stage 3: 400 max_steps
+# - Stage 4: 500 max_steps (full)
+
+# ============================================================================
+# EXPLORATION SECTION - Intrinsic motivation (RND + adaptive annealing)
+# ============================================================================
+exploration:
+  # RND parameters (ALL REQUIRED)
+  embed_dim: 128  # Embedding dimension for RND predictor network
+
+  # Intrinsic reward parameters (ALL REQUIRED)
+  initial_intrinsic_weight: 1.0  # Initial weight for intrinsic rewards (vs extrinsic)
+  variance_threshold: 100.0      # Survival variance threshold for annealing (higher = slower)
+  survival_window: 100           # Window size for tracking survival consistency
+
+# Intrinsic weight annealing:
+# - Starts at initial_intrinsic_weight (1.0 = exploration priority)
+# - Anneals when survival variance < variance_threshold for survival_window episodes
+# - Prevents premature annealing from "consistently failing" patterns
+# - See docs/EXPLORATION.md for detailed annealing algorithm
+
+# ============================================================================
+# RUN METADATA (OPTIONAL) - For output organization
+# ============================================================================
+run_metadata:
+  output_subdir: L1_full_observability  # Subdirectory for outputs (logs, checkpoints)
+
+# ============================================================================
+# VALIDATION CHECKLIST
+# ============================================================================
+# Before running training, verify:
+# ✓ All sections present (training, environment, population, curriculum, exploration)
+# ✓ No fields use default values (all explicitly specified)
+# ✓ epsilon_decay matches learning speed (0.99 fast, 0.995 moderate, 0.998 slow)
+# ✓ network_type matches observability (simple for full obs, recurrent for POMDP)
+# ✓ batch_size ≤ replay_buffer_capacity (can't sample more than buffer holds)
+# ✓ grid_size² > len(enabled_affordances) + 1 (room for affordances + agent)
+
+# Validate with: python scripts/validate_configs.py --config-pack <pack_name>

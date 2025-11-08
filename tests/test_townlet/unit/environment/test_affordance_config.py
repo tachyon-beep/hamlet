@@ -178,6 +178,32 @@ class TestAffordanceConfigValidation:
 
         assert config.operating_hours == [18, 4]
 
+    def test_position_formats(self):
+        """Position supports list, dict, int, or None."""
+        base_kwargs = dict(
+            id="Bed",
+            name="Bed",
+            category="energy_restoration",
+            interaction_type="instant",
+            operating_hours=[0, 24],
+            costs=[],
+            effects=[{"meter": "energy", "amount": 0.5}],
+        )
+
+        assert AffordanceConfig(**base_kwargs, position=[1, 2]).position == [1, 2]
+        assert AffordanceConfig(**base_kwargs, position=[1, 2, 0]).position == [1, 2, 0]
+        assert AffordanceConfig(**base_kwargs, position={"q": 1, "r": 2}).position == {"q": 1, "r": 2}
+        assert AffordanceConfig(**base_kwargs, position=3).position == 3
+
+        with pytest.raises(ValueError):
+            AffordanceConfig(**base_kwargs, position=[1])  # Wrong dimensionality
+
+        with pytest.raises(ValueError):
+            AffordanceConfig(**base_kwargs, position={"x": 1})  # Wrong keys
+
+        with pytest.raises(ValueError):
+            AffordanceConfig(**base_kwargs, position=-1)  # Invalid graph node id
+
 
 # =============================================================================
 # COLLECTION QUERY METHOD TESTS

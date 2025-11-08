@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Phase 5 universe compiler DTOs under `townlet.universe.dto` (observation, action, meter, affordance, and universe metadata) with accompanying unit tests.
+- New `CuesConfig` DTO/loader plus config-pack fixtures ensuring cues schemas are validated alongside other UAC artifacts.
+
+### Changed
+
+- `HamletConfig` now composes substrate, cues, bars, cascades, and affordances (in addition to training sections) so config packs are validated holistically; `scripts/validate_configs.py` benefits automatically.
+- `make_temp_config_pack` and shared fixtures updated to include cues data and all production config packs, enabling broader regression coverage.
+- `townlet.environment.affordance_config.AffordanceConfig` now validates substrate-aware `position` definitions (2D/3D lists, axial dicts, or graph indices).
+
+### Fixed
+
+- `DemoRunner` references the correct `self.config` mapping when reading optional recording settings (previously crashed due to `self.raw_config`).
+
 ## 2025-11-07 - TASK-002C: VFS Phase 1 Integration (COMPLETE)
 
 **Status**: ✅ Complete (Nov 2025)

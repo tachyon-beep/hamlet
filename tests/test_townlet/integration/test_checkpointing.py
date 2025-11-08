@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 import torch
-import yaml
 
+from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.runner import DemoRunner
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -608,28 +608,18 @@ class TestRunnerCheckpointing:
     def test_runner_checkpoint_includes_all_components(self, cpu_device):
         """Runner checkpoint should include state from all components."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-            checkpoint_dir = tmpdir / "checkpoints"
+            tmp_path = Path(tmpdir)
+            checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            # Create minimal config
-            config = {
-                "environment": {"grid_size": 8, "partial_observability": False},
-                "population": {"num_agents": 1, "network_type": "simple"},
-                "curriculum": {"max_steps_per_episode": 100},
-                "exploration": {},
-            }
-            config_path = tmpdir / "config.yaml"
-            with open(config_path, "w") as f:
-                yaml.dump(config, f)
+            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}))
 
             # Create runner with context manager
             with DemoRunner(
-                config_dir=config_path.parent,
-                db_path=tmpdir / "test.db",
+                config_dir=config_dir,
+                db_path=tmp_path / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
-                training_config_path=config_path,
             ) as runner:
                 # Manually initialize components
                 runner.env = VectorizedHamletEnv(
@@ -691,27 +681,17 @@ class TestRunnerCheckpointing:
     def test_runner_checkpoint_preserves_episode_number(self, cpu_device):
         """Runner should preserve episode counter across checkpoint cycle."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-            checkpoint_dir = tmpdir / "checkpoints"
+            tmp_path = Path(tmpdir)
+            checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config = {
-                "environment": {"grid_size": 8, "partial_observability": False},
-                "population": {"num_agents": 1, "network_type": "simple"},
-                "curriculum": {"max_steps_per_episode": 100},
-                "exploration": {},
-            }
-            config_path = tmpdir / "config.yaml"
-            with open(config_path, "w") as f:
-                yaml.dump(config, f)
+            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}))
 
-            # First runner - set episode and save
             with DemoRunner(
-                config_dir=config_path.parent,
-                db_path=tmpdir / "test1.db",
+                config_dir=config_dir,
+                db_path=tmp_path / "test1.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
-                training_config_path=config_path,
             ) as runner1:
                 runner1.env = VectorizedHamletEnv(
                     num_agents=1,
@@ -724,7 +704,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
-                    config_pack_path=Path("configs/L1_full_observability"),
+                    config_pack_path=config_dir,
                 )
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner1.curriculum.initialize_population(1)
@@ -736,21 +716,16 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner1.env.observation_dim,
-                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
-
-                # Set episode number
                 runner1.current_episode = 42
                 runner1.save_checkpoint()
 
-            # Second runner - load and verify
             with DemoRunner(
-                config_dir=config_path.parent,
-                db_path=tmpdir / "test2.db",
+                config_dir=config_dir,
+                db_path=tmp_path / "test2.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
-                training_config_path=config_path,
             ) as runner2:
                 runner2.env = VectorizedHamletEnv(
                     num_agents=1,
@@ -763,7 +738,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
-                    config_pack_path=Path("configs/L1_full_observability"),
+                    config_pack_path=config_dir,
                 )
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner2.curriculum.initialize_population(1)
@@ -775,40 +750,25 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner2.env.observation_dim,
-                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
-
-                # Load checkpoint
                 runner2.load_checkpoint()
-
-                # Verify episode number restored
-                assert runner2.current_episode == 42, f"Episode number should be restored: 42 vs {runner2.current_episode}"
+                assert runner2.current_episode == 42, "Episode number should be preserved after load"
 
     def test_runner_checkpoint_round_trip_preserves_training_state(self, cpu_device):
         """Runner checkpoint round-trip should preserve complete training state."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-            checkpoint_dir = tmpdir / "checkpoints"
+            tmp_path = Path(tmpdir)
+            checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config = {
-                "environment": {"grid_size": 8, "partial_observability": False},
-                "population": {"num_agents": 1, "network_type": "simple"},
-                "curriculum": {"max_steps_per_episode": 100},
-                "exploration": {},
-            }
-            config_path = tmpdir / "config.yaml"
-            with open(config_path, "w") as f:
-                yaml.dump(config, f)
+            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}), name="runner_config")
 
-            # First runner - train and save
             with DemoRunner(
-                config_dir=config_path.parent,
-                db_path=tmpdir / "test1.db",
+                config_dir=config_dir,
+                db_path=tmp_path / "test1.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
-                training_config_path=config_path,
             ) as runner1:
                 runner1.env = VectorizedHamletEnv(
                     num_agents=1,
@@ -821,7 +781,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
-                    config_pack_path=Path("configs/L1_full_observability"),
+                    config_pack_path=config_dir,
                 )
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner1.curriculum.initialize_population(1)
@@ -833,34 +793,26 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner1.env.observation_dim,
-                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
 
-                # Train for a few steps
                 runner1.population.reset()
                 for _ in range(50):
                     runner1.population.step_population(runner1.env)
-
-                # Advance curriculum stage
                 runner1.curriculum.tracker.agent_stages[0] = 3
 
-                # Capture state before save
                 q_weights_before = {k: v.clone() for k, v in runner1.population.q_network.state_dict().items()}
                 stage_before = runner1.curriculum.tracker.agent_stages[0].item()
                 epsilon_before = runner1.exploration.rnd.epsilon
                 buffer_size_before = len(runner1.population.replay_buffer)
 
-                # Save checkpoint
                 runner1.save_checkpoint()
 
-            # Second runner - load and verify
             with DemoRunner(
-                config_dir=config_path.parent,
-                db_path=tmpdir / "test2.db",
+                config_dir=config_dir,
+                db_path=tmp_path / "test2.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
-                training_config_path=config_path,
             ) as runner2:
                 runner2.env = VectorizedHamletEnv(
                     num_agents=1,
@@ -873,7 +825,7 @@ class TestRunnerCheckpointing:
                     wait_energy_cost=0.001,
                     interact_energy_cost=0.0,
                     agent_lifespan=1000,
-                    config_pack_path=Path("configs/L1_full_observability"),
+                    config_pack_path=config_dir,
                 )
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
                 runner2.curriculum.initialize_population(1)
@@ -885,34 +837,23 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner2.env.observation_dim,
-                    # action_dim defaults to env.action_dim
                     network_type="simple",
                 )
 
-                # Load checkpoint
                 runner2.load_checkpoint()
 
-                # Verify complete state restoration
-                # 1. Q-network weights
                 q_weights_after = runner2.population.q_network.state_dict()
                 for key in q_weights_before.keys():
-                    assert torch.allclose(
-                        q_weights_before[key], q_weights_after[key], atol=1e-6
-                    ), f"Q-network weights for {key} should match"
+                    assert torch.allclose(q_weights_before[key], q_weights_after[key], atol=1e-6)
 
-                # 2. Curriculum stage
                 stage_after = runner2.curriculum.tracker.agent_stages[0].item()
-                assert stage_after == stage_before, f"Curriculum stage should match: {stage_before} vs {stage_after}"
+                assert stage_after == stage_before
 
-                # 3. Exploration epsilon
                 epsilon_after = runner2.exploration.rnd.epsilon
-                assert abs(epsilon_after - epsilon_before) < 1e-6, f"Epsilon should match: {epsilon_before} vs {epsilon_after}"
+                assert abs(epsilon_after - epsilon_before) < 1e-6
 
-                # 4. Replay buffer size
                 buffer_size_after = len(runner2.population.replay_buffer)
-                assert (
-                    buffer_size_after == buffer_size_before
-                ), f"Replay buffer size should match: {buffer_size_before} vs {buffer_size_after}"
+                assert buffer_size_after == buffer_size_before
 
 
 # =============================================================================
@@ -1342,109 +1283,64 @@ class TestVariableMeterCheckpoints:
 class TestDemoRunnerResourceManagement:
     """Test DemoRunner context manager and resource cleanup (QUICK-002)."""
 
-    def test_runner_closes_database_on_context_exit(self, cpu_device):
+    def test_runner_closes_database_on_context_exit(self, tmp_path, cpu_device):
         """DemoRunner should close database when exiting context manager."""
-        import tempfile
-        from pathlib import Path
+        checkpoint_dir = tmp_path / "checkpoints"
+        checkpoint_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="demo_runner_config")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-            checkpoint_dir = tmpdir / "checkpoints"
-            checkpoint_dir.mkdir()
+        # Create runner in context manager
+        with DemoRunner(
+            config_dir=config_dir,
+            db_path=tmp_path / "test.db",
+            checkpoint_dir=checkpoint_dir,
+            max_episodes=1,
+        ) as runner:
+            # Database should be open
+            assert hasattr(runner, "db")
+            assert runner.db.conn is not None
+            # Store connection reference
+            conn = runner.db.conn
 
-            config = {
-                "environment": {"grid_size": 8, "partial_observability": False},
-                "population": {"num_agents": 1, "network_type": "simple"},
-                "curriculum": {"max_steps_per_episode": 100},
-                "exploration": {},
-            }
-            config_path = tmpdir / "config.yaml"
-            with open(config_path, "w") as f:
-                yaml.dump(config, f)
+        # After exiting context, connection should be closed
+        # SQLite connection has no is_closed() but we can check it raises
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            conn.execute("SELECT 1")
 
-            # Create runner in context manager
-            with DemoRunner(
-                config_dir=config_path.parent,
-                db_path=tmpdir / "test.db",
-                checkpoint_dir=checkpoint_dir,
-                max_episodes=1,
-                training_config_path=config_path,
-            ) as runner:
-                # Database should be open
-                assert hasattr(runner, "db")
-                assert runner.db.conn is not None
-                # Store connection reference
-                conn = runner.db.conn
-
-            # After exiting context, connection should be closed
-            # SQLite connection has no is_closed() but we can check it raises
-            with pytest.raises(sqlite3.ProgrammingError, match="closed"):
-                conn.execute("SELECT 1")
-
-    def test_runner_cleanup_is_idempotent(self, cpu_device):
+    def test_runner_cleanup_is_idempotent(self, tmp_path, cpu_device):
         """Calling _cleanup() multiple times should be safe."""
-        import tempfile
-        from pathlib import Path
+        checkpoint_dir = tmp_path / "checkpoints"
+        checkpoint_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="demo_runner_cleanup")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-            checkpoint_dir = tmpdir / "checkpoints"
-            checkpoint_dir.mkdir()
+        runner = DemoRunner(
+            config_dir=config_dir,
+            db_path=tmp_path / "test.db",
+            checkpoint_dir=checkpoint_dir,
+            max_episodes=1,
+        )
 
-            config = {
-                "environment": {"grid_size": 8, "partial_observability": False},
-                "population": {"num_agents": 1, "network_type": "simple"},
-                "curriculum": {"max_steps_per_episode": 100},
-                "exploration": {},
-            }
-            config_path = tmpdir / "config.yaml"
-            with open(config_path, "w") as f:
-                yaml.dump(config, f)
+        # Call cleanup multiple times - should not raise
+        runner._cleanup()
+        runner._cleanup()  # Second call should be safe
+        runner._cleanup()  # Third call should be safe
 
-            runner = DemoRunner(
-                config_dir=config_path.parent,
-                db_path=tmpdir / "test.db",
+    def test_runner_context_manager_propagates_exceptions(self, tmp_path, cpu_device):
+        """Context manager should propagate exceptions, not suppress them."""
+        checkpoint_dir = tmp_path / "checkpoints"
+        checkpoint_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="demo_runner_exception")
+
+        # Exception inside with block should propagate
+        with pytest.raises(ValueError, match="test exception"):
+            with DemoRunner(
+                config_dir=config_dir,
+                db_path=tmp_path / "test.db",
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
-                training_config_path=config_path,
-            )
-
-            # Call cleanup multiple times - should not raise
-            runner._cleanup()
-            runner._cleanup()  # Second call should be safe
-            runner._cleanup()  # Third call should be safe
-
-    def test_runner_context_manager_propagates_exceptions(self, cpu_device):
-        """Context manager should propagate exceptions, not suppress them."""
-        import tempfile
-        from pathlib import Path
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-            checkpoint_dir = tmpdir / "checkpoints"
-            checkpoint_dir.mkdir()
-
-            config = {
-                "environment": {"grid_size": 8, "partial_observability": False},
-                "population": {"num_agents": 1, "network_type": "simple"},
-                "curriculum": {"max_steps_per_episode": 100},
-                "exploration": {},
-            }
-            config_path = tmpdir / "config.yaml"
-            with open(config_path, "w") as f:
-                yaml.dump(config, f)
-
-            # Exception inside with block should propagate
-            with pytest.raises(ValueError, match="test exception"):
-                with DemoRunner(
-                    config_dir=config_path.parent,
-                    db_path=tmpdir / "test.db",
-                    checkpoint_dir=checkpoint_dir,
-                    max_episodes=1,
-                    training_config_path=config_path,
-                ) as runner:
-                    assert runner is not None  # Runner created successfully
-                    raise ValueError("test exception")
+            ) as runner:
+                assert runner is not None  # Runner created successfully
+                raise ValueError("test exception")
 
     def test_database_close_is_idempotent(self, cpu_device):
         """DemoDatabase.close() should be safe to call multiple times and track closed state."""
