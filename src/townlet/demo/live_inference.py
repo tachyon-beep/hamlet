@@ -26,9 +26,6 @@ from townlet.substrate.gridnd import GridNDSubstrate
 
 logger = logging.getLogger(__name__)
 
-# Q-value log file (opened at module level)
-qvalue_log_file = None
-
 TELEMETRY_SCHEMA_VERSION = "1.0.0"
 
 
@@ -129,9 +126,9 @@ class LiveInferenceServer:
                 logger.error(f"Failed to initialize replay manager: {e}")
                 self.replay_manager = None
 
-        # Open Q-value log file
-        global qvalue_log_file
-        qvalue_log_file = open("qvalues_inference.log", "w", buffering=1)  # Line buffering
+        # Q-value logging (auto-closed via shutdown / destructor)
+        self._qvalue_log_path = Path("qvalues_inference.log")
+        self._qvalue_log_file = self._open_qvalue_log()
 
         # FastAPI app
         self.app = FastAPI(title="Hamlet Live Inference Server")
@@ -242,12 +239,31 @@ class LiveInferenceServer:
         """Cleanup on shutdown."""
         self.is_running = False
         logger.info("Live inference server shut down")
-        global qvalue_log_file
-        if qvalue_log_file:
+        self._close_qvalue_log()
+
+    def __del__(self):
+        """Best-effort cleanup when GC collects the server."""
+        try:
+            self._close_qvalue_log()
+        except Exception:
+            # Destructors must never raise; loggers may already be torn down
+            pass
+
+    def _open_qvalue_log(self):
+        """Open Q-value log file with line buffering."""
+        try:
+            return self._qvalue_log_path.open("w", buffering=1)
+        except OSError as exc:
+            logger.warning(f"Unable to open Q-value log at {self._qvalue_log_path}: {exc}")
+            return None
+
+    def _close_qvalue_log(self):
+        """Close Q-value log if open."""
+        if self._qvalue_log_file:
             try:
-                qvalue_log_file.close()
+                self._qvalue_log_file.close()
             finally:
-                qvalue_log_file = None
+                self._qvalue_log_file = None
 
     def _initialize_components(self):
         """Initialize environment and agent components."""
@@ -788,9 +804,9 @@ class LiveInferenceServer:
             f"Left={padded_for_log[2]:.2f}, Right={padded_for_log[3]:.2f}, "
             f"Interact={padded_for_log[4]:.2f}, Wait={padded_for_log[5]:.2f}\n"
         )
-        if qvalue_log_file:
-            qvalue_log_file.write(log_line)
-            qvalue_log_file.flush()
+        if self._qvalue_log_file:
+            self._qvalue_log_file.write(log_line)
+            self._qvalue_log_file.flush()
 
         # Prepare affordance interaction counts (sorted by count descending)
         affordance_stats = [
