@@ -183,14 +183,26 @@ class UniverseCompiler:
         errors.check_and_raise("Stage 4: Cross-Validation")
 
         # Stage 5: Compute metadata
-        metadata = self._stage_5_compute_metadata(raw_configs, symbol_table)
+        metadata, observation_spec = self._stage_5_compute_metadata(
+            config_dir, raw_configs, symbol_table
+        )
+
+        # Stage 5.3: Build rich metadata structures
+        action_space_metadata, meter_metadata, affordance_metadata = \
+            self._stage_5_build_rich_metadata(raw_configs)
 
         # Stage 6: Optimize (pre-compute)
         optimization_data = self._stage_6_optimize(raw_configs, metadata)
 
         # Stage 7: Emit compiled universe
         universe = self._stage_7_emit_compiled_universe(
-            raw_configs, metadata, optimization_data
+            raw_configs,
+            metadata,
+            observation_spec,
+            action_space_metadata,
+            meter_metadata,
+            affordance_metadata,
+            optimization_data
         )
 
         return universe
@@ -1214,59 +1226,55 @@ def _stage_5_build_rich_metadata(
         (action_space_metadata, meter_metadata, affordance_metadata)
     """
     # 1. ActionSpaceMetadata
-    action_infos = []
+    action_metadatas = []
     for action in raw_configs.actions.actions:
-        action_info = ActionInfo(
+        action_metadata = ActionMetadata(
             id=action.id,
             name=action.name,
-            type=action.type,  # "movement", "interaction", "passive"
+            type=action.type,  # "movement", "interaction", "passive", "custom"
+            enabled=True,  # Could be extended with training.enabled_actions
+            source="substrate" if action.source == "substrate" else "custom",
             costs={cost.meter: cost.amount for cost in action.costs},
             description=action.description or f"{action.name} action"
         )
-        action_infos.append(action_info)
+        action_metadatas.append(action_metadata)
 
     action_space_metadata = ActionSpaceMetadata(
-        actions=action_infos,
-        total_count=len(action_infos)
+        actions=action_metadatas,
+        action_dim=len(action_metadatas)
     )
 
     # 2. MeterMetadata
     meter_infos = []
     for bar in raw_configs.bars.bars:
         meter_info = MeterInfo(
-            index=bar.index,
             name=bar.name,
-            range_min=bar.range[0],
-            range_max=bar.range[1],
-            initial=bar.initial,
-            base_depletion=bar.base_depletion,
-            semantic_type="resource",  # Could be extended with bar.category
+            index=bar.index,
+            critical=bar.critical,
+            initial_value=bar.initial,
+            observable=True,  # All meters observable by default
             description=bar.description or f"{bar.name} resource meter"
         )
         meter_infos.append(meter_info)
 
     meter_metadata = MeterMetadata(
-        meters=sorted(meter_infos, key=lambda m: m.index),
-        total_count=len(meter_infos)
+        meters=sorted(meter_infos, key=lambda m: m.index)
     )
 
     # 3. AffordanceMetadata
     affordance_infos = []
-    for aff in raw_configs.affordances.affordances:
+    for idx, aff in enumerate(raw_configs.affordances.affordances):
         affordance_info = AffordanceInfo(
-            id=aff.id,
             name=aff.name,
-            category=aff.category,
-            costs={cost.meter: cost.amount for cost in aff.costs},
-            effects={eff.meter: eff.amount for eff in aff.effects},
-            operating_hours=aff.operating_hours,
+            id=aff.id,
+            index=idx,
+            type=aff.category,  # "resource", "service", "hazard", etc.
             description=aff.description or f"{aff.name} affordance"
         )
         affordance_infos.append(affordance_info)
 
     affordance_metadata = AffordanceMetadata(
-        affordances=affordance_infos,
-        total_count=len(affordance_infos)
+        affordances=affordance_infos
     )
 
     return (action_space_metadata, meter_metadata, affordance_metadata)
