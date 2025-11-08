@@ -38,10 +38,7 @@ def compute_vfs_observation_dim_from_agent_readable(config_path: Path) -> int:
     variables = load_variables_from_config(config_path)
 
     # Build exposures from all variables marked as readable by agent
-    exposures = {}
-    for var in variables:
-        if "agent" in var.readable_by:
-            exposures[var.id] = {"normalization": None}
+    exposures = [{"source_variable": var.id, "normalization": None} for var in variables if "agent" in var.readable_by]
 
     builder = VFSObservationSpecBuilder()
     spec = builder.build_observation_spec(variables, exposures)

@@ -10,7 +10,6 @@ the BAC (Behavioral Action Compiler) for dynamic network input head generation.
 """
 
 import math
-import warnings
 from typing import Any
 
 from townlet.vfs.schema import NormalizationSpec, ObservationField, VariableDef
@@ -29,16 +28,13 @@ class VFSObservationSpecBuilder:
     def build_observation_spec(
         self,
         variables: list[VariableDef],
-        exposures: list[dict[str, Any]] | dict[str, dict[str, Any]],
+        exposures: list[dict[str, Any]],
     ) -> list[ObservationField]:
         """Build observation specification from variables and exposure config.
 
         Args:
             variables: List of variable definitions
-                exposures: Exposure configuration describing which variables to expose.
-                    Accepts either:
-                        - List of exposure entries loaded from YAML (preferred)
-                        - Legacy dict mapping variable_id -> {"normalization": {...}}
+            exposures: Exposure entries describing which variables to expose.
 
         Returns:
             List of ObservationField specs
@@ -48,15 +44,14 @@ class VFSObservationSpecBuilder:
 
         Examples:
             >>> variables = [VariableDef(id="energy", scope="agent", type="scalar", ...)]
-            >>> exposures = {"energy": {"normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}}}
+            >>> exposures = [{"source_variable": "energy", "normalization": {"kind": "minmax", "min": 0.0, "max": 1.0}}]
             >>> spec = builder.build_observation_spec(variables, exposures)
             >>> len(spec)
             1
             >>> spec[0].source_variable
             'energy'
         """
-        # Normalize exposures to list form (multiple entries per variable allowed)
-        normalized_exposures = self._normalize_exposures(exposures)
+        normalized_exposures = self._copy_exposures(exposures)
 
         # Build variable lookup map
         var_map = {v.id: v for v in variables}
@@ -145,25 +140,17 @@ class VFSObservationSpecBuilder:
         else:
             raise ValueError(f"Unknown variable type: {var_def.type}")
 
-    def _normalize_exposures(
-        self,
-        exposures: list[dict[str, Any]] | dict[str, dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        """Normalize exposures to list form, warning on legacy dict usage."""
-        if isinstance(exposures, dict):
-            warnings.warn(
-                "Passing VFS exposures as a dict is deprecated; supply a list of exposure entries instead.",
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            normalized: list[dict[str, Any]] = []
-            for var_id, exposure_config in exposures.items():
-                config = dict(exposure_config or {})
-                config["source_variable"] = var_id
-                normalized.append(config)
-            return normalized
+    def _copy_exposures(self, exposures: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Create shallow copies of exposure definitions and validate input type."""
+        if not isinstance(exposures, list):
+            raise TypeError("exposures must be provided as a list of dictionaries")
 
-        return [dict(exposure) for exposure in exposures]
+        normalized: list[dict[str, Any]] = []
+        for idx, exposure in enumerate(exposures):
+            if not isinstance(exposure, dict):
+                raise TypeError(f"Exposure entry at index {idx} must be a dict, got {type(exposure).__name__}")
+            normalized.append(dict(exposure))
+        return normalized
 
     def _build_normalization_spec(self, norm_config: dict[str, Any] | None) -> NormalizationSpec | None:
         """Build a NormalizationSpec from config dict, if provided."""

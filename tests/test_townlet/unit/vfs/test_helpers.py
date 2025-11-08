@@ -99,14 +99,14 @@ def load_exposures_from_config(config_path: Path) -> list[dict[str, Any]]:
 
 def calculate_vfs_observation_dim(
     variables: list[VariableDef],
-    exposures: list[dict[str, Any]] | dict[str, dict[str, Any]],
+    exposures: list[dict[str, Any]],
     partial_observability: bool = False,
 ) -> int:
     """Calculate total observation dimension from VFS specification.
 
     Args:
         variables: List of variable definitions
-        exposures: Exposure configuration (list or legacy dict form)
+        exposures: Exposure configuration (list form)
         partial_observability: If True, filter for POMDP mode (exclude grid_encoding)
 
     Returns:
