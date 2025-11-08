@@ -49,6 +49,7 @@ class TestLSTMHiddenStatePersistence:
             interact_energy_cost=0.0,
             agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
+            enabled_affordances=[],  # Disable affordances to avoid random lethal interactions
             device=cpu_device,
         )
 
@@ -131,6 +132,7 @@ class TestLSTMHiddenStatePersistence:
             interact_energy_cost=0.0,
             agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
+            enabled_affordances=[],  # Deterministic survival for max-steps flush test
             device=cpu_device,
         )
 
@@ -255,6 +257,7 @@ class TestLSTMHiddenStatePersistence:
             interact_energy_cost=0.0,
             agent_lifespan=1000,
             config_pack_path=test_config_pack_path,
+            enabled_affordances=[],  # Remove stochastic affordance effects for shape test
             device=cpu_device,
         )
 
