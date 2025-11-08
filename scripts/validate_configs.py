@@ -17,7 +17,6 @@ Usage:
 
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -25,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from townlet.config import HamletConfig
 
 
-def find_config_packs(configs_dir: Path) -> List[Path]:
+def find_config_packs(configs_dir: Path) -> list[Path]:
     """Find all config pack directories.
 
     A config pack is a directory containing training.yaml.
@@ -46,7 +45,7 @@ def find_config_packs(configs_dir: Path) -> List[Path]:
     return sorted(config_packs)
 
 
-def validate_config(config_dir: Path) -> Tuple[bool, str]:
+def validate_config(config_dir: Path) -> tuple[bool, str]:
     """Validate a single config pack.
 
     Args:

@@ -1,6 +1,5 @@
 """Tests for TrainingConfig DTO (Cycle 1)."""
 
-
 import pytest
 from pydantic import ValidationError
 

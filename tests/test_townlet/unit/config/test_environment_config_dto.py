@@ -11,7 +11,6 @@ This DTO covers training.yaml's 'environment' section:
 - Energy costs (action depletion rates)
 """
 
-
 import pytest
 from pydantic import ValidationError
 

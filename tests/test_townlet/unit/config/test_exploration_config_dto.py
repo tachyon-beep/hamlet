@@ -1,6 +1,5 @@
 """Tests for ExplorationConfig DTO (Cycle 5)."""
 
-
 import pytest
 from pydantic import ValidationError
 

@@ -1,6 +1,5 @@
 """Tests for CurriculumConfig DTO (Cycle 4)."""
 
-
 import pytest
 from pydantic import ValidationError
 

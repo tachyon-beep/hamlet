@@ -21,6 +21,7 @@ Naming Strategy:
 from townlet.config.affordance import AffordanceConfig, load_affordances_config
 from townlet.config.bar import BarConfig, load_bars_config
 from townlet.config.cascade import CascadeConfig, load_cascades_config
+from townlet.config.cues import CuesConfig, load_cues_config
 from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
 from townlet.config.environment import (
     TrainingEnvironmentConfig,
@@ -53,4 +54,6 @@ __all__ = [
     "AffordanceConfig",
     "load_affordances_config",
     "HamletConfig",  # Master config - primary entry point
+    "CuesConfig",
+    "load_cues_config",
 ]

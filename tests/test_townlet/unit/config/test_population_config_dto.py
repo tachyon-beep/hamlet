@@ -1,6 +1,5 @@
 """Tests for PopulationConfig DTO (Cycle 3)."""
 
-
 import pytest
 from pydantic import ValidationError
 

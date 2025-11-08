@@ -20,7 +20,6 @@ Each config pack is a directory containing:
 - training.yaml: Training hyperparameters and episode limits
 """
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -28,6 +27,7 @@ import torch
 import yaml
 from pydantic import ValidationError
 
+from tests.test_townlet.helpers.config_builder import mutate_training_yaml, prepare_config_dir
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.runner import DemoRunner
 from townlet.environment.affordance_config import (
@@ -873,58 +873,28 @@ class TestEpsilonConfiguration:
 
     def test_runner_loads_epsilon_from_yaml(self, tmp_path: Path):
         """DemoRunner should load epsilon params from training.yaml (integration test)."""
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="epsilon_config")
 
-        training_config = {
-            "environment": {
-                "grid_size": 8,  # Large enough to fit all affordances from L0_0_minimal
-                "partial_observability": False,
-                "enabled_affordances": ["Bed"],
-            },
-            "population": {
-                "num_agents": 1,
-                "learning_rate": 0.001,
-                "gamma": 0.95,
-                "replay_buffer_capacity": 1000,
-                "network_type": "simple",
-            },
-            "curriculum": {
-                "max_steps_per_episode": 100,
-                "survival_advance_threshold": 0.7,
-                "survival_retreat_threshold": 0.3,
-                "entropy_gate": 0.5,
-                "min_steps_at_stage": 100,
-            },
-            "exploration": {
-                "embed_dim": 64,
-                "initial_intrinsic_weight": 1.0,
-                "variance_threshold": 100.0,
-                "survival_window": 50,
-            },
-            "training": {
-                "device": "cpu",
-                "max_episodes": 10,
-                "epsilon_start": 0.9,
-                "epsilon_decay": 0.97,
-                "epsilon_min": 0.03,
-            },
-        }
+        def mutator(data: dict) -> None:
+            data["training"].update(
+                {
+                    "device": "cpu",
+                    "max_episodes": 10,
+                    "epsilon_start": 0.9,
+                    "epsilon_decay": 0.97,
+                    "epsilon_min": 0.03,
+                }
+            )
+            data["exploration"].update(
+                {
+                    "embed_dim": 64,
+                    "initial_intrinsic_weight": 1.0,
+                    "variance_threshold": 100.0,
+                    "survival_window": 50,
+                }
+            )
 
-        training_yaml = config_dir / "training.yaml"
-        with open(training_yaml, "w") as f:
-            yaml.dump(training_config, f)
-
-        # Copy other required config files from test pack
-        # Use L1 substrate (8×8 grid) to fit all affordances
-        l1_config = Path("configs/L1_full_observability")
-        shutil.copy(l1_config / "substrate.yaml", config_dir / "substrate.yaml")
-        shutil.copy(l1_config / "variables_reference.yaml", config_dir / "variables_reference.yaml")
-
-        # Copy other configs from L0 (affordances, bars, cascades, cues)
-        l0_config = Path("configs/L0_0_minimal")
-        for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
-            shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
+        mutate_training_yaml(config_dir, mutator)
 
         _runner = DemoRunner(
             config_dir=config_dir,
@@ -953,13 +923,13 @@ class TestEpsilonConfiguration:
 
         exploration = AdaptiveIntrinsicExploration(
             obs_dim=temp_env.observation_dim,
-            embed_dim=training_config["exploration"]["embed_dim"],
-            initial_intrinsic_weight=training_config["exploration"]["initial_intrinsic_weight"],
-            variance_threshold=training_config["exploration"]["variance_threshold"],
-            survival_window=training_config["exploration"]["survival_window"],
-            epsilon_start=training_config["training"]["epsilon_start"],
-            epsilon_decay=training_config["training"]["epsilon_decay"],
-            epsilon_min=training_config["training"]["epsilon_min"],
+            embed_dim=64,
+            initial_intrinsic_weight=1.0,
+            variance_threshold=100.0,
+            survival_window=50,
+            epsilon_start=0.9,
+            epsilon_decay=0.97,
+            epsilon_min=0.03,
             device=torch.device("cpu"),
         )
 
@@ -1039,54 +1009,22 @@ class TestTrainingHyperparameters:
 
     def test_runner_loads_training_hyperparameters_from_yaml(self, tmp_path: Path):
         """DemoRunner should load training hyperparameters from config (integration test)."""
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="hyperparams_config")
 
-        training_config = {
-            "environment": {
-                "grid_size": 5,
-                "partial_observability": False,
-                "enabled_affordances": ["Bed"],
-            },
-            "population": {
-                "num_agents": 1,
-                "learning_rate": 0.001,
-                "gamma": 0.95,
-                "replay_buffer_capacity": 1000,
-                "network_type": "simple",
-            },
-            "curriculum": {
-                "max_steps_per_episode": 100,
-                "survival_advance_threshold": 0.7,
-                "survival_retreat_threshold": 0.3,
-                "entropy_gate": 0.5,
-                "min_steps_at_stage": 100,
-            },
-            "exploration": {
-                "embed_dim": 64,
-                "initial_intrinsic_weight": 1.0,
-                "variance_threshold": 100.0,
-                "survival_window": 50,
-            },
-            "training": {
-                "device": "cpu",
-                "max_episodes": 10,
-                "train_frequency": 2,
-                "target_update_frequency": 50,
-                "batch_size": 128,
-                "sequence_length": 4,
-                "max_grad_norm": 15.0,
-            },
-        }
+        def mutator(data: dict) -> None:
+            data["training"].update(
+                {
+                    "device": "cpu",
+                    "max_episodes": 10,
+                    "train_frequency": 2,
+                    "target_update_frequency": 50,
+                    "batch_size": 128,
+                    "sequence_length": 4,
+                    "max_grad_norm": 15.0,
+                }
+            )
 
-        training_yaml = config_dir / "training.yaml"
-        with open(training_yaml, "w") as f:
-            yaml.dump(training_config, f)
-
-        # Copy other required config files
-        l0_config = Path("configs/L0_0_minimal")
-        for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
-            shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
+        mutate_training_yaml(config_dir, mutator)
 
         runner = DemoRunner(
             config_dir=config_dir,
@@ -1113,48 +1051,12 @@ class TestMaxEpisodesConfiguration:
 
     def test_explicit_max_episodes_overrides_config(self, tmp_path: Path):
         """When max_episodes is explicitly provided, it should override config."""
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="max_episodes_override")
 
-        training_config = {
-            "environment": {
-                "grid_size": 5,
-                "enabled_affordances": ["Bed"],
-            },
-            "population": {
-                "num_agents": 1,
-                "learning_rate": 0.001,
-                "gamma": 0.95,
-                "replay_buffer_capacity": 1000,
-                "network_type": "simple",
-            },
-            "curriculum": {
-                "max_steps_per_episode": 100,
-                "survival_advance_threshold": 0.7,
-                "survival_retreat_threshold": 0.3,
-                "entropy_gate": 0.5,
-                "min_steps_at_stage": 100,
-            },
-            "exploration": {
-                "embed_dim": 64,
-                "initial_intrinsic_weight": 1.0,
-                "variance_threshold": 100.0,
-                "survival_window": 50,
-            },
-            "training": {
-                "device": "cpu",
-                "max_episodes": 500,  # Config says 500
-            },
-        }
+        def mutator(data: dict) -> None:
+            data["training"].update({"max_episodes": 500})
 
-        training_yaml = config_dir / "training.yaml"
-        with open(training_yaml, "w") as f:
-            yaml.dump(training_config, f)
-
-        # Copy other required config files
-        l0_config = Path("configs/L0_0_minimal")
-        for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
-            shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
+        mutate_training_yaml(config_dir, mutator)
 
         runner = DemoRunner(
             config_dir=config_dir,
@@ -1167,48 +1069,12 @@ class TestMaxEpisodesConfiguration:
 
     def test_reads_max_episodes_from_config_when_not_provided(self, tmp_path: Path):
         """When max_episodes is not provided, should read from config YAML."""
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="max_episodes_from_config")
 
-        training_config = {
-            "environment": {
-                "grid_size": 5,
-                "enabled_affordances": ["Bed"],
-            },
-            "population": {
-                "num_agents": 1,
-                "learning_rate": 0.001,
-                "gamma": 0.95,
-                "replay_buffer_capacity": 1000,
-                "network_type": "simple",
-            },
-            "curriculum": {
-                "max_steps_per_episode": 100,
-                "survival_advance_threshold": 0.7,
-                "survival_retreat_threshold": 0.3,
-                "entropy_gate": 0.5,
-                "min_steps_at_stage": 100,
-            },
-            "exploration": {
-                "embed_dim": 64,
-                "initial_intrinsic_weight": 1.0,
-                "variance_threshold": 100.0,
-                "survival_window": 50,
-            },
-            "training": {
-                "device": "cpu",
-                "max_episodes": 500,  # Config says 500
-            },
-        }
+        def mutator(data: dict) -> None:
+            data["training"].update({"max_episodes": 500})
 
-        training_yaml = config_dir / "training.yaml"
-        with open(training_yaml, "w") as f:
-            yaml.dump(training_config, f)
-
-        # Copy other required config files
-        l0_config = Path("configs/L0_0_minimal")
-        for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
-            shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
+        mutate_training_yaml(config_dir, mutator)
 
         runner = DemoRunner(
             config_dir=config_dir,
@@ -1221,68 +1087,25 @@ class TestMaxEpisodesConfiguration:
 
     def test_raises_error_when_max_episodes_missing(self, tmp_path: Path):
         """PDR-002: When max_episodes is missing, should raise clear error (no-defaults principle)."""
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
+        config_dir = prepare_config_dir(tmp_path, name="max_episodes_missing")
 
-        training_config = {
-            "environment": {
-                "grid_size": 5,
-                "partial_observability": False,
-                "vision_range": 5,
-                "enabled_affordances": ["Bed"],
-                "energy_move_depletion": 0.005,
-                "energy_wait_depletion": 0.003,
-                "energy_interact_depletion": 0.0029,
-            },
-            "population": {
-                "num_agents": 1,
-                "learning_rate": 0.001,
-                "gamma": 0.95,
-                "replay_buffer_capacity": 1000,
-                "network_type": "simple",
-            },
-            "curriculum": {
-                "max_steps_per_episode": 100,
-                "survival_advance_threshold": 0.7,
-                "survival_retreat_threshold": 0.3,
-                "entropy_gate": 0.5,
-                "min_steps_at_stage": 100,
-            },
-            "exploration": {
-                "embed_dim": 64,
-                "initial_intrinsic_weight": 1.0,
-                "variance_threshold": 100.0,
-                "survival_window": 50,
-            },
-            "training": {
-                "device": "cpu",
-                "train_frequency": 4,
-                "target_update_frequency": 100,
-                "max_grad_norm": 10.0,
-                "epsilon_start": 1.0,
-                "epsilon_decay": 0.99,
-                "epsilon_min": 0.01,
-                # No max_episodes specified - should raise error
-            },
-        }
+        def mutator(data: dict) -> None:
+            data["training"].pop("max_episodes", None)
 
-        training_yaml = config_dir / "training.yaml"
-        with open(training_yaml, "w") as f:
-            yaml.dump(training_config, f)
-
-        # Copy other required config files
-        l0_config = Path("configs/L0_0_minimal")
-        for yaml_file in ["affordances.yaml", "bars.yaml", "cascades.yaml", "cues.yaml"]:
-            shutil.copy(l0_config / yaml_file, config_dir / yaml_file)
+        mutate_training_yaml(config_dir, mutator)
 
         # Verify PDR-002 fail-fast behavior
-        with pytest.raises(ValueError, match="Missing required parameter 'max_episodes'"):
+        with pytest.raises(ValueError) as exc_info:
             DemoRunner(
                 config_dir=config_dir,
                 db_path=tmp_path / "test.db",
                 checkpoint_dir=tmp_path / "checkpoints",
                 max_episodes=None,
             )
+
+        error = str(exc_info.value)
+        assert "training.yaml" in error
+        assert "max_episodes" in error
 
     def test_stable_test_config_reads_200_episodes(self):
         """Integration test: configs/test should read 200 episodes (stable test config)."""

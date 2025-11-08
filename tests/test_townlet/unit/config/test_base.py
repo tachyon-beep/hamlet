@@ -1,6 +1,5 @@
 """Tests for base configuration utilities."""
 
-
 import pytest
 from pydantic import BaseModel, ValidationError
 

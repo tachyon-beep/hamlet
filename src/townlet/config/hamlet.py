@@ -14,11 +14,16 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
+from townlet.config.affordance import AffordanceConfig, load_affordances_config
+from townlet.config.bar import BarConfig, load_bars_config
+from townlet.config.cascade import CascadeConfig, load_cascades_config
+from townlet.config.cues import CuesConfig, load_cues_config
 from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
 from townlet.config.environment import TrainingEnvironmentConfig, load_environment_config
 from townlet.config.exploration import ExplorationConfig, load_exploration_config
 from townlet.config.population import PopulationConfig, load_population_config
 from townlet.config.training import TrainingConfig, load_training_config
+from townlet.substrate.config import SubstrateConfig, load_substrate_config
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +50,11 @@ class HamletConfig(BaseModel):
     population: PopulationConfig = Field(description="Population parameters (agents, learning rate, replay buffer, network type)")
     curriculum: CurriculumConfig = Field(description="Curriculum parameters (episode length, advancement thresholds)")
     exploration: ExplorationConfig = Field(description="Exploration parameters (RND, intrinsic motivation, annealing)")
+    bars: tuple[BarConfig, ...] = Field(description="Meter definitions loaded from bars.yaml")
+    cascades: tuple[CascadeConfig, ...] = Field(description="Cascade relationships loaded from cascades.yaml")
+    affordances: tuple[AffordanceConfig, ...] = Field(description="Affordance definitions loaded from affordances.yaml")
+    substrate: SubstrateConfig = Field(description="Spatial substrate configuration (grid, continuous, aspatial)")
+    cues: CuesConfig | None = Field(default=None, description="Optional public cues configuration (cues.yaml)")
 
     @model_validator(mode="after")
     def validate_batch_size_vs_buffer(self) -> "HamletConfig":
@@ -105,8 +115,7 @@ class HamletConfig(BaseModel):
 
         # Estimate affordance count
         if self.environment.enabled_affordances is None:
-            # Assume 14 affordances (all enabled)
-            num_affordances = 14
+            num_affordances = len(self.affordances)
         else:
             num_affordances = len(self.environment.enabled_affordances)
 
@@ -157,6 +166,15 @@ class HamletConfig(BaseModel):
         population = load_population_config(config_dir)
         curriculum = load_curriculum_config(config_dir)
         exploration = load_exploration_config(config_dir)
+        bars = tuple(load_bars_config(config_dir))
+        cascades = tuple(load_cascades_config(config_dir))
+        affordances = tuple(load_affordances_config(config_dir))
+        substrate = load_substrate_config(config_dir / "substrate.yaml")
+
+        cues = None
+        cues_path = config_dir / "cues.yaml"
+        if cues_path.exists():
+            cues = load_cues_config(cues_path)
 
         return cls(
             training=training,
@@ -164,4 +182,9 @@ class HamletConfig(BaseModel):
             population=population,
             curriculum=curriculum,
             exploration=exploration,
+            bars=bars,
+            cascades=cascades,
+            affordances=affordances,
+            substrate=substrate,
+            cues=cues,
         )

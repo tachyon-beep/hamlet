@@ -169,6 +169,12 @@ print(f"Network: {config.population.network_type}")
 - Grid capacity warnings
 - Network type consistency warnings
 
+### **Cycle 7: Compiler Artifacts & Cues Integration** ✅
+- Added `townlet.universe.dto` package (ObservationSpec, ActionSpaceMetadata, Meter/Affordance metadata, UniverseMetadata) with frozen dataclasses and regression tests
+- `HamletConfig` now loads cues, substrate, bars, cascades, and affordances alongside the training sections for holistic validation
+- Introduced `CuesConfig` DTO/loader and expanded config fixtures to include all production packs (continuous/aspatial/3D) for validation coverage
+- Implemented affordance `position` validation covering 2D/3D lists, axial dicts, and graph node IDs; fixed DemoRunner recording config regression
+
 ---
 
 ## 🔍 Validation Tested

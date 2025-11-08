@@ -424,7 +424,7 @@ class DemoRunner:
         self.curriculum.initialize_population(num_agents)
 
         # Initialize episode recorder if enabled
-        recording_cfg = self.raw_config.get("recording", {})
+        recording_cfg = self.config.get("recording", {})
         if recording_cfg.get("enabled", False):
             from townlet.recording.recorder import EpisodeRecorder
 

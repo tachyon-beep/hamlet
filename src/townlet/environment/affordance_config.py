@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from townlet.environment.cascade_config import BarsConfig
 
@@ -79,6 +79,7 @@ class AffordanceConfig(BaseModel):
     # Optional metadata
     teaching_note: str | None = None
     design_intent: str | None = None
+    position: list[int] | dict[str, int] | int | None = None
 
     @model_validator(mode="after")
     def validate_multi_tick_requirements(self) -> "AffordanceConfig":
@@ -109,6 +110,34 @@ class AffordanceConfig(BaseModel):
             raise ValueError(f"Affordance '{self.id}': close_hour must be 1-28, got {close_hour}")
 
         return self
+
+    @field_validator("position")
+    @classmethod
+    def validate_position_format(cls, value):
+        """Validate multi-format positioning across substrates."""
+        if value is None:
+            return value
+
+        if isinstance(value, list):
+            if not value or not all(isinstance(coord, int) for coord in value):
+                raise ValueError("List position must contain integer coordinates")
+            if len(value) not in (2, 3):
+                raise ValueError(f"List position must be 2D or 3D, got {len(value)}D")
+            return value
+
+        if isinstance(value, dict):
+            if set(value.keys()) != {"q", "r"}:
+                raise ValueError("Dict position must contain 'q' and 'r' keys for axial coordinates")
+            if not all(isinstance(coord, int) for coord in value.values()):
+                raise ValueError("Dict position values must be integers")
+            return value
+
+        if isinstance(value, int):
+            if value < 0:
+                raise ValueError("Integer position (graph node id) must be >= 0")
+            return value
+
+        raise ValueError(f"Invalid position format ({type(value)}). Expected list[int], dict[str,int], int, or None.")
 
 
 class AffordanceConfigCollection(BaseModel):

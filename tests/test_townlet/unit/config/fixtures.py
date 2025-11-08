@@ -22,6 +22,12 @@ PRODUCTION_CONFIG_PACKS = {
     "L1_full_observability": CONFIGS_DIR / "L1_full_observability",
     "L2_partial_observability": CONFIGS_DIR / "L2_partial_observability",
     "L3_temporal_mechanics": CONFIGS_DIR / "L3_temporal_mechanics",
+    "L1_3D_house": CONFIGS_DIR / "L1_3D_house",
+    "L1_continuous_1D": CONFIGS_DIR / "L1_continuous_1D",
+    "L1_continuous_2D": CONFIGS_DIR / "L1_continuous_2D",
+    "L1_continuous_3D": CONFIGS_DIR / "L1_continuous_3D",
+    "aspatial_test": CONFIGS_DIR / "aspatial_test",
+    "test": CONFIGS_DIR / "test",
 }
 
 # ==============================================================================
@@ -98,6 +104,22 @@ VALID_AFFORDANCE_PARAMS = {
     "name": "Bed",
     "costs": [{"meter": "money", "amount": 0.05}],
     "effects": [{"meter": "energy", "amount": 0.50}],
+}
+
+VALID_CUES_CONFIG = {
+    "version": "1.0",
+    "description": "Test cues",
+    "status": "TEMPLATE",
+    "simple_cues": [
+        {
+            "cue_id": "looks_tired",
+            "name": "Looks Tired",
+            "category": "energy",
+            "visibility": "public",
+            "condition": {"meter": "energy", "operator": "<", "threshold": 0.2},
+        }
+    ],
+    "compound_cues": [],
 }
 
 # ==============================================================================
@@ -230,6 +252,6 @@ def make_temp_config_pack(tmp_path: Path) -> Path:
     # Create cues.yaml (optional but good for completeness)
     cues_yaml = config_dir / "cues.yaml"
     with open(cues_yaml, "w") as f:
-        yaml.dump({"cues": []}, f)
+        yaml.dump(VALID_CUES_CONFIG, f)
 
     return config_dir

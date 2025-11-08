@@ -7,6 +7,7 @@ These tests verify that HamletConfig correctly:
 4. Provides clear error messages for validation failures
 """
 
+import copy
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytest
 # Add src to path for imports (integration tests may run standalone)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / "src"))
 
+from tests.test_townlet.helpers.config_builder import mutate_training_yaml, prepare_config_dir
 from tests.test_townlet.unit.config.fixtures import (
     PRODUCTION_CONFIG_PACKS,
     VALID_CURRICULUM_PARAMS,
@@ -22,9 +24,21 @@ from tests.test_townlet.unit.config.fixtures import (
     VALID_EXPLORATION_PARAMS,
     VALID_POPULATION_PARAMS,
     VALID_TRAINING_PARAMS,
-    make_temp_config_pack,
 )
 from townlet.config import HamletConfig
+
+
+def _apply_valid_sections(config_dir: Path) -> None:
+    """Rewrite training.yaml with canonical fixture sections."""
+
+    def mutator(data: dict) -> None:
+        data["training"] = copy.deepcopy(VALID_TRAINING_PARAMS)
+        data["environment"] = copy.deepcopy(VALID_ENVIRONMENT_PARAMS)
+        data["population"] = copy.deepcopy(VALID_POPULATION_PARAMS)
+        data["curriculum"] = copy.deepcopy(VALID_CURRICULUM_PARAMS)
+        data["exploration"] = copy.deepcopy(VALID_EXPLORATION_PARAMS)
+
+    mutate_training_yaml(config_dir, mutator)
 
 
 class TestHamletConfigComposition:
@@ -32,28 +46,8 @@ class TestHamletConfigComposition:
 
     def test_all_sections_required(self, tmp_path):
         """All 5 sections must be present in config."""
-        import yaml
-
-        config_dir = tmp_path / "incomplete_config"
-        config_dir.mkdir()
-
-        # Missing exploration section
-        training_yaml = config_dir / "training.yaml"
-        with open(training_yaml, "w") as f:
-            yaml.dump(
-                {
-                    "training": VALID_TRAINING_PARAMS,
-                    "environment": VALID_ENVIRONMENT_PARAMS,
-                    "population": VALID_POPULATION_PARAMS,
-                    "curriculum": VALID_CURRICULUM_PARAMS,
-                    # Missing: exploration
-                },
-                f,
-            )
-
-        # Need dummy files for other DTOs
-        for filename in ["bars.yaml", "cascades.yaml", "affordances.yaml"]:
-            (config_dir / filename).write_text("bars: []\ncascades: []\naffordances: []\n")
+        config_dir = prepare_config_dir(tmp_path)
+        mutate_training_yaml(config_dir, lambda data: data.pop("exploration", None))
 
         with pytest.raises(Exception) as exc_info:
             HamletConfig.load(config_dir)
@@ -61,7 +55,8 @@ class TestHamletConfigComposition:
 
     def test_load_complete_config(self, tmp_path):
         """Load complete config with all sections."""
-        config_dir = make_temp_config_pack(tmp_path)
+        config_dir = prepare_config_dir(tmp_path)
+        _apply_valid_sections(config_dir)
 
         config = HamletConfig.load(config_dir)
 
@@ -71,6 +66,10 @@ class TestHamletConfigComposition:
         assert config.population.num_agents == VALID_POPULATION_PARAMS["num_agents"]
         assert config.curriculum.max_steps_per_episode == VALID_CURRICULUM_PARAMS["max_steps_per_episode"]
         assert config.exploration.embed_dim == VALID_EXPLORATION_PARAMS["embed_dim"]
+        assert len(config.bars) > 0
+        assert len(config.affordances) > 0
+        assert config.substrate.type in {"grid", "gridnd", "continuous", "continuousnd", "aspatial"}
+        assert config.cues is not None
 
     def test_config_sections_are_dtos_not_dicts(self, tmp_path):
         """Verify sections are DTO objects, not raw dicts."""
@@ -80,7 +79,8 @@ class TestHamletConfigComposition:
         from townlet.config.population import PopulationConfig
         from townlet.config.training import TrainingConfig
 
-        config_dir = make_temp_config_pack(tmp_path)
+        config_dir = prepare_config_dir(tmp_path)
+        _apply_valid_sections(config_dir)
         config = HamletConfig.load(config_dir)
 
         # Type checks
@@ -93,37 +93,29 @@ class TestHamletConfigComposition:
         # Should NOT be dicts
         assert not isinstance(config.training, dict)
 
+    def test_cues_optional_when_file_missing(self, tmp_path):
+        """HamletConfig handles missing cues.yaml by setting cues=None."""
+        config_dir = prepare_config_dir(tmp_path)
+        cues_path = config_dir / "cues.yaml"
+        cues_path.unlink()
+
+        config = HamletConfig.load(config_dir)
+        assert config.cues is None
+
 
 class TestHamletConfigCrossValidation:
     """Test cross-config validation rules in HamletConfig."""
 
     def test_batch_size_must_not_exceed_buffer_capacity(self, tmp_path):
         """batch_size cannot exceed replay_buffer_capacity."""
-        import yaml
+        config_dir = prepare_config_dir(tmp_path)
+        _apply_valid_sections(config_dir)
 
-        config_dir = tmp_path / "invalid_batch_size"
-        config_dir.mkdir()
+        def mutator(data: dict) -> None:
+            data["training"]["batch_size"] = 10000
+            data["population"]["replay_buffer_capacity"] = 1000
 
-        # Create config with batch_size > buffer_capacity
-        training_yaml = config_dir / "training.yaml"
-        invalid_training = {**VALID_TRAINING_PARAMS, "batch_size": 10000}  # batch_size=10000
-        invalid_population = {**VALID_POPULATION_PARAMS, "replay_buffer_capacity": 1000}  # buffer=1000
-
-        with open(training_yaml, "w") as f:
-            yaml.dump(
-                {
-                    "training": invalid_training,
-                    "environment": VALID_ENVIRONMENT_PARAMS,
-                    "population": invalid_population,
-                    "curriculum": VALID_CURRICULUM_PARAMS,
-                    "exploration": VALID_EXPLORATION_PARAMS,
-                },
-                f,
-            )
-
-        # Create dummy files
-        for filename in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
-            (config_dir / filename).write_text("bars: []\ncascades: []\naffordances: []\ncues: []\n")
+        mutate_training_yaml(config_dir, mutator)
 
         with pytest.raises(ValueError) as exc_info:
             HamletConfig.load(config_dir)
@@ -134,33 +126,15 @@ class TestHamletConfigCrossValidation:
 
     def test_batch_size_equal_to_buffer_capacity_allowed(self, tmp_path):
         """batch_size == replay_buffer_capacity is allowed (edge case)."""
-        import yaml
+        config_dir = prepare_config_dir(tmp_path)
+        _apply_valid_sections(config_dir)
 
-        config_dir = tmp_path / "edge_case_batch"
-        config_dir.mkdir()
+        def mutator(data: dict) -> None:
+            data["training"]["batch_size"] = 5000
+            data["population"]["replay_buffer_capacity"] = 5000
 
-        # Create config with batch_size == buffer_capacity
-        training_yaml = config_dir / "training.yaml"
-        edge_training = {**VALID_TRAINING_PARAMS, "batch_size": 5000}
-        edge_population = {**VALID_POPULATION_PARAMS, "replay_buffer_capacity": 5000}
+        mutate_training_yaml(config_dir, mutator)
 
-        with open(training_yaml, "w") as f:
-            yaml.dump(
-                {
-                    "training": edge_training,
-                    "environment": VALID_ENVIRONMENT_PARAMS,
-                    "population": edge_population,
-                    "curriculum": VALID_CURRICULUM_PARAMS,
-                    "exploration": VALID_EXPLORATION_PARAMS,
-                },
-                f,
-            )
-
-        # Create dummy files
-        for filename in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
-            (config_dir / filename).write_text("bars: []\ncascades: []\naffordances: []\ncues: []\n")
-
-        # Should NOT raise (batch_size == buffer_capacity is valid)
         config = HamletConfig.load(config_dir)
         assert config.training.batch_size == config.population.replay_buffer_capacity
 
@@ -168,37 +142,35 @@ class TestHamletConfigCrossValidation:
 class TestHamletConfigProductionPacks:
     """Test loading from all production config packs."""
 
-    def test_load_L0_0_minimal(self):  # noqa: N802
-        """Load L0_0_minimal config pack."""
-        config_dir = PRODUCTION_CONFIG_PACKS["L0_0_minimal"]
+    @pytest.mark.parametrize("pack_name", sorted(PRODUCTION_CONFIG_PACKS.keys()))
+    def test_load_pack(self, pack_name):
+        """Ensure each config pack compiles via HamletConfig."""
+        config_dir = PRODUCTION_CONFIG_PACKS[pack_name]
         if not config_dir.exists():
             pytest.skip(f"Config pack not found: {config_dir}")
 
         config = HamletConfig.load(config_dir)
-        assert config.training.device in ["cpu", "cuda", "mps"]
-        assert config.environment.grid_size == 3  # L0 is 3×3
-        assert config.environment.enable_temporal_mechanics is False  # L0 has no temporal
 
-    def test_load_L0_5_dual_resource(self):  # noqa: N802
-        """Load L0_5_dual_resource config pack."""
-        config_dir = PRODUCTION_CONFIG_PACKS["L0_5_dual_resource"]
-        if not config_dir.exists():
-            pytest.skip(f"Config pack not found: {config_dir}")
+        assert len(config.bars) > 0
+        assert len(config.affordances) > 0
+        assert config.substrate.type in {"grid", "gridnd", "continuous", "continuousnd", "aspatial"}
 
-        config = HamletConfig.load(config_dir)
-        assert config.environment.grid_size == 7  # L0.5 is 7×7
-        assert config.environment.enable_temporal_mechanics is False
-
-    def test_load_L1_full_observability(self):  # noqa: N802
-        """Load L1_full_observability config pack."""
-        config_dir = PRODUCTION_CONFIG_PACKS["L1_full_observability"]
-        if not config_dir.exists():
-            pytest.skip(f"Config pack not found: {config_dir}")
-
-        config = HamletConfig.load(config_dir)
-        assert config.environment.grid_size == 8  # L1 is 8×8
-        assert config.environment.partial_observability is False  # L1 is full obs
-        assert config.population.network_type == "simple"  # L1 uses MLP
+        if pack_name == "L0_0_minimal":
+            assert config.environment.grid_size == 3
+        if pack_name == "L0_5_dual_resource":
+            assert config.environment.grid_size == 7
+        if pack_name == "L1_full_observability":
+            assert config.environment.partial_observability is False
+        if pack_name == "L2_partial_observability":
+            assert config.environment.partial_observability is True
+        if pack_name == "L3_temporal_mechanics":
+            assert config.environment.enable_temporal_mechanics is True
+        if pack_name == "aspatial_test":
+            assert config.substrate.type == "aspatial"
+        if pack_name in {"L2_partial_observability", "L3_temporal_mechanics"}:
+            assert config.population.network_type == "recurrent"
+        else:
+            assert config.population.network_type == "simple"
 
     def test_load_L2_partial_observability(self):  # noqa: N802
         """Load L2_partial_observability config pack."""
@@ -256,30 +228,8 @@ class TestHamletConfigErrorMessages:
 
     def test_invalid_field_value_shows_field_name(self, tmp_path):
         """Error message includes field name for invalid values."""
-        import yaml
-
-        config_dir = tmp_path / "invalid_field"
-        config_dir.mkdir()
-
-        # Create config with invalid device
-        training_yaml = config_dir / "training.yaml"
-        invalid_training = {**VALID_TRAINING_PARAMS, "device": "invalid_device"}
-
-        with open(training_yaml, "w") as f:
-            yaml.dump(
-                {
-                    "training": invalid_training,
-                    "environment": VALID_ENVIRONMENT_PARAMS,
-                    "population": VALID_POPULATION_PARAMS,
-                    "curriculum": VALID_CURRICULUM_PARAMS,
-                    "exploration": VALID_EXPLORATION_PARAMS,
-                },
-                f,
-            )
-
-        # Create dummy files
-        for filename in ["bars.yaml", "cascades.yaml", "affordances.yaml", "cues.yaml"]:
-            (config_dir / filename).write_text("bars: []\ncascades: []\naffordances: []\ncues: []\n")
+        config_dir = prepare_config_dir(tmp_path)
+        mutate_training_yaml(config_dir, lambda data: data["training"].update({"device": "invalid_device"}))
 
         with pytest.raises(ValueError) as exc_info:
             HamletConfig.load(config_dir)

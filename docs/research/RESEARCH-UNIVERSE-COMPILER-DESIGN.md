@@ -50,7 +50,7 @@ PASS 5: Code Generation (emit target code)
 
 **Applied to UAC**:
 
-```
+`````````
 YAML Files
     ↓
 STAGE 1: Parse & Validate Individual Files (bars, cascades, affordances, actions, substrate)
