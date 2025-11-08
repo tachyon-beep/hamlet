@@ -77,17 +77,17 @@ class DemoRunner:
         )
 
         # Load config using HamletConfig DTO (enforces no-defaults validation)
-        self.config = HamletConfig.load(self.config_dir)
+        self.hamlet_config = HamletConfig.load(self.config_dir)
 
-        # Also load raw YAML for optional sections (e.g., recording) not in core DTOs
+        # Also load raw YAML for backward compatibility and optional sections (e.g., recording)
         with open(self.training_config_path) as f:
-            self.raw_config = yaml.safe_load(f)
+            self.config = yaml.safe_load(f)
 
         # Set max_episodes: use provided value, otherwise read from config
         if max_episodes is not None:
             self.max_episodes = max_episodes
         else:
-            self.max_episodes = self.config.training.max_episodes
+            self.max_episodes = self.config["training"]["max_episodes"]
 
         self.current_episode = 0
 
@@ -318,22 +318,22 @@ class DemoRunner:
         # All required parameters validated at load time (lines 109-110)
 
         # Initialize training components
-        device_str = self.config.training.device
+        device_str = self.hamlet_config.training.device
         device = torch.device(device_str if torch.cuda.is_available() else "cpu")
         if device_str == "cuda" and not torch.cuda.is_available():
             logger.warning("CUDA requested but not available, falling back to CPU")
 
         # Extract config parameters from DTOs (all required, validated at load time)
-        num_agents = self.config.population.num_agents
-        grid_size = self.config.environment.grid_size
-        partial_observability = self.config.environment.partial_observability
-        vision_range = self.config.environment.vision_range
+        num_agents = self.hamlet_config.population.num_agents
+        grid_size = self.hamlet_config.environment.grid_size
+        partial_observability = self.hamlet_config.environment.partial_observability
+        vision_range = self.hamlet_config.environment.vision_range
         # enabled_affordances: None = all affordances (semantic meaning)
-        enabled_affordances = self.config.environment.enabled_affordances
-        enable_temporal_mechanics = self.config.environment.enable_temporal_mechanics
-        move_energy_cost = self.config.environment.energy_move_depletion
-        wait_energy_cost = self.config.environment.energy_wait_depletion
-        interact_energy_cost = self.config.environment.energy_interact_depletion
+        enabled_affordances = self.hamlet_config.environment.enabled_affordances
+        enable_temporal_mechanics = self.hamlet_config.environment.enable_temporal_mechanics
+        move_energy_cost = self.hamlet_config.environment.energy_move_depletion
+        wait_energy_cost = self.hamlet_config.environment.energy_wait_depletion
+        interact_energy_cost = self.hamlet_config.environment.energy_interact_depletion
 
         # TODO(UAC): agent_lifespan should be in config (TASK-006: BRAIN_AS_CODE)
         # For now, use constant 1000 (standard test value)
@@ -361,40 +361,40 @@ class DemoRunner:
 
         # Create curriculum (all params required per PDR-002)
         self.curriculum = AdversarialCurriculum(
-            max_steps_per_episode=self.config.curriculum.max_steps_per_episode,
-            survival_advance_threshold=self.config.curriculum.survival_advance_threshold,
-            survival_retreat_threshold=self.config.curriculum.survival_retreat_threshold,
-            entropy_gate=self.config.curriculum.entropy_gate,
-            min_steps_at_stage=self.config.curriculum.min_steps_at_stage,
+            max_steps_per_episode=self.hamlet_config.curriculum.max_steps_per_episode,
+            survival_advance_threshold=self.hamlet_config.curriculum.survival_advance_threshold,
+            survival_retreat_threshold=self.hamlet_config.curriculum.survival_retreat_threshold,
+            entropy_gate=self.hamlet_config.curriculum.entropy_gate,
+            min_steps_at_stage=self.hamlet_config.curriculum.min_steps_at_stage,
             device=device,
         )
 
         # Create exploration (all params required per PDR-002)
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
-            embed_dim=self.config.exploration.embed_dim,
-            initial_intrinsic_weight=self.config.exploration.initial_intrinsic_weight,
-            variance_threshold=self.config.exploration.variance_threshold,
-            survival_window=self.config.exploration.survival_window,
-            epsilon_start=self.config.training.epsilon_start,
-            epsilon_decay=self.config.training.epsilon_decay,
-            epsilon_min=self.config.training.epsilon_min,
+            embed_dim=self.hamlet_config.exploration.embed_dim,
+            initial_intrinsic_weight=self.hamlet_config.exploration.initial_intrinsic_weight,
+            variance_threshold=self.hamlet_config.exploration.variance_threshold,
+            survival_window=self.hamlet_config.exploration.survival_window,
+            epsilon_start=self.hamlet_config.training.epsilon_start,
+            epsilon_decay=self.hamlet_config.training.epsilon_decay,
+            epsilon_min=self.hamlet_config.training.epsilon_min,
             device=device,
         )
 
         # Get population parameters from config (all required per PDR-002)
-        learning_rate = self.config.population.learning_rate
-        gamma = self.config.population.gamma
-        replay_buffer_capacity = self.config.population.replay_buffer_capacity
-        network_type = self.config.population.network_type  # 'simple' or 'recurrent'
+        learning_rate = self.hamlet_config.population.learning_rate
+        gamma = self.hamlet_config.population.gamma
+        replay_buffer_capacity = self.hamlet_config.population.replay_buffer_capacity
+        network_type = self.hamlet_config.population.network_type  # 'simple' or 'recurrent'
         vision_window_size = 2 * vision_range + 1  # 5 for vision_range=2
 
         # Get training hyperparameters from config (all required per PDR-002)
-        train_frequency = self.config.training.train_frequency
-        target_update_frequency = self.config.training.target_update_frequency
-        batch_size = self.config.training.batch_size
-        sequence_length = self.config.training.sequence_length
-        max_grad_norm = self.config.training.max_grad_norm
+        train_frequency = self.hamlet_config.training.train_frequency
+        target_update_frequency = self.hamlet_config.training.target_update_frequency
+        batch_size = self.hamlet_config.training.batch_size
+        sequence_length = self.hamlet_config.training.sequence_length
+        max_grad_norm = self.hamlet_config.training.max_grad_norm
 
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
@@ -457,9 +457,9 @@ class DemoRunner:
             "partial_observability": partial_observability,
             "vision_range": vision_range,
             "enable_temporal": enable_temporal_mechanics,
-            "initial_intrinsic_weight": self.config.exploration.initial_intrinsic_weight,
-            "variance_threshold": self.config.exploration.variance_threshold,
-            "max_steps_per_episode": self.config.curriculum.max_steps_per_episode,
+            "initial_intrinsic_weight": self.hamlet_config.exploration.initial_intrinsic_weight,
+            "variance_threshold": self.hamlet_config.exploration.variance_threshold,
+            "max_steps_per_episode": self.hamlet_config.curriculum.max_steps_per_episode,
         }
         # Note: final metrics will be logged at end of training
         self.tb_logger.log_hyperparameters(hparams=self.hparams, metrics={})
@@ -504,7 +504,7 @@ class DemoRunner:
 
                 # Run episode
                 num_agents = self.population.num_agents
-                max_steps = curriculum_cfg["max_steps_per_episode"]
+                max_steps = self.config["curriculum"]["max_steps_per_episode"]
                 episode_reward = torch.zeros(num_agents, device=self.env.device)
                 episode_extrinsic_reward = torch.zeros(num_agents, device=self.env.device)
                 episode_intrinsic_reward = torch.zeros(num_agents, device=self.env.device)
