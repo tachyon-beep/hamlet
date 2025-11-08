@@ -952,6 +952,7 @@ class UniverseMetadata:
     config_version: str
     compiler_version: str
     compiled_at: str  # ISO timestamp
+    config_hash: str  # SHA-256 hash of all config file contents (for checkpoint compatibility)
 ```
 
 #### 5.1b: Create ObservationSpec (NEW - Per COMPILER_ARCHITECTURE.md §3.2)
@@ -1094,6 +1095,9 @@ def _stage_5_compute_metadata(
     compiler_version = "1.0.0"
     compiled_at = datetime.now().isoformat()
 
+    # Config hash (for checkpoint compatibility - Per COMPILER_ARCHITECTURE.md §4.2)
+    config_hash = self._compute_config_hash(config_dir)
+
     return UniverseMetadata(
         meter_count=meter_count,
         meter_names=meter_names,
@@ -1112,6 +1116,7 @@ def _stage_5_compute_metadata(
         config_version=config_version,
         compiler_version=compiler_version,
         compiled_at=compiled_at,
+        config_hash=config_hash,
     )
 ```
 
@@ -1121,6 +1126,11 @@ def _stage_5_compute_metadata(
 - [ ] Observation dim scales with meter_count
 - [ ] Observation dim correct for partial observability
 - [ ] Economic metadata computed correctly
+- [ ] **Config hash computed correctly** (NEW - Per COMPILER_ARCHITECTURE.md §4.2)
+  - [ ] SHA-256 hash includes all config YAML file contents
+  - [ ] Identical configs produce identical hashes
+  - [ ] Any config change produces different hash
+  - [ ] Hash enables checkpoint compatibility validation
 - [ ] **ObservationSpec built correctly** (NEW - Per COMPILER_ARCHITECTURE.md §3.2)
   - [ ] ObservationSpec.total_dims matches computed observation_dim
   - [ ] All observation fields have correct start/end indices
@@ -1490,29 +1500,72 @@ class CompiledUniverse:
         )
 ```
 
-#### 7.2: Implement Cache Invalidation
+#### 7.2: Implement Hash-Based Cache Invalidation
+
+**Per COMPILER_ARCHITECTURE.md §4.2**: Use SHA-256 hash of config file contents for robust cache invalidation.
+
+**Why hash-based over mtime-based:**
+- **Robust across filesystems**: mtime can be unreliable (git checkout, CI runners, network filesystems)
+- **Content-aware**: Only invalidates when config *actually* changes, not just timestamps
+- **Portable**: Works across different machines and deployment environments
+- **Deterministic**: Same content always produces same hash
 
 ```python
+import hashlib
+from pathlib import Path
+
+
 class UniverseCompiler:
+    def _compute_config_hash(self, config_dir: Path) -> str:
+        """
+        Compute SHA-256 hash of all config file contents.
+
+        Args:
+            config_dir: Directory containing YAML config files
+
+        Returns:
+            Hexadecimal SHA-256 hash string
+
+        Note: Per COMPILER_ARCHITECTURE.md §4.2
+        """
+        hasher = hashlib.sha256()
+
+        # Get all YAML files in sorted order (for determinism)
+        yaml_files = sorted(config_dir.glob("*.yaml"))
+
+        for yaml_file in yaml_files:
+            # Hash filename (for uniqueness)
+            hasher.update(yaml_file.name.encode('utf-8'))
+
+            # Hash file contents
+            with open(yaml_file, 'rb') as f:
+                hasher.update(f.read())
+
+        return hasher.hexdigest()
+
     def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
-        """Compile universe with mtime-based cache invalidation."""
+        """Compile universe with hash-based cache invalidation."""
         cache_path = config_dir / ".compiled" / "universe.msgpack"
 
         if use_cache and cache_path.exists():
             try:
-                # Get cache modification time
-                cache_mtime = cache_path.stat().st_mtime
+                # Load cached universe
+                cached_universe = CompiledUniverse.load_from_cache(cache_path)
 
-                # Get all YAML modification times
-                yaml_files = list(config_dir.glob("*.yaml"))
-                yaml_mtimes = [f.stat().st_mtime for f in yaml_files]
+                # Compute current config hash
+                current_hash = self._compute_config_hash(config_dir)
 
-                # Cache is fresh if newer than ALL source files
-                if all(yaml_mtime < cache_mtime for yaml_mtime in yaml_mtimes):
-                    logger.info(f"Loading cached universe from {cache_path}")
-                    return CompiledUniverse.load_from_cache(cache_path)
+                # Compare hashes
+                if cached_universe.metadata.config_hash == current_hash:
+                    logger.info(f"Loading cached universe (hash={current_hash[:8]}...)")
+                    return cached_universe
                 else:
-                    logger.info("Cache stale (source YAML modified), recompiling...")
+                    logger.info(
+                        f"Cache stale (config changed):\n"
+                        f"  Cached:  {cached_universe.metadata.config_hash[:8]}...\n"
+                        f"  Current: {current_hash[:8]}...\n"
+                        f"Recompiling..."
+                    )
 
             except Exception as e:
                 # Cache corrupted, fall back to full compilation
@@ -1526,7 +1579,10 @@ class UniverseCompiler:
         try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             universe.save_to_cache(cache_path)
-            logger.info(f"Saved compiled universe to {cache_path}")
+            logger.info(
+                f"Saved compiled universe to {cache_path}\n"
+                f"  Hash: {universe.metadata.config_hash[:16]}..."
+            )
         except Exception as e:
             logger.warning(f"Cache save failed ({e}), continuing without cache")
 
@@ -1540,9 +1596,13 @@ class UniverseCompiler:
 
 **Success Criteria**:
 
-- [ ] First compile saves cache
+- [ ] First compile saves cache with config_hash
 - [ ] Second compile loads from cache (10-100x faster)
-- [ ] Cache invalidated when YAML modified
+- [ ] **Hash-based invalidation** (NEW - Per COMPILER_ARCHITECTURE.md §4.2)
+  - [ ] Cache invalidated when config content changes (not just mtime)
+  - [ ] Identical configs produce identical hashes (deterministic)
+  - [ ] Hash comparison works across filesystems and git operations
+  - [ ] `_compute_config_hash()` includes all YAML files in sorted order
 - [ ] Cache corruption handled gracefully
 
 ---
@@ -1626,12 +1686,61 @@ env = VectorizedHamletEnv(
 )
 ```
 
+#### 8.3: Checkpoint Compatibility Validation (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
+
+**Critical**: Use `universe.metadata.config_hash` to validate checkpoint compatibility during transfer learning.
+
+```python
+class TrainingRunner:
+    def save_checkpoint(self, universe: CompiledUniverse, q_network, path: Path):
+        """Save checkpoint with config_hash for compatibility checking."""
+        torch.save({
+            'q_network_state': q_network.state_dict(),
+            'config_hash': universe.metadata.config_hash,  # NEW: Store hash
+            'observation_dim': universe.metadata.observation_dim,
+            'action_dim': universe.metadata.action_count,
+            'meter_count': universe.metadata.meter_count,
+        }, path)
+
+    def load_checkpoint(self, universe: CompiledUniverse, q_network, path: Path):
+        """Load checkpoint with soft-warning for config mismatches."""
+        checkpoint = torch.load(path)
+
+        # Soft-warning for config mismatch (Per COMPILER_ARCHITECTURE.md §6.2)
+        if checkpoint['config_hash'] != universe.metadata.config_hash:
+            logger.warning(
+                f"⚠️  Checkpoint config mismatch (transfer learning):\n"
+                f"  Checkpoint hash: {checkpoint['config_hash'][:16]}...\n"
+                f"  Current hash:    {universe.metadata.config_hash[:16]}...\n"
+                f"  This may cause training issues if configs differ significantly.\n"
+                f"  Recommendation: Use checkpoints trained on identical configs."
+            )
+
+        # Load weights (may fail if architecture changed)
+        try:
+            q_network.load_state_dict(checkpoint['q_network_state'])
+        except RuntimeError as e:
+            raise ValueError(
+                f"Failed to load checkpoint (architecture mismatch):\n"
+                f"  Expected obs_dim={universe.metadata.observation_dim}, "
+                f"got {checkpoint['observation_dim']}\n"
+                f"  Expected action_dim={universe.metadata.action_count}, "
+                f"got {checkpoint['action_dim']}\n"
+                f"  Original error: {e}"
+            )
+```
+
 **Success Criteria**:
 
 - [ ] Environment accepts compiled universe
 - [ ] Environment reads metadata correctly
 - [ ] Environment behavior unchanged (integration test)
 - [ ] Training scripts updated
+- [ ] **Checkpoint compatibility validation** (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
+  - [ ] Checkpoints save config_hash from universe.metadata
+  - [ ] Soft-warning displayed when loading checkpoint with different config_hash
+  - [ ] Hard error when architecture dimensions mismatch
+  - [ ] Transfer learning warnings enable debugging config drift
 
 ---
 
