@@ -7,10 +7,10 @@ Follows the same UNIVERSE_AS_CODE principles as other config schemas.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from townlet.config.base import format_validation_error
 
@@ -58,6 +58,22 @@ class CompoundCueConfig(BaseModel):
         return value
 
 
+class VisualCueConfig(BaseModel):
+    """Visual cue definition for meter range mappings."""
+
+    range: tuple[float, float]
+    label: str = Field(min_length=1)
+    icon: str | None = None
+    observable_effects: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_range(self) -> VisualCueConfig:
+        start, end = self.range
+        if not (0.0 <= start < end <= 1.0):
+            raise ValueError(f"Visual cue range must lie within [0.0, 1.0] and have start < end. Got {self.range}.")
+        return self
+
+
 class CuesConfig(BaseModel):
     """Top-level cues configuration."""
 
@@ -66,6 +82,7 @@ class CuesConfig(BaseModel):
     status: str | None = None
     simple_cues: list[SimpleCueConfig] = Field(default_factory=list)
     compound_cues: list[CompoundCueConfig] = Field(default_factory=list)
+    visual_cues: dict[str, list[VisualCueConfig]] = Field(default_factory=dict)
 
     @property
     def total_cues(self) -> int:

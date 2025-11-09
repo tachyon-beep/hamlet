@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+import torch
 import yaml
 from pydantic import ValidationError
 
@@ -20,8 +21,9 @@ from townlet.config.environment import TrainingEnvironmentConfig
 from townlet.config.exploration import ExplorationConfig
 from townlet.config.population import PopulationConfig
 from townlet.config.training import TrainingConfig
-from townlet.environment.action_config import ActionSpaceConfig, load_global_actions_config
+from townlet.environment.action_config import ActionConfig, ActionSpaceConfig, load_global_actions_config
 from townlet.substrate.config import SubstrateConfig
+from townlet.substrate.factory import SubstrateFactory
 from townlet.universe.errors import CompilationErrorCollector
 from townlet.universe.source_map import SourceMap
 from townlet.vfs.schema import VariableDef, load_variables_reference_config
@@ -130,9 +132,17 @@ class RawConfigs:
             missing_hint="Ensure configs/global_actions.yaml exists (global action vocabulary).",
         )
 
+        composed_actions: ActionSpaceConfig | None = None
+        if hamlet_config is not None and global_actions is not None:
+            composed_actions = cls._compose_action_space(
+                hamlet_config=hamlet_config,
+                custom_actions=global_actions,
+                errors=errors,
+            )
+
         errors.check_and_raise()
 
-        if hamlet_config is None or variables_reference is None or global_actions is None:
+        if hamlet_config is None or variables_reference is None or composed_actions is None:
             # Defensive: reaching here would indicate check_and_raise failed to trigger.
             raise RuntimeError("Stage 1: Parse succeeded without fully loaded configs.")
 
@@ -148,6 +158,44 @@ class RawConfigs:
         return cls(
             hamlet_config=hamlet_config,
             variables_reference=variables_reference,
-            global_actions=global_actions,
+            global_actions=composed_actions,
             source_map=source_map,
         )
+
+    @staticmethod
+    def _compose_action_space(
+        *,
+        hamlet_config: HamletConfig,
+        custom_actions: ActionSpaceConfig,
+        errors: CompilationErrorCollector,
+    ) -> ActionSpaceConfig | None:
+        """Combine substrate default actions with global custom actions for validation."""
+
+        try:
+            substrate = SubstrateFactory.build(hamlet_config.substrate, torch.device("cpu"))
+        except Exception as exc:  # pragma: no cover - defensive
+            errors.add(f"substrate.yaml: failed to build substrate actions - {exc}")
+            return None
+
+        try:
+            substrate_actions = substrate.get_default_actions()
+        except Exception as exc:  # pragma: no cover - defensive
+            errors.add(f"substrate.yaml: failed to derive default actions - {exc}")
+            return None
+
+        combined: list[ActionConfig] = []
+        next_id = 0
+
+        def _clone(action: ActionConfig) -> ActionConfig:
+            nonlocal next_id
+            cloned = action.model_copy(update={"id": next_id})
+            next_id += 1
+            return cloned
+
+        for action in substrate_actions:
+            combined.append(_clone(action))
+
+        for action in custom_actions.actions:
+            combined.append(_clone(action))
+
+        return ActionSpaceConfig(actions=combined)

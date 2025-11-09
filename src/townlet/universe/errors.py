@@ -9,14 +9,24 @@ from dataclasses import dataclass, field
 class CompilationError(Exception):
     """Raised when a compilation stage encounters validation failures."""
 
-    def __init__(self, stage: str, errors: Iterable[str], hints: Iterable[str] | None = None):
+    def __init__(
+        self,
+        stage: str,
+        errors: Iterable[str],
+        hints: Iterable[str] | None = None,
+        warnings: Iterable[str] | None = None,
+    ):
         self.stage = stage
         self.errors = list(errors)
         self.hints = list(hints or [])
+        self.warnings = list(warnings or [])
         message_lines = [f"{stage} failed:"] + [f"  - {msg}" for msg in self.errors]
         if self.hints:
             message_lines.append("Hints:")
             message_lines.extend(f"  • {hint}" for hint in self.hints)
+        if self.warnings:
+            message_lines.append("Warnings:")
+            message_lines.extend(f"  ! {warning}" for warning in self.warnings)
         super().__init__("\n".join(message_lines))
 
 
@@ -27,6 +37,7 @@ class CompilationErrorCollector:
     stage: str = ""
     errors: list[str] = field(default_factory=list)
     hints: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     def add(self, message: str) -> None:
         self.errors.append(message)
@@ -38,9 +49,17 @@ class CompilationErrorCollector:
     def add_hint(self, hint: str) -> None:
         self.hints.append(hint)
 
+    def add_warning(self, message: str) -> None:
+        self.warnings.append(message)
+
     def extend(self, messages: Iterable[str]) -> None:
         self.errors.extend(messages)
 
     def check_and_raise(self, stage_label: str | None = None) -> None:
         if self.errors:
-            raise CompilationError(stage_label or self.stage or "Compiler", self.errors, self.hints)
+            raise CompilationError(
+                stage_label or self.stage or "Compiler",
+                self.errors,
+                self.hints,
+                self.warnings,
+            )
