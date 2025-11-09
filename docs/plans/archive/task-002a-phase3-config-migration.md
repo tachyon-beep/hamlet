@@ -1005,7 +1005,7 @@ Part of TASK-002A Phase 3 (Config Migration).
 #   - cascades.yaml     (cascade physics: meter interactions)
 #   - affordances.yaml  (interaction definitions: Bed, Job, Hospital, etc.)
 #   - training.yaml     (training hyperparameters and network config)
-#   - cues.yaml         (optional - UI metadata for visualization)
+#   - cues.yaml         (required - cues feed observation pipeline)
 
 version: "1.0"
 

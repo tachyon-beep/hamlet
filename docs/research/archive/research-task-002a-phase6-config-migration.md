@@ -327,7 +327,7 @@ grid:
 #   - affordances.yaml        (affordance definitions)
 #   - bars.yaml               (meter definitions)
 #   - cascades.yaml           (cascade physics)
-#   - cues.yaml               (observable cues, optional)
+#   - cues.yaml               (observable cues, required)
 
 version: "1.0"
 

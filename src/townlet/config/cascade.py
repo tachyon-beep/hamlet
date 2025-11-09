@@ -12,6 +12,9 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
+from townlet.environment.cascade_config import CascadesConfig as _CascadesConfig
+
+__all__ = ["CascadeConfig", "load_cascades_config", "CascadesConfig"]
 
 
 class CascadeConfig(BaseModel):
@@ -83,3 +86,6 @@ def load_cascades_config(config_dir: Path) -> list[CascadeConfig]:
         return [CascadeConfig(**cascade_data) for cascade_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "cascades.yaml")) from e
+
+
+CascadesConfig = _CascadesConfig

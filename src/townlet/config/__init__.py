@@ -18,9 +18,13 @@ Naming Strategy:
 """
 
 # Import DTOs for convenient access
-from townlet.config.affordance import AffordanceConfig, load_affordances_config
-from townlet.config.bar import BarConfig, load_bars_config
-from townlet.config.cascade import CascadeConfig, load_cascades_config
+from townlet.config.affordance import (
+    AffordanceConfig,
+    AffordanceConfigCollection,
+    load_affordances_config,
+)
+from townlet.config.bar import BarConfig, BarsConfig, load_bars_config
+from townlet.config.cascade import CascadeConfig, CascadesConfig, load_cascades_config
 from townlet.config.cues import CuesConfig, load_cues_config
 from townlet.config.curriculum import CurriculumConfig, load_curriculum_config
 from townlet.config.environment import (
@@ -48,10 +52,13 @@ __all__ = [
     "ExplorationConfig",
     "load_exploration_config",
     "BarConfig",
+    "BarsConfig",
     "load_bars_config",
     "CascadeConfig",
+    "CascadesConfig",
     "load_cascades_config",
     "AffordanceConfig",
+    "AffordanceConfigCollection",
     "load_affordances_config",
     "HamletConfig",  # Master config - primary entry point
     "CuesConfig",

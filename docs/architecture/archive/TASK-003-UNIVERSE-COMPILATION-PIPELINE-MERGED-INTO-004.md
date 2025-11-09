@@ -411,7 +411,7 @@ class UniverseCompiler:
         cues_path = self.config_dir / "cues.yaml"
         if not cues_path.exists():
             # Cues are optional for headless training
-            logger.info("  ⚠️  No cues.yaml found (optional)")
+            logger.error("  ❌ cues.yaml missing – cues required for compiler pipeline")
             return CuesConfig(cues=[])
 
         cues_config = load_cues_config(cues_path)

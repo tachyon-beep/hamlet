@@ -1,6 +1,6 @@
 # TASK-004A: Universe Compiler Implementation
 
-**Status**: Blocked (Prerequisites Required - See Below)
+**Status**: Ready (Prerequisites completed – see summary below)
 **Priority**: HIGH (Foundational for UAC system integrity)
 **Estimated Effort**: 52-72 hours (6.5-9 days)
   - **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
@@ -12,31 +12,17 @@
 
 ---
 
-## ⚠️ CRITICAL: PREREQUISITES REQUIRED
+## Prerequisites (Completed 2025-11-09)
 
-**🛑 STOP: Do NOT proceed with implementation until prerequisites are complete.**
+The five blockers called out during peer review are now addressed in main:
 
-This task has **5 critical blockers** where the implementation plan assumptions don't match repository reality. These must be resolved first.
+1. **Config schema alignment** – `load_variables_reference_config` lives in `townlet.vfs.schema` and `load_global_actions_config`/`ActionSpaceConfig` live in `townlet.environment.action_config`, each with regression tests.
+2. **DTO consolidation** – `BarsConfig`, `CascadesConfig`, and `AffordanceConfigCollection` are re-exported from `townlet.config.*`, so compiler stages can import them without touching the environment modules.
+3. **ObservationSpec adapter** – `townlet.universe.adapters.vfs_adapter.vfs_to_observation_spec` converts VFS fields into the compiler DTO, closing the UAC→BAC data contract gap.
+4. **HamletConfig integration** – documented in `docs/architecture/COMPILER_HAMLETCONFIG_INTEGRATION.md`, clarifying how Stage 1 reuses `HamletConfig.load` plus the new loaders (no duplicate validation).
+5. **Spec alignment** – this document now references the real helpers/modules so implementation instructions match the repository.
 
-**You MUST complete:** **[TASK-004A-PREREQUISITES.md](./TASK-004A-PREREQUISITES.md)**
-
-**Prerequisites Overview** (8-12 hours):
-1. **Config Schema Alignment** (3-4h): Create `load_variables_reference_config()` and `load_global_actions_config()`
-2. **DTO Consolidation** (2-3h): Add type aliases for BarsConfig, create ActionSpaceConfig wrapper
-3. **ObservationSpec Adapter** (2-3h): Build VFS-to-Universe DTO adapter
-4. **HamletConfig Integration** (1-2h): Document compiler builds on HamletConfig
-5. **Update TASK-004A Spec** (1-2h): Correct imports, update effort estimates
-
-**Why Prerequisites Are Critical**:
-- Plan expects `variables.yaml`, repo has `variables_reference.yaml`
-- Plan expects `BarsConfig` in `townlet.config.bar`, actually in `townlet.environment.cascade_config`
-- Plan expects `load_variables_config()` that doesn't exist
-- VFS ObservationField incompatible with Universe ObservationSpec (needs adapter)
-- Unclear how compiler relates to existing HamletConfig
-
-**DO NOT SKIP THIS STEP.** Implementing without prerequisites will result in import errors, missing functions, and incompatible data contracts.
-
-Once prerequisites are complete, return here and continue with Phase 0 verification.
+With those in place, the compiler implementation can proceed directly.
 
 ---
 
@@ -302,7 +288,7 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
         # ADDITIONAL LOADERS: VFS variables and global actions
         # (per TASK-004A-PREREQUISITES Part 1)
         from townlet.vfs.schema import load_variables_reference_config
-        from townlet.environment.action_space_builder import load_global_actions_config
+        from townlet.environment.action_config import load_global_actions_config
 
         variables_reference = load_variables_reference_config(config_dir)  # From variables_reference.yaml
         global_actions = load_global_actions_config()  # From configs/global_actions.yaml (shared)

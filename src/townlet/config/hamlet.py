@@ -54,7 +54,7 @@ class HamletConfig(BaseModel):
     cascades: tuple[CascadeConfig, ...] = Field(description="Cascade relationships loaded from cascades.yaml")
     affordances: tuple[AffordanceConfig, ...] = Field(description="Affordance definitions loaded from affordances.yaml")
     substrate: SubstrateConfig = Field(description="Spatial substrate configuration (grid, continuous, aspatial)")
-    cues: CuesConfig | None = Field(default=None, description="Optional public cues configuration (cues.yaml)")
+    cues: CuesConfig = Field(description="Cues configuration (cues.yaml) – required for Stage 5 cues pipeline")
 
     @model_validator(mode="after")
     def validate_batch_size_vs_buffer(self) -> "HamletConfig":
@@ -174,11 +174,6 @@ class HamletConfig(BaseModel):
         affordances = tuple(load_affordances_config(config_dir))
         substrate = load_substrate_config(config_dir / "substrate.yaml")
 
-        cues = None
-        cues_path = config_dir / "cues.yaml"
-        if cues_path.exists():
-            cues = load_cues_config(cues_path)
-
         return cls(
             training=training,
             environment=environment,
@@ -189,5 +184,5 @@ class HamletConfig(BaseModel):
             cascades=cascades,
             affordances=affordances,
             substrate=substrate,
-            cues=cues,
+            cues=load_cues_config(config_dir / "cues.yaml"),
         )

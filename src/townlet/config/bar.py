@@ -12,6 +12,9 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
+from townlet.environment.cascade_config import BarsConfig as _BarsConfig
+
+__all__ = ["BarConfig", "load_bars_config", "BarsConfig"]
 
 
 class BarConfig(BaseModel):
@@ -95,3 +98,7 @@ def load_bars_config(config_dir: Path) -> list[BarConfig]:
         return [BarConfig(**bar_data) for bar_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "bars.yaml")) from e
+
+
+# Type alias for compiler convenience (exposes richer collection DTO)
+BarsConfig = _BarsConfig

@@ -1,0 +1,63 @@
+"""Adapters between VFS observation fields and compiler DTOs."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import Literal
+
+from townlet.universe.dto.observation_spec import ObservationField as CompilerObservationField
+from townlet.universe.dto.observation_spec import ObservationSpec
+from townlet.vfs.schema import ObservationField as VFSObservationField
+
+
+def _infer_field_type(field: VFSObservationField) -> Literal["scalar", "vector", "categorical", "spatial_grid"]:
+    if not field.shape:
+        return "scalar"
+    if len(field.shape) == 1:
+        return "vector"
+    return "spatial_grid"
+
+
+def _flatten_dims(shape: list[int]) -> int:
+    if not shape:
+        return 1
+    dims = 1
+    for dim in shape:
+        dims *= dim
+    return dims
+
+
+def _semantic_from_name(name: str) -> str | None:
+    lowered = name.lower()
+    if "position" in lowered:
+        return "position"
+    if any(token in lowered for token in ["energy", "health", "satiation", "mood", "fitness", "hygiene", "money"]):
+        return "meter"
+    if "affordance" in lowered:
+        return "affordance"
+    if "time" in lowered or "temporal" in lowered:
+        return "temporal"
+    return None
+
+
+def vfs_to_observation_spec(fields: Iterable[VFSObservationField]) -> ObservationSpec:
+    compiler_fields: list[CompilerObservationField] = []
+    cursor = 0
+
+    for field in fields:
+        dims = _flatten_dims(field.shape)
+        compiler_fields.append(
+            CompilerObservationField(
+                name=field.id,
+                type=_infer_field_type(field),
+                dims=dims,
+                start_index=cursor,
+                end_index=cursor + dims,
+                scope="agent",  # TODO(compiler): pull real scope when VFS exposes it per field
+                description=field.source_variable,
+                semantic_type=_semantic_from_name(field.id),
+            )
+        )
+        cursor += dims
+
+    return ObservationSpec.from_fields(compiler_fields)

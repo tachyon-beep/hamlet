@@ -939,7 +939,7 @@ Existing DTOs already cover Substrate (`townlet.substrate.config.SubstrateConfig
 
 **Why**: Hidden defaults create non-reproducible configs, operators don’t know what values are being used, and changing code defaults silently breaks old configs.
 
-**Exemptions**: Only truly optional features (cues.yaml for visualization), metadata (descriptions), and computed values (e.g., observation_dim).
+**Exemptions**: Only metadata (descriptions) and computed values (e.g., observation_dim). All behavioral configs—including `cues.yaml`—are mandatory.
 
 **Enforcement**: DTOs are used at load time (runner.py instantiates `HamletConfig`). Missing/invalid fields raise descriptive validation errors; CI will run `scripts/validate_configs.py` to catch inconsistent packs.
 

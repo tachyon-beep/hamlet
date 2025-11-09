@@ -134,7 +134,7 @@ Enforces the **no-defaults principle** - all behavioral parameters must be expli
 
 **Exemptions** (whitelisted in `.defaults-whitelist.txt`):
 
-- Truly optional features (e.g., `cues.yaml` for visualization)
+- Truly optional features (extremely rare; cues and other behavioral configs are *not* optional)
 - Metadata fields (descriptions, display names)
 - Computed values (observation dimensions)
 

@@ -14,6 +14,15 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
+from townlet.environment.affordance_config import (
+    AffordanceConfigCollection as _AffordanceConfigCollection,
+)
+
+__all__ = [
+    "AffordanceConfig",
+    "load_affordances_config",
+    "AffordanceConfigCollection",
+]
 
 
 class AffordanceConfig(BaseModel):
@@ -91,3 +100,6 @@ def load_affordances_config(config_dir: Path) -> list[AffordanceConfig]:
         return [AffordanceConfig(**affordance_data) for affordance_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "affordances.yaml")) from e
+
+
+AffordanceConfigCollection = _AffordanceConfigCollection

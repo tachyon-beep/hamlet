@@ -399,6 +399,17 @@ The UniverseCompiler executes a **seven-stage pipeline** that progressively vali
 
 **Output**: `CompiledUniverse` (final artifact)
 
+### 2.5 Symbol Table Contract (Implementation Note)
+
+Before coding Stage 2, standardise the symbol table surface so each downstream stage knows what to expect. The `UniverseSymbolTable` must expose at least:
+
+- `register_meter(BarConfig)` / `get_meter(name)` → provides meter metadata + index
+- `register_variable(VariableDef)` / `get_variable(id)`
+- `register_action(ActionConfig)` / `get_action(name)`
+- iteration helpers (`meters`, `variables`, `actions`) for validation passes
+
+All register calls should be idempotent and raise `CompilationError` on duplicates, keeping error reporting consistent with the Stage‑2 plan.
+
 ## 2.4 Implementation Structure
 
 ```python

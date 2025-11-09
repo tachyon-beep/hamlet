@@ -41,7 +41,7 @@ Just like you wouldn't run Python code with syntax errors, you shouldn't run tra
 
 **Allowed Defaults** (rare exceptions):
 
-1. **Truly optional features**: `cues: CuesConfig | None = None` (visualization is optional for headless training)
+1. **Visualization cues**: `cues: CuesConfig` is mandatory; cues feed Stage 5 and cannot be skipped.
 2. **Metadata only**: `description: str | None = None` (doesn't affect simulation)
 3. **Computed values**: `observation_dim: int` (calculated at compile time)
 
@@ -344,8 +344,8 @@ class HamletConfig(BaseModel):
     curriculum: CurriculumConfig
     population: PopulationConfig
 
-    # Optional (can be None for headless training)
-    cues: CuesConfig | None = None
+    # Cues (required – feeds Stage 5 cues compiler)
+    cues: CuesConfig
 
     @model_validator(mode="after")
     def validate_cross_config_constraints(self) -> "HamletConfig":
@@ -1095,10 +1095,9 @@ Tip: See configs/templates/training.yaml.template for reference.
 
 Only three categories can have defaults:
 
-**1. Truly Optional Features** (doesn't affect core simulation):
+**1. Truly Optional Features** (doesn't affect core simulation; rare):
 
 ```python
-cues: CuesConfig | None = None  # ✅ Visualization optional for headless training
 description: str | None = None   # ✅ Metadata only
 ```
 

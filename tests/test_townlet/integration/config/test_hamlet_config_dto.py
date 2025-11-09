@@ -94,14 +94,13 @@ class TestHamletConfigComposition:
         # Should NOT be dicts
         assert not isinstance(config.training, dict)
 
-    def test_cues_optional_when_file_missing(self, tmp_path):
-        """HamletConfig handles missing cues.yaml by setting cues=None."""
+    def test_missing_cues_file_raises(self, tmp_path):
+        """cues.yaml is required – missing file must raise."""
         config_dir = prepare_config_dir(tmp_path)
-        cues_path = config_dir / "cues.yaml"
-        cues_path.unlink()
+        (config_dir / "cues.yaml").unlink()
 
-        config = HamletConfig.load(config_dir)
-        assert config.cues is None
+        with pytest.raises(FileNotFoundError):
+            HamletConfig.load(config_dir)
 
     def test_training_section_can_be_overridden_via_explicit_path(self, tmp_path):
         """training_config_path override must control training hyperparameters."""
