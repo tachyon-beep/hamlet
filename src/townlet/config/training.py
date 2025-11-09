@@ -62,6 +62,14 @@ class TrainingConfig(BaseModel):
     # Recurrent-specific (REQUIRED for all configs, used when network_type=recurrent)
     sequence_length: int = Field(gt=0, description="Length of sequences for LSTM training (recurrent networks only)")
 
+    allow_unfeasible_universe: bool = Field(
+        default=False,
+        description=(
+            "Set true to downgrade compiler feasibility guards (economic, sustainability) from errors to warnings. "
+            "Use only when intentionally building stress-test or instructional worlds."
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_epsilon_order(self) -> "TrainingConfig":
         """Ensure epsilon_start >= epsilon_min."""

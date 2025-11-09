@@ -28,6 +28,7 @@ def test_attach_universe_metadata(compiled_universe) -> None:
     assert checkpoint["observation_dim"] == compiled_universe.metadata.observation_dim
     assert checkpoint["action_dim"] == compiled_universe.metadata.action_count
     assert checkpoint["meter_count"] == compiled_universe.metadata.meter_count
+    assert checkpoint["observation_field_uuids"] == [field.uuid for field in compiled_universe.observation_spec.fields]
 
 
 def test_config_hash_warning_detects_mismatch(compiled_universe) -> None:
@@ -49,5 +50,11 @@ def test_assert_checkpoint_dimensions_raises_on_mismatch(compiled_universe) -> N
     assert_checkpoint_dimensions(checkpoint, compiled_universe)
 
     checkpoint["observation_dim"] = -1
+    with pytest.raises(ValueError):
+        assert_checkpoint_dimensions(checkpoint, compiled_universe)
+
+    checkpoint = {}
+    attach_universe_metadata(checkpoint, compiled_universe)
+    checkpoint["observation_field_uuids"][0] = "deadbeefdeadbeef"
     with pytest.raises(ValueError):
         assert_checkpoint_dimensions(checkpoint, compiled_universe)

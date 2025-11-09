@@ -22,6 +22,7 @@ class TestObservationSpec:
     def test_lookup_and_semantic_filter(self):
         fields = [
             ObservationField(
+                uuid=None,
                 name="energy",
                 type="scalar",
                 dims=1,
@@ -32,6 +33,7 @@ class TestObservationSpec:
                 semantic_type="meter",
             ),
             ObservationField(
+                uuid=None,
                 name="position",
                 type="vector",
                 dims=2,
@@ -46,9 +48,36 @@ class TestObservationSpec:
 
         assert spec.get_field_by_name("energy").name == "energy"
         assert spec.get_fields_by_semantic_type("meter")[0].name == "energy"
+        assert spec.fields[0].uuid is not None
+        assert spec.fields[0].uuid != spec.fields[1].uuid
 
         with pytest.raises(KeyError):
             spec.get_field_by_name("missing")
+
+    def test_duplicate_uuid_rejected(self):
+        field_a = ObservationField(
+            uuid="deadbeefdeadbeef",
+            name="energy",
+            type="scalar",
+            dims=1,
+            start_index=0,
+            end_index=1,
+            scope="agent",
+            description="Energy",
+        )
+        field_b = ObservationField(
+            uuid="deadbeefdeadbeef",
+            name="energy_clone",
+            type="scalar",
+            dims=1,
+            start_index=1,
+            end_index=2,
+            scope="agent",
+            description="Energy",
+        )
+
+        with pytest.raises(ValueError, match="duplicate observation field UUIDs"):
+            ObservationSpec.from_fields([field_a, field_b])
 
 
 class TestActionSpaceMetadata:

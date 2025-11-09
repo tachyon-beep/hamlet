@@ -29,6 +29,7 @@ def test_adapter_scalar_and_vector():
     assert spec.fields[0].dims == 1
     assert spec.fields[1].name == "obs_position"
     assert spec.fields[1].dims == 2
+    assert spec.fields[0].uuid != spec.fields[1].uuid
 
 
 def test_adapter_grid_field():
@@ -39,3 +40,4 @@ def test_adapter_grid_field():
     assert spec.total_dims == 25
     assert spec.fields[0].start_index == 0
     assert spec.fields[0].end_index == 25
+    assert spec.fields[0].uuid is not None

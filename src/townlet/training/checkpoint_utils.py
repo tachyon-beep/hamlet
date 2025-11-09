@@ -15,6 +15,7 @@ def attach_universe_metadata(checkpoint: dict[str, Any], universe: CompiledUnive
     checkpoint["observation_dim"] = universe.metadata.observation_dim
     checkpoint["action_dim"] = universe.metadata.action_count
     checkpoint["meter_count"] = universe.metadata.meter_count
+    checkpoint["observation_field_uuids"] = [field.uuid for field in universe.observation_spec.fields]
 
 
 def config_hash_warning(checkpoint: Mapping[str, Any], universe: CompiledUniverse) -> str | None:
@@ -45,3 +46,10 @@ def assert_checkpoint_dimensions(checkpoint: Mapping[str, Any], universe: Compil
     action_dim = checkpoint.get("action_dim")
     if action_dim is not None and action_dim != universe.metadata.action_count:
         raise ValueError("Checkpoint action_dim mismatch:" f" checkpoint={action_dim}, current={universe.metadata.action_count}")
+
+    expected_uuids = [field.uuid for field in universe.observation_spec.fields]
+    checkpoint_uuids = checkpoint.get("observation_field_uuids")
+    if checkpoint_uuids is None:
+        raise ValueError("Checkpoint missing observation_field_uuids; regenerate the checkpoint with the latest compiler.")
+    if list(checkpoint_uuids) != expected_uuids:
+        raise ValueError("Checkpoint observation field UUIDs mismatch current universe specification.")

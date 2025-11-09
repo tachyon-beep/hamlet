@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from typing import Literal
 
 from townlet.universe.dto.observation_spec import ObservationField as CompilerObservationField
-from townlet.universe.dto.observation_spec import ObservationSpec
+from townlet.universe.dto.observation_spec import ObservationSpec, compute_observation_field_uuid
 from townlet.vfs.schema import ObservationField as VFSObservationField
 
 
@@ -68,8 +68,16 @@ def vfs_to_observation_spec(
             getattr(field, "exposed_to", None),
             variable_lookup.get(field.source_variable) if variable_lookup else None,
         )
+        semantic = _semantic_from_name(field.id)
         compiler_fields.append(
             CompilerObservationField(
+                uuid=compute_observation_field_uuid(
+                    name=field.id,
+                    scope=scope,
+                    description=field.source_variable,
+                    dims=dims,
+                    semantic_type=semantic,
+                ),
                 name=field.id,
                 type=_infer_field_type(field),
                 dims=dims,
@@ -77,7 +85,7 @@ def vfs_to_observation_spec(
                 end_index=cursor + dims,
                 scope=scope,
                 description=field.source_variable,
-                semantic_type=_semantic_from_name(field.id),
+                semantic_type=semantic,
             )
         )
         cursor += dims

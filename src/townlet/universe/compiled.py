@@ -134,6 +134,19 @@ class CompiledUniverse:
                 "Action dimension mismatch between checkpoint and compiled universe.",
             )
 
+        expected_uuids = [field.uuid for field in self.observation_spec.fields]
+        checkpoint_field_uuids = checkpoint.get("observation_field_uuids")
+        if checkpoint_field_uuids is None:
+            return (
+                False,
+                "Checkpoint missing observation_field_uuids; regenerate with updated compiler to ensure field alignment.",
+            )
+        if list(checkpoint_field_uuids) != expected_uuids:
+            return (
+                False,
+                "Observation field UUID mismatch between checkpoint and compiled universe.",
+            )
+
         return True, "Checkpoint compatible."
 
     def to_runtime(self) -> RuntimeUniverse:

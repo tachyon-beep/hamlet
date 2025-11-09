@@ -427,7 +427,8 @@ class UniverseCompiler:
 
         self._validate_spatial_feasibility(raw_configs, errors, _format_error)
         self._enforce_security_limits(raw_configs, errors)
-        self._validate_economic_balance(raw_configs, errors, _format_error)
+        allow_unfeasible = bool(getattr(raw_configs.training, "allow_unfeasible_universe", False))
+        self._validate_economic_balance(raw_configs, errors, _format_error, allow_unfeasible)
         self._validate_cascade_cycles(raw_configs, errors, _format_error)
         self._validate_operating_hours(raw_configs, errors, _format_error)
         cues_config = raw_configs.hamlet_config.cues
@@ -437,7 +438,7 @@ class UniverseCompiler:
         self._validate_capabilities_and_effect_pipelines(raw_configs, errors, _format_error)
         self._validate_affordance_positions(raw_configs, errors, _format_error)
         self._validate_substrate_action_compatibility(raw_configs, errors, _format_error, _add_hint)
-        self._validate_capacity_and_sustainability(raw_configs, errors, _format_error)
+        self._validate_capacity_and_sustainability(raw_configs, errors, _format_error, allow_unfeasible)
 
     def _validate_spatial_feasibility(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
         grid_size = getattr(raw_configs.environment, "grid_size", None)
@@ -476,19 +477,26 @@ class UniverseCompiler:
                     location=location,
                 )
 
-    def _validate_economic_balance(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
+    def _validate_economic_balance(
+        self,
+        raw_configs: RawConfigs,
+        errors: CompilationErrorCollector,
+        formatter,
+        allow_unfeasible: bool,
+    ) -> None:
         enabled_lookup = self._build_enabled_affordance_lookup(getattr(raw_configs.environment, "enabled_affordances", None))
 
         total_income = self._compute_max_income(raw_configs.affordances)
         total_costs = self._compute_total_costs(raw_configs.affordances)
 
         if total_income <= 0.0 and total_costs > 0.0:
-            errors.add(
-                formatter(
-                    "UAC-VAL-002",
-                    "No income-generating affordances available while costs accrue. Universe is unwinnable.",
-                    "affordances.yaml",
-                )
+            self._record_feasibility_issue(
+                errors,
+                formatter,
+                allow_unfeasible,
+                "UAC-VAL-002",
+                "No income-generating affordances available while costs accrue. Universe is unwinnable.",
+                "affordances.yaml",
             )
         elif total_income < total_costs:
             errors.add_warning(
@@ -501,15 +509,16 @@ class UniverseCompiler:
 
         income_hours = self._count_income_hours(raw_configs, enabled_lookup)
         if total_income > 0.0 and income_hours == 0:
-            errors.add(
-                formatter(
-                    "UAC-VAL-002",
-                    (
-                        "Income-generating affordances exist but none are available during the day. "
-                        "Adjust operating_hours or enable additional jobs."
-                    ),
-                    "affordances.yaml",
-                )
+            self._record_feasibility_issue(
+                errors,
+                formatter,
+                allow_unfeasible,
+                "UAC-VAL-002",
+                (
+                    "Income-generating affordances exist but none are available during the day. "
+                    "Adjust operating_hours or enable additional jobs."
+                ),
+                "affordances.yaml",
             )
         elif 0 < income_hours < 12:
             errors.add_warning(
@@ -800,9 +809,10 @@ class UniverseCompiler:
         raw_configs: RawConfigs,
         errors: CompilationErrorCollector,
         formatter,
+        allow_unfeasible: bool,
     ) -> None:
         enabled_lookup = self._build_enabled_affordance_lookup(getattr(raw_configs.environment, "enabled_affordances", None))
-        self._validate_meter_sustainability(raw_configs, enabled_lookup, errors, formatter)
+        self._validate_meter_sustainability(raw_configs, enabled_lookup, errors, formatter, allow_unfeasible)
         self._validate_capacity_constraints(raw_configs, enabled_lookup, errors, formatter)
 
     @staticmethod
@@ -1023,6 +1033,7 @@ class UniverseCompiler:
         enabled_lookup: set[str] | None,
         errors: CompilationErrorCollector,
         formatter,
+        allow_unfeasible: bool,
     ) -> None:
         critical_meter_names = self._collect_critical_meter_names(raw_configs)
         if not critical_meter_names:
@@ -1036,20 +1047,22 @@ class UniverseCompiler:
                 continue
             restoration = self._compute_max_restoration_for_meter(bar.name, raw_configs.affordances, enabled_lookup)
             if restoration <= 0.0:
-                errors.add(
-                    formatter(
-                        "UAC-VAL-005",
-                        f"Meter {bar.name} unsustainable: passive depletion {depletion:.4f}/tick but no restoring affordances are enabled.",
-                        f"bars.yaml:{bar.name}",
-                    )
+                self._record_feasibility_issue(
+                    errors,
+                    formatter,
+                    allow_unfeasible,
+                    "UAC-VAL-005",
+                    f"Meter {bar.name} unsustainable: passive depletion {depletion:.4f}/tick but no restoring affordances are enabled.",
+                    f"bars.yaml:{bar.name}",
                 )
             elif restoration < depletion:
-                errors.add(
-                    formatter(
-                        "UAC-VAL-005",
-                        f"Meter {bar.name} unsustainable: depletion ({depletion:.4f}/tick) > max restoration ({restoration:.4f}/tick).",
-                        f"bars.yaml:{bar.name}",
-                    )
+                self._record_feasibility_issue(
+                    errors,
+                    formatter,
+                    allow_unfeasible,
+                    "UAC-VAL-005",
+                    f"Meter {bar.name} unsustainable: depletion ({depletion:.4f}/tick) > max restoration ({restoration:.4f}/tick).",
+                    f"bars.yaml:{bar.name}",
                 )
 
     def _collect_critical_meter_names(self, raw_configs: RawConfigs) -> set[str]:
@@ -1106,6 +1119,21 @@ class UniverseCompiler:
             if any(self._affordance_positive_amount_for_meter(affordance, meter) > 0.0 for meter in critical_meters):
                 critical_affordances.append(affordance)
         return critical_affordances
+
+    def _record_feasibility_issue(
+        self,
+        errors: CompilationErrorCollector,
+        formatter,
+        allow_unfeasible: bool,
+        code: str,
+        message: str,
+        location: str,
+    ) -> None:
+        issue = formatter(code, message, location)
+        if allow_unfeasible:
+            errors.add_warning(f"{issue.format()} (allow_unfeasible_universe=true)")
+        else:
+            errors.add(issue)
 
     def _get_meter(self, entry: object | None) -> str | None:
         if entry is None:

@@ -43,9 +43,14 @@ def test_compiled_universe_checkpoint_check() -> None:
         "config_hash": compiled.metadata.config_hash,
         "observation_dim": compiled.metadata.observation_dim,
         "action_dim": compiled.metadata.action_count,
+        "observation_field_uuids": [field.uuid for field in compiled.observation_spec.fields],
     }
     compatible, reason = compiled.check_checkpoint_compatibility(checkpoint)
     assert compatible, reason
+
+    checkpoint["observation_field_uuids"][0] = "deadbeefdeadbeef"
+    compatible, reason = compiled.check_checkpoint_compatibility(checkpoint)
+    assert not compatible
 
 
 def test_compiled_universe_create_environment() -> None:
