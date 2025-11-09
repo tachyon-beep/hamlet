@@ -37,8 +37,57 @@ def test_stage5_computes_metadata_and_observation_spec(base_config_dir: Path, ba
 
     grid_field = observation_spec.get_field_by_name("obs_grid")
     assert grid_field.dims == 9
+    assert grid_field.scope == "agent", "Grid encoding should stay agent scoped under full observability"
     affordance_field = observation_spec.get_field_by_name("obs_affordance")
     assert affordance_field.dims == 15
+    assert affordance_field.scope == "agent"
+
+
+@pytest.mark.parametrize(
+    ("pack_name", "expected_fields", "extra_asserts"),
+    [
+        (
+            "L0_0_minimal",
+            [
+                ("obs_grid", "agent"),
+                ("obs_pos", "agent"),
+                ("obs_energy", "agent"),
+                ("obs_health", "agent"),
+            ],
+            (("obs_time_sin", "global"),),
+        ),
+        (
+            "L2_partial_observability",
+            [
+                ("obs_local_window", "agent"),
+                ("obs_pos", "agent"),
+                ("obs_energy", "agent"),
+                ("obs_health", "agent"),
+            ],
+            (("obs_time_sin", "global"), ("obs_time_cos", "global")),
+        ),
+    ],
+)
+def test_observation_spec_fields_order_and_scope(
+    pack_name: str,
+    expected_fields: list[tuple[str, str]],
+    extra_asserts: tuple[str, ...],
+) -> None:
+    """Regress ObservationSpec ordering + scope for representative configs."""
+
+    config_dir = Path("configs") / pack_name
+    raw_configs = RawConfigs.from_config_dir(config_dir)
+    compiler = UniverseCompiler()
+    symbol_table = compiler._stage_2_build_symbol_tables(raw_configs)
+
+    _, observation_spec = compiler._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
+
+    actual_pairs = [(field.name, field.scope) for field in observation_spec.fields[: len(expected_fields)]]
+    assert actual_pairs == expected_fields, f"{pack_name}: expected field ordering {expected_fields}, got {actual_pairs}"
+
+    for field_name, expected_scope in extra_asserts:
+        field = observation_spec.get_field_by_name(field_name)
+        assert field.scope == expected_scope, f"{pack_name}: expected {field_name} scope {expected_scope}, got {field.scope}"
 
 
 def test_stage5_config_hash_changes_when_config_changes(tmp_path: Path, base_config_dir: Path) -> None:
@@ -51,7 +100,9 @@ def test_stage5_config_hash_changes_when_config_changes(tmp_path: Path, base_con
     metadata_before, _ = compiler._stage_5_compute_metadata(temp_pack, original, symbol_table)
 
     training_path = temp_pack / "training.yaml"
-    training_path.write_text(training_path.read_text() + "\n# stage5-test\n")
+    text = training_path.read_text()
+    text = text.replace("max_episodes: 500", "max_episodes: 501")
+    training_path.write_text(text)
 
     mutated = RawConfigs.from_config_dir(temp_pack)
     symbol_table_mut = compiler._stage_2_build_symbol_tables(mutated)

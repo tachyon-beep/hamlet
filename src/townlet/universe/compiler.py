@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import torch
 import yaml
 
 from townlet.config.affordance import AffordanceConfig
@@ -30,7 +31,9 @@ from townlet.universe.dto import (
     ObservationSpec,
     UniverseMetadata,
 )
+from townlet.universe.optimization import OptimizationData
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
+from townlet.vfs.registry import VariableRegistry
 
 from .errors import CompilationErrorCollector
 from .symbol_table import UniverseSymbolTable
@@ -51,6 +54,7 @@ class UniverseCompiler:
         self._action_metadata: ActionSpaceMetadata | None = None
         self._meter_metadata: MeterMetadata | None = None
         self._affordance_metadata: AffordanceMetadata | None = None
+        self._optimization_data: OptimizationData | None = None
 
     def compile(self, config_dir: Path, use_cache: bool = True):  # pragma: no cover - placeholder
         """Compile a config pack into a CompiledUniverse.
@@ -87,6 +91,7 @@ class UniverseCompiler:
         self._action_metadata = action_space_metadata
         self._meter_metadata = meter_metadata
         self._affordance_metadata = affordance_metadata
+        self._optimization_data = self._stage_6_optimize(raw_configs, metadata)
 
         raise NotImplementedError("UniverseCompiler.compile is not yet fully implemented")
 
@@ -850,9 +855,17 @@ class UniverseCompiler:
         from pydantic import __version__ as pydantic_version  # lazy import to avoid startup penalty
 
         exposures = self._load_observation_exposures(config_dir, raw_configs)
+        variable_registry = VariableRegistry(
+            variables=list(raw_configs.variables_reference),
+            num_agents=raw_configs.population.num_agents,
+            device=torch.device("cpu"),
+        )
+
         obs_builder = VFSObservationSpecBuilder()
-        vfs_fields = obs_builder.build_observation_spec(raw_configs.variables_reference, exposures)
-        observation_spec = vfs_to_observation_spec(vfs_fields)
+        variables = list(variable_registry.variables.values())
+        vfs_fields = obs_builder.build_observation_spec(variables, exposures)
+        var_scope_lookup = {var.id: var.scope for var in variables}
+        observation_spec = vfs_to_observation_spec(vfs_fields, var_scope_lookup)
 
         sorted_bars = sorted(raw_configs.bars, key=lambda bar: bar.index)
         meter_names = tuple(bar.name for bar in sorted_bars)
@@ -977,6 +990,39 @@ class UniverseCompiler:
 
         return action_space_metadata, meter_metadata, affordance_metadata
 
+    def _stage_6_optimize(
+        self,
+        raw_configs: RawConfigs,
+        metadata: UniverseMetadata,
+        *,
+        device: torch.device | None = None,
+    ) -> OptimizationData:
+        """Stage 6 – placeholder optimization data (to be populated in future steps)."""
+
+        torch_device = device or torch.device("cpu")
+        base_depletions = torch.zeros(metadata.meter_count, dtype=torch.float32, device=torch_device)
+        for bar in raw_configs.bars:
+            depletion = getattr(bar, "base_depletion", 0.0)
+            base_depletions[bar.index] = float(depletion)
+
+        affordance_count = max(metadata.affordance_count, 1)
+        action_mask_table = torch.ones(
+            24,
+            affordance_count,
+            dtype=torch.bool,
+            device=torch_device,
+        )
+
+        affordance_position_map = {aff.id: None for aff in raw_configs.affordances}
+
+        return OptimizationData(
+            base_depletions=base_depletions,
+            cascade_data={},
+            modulation_data=[],
+            action_mask_table=action_mask_table,
+            affordance_position_map=affordance_position_map,
+        )
+
     def _derive_grid_dimensions(self, substrate: SubstrateConfig) -> tuple[int | None, int | None]:
         if substrate.type == "grid" and substrate.grid is not None:
             width = substrate.grid.width
@@ -1040,6 +1086,11 @@ class UniverseCompiler:
 
         return exposures
 
+    def _normalize_yaml(self, file_path: Path) -> str:
+        with file_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
+        return yaml.dump(data, sort_keys=True)
+
     def _compute_config_hash(self, config_dir: Path) -> str:
         files_to_hash = [
             config_dir / "training.yaml",
@@ -1056,9 +1107,8 @@ class UniverseCompiler:
         for file_path in sorted(files_to_hash):
             if not file_path.exists():
                 continue
-            digest.update(str(file_path.resolve()).encode("utf-8"))
-            with file_path.open("rb") as handle:
-                digest.update(handle.read())
+            normalized = self._normalize_yaml(file_path)
+            digest.update(normalized.encode("utf-8"))
         return digest.hexdigest()
 
     def _compute_provenance_id(

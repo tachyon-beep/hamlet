@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Literal
 
 from townlet.universe.dto.observation_spec import ObservationField as CompilerObservationField
@@ -40,12 +40,34 @@ def _semantic_from_name(name: str) -> str | None:
     return None
 
 
-def vfs_to_observation_spec(fields: Iterable[VFSObservationField]) -> ObservationSpec:
+def _scope_from_metadata(exposed_to: list[str] | None, variable_scope: str | None) -> str:
+    candidates = exposed_to or []
+    if variable_scope == "global":
+        return "global"
+    if variable_scope == "agent_private":
+        return "agent_private"
+    if "global" in candidates:
+        return "global"
+    if "agent_private" in candidates:
+        return "agent_private"
+    if "agent" in candidates:
+        return "agent"
+    return "agent"
+
+
+def vfs_to_observation_spec(
+    fields: Iterable[VFSObservationField],
+    variable_lookup: Mapping[str, str] | None = None,
+) -> ObservationSpec:
     compiler_fields: list[CompilerObservationField] = []
     cursor = 0
 
     for field in fields:
         dims = _flatten_dims(field.shape)
+        scope = _scope_from_metadata(
+            getattr(field, "exposed_to", None),
+            variable_lookup.get(field.source_variable) if variable_lookup else None,
+        )
         compiler_fields.append(
             CompilerObservationField(
                 name=field.id,
@@ -53,7 +75,7 @@ def vfs_to_observation_spec(fields: Iterable[VFSObservationField]) -> Observatio
                 dims=dims,
                 start_index=cursor,
                 end_index=cursor + dims,
-                scope="agent",  # TODO(compiler): pull real scope when VFS exposes it per field
+                scope=scope,
                 description=field.source_variable,
                 semantic_type=_semantic_from_name(field.id),
             )
