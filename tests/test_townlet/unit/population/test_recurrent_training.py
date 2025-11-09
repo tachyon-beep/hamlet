@@ -1,47 +1,68 @@
-"""Unit tests for recurrent (LSTM) training in VectorizedPopulation.
+"""Unit tests for recurrent (LSTM) training in VectorizedPopulation."""
 
-This module tests the LSTM-specific training paths that are only executed
-when using RecurrentSpatialQNetwork for POMDP scenarios.
+import shutil
+import uuid
 
-Coverage targets:
-- src/townlet/population/vectorized.py:212-232 (_store_episode_and_reset)
-- src/townlet/population/vectorized.py:236-248 (_reset_hidden_state)
-- src/townlet/population/vectorized.py:341-348 (flush_episode)
-- src/townlet/population/vectorized.py:529-616 (recurrent training loop)
-- src/townlet/population/vectorized.py:316-325 (AdaptiveIntrinsicExploration)
-- src/townlet/population/vectorized.py:703-714 (snapshot and curriculum tracker)
-"""
-
+import pytest
 import torch
+import yaml
 
 from townlet.curriculum.static import StaticCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
 
+@pytest.fixture
+def recurrent_env_builder(tmp_path, test_config_pack_path, env_factory, cpu_device):
+    """Clone config packs, enforce POMDP settings, and build envs."""
+
+    def _build(*, num_agents: int, overrides: dict | None = None):
+        target = tmp_path / f"recurrent_env_{uuid.uuid4().hex}"
+        shutil.copytree(test_config_pack_path, target)
+
+        training_yaml = target / "training.yaml"
+        with open(training_yaml) as f:
+            training_config = yaml.safe_load(f)
+
+        def _merge(config: dict, updates: dict) -> None:
+            for section, values in updates.items():
+                current = config.get(section, {}) or {}
+                current.update(values)
+                config[section] = current
+
+        base_updates = {"environment": {"partial_observability": True, "vision_range": 2}}
+        _merge(training_config, base_updates)
+        if overrides:
+            _merge(training_config, overrides)
+
+        with open(training_yaml, "w") as f:
+            yaml.safe_dump(training_config, f, sort_keys=False)
+
+        return env_factory(config_dir=target, num_agents=num_agents, device_override=cpu_device)
+
+    return _build
+
+
+@pytest.fixture
+def cpu_env_factory(env_factory, cpu_device):
+    """Generic CPU-bound environment builder."""
+
+    def _build(**kwargs):
+        return env_factory(device_override=cpu_device, **kwargs)
+
+    return _build
+
+
 class TestRecurrentNetworkInitialization:
     """Test recurrent network setup and initialization."""
 
-    def test_recurrent_network_creates_sequential_buffer(self, cpu_device, test_config_pack_path):
+    def test_recurrent_network_creates_sequential_buffer(self, recurrent_env_builder):
         """Recurrent networks should use SequentialReplayBuffer, not standard ReplayBuffer.
 
         Coverage target: Initialization path for recurrent networks
         """
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=True,  # POMDP requires recurrent network
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = recurrent_env_builder(num_agents=2)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -51,7 +72,7 @@ class TestRecurrentNetworkInitialization:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=["agent_0", "agent_1"],
-            device=cpu_device,
+            device=env.device,
             obs_dim=env.observation_dim,
             network_type="recurrent",  # Use RecurrentSpatialQNetwork
             learning_rate=0.0001,
@@ -74,24 +95,12 @@ class TestRecurrentNetworkInitialization:
         assert population.current_episodes is not None, "Should have episode containers"
         assert len(population.current_episodes) == 2, "Should have container for each agent"
 
-    def test_recurrent_network_initializes_hidden_states(self, cpu_device, test_config_pack_path):
+    def test_recurrent_network_initializes_hidden_states(self, recurrent_env_builder):
         """Recurrent networks should initialize LSTM hidden states.
 
         Coverage target: LSTM hidden state initialization
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = recurrent_env_builder(num_agents=1)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -101,7 +110,7 @@ class TestRecurrentNetworkInitialization:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=["agent_0"],
-            device=cpu_device,
+            device=env.device,
             obs_dim=env.observation_dim,
             network_type="recurrent",
             learning_rate=0.0001,
@@ -139,19 +148,7 @@ class TestLSTMHiddenStateManagement:
 
         Coverage target: lines 236-248 (_reset_hidden_state)
         """
-        env = VectorizedHamletEnv(
-            num_agents=3,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = recurrent_env_builder(num_agents=3)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -208,19 +205,7 @@ class TestEpisodeBuffering:
 
         Coverage target: lines 212-232 (_store_episode_and_reset)
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = recurrent_env_builder(num_agents=1)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -270,19 +255,7 @@ class TestEpisodeBuffering:
 
         Coverage target: lines 216-217 (empty episode check)
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = recurrent_env_builder(num_agents=1)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -317,19 +290,7 @@ class TestEpisodeBuffering:
 
         Coverage target: lines 341-348 (flush_episode for recurrent)
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = recurrent_env_builder(num_agents=1)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -385,19 +346,7 @@ class TestRecurrentTraining:
 
         Coverage target: lines 529-616 (recurrent training loop via step_population)
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = recurrent_env_builder(num_agents=1)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -452,24 +401,12 @@ class TestRecurrentTraining:
 class TestAdaptiveIntrinsicExplorationIntegration:
     """Test AdaptiveIntrinsicExploration integration."""
 
-    def test_adaptive_exploration_updates_on_episode_end(self, cpu_device, test_config_pack_path):
+    def test_adaptive_exploration_updates_on_episode_end(self, cpu_env_factory, cpu_device):
         """Episode end should trigger AdaptiveIntrinsicExploration update.
 
         Coverage target: lines 318-322 (AdaptiveIntrinsicExploration integration)
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
 
@@ -481,7 +418,7 @@ class TestAdaptiveIntrinsicExplorationIntegration:
             initial_intrinsic_weight=1.0,
             variance_threshold=100.0,
             survival_window=10,
-            device=cpu_device,
+            device=env.device,
         )
 
         population = VectorizedPopulation(
@@ -489,7 +426,7 @@ class TestAdaptiveIntrinsicExplorationIntegration:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=["agent_0"],
-            device=cpu_device,
+            device=env.device,
             obs_dim=env.observation_dim,
             network_type="simple",
             learning_rate=0.00025,
@@ -516,24 +453,12 @@ class TestAdaptiveIntrinsicExplorationIntegration:
 class TestSnapshotAndMetrics:
     """Test snapshot generation and metrics tracking."""
 
-    def test_build_telemetry_snapshot_generates_runtime_data(self, cpu_device, test_config_pack_path):
+    def test_build_telemetry_snapshot_generates_runtime_data(self, cpu_env_factory, cpu_device):
         """build_telemetry_snapshot() should generate runtime data for all agents.
 
         Coverage target: lines 703-709 (snapshot generation)
         """
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(num_agents=2)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -543,7 +468,7 @@ class TestSnapshotAndMetrics:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=["agent_0", "agent_1"],
-            device=cpu_device,
+            device=env.device,
             obs_dim=env.observation_dim,
             network_type="simple",
             learning_rate=0.00025,
@@ -570,24 +495,12 @@ class TestSnapshotAndMetrics:
         assert "agent_id" in agent_snapshot
         assert "survival_time" in agent_snapshot  # Actual field, not total_episodes
 
-    def test_update_curriculum_tracker_when_tracker_exists(self, cpu_device, test_config_pack_path):
+    def test_update_curriculum_tracker_when_tracker_exists(self, cpu_env_factory, cpu_device):
         """update_curriculum_tracker() should update when tracker exists.
 
         Coverage target: lines 713-714 (curriculum tracker update)
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Use AdversarialCurriculum which has a tracker
         from townlet.curriculum.adversarial import AdversarialCurriculum
@@ -606,7 +519,7 @@ class TestSnapshotAndMetrics:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=["agent_0"],
-            device=cpu_device,
+            device=env.device,
             obs_dim=env.observation_dim,
             network_type="simple",
             learning_rate=0.00025,
@@ -630,24 +543,12 @@ class TestSnapshotAndMetrics:
         # Verify tracker exists and was initialized
         assert curriculum.tracker is not None, "Tracker should be initialized"
 
-    def test_get_training_metrics_returns_dict(self, cpu_device, test_config_pack_path):
+    def test_get_training_metrics_returns_dict(self, cpu_env_factory, cpu_device):
         """get_training_metrics() should return metrics dictionary.
 
         Coverage target: line 723 (get_training_metrics)
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.999)
@@ -657,7 +558,7 @@ class TestSnapshotAndMetrics:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=["agent_0"],
-            device=cpu_device,
+            device=env.device,
             obs_dim=env.observation_dim,
             network_type="simple",
             learning_rate=0.00025,

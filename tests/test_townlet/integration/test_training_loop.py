@@ -12,8 +12,8 @@ Focus: Test training loop over multiple episodes with real components
 
 import torch
 
+from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.curriculum.static import StaticCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
@@ -33,7 +33,7 @@ class TestMaskedLossIntegration:
     components instead of synthetic tensors.
     """
 
-    def test_masked_loss_during_training(self, cpu_device, test_config_pack_path):
+    def test_masked_loss_during_training(self, cpu_device, cpu_env_factory, tmp_path):
         """Verify masked loss computed correctly during LSTM training.
 
         This test validates the critical contract:
@@ -44,20 +44,24 @@ class TestMaskedLossIntegration:
         Integration point: VectorizedPopulation.step_population() with
         recurrent network applies masked loss during training.
         """
-        # Create POMDP environment for recurrent network with high depletion to force death
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,  # 5×5 vision window
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.1,  # High depletion to force death
-            wait_energy_cost=0.05,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+
+        def _modifier(cfg):
+            env_cfg = cfg["environment"]
+            env_cfg.update(
+                {
+                    "grid_size": 5,
+                    "partial_observability": True,
+                    "vision_range": 2,
+                    "enable_temporal_mechanics": False,
+                    "energy_move_depletion": 0.1,
+                    "energy_wait_depletion": 0.05,
+                    "energy_interact_depletion": 0.0,
+                }
+            )
+            cfg["curriculum"].update({"max_steps_per_episode": 1000})
+
+        config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="masked_loss")
+        env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         # Create population with recurrent network
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -116,7 +120,7 @@ class TestMaskedLossIntegration:
         if population.last_td_error is not None:
             assert torch.isfinite(torch.tensor(population.last_td_error)), f"TD error should be finite, got {population.last_td_error}"
 
-    def test_action_masking_enforced_in_q_values(self, cpu_device, test_config_pack_path):
+    def test_action_masking_enforced_in_q_values(self, cpu_device, cpu_env_factory):
         """Verify action masking enforced in Q-values during action selection.
 
         This test validates the critical contract:
@@ -127,20 +131,7 @@ class TestMaskedLossIntegration:
         Integration point: VectorizedPopulation.step_population() calls
         env.get_action_masks() and passes masks to exploration.select_actions().
         """
-        # Create small environment for testing
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -184,7 +175,7 @@ class TestMaskedLossIntegration:
         # Verify actions were taken (not all zeros)
         assert len(set(actions_taken)) > 1, "Should have variety of actions (not all zeros)"
 
-    def test_boundary_masking_during_training(self, cpu_device, test_config_pack_path):
+    def test_boundary_masking_during_training(self, cpu_device, cpu_env_factory):
         """Verify boundary masking prevents out-of-bounds movement.
 
         This test validates the critical contract:
@@ -196,19 +187,7 @@ class TestMaskedLossIntegration:
         boundary masks, VectorizedPopulation enforces them during action selection.
         """
         # Create small environment to easily hit boundaries
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,  # Small grid to easily hit boundaries
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population with random exploration to test boundaries
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -266,7 +245,7 @@ class TestMultiEpisodeTraining:
     target network updates.
     """
 
-    def test_train_10_episodes_with_learning_progression(self, cpu_device, test_config_pack_path):
+    def test_train_10_episodes_with_learning_progression(self, cpu_device, cpu_env_factory):
         """Verify agents improve over 10 episodes (survival time or Q-values).
 
         This test validates the critical contract:
@@ -278,20 +257,7 @@ class TestMultiEpisodeTraining:
         Integration point: Multi-episode loop with VectorizedPopulation.step_population()
         called repeatedly across episodes.
         """
-        # Create small environment for fast training
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population with epsilon decay
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -355,7 +321,7 @@ class TestMultiEpisodeTraining:
         # Verify episodes completed
         assert len(survival_times) == 10, "Should complete 10 episodes"
 
-    def test_epsilon_decay_over_episodes(self, cpu_device, test_config_pack_path):
+    def test_epsilon_decay_over_episodes(self, cpu_device, cpu_env_factory):
         """Verify epsilon decreases over episodes according to decay schedule.
 
         This test validates the critical contract:
@@ -367,20 +333,7 @@ class TestMultiEpisodeTraining:
         Integration point: EpsilonGreedyExploration.decay_epsilon() called
         by training loop after each episode.
         """
-        # Create minimal environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create exploration with known decay parameters
         exploration = EpsilonGreedyExploration(
@@ -435,7 +388,7 @@ class TestMultiEpisodeTraining:
             abs(epsilon_history[10] - expected_epsilon_10) < 0.05
         ), f"Epsilon at episode 10 should be ~{expected_epsilon_10}, got {epsilon_history[10]}"
 
-    def test_replay_buffer_accumulation_during_training(self, cpu_device, test_config_pack_path):
+    def test_replay_buffer_accumulation_during_training(self, cpu_device, cpu_env_factory):
         """Verify replay buffer accumulates transitions during training.
 
         This test validates the critical contract:
@@ -447,20 +400,7 @@ class TestMultiEpisodeTraining:
         Integration point: VectorizedPopulation.step_population() pushes
         transitions to replay buffer after each step.
         """
-        # Create environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -505,7 +445,7 @@ class TestMultiEpisodeTraining:
                 buffer_sizes[i] >= buffer_sizes[i - 1] or buffer_sizes[i] == 500
             ), f"Buffer size should increase or stay at capacity: {buffer_sizes}"
 
-    def test_target_network_updates_at_frequency(self, cpu_device, test_config_pack_path):
+    def test_target_network_updates_at_frequency(self, cpu_device, cpu_env_factory):
         """Verify target network updated at specified frequency.
 
         This test validates the critical contract:
@@ -516,20 +456,7 @@ class TestMultiEpisodeTraining:
         Integration point: VectorizedPopulation.step_population() updates
         target network every target_update_frequency training steps.
         """
-        # Create environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population with short target update frequency
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -580,7 +507,7 @@ class TestMultiEpisodeTraining:
         if population.training_step_counter >= 10:
             assert target_weights_changed, f"Target network should update after {population.training_step_counter} training steps"
 
-    def test_q_values_improve_over_time(self, cpu_device, test_config_pack_path):
+    def test_q_values_improve_over_time(self, cpu_device, cpu_env_factory):
         """Verify Q-values become more certain over time (reduced variance).
 
         This test validates the critical contract:
@@ -591,20 +518,7 @@ class TestMultiEpisodeTraining:
         Integration point: VectorizedPopulation.step_population() trains
         Q-network, causing Q-values to become more certain over time.
         """
-        # Create environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)

@@ -430,7 +430,7 @@ class TestVFSActionConfigIntegration:
 class TestVFSEnvironmentIntegration:
     """Test VFS integration with VectorizedHamletEnv."""
 
-    def test_meter_index_mapping_correctness(self, test_config_pack_path: Path):
+    def test_meter_index_mapping_correctness(self, cpu_env_factory):
         """Regression test: Ensure meter indices are read from meter_name_to_index, not enumerate().
 
         This tests the fix for a bug where enumerate() was used instead of the stored
@@ -442,22 +442,8 @@ class TestVFSEnvironmentIntegration:
         - enumerate(keys()) would give: hygiene→0, energy→1, health→2 (WRONG!)
         - Should use stored indices: hygiene→7, energy→0, health→1 (CORRECT)
         """
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
         # Initialize environment with test config (uses configs/test, designed for integration testing)
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,  # Test config uses 8×8 grid
-            device=torch.device("cpu"),
-            config_pack_path=test_config_pack_path,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=2)
 
         # Verify meter_name_to_index exists and has expected structure
         assert hasattr(env, "meter_name_to_index"), "Environment should have meter_name_to_index"
@@ -494,7 +480,7 @@ class TestVFSEnvironmentIntegration:
                 f"This indicates meter_name_to_index mapping is incorrect!"
             )
 
-    def test_position_normalization_full_observability(self, test_config_pack_path: Path):
+    def test_position_normalization_full_observability(self, cpu_env_factory):
         """Regression test: Ensure positions are normalized in full observability mode.
 
         This tests the fix for a bug where full observability stored raw grid coordinates
@@ -509,22 +495,8 @@ class TestVFSEnvironmentIntegration:
         - Without normalization: VFS stores 7.0 → observation sees 7.0 (WRONG!)
         - With normalization: VFS stores 0.875 → observation sees 0.875 (CORRECT!)
         """
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
         # Test with full observability (the bug case)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=torch.device("cpu"),
-            config_pack_path=test_config_pack_path,
-            partial_observability=False,  # Full observability (bug case)
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Set agent to position (7, 7) - far corner of 8×8 grid
         env.positions[0] = torch.tensor([7, 7], dtype=torch.long, device=env.device)
@@ -551,24 +523,10 @@ class TestVFSEnvironmentIntegration:
             f"Position outside [0,1] range: {vfs_position.tolist()}. " f"This violates the VFS schema contract."
         )
 
-    def test_position_normalization_pomdp(self, test_config_pack_path: Path):
+    def test_position_normalization_pomdp(self, cpu_env_factory):
         """Verify positions are normalized in POMDP mode (this should already work)."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
         # Test with POMDP (this was already working, but verify it still works)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=torch.device("cpu"),
-            config_pack_path=test_config_pack_path,
-            partial_observability=True,  # POMDP mode
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=Path("configs/L2_partial_observability"), num_agents=1)
 
         # Set agent to position (7, 7)
         env.positions[0] = torch.tensor([7, 7], dtype=torch.long, device=env.device)

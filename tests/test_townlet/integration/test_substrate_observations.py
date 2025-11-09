@@ -2,26 +2,10 @@
 
 from pathlib import Path
 
-import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-
-def test_full_observation_uses_substrate(test_config_pack_path):
+def test_full_observation_uses_substrate(cpu_env_factory):
     """Full observability should use substrate.encode_observation()."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=Path("configs/L1_full_observability"),
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=Path("configs/L1_full_observability"), num_agents=1)
 
     # Get observation
     obs = env.reset()
@@ -31,21 +15,9 @@ def test_full_observation_uses_substrate(test_config_pack_path):
     assert obs.shape[1] == expected_dim, f"Expected {expected_dim}, got {obs.shape[1]}"
 
 
-def test_partial_observation_uses_substrate(test_config_pack_path):
+def test_partial_observation_uses_substrate(cpu_env_factory):
     """Partial observability should use substrate.encode_partial_observation()."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=8,
-        partial_observability=True,
-        vision_range=2,  # 5×5 window
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=Path("configs/L2_partial_observability"),
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=Path("configs/L2_partial_observability"), num_agents=1)
 
     # Get observation
     obs = env.reset()
@@ -64,21 +36,9 @@ def test_partial_observation_uses_substrate(test_config_pack_path):
     assert obs.shape[1] == 54, f"L2 should have 54 dims, got {obs.shape[1]}"
 
 
-def test_observation_dim_matches_actual_observation(test_config_pack_path):
+def test_observation_dim_matches_actual_observation(cpu_env_factory, test_config_pack_path):
     """Environment's observation_dim should match actual observation shape."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
     obs = env.reset()
 
@@ -86,21 +46,9 @@ def test_observation_dim_matches_actual_observation(test_config_pack_path):
     assert obs.shape[1] == env.observation_dim, f"observation_dim={env.observation_dim} doesn't match actual obs.shape[1]={obs.shape[1]}"
 
 
-def test_partial_observation_dim_matches_actual(test_config_pack_path):
+def test_partial_observation_dim_matches_actual(cpu_env_factory, test_config_pack_path):
     """POMDP observation_dim should match actual observation shape."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=8,
-        partial_observability=True,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
     obs = env.reset()
 

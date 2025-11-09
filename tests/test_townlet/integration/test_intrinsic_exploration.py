@@ -14,7 +14,6 @@ Test Organization:
 import torch
 
 from townlet.curriculum.static import StaticCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 
@@ -30,7 +29,7 @@ class TestRNDIntrinsicRewards:
     intrinsic/extrinsic rewards are combined correctly for training.
     """
 
-    def test_rnd_computes_novelty_for_observations(self, cpu_device, test_config_pack_path):
+    def test_rnd_computes_novelty_for_observations(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify RND produces novelty rewards for observations during episode steps.
 
         This test validates the critical contract:
@@ -40,20 +39,7 @@ class TestRNDIntrinsicRewards:
 
         Integration point: VectorizedHamletEnv → AdaptiveIntrinsicExploration → RND
         """
-        # Create small environment for fast testing
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create adaptive intrinsic exploration
         obs_dim = env.observation_dim
@@ -102,7 +88,7 @@ class TestRNDIntrinsicRewards:
         # At least some rewards should be positive (RND should detect novelty)
         assert sum(intrinsic_rewards_collected) > 0, "RND should produce non-zero novelty rewards"
 
-    def test_intrinsic_rewards_combined_with_extrinsic(self, cpu_device, test_config_pack_path):
+    def test_intrinsic_rewards_combined_with_extrinsic(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify intrinsic and extrinsic rewards are combined correctly during step.
 
         This test validates the critical contract:
@@ -112,20 +98,7 @@ class TestRNDIntrinsicRewards:
 
         Integration point: VectorizedPopulation combines rewards from environment and exploration
         """
-        # Create small environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create adaptive intrinsic exploration with known weight
         obs_dim = env.observation_dim
@@ -185,7 +158,7 @@ class TestRNDIntrinsicRewards:
         # The combined reward exists and is a float
         assert isinstance(combined, float), "Combined reward should be a float"
 
-    def test_combined_reward_stored_in_replay_buffer(self, cpu_device, test_config_pack_path):
+    def test_combined_reward_stored_in_replay_buffer(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify combined rewards are stored in replay buffer (not separate rewards).
 
         This test validates the critical contract:
@@ -195,20 +168,7 @@ class TestRNDIntrinsicRewards:
 
         Integration point: VectorizedPopulation → ReplayBuffer storage
         """
-        # Create small environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create adaptive intrinsic exploration
         obs_dim = env.observation_dim
@@ -276,7 +236,7 @@ class TestAdaptiveAnnealing:
     performance (low variance + high survival).
     """
 
-    def test_intrinsic_weight_decreases_after_consistent_performance(self, cpu_device, test_config_pack_path):
+    def test_intrinsic_weight_decreases_after_consistent_performance(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify intrinsic weight decreases when agent performs consistently well.
 
         This test validates the critical contract:
@@ -286,20 +246,7 @@ class TestAdaptiveAnnealing:
 
         Integration point: AdaptiveIntrinsicExploration annealing logic
         """
-        # Create small environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create adaptive intrinsic exploration with fast annealing for testing
         obs_dim = env.observation_dim
@@ -338,7 +285,7 @@ class TestAdaptiveAnnealing:
         # Verify weight respects minimum floor
         assert final_weight >= 0.1, f"Weight should not go below minimum (0.1), got {final_weight}"
 
-    def test_annealing_requires_survival_above_50_steps(self, cpu_device, test_config_pack_path):
+    def test_annealing_requires_survival_above_50_steps(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify annealing requires mean survival > 50 steps (prevents premature annealing).
 
         This test validates the critical fix for the "consistent failure" bug:
@@ -348,19 +295,7 @@ class TestAdaptiveAnnealing:
         Integration point: AdaptiveIntrinsicExploration.should_anneal() logic
         """
         # Create environment (not needed for this test, but keeping for consistency)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create exploration
         obs_dim = env.observation_dim
@@ -392,7 +327,7 @@ class TestAdaptiveAnnealing:
         weight_after = exploration.get_intrinsic_weight()
         assert weight_after < 1.0, f"Weight should decrease for consistent success: expected < 1.0, got {weight_after}"
 
-    def test_annealing_requires_low_variance(self, cpu_device, test_config_pack_path):
+    def test_annealing_requires_low_variance(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify annealing requires variance < threshold (prevents annealing during exploration).
 
         This test validates the critical contract:
@@ -402,19 +337,7 @@ class TestAdaptiveAnnealing:
         Integration point: AdaptiveIntrinsicExploration variance calculation
         """
         # Create environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create exploration with strict variance threshold
         obs_dim = env.observation_dim

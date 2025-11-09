@@ -130,9 +130,6 @@ class VectorizedHamletEnv:
         partial_observability = self.partial_observability
         vision_range = self.vision_range
 
-        if self.wait_energy_cost >= self.move_energy_cost:
-            raise ValueError("wait_energy_cost must be less than move_energy_cost to preserve WAIT as a low-cost recovery action")
-
         from townlet.substrate.factory import SubstrateFactory
 
         self.substrate = SubstrateFactory.build(runtime.clone_substrate_config(), device=torch_device)

@@ -1,51 +1,30 @@
 """Test environment substrate integration (core functionality)."""
 
+import shutil
 from pathlib import Path
 
 import pytest
 import torch
 import yaml
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.substrate.grid2d import Grid2DSubstrate
 
+CONFIG_L1 = Path("configs/L1_full_observability")
+ASPARTIAL_CONFIG = Path("configs/aspatial_test")
 
-def test_env_loads_substrate_config():
+
+def test_env_loads_substrate_config(cpu_env_factory):
     """Environment should load substrate.yaml and create substrate instance."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=1)
 
     # Verify substrate loaded
     assert hasattr(env, "grid_size")
     assert env.grid_size == 8
 
 
-def test_env_substrate_accessible():
+def test_env_substrate_accessible(cpu_env_factory):
     """Environment should expose substrate for inspection."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=1)
 
     # Verify substrate is accessible and correct type
     assert hasattr(env, "substrate")
@@ -53,21 +32,9 @@ def test_env_substrate_accessible():
     assert env.substrate.width == 8
 
 
-def test_env_initializes_positions_via_substrate():
+def test_env_initializes_positions_via_substrate(cpu_env_factory):
     """Environment should use substrate.initialize_positions() in reset()."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=5,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=5)
 
     # Reset environment
     env.reset()
@@ -82,21 +49,9 @@ def test_env_initializes_positions_via_substrate():
     assert (env.positions < 8).all()
 
 
-def test_env_applies_movement_via_substrate():
+def test_env_applies_movement_via_substrate(cpu_env_factory):
     """Environment should use substrate.apply_movement() for boundary handling."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=1)
 
     env.reset()
 
@@ -113,21 +68,9 @@ def test_env_applies_movement_via_substrate():
     assert (env.positions[:, 1] >= 0).all()  # Y within bounds
 
 
-def test_env_randomizes_affordances_via_substrate():
+def test_env_randomizes_affordances_via_substrate(cpu_env_factory):
     """Environment should use substrate.get_all_positions() for affordance placement."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=1)
 
     # Randomize affordances
     env.randomize_affordance_positions()
@@ -150,22 +93,6 @@ def test_env_randomizes_affordances_via_substrate():
 # pytestmark = pytest.mark.skip(reason="Phase 4 (Environment Integration) not yet complete")
 
 
-def load_enabled_affordances(config_pack_path: Path) -> list[str]:
-    """Load enabled_affordances from training.yaml."""
-    training_yaml = config_pack_path / "training.yaml"
-    with open(training_yaml) as f:
-        config = yaml.safe_load(f)
-    return config["environment"]["enabled_affordances"]
-
-
-def load_partial_observability(config_pack_path: Path) -> bool:
-    """Load partial_observability setting from training.yaml."""
-    training_yaml = config_pack_path / "training.yaml"
-    with open(training_yaml) as f:
-        config = yaml.safe_load(f)
-    return config["environment"]["partial_observability"]
-
-
 @pytest.mark.parametrize(
     "config_name",
     [
@@ -176,29 +103,13 @@ def load_partial_observability(config_pack_path: Path) -> bool:
         "L3_temporal_mechanics",
     ],
 )
-def test_env_observation_dim_unchanged(config_name):
+def test_env_observation_dim_unchanged(cpu_env_factory, config_name):
     """Environment with substrate.yaml using coordinate encoding (all same dims)."""
     config_path = Path("configs") / config_name
-    enabled_affordances = load_enabled_affordances(config_path)
-    partial_observability = load_partial_observability(config_path)
-
-    env = VectorizedHamletEnv(
-        config_pack_path=config_path,
-        num_agents=1,
-        grid_size=8,
-        partial_observability=partial_observability,  # Use config's POMDP setting
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=enabled_affordances,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=config_path, num_agents=1)
 
     # Calculate expected observation dimension based on observability mode
-    if partial_observability:
+    if env.partial_observability:
         # POMDP: local_window + position + meters + affordances + temporal
         window_size = 2 * env.vision_range + 1
         local_window_dim = window_size**env.substrate.position_dim
@@ -225,25 +136,10 @@ def test_env_observation_dim_unchanged(config_name):
         ("L3_temporal_mechanics", 8),
     ],
 )
-def test_env_substrate_dimensions(config_name, expected_grid_size):
+def test_env_substrate_dimensions(cpu_env_factory, config_name, expected_grid_size):
     """Environment substrate should have correct grid dimensions."""
     config_path = Path("configs") / config_name
-    enabled_affordances = load_enabled_affordances(config_path)
-
-    env = VectorizedHamletEnv(
-        config_pack_path=config_path,
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=enabled_affordances,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=config_path, num_agents=1)
 
     # Substrate should be Grid2D with correct dimensions
     assert env.substrate.width == expected_grid_size
@@ -251,21 +147,9 @@ def test_env_substrate_dimensions(config_name, expected_grid_size):
     assert env.substrate.width == env.substrate.height  # Square grid
 
 
-def test_env_substrate_boundary_behavior():
+def test_env_substrate_boundary_behavior(cpu_env_factory):
     """Environment substrate should use clamp boundary (legacy behavior)."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs") / "L1_full_observability",
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=1)
 
     # Test boundary clamping (agent at edge trying to move out of bounds)
     positions = torch.tensor([[0, 0]], dtype=torch.long, device="cpu")  # Top-left corner
@@ -277,21 +161,9 @@ def test_env_substrate_boundary_behavior():
     assert (new_positions == torch.tensor([[0, 0]], dtype=torch.long)).all()
 
 
-def test_env_substrate_distance_metric():
+def test_env_substrate_distance_metric(cpu_env_factory):
     """Environment substrate should use manhattan distance (legacy behavior)."""
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs") / "L1_full_observability",
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=1)
 
     # Test manhattan distance calculation
     pos1 = torch.tensor([[0, 0]], dtype=torch.long, device="cpu")
@@ -308,33 +180,23 @@ def test_env_substrate_distance_metric():
 # =============================================================================
 
 
-def test_grid_size_overridden_by_substrate():
+def test_grid_size_overridden_by_substrate(cpu_env_factory, tmp_path):
     """grid_size parameter should be overridden by substrate dimensions.
 
     Backward compatibility test: ensures substrate.yaml takes precedence.
     """
-    from pathlib import Path
+    import shutil
 
-    import torch
+    config_copy = tmp_path / "l1_override"
+    shutil.copytree(CONFIG_L1, config_copy)
 
-    from townlet.environment.vectorized_env import VectorizedHamletEnv
+    training_yaml = config_copy / "training.yaml"
+    config = training_yaml.read_text()
+    data = yaml.safe_load(config)
+    data["environment"]["grid_size"] = 999
+    training_yaml.write_text(yaml.safe_dump(data, sort_keys=False))
 
-    # Use L1_full_observability which has 8×8 grid in substrate.yaml
-    # But pass grid_size=999 as parameter
-
-    env = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
-        num_agents=1,
-        grid_size=999,  # Parameter value (should be overridden)
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=config_copy, num_agents=1)
 
     # Verify grid_size comes from substrate (8), not parameter (999)
     assert env.grid_size == 8  # From substrate.yaml, NOT parameter
@@ -342,55 +204,20 @@ def test_grid_size_overridden_by_substrate():
     assert env.substrate.height == 8
 
 
-def test_aspatial_preserves_grid_size_parameter(tmp_path):
+def test_aspatial_preserves_grid_size_parameter(cpu_env_factory, tmp_path):
     """Aspatial substrate should keep grid_size parameter value.
 
     Backward compatibility test: aspatial has no width/height, so parameter preserved.
     """
-    import shutil
-    from pathlib import Path
+    config_copy = tmp_path / "aspatial_override"
+    shutil.copytree(ASPARTIAL_CONFIG, config_copy)
 
-    import torch
+    training_yaml = config_copy / "training.yaml"
+    data = yaml.safe_load(training_yaml.read_text())
+    data["environment"]["grid_size"] = 12
+    training_yaml.write_text(yaml.safe_dump(data, sort_keys=False))
 
-    from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-    # Create config pack with aspatial substrate
-    config_pack = tmp_path / "test_config"
-    config_pack.mkdir()
-
-    # Create aspatial substrate.yaml
-    substrate_yaml = config_pack / "substrate.yaml"
-    substrate_yaml.write_text(
-        """
-version: "1.0"
-description: "Aspatial substrate test"
-type: "aspatial"
-aspatial: {}
-"""
-    )
-
-    # Copy complete config files from test config
-    test_config = Path("configs/test")
-    shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
-    shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
-    shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
-
-    # Create environment with aspatial substrate and grid_size parameter
-    env = VectorizedHamletEnv(
-        config_pack_path=config_pack,
-        num_agents=1,
-        grid_size=12,  # Should be preserved for aspatial
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=[],  # Aspatial can't have positioned affordances
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=config_copy, num_agents=1)
 
     # Verify grid_size parameter is preserved (not overridden)
     assert env.grid_size == 12  # From parameter (aspatial has no width/height)
@@ -403,32 +230,12 @@ aspatial: {}
 # =============================================================================
 
 
-def test_vectorized_env_loads_composed_action_space():
+def test_vectorized_env_loads_composed_action_space(cpu_env_factory):
     """VectorizedHamletEnv should use ActionSpaceBuilder.
 
     TDD Test (RED phase): Verifies env has action_space attribute from builder.
     """
-    from pathlib import Path
-
-    import torch
-
-    from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-    config_path = Path("configs/L1_full_observability")
-
-    env = VectorizedHamletEnv(
-        config_pack_path=config_path,
-        num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=1)
 
     # Should have composed action space (substrate + custom)
     assert hasattr(env, "action_space"), "Environment should have action_space attribute"
@@ -446,7 +253,7 @@ def test_vectorized_env_loads_composed_action_space():
     assert 0 <= env.wait_action_idx < env.action_dim
 
 
-def test_action_masks_include_base_masking():
+def test_action_masks_include_base_masking(cpu_env_factory):
     """Action masks should start with base mask from ActionSpace.
 
     TDD Test (RED phase): Verifies get_action_masks() uses
@@ -455,28 +262,9 @@ def test_action_masks_include_base_masking():
     This test verifies integration between get_action_masks() and ActionSpace,
     even though all actions are currently enabled (enabled_actions loading is future task).
     """
-    from pathlib import Path
     from unittest.mock import patch
 
-    import torch
-
-    from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-    config_path = Path("configs/L1_full_observability")
-
-    env = VectorizedHamletEnv(
-        config_pack_path=config_path,
-        num_agents=2,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
-    )
+    env = cpu_env_factory(config_dir=CONFIG_L1, num_agents=2)
 
     env.reset()
 

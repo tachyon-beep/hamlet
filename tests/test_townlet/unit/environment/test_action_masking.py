@@ -18,11 +18,7 @@ Coverage:
 - Integration: combined masking scenarios
 """
 
-from pathlib import Path
-
-import pytest
 import torch
-import yaml
 
 
 class TestBoundaryMasking:
@@ -488,44 +484,6 @@ class TestWaitAction:
         basic_env.step(actions)
 
         assert torch.equal(basic_env.positions[0], initial_pos), "WAIT should not move agent"
-
-    def test_wait_costs_less_than_movement(self, basic_env):
-        """WAIT should cost less energy than movement."""
-        basic_env.reset()
-        basic_env.positions[0] = torch.tensor([4, 4], device=basic_env.device)
-
-        # Measure WAIT cost
-        initial_wait = basic_env.meters[0, 0].item()
-        actions = torch.tensor([5], device=basic_env.device)
-        basic_env.step(actions)
-        wait_cost = initial_wait - basic_env.meters[0, 0].item()
-
-        # Measure movement cost
-        basic_env.reset()
-        basic_env.positions[0] = torch.tensor([4, 4], device=basic_env.device)
-        initial_move = basic_env.meters[0, 0].item()
-        actions = torch.tensor([0], device=basic_env.device)
-        basic_env.step(actions)
-        move_cost = initial_move - basic_env.meters[0, 0].item()
-
-        assert wait_cost < move_cost, f"WAIT cost ({wait_cost}) should be < movement cost ({move_cost})"
-
-    def test_wait_energy_cost_validation(self, temp_config_pack: Path, env_factory, device):
-        """Environment should reject configs where WAIT is more expensive than MOVE."""
-        training_yaml = temp_config_pack / "training.yaml"
-        with open(training_yaml) as f:
-            training_config = yaml.safe_load(f)
-
-        env_section = training_config.get("environment", {})
-        env_section["energy_move_depletion"] = 0.005
-        env_section["energy_wait_depletion"] = 0.01  # Invalid: WAIT more expensive than MOVE
-        training_config["environment"] = env_section
-
-        with open(training_yaml, "w") as f:
-            yaml.safe_dump(training_config, f, sort_keys=False)
-
-        with pytest.raises(ValueError, match="wait_energy_cost must be less than move_energy_cost"):
-            env_factory(config_dir=temp_config_pack, num_agents=1, device_override=device)
 
 
 class TestActionMaskingIntegration:

@@ -22,34 +22,62 @@ Critical Behaviors:
 5. Random exploration only samples from valid actions (respects masks)
 """
 
+import shutil
+import uuid
+
 import pytest
 import torch
+import yaml
 
 from townlet.agent.networks import SimpleQNetwork
 from townlet.curriculum.static import StaticCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
+
+
+@pytest.fixture
+def cpu_env_factory(env_factory, cpu_device):
+    """Helper to create CPU-bound environments for population tests."""
+
+    def _build(**kwargs):
+        return env_factory(device_override=cpu_device, **kwargs)
+
+    return _build
+
+
+@pytest.fixture
+def custom_env_builder(tmp_path, test_config_pack_path, env_factory, cpu_device):
+    """Clone the base pack, apply overrides, and build an environment."""
+
+    def _build(*, num_agents: int = 1, overrides: dict | None = None):
+        target = tmp_path / f"population_env_{uuid.uuid4().hex}"
+        shutil.copytree(test_config_pack_path, target)
+
+        if overrides:
+            training_yaml = target / "training.yaml"
+            with open(training_yaml) as f:
+                training_config = yaml.safe_load(f)
+
+            for section, updates in overrides.items():
+                current = training_config.get(section, {}) or {}
+                current.update(updates)
+                training_config[section] = current
+
+            with open(training_yaml, "w") as f:
+                yaml.safe_dump(training_config, f, sort_keys=False)
+
+        return env_factory(config_dir=target, num_agents=num_agents, device_override=cpu_device)
+
+    return _build
 
 
 class TestGreedyActionSelection:
     """Test greedy action selection with Q-value masking."""
 
     @pytest.fixture
-    def simple_setup(self):
+    def simple_setup(self, cpu_env_factory):
         """Create simple network + environment."""
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
-        )
+        env = cpu_env_factory(num_agents=2)
 
         obs_dim = env.observation_dim
         network = SimpleQNetwork(obs_dim=obs_dim, action_dim=env.action_dim, hidden_dim=128)
@@ -62,9 +90,8 @@ class TestGreedyActionSelection:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=[0, 1],
-            device=torch.device("cpu"),
+            device=env.device,
             obs_dim=obs_dim,
-            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -145,20 +172,9 @@ class TestEpsilonGreedyActionSelection:
     """Test epsilon-greedy action selection."""
 
     @pytest.fixture
-    def simple_setup(self):
+    def simple_setup(self, cpu_env_factory):
         """Create simple network + environment."""
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
-        )
+        env = cpu_env_factory(num_agents=2)
 
         obs_dim = env.observation_dim
 
@@ -170,9 +186,8 @@ class TestEpsilonGreedyActionSelection:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=[0, 1],
-            device=torch.device("cpu"),
+            device=env.device,
             obs_dim=obs_dim,
-            # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
             network_type="simple",
@@ -265,19 +280,11 @@ class TestRecurrentNetworkActionSelection:
     """Test action selection with recurrent networks."""
 
     @pytest.fixture
-    def recurrent_setup(self):
+    def recurrent_setup(self, custom_env_builder):
         """Create recurrent network + environment."""
-        env = VectorizedHamletEnv(
+        env = custom_env_builder(
             num_agents=2,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
+            overrides={"environment": {"partial_observability": True, "vision_range": 2}},
         )
 
         obs_dim = env.observation_dim
@@ -290,7 +297,7 @@ class TestRecurrentNetworkActionSelection:
             curriculum=curriculum,
             exploration=exploration,
             agent_ids=[0, 1],
-            device=torch.device("cpu"),
+            device=env.device,
             obs_dim=obs_dim,
             # action_dim defaults to env.action_dim
             learning_rate=0.001,
@@ -346,20 +353,11 @@ class TestActionSelectionEdgeCases:
     """Test edge cases in action selection."""
 
     @pytest.fixture
-    def minimal_env(self):
-        """Create minimal 5×5 environment with single agent."""
-        return VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
-        )
+    def minimal_env(self, cpu_env_factory):
+        """Create minimal environment with single agent."""
+        env = cpu_env_factory(num_agents=1)
+        env.reset()
+        return env
 
     def test_single_agent_at_corner(self, minimal_env):
         """Should handle case where some actions are masked at corner."""
@@ -391,24 +389,12 @@ class TestActionSelectionEdgeCases:
         actions = population.select_greedy_actions(minimal_env)
         assert actions[0] not in [0, 2]  # Should NOT be UP or LEFT
 
-    def test_all_movement_actions_valid_at_center(self):
+    def test_all_movement_actions_valid_at_center(self, cpu_env_factory):
         """Test case where all movement actions are valid (center position)."""
         # This verifies masking logic works correctly when no movements are masked
 
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
-        )
-
-        env.reset()  # Initialize environment
+        env = cpu_env_factory(num_agents=1)
+        env.reset()
 
         # Place in center - all movements valid
         env.positions = torch.tensor([[2, 2]], device=env.device)

@@ -8,8 +8,8 @@ environment:
   enable_temporal_mechanics: false
   enabled_affordances: ["Bed", "Hospital", "HomeMeal", "Job"]
   randomize_affordances: true
-  energy_move_depletion: 0.0  # No movement in aspatial
-  energy_wait_depletion: 0.001
+  energy_move_depletion: 0.001  # No spatial movement, but keep move > wait for runtime invariants
+  energy_wait_depletion: 0.0
   energy_interact_depletion: 0.0
 
 population:

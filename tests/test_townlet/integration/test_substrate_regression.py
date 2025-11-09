@@ -7,25 +7,26 @@ These tests verify backward compatibility and prevent behavioral regressions.
 import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from tests.test_townlet.helpers.config_builder import prepare_config_dir
 
 
 @pytest.mark.parametrize("grid_size", [3, 7, 8])
-def test_regression_observation_dims_unchanged(grid_size, test_config_pack_path, cpu_device):
+def test_regression_observation_dims_unchanged(grid_size, cpu_env_factory, tmp_path):
     """Observation dimensions should match substrate-provided breakdown."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=grid_size,
-        device=cpu_device,
-        config_pack_path=test_config_pack_path,
-        partial_observability=False,  # Full observability
-        vision_range=grid_size,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-    )
+
+    def _modifier(cfg):
+        env_cfg = cfg["environment"]
+        env_cfg.update(
+            {
+                "grid_size": grid_size,
+                "vision_range": grid_size,
+                "partial_observability": False,
+                "enable_temporal_mechanics": False,
+            }
+        )
+
+    config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name=f"regression_obs_dim_{grid_size}")
+    env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
     obs = env.reset()
 
@@ -36,26 +37,14 @@ def test_regression_observation_dims_unchanged(grid_size, test_config_pack_path,
     ), f"Observation dimension changed for {grid_size}×{grid_size} grid: {obs.shape[1]} vs {expected_obs_dim}"
 
 
-def test_regression_grid2d_equivalent_to_legacy(test_config_pack_path, cpu_device):
+def test_regression_grid2d_equivalent_to_legacy(test_config_pack_path, cpu_device, cpu_env_factory):
     """Grid2D substrate should produce identical behavior to legacy hardcoded grid.
 
     This test verifies that replacing hardcoded grid logic with Grid2DSubstrate
     doesn't change environment behavior.
     """
     # Create environment with Grid2D substrate (new)
-    env_new = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=8,
-        device=cpu_device,
-        config_pack_path=test_config_pack_path,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-    )
+    env_new = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
     # Verify substrate is Grid2D
     substrate_type = type(env_new.substrate).__name__.lower()
@@ -87,7 +76,7 @@ def test_regression_grid2d_equivalent_to_legacy(test_config_pack_path, cpu_devic
     # No assertions on exact rewards (stochastic), just verify no crashes
 
 
-def test_regression_position_tensor_shapes_unchanged(test_config_pack_path, cpu_device):
+def test_regression_position_tensor_shapes_unchanged(test_config_pack_path, cpu_device, cpu_env_factory):
     """Position tensor shapes should match legacy behavior.
 
     Legacy: positions.shape == (num_agents, 2) for Grid2D
@@ -95,19 +84,7 @@ def test_regression_position_tensor_shapes_unchanged(test_config_pack_path, cpu_
 
     For Grid2D, position_dim=2, so behavior is unchanged.
     """
-    env = VectorizedHamletEnv(
-        num_agents=4,  # Multi-agent test
-        grid_size=8,
-        device=cpu_device,
-        config_pack_path=test_config_pack_path,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-    )
+    env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=4)
 
     env.reset()
 
@@ -115,25 +92,13 @@ def test_regression_position_tensor_shapes_unchanged(test_config_pack_path, cpu_
     assert env.positions.shape == (4, 2), f"Position shape changed: {env.positions.shape} vs (4, 2)"
 
 
-def test_regression_affordance_positions_unchanged(test_config_pack_path, cpu_device):
+def test_regression_affordance_positions_unchanged(test_config_pack_path, cpu_device, cpu_env_factory):
     """Affordance positions should be (x, y) tensors for Grid2D.
 
     Legacy: affordances stored as {name: torch.tensor([x, y])}
     New: affordances stored as {name: torch.tensor([x, y])} (unchanged for Grid2D)
     """
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=8,
-        device=cpu_device,
-        config_pack_path=test_config_pack_path,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-    )
+    env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
     env.reset()
 

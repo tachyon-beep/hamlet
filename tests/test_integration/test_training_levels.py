@@ -23,6 +23,7 @@ from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
+from townlet.universe.compiler import UniverseCompiler
 
 
 @pytest.fixture
@@ -62,14 +63,12 @@ def run_training_pipeline(
     db = DemoDatabase(db_path)
 
     # Create environment
-    env_config = config["environment"]
-    env = VectorizedHamletEnv(
+    compiler = UniverseCompiler()
+    universe = compiler.compile(config_path.parent)
+    env = VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=config["population"]["num_agents"],
         device=device,
-        partial_observability=env_config.get("partial_observability", False),
-        vision_range=env_config.get("vision_range", 8),
-        enable_temporal_mechanics=env_config.get("enable_temporal_mechanics", False),
-        config_pack_path=config_path.parent,
     )
 
     # Create curriculum

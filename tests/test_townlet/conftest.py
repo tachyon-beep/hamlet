@@ -337,6 +337,16 @@ def env_factory(
     return _build_env
 
 
+@pytest.fixture
+def cpu_env_factory(env_factory, cpu_device):
+    """Convenience factory that always targets the CPU device."""
+
+    def _build_env(**kwargs):
+        return env_factory(device_override=cpu_device, **kwargs)
+
+    return _build_env
+
+
 # =============================================================================
 # TASK-002A: SUBSTRATE-PARAMETERIZED FIXTURES
 # =============================================================================

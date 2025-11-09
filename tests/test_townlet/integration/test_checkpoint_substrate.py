@@ -1,27 +1,18 @@
 """Test checkpoint serialization with substrate metadata."""
 
 import pytest
-import torch
-
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
 @pytest.fixture
-def env_cpu(test_config_pack_path):
+def env_cpu(env_factory, test_config_pack_path, cpu_device):
     """Create a CPU-based environment for testing."""
-    return VectorizedHamletEnv(
+    env = env_factory(
+        config_dir=test_config_pack_path,
         num_agents=1,
-        grid_size=8,
-        device=torch.device("cpu"),
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
+        device_override=cpu_device,
     )
+    env.reset()
+    return env
 
 
 def test_checkpoint_includes_position_dim(env_cpu):

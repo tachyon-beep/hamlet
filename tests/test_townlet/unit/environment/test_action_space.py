@@ -25,7 +25,7 @@ class TestActionSpaceDynamicSizing:
         substrate = Grid2DSubstrate(8, 8, "clamp", "manhattan")
 
         # Create environment (would need full config in real test)
-        # env = VectorizedHamletEnv(substrate, minimal_config, ...)
+        # env = <vectorized environment instantiated via fixtures>
 
         # Verify action dimension matches substrate
         # assert env.action_dim == substrate.action_space_size
