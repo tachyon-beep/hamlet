@@ -24,7 +24,7 @@ from unittest.mock import Mock, patch
 
 import torch
 
-from tests.test_townlet.builders import make_test_episode_metadata, make_test_recorded_step
+from tests.test_townlet.utils.builders import make_test_episode_metadata, make_test_recorded_step
 from townlet.recording.data_structures import EpisodeEndMarker, EpisodeMetadata, RecordedStep
 
 

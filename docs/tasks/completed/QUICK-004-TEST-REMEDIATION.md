@@ -309,7 +309,7 @@ Provides single source of truth for test entity construction.
 Eliminates magic numbers and boilerplate Pydantic instantiation.
 
 Usage:
-    from tests.test_townlet.builders import (
+    from tests.test_townlet.utils.builders import (
         TestDimensions,
         make_test_meters,
         make_test_bars_config,
