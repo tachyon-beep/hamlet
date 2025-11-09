@@ -4,26 +4,16 @@ from pathlib import Path
 
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-
 
 class TestMovementDeltasFromActionConfig:
     """Test that movement deltas come from ActionConfig, not hardcoded arrays."""
 
-    def test_movement_deltas_from_action_config_grid2d(self):
+    def test_movement_deltas_from_action_config_grid2d(self, env_factory, cpu_device):
         """Movement deltas should come from ActionConfig, not hardcoded arrays."""
-        env = VectorizedHamletEnv(
-            config_pack_path=Path("configs/L1_full_observability"),
+        env = env_factory(
+            config_dir=Path("configs/L1_full_observability"),
             num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.5,
-            wait_energy_cost=0.1,
-            interact_energy_cost=0.3,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
+            device_override=cpu_device,
         )
 
         env.reset()
@@ -38,20 +28,12 @@ class TestMovementDeltasFromActionConfig:
 
         assert torch.equal(actual_delta, expected_delta), f"Delta mismatch for UP action: expected {expected_delta}, " f"got {actual_delta}"
 
-    def test_all_movement_deltas_match_action_config(self):
+    def test_all_movement_deltas_match_action_config(self, env_factory, cpu_device):
         """All movement actions should have correct deltas from ActionConfig."""
-        env = VectorizedHamletEnv(
-            config_pack_path=Path("configs/L1_full_observability"),
+        env = env_factory(
+            config_dir=Path("configs/L1_full_observability"),
             num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.5,
-            wait_energy_cost=0.1,
-            interact_energy_cost=0.3,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
+            device_override=cpu_device,
         )
 
         env.reset()
@@ -71,20 +53,12 @@ class TestMovementDeltasFromActionConfig:
                     f"Delta mismatch for {action.name} (id={action.id}): " f"expected {expected_delta}, got {actual_delta}"
                 )
 
-    def test_non_movement_actions_have_zero_deltas(self):
+    def test_non_movement_actions_have_zero_deltas(self, env_factory, cpu_device):
         """INTERACT and WAIT actions should have zero deltas."""
-        env = VectorizedHamletEnv(
-            config_pack_path=Path("configs/L1_full_observability"),
+        env = env_factory(
+            config_dir=Path("configs/L1_full_observability"),
             num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.5,
-            wait_energy_cost=0.1,
-            interact_energy_cost=0.3,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
+            device_override=cpu_device,
         )
 
         env.reset()

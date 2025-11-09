@@ -17,7 +17,12 @@ Old files consolidated: test_affordance_engine.py, test_affordance_effects.py,
 test_affordance_equivalence.py, test_affordance_integration.py
 """
 
+import shutil
+from pathlib import Path
+
+import pytest
 import torch
+import yaml
 
 
 class TestAffordanceAvailability:
@@ -744,47 +749,43 @@ class TestAffordanceBatching:
         assert abs(multi_agent_env.meters[1, 0] - initial_energy[1]) < 0.1, "Agent 1 should not get Bed's effects"
 
 
+@pytest.fixture
+def bed_equivalence_envs(
+    tmp_path: Path,
+    test_config_pack_path: Path,
+    env_factory,
+    cpu_device: torch.device,
+):
+    """Provide instant + temporal mechanics envs sharing the same config pack."""
+
+    def _build_env(enable_temporal: bool):
+        target = tmp_path / ("temporal" if enable_temporal else "instant")
+        shutil.copytree(test_config_pack_path, target)
+
+        training_path = target / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["environment"]["enable_temporal_mechanics"] = enable_temporal
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
+        return env_factory(
+            config_dir=target,
+            num_agents=1,
+            device_override=cpu_device,
+        )
+
+    return _build_env(False), _build_env(True)
+
+
 class TestAffordanceEquivalence:
     """Test equivalence between instant and multi-tick modes (75%/25% split validation)."""
 
-    def test_bed_instant_vs_multitick_total_equals(self, cpu_device):
+    def test_bed_instant_vs_multitick_total_equals(self, bed_equivalence_envs, cpu_device):
         """Bed instant mode should equal multi-tick total (75% linear + 25% bonus)."""
-        # This validates the 75%/25% split for multi-tick interactions
-        from pathlib import Path
-
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        config_path = Path(__file__).parent.parent.parent.parent.parent / "configs" / "test"
-
-        # Instant mode environment
-        instant_env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            enable_temporal_mechanics=False,
-            config_pack_path=config_path,
-            device=cpu_device,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
-
-        # Multi-tick mode environment
-        temporal_env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            enable_temporal_mechanics=True,
-            config_pack_path=config_path,
-            device=cpu_device,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        instant_env, temporal_env = bed_equivalence_envs
 
         # Test Bed interaction equivalence
         instant_env.reset()

@@ -22,7 +22,9 @@ from townlet.config.exploration import ExplorationConfig
 from townlet.config.population import PopulationConfig
 from townlet.config.training import TrainingConfig
 from townlet.environment.action_config import ActionConfig, ActionSpaceConfig, load_global_actions_config
-from townlet.substrate.config import SubstrateConfig
+from townlet.environment.cascade_config import EnvironmentConfig
+from townlet.environment.cascade_config import load_environment_config as load_cascade_environment_config
+from townlet.substrate.config import ActionLabelConfig, SubstrateConfig
 from townlet.substrate.factory import SubstrateFactory
 from townlet.universe.errors import CompilationErrorCollector
 from townlet.universe.source_map import SourceMap
@@ -38,6 +40,8 @@ class RawConfigs:
     hamlet_config: HamletConfig
     variables_reference: list[VariableDef]
     global_actions: ActionSpaceConfig
+    action_labels: ActionLabelConfig | None
+    environment_config: EnvironmentConfig
     source_map: SourceMap
     config_dir: Path
 
@@ -96,10 +100,13 @@ class RawConfigs:
             loader: Callable[[], _T],
             *,
             missing_hint: str | None = None,
+            optional: bool = False,
         ) -> _T | None:
             try:
                 return loader()
             except FileNotFoundError as exc:
+                if optional:
+                    return None
                 errors.add(f"{description}: {exc}")
                 if missing_hint and missing_hint not in errors.hints:
                     errors.add_hint(missing_hint)
@@ -141,9 +148,20 @@ class RawConfigs:
                 errors=errors,
             )
 
+        action_labels = _load_config(
+            "action_labels.yaml",
+            lambda: cls._load_action_labels_config(config_dir),
+            optional=True,
+        )
+
+        environment_config = _load_config(
+            "bars/cascades environment_config",
+            lambda: load_cascade_environment_config(config_dir),
+        )
+
         errors.check_and_raise()
 
-        if hamlet_config is None or variables_reference is None or composed_actions is None:
+        if hamlet_config is None or variables_reference is None or composed_actions is None or environment_config is None:
             # Defensive: reaching here would indicate check_and_raise failed to trigger.
             raise RuntimeError("Stage 1: Parse succeeded without fully loaded configs.")
 
@@ -160,6 +178,8 @@ class RawConfigs:
             hamlet_config=hamlet_config,
             variables_reference=variables_reference,
             global_actions=composed_actions,
+            action_labels=action_labels,
+            environment_config=environment_config,
             source_map=source_map,
             config_dir=config_dir,
         )
@@ -201,3 +221,18 @@ class RawConfigs:
             combined.append(_clone(action))
 
         return ActionSpaceConfig(actions=combined)
+
+    @staticmethod
+    def _load_action_labels_config(config_dir: Path) -> ActionLabelConfig:
+        yaml_path = config_dir / "action_labels.yaml"
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"action_labels.yaml not found in {config_dir}")
+
+        with yaml_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
+
+        payload = data.get("action_labels", data)
+        if not isinstance(payload, dict):
+            raise ValueError(f"action_labels.yaml must define a mapping, got {type(payload).__name__}")
+
+        return ActionLabelConfig(**payload)

@@ -12,20 +12,20 @@ from pathlib import Path
 
 import pytest
 import torch
+import yaml
 
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
 @pytest.fixture
-def aspatial_env(tmp_path):
+def aspatial_env(tmp_path, compile_universe, cpu_device):
     """Create aspatial environment for testing."""
     import shutil
 
-    # Create config pack
     config_pack = tmp_path / "aspatial_test"
-    config_pack.mkdir()
+    shutil.copytree(Path("configs/test"), config_pack)
 
-    # Create aspatial substrate.yaml
+    # Override substrate with aspatial definition
     substrate_yaml = config_pack / "substrate.yaml"
     substrate_yaml.write_text(
         """
@@ -36,24 +36,12 @@ aspatial: {}
 """
     )
 
-    # Copy complete config files from test config (8 meters)
-    test_config = Path("configs/test")
-    shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
-    shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
-    shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
-
-    # Generate aspatial-specific VFS config (8 meters, no position/grid_encoding)
-    import yaml
-
+    # Remove spatial variables from VFS
     vfs_yaml = config_pack / "variables_reference.yaml"
     with open(vfs_yaml) as f:
         vfs_config = yaml.safe_load(f)
 
-    # Remove grid_encoding and position variables (aspatial has no position)
     vfs_config["variables"] = [var for var in vfs_config["variables"] if var["id"] not in ["grid_encoding", "local_window", "position"]]
-
-    # Remove grid_encoding observation (aspatial has no grid)
     if "exposed_observations" in vfs_config:
         vfs_config["exposed_observations"] = [
             obs for obs in vfs_config["exposed_observations"] if obs["id"] not in ["obs_grid_encoding", "obs_local_window", "obs_position"]
@@ -62,33 +50,33 @@ aspatial: {}
     with open(vfs_yaml, "w") as f:
         yaml.safe_dump(vfs_config, f, sort_keys=False)
 
-    # Create environment
-    return VectorizedHamletEnv(
-        config_pack_path=config_pack,
+    # Disable affordance placement (aspatial has no positions)
+    training_yaml = config_pack / "training.yaml"
+    with open(training_yaml) as f:
+        training_config = yaml.safe_load(f)
+
+    training_config["environment"]["enabled_affordances"] = []
+
+    with open(training_yaml, "w") as f:
+        yaml.safe_dump(training_config, f, sort_keys=False)
+
+    universe = compile_universe(config_pack)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,  # Ignored for aspatial
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=[],  # No positioned affordances for aspatial
-        move_energy_cost=0.005,  # 0.5%
-        wait_energy_cost=0.001,  # 0.1%
-        interact_energy_cost=0.003,  # 0.3%
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
+        device=cpu_device,
     )
 
 
 @pytest.fixture
-def continuous1d_env(tmp_path):
+def continuous1d_env(tmp_path, compile_universe, cpu_device):
     """Create 1D continuous environment for testing."""
     import shutil
 
-    # Create config pack
     config_pack = tmp_path / "continuous1d_test"
-    config_pack.mkdir()
+    shutil.copytree(Path("configs/test"), config_pack)
 
-    # Create 1D continuous substrate.yaml
+    # Override substrate
     substrate_yaml = config_pack / "substrate.yaml"
     substrate_yaml.write_text(
         """
@@ -106,43 +94,35 @@ continuous:
 """
     )
 
-    # Copy complete config files from test config
-    test_config = Path("configs/test")
-    shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
-    shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
-    shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-
-    # Use continuous1D VFS config (1D position)
+    # Use 1D variables reference
     continuous1d_config = Path("configs/L1_continuous_1D")
     shutil.copy(continuous1d_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
-    # Create environment
-    return VectorizedHamletEnv(
-        config_pack_path=config_pack,
+    training_yaml = config_pack / "training.yaml"
+    with open(training_yaml) as f:
+        training_config = yaml.safe_load(f)
+
+    training_config["environment"]["enabled_affordances"] = []
+
+    with open(training_yaml, "w") as f:
+        yaml.safe_dump(training_config, f, sort_keys=False)
+
+    universe = compile_universe(config_pack)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,  # Ignored for continuous
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=[],  # No affordances for testing
-        move_energy_cost=0.005,  # 0.5%
-        wait_energy_cost=0.001,  # 0.1%
-        interact_energy_cost=0.003,  # 0.3%
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
+        device=cpu_device,
     )
 
 
 @pytest.fixture
-def continuous3d_env(tmp_path):
+def continuous3d_env(tmp_path, compile_universe, cpu_device):
     """Create 3D continuous environment for testing."""
     import shutil
 
-    # Create config pack
     config_pack = tmp_path / "continuous3d_test"
-    config_pack.mkdir()
+    shutil.copytree(Path("configs/test"), config_pack)
 
-    # Create 3D continuous substrate.yaml
     substrate_yaml = config_pack / "substrate.yaml"
     substrate_yaml.write_text(
         """
@@ -163,30 +143,23 @@ continuous:
 """
     )
 
-    # Copy complete config files from test config
-    test_config = Path("configs/test")
-    shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
-    shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
-    shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-
-    # Use continuous3D VFS config (3D position)
     continuous3d_config = Path("configs/L1_continuous_3D")
     shutil.copy(continuous3d_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
 
-    # Create environment
-    return VectorizedHamletEnv(
-        config_pack_path=config_pack,
+    training_yaml = config_pack / "training.yaml"
+    with open(training_yaml) as f:
+        training_config = yaml.safe_load(f)
+
+    training_config["environment"]["enabled_affordances"] = []
+
+    with open(training_yaml, "w") as f:
+        yaml.safe_dump(training_config, f, sort_keys=False)
+
+    universe = compile_universe(config_pack)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,  # Ignored for continuous substrates
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=[],  # No affordances for testing
-        move_energy_cost=0.005,  # 0.5%
-        wait_energy_cost=0.001,  # 0.1%
-        interact_energy_cost=0.003,  # 0.3%
-        agent_lifespan=1000,
-        device=torch.device("cpu"),
+        device=cpu_device,
     )
 
 

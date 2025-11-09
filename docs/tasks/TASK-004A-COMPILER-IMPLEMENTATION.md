@@ -2054,7 +2054,13 @@ env = VectorizedHamletEnv(
 )
 ```
 
-#### 8.3: Checkpoint Compatibility Validation (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
+#### 8.3: Runtime DTO + I/O Guarantees
+
+- `UniverseCompiler` now serializes VFS observation fields and optional `action_labels.yaml` data into the compiled artifact so runtime systems never reopen pack YAML files.
+- `RuntimeUniverse` exposes read-only views of `HamletConfig`/`ActionSpaceConfig` (mutations raise) and clone helpers for callers that need mutable DTOs.
+- `VectorizedHamletEnv` consumes the runtime DTO exclusively—variables, exposures, meter metadata, action labels, and affordance vocabularies are sourced from the compiled universe, and regression tests guard against reopening `bars.yaml`, `variables_reference.yaml`, or `action_labels.yaml` during initialization.
+
+#### 8.4: Checkpoint Compatibility Validation (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
 
 **Critical**: Use `universe.metadata.config_hash` to validate checkpoint compatibility during transfer learning.
 

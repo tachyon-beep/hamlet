@@ -301,6 +301,42 @@ def multi_agent_env(
     )
 
 
+@pytest.fixture
+def env_factory(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    test_config_pack_path: Path,
+    device: torch.device,
+):
+    """Return a helper for building environments from compiled universes.
+
+    Most tests only need to vary the config pack or agent count.  This
+    factory centralizes the compile → from_universe pipeline so individual
+    tests do not reach for the legacy constructor.
+    """
+
+    def _build_env(
+        *,
+        config_dir: Path | str | None = None,
+        universe: CompiledUniverse | None = None,
+        num_agents: int = 1,
+        device_override: torch.device | str | None = None,
+    ) -> VectorizedHamletEnv:
+        target_universe = universe
+        if target_universe is None:
+            pack_path = Path(config_dir) if config_dir is not None else test_config_pack_path
+            target_universe = compile_universe(pack_path)
+
+        target_device = device_override if device_override is not None else device
+
+        return VectorizedHamletEnv.from_universe(
+            target_universe,
+            num_agents=num_agents,
+            device=target_device,
+        )
+
+    return _build_env
+
+
 # =============================================================================
 # TASK-002A: SUBSTRATE-PARAMETERIZED FIXTURES
 # =============================================================================

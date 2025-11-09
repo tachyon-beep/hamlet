@@ -14,13 +14,12 @@ Tests cover:
 - Vision window mechanics for POMDP
 """
 
+import shutil
 from pathlib import Path
 
 import pytest
 import torch
 import yaml
-
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
 class TestFullObservability:
@@ -166,7 +165,12 @@ class TestPartialObservability:
 class TestPartialObservabilityWindowDimensions:
     """Validate POMDP window sizing across substrates."""
 
-    def test_grid3d_window_dimension_matches_position_dim(self, temp_config_pack: Path, device: torch.device) -> None:
+    def test_grid3d_window_dimension_matches_position_dim(
+        self,
+        temp_config_pack: Path,
+        device: torch.device,
+        env_factory,
+    ) -> None:
         """Grid3D should produce W³ local footprint for vision window."""
         substrate_path = temp_config_pack / "substrate.yaml"
         cubic_config = {
@@ -216,18 +220,20 @@ class TestPartialObservabilityWindowDimensions:
         with vfs_path.open("w") as fh:
             yaml.safe_dump(vfs_config, fh)
 
-        env = VectorizedHamletEnv(
+        training_path = temp_config_pack / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["environment"]["partial_observability"] = True
+        training_config["environment"]["vision_range"] = 1
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
+        env = env_factory(
+            config_dir=temp_config_pack,
             num_agents=1,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=1,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=100,
-            config_pack_path=temp_config_pack,
-            device=device,
+            device_override=device,
         )
 
         obs = env.reset()
@@ -240,7 +246,12 @@ class TestPartialObservabilityWindowDimensions:
         assert obs.shape == (env.num_agents, expected_total_dim)
         assert obs.shape[1] == expected_total_dim
 
-    def test_aspatial_partial_observability_rejected(self, temp_config_pack: Path, device: torch.device) -> None:
+    def test_aspatial_partial_observability_rejected(
+        self,
+        temp_config_pack: Path,
+        device: torch.device,
+        env_factory,
+    ) -> None:
         """Aspatial substrates must reject partial observability."""
         substrate_path = temp_config_pack / "substrate.yaml"
         aspatial_config = {
@@ -252,22 +263,29 @@ class TestPartialObservabilityWindowDimensions:
         with substrate_path.open("w") as fh:
             yaml.safe_dump(aspatial_config, fh)
 
+        training_path = temp_config_pack / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["environment"]["partial_observability"] = True
+        training_config["environment"]["vision_range"] = 1
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
         with pytest.raises(ValueError, match="Partial observability \\(POMDP\\) is not supported for aspatial substrates"):
-            VectorizedHamletEnv(
+            env_factory(
+                config_dir=temp_config_pack,
                 num_agents=1,
-                grid_size=1,
-                partial_observability=True,
-                vision_range=1,
-                enable_temporal_mechanics=False,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.001,
-                interact_energy_cost=0.0,
-                agent_lifespan=100,
-                config_pack_path=temp_config_pack,
-                device=device,
+                device_override=device,
             )
 
-    def test_continuous_partial_observability_rejected(self, temp_config_pack: Path, device: torch.device) -> None:
+    def test_continuous_partial_observability_rejected(
+        self,
+        temp_config_pack: Path,
+        device: torch.device,
+        env_factory,
+    ) -> None:
         """Continuous substrates must reject partial observability."""
         substrate_path = temp_config_pack / "substrate.yaml"
         continuous_config = {
@@ -287,19 +305,21 @@ class TestPartialObservabilityWindowDimensions:
         with substrate_path.open("w") as fh:
             yaml.safe_dump(continuous_config, fh)
 
+        training_path = temp_config_pack / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["environment"]["partial_observability"] = True
+        training_config["environment"]["vision_range"] = 1
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
         with pytest.raises(ValueError, match="Partial observability \\(POMDP\\) is not supported for continuous substrates"):
-            VectorizedHamletEnv(
+            env_factory(
+                config_dir=temp_config_pack,
                 num_agents=1,
-                grid_size=1,
-                partial_observability=True,
-                vision_range=1,
-                enable_temporal_mechanics=False,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.001,
-                interact_energy_cost=0.0,
-                agent_lifespan=100,
-                config_pack_path=temp_config_pack,
-                device=device,
+                device_override=device,
             )
 
 
@@ -359,23 +379,13 @@ class TestObservationUpdates:
     """
 
     @pytest.mark.skip(reason="TODO VFS: Rewrite to test via environment")
-    def test_movement_updates_grid_position_full_obs(self, test_config_pack_path, cpu_device):
+    def test_movement_updates_grid_position_full_obs(self, test_config_pack_path, cpu_device, env_factory):
         """Full observability: moving agent updates position encoding."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        # Use CPU device for determinism
-        env = VectorizedHamletEnv(
+        env = env_factory(
+            config_dir=test_config_pack_path,
             num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
+            device_override=cpu_device,
         )
 
         env.reset()
@@ -396,35 +406,21 @@ class TestObservationUpdates:
         # Position MUST change (agent moved from (4,4) to (3,4))
         assert not torch.equal(position1, position2), "Position should update after movement"
 
-    def test_movement_updates_vision_window_pomdp(self, test_config_pack_path, cpu_device):
+    def test_movement_updates_vision_window_pomdp(self, pomdp_env):
         """POMDP: moving agent updates vision window contents."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        # Use CPU device for determinism
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=True,
-            vision_range=2,  # 5×5 window
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = pomdp_env
 
         env.reset()
         # Force agent to center position
-        env.positions[0] = torch.tensor([4, 4], device=cpu_device, dtype=torch.long)
+        env.positions[0] = torch.tensor([4, 4], device=env.device, dtype=torch.long)
 
         obs1 = env._get_observations()
         _local_grid1 = obs1[0, :25]
         position1 = obs1[0, 25:27]
 
         # Move RIGHT (guaranteed valid from center)
-        actions = torch.tensor([3], device=cpu_device)  # RIGHT
+        actions = torch.tensor([3], device=env.device)  # RIGHT
         obs2, _, _, _ = env.step(actions)
         _local_grid2 = obs2[0, :25]
         position2 = obs2[0, 25:27]
@@ -451,24 +447,31 @@ class TestObservationUpdates:
         # At minimum, energy should have decreased
         assert meters_final[0] < meters1[0]  # Energy decreased
 
-    def test_lifetime_progress_increases_linearly(self, basic_env, test_config_pack_path):
+    def test_lifetime_progress_increases_linearly(
+        self,
+        tmp_path: Path,
+        test_config_pack_path: Path,
+        cpu_device: torch.device,
+        env_factory,
+    ):
         """lifetime_progress increases from 0 to 1 over agent_lifespan steps."""
-        # Note: basic_env has default agent_lifespan=1000, too long for test
-        # Create custom env with short lifespan
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        env = VectorizedHamletEnv(
+        config_dir = tmp_path / "short_lifespan"
+        shutil.copytree(test_config_pack_path, config_dir)
+
+        training_path = config_dir / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["curriculum"]["max_steps_per_episode"] = 100
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
+        env = env_factory(
+            config_dir=config_dir,
             num_agents=1,
-            grid_size=8,
-            device=basic_env.device,
-            partial_observability=False,
-            agent_lifespan=100,
-            config_pack_path=test_config_pack_path,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
+            device_override=cpu_device,
         )
 
         env.reset()
@@ -523,28 +526,37 @@ class TestMultiAgentObservations:
         assert obs.min() >= -1.0
         assert obs.max() <= 2.0
 
-    def test_multiple_agents_lifetime_progress(self, test_config_pack_path):
+    def test_multiple_agents_lifetime_progress(
+        self,
+        tmp_path: Path,
+        test_config_pack_path: Path,
+        cpu_device: torch.device,
+        env_factory,
+    ):
         """lifetime_progress works correctly with multiple agents."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        env = VectorizedHamletEnv(
+        config_dir = tmp_path / "multi_agent_short_life"
+        shutil.copytree(test_config_pack_path, config_dir)
+
+        training_path = config_dir / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["curriculum"]["max_steps_per_episode"] = 100
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
+        env = env_factory(
+            config_dir=config_dir,
             num_agents=3,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=100,
-            device=torch.device("cpu"),
-            config_pack_path=test_config_pack_path,
+            device_override=cpu_device,
         )
 
         env.reset()
 
         # Step 10 times
-        actions = torch.tensor([4, 4, 4], device=torch.device("cpu"))
+        actions = torch.tensor([4, 4, 4], device=env.device)
         for _ in range(10):
             env.step(actions)
 
@@ -570,22 +582,33 @@ class TestDimensionConsistency:
         expected_dim = temporal_env.observation_dim
         assert obs.shape == (1, expected_dim)
 
-    def test_pomdp_with_temporal_mechanics(self, test_config_pack_path):
+    def test_pomdp_with_temporal_mechanics(
+        self,
+        tmp_path: Path,
+        test_config_pack_path: Path,
+        cpu_device: torch.device,
+        env_factory,
+    ):
         """POMDP + temporal: 25 local + 2 pos + 8 meters + 15 affordance + 4 temporal = 54."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        env = VectorizedHamletEnv(
+        config_dir = tmp_path / "pomdp_temporal"
+        shutil.copytree(test_config_pack_path, config_dir)
+
+        training_path = config_dir / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["environment"]["partial_observability"] = True
+        training_config["environment"]["vision_range"] = 2
+        training_config["environment"]["enable_temporal_mechanics"] = True
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
+        env = env_factory(
+            config_dir=config_dir,
             num_agents=1,
-            grid_size=8,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=True,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
-            config_pack_path=test_config_pack_path,
+            device_override=cpu_device,
         )
 
         obs = env.reset()

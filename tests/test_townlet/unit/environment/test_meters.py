@@ -24,7 +24,6 @@ import torch
 from townlet.environment.cascade_config import load_environment_config
 from townlet.environment.cascade_engine import CascadeEngine
 from townlet.environment.meter_dynamics import MeterDynamics
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 # =============================================================================
 # Fixtures
@@ -43,6 +42,16 @@ def cascade_engine(cascade_config, cpu_device):
     return CascadeEngine(cascade_config, cpu_device)
 
 
+@pytest.fixture
+def cpu_env_factory(env_factory, cpu_device):
+    """Convenience builder for CPU-bound VectorizedHamletEnv instances."""
+
+    def _build(num_agents: int = 1):
+        return env_factory(num_agents=num_agents, device_override=cpu_device)
+
+    return _build
+
+
 # =============================================================================
 # Base Depletion Tests
 # =============================================================================
@@ -51,20 +60,9 @@ def cascade_engine(cascade_config, cpu_device):
 class TestBaseDepletion:
     """Test per-step meter depletion mechanics."""
 
-    def test_base_depletion_rates(self, cpu_device):
+    def test_base_depletion_rates(self, cpu_env_factory):
         """Base depletion rates applied correctly via MeterDynamics."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Set all meters to 1.0
@@ -124,20 +122,9 @@ class TestBaseDepletion:
         for bar in cascade_config.bars.bars:
             assert cascade_engine._base_depletions[bar.index] == bar.base_depletion
 
-    def test_clamping_at_zero(self, cpu_device):
+    def test_clamping_at_zero(self, cpu_env_factory):
         """Meters clamped at 0.0 (no negative values)."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Set all meters very low
@@ -169,20 +156,9 @@ class TestBaseDepletion:
 class TestModulation:
     """Test meter modulation effects (fitness → health)."""
 
-    def test_fitness_modulated_health_depletion(self, cpu_device):
+    def test_fitness_modulated_health_depletion(self, cpu_env_factory):
         """Health depletion modulated by fitness (gradient approach)."""
-        env = VectorizedHamletEnv(
-            num_agents=3,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=3)
         env.reset()
 
         # Set three fitness levels: 100%, 50%, 0%
@@ -259,20 +235,9 @@ class TestCascadeEffects:
 
     # Secondary → Primary Cascades
 
-    def test_low_satiation_affects_both_primaries(self, cpu_device):
+    def test_low_satiation_affects_both_primaries(self, cpu_env_factory):
         """Low satiation damages both health AND energy (fundamental need)."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Set satiation below threshold (0.3), primaries at 1.0
@@ -297,20 +262,9 @@ class TestCascadeEffects:
         assert torch.isclose(env.meters[0, 6], torch.tensor(expected_health), atol=1e-4)
         assert torch.isclose(env.meters[0, 0], torch.tensor(expected_energy), atol=1e-4)
 
-    def test_low_mood_affects_energy(self, cpu_device):
+    def test_low_mood_affects_energy(self, cpu_env_factory):
         """Low mood damages energy (depressed → exhausted)."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Set mood below threshold, energy at 1.0
@@ -329,20 +283,9 @@ class TestCascadeEffects:
         expected_energy = 1.0 - (0.005 * (0.3 - 0.1) / 0.3)
         assert torch.isclose(env.meters[0, 0], torch.tensor(expected_energy), atol=1e-4)
 
-    def test_high_satiation_no_penalty(self, cpu_device):
+    def test_high_satiation_no_penalty(self, cpu_env_factory):
         """Satiation above threshold → no penalties."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -359,20 +302,9 @@ class TestCascadeEffects:
 
     # Tertiary → Secondary Cascades
 
-    def test_low_hygiene_affects_satiation_fitness_mood(self, cpu_device):
+    def test_low_hygiene_affects_satiation_fitness_mood(self, cpu_env_factory):
         """Low hygiene damages satiation, fitness, and mood."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -389,20 +321,9 @@ class TestCascadeEffects:
         assert env.meters[0, 7] < initial_fitness
         assert env.meters[0, 4] < initial_mood
 
-    def test_low_social_affects_mood(self, cpu_device):
+    def test_low_social_affects_mood(self, cpu_env_factory):
         """Low social damages mood."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -422,20 +343,9 @@ class TestCascadeEffects:
 
     # Tertiary → Primary Cascades (weak effects)
 
-    def test_low_hygiene_weak_health_energy_penalty(self, cpu_device):
+    def test_low_hygiene_weak_health_energy_penalty(self, cpu_env_factory):
         """Low hygiene → weak health and energy penalties."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -459,20 +369,9 @@ class TestCascadeEffects:
         assert torch.isclose(env.meters[0, 6], torch.tensor(expected_health), atol=1e-5)
         assert torch.isclose(env.meters[0, 0], torch.tensor(expected_energy), atol=1e-5)
 
-    def test_low_social_weak_energy_penalty(self, cpu_device):
+    def test_low_social_weak_energy_penalty(self, cpu_env_factory):
         """Low social → weak energy penalty."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -574,20 +473,9 @@ class TestCascadeEffects:
 class TestTerminalConditions:
     """Test death conditions (energy ≤ 0, health ≤ 0)."""
 
-    def test_health_zero_death(self, cpu_device):
+    def test_health_zero_death(self, cpu_env_factory):
         """Health at 0 → death."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -598,20 +486,9 @@ class TestTerminalConditions:
 
         assert env.dones[0]
 
-    def test_energy_zero_death(self, cpu_device):
+    def test_energy_zero_death(self, cpu_env_factory):
         """Energy at 0 → death."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -622,20 +499,9 @@ class TestTerminalConditions:
 
         assert env.dones[0]
 
-    def test_both_primaries_above_zero_alive(self, cpu_device):
+    def test_both_primaries_above_zero_alive(self, cpu_env_factory):
         """Both primaries > 0 → alive."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         env.meters = torch.ones(1, 8)
@@ -680,20 +546,9 @@ class TestTerminalConditions:
 class TestMeterClamping:
     """Test that meters stay within [0, 1] bounds."""
 
-    def test_no_negative_values_after_depletion(self, cpu_device):
+    def test_no_negative_values_after_depletion(self, cpu_env_factory):
         """Meters don't go negative after depletion."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Set all meters very low
@@ -706,20 +561,9 @@ class TestMeterClamping:
         # All should be >= 0.0
         assert torch.all(env.meters >= 0.0)
 
-    def test_no_overflow_above_one(self, cpu_device):
+    def test_no_overflow_above_one(self, cpu_env_factory):
         """Meters don't overflow above 1.0."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Set all meters to 1.0
@@ -747,20 +591,9 @@ class TestMeterClamping:
 class TestMultiAgentMeters:
     """Test that agents have independent meter states."""
 
-    def test_multi_agent_selective_death(self, cpu_device):
+    def test_multi_agent_selective_death(self, cpu_env_factory):
         """Multiple agents: only those with primary=0 die."""
-        env = VectorizedHamletEnv(
-            num_agents=3,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=3)
         env.reset()
 
         env.meters = torch.ones(3, 8)
@@ -817,20 +650,9 @@ class TestMultiAgentMeters:
 class TestCascadeIntegration:
     """Test full cascade sequence (as called in step())."""
 
-    def test_full_cascade_sequence(self, cpu_device):
+    def test_full_cascade_sequence(self, cpu_env_factory):
         """Test complete cascade: deplete → secondary → tertiary → check_dones."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Set meters to trigger cascades

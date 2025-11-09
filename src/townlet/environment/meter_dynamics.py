@@ -12,6 +12,7 @@ from pathlib import Path
 import torch
 
 from townlet.environment.cascade_config import (
+    EnvironmentConfig,
     load_default_config,
     load_environment_config,
 )
@@ -39,6 +40,7 @@ class MeterDynamics:
         num_agents: int,
         device: torch.device,
         cascade_config_dir: Path | None = None,
+        environment_config: EnvironmentConfig | None = None,
     ):
         """
         Initialize meter dynamics with config-driven cascade system.
@@ -53,8 +55,9 @@ class MeterDynamics:
         self.device = device
 
         # Load cascade configuration
-        if cascade_config_dir is None:
-            # Load from project configs/ directory
+        if environment_config is not None:
+            env_config = environment_config
+        elif cascade_config_dir is None:
             env_config = load_default_config()
         else:
             env_config = load_environment_config(cascade_config_dir)

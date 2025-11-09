@@ -9,24 +9,61 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
-import yaml
 
-from townlet.environment.action_builder import ActionSpaceBuilder
-from townlet.environment.affordance_config import load_affordance_config
+from townlet.environment.action_builder import ComposedActionSpace
+from townlet.environment.affordance_config import AffordanceConfig, AffordanceConfigCollection
 from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
-from townlet.vfs import VariableRegistry, VFSObservationSpecBuilder
+from townlet.vfs.registry import VariableRegistry
 
 if TYPE_CHECKING:
-    from townlet.environment.action_config import ActionConfig
+    from townlet.environment.action_config import ActionConfig, ActionSpaceConfig
     from townlet.population.runtime_registry import AgentRuntimeRegistry
     from townlet.universe.compiled import CompiledUniverse
+
+
+def _build_affordance_collection(raw_affordances: tuple[Any, ...]) -> AffordanceConfigCollection:
+    """Convert compiler affordance DTOs into runtime collection without touching disk."""
+
+    affordance_entries: list[AffordanceConfig] = []
+    for raw in raw_affordances:
+        data = raw.model_dump()
+        interaction_type = data.get("interaction_type")
+        if not interaction_type:
+            raise ValueError(f"Affordance '{raw.id}' missing interaction_type; required for runtime execution")
+        operating_hours = data.get("operating_hours")
+        if operating_hours is None:
+            raise ValueError(f"Affordance '{raw.id}' missing operating_hours; runtime requires explicit hours")
+
+        payload = {
+            "id": raw.id,
+            "name": raw.name,
+            "category": data.get("category") or "unspecified",
+            "interaction_type": interaction_type,
+            "required_ticks": data.get("required_ticks"),
+            "costs": data.get("costs") or [],
+            "costs_per_tick": data.get("costs_per_tick") or [],
+            "effects": data.get("effects") or [],
+            "effects_per_tick": data.get("effects_per_tick") or [],
+            "completion_bonus": data.get("completion_bonus") or [],
+            "operating_hours": operating_hours,
+            "teaching_note": data.get("teaching_note"),
+            "design_intent": data.get("design_intent"),
+            "position": data.get("position"),
+        }
+        affordance_entries.append(AffordanceConfig(**payload))
+
+    return AffordanceConfigCollection(
+        version="runtime",
+        description="Compiled affordance set",
+        status="COMPILED",
+        affordances=affordance_entries,
+    )
 
 
 class VectorizedHamletEnv:
@@ -59,14 +96,15 @@ class VectorizedHamletEnv:
         """
         torch_device = torch.device(device) if isinstance(device, str) else device
 
+        runtime = universe.to_runtime()
+        self.runtime = runtime
         self.universe = universe
-        self.config_pack_path = Path(universe.config_dir)
         self.num_agents = num_agents
         self.device = torch_device
 
-        hamlet_config = universe.hamlet_config
-        env_cfg = hamlet_config.environment
-        curriculum = hamlet_config.curriculum
+        env_cfg = runtime.clone_environment_config()
+        curriculum = runtime.clone_curriculum_config()
+        enabled_affordances = env_cfg.enabled_affordances
 
         self.partial_observability = env_cfg.partial_observability
         self.vision_range = env_cfg.vision_range
@@ -75,7 +113,6 @@ class VectorizedHamletEnv:
         self.wait_energy_cost = env_cfg.energy_wait_depletion
         self.interact_energy_cost = env_cfg.energy_interact_depletion
         self.agent_lifespan = curriculum.max_steps_per_episode
-        enabled_affordances = env_cfg.enabled_affordances
         partial_observability = self.partial_observability
         vision_range = self.vision_range
 
@@ -84,32 +121,23 @@ class VectorizedHamletEnv:
 
         from townlet.substrate.factory import SubstrateFactory
 
-        self.substrate = SubstrateFactory.build(hamlet_config.substrate, device=torch_device)
+        self.substrate = SubstrateFactory.build(runtime.clone_substrate_config(), device=torch_device)
 
-        # Load action labels (optional - defaults to "gaming" preset if not specified)
         from townlet.environment.action_labels import get_labels
 
-        action_labels_config_path = self.config_pack_path / "action_labels.yaml"
-        if action_labels_config_path.exists():
-            # Load custom action labels from config
-            with open(action_labels_config_path) as f:
-                action_labels_data = yaml.safe_load(f)
-
-            from townlet.substrate.config import ActionLabelConfig
-
-            label_config = ActionLabelConfig(**action_labels_data)
-
-            # Get labels for substrate dimensionality
-            if label_config.preset:
-                self.action_labels = get_labels(preset=label_config.preset, substrate_position_dim=self.substrate.position_dim)
-            else:
-                self.action_labels = get_labels(custom_labels=label_config.custom, substrate_position_dim=self.substrate.position_dim)
+        action_labels_config = runtime.clone_action_labels_config()
+        if action_labels_config and action_labels_config.custom:
+            self.action_labels = get_labels(
+                custom_labels=action_labels_config.custom,
+                substrate_position_dim=self.substrate.position_dim,
+            )
+        elif action_labels_config and action_labels_config.preset:
+            self.action_labels = get_labels(preset=action_labels_config.preset, substrate_position_dim=self.substrate.position_dim)
         else:
-            # Default to gaming preset if no action_labels.yaml
             self.action_labels = get_labels(preset="gaming", substrate_position_dim=self.substrate.position_dim)
 
-        self.metadata = universe.metadata
-        self.optimization_data = universe.optimization_data
+        self.metadata = runtime.metadata
+        self.optimization_data = runtime.optimization_data
 
         # Update grid_size from compiler metadata / substrate (handles aspatial vs grid)
         self.grid_size = self.metadata.grid_size or env_cfg.grid_size
@@ -118,67 +146,20 @@ class VectorizedHamletEnv:
                 raise ValueError(f"Non-square grids not yet supported: {self.substrate.width}×{self.substrate.height}")
             self.grid_size = self.substrate.width  # Override with substrate for grid
 
-        # Load bars configuration to get meter_count for observation dimensions
-        # This must happen before observation dimension calculation
-        from townlet.environment.cascade_config import load_bars_config
+        self.vfs_variables = [var.model_copy(deep=True) for var in runtime.variables_reference]
+        self.vfs_observation_spec = [deepcopy(field) for field in runtime.vfs_observation_fields]
 
-        bars_config_path = self.config_pack_path / "bars.yaml"
-        bars_config = load_bars_config(bars_config_path)
-        self.bars_config = bars_config  # Store for use in affordance validation (TASK-001)
-        self.meter_count = self.metadata.meter_count
-        meter_count = self.meter_count
-        if meter_count != bars_config.meter_count:
-            raise ValueError(f"Meter count mismatch between compiled metadata ({meter_count}) and bars.yaml ({bars_config.meter_count}).")
-
-        # VFS INTEGRATION: Load variables from compiled universe + exposures from YAML
-        variables_path = self.config_pack_path / "variables_reference.yaml"
-
-        if not variables_path.exists():
-            raise FileNotFoundError(
-                f"variables_reference.yaml is required but not found in {self.config_pack_path}.\n\n"
-                f"Quick fix:\n"
-                f"  1. Copy reference: cp configs/L1_full_observability/variables_reference.yaml {self.config_pack_path}/\n"
-                f"  2. Edit to match your configuration\n"
-                f"  3. See docs/config-schemas/variables.md for schema details"
+        computed_observation_dim = sum(field.shape[0] if field.shape else 1 for field in self.vfs_observation_spec)
+        if computed_observation_dim != self.metadata.observation_dim:
+            raise ValueError(
+                f"Observation dimension mismatch between compiled metadata ({self.metadata.observation_dim}) "
+                f"and VFS exposures ({computed_observation_dim})."
             )
 
-        with open(variables_path) as f:
-            variables_data = yaml.safe_load(f) or {}
+        self.meter_count = self.metadata.meter_count
+        meter_count = self.meter_count
 
-        self.vfs_variables = [deepcopy(var) for var in universe.variables_reference]
-
-        # Build exposure configuration for observation spec
-        raw_exposures = variables_data.get("exposed_observations") or []
-        if raw_exposures:
-            self.vfs_exposures: list[dict[str, Any]] = [deepcopy(obs) for obs in raw_exposures]
-        else:
-            # Fallback: expose all agent-readable variables with default metadata
-            self.vfs_exposures = []
-            for var in self.vfs_variables:
-                if "agent" in var.readable_by:
-                    self.vfs_exposures.append(
-                        {
-                            "id": f"obs_{var.id}",
-                            "source_variable": var.id,
-                            "exposed_to": ["agent"],
-                            "normalization": None,
-                        }
-                    )
-
-        # Filter exposures based on observability mode
-        # Full obs uses grid_encoding, POMDP uses local_window
-        if partial_observability:
-            # POMDP: Remove grid_encoding if present (use local_window instead)
-            self.vfs_exposures = [obs for obs in self.vfs_exposures if obs.get("source_variable") != "grid_encoding"]
-        else:
-            # Full obs: Remove local_window if present (use grid_encoding instead)
-            self.vfs_exposures = [obs for obs in self.vfs_exposures if obs.get("source_variable") != "local_window"]
-
-        # Load affordance configuration to get FULL universe vocabulary
-        # This must also happen before observation dimension calculation
-        # Pass bars_config for meter reference validation (TASK-001)
-        config_path = self.config_pack_path / "affordances.yaml"
-        affordance_config = load_affordance_config(config_path, bars_config)
+        affordance_config = _build_affordance_collection(runtime.clone_affordance_configs())
 
         # Extract ALL affordance names from YAML (defines observation vocabulary)
         # This is the FULL universe - what the agent can observe and reason about
@@ -229,7 +210,7 @@ class VectorizedHamletEnv:
                 f"\n  - Training slowdown (gradient computation over huge inputs)"
                 f"\n\nSolution: Use full observability (partial_observability=False) with normalized position encoding:"
                 f"\n  - observation_encoding='relative': Just {self.substrate.position_dim} dims (normalized coordinates)"
-                f"\n  - observation_encoding='scaled': {self.substrate.position_dim*2} dims (coordinates + grid sizes)"
+                f"\n  - observation_encoding='scaled': {self.substrate.position_dim * 2} dims (coordinates + grid sizes)"
                 f"\n  - Enables dimension-independent learning WITHOUT exponential curse"
                 f"\n\nSee docs/manual/pomdp_compatibility_matrix.md for details."
             )
@@ -240,7 +221,7 @@ class VectorizedHamletEnv:
             if window_volume > 125:  # 5×5×5 = 125 is the threshold
                 raise ValueError(
                     f"Grid3D POMDP with vision_range={vision_range} requires {window_volume} cells "
-                    f"(window size {2*vision_range+1}×{2*vision_range+1}×{2*vision_range+1}), which is excessive. "
+                    f"(window size {2 * vision_range + 1}×{2 * vision_range + 1}×{2 * vision_range + 1}), which is excessive. "
                     f"Use vision_range ≤ 2 (5×5×5 = 125 cells) for Grid3D partial observability, "
                     f"or disable partial_observability."
                 )
@@ -255,42 +236,14 @@ class VectorizedHamletEnv:
                     f"Set observation_encoding='relative' in substrate.yaml or disable partial_observability."
                 )
 
+        self.observation_dim = self.metadata.observation_dim
+
         # VFS INTEGRATION: Initialize variable registry
-        # Registry holds runtime state for all VFS variables
         self.vfs_registry = VariableRegistry(variables=self.vfs_variables, num_agents=num_agents, device=self.device)
 
-        # VFS INTEGRATION: Build observation spec from variables
-        # This replaces hardcoded observation dimension calculation
-        obs_builder = VFSObservationSpecBuilder()
-        all_obs_spec = obs_builder.build_observation_spec(self.vfs_variables, self.vfs_exposures)
-
-        # Filter observation spec based on observability mode
-        # POMDP uses "local_window", full obs uses "grid_encoding"
-        # The YAML may expose both, but only one is written to the registry based on mode
-        if partial_observability:
-            # POMDP: Exclude grid_encoding, include local_window
-            self.vfs_observation_spec = [field for field in all_obs_spec if field.source_variable != "grid_encoding"]
-        else:
-            # Full observability: Exclude local_window, include grid_encoding
-            self.vfs_observation_spec = [field for field in all_obs_spec if field.source_variable != "local_window"]
-
-        computed_observation_dim = sum(field.shape[0] if field.shape else 1 for field in self.vfs_observation_spec)
-        self.observation_dim = self.metadata.observation_dim
-        if computed_observation_dim != self.observation_dim:
-            raise ValueError(
-                f"Observation dimension mismatch between compiled metadata ({self.observation_dim}) "
-                f"and VFS exposures ({computed_observation_dim})."
-            )
-
-        # Store partial observability settings for observation construction
-        self.partial_observability = partial_observability
-        self.vision_range = vision_range
-
         # Initialize reward strategy (TASK-001: variable meters)
-        # Get meter indices from bars_config for dynamic action costs and death detection
-        meter_name_to_index = bars_config.meter_name_to_index
-        # Store full mapping for dynamic meter lookups (custom actions, telemetry, etc.)
-        self.meter_name_to_index: dict[str, int] = dict(meter_name_to_index)
+        meter_name_to_index = dict(self.metadata.meter_name_to_index)
+        self.meter_name_to_index = meter_name_to_index
         self.energy_idx = meter_name_to_index.get("energy", 0)  # Default to 0 if not found
         self.health_idx = meter_name_to_index.get("health", min(6, meter_count - 1))  # Default to 6 or last meter
         self.hygiene_idx = meter_name_to_index.get("hygiene", None)  # Optional meter
@@ -306,7 +259,7 @@ class VectorizedHamletEnv:
         self.meter_dynamics = MeterDynamics(
             num_agents=num_agents,
             device=self.device,
-            cascade_config_dir=self.config_pack_path,
+            environment_config=runtime.clone_environment_cascade_config(),
         )
 
         # Initialize affordance engine (reuse affordance_config loaded above)
@@ -315,21 +268,15 @@ class VectorizedHamletEnv:
             affordance_config,
             num_agents,
             self.device,
-            bars_config.meter_name_to_index,
+            self.meter_name_to_index,
         )
 
         # Build composed action space from substrate + global custom actions
         # TODO(Phase 4.2): Load enabled_actions from training.yaml when TrainingConfig DTO exists
         # For now, all actions enabled by default (None = all enabled)
         enabled_actions = None  # Will be loaded from training.yaml in Task 4.2
-
-        global_actions_path = Path("configs/global_actions.yaml")
-        builder = ActionSpaceBuilder(
-            substrate=self.substrate,
-            global_actions_path=global_actions_path,
-            enabled_action_names=enabled_actions,
-        )
-        self.action_space = builder.build()
+        global_actions = runtime.clone_global_actions()
+        self.action_space = self._compose_action_space(global_actions, enabled_actions)
         self.action_dim = self.metadata.action_count
         if self.action_space.action_dim != self.action_dim:
             raise ValueError(
@@ -383,6 +330,28 @@ class VectorizedHamletEnv:
             return self.action_space.get_action_by_name(action_name).id
         except ValueError:
             return None
+
+    def _compose_action_space(
+        self,
+        global_actions: ActionSpaceConfig,
+        enabled_action_names: list[str] | None,
+    ) -> ComposedActionSpace:
+        enabled_set = set(enabled_action_names) if enabled_action_names else None
+        cloned_actions = [action.model_copy(deep=True) for action in global_actions.actions]
+        for action in cloned_actions:
+            action.enabled = True if enabled_set is None else action.name in enabled_set
+
+        substrate_count = sum(1 for action in cloned_actions if action.source == "substrate")
+        custom_count = sum(1 for action in cloned_actions if action.source == "custom")
+        affordance_count = sum(1 for action in cloned_actions if action.source == "affordance")
+
+        return ComposedActionSpace(
+            actions=cloned_actions,
+            substrate_action_count=substrate_count,
+            custom_action_count=custom_count,
+            affordance_action_count=affordance_count,
+            enabled_action_names=enabled_set,
+        )
 
     def _build_movement_deltas(self) -> torch.Tensor:
         """Build movement delta tensor from substrate default actions.
@@ -1151,53 +1120,3 @@ class VectorizedHamletEnv:
 
         # Clamp meters to [0, 1]
         self.meters = torch.clamp(self.meters, 0.0, 1.0)
-
-    def randomize_affordance_positions(self):
-        """Randomize affordance positions for generalization testing.
-
-        Grid substrates: Shuffle all positions
-        Continuous substrates: Random sampling
-        Aspatial: No positions
-
-        Ensures no two affordances occupy the same position (for grid substrates).
-        """
-        import random
-
-        # Skip if no affordances to randomize
-        num_affordances = len(self.affordances)
-        if num_affordances == 0:
-            return  # Nothing to randomize
-
-        # Aspatial substrates don't have positions
-        if self.substrate.position_dim == 0:
-            # Aspatial: no positions, affordances don't need placement
-            return
-
-        # Check if substrate supports enumerable positions
-        if hasattr(self.substrate, "supports_enumerable_positions") and self.substrate.supports_enumerable_positions():
-            # Grid substrates: shuffle all positions
-            all_positions = self.substrate.get_all_positions()
-
-            # Validate that grid has enough cells for all affordances (need +1 for agent)
-            total_cells = len(all_positions)
-            if num_affordances >= total_cells:
-                raise ValueError(
-                    f"Grid has {total_cells} cells but {num_affordances} affordances + 1 agent need space. "
-                    f"Reduce affordances or increase grid_size to at least {int((num_affordances + 1) ** 0.5) + 1}."
-                )
-
-            # Shuffle and assign to affordances
-            random.shuffle(all_positions)
-
-            # Assign new positions to affordances
-            for i, affordance_name in enumerate(self.affordances.keys()):
-                new_pos = all_positions[i]
-                self.affordances[affordance_name] = torch.tensor(new_pos, dtype=self.substrate.position_dtype, device=self.device)
-        else:
-            # Continuous/other: random sampling
-            # Use substrate's initialize_positions for random placement
-            affordance_positions_tensor = self.substrate.initialize_positions(num_agents=num_affordances, device=self.device)
-
-            # Assign to affordances
-            for i, affordance_name in enumerate(self.affordances.keys()):
-                self.affordances[affordance_name] = affordance_positions_tensor[i]

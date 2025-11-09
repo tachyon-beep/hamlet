@@ -19,6 +19,7 @@ import yaml
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.cascade import CascadeConfig
 from townlet.config.effect_pipeline import EffectPipeline
+from townlet.environment.cascade_config import EnvironmentConfig
 from townlet.environment.cascade_config import load_cascades_config as load_full_cascades_config
 from townlet.environment.substrate_action_validator import SubstrateActionValidator
 from townlet.substrate.config import SubstrateConfig
@@ -38,6 +39,7 @@ from townlet.universe.dto import (
 from townlet.universe.optimization import OptimizationData
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 from townlet.vfs.registry import VariableRegistry
+from townlet.vfs.schema import ObservationField as VFSObservationField
 
 from .errors import CompilationError, CompilationErrorCollector
 from .symbol_table import UniverseSymbolTable
@@ -106,7 +108,7 @@ class UniverseCompiler:
             logger.warning(warning)
         stage4_errors.check_and_raise("Stage 4: Cross-Validation")
 
-        metadata, observation_spec = self._stage_5_compute_metadata(
+        metadata, observation_spec, vfs_fields = self._stage_5_compute_metadata(
             config_dir,
             raw_configs,
             symbol_table,
@@ -124,10 +126,12 @@ class UniverseCompiler:
             raw_configs=raw_configs,
             metadata=metadata,
             observation_spec=observation_spec,
+            vfs_observation_fields=vfs_fields,
             action_space_metadata=action_space_metadata,
             meter_metadata=meter_metadata,
             affordance_metadata=affordance_metadata,
             optimization_data=optimization_data,
+            environment_config=raw_configs.environment_config,
         )
 
         if use_cache:
@@ -918,7 +922,7 @@ class UniverseCompiler:
         symbol_table: UniverseSymbolTable,
         *,
         precomputed_config_hash: str | None = None,
-    ) -> tuple[UniverseMetadata, ObservationSpec]:
+    ) -> tuple[UniverseMetadata, ObservationSpec, tuple[VFSObservationField, ...]]:
         """Stage 5 – compute derived metadata and observation specification."""
 
         import torch
@@ -995,7 +999,7 @@ class UniverseCompiler:
             pydantic_version=pydantic_version,
         )
 
-        return metadata, observation_spec
+        return metadata, observation_spec, tuple(vfs_fields)
 
     def _stage_5_build_rich_metadata(
         self,
@@ -1148,10 +1152,12 @@ class UniverseCompiler:
         raw_configs: RawConfigs,
         metadata: UniverseMetadata,
         observation_spec: ObservationSpec,
+        vfs_observation_fields: tuple[VFSObservationField, ...],
         action_space_metadata: ActionSpaceMetadata,
         meter_metadata: MeterMetadata,
         affordance_metadata: AffordanceMetadata,
         optimization_data: OptimizationData,
+        environment_config: EnvironmentConfig,
     ) -> CompiledUniverse:
         """Stage 7 – produce immutable CompiledUniverse artifact."""
 
@@ -1162,10 +1168,13 @@ class UniverseCompiler:
             config_dir=raw_configs.config_dir,
             metadata=metadata,
             observation_spec=observation_spec,
+            vfs_observation_fields=vfs_observation_fields,
             action_space_metadata=action_space_metadata,
             meter_metadata=meter_metadata,
             affordance_metadata=affordance_metadata,
             optimization_data=optimization_data,
+            action_labels_config=raw_configs.action_labels,
+            environment_config=environment_config,
         )
 
         if not dataclasses.is_dataclass(universe):
