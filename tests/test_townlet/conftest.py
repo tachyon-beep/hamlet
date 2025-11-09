@@ -13,6 +13,7 @@ Usage:
 
 import copy
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,8 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.replay_buffer import ReplayBuffer
+from townlet.universe.compiled import CompiledUniverse
+from townlet.universe.compiler import UniverseCompiler
 
 # Default observation dimensionality for the standard 8×8 full-observability setup:
 #   64 grid cells + 2 normalized position features + 8 meters + 15 affordance slots + 4 temporal
@@ -119,6 +122,34 @@ def cpu_device() -> torch.device:
     return torch.device("cpu")
 
 
+@pytest.fixture(scope="session")
+def compile_universe() -> Callable[[Path | str], CompiledUniverse]:
+    """Return a compiler helper that caches compiled reference packs."""
+
+    compiler = UniverseCompiler()
+    cache: dict[Path, CompiledUniverse] = {}
+    repo_configs = (Path(__file__).parent.parent.parent / "configs").resolve()
+
+    def _compile(config_dir: Path | str) -> CompiledUniverse:
+        target_path = Path(config_dir).resolve()
+        cache_key: Path | None = None
+        try:
+            target_path.relative_to(repo_configs)
+            cache_key = target_path
+        except ValueError:
+            cache_key = None
+
+        if cache_key is not None and cache_key in cache:
+            return cache[cache_key]
+
+        compiled = compiler.compile(target_path)
+        if cache_key is not None:
+            cache[cache_key] = compiled
+        return compiled
+
+    return _compile
+
+
 # =============================================================================
 # TEMPFILE FIXTURES
 # =============================================================================
@@ -169,7 +200,11 @@ def temp_yaml_file(temp_test_dir: Path) -> Path:
 
 
 @pytest.fixture
-def basic_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+def basic_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    test_config_pack_path: Path,
+    device: torch.device,
+) -> VectorizedHamletEnv:
     """Create a basic environment with default test config.
 
     Configuration:
@@ -182,23 +217,19 @@ def basic_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHa
     Returns:
         VectorizedHamletEnv instance
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(test_config_pack_path)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
         device=device,
     )
 
 
 @pytest.fixture
-def pomdp_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+def pomdp_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    device: torch.device,
+) -> VectorizedHamletEnv:
     """Create a POMDP environment with partial observability.
 
     Configuration:
@@ -211,23 +242,19 @@ def pomdp_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHa
     Returns:
         VectorizedHamletEnv instance with POMDP
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(Path("configs/L2_partial_observability"))
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,
-        partial_observability=True,
-        vision_range=2,  # 5×5 window
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
         device=device,
     )
 
 
 @pytest.fixture
-def temporal_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+def temporal_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    device: torch.device,
+) -> VectorizedHamletEnv:
     """Create an environment with temporal mechanics enabled.
 
     Configuration:
@@ -240,23 +267,20 @@ def temporal_env(test_config_pack_path: Path, device: torch.device) -> Vectorize
     Returns:
         VectorizedHamletEnv instance with temporal mechanics
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(Path("configs/L3_temporal_mechanics"))
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=True,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
         device=device,
     )
 
 
 @pytest.fixture
-def multi_agent_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+def multi_agent_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    test_config_pack_path: Path,
+    device: torch.device,
+) -> VectorizedHamletEnv:
     """Create an environment with multiple agents.
 
     Configuration:
@@ -269,17 +293,10 @@ def multi_agent_env(test_config_pack_path: Path, device: torch.device) -> Vector
     Returns:
         VectorizedHamletEnv instance with 4 agents
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(test_config_pack_path)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=4,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
         device=device,
     )
 
@@ -290,7 +307,10 @@ def multi_agent_env(test_config_pack_path: Path, device: torch.device) -> Vector
 
 
 @pytest.fixture
-def grid2d_3x3_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+def grid2d_3x3_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    device: torch.device,
+) -> VectorizedHamletEnv:
     """Small 3×3 Grid2D environment for fast tests.
 
     Configuration:
@@ -305,23 +325,20 @@ def grid2d_3x3_env(test_config_pack_path: Path, device: torch.device) -> Vectori
     Returns:
         VectorizedHamletEnv with 3×3 Grid2D substrate
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(Path("configs/L0_0_minimal"))
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=3,
-        partial_observability=False,
-        vision_range=3,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
         device=device,
     )
 
 
 @pytest.fixture
-def grid2d_8x8_env(test_config_pack_path: Path, device: torch.device) -> VectorizedHamletEnv:
+def grid2d_8x8_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    test_config_pack_path: Path,
+    device: torch.device,
+) -> VectorizedHamletEnv:
     """Standard 8×8 Grid2D environment (same as basic_env, explicit name).
 
     Configuration:
@@ -336,23 +353,19 @@ def grid2d_8x8_env(test_config_pack_path: Path, device: torch.device) -> Vectori
     Returns:
         VectorizedHamletEnv with 8×8 Grid2D substrate
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(test_config_pack_path)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
         device=device,
     )
 
 
 @pytest.fixture
-def aspatial_env(device: torch.device) -> VectorizedHamletEnv:
+def aspatial_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    device: torch.device,
+) -> VectorizedHamletEnv:
     """Aspatial environment (no grid, meters only).
 
     Configuration:
@@ -371,18 +384,11 @@ def aspatial_env(device: torch.device) -> VectorizedHamletEnv:
     repo_root = Path(__file__).parent.parent.parent
     aspatial_config_path = repo_root / "configs" / "aspatial_test"
 
-    return VectorizedHamletEnv(
+    universe = compile_universe(aspatial_config_path)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=1,  # Ignored for aspatial, but required by constructor
-        partial_observability=False,
-        vision_range=1,
-        enable_temporal_mechanics=False,
         device=device,
-        config_pack_path=aspatial_config_path,
-        move_energy_cost=0.005,  # Must be > wait_energy_cost (validation requirement)
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
     )
 
 
@@ -564,7 +570,7 @@ def vectorized_population(
 
 @pytest.fixture
 def non_training_recurrent_population(
-    test_config_pack_path: Path,
+    compile_universe: Callable[[Path | str], CompiledUniverse],
     cpu_device: torch.device,
 ) -> VectorizedPopulation:
     """Create recurrent population with training DISABLED for unit tests.
@@ -591,17 +597,10 @@ def non_training_recurrent_population(
     Returns:
         VectorizedPopulation instance with training disabled
     """
-    env = VectorizedHamletEnv(
+    pomdp_universe = compile_universe(Path("configs/L2_partial_observability"))
+    env = VectorizedHamletEnv.from_universe(
+        pomdp_universe,
         num_agents=1,
-        grid_size=5,
-        partial_observability=True,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
         device=cpu_device,
     )
 
@@ -1450,7 +1449,11 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
 
 
 @pytest.fixture
-def task001_env_4meter(cpu_device: torch.device, task001_config_4meter: Path) -> VectorizedHamletEnv:
+def task001_env_4meter(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    cpu_device: torch.device,
+    task001_config_4meter: Path,
+) -> VectorizedHamletEnv:
     """4-meter environment for TASK-001 testing.
 
     Args:
@@ -1460,23 +1463,20 @@ def task001_env_4meter(cpu_device: torch.device, task001_config_4meter: Path) ->
     Returns:
         VectorizedHamletEnv instance with 4 meters
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(task001_config_4meter)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=task001_config_4meter,
         device=cpu_device,
     )
 
 
 @pytest.fixture
-def task001_env_4meter_pomdp(cpu_device: torch.device, task001_config_4meter: Path) -> VectorizedHamletEnv:
+def task001_env_4meter_pomdp(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    cpu_device: torch.device,
+    task001_config_4meter: Path,
+) -> VectorizedHamletEnv:
     """4-meter POMDP environment for TASK-001 recurrent network testing.
 
     Args:
@@ -1486,23 +1486,20 @@ def task001_env_4meter_pomdp(cpu_device: torch.device, task001_config_4meter: Pa
     Returns:
         VectorizedHamletEnv instance with 4 meters and partial observability
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(task001_config_4meter)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,
-        partial_observability=True,  # POMDP mode for recurrent networks
-        vision_range=2,  # 5×5 local window
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=task001_config_4meter,
         device=cpu_device,
     )
 
 
 @pytest.fixture
-def task001_env_12meter(cpu_device: torch.device, task001_config_12meter: Path) -> VectorizedHamletEnv:
+def task001_env_12meter(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    cpu_device: torch.device,
+    task001_config_12meter: Path,
+) -> VectorizedHamletEnv:
     """12-meter environment for TASK-001 testing.
 
     Args:
@@ -1512,17 +1509,10 @@ def task001_env_12meter(cpu_device: torch.device, task001_config_12meter: Path) 
     Returns:
         VectorizedHamletEnv instance with 12 meters
     """
-    return VectorizedHamletEnv(
+    universe = compile_universe(task001_config_12meter)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=8,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=task001_config_12meter,
         device=cpu_device,
     )
 

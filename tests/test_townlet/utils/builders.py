@@ -17,13 +17,52 @@ Example:
         bars_config = make_bars_config(meter_count=4)
 """
 
+from pathlib import Path
 from typing import Literal
 
 import torch
 
 from townlet.environment.cascade_config import BarConfig, BarsConfig, TerminalCondition
+from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
+from townlet.universe.compiled import CompiledUniverse
+from townlet.universe.compiler import UniverseCompiler
+
+# =============================================================================
+# INTERNAL HELPERS
+# =============================================================================
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CONFIGS_ROOT = (_REPO_ROOT / "configs").resolve()
+_COMPILER = UniverseCompiler()
+_UNIVERSE_CACHE: dict[Path, CompiledUniverse] = {}
+
+
+def _resolve_config_path(config_dir: Path | str) -> Path:
+    return Path(config_dir).resolve()
+
+
+def _is_repo_config(path: Path) -> bool:
+    try:
+        path.relative_to(_CONFIGS_ROOT)
+        return True
+    except ValueError:
+        return False
+
+
+def _compile_universe(config_dir: Path | str) -> CompiledUniverse:
+    path = _resolve_config_path(config_dir)
+    cacheable = _is_repo_config(path)
+
+    if cacheable and path in _UNIVERSE_CACHE:
+        return _UNIVERSE_CACHE[path]
+
+    compiled = _COMPILER.compile(path)
+    if cacheable:
+        _UNIVERSE_CACHE[path] = compiled
+    return compiled
+
 
 # =============================================================================
 # SUBSTRATE BUILDERS
@@ -337,5 +376,26 @@ def make_positions(
         (num_agents, position_dim),
         value,
         dtype=torch.long,
+        device=device,
+    )
+
+
+# =============================================================================
+# ENVIRONMENT BUILDERS
+# =============================================================================
+
+
+def make_vectorized_env_from_pack(
+    config_dir: Path | str,
+    *,
+    num_agents: int = 1,
+    device: torch.device | str = "cpu",
+) -> VectorizedHamletEnv:
+    """Instantiate VectorizedHamletEnv from a compiled config pack."""
+
+    universe = _compile_universe(config_dir)
+    return VectorizedHamletEnv.from_universe(
+        universe,
+        num_agents=num_agents,
         device=device,
     )

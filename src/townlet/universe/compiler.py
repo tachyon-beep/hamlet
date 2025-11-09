@@ -66,22 +66,28 @@ class UniverseCompiler:
         config_dir = Path(config_dir)
         cache_path = self._cache_artifact_path(config_dir)
         precomputed_hash: str | None = None
+        precomputed_provenance: str | None = None
 
         if use_cache and cache_path.exists():
-            precomputed_hash = self._compute_config_hash(config_dir)
+            precomputed_hash, precomputed_provenance = self._build_cache_fingerprint(config_dir)
             try:
                 cached_universe = CompiledUniverse.load_from_cache(cache_path)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Failed to load cached universe from %s: %s", cache_path, exc)
             else:
-                if cached_universe.metadata.config_hash == precomputed_hash:
+                if (
+                    cached_universe.metadata.config_hash == precomputed_hash
+                    and cached_universe.metadata.provenance_id == precomputed_provenance
+                ):
                     logger.info("Loaded compiled universe from cache: %s", cache_path)
                     return cached_universe
                 logger.info(
-                    "Cache stale for %s (cached=%s, current=%s). Recompiling.",
+                    "Cache stale for %s (cached=%s/%s, current=%s/%s). Recompiling.",
                     cache_path,
                     cached_universe.metadata.config_hash[:8],
                     precomputed_hash[:8] if precomputed_hash else "unknown",
+                    (cached_universe.metadata.provenance_id or "")[:8],
+                    (precomputed_provenance or "unknown")[:8],
                 )
 
         raw_configs = self._stage_1_parse_individual_files(config_dir)
@@ -100,7 +106,12 @@ class UniverseCompiler:
             logger.warning(warning)
         stage4_errors.check_and_raise("Stage 4: Cross-Validation")
 
-        metadata, observation_spec = self._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
+        metadata, observation_spec = self._stage_5_compute_metadata(
+            config_dir,
+            raw_configs,
+            symbol_table,
+            precomputed_config_hash=precomputed_hash,
+        )
         (
             action_space_metadata,
             meter_metadata,
@@ -905,6 +916,8 @@ class UniverseCompiler:
         config_dir: Path,
         raw_configs: RawConfigs,
         symbol_table: UniverseSymbolTable,
+        *,
+        precomputed_config_hash: str | None = None,
     ) -> tuple[UniverseMetadata, ObservationSpec]:
         """Stage 5 – compute derived metadata and observation specification."""
 
@@ -940,7 +953,7 @@ class UniverseCompiler:
 
         grid_size, grid_cells = self._derive_grid_dimensions(raw_configs.substrate)
 
-        config_hash = self._compute_config_hash(config_dir)
+        config_hash = precomputed_config_hash or self._compute_config_hash(config_dir)
         compiler_git_sha = self._get_git_sha()
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         provenance_id = self._compute_provenance_id(
@@ -1242,6 +1255,21 @@ class UniverseCompiler:
         with file_path.open() as handle:
             data = yaml.safe_load(handle) or {}
         return yaml.dump(data, sort_keys=True)
+
+    def _build_cache_fingerprint(self, config_dir: Path) -> tuple[str, str]:
+        config_hash = self._compute_config_hash(config_dir)
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        from pydantic import __version__ as pydantic_version  # lazy import to avoid startup penalty
+
+        provenance = self._compute_provenance_id(
+            config_hash=config_hash,
+            compiler_version=COMPILER_VERSION,
+            git_sha=self._get_git_sha(),
+            python_version=python_version,
+            torch_version=torch.__version__,
+            pydantic_version=pydantic_version,
+        )
+        return config_hash, provenance
 
     def _cache_directory_for(self, config_dir: Path) -> Path:
         """Return the cache directory path for a config pack."""

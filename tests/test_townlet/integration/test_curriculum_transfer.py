@@ -4,38 +4,20 @@ from pathlib import Path
 
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 
 
 def test_l0_and_l1_have_same_action_dim():
     """L0 and L1 should have same action_dim (enables checkpoint transfer)."""
-    env_l0 = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L0_0_minimal"),
+    env_l0 = make_vectorized_env_from_pack(
+        Path("configs/L0_0_minimal"),
         num_agents=1,
-        grid_size=3,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=["Bed"],  # L0 deploys only 1 affordance
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
         device=torch.device("cpu"),
     )
 
-    env_l1 = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
+    env_l1 = make_vectorized_env_from_pack(
+        Path("configs/L1_full_observability"),
         num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=None,  # L1 deploys all 14 affordances
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
         device=torch.device("cpu"),
     )
 
@@ -47,33 +29,15 @@ def test_l0_and_l1_have_same_action_dim():
 
 def test_l0_and_l1_share_global_vocabulary():
     """L0 and L1 should share same action vocabulary (from global_actions.yaml)."""
-    env_l0 = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L0_0_minimal"),
+    env_l0 = make_vectorized_env_from_pack(
+        Path("configs/L0_0_minimal"),
         num_agents=1,
-        grid_size=3,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=["Bed"],  # L0 deploys only 1 affordance
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
         device=torch.device("cpu"),
     )
 
-    env_l1 = VectorizedHamletEnv(
-        config_pack_path=Path("configs/L1_full_observability"),
+    env_l1 = make_vectorized_env_from_pack(
+        Path("configs/L1_full_observability"),
         num_agents=1,
-        grid_size=8,
-        partial_observability=False,
-        vision_range=2,
-        enable_temporal_mechanics=False,
-        enabled_affordances=None,  # L1 deploys all 14 affordances
-        move_energy_cost=0.5,
-        wait_energy_cost=0.1,
-        interact_energy_cost=0.3,
-        agent_lifespan=1000,
         device=torch.device("cpu"),
     )
 

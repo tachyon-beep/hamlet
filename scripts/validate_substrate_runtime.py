@@ -28,12 +28,19 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.universe.compiler import UniverseCompiler
 
 
 class SubstrateRuntimeValidator:
     """Runtime validator for substrate integration."""
 
-    def __init__(self, verbose: bool = False):
+    def log(self, message: str, level: str = "INFO"):
+        """Log message if verbose mode enabled."""
+        if self.verbose:
+            prefix = "✓" if level == "INFO" else "⚠" if level == "WARN" else "✗"
+            print(f"{prefix} {message}")
+
+    def __init__(self, *, verbose: bool = False):
         """Initialize validator.
 
         Args:
@@ -42,12 +49,7 @@ class SubstrateRuntimeValidator:
         self.verbose = verbose
         self.errors = []
         self.warnings = []
-
-    def log(self, message: str, level: str = "INFO"):
-        """Log message if verbose mode enabled."""
-        if self.verbose:
-            prefix = "✓" if level == "INFO" else "⚠" if level == "WARN" else "✗"
-            print(f"{prefix} {message}")
+        self.compiler = UniverseCompiler()
 
     def validate_config_pack(self, config_path: Path) -> bool:
         """Validate a single config pack.
@@ -63,8 +65,9 @@ class SubstrateRuntimeValidator:
 
         try:
             # Create environment
-            env = VectorizedHamletEnv(
-                config_pack_path=config_path,
+            universe = self.compiler.compile(config_path)
+            env = VectorizedHamletEnv.from_universe(
+                universe,
                 num_agents=2,  # Test multi-agent
                 device=torch.device("cpu"),  # Use CPU for validation
             )

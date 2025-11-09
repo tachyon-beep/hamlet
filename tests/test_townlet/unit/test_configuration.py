@@ -28,6 +28,7 @@ import yaml
 from pydantic import ValidationError
 
 from tests.test_townlet.helpers.config_builder import mutate_training_yaml, prepare_config_dir
+from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.runner import DemoRunner
 from townlet.environment.affordance_config import (
@@ -48,7 +49,6 @@ from townlet.environment.cascade_config import (
     load_default_config,
     load_environment_config,
 )
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
@@ -66,7 +66,7 @@ class TestConfigPackLoading:
     cascades.yaml, etc.
     """
 
-    def test_vectorized_env_uses_pack_specific_bars(self, temp_config_pack: Path):
+    def test_vectorized_env_uses_pack_specific_bars(self, temp_config_pack: Path, cpu_device: torch.device):
         """Ensure VectorizedHamletEnv reads bars.yaml from the selected pack."""
         bars_path = temp_config_pack / "bars.yaml"
         original = bars_path.read_text()
@@ -87,18 +87,10 @@ class TestConfigPackLoading:
         env_cfg["energy_interact_depletion"] = 0.001
         training_path.write_text(yaml.safe_dump(training_config))
 
-        env_cfg_update = training_config["environment"]
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            temp_config_pack,
             num_agents=1,
-            grid_size=env_cfg_update.get("grid_size", 8),
-            partial_observability=env_cfg_update.get("partial_observability", False),
-            vision_range=env_cfg_update.get("vision_range", 2),
-            enable_temporal_mechanics=env_cfg_update.get("enable_temporal_mechanics", False),
-            move_energy_cost=env_cfg_update["energy_move_depletion"],
-            wait_energy_cost=env_cfg_update["energy_wait_depletion"],
-            interact_energy_cost=env_cfg_update["energy_interact_depletion"],
-            agent_lifespan=1000,
-            config_pack_path=temp_config_pack,
+            device=cpu_device,
         )
 
         # Verify modified base depletion was loaded
@@ -905,20 +897,10 @@ class TestEpsilonConfiguration:
 
         # Create exploration with config params (mimics runner initialization)
         # Create a basic env to get observation_dim
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        temp_env = VectorizedHamletEnv(
+        temp_env = make_vectorized_env_from_pack(
+            config_dir,
             num_agents=1,
-            grid_size=8,  # Match training_config grid_size
-            partial_observability=False,
             device=torch.device("cpu"),
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=config_dir,
         )
 
         exploration = AdaptiveIntrinsicExploration(
@@ -948,19 +930,10 @@ class TestTrainingHyperparameters:
 
     def test_population_uses_train_frequency_from_config(self, test_config_pack_path: Path, cpu_device: torch.device):
         """VectorizedPopulation should accept train_frequency and other hyperparameters."""
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            test_config_pack_path,
             num_agents=1,
-            grid_size=5,
-            partial_observability=False,
             device=cpu_device,
-            enabled_affordances=["Bed"],
-            config_pack_path=test_config_pack_path,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
         )
 
         curriculum = AdversarialCurriculum(

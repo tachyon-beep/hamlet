@@ -11,12 +11,13 @@ Coverage targets:
 - src/townlet/environment/vectorized_env.py:106-119 (action label loading)
 """
 
+import shutil
 from pathlib import Path
 
 import pytest
 import yaml
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 
 
 class TestCheckpointValidation:
@@ -31,18 +32,10 @@ class TestCheckpointValidation:
 
         Coverage target: lines 878-891 (legacy checkpoint detection)
         """
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            test_config_pack_path,
             num_agents=1,
-            grid_size=8,
             device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
         )
 
         # Create legacy checkpoint data (missing position_dim field)
@@ -72,18 +65,10 @@ class TestCheckpointValidation:
         Coverage target: lines 893-899 (dimension mismatch validation)
         """
         # Create 2D environment
-        env_2d = VectorizedHamletEnv(
+        env_2d = make_vectorized_env_from_pack(
+            test_config_pack_path,
             num_agents=1,
-            grid_size=8,
             device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
         )
 
         # Create checkpoint with wrong position_dim (pretend it came from 3D substrate)
@@ -109,18 +94,10 @@ class TestCheckpointValidation:
 
         Coverage target: lines 901-910 (successful checkpoint loading)
         """
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            test_config_pack_path,
             num_agents=1,
-            grid_size=8,
             device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
         )
 
         # Create valid checkpoint with correct position_dim
@@ -151,28 +128,9 @@ class TestActionLabelLoading:
 
         Coverage target: lines 106-119 (custom action label loading)
         """
-        # Create minimal config pack with custom action labels
         config_dir = tmp_path / "custom_labels_config"
-        config_dir.mkdir()
+        shutil.copytree(Path("configs/test"), config_dir)
 
-        # Create substrate.yaml (Grid2D)
-        substrate_config = {
-            "version": "1.0",
-            "description": "2D grid for action label test",
-            "type": "grid",
-            "grid": {
-                "topology": "square",
-                "width": 5,
-                "height": 5,
-                "boundary": "clamp",
-                "distance_metric": "manhattan",
-                "observation_encoding": "relative",
-            },
-        }
-        with open(config_dir / "substrate.yaml", "w") as f:
-            yaml.safe_dump(substrate_config, f)
-
-        # Create action_labels.yaml with custom labels
         action_labels_config = {
             "custom": {
                 0: "PORT",  # Custom name for LEFT
@@ -184,191 +142,12 @@ class TestActionLabelLoading:
             }
         }
         with open(config_dir / "action_labels.yaml", "w") as f:
-            yaml.safe_dump(action_labels_config, f)
+            yaml.safe_dump(action_labels_config, f, sort_keys=False)
 
-        # Create minimal bars.yaml
-        bars_config = {
-            "version": "2.0",
-            "description": "Minimal test config",
-            "bars": [
-                {
-                    "name": "energy",
-                    "index": 0,
-                    "tier": "pivotal",
-                    "range": [0.0, 1.0],
-                    "initial": 1.0,
-                    "base_depletion": 0.005,
-                    "description": "Energy meter",
-                }
-            ],
-            "terminal_conditions": [{"meter": "energy", "operator": "<=", "value": 0.0, "description": "Death"}],
-        }
-        with open(config_dir / "bars.yaml", "w") as f:
-            yaml.safe_dump(bars_config, f)
-
-        # Create minimal cascades.yaml
-        cascades_config = {
-            "version": "2.0",
-            "description": "Minimal test cascades",
-            "math_type": "gradient_penalty",
-            "modulations": [],
-            "cascades": [],
-            "execution_order": [],
-        }
-        with open(config_dir / "cascades.yaml", "w") as f:
-            yaml.safe_dump(cascades_config, f)
-
-        # Create minimal affordances.yaml
-        affordances_config = {
-            "version": "2.0",
-            "description": "Minimal test affordances",
-            "status": "TEST",
-            "affordances": [
-                {
-                    "id": "0",
-                    "name": "Bed",
-                    "category": "energy",
-                    "interaction_type": "instant",
-                    "costs": [],
-                    "effects": [{"meter": "energy", "amount": 0.5}],
-                    "operating_hours": [0, 24],
-                }
-            ],
-        }
-        with open(config_dir / "affordances.yaml", "w") as f:
-            yaml.safe_dump(affordances_config, f)
-
-        # Create minimal variables_reference.yaml (1 meter: energy)
-        vfs_config = {
-            "version": "1.0",
-            "variables": [
-                {
-                    "id": "grid_encoding",
-                    "scope": "agent",
-                    "type": "vecNf",
-                    "dims": 25,
-                    "lifetime": "tick",
-                    "readable_by": ["agent", "engine"],
-                    "writable_by": ["engine"],
-                    "default": [0.0] * 25,
-                },
-                {
-                    "id": "position",
-                    "scope": "agent",
-                    "type": "vecNf",
-                    "dims": 2,
-                    "lifetime": "episode",
-                    "readable_by": ["agent", "engine"],
-                    "writable_by": ["engine"],
-                    "default": [0.0, 0.0],
-                },
-                {
-                    "id": "energy",
-                    "scope": "agent",
-                    "type": "scalar",
-                    "lifetime": "episode",
-                    "readable_by": ["agent", "engine"],
-                    "writable_by": ["engine"],
-                    "default": 1.0,
-                },
-                {
-                    "id": "affordance_at_position",
-                    "scope": "agent",
-                    "type": "vecNf",
-                    "dims": 15,
-                    "lifetime": "tick",
-                    "readable_by": ["agent", "engine"],
-                    "writable_by": ["engine"],
-                    "default": [0.0] * 14 + [1.0],
-                },
-                {
-                    "id": "time_sin",
-                    "scope": "global",
-                    "type": "scalar",
-                    "lifetime": "tick",
-                    "readable_by": ["agent"],
-                    "writable_by": ["engine"],
-                    "default": 0.0,
-                },
-                {
-                    "id": "time_cos",
-                    "scope": "global",
-                    "type": "scalar",
-                    "lifetime": "tick",
-                    "readable_by": ["agent"],
-                    "writable_by": ["engine"],
-                    "default": 1.0,
-                },
-                {
-                    "id": "interaction_progress",
-                    "scope": "agent",
-                    "type": "scalar",
-                    "lifetime": "tick",
-                    "readable_by": ["agent"],
-                    "writable_by": ["engine"],
-                    "default": 0.0,
-                },
-                {
-                    "id": "lifetime_progress",
-                    "scope": "agent",
-                    "type": "scalar",
-                    "lifetime": "episode",
-                    "readable_by": ["agent"],
-                    "writable_by": ["engine"],
-                    "default": 0.0,
-                },
-            ],
-            "exposed_observations": [
-                {
-                    "id": "obs_grid_encoding",
-                    "source_variable": "grid_encoding",
-                    "exposed_to": ["agent"],
-                    "shape": [25],
-                    "normalization": None,
-                },
-                {"id": "obs_position", "source_variable": "position", "exposed_to": ["agent"], "shape": [2], "normalization": None},
-                {"id": "obs_energy", "source_variable": "energy", "exposed_to": ["agent"], "shape": [], "normalization": None},
-                {
-                    "id": "obs_affordance_at_position",
-                    "source_variable": "affordance_at_position",
-                    "exposed_to": ["agent"],
-                    "shape": [15],
-                    "normalization": None,
-                },
-                {"id": "obs_time_sin", "source_variable": "time_sin", "exposed_to": ["agent"], "shape": [], "normalization": None},
-                {"id": "obs_time_cos", "source_variable": "time_cos", "exposed_to": ["agent"], "shape": [], "normalization": None},
-                {
-                    "id": "obs_interaction_progress",
-                    "source_variable": "interaction_progress",
-                    "exposed_to": ["agent"],
-                    "shape": [],
-                    "normalization": None,
-                },
-                {
-                    "id": "obs_lifetime_progress",
-                    "source_variable": "lifetime_progress",
-                    "exposed_to": ["agent"],
-                    "shape": [],
-                    "normalization": None,
-                },
-            ],
-        }
-        with open(config_dir / "variables_reference.yaml", "w") as f:
-            yaml.safe_dump(vfs_config, f, sort_keys=False)
-
-        # Create environment with custom action labels config
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            config_dir,
             num_agents=1,
-            grid_size=5,
             device=cpu_device,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=config_dir,
         )
 
         # Verify custom labels were loaded (action_labels is an ActionLabels object with labels dict)
@@ -386,18 +165,10 @@ class TestActionLabelLoading:
         Coverage target: lines 120-122 (default label fallback)
         """
         # test_config_pack_path doesn't have action_labels.yaml, so should use default
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            test_config_pack_path,
             num_agents=1,
-            grid_size=8,
             device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
         )
 
         # Verify default gaming labels are used (action_labels is an ActionLabels object)
@@ -411,7 +182,7 @@ class TestActionLabelLoading:
 class TestAffordancePositionSerialization:
     """Test affordance position serialization edge cases."""
 
-    def test_aspatial_affordance_positions_empty_list(self, cpu_device):
+    def test_aspatial_affordance_positions_empty_list(self, cpu_device, tmp_path):
         """Aspatial substrates should serialize affordance positions as empty lists.
 
         When substrate has position_dim=0 (aspatial), affordance positions should
@@ -428,18 +199,22 @@ class TestAffordancePositionSerialization:
         if not aspatial_config_path.exists():
             pytest.skip("Aspatial test config not found")
 
-        env = VectorizedHamletEnv(
+        config_pack = tmp_path / "aspatial_pack"
+        shutil.copytree(aspatial_config_path, config_pack)
+
+        training_path = config_pack / "training.yaml"
+        training_cfg = yaml.safe_load(training_path.read_text())
+        env_cfg = training_cfg.setdefault("environment", {})
+        env_cfg["grid_size"] = max(env_cfg.get("grid_size", 1), 8)
+        env_cfg["energy_move_depletion"] = 0.005
+        env_cfg["energy_wait_depletion"] = 0.001
+        env_cfg["energy_interact_depletion"] = 0.0
+        training_path.write_text(yaml.safe_dump(training_cfg, sort_keys=False))
+
+        env = make_vectorized_env_from_pack(
+            config_pack,
             num_agents=1,
-            grid_size=1,  # Ignored for aspatial
             device=cpu_device,
-            partial_observability=False,
-            vision_range=1,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=aspatial_config_path,
         )
 
         env.reset()

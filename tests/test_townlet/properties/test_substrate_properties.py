@@ -10,11 +10,16 @@ Properties tested:
 4. Observation dimension: obs_dim matches substrate + meters + affordances + temporal
 """
 
+import shutil
+import tempfile
+from pathlib import Path
+
 import torch
+import yaml
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -151,19 +156,22 @@ def test_property_aspatial_no_position_operations():
 @settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)  # Disable deadline for VFS overhead
 def test_property_obs_dim_matches_substrate_grid2d(grid_size, num_agents, test_config_pack_path, cpu_device):
     """Observation dimension should match substrate + meters + affordances + temporal."""
-    env = VectorizedHamletEnv(
-        num_agents=num_agents,
-        grid_size=grid_size,  # Square grid
-        partial_observability=False,  # Full observability
-        vision_range=grid_size,
-        enable_temporal_mechanics=False,
-        device=cpu_device,
-        config_pack_path=test_config_pack_path,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_pack = Path(tmpdir) / "pack"
+        shutil.copytree(test_config_pack_path, temp_pack)
+
+        training_path = temp_pack / "training.yaml"
+        training_data = yaml.safe_load(training_path.read_text())
+        training_env = training_data.setdefault("environment", {})
+        training_env["grid_size"] = grid_size
+        training_env["vision_range"] = grid_size
+        training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
+
+        env = make_vectorized_env_from_pack(
+            temp_pack,
+            num_agents=num_agents,
+            device=cpu_device,
+        )
 
     obs = env.reset()
 

@@ -18,7 +18,7 @@ import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 
 
 class TestEnvironmentBoundaryProperties:
@@ -37,23 +37,10 @@ class TestEnvironmentBoundaryProperties:
         NOTE: After TASK-002A, grid_size comes from substrate.yaml (8×8),
               not from the grid_size parameter.
         """
-        # Create environment
-        # grid_size loaded from substrate.yaml (8×8)
-        project_root = Path(__file__).parent.parent.parent.parent
-        config_pack = project_root / "configs" / "test"
-
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            Path("configs/test"),
             num_agents=1,
-            grid_size=8,  # NOTE: Ignored! Actual grid_size comes from substrate.yaml
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
             device=torch.device("cpu"),
-            config_pack_path=config_pack,
         )
 
         # Reset environment
@@ -89,21 +76,10 @@ class TestEnvironmentBoundaryProperties:
         Meters represent normalized resources (energy, health, etc.) and must
         never go below 0 or above 1, regardless of interactions or decay.
         """
-        project_root = Path(__file__).parent.parent.parent.parent
-        config_pack = project_root / "configs" / "test"
-
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            Path("configs/test"),
             num_agents=num_agents,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
             device=torch.device("cpu"),
-            config_pack_path=config_pack,
         )
 
         env.reset()
@@ -123,33 +99,27 @@ class TestEnvironmentBoundaryProperties:
                 break
 
     @given(
-        grid_size=st.integers(min_value=5, max_value=12),  # Min 5 for affordances and POMDP
-        num_agents=st.integers(min_value=1, max_value=8),
-        partial_observability=st.booleans(),
+        config_name=st.sampled_from(
+            [
+                "configs/L0_0_minimal",  # 3×3 full obs
+                "configs/test",  # 8×8 full obs
+                "configs/L2_partial_observability",  # POMDP
+            ]
+        ),
+        num_agents=st.integers(min_value=1, max_value=4),
     )
     @settings(max_examples=40, deadline=None)  # Disable deadline for VFS overhead
-    def test_observations_always_match_expected_dimensions(self, grid_size, num_agents, partial_observability):
+    def test_observations_always_match_expected_dimensions(self, config_name, num_agents):
         """Property: Observations always match observation_dim regardless of state.
 
         The observation dimension is computed at initialization and should
         never change during environment execution.
         """
 
-        project_root = Path(__file__).parent.parent.parent.parent
-        config_pack = project_root / "configs" / "test"
-
-        env = VectorizedHamletEnv(
+        env = make_vectorized_env_from_pack(
+            Path(config_name),
             num_agents=num_agents,
-            grid_size=grid_size,
-            partial_observability=partial_observability,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
             device=torch.device("cpu"),
-            config_pack_path=config_pack,
         )
 
         # Reset and check initial observation

@@ -22,7 +22,6 @@ from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
 from townlet.vfs import VariableRegistry, VFSObservationSpecBuilder
-from townlet.vfs.schema import VariableDef
 
 if TYPE_CHECKING:
     from townlet.environment.action_config import ActionConfig
@@ -40,67 +39,52 @@ class VectorizedHamletEnv:
 
     def __init__(
         self,
+        *,
+        universe: CompiledUniverse,
         num_agents: int,
-        grid_size: int,
-        partial_observability: bool,
-        vision_range: int,
-        enable_temporal_mechanics: bool,
-        move_energy_cost: float,
-        wait_energy_cost: float,
-        interact_energy_cost: float,
-        agent_lifespan: int,
-        device: torch.device = torch.device("cpu"),
-        enabled_affordances: list[str] | None = None,
-        config_pack_path: Path | None = None,
+        device: torch.device | str = torch.device("cpu"),
     ):
         """
         Initialize vectorized environment.
 
         Args:
-            num_agents: Number of parallel agents
-            grid_size: Grid dimension (grid_size × grid_size)
-            device: PyTorch device (default: cpu). Infrastructure default - PDR-002 exemption.
-            partial_observability: If True, agent sees only local window (POMDP)
-            vision_range: Radius of vision window (2 = 5×5 window)
-            enable_temporal_mechanics: Enable time-based mechanics and multi-tick interactions
-            enabled_affordances: List of affordance names to enable (None = all affordances). Semantic default.
-            move_energy_cost: Energy cost per movement action
-            wait_energy_cost: Energy cost per WAIT action
-            interact_energy_cost: Energy cost per INTERACT action
-            agent_lifespan: Maximum lifetime in steps (provides retirement incentive)
-            config_pack_path: Path to config pack (default: configs/test). Infrastructure fallback - PDR-002 exemption.
+            universe: CompiledUniverse artifact produced by UniverseCompiler
+            num_agents: Number of parallel agents to simulate
+            device: PyTorch device or device string (defaults to CPU). Infrastructure default - PDR-002 exemption.
 
         Note (PDR-002 Compliance):
-            - device and config_pack_path have infrastructure defaults (exempted from no-defaults principle)
-            - enabled_affordances=None is a semantic default (None means "all affordances enabled")
-            - All other parameters are UAC behavioral parameters and MUST be explicitly provided
+            - device retains an infrastructure default (exempted from no-defaults principle)
+            - Behavioral parameters (grid size, observability, energy costs, affordance selection)
+              now flow exclusively from the compiled universe
         """
-        project_root = Path(__file__).parent.parent.parent.parent
-        default_pack = project_root / "configs" / "test"
+        torch_device = torch.device(device) if isinstance(device, str) else device
 
-        self.config_pack_path = Path(config_pack_path) if config_pack_path else default_pack
-        if not self.config_pack_path.exists():
-            raise FileNotFoundError(f"Config pack directory not found: {self.config_pack_path}")
+        self.universe = universe
+        self.config_pack_path = Path(universe.config_dir)
+        self.num_agents = num_agents
+        self.device = torch_device
 
-        # BREAKING CHANGE: substrate.yaml is now REQUIRED
-        substrate_config_path = self.config_pack_path / "substrate.yaml"
-        if not substrate_config_path.exists():
-            raise FileNotFoundError(
-                f"substrate.yaml is required but not found in {self.config_pack_path}.\n\n"
-                f"All config packs must define their spatial substrate.\n\n"
-                f"Quick fix:\n"
-                f"  1. Copy template: cp configs/templates/substrate.yaml {self.config_pack_path}/\n"
-                f"  2. Edit substrate.yaml to match your grid_size from training.yaml\n"
-                f"  3. See CLAUDE.md 'Configuration System' for details\n\n"
-                f"This is a breaking change from TASK-002A. Previous configs without\n"
-                f"substrate.yaml will no longer work. See CHANGELOG.md for migration guide."
-            )
+        hamlet_config = universe.hamlet_config
+        env_cfg = hamlet_config.environment
+        curriculum = hamlet_config.curriculum
 
-        from townlet.substrate.config import load_substrate_config
+        self.partial_observability = env_cfg.partial_observability
+        self.vision_range = env_cfg.vision_range
+        self.enable_temporal_mechanics = env_cfg.enable_temporal_mechanics
+        self.move_energy_cost = env_cfg.energy_move_depletion
+        self.wait_energy_cost = env_cfg.energy_wait_depletion
+        self.interact_energy_cost = env_cfg.energy_interact_depletion
+        self.agent_lifespan = curriculum.max_steps_per_episode
+        enabled_affordances = env_cfg.enabled_affordances
+        partial_observability = self.partial_observability
+        vision_range = self.vision_range
+
+        if self.wait_energy_cost >= self.move_energy_cost:
+            raise ValueError("wait_energy_cost must be less than move_energy_cost to preserve WAIT as a low-cost recovery action")
+
         from townlet.substrate.factory import SubstrateFactory
 
-        substrate_config = load_substrate_config(substrate_config_path)
-        self.substrate = SubstrateFactory.build(substrate_config, device=device)
+        self.substrate = SubstrateFactory.build(hamlet_config.substrate, device=torch_device)
 
         # Load action labels (optional - defaults to "gaming" preset if not specified)
         from townlet.environment.action_labels import get_labels
@@ -124,28 +108,15 @@ class VectorizedHamletEnv:
             # Default to gaming preset if no action_labels.yaml
             self.action_labels = get_labels(preset="gaming", substrate_position_dim=self.substrate.position_dim)
 
-        # Update grid_size from substrate (for backward compatibility with other code)
-        # For aspatial substrates, keep parameter value; for grid substrates, use substrate
-        self.grid_size = grid_size  # Default to parameter (for aspatial or backward compat)
+        self.metadata = universe.metadata
+        self.optimization_data = universe.optimization_data
+
+        # Update grid_size from compiler metadata / substrate (handles aspatial vs grid)
+        self.grid_size = self.metadata.grid_size or env_cfg.grid_size
         if hasattr(self.substrate, "width") and hasattr(self.substrate, "height"):
             if self.substrate.width != self.substrate.height:
                 raise ValueError(f"Non-square grids not yet supported: {self.substrate.width}×{self.substrate.height}")
             self.grid_size = self.substrate.width  # Override with substrate for grid
-
-        self.num_agents = num_agents
-        self.device = device
-        self.partial_observability = partial_observability
-        self.vision_range = vision_range
-        self.enable_temporal_mechanics = enable_temporal_mechanics
-        self.agent_lifespan = agent_lifespan
-
-        # Configurable energy costs
-        self.move_energy_cost = move_energy_cost
-        self.wait_energy_cost = wait_energy_cost
-        self.interact_energy_cost = interact_energy_cost
-
-        if self.wait_energy_cost >= self.move_energy_cost:
-            raise ValueError("wait_energy_cost must be less than move_energy_cost to preserve WAIT as a low-cost recovery action")
 
         # Load bars configuration to get meter_count for observation dimensions
         # This must happen before observation dimension calculation
@@ -154,11 +125,12 @@ class VectorizedHamletEnv:
         bars_config_path = self.config_pack_path / "bars.yaml"
         bars_config = load_bars_config(bars_config_path)
         self.bars_config = bars_config  # Store for use in affordance validation (TASK-001)
-        self.meter_count = bars_config.meter_count
-        meter_count = self.meter_count  # Keep local variable for backward compatibility in this method
+        self.meter_count = self.metadata.meter_count
+        meter_count = self.meter_count
+        if meter_count != bars_config.meter_count:
+            raise ValueError(f"Meter count mismatch between compiled metadata ({meter_count}) and bars.yaml ({bars_config.meter_count}).")
 
-        # VFS INTEGRATION: Load variables from config pack
-        # Must happen AFTER bars_config is loaded
+        # VFS INTEGRATION: Load variables from compiled universe + exposures from YAML
         variables_path = self.config_pack_path / "variables_reference.yaml"
 
         if not variables_path.exists():
@@ -170,11 +142,10 @@ class VectorizedHamletEnv:
                 f"  3. See docs/config-schemas/variables.md for schema details"
             )
 
-        # Load from VFS config file
         with open(variables_path) as f:
-            variables_data = yaml.safe_load(f)
+            variables_data = yaml.safe_load(f) or {}
 
-        self.vfs_variables = [VariableDef(**var_data) for var_data in variables_data["variables"]]
+        self.vfs_variables = [deepcopy(var) for var in universe.variables_reference]
 
         # Build exposure configuration for observation spec
         raw_exposures = variables_data.get("exposed_observations") or []
@@ -222,7 +193,7 @@ class VectorizedHamletEnv:
 
         # DEPLOYED affordances: have positions on grid, can be interacted with
         # Positions will be randomized by randomize_affordance_positions() before first use
-        default_position = torch.zeros(self.substrate.position_dim, dtype=self.substrate.position_dtype, device=device)
+        default_position = torch.zeros(self.substrate.position_dim, dtype=self.substrate.position_dtype, device=self.device)
         self.affordances = {name: default_position.clone() for name in affordance_names_to_deploy}
 
         # OBSERVATION VOCABULARY: Full list from YAML, used for fixed observation encoding
@@ -286,7 +257,7 @@ class VectorizedHamletEnv:
 
         # VFS INTEGRATION: Initialize variable registry
         # Registry holds runtime state for all VFS variables
-        self.vfs_registry = VariableRegistry(variables=self.vfs_variables, num_agents=num_agents, device=device)
+        self.vfs_registry = VariableRegistry(variables=self.vfs_variables, num_agents=num_agents, device=self.device)
 
         # VFS INTEGRATION: Build observation spec from variables
         # This replaces hardcoded observation dimension calculation
@@ -303,8 +274,13 @@ class VectorizedHamletEnv:
             # Full observability: Exclude local_window, include grid_encoding
             self.vfs_observation_spec = [field for field in all_obs_spec if field.source_variable != "local_window"]
 
-        # Calculate observation_dim from VFS spec
-        self.observation_dim = sum(field.shape[0] if field.shape else 1 for field in self.vfs_observation_spec)
+        computed_observation_dim = sum(field.shape[0] if field.shape else 1 for field in self.vfs_observation_spec)
+        self.observation_dim = self.metadata.observation_dim
+        if computed_observation_dim != self.observation_dim:
+            raise ValueError(
+                f"Observation dimension mismatch between compiled metadata ({self.observation_dim}) "
+                f"and VFS exposures ({computed_observation_dim})."
+            )
 
         # Store partial observability settings for observation construction
         self.partial_observability = partial_observability
@@ -322,14 +298,14 @@ class VectorizedHamletEnv:
         self.money_idx = meter_name_to_index.get("money", None)  # Optional meter
 
         self.reward_strategy = RewardStrategy(
-            device=device, num_agents=num_agents, meter_count=meter_count, energy_idx=self.energy_idx, health_idx=self.health_idx
+            device=self.device, num_agents=num_agents, meter_count=meter_count, energy_idx=self.energy_idx, health_idx=self.health_idx
         )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
 
         # Initialize meter dynamics
         self.meter_dynamics = MeterDynamics(
             num_agents=num_agents,
-            device=device,
+            device=self.device,
             cascade_config_dir=self.config_pack_path,
         )
 
@@ -338,7 +314,7 @@ class VectorizedHamletEnv:
         self.affordance_engine = AffordanceEngine(
             affordance_config,
             num_agents,
-            device,
+            self.device,
             bars_config.meter_name_to_index,
         )
 
@@ -354,7 +330,12 @@ class VectorizedHamletEnv:
             enabled_action_names=enabled_actions,
         )
         self.action_space = builder.build()
-        self.action_dim = self.action_space.action_dim
+        self.action_dim = self.metadata.action_count
+        if self.action_space.action_dim != self.action_dim:
+            raise ValueError(
+                f"Action dimension mismatch between compiled metadata ({self.action_dim}) "
+                f"and composed action space ({self.action_space.action_dim})."
+            )
 
         # Cache action indices for fast lookup (replaces hardcoded formulas from Task 1.6)
         self.interact_action_idx = self.action_space.get_action_by_name("INTERACT").id
@@ -483,23 +464,12 @@ class VectorizedHamletEnv:
     ) -> VectorizedHamletEnv:
         """Instantiate environment using metadata from a compiled universe."""
 
-        env_cfg = universe.hamlet_config.environment
-        curriculum = universe.hamlet_config.curriculum
         torch_device = torch.device(device) if isinstance(device, str) else device
 
         return cls(
+            universe=universe,
             num_agents=num_agents,
-            grid_size=env_cfg.grid_size,
-            partial_observability=env_cfg.partial_observability,
-            vision_range=env_cfg.vision_range,
-            enable_temporal_mechanics=env_cfg.enable_temporal_mechanics,
-            move_energy_cost=env_cfg.energy_move_depletion,
-            wait_energy_cost=env_cfg.energy_wait_depletion,
-            interact_energy_cost=env_cfg.energy_interact_depletion,
-            agent_lifespan=curriculum.max_steps_per_episode,
             device=torch_device,
-            enabled_affordances=env_cfg.enabled_affordances,
-            config_pack_path=universe.config_dir,
         )
 
     def _get_observations(self) -> torch.Tensor:

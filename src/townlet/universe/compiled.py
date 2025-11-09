@@ -90,22 +90,10 @@ class CompiledUniverse:
 
         from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        env_cfg = self.hamlet_config.environment
-        curriculum = self.hamlet_config.curriculum
-
         return VectorizedHamletEnv(
+            universe=self,
             num_agents=num_agents,
-            grid_size=env_cfg.grid_size,
-            partial_observability=env_cfg.partial_observability,
-            vision_range=env_cfg.vision_range,
-            enable_temporal_mechanics=env_cfg.enable_temporal_mechanics,
-            move_energy_cost=env_cfg.energy_move_depletion,
-            wait_energy_cost=env_cfg.energy_wait_depletion,
-            interact_energy_cost=env_cfg.energy_interact_depletion,
-            agent_lifespan=curriculum.max_steps_per_episode,
-            device=torch.device(device),
-            enabled_affordances=env_cfg.enabled_affordances,
-            config_pack_path=self.config_dir,
+            device=device,
         )
 
     # Checkpoint compatibility -----------------------------------------------

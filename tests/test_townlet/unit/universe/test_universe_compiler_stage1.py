@@ -85,7 +85,7 @@ def test_compile_executes_stage2_before_stage3(monkeypatch) -> None:
     monkeypatch.setattr(UniverseCompiler, "_stage_3_resolve_references", fake_stage3, raising=False)
 
     with pytest.raises(CompilationError):
-        compiler.compile(Path("configs/L0_0_minimal"))
+        compiler.compile(Path("configs/L0_0_minimal"), use_cache=False)
 
     assert called["stage2"] is True
     assert called["stage3"] is True
