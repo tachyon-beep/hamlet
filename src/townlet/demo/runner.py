@@ -25,6 +25,7 @@ from townlet.training.checkpoint_utils import (
 )
 from townlet.training.state import BatchedAgentState
 from townlet.training.tensorboard_logger import TensorBoardLogger
+from townlet.universe.compiler import UniverseCompiler
 
 if TYPE_CHECKING:
     from townlet.universe.compiled import CompiledUniverse
@@ -61,6 +62,7 @@ class DemoRunner:
             raise FileNotFoundError(f"Training config not found: {self.training_config_path}")
         self.db_path = Path(db_path)
         self.checkpoint_dir = Path(checkpoint_dir)
+        self.compiled_universe: CompiledUniverse | None = None
 
         # Create directories
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -269,6 +271,8 @@ class DemoRunner:
         checkpoint["training_config"] = self.config
         checkpoint["config_dir"] = str(self.config_dir)
 
+        if universe is None:
+            universe = self.compiled_universe
         if universe is not None:
             attach_universe_metadata(checkpoint, universe)
 
@@ -295,6 +299,8 @@ class DemoRunner:
 
         checkpoint = torch.load(latest_checkpoint, weights_only=False)
 
+        if universe is None:
+            universe = self.compiled_universe
         if universe is not None:
             warning = config_hash_warning(checkpoint, universe)
             if warning:
@@ -343,41 +349,28 @@ class DemoRunner:
         if device_str == "cuda" and not torch.cuda.is_available():
             logger.warning("CUDA requested but not available, falling back to CPU")
 
+        # Compile universe once and keep runtime view
+        compiler = UniverseCompiler()
+        self.compiled_universe = compiler.compile(self.config_dir)
+        runtime_universe = self.compiled_universe.to_runtime()
+
         # Extract config parameters from DTOs (all required, validated at load time)
         num_agents = self.hamlet_config.population.num_agents
         grid_size = self.hamlet_config.environment.grid_size
         partial_observability = self.hamlet_config.environment.partial_observability
         vision_range = self.hamlet_config.environment.vision_range
-        # enabled_affordances: None = all affordances (semantic meaning)
-        enabled_affordances = self.hamlet_config.environment.enabled_affordances
         enable_temporal_mechanics = self.hamlet_config.environment.enable_temporal_mechanics
-        move_energy_cost = self.hamlet_config.environment.energy_move_depletion
-        wait_energy_cost = self.hamlet_config.environment.energy_wait_depletion
-        interact_energy_cost = self.hamlet_config.environment.energy_interact_depletion
 
-        # TODO(UAC): agent_lifespan should be in config (TASK-006: BRAIN_AS_CODE)
-        # For now, use constant 1000 (standard test value)
-        agent_lifespan = 1000
-
-        # Create environment FIRST (need it to auto-detect dimensions)
-        self.env = VectorizedHamletEnv(
+        # Create environment from compiled universe
+        self.env = VectorizedHamletEnv.from_universe(
+            self.compiled_universe,
             num_agents=num_agents,
-            grid_size=grid_size,
-            partial_observability=partial_observability,
-            vision_range=vision_range,
-            enable_temporal_mechanics=enable_temporal_mechanics,
-            move_energy_cost=move_energy_cost,
-            wait_energy_cost=wait_energy_cost,
-            interact_energy_cost=interact_energy_cost,
-            agent_lifespan=agent_lifespan,
             device=device,
-            enabled_affordances=enabled_affordances,
-            config_pack_path=self.config_dir,
         )
 
-        # Auto-detect dimensions from environment (avoids hardcoded config values)
-        obs_dim = self.env.observation_dim
-        action_dim = self.env.action_dim
+        # Dimensions sourced from compiled metadata
+        obs_dim = runtime_universe.metadata.observation_dim
+        action_dim = runtime_universe.metadata.action_count
 
         # Create curriculum (all params required per PDR-002)
         self.curriculum = AdversarialCurriculum(
@@ -463,7 +456,7 @@ class DemoRunner:
             logger.info("Episode recording disabled")
 
         # Try to resume from checkpoint
-        loaded_episode = self.load_checkpoint()
+        loaded_episode = self.load_checkpoint(self.compiled_universe)
         if loaded_episode is not None:
             self.current_episode = loaded_episode + 1
 
@@ -805,7 +798,7 @@ class DemoRunner:
 
                 # Checkpoint every 100 episodes
                 if self.current_episode % 100 == 0:
-                    self.save_checkpoint()
+                    self.save_checkpoint(self.compiled_universe)
 
                 # Decay epsilon for next episode and sync telemetry
                 self.exploration.decay_epsilon()
@@ -816,7 +809,7 @@ class DemoRunner:
         finally:
             # Save final checkpoint
             logger.info("Training complete, saving final checkpoint...")
-            self.save_checkpoint()
+            self.save_checkpoint(self.compiled_universe)
 
             # Phase 4 - Log final metrics with hyperparameters
             if self.population is not None:

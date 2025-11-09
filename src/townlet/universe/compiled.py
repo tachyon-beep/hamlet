@@ -148,6 +148,7 @@ class CompiledUniverse:
             hamlet_config=deepcopy(self.hamlet_config),
             global_actions=deepcopy(self.global_actions),
             variables_reference=tuple(deepcopy(var) for var in self.variables_reference),
+            config_dir=self.config_dir,
             metadata=self.metadata,
             observation_spec=self.observation_spec,
             action_space_metadata=self.action_space_metadata,

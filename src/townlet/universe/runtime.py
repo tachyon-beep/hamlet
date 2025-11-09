@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from townlet.config import HamletConfig
 from townlet.environment.action_config import ActionSpaceConfig
@@ -25,6 +26,7 @@ class RuntimeUniverse:
     hamlet_config: HamletConfig
     global_actions: ActionSpaceConfig
     variables_reference: tuple[VariableDef, ...]
+    config_dir: Path
     metadata: UniverseMetadata
     observation_spec: ObservationSpec
     action_space_metadata: ActionSpaceMetadata
