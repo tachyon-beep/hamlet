@@ -52,8 +52,8 @@ class UniverseCompiler:
         for affordance in raw_configs.affordances:
             table.register_affordance(affordance)
 
-        if raw_configs.cues is not None:
-            table.register_cues(raw_configs.cues)
+        for cue in raw_configs.cues:
+            table.register_cue(cue)
 
         return table
 
