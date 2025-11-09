@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.bar import BarConfig
 from townlet.config.cascade import CascadeConfig
-from townlet.config.cues import CompoundCueConfig, CuesConfig, SimpleCueConfig
+from townlet.config.cues import CompoundCueConfig, SimpleCueConfig
 from townlet.environment.action_config import ActionConfig
 from townlet.vfs.schema import VariableDef
 
@@ -50,21 +50,16 @@ class UniverseSymbolTable:
             raise CompilationError("Stage 2: Symbol Table", [f"Duplicate affordance '{config.id}' detected."])
         self.affordances[config.id] = config
 
-    def register_cues(self, cues_config: CuesConfig) -> None:
-        for cue in cues_config.simple_cues:
-            if cue.cue_id in self.cues:
-                raise CompilationError("Stage 2: Symbol Table", [f"Duplicate cue '{cue.cue_id}' detected."])
-            self.cues[cue.cue_id] = cue
-        for cue in cues_config.compound_cues:
-            if cue.cue_id in self.cues:
-                raise CompilationError("Stage 2: Symbol Table", [f"Duplicate cue '{cue.cue_id}' detected."])
-            self.cues[cue.cue_id] = cue
+    def register_cue(self, cue: SimpleCueConfig | CompoundCueConfig) -> None:
+        if cue.cue_id in self.cues:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate cue '{cue.cue_id}' detected."])
+        self.cues[cue.cue_id] = cue
 
     def get_meter(self, name: str) -> BarConfig:
         return self.meters[name]
 
     def get_meter_names(self) -> list[str]:
-        return sorted(self.meters.keys())
+        return [meter.name for meter in sorted(self.meters.values(), key=lambda m: m.index)]
 
     def get_meter_count(self) -> int:
         return len(self.meters)
@@ -74,3 +69,6 @@ class UniverseSymbolTable:
 
     def get_variable(self, variable_id: str) -> VariableDef:
         return self.variables[variable_id]
+
+    def get_affordance_count(self) -> int:
+        return len(self.affordances)

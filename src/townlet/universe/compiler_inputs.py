@@ -9,7 +9,7 @@ from townlet.config import HamletConfig
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.bar import BarConfig
 from townlet.config.cascade import CascadeConfig
-from townlet.config.cues import CuesConfig
+from townlet.config.cues import CompoundCueConfig, CuesConfig, SimpleCueConfig
 from townlet.config.curriculum import CurriculumConfig
 from townlet.config.environment import TrainingEnvironmentConfig
 from townlet.config.exploration import ExplorationConfig
@@ -63,8 +63,9 @@ class RawConfigs:
         return self.hamlet_config.affordances
 
     @property
-    def cues(self) -> CuesConfig:
-        return self.hamlet_config.cues
+    def cues(self) -> tuple[SimpleCueConfig | CompoundCueConfig, ...]:
+        cues_config: CuesConfig = self.hamlet_config.cues
+        return tuple(cues_config.simple_cues + cues_config.compound_cues)
 
     @property
     def substrate(self) -> SubstrateConfig:
