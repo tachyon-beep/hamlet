@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 __all__ = [
     "NormalizationSpec",
@@ -40,6 +40,8 @@ class NormalizationSpec(BaseModel):
         # Scalar z-score
         NormalizationSpec(kind="zscore", mean=0.5, std=0.2)
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     kind: Literal["minmax", "zscore"] = Field(description="Normalization method: minmax or zscore")
 
@@ -95,6 +97,8 @@ class WriteSpec(BaseModel):
         WriteSpec(variable_id="money", expression="money + 10.0")
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     variable_id: str = Field(
         min_length=1,
         description="ID of the variable to write to",
@@ -130,6 +134,8 @@ class ObservationField(BaseModel):
             normalization=NormalizationSpec(kind="minmax", min=[0,0], max=[7,7]),
         )
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     id: str = Field(
         min_length=1,
@@ -177,7 +183,9 @@ class VariableDef(BaseModel):
     Examples:
         # Scalar variable
         VariableDef(
-            id="energy",
+    model_config = ConfigDict(extra="forbid")
+
+    id="energy",
             scope="agent",
             type="scalar",
             lifetime="episode",

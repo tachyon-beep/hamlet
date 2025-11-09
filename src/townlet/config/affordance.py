@@ -32,7 +32,7 @@ __all__ = [
 class AffordanceConfig(BaseModel):
     """Rich affordance configuration DTO used throughout the compiler pipeline."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     # Identity / metadata
     id: str = Field(min_length=1, description="Unique affordance ID")
@@ -40,6 +40,8 @@ class AffordanceConfig(BaseModel):
     category: str | None = None
     interaction_type: str | None = None
     description: str | None = None
+    teaching_note: str | None = None
+    design_intent: str | None = None
 
     # Costs & effects (legacy fields retained for backwards compatibility)
     costs: list[dict[str, Any]] = Field(default_factory=list, description="Instant costs applied when interaction starts")
@@ -49,6 +51,7 @@ class AffordanceConfig(BaseModel):
     completion_bonus: list[dict[str, Any]] = Field(default_factory=list, description="Completion bonuses (deprecated, auto-migrated)")
 
     # Temporal metadata
+    required_ticks: int | None = None
     operating_hours: list[int] | None = Field(default=None, description="Operating hours [open, close] or None for always open")
     modes: dict[str, ModeConfig] = Field(default_factory=dict, description="Optional operating modes (coffee vs bar, etc.)")
     availability: list[BarConstraint] = Field(default_factory=list, description="Meter-based availability constraints")

@@ -26,7 +26,7 @@ class BarConstraint(BaseModel):
 class ModeConfig(BaseModel):
     """Mode-specific affordance configuration (e.g., operating hours)."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     hours: tuple[int, int] | None = None
     effects: dict[str, float] | None = None

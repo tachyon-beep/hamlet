@@ -33,8 +33,7 @@ class CascadeConfig(BaseModel):
         ... )
     """
 
-    # Allow extra fields (for metadata like category, source_index, etc.)
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     # Cascade identity (REQUIRED)
     name: str = Field(min_length=1, description="Cascade rule name")
@@ -50,6 +49,10 @@ class CascadeConfig(BaseModel):
 
     # Optional metadata
     category: str | None = None
+    source_index: int | None = None
+    target_index: int | None = None
+    teaching_note: str | None = None
+    why_it_matters: str | None = None
 
     @model_validator(mode="after")
     def validate_not_self_cascade(self) -> "CascadeConfig":

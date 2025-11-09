@@ -10,7 +10,7 @@ from townlet.config.cues import CueCondition, CuesConfig, SimpleCueConfig, Visua
 from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
 from townlet.environment.action_config import ActionConfig, ActionSpaceConfig
 from townlet.substrate.config import AspatialSubstrateConfig, SubstrateConfig
-from townlet.universe.compiler import UniverseCompiler
+from townlet.universe.compiler import MAX_AFFORDANCES, UniverseCompiler
 from townlet.universe.compiler_inputs import RawConfigs
 from townlet.universe.errors import CompilationError, CompilationErrorCollector
 
@@ -46,20 +46,21 @@ def _run_stage4_collector(raw_configs: RawConfigs) -> CompilationErrorCollector:
     return collector
 
 
-def _run_stage4_expect_error(raw_configs: RawConfigs) -> list[str]:
+def _run_stage4_expect_error(raw_configs: RawConfigs) -> CompilationError:
     collector = _run_stage4_collector(raw_configs)
     with pytest.raises(CompilationError) as exc_info:
         collector.check_and_raise("Stage 4: Cross-Validation")
-    return exc_info.value.errors
+    return exc_info.value
 
 
 def test_stage4_detects_spatial_infeasibility(base_raw_configs: RawConfigs) -> None:
     env = base_raw_configs.environment.model_copy(update={"grid_size": 1, "enabled_affordances": ["Bed", "Hospital", "HomeMeal"]})
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"environment": env})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-001" in message for message in errors)
+    assert any("UAC-VAL-001" in message for message in error.errors)
+    assert any(issue.code == "UAC-VAL-001" for issue in error.issues)
 
 
 def test_stage4_detects_cascade_cycle(base_raw_configs: RawConfigs) -> None:
@@ -67,9 +68,9 @@ def test_stage4_detects_cascade_cycle(base_raw_configs: RawConfigs) -> None:
     cascades.append(cascades[0].model_copy(update={"name": "loop_one", "source": "energy", "target": "energy"}))
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"cascades": tuple(cascades)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-003" in message for message in errors)
+    assert any("UAC-VAL-003" in message for message in error.errors)
 
 
 def test_stage4_detects_aspatial_movement_actions(base_raw_configs: RawConfigs) -> None:
@@ -88,9 +89,9 @@ def test_stage4_detects_aspatial_movement_actions(base_raw_configs: RawConfigs) 
         global_actions=mutated_actions,
     )
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-006" in message for message in errors)
+    assert any("UAC-VAL-006" in message for message in error.errors)
 
 
 def test_stage4_warns_on_economic_imbalance(base_raw_configs: RawConfigs) -> None:
@@ -104,9 +105,9 @@ def test_stage4_errors_when_critical_meter_unsustainable(base_raw_configs: RawCo
     bars[energy_index] = bars[energy_index].model_copy(update={"base_depletion": 1.5})
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"bars": tuple(bars)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("unsustainable" in message for message in errors)
+    assert any("unsustainable" in message for message in error.errors)
 
 
 def test_stage4_warns_when_income_hours_insufficient(base_raw_configs: RawConfigs) -> None:
@@ -139,14 +140,28 @@ def test_stage4_warns_on_capacity_constraint(base_raw_configs: RawConfigs) -> No
     assert any("capacity" in warning for warning in collector.warnings)
 
 
+def test_stage4_rejects_affordance_limit(base_raw_configs: RawConfigs) -> None:
+    affs = list(base_raw_configs.affordances)
+    template = affs[0]
+    needed = MAX_AFFORDANCES + 1 - len(affs)
+    for idx in range(needed):
+        affs.append(template.model_copy(update={"id": f"Stress{idx}", "name": f"Stress{idx}"}))
+
+    mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"affordances": tuple(affs)})
+
+    error = _run_stage4_expect_error(mutated_raw)
+
+    assert any("Too many affordances" in message for message in error.errors)
+
+
 def test_stage4_detects_availability_meter_reference(base_raw_configs: RawConfigs) -> None:
     affs = list(base_raw_configs.affordances)
     affs[0] = affs[0].model_copy(update={"availability": [{"meter": "unknown", "min": 0.2}]})
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"affordances": tuple(affs)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-007" in message for message in errors)
+    assert any("UAC-VAL-007" in message for message in error.errors)
 
 
 def test_stage4_detects_availability_min_max_order(base_raw_configs: RawConfigs) -> None:
@@ -154,9 +169,9 @@ def test_stage4_detects_availability_min_max_order(base_raw_configs: RawConfigs)
     affs[0] = affs[0].model_copy(update={"availability": [{"meter": "energy", "min": 0.8, "max": 0.2}]})
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"affordances": tuple(affs)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("min" in message and "max" in message for message in errors)
+    assert any("min" in message and "max" in message for message in error.errors)
 
 
 def test_stage4_detects_visual_cue_range_gap(base_raw_configs: RawConfigs) -> None:
@@ -180,9 +195,9 @@ def test_stage4_detects_visual_cue_range_gap(base_raw_configs: RawConfigs) -> No
     )
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"cues": cues})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-009" in message for message in errors)
+    assert any("UAC-VAL-009" in message for message in error.errors)
 
 
 def test_stage4_detects_capability_conflict(base_raw_configs: RawConfigs) -> None:
@@ -196,9 +211,9 @@ def test_stage4_detects_capability_conflict(base_raw_configs: RawConfigs) -> Non
     )
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"affordances": tuple(affs)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-008" in message for message in errors)
+    assert any("UAC-VAL-008" in message for message in error.errors)
 
 
 def test_stage4_detects_resumable_without_multi_tick(base_raw_configs: RawConfigs) -> None:
@@ -211,9 +226,9 @@ def test_stage4_detects_resumable_without_multi_tick(base_raw_configs: RawConfig
     )
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"affordances": tuple(affs)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("'resumable' flag" in message for message in errors)
+    assert any("'resumable' flag" in message for message in error.errors)
 
 
 def test_stage4_detects_missing_effect_pipeline_for_multi_tick(base_raw_configs: RawConfigs) -> None:
@@ -227,9 +242,9 @@ def test_stage4_detects_missing_effect_pipeline_for_multi_tick(base_raw_configs:
     )
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"affordances": tuple(affs)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-008" in message for message in errors)
+    assert any("UAC-VAL-008" in message for message in error.errors)
 
 
 def test_stage4_warns_on_early_exit_without_permission(base_raw_configs: RawConfigs) -> None:
@@ -259,9 +274,9 @@ def test_stage4_detects_position_out_of_bounds(base_raw_configs: RawConfigs) -> 
     affs[0] = affs[0].model_copy(update={"position": [10, 10]})
     mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"affordances": tuple(affs)})
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-010" in message for message in errors)
+    assert any("UAC-VAL-010" in message for message in error.errors)
 
 
 def test_stage4_detects_missing_square_movements(base_raw_configs: RawConfigs) -> None:
@@ -292,9 +307,9 @@ def test_stage4_detects_missing_square_movements(base_raw_configs: RawConfigs) -
     mutated_actions = ActionSpaceConfig(actions=limited_actions)
     mutated_raw = _clone_raw_configs(base_raw_configs, global_actions=mutated_actions)
 
-    errors = _run_stage4_expect_error(mutated_raw)
+    error = _run_stage4_expect_error(mutated_raw)
 
-    assert any("UAC-VAL-006" in message for message in errors)
+    assert any("UAC-VAL-006" in message for message in error.errors)
 
 
 def test_stage4_exception_includes_warnings(base_raw_configs: RawConfigs) -> None:

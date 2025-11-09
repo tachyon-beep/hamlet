@@ -33,8 +33,7 @@ class BarConfig(BaseModel):
         ... )
     """
 
-    # Allow extra fields (for metadata like key_insight, cascade_pattern, etc.)
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     # Meter identity (REQUIRED)
     name: str = Field(min_length=1, description="Meter name (e.g., 'energy')")
@@ -54,6 +53,9 @@ class BarConfig(BaseModel):
 
     # Metadata (OPTIONAL)
     description: str | None = None
+    special: str | None = None
+    key_insight: str | None = None
+    cascade_pattern: str | None = None
 
     @field_validator("range")
     @classmethod

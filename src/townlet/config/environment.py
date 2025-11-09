@@ -17,7 +17,7 @@ No implicit defaults. Operator accountability.
 import logging
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
 
@@ -47,6 +47,8 @@ class TrainingEnvironmentConfig(BaseModel):
         ...     energy_interact_depletion=0.0,
         ... )
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # Grid parameters (REQUIRED)
     grid_size: int = Field(gt=0, description="Grid dimensions (N×N square grid)")

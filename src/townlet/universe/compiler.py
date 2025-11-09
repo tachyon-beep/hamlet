@@ -47,13 +47,19 @@ from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 from townlet.vfs.registry import VariableRegistry
 from townlet.vfs.schema import ObservationField as VFSObservationField
 
-from .errors import CompilationError, CompilationErrorCollector
+from .errors import CompilationError, CompilationErrorCollector, CompilationMessage
 from .symbol_table import UniverseSymbolTable
 
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "1.0"
 COMPILER_VERSION = "0.1.0"
+
+MAX_METERS = 100
+MAX_AFFORDANCES = 100
+MAX_CASCADES = 500
+MAX_ACTIONS = 50
+MAX_VARIABLES = 200
 
 
 class UniverseCompiler:
@@ -203,15 +209,13 @@ class UniverseCompiler:
                 errors.add_hint(text)
                 hints_added.add(key)
 
-        def _format_error(code: str, message: str, location: str | None = None) -> str:
+        def _format_error(code: str, message: str, location: str | None = None) -> CompilationMessage:
             location_str = None
             if location and source_map is not None:
                 location_str = source_map.lookup(location)
             if not location_str:
                 location_str = location
-            if location_str:
-                return f"[{code}] {location_str} - {message}"
-            return f"[{code}] {message}"
+            return CompilationMessage(code=code, message=message, location=location_str)
 
         def _record_meter_reference(
             meter_name: str | None,
@@ -413,18 +417,16 @@ class UniverseCompiler:
                 errors.add_hint(text)
                 hints_added.add(key)
 
-        def _format_error(code: str, message: str, location: str | None = None) -> str:
+        def _format_error(code: str, message: str, location: str | None = None) -> CompilationMessage:
             location_str = None
             if location and source_map is not None:
                 location_str = source_map.lookup(location)
             if not location_str:
                 location_str = location
-            prefix = f"[{code}] "
-            if location_str:
-                return f"{prefix}{location_str} - {message}"
-            return f"{prefix}{message}"
+            return CompilationMessage(code=code, message=message, location=location_str)
 
         self._validate_spatial_feasibility(raw_configs, errors, _format_error)
+        self._enforce_security_limits(raw_configs, errors)
         self._validate_economic_balance(raw_configs, errors, _format_error)
         self._validate_cascade_cycles(raw_configs, errors, _format_error)
         self._validate_operating_hours(raw_configs, errors, _format_error)
@@ -456,6 +458,23 @@ class UniverseCompiler:
                 f"({required} affordances + 1 agent)."
             )
             errors.add(formatter("UAC-VAL-001", message, "training.yaml:environment.grid_size"))
+
+    def _enforce_security_limits(self, raw_configs: RawConfigs, errors: CompilationErrorCollector) -> None:
+        checks = (
+            (len(raw_configs.bars), MAX_METERS, "bars.yaml", "meters"),
+            (len(raw_configs.affordances), MAX_AFFORDANCES, "affordances.yaml", "affordances"),
+            (len(raw_configs.cascades), MAX_CASCADES, "cascades.yaml", "cascades"),
+            (len(raw_configs.global_actions.actions), MAX_ACTIONS, "configs/global_actions.yaml", "actions"),
+            (len(raw_configs.variables_reference), MAX_VARIABLES, "variables_reference.yaml", "variables"),
+        )
+
+        for count, limit, location, label in checks:
+            if count > limit:
+                errors.add(
+                    f"Too many {label}: found {count} (max {limit}). This may indicate config injection or duplication.",
+                    code="UAC-VAL-006",
+                    location=location,
+                )
 
     def _validate_economic_balance(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
         enabled_lookup = self._build_enabled_affordance_lookup(getattr(raw_configs.environment, "enabled_affordances", None))
