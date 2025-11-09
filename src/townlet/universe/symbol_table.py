@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.bar import BarConfig
 from townlet.config.cascade import CascadeConfig
+from townlet.config.cues import CompoundCueConfig, CuesConfig, SimpleCueConfig
 from townlet.environment.action_config import ActionConfig
 from townlet.vfs.schema import VariableDef
 
@@ -21,7 +22,8 @@ class UniverseSymbolTable:
     cascades: dict[str, CascadeConfig] = field(default_factory=dict)
     affordances: dict[str, AffordanceConfig] = field(default_factory=dict)
     variables: dict[str, VariableDef] = field(default_factory=dict)
-    actions: dict[str, ActionConfig] = field(default_factory=dict)
+    actions: dict[int, ActionConfig] = field(default_factory=dict)
+    cues: dict[str, SimpleCueConfig | CompoundCueConfig] = field(default_factory=dict)
 
     def register_meter(self, config: BarConfig) -> None:
         if config.name in self.meters:
@@ -34,9 +36,9 @@ class UniverseSymbolTable:
         self.variables[config.id] = config
 
     def register_action(self, config: ActionConfig) -> None:
-        if config.name in self.actions:
-            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate action '{config.name}' detected."])
-        self.actions[config.name] = config
+        if config.id in self.actions:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate action id '{config.id}' detected."])
+        self.actions[config.id] = config
 
     def register_cascade(self, config: CascadeConfig) -> None:
         if config.name in self.cascades:
@@ -47,3 +49,28 @@ class UniverseSymbolTable:
         if config.id in self.affordances:
             raise CompilationError("Stage 2: Symbol Table", [f"Duplicate affordance '{config.id}' detected."])
         self.affordances[config.id] = config
+
+    def register_cues(self, cues_config: CuesConfig) -> None:
+        for cue in cues_config.simple_cues:
+            if cue.cue_id in self.cues:
+                raise CompilationError("Stage 2: Symbol Table", [f"Duplicate cue '{cue.cue_id}' detected."])
+            self.cues[cue.cue_id] = cue
+        for cue in cues_config.compound_cues:
+            if cue.cue_id in self.cues:
+                raise CompilationError("Stage 2: Symbol Table", [f"Duplicate cue '{cue.cue_id}' detected."])
+            self.cues[cue.cue_id] = cue
+
+    def get_meter(self, name: str) -> BarConfig:
+        return self.meters[name]
+
+    def get_meter_names(self) -> list[str]:
+        return sorted(self.meters.keys())
+
+    def get_meter_count(self) -> int:
+        return len(self.meters)
+
+    def get_action(self, action_id: int) -> ActionConfig:
+        return self.actions[action_id]
+
+    def get_variable(self, variable_id: str) -> VariableDef:
+        return self.variables[variable_id]
