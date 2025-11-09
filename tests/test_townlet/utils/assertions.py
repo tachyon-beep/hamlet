@@ -67,6 +67,30 @@ def assert_valid_observation(env: VectorizedHamletEnv, obs: torch.Tensor) -> Non
         raise AssertionError(f"Observation contains {inf_count} Inf values")
 
 
+def calculate_expected_observation_dim(env: VectorizedHamletEnv) -> int:
+    """Return the expected flattened observation dimensionality for an environment.
+
+    Observation layout currently follows the pattern:
+        substrate features + meters + affordance vocabulary (+"none") + temporal features
+
+    Args:
+        env: Environment whose observation structure should be analyzed.
+
+    Returns:
+        Total dimensionality the observation tensor is expected to have per agent.
+    """
+
+    substrate_dim = env.substrate.get_observation_dim()
+    meter_dim = env.meter_count
+    affordance_dim = env.num_affordance_types + 1  # +1 for "none" affordance slot
+
+    # Temporal encoding always reserves 4 channels:
+    #   sin(time), cos(time), interaction_progress, lifetime_progress
+    temporal_dim = 4
+
+    return substrate_dim + meter_dim + affordance_dim + temporal_dim
+
+
 # =============================================================================
 # ACTION MASK ASSERTIONS
 # =============================================================================
