@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import logging
+import os
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -37,7 +39,7 @@ from townlet.universe.optimization import OptimizationData
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 from townlet.vfs.registry import VariableRegistry
 
-from .errors import CompilationErrorCollector
+from .errors import CompilationError, CompilationErrorCollector
 from .symbol_table import UniverseSymbolTable
 
 logger = logging.getLogger(__name__)
@@ -58,12 +60,29 @@ class UniverseCompiler:
         self._affordance_metadata: AffordanceMetadata | None = None
         self._optimization_data: OptimizationData | None = None
 
-    def compile(self, config_dir: Path, use_cache: bool = True):  # pragma: no cover - placeholder
-        """Compile a config pack into a CompiledUniverse.
+    def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
+        """Compile a config pack into a CompiledUniverse (with optional caching)."""
 
-        Currently only Stage 1 is implemented; later stages will populate metadata
-        and emit CompiledUniverse artifacts.
-        """
+        config_dir = Path(config_dir)
+        cache_path = self._cache_artifact_path(config_dir)
+        precomputed_hash: str | None = None
+
+        if use_cache and cache_path.exists():
+            precomputed_hash = self._compute_config_hash(config_dir)
+            try:
+                cached_universe = CompiledUniverse.load_from_cache(cache_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to load cached universe from %s: %s", cache_path, exc)
+            else:
+                if cached_universe.metadata.config_hash == precomputed_hash:
+                    logger.info("Loaded compiled universe from cache: %s", cache_path)
+                    return cached_universe
+                logger.info(
+                    "Cache stale for %s (cached=%s, current=%s). Recompiling.",
+                    cache_path,
+                    cached_universe.metadata.config_hash[:8],
+                    precomputed_hash[:8] if precomputed_hash else "unknown",
+                )
 
         raw_configs = self._stage_1_parse_individual_files(config_dir)
 
@@ -99,6 +118,14 @@ class UniverseCompiler:
             affordance_metadata=affordance_metadata,
             optimization_data=optimization_data,
         )
+
+        if use_cache:
+            cache_dir = self._cache_directory_for(config_dir)
+            try:
+                self._prepare_cache_directory(cache_dir)
+                compiled.save_to_cache(cache_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to write compiled universe cache at %s: %s", cache_path, exc)
 
         self._metadata = compiled.metadata
         self._observation_spec = compiled.observation_spec
@@ -1061,22 +1088,20 @@ class UniverseCompiler:
                         "baseline_depletion": modulation.baseline_depletion,
                     }
                 )
+            modulation_data.sort(key=lambda entry: entry["target_idx"])
 
         affordance_count = metadata.affordance_count
-        action_mask_table = torch.zeros(
-            (24, affordance_count),
-            dtype=torch.bool,
-            device=torch_device,
-        )
+        action_mask_table = torch.zeros((24, affordance_count), dtype=torch.bool, device=torch_device)
 
-        for hour in range(24):
-            for affordance_idx, affordance in enumerate(raw_configs.affordances):
-                hours = getattr(affordance, "operating_hours", None)
-                if not hours:
-                    action_mask_table[hour, affordance_idx] = True
-                    continue
-                open_hour, close_hour = hours
-                action_mask_table[hour, affordance_idx] = self._is_open(hour, open_hour, close_hour)
+        if affordance_count > 0:
+            for hour in range(24):
+                for affordance_idx, affordance in enumerate(raw_configs.affordances):
+                    hours = getattr(affordance, "operating_hours", None)
+                    if not hours:
+                        action_mask_table[hour, affordance_idx] = True
+                        continue
+                    open_hour, close_hour = hours
+                    action_mask_table[hour, affordance_idx] = self._is_open(hour, open_hour, close_hour)
 
         affordance_position_map = {aff.id: None for aff in raw_configs.affordances}
 
@@ -1101,7 +1126,7 @@ class UniverseCompiler:
     ) -> CompiledUniverse:
         """Stage 7 – produce immutable CompiledUniverse artifact."""
 
-        return CompiledUniverse(
+        universe = CompiledUniverse(
             hamlet_config=raw_configs.hamlet_config,
             variables_reference=raw_configs.variables_reference,
             global_actions=raw_configs.global_actions,
@@ -1113,6 +1138,26 @@ class UniverseCompiler:
             affordance_metadata=affordance_metadata,
             optimization_data=optimization_data,
         )
+
+        if not dataclasses.is_dataclass(universe):
+            raise CompilationError(
+                stage="Stage 7: Emit",
+                errors=["CompiledUniverse must be a dataclass"],
+                hints=["Ensure @dataclass decorator remains applied to CompiledUniverse"],
+            )
+
+        try:
+            universe.metadata = metadata  # type: ignore[attr-defined]
+        except dataclasses.FrozenInstanceError:
+            pass
+        else:
+            raise CompilationError(
+                stage="Stage 7: Emit",
+                errors=["CompiledUniverse must be frozen (immutable)"],
+                hints=["Annotate CompiledUniverse with @dataclass(frozen=True)"],
+            )
+
+        return universe
 
     def _derive_grid_dimensions(self, substrate: SubstrateConfig) -> tuple[int | None, int | None]:
         if substrate.type == "grid" and substrate.grid is not None:
@@ -1181,6 +1226,30 @@ class UniverseCompiler:
         with file_path.open() as handle:
             data = yaml.safe_load(handle) or {}
         return yaml.dump(data, sort_keys=True)
+
+    def _cache_directory_for(self, config_dir: Path) -> Path:
+        """Return the cache directory path for a config pack."""
+
+        return config_dir / ".compiled"
+
+    def _cache_artifact_path(self, config_dir: Path) -> Path:
+        """Return the expected cache artifact path for a config pack."""
+
+        return self._cache_directory_for(config_dir) / "universe.msgpack"
+
+    def _prepare_cache_directory(self, cache_dir: Path) -> None:
+        """Ensure the cache directory exists and is writable."""
+
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:  # pragma: no cover - defensive
+            raise RuntimeError(f"Unable to create cache directory at {cache_dir}: {exc}") from exc
+
+        if not cache_dir.is_dir():
+            raise RuntimeError(f"Cache path {cache_dir} exists but is not a directory")
+
+        if not os.access(cache_dir, os.W_OK):
+            raise RuntimeError(f"Cache directory {cache_dir} is not writable")
 
     def _compute_config_hash(self, config_dir: Path) -> str:
         files_to_hash = [

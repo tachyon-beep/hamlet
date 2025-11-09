@@ -53,3 +53,26 @@ def test_stage6_builds_action_mask_with_operating_hours() -> None:
     # Bar open 18:00 - 04:00 (wrap). Verify 20:00 open, 10:00 closed.
     assert optimization.action_mask_table[20, bar_idx]
     assert not optimization.action_mask_table[10, bar_idx]
+
+
+def test_stage6_invariants_on_cascades_and_modulations() -> None:
+    config_dir = Path("configs/L0_5_dual_resource")
+    compiler, raw_configs, metadata = _build_metadata(config_dir)
+
+    optimization = compiler._stage_6_optimize(raw_configs, metadata)
+
+    for category, entries in optimization.cascade_data.items():
+        target_idxs = [entry["target_idx"] for entry in entries]
+        assert target_idxs == sorted(target_idxs), f"{category} cascade targets must stay sorted"
+
+        for entry in entries:
+            assert 0 <= entry["source_idx"] < metadata.meter_count
+            assert 0 <= entry["target_idx"] < metadata.meter_count
+
+    modulation_targets = [entry["target_idx"] for entry in optimization.modulation_data]
+    if modulation_targets:
+        assert modulation_targets == sorted(modulation_targets), "Modulation targets must stay sorted"
+
+    for entry in optimization.modulation_data:
+        assert 0 <= entry["source_idx"] < metadata.meter_count
+        assert 0 <= entry["target_idx"] < metadata.meter_count

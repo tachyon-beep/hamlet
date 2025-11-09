@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Mapping
-from dataclasses import fields, is_dataclass
+from dataclasses import FrozenInstanceError, is_dataclass
 from pathlib import Path
 
+import pytest
+import torch
+
+from townlet.universe.compiled import CompiledUniverse
 from townlet.universe.compiler import UniverseCompiler
 from townlet.universe.compiler_inputs import RawConfigs
 from townlet.universe.dto import (
@@ -22,6 +27,16 @@ from townlet.universe.dto import (
 )
 
 
+def _to_plain(obj):
+    if is_dataclass(obj):
+        return {f.name: _to_plain(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
+    if isinstance(obj, Mapping):
+        return {k: _to_plain(v) for k, v in obj.items()}
+    if isinstance(obj, list | tuple):
+        return [_to_plain(v) for v in obj]
+    return obj
+
+
 def _load_stage5_artifacts(config_name: str):
     config_dir = Path("configs") / config_name
     raw_configs = RawConfigs.from_config_dir(config_dir)
@@ -35,17 +50,8 @@ def _load_stage5_artifacts(config_name: str):
 def test_universe_metadata_round_trip() -> None:
     metadata, observation_spec, action_meta, meter_meta, affordance_meta = _load_stage5_artifacts("L0_0_minimal")
 
-    def _to_serializable(obj):
-        if is_dataclass(obj):
-            return {f.name: _to_serializable(getattr(obj, f.name)) for f in fields(obj)}
-        if isinstance(obj, Mapping):
-            return {k: _to_serializable(v) for k, v in obj.items()}
-        if isinstance(obj, list | tuple):
-            return [_to_serializable(v) for v in obj]
-        return obj
-
     def _round_trip(dataclass_obj, factory):
-        payload = json.loads(json.dumps(_to_serializable(dataclass_obj)))
+        payload = json.loads(json.dumps(_to_plain(dataclass_obj)))
         return factory(payload)
 
     def _meta_factory(payload: dict) -> UniverseMetadata:
@@ -56,8 +62,8 @@ def test_universe_metadata_round_trip() -> None:
         return UniverseMetadata(**payload)
 
     def _obs_spec_factory(payload: dict) -> ObservationSpec:
-        fields = tuple(ObservationField(**field) for field in payload["fields"])
-        return ObservationSpec(total_dims=payload["total_dims"], fields=fields, encoding_version=payload["encoding_version"])
+        obs_fields = tuple(ObservationField(**field) for field in payload["fields"])
+        return ObservationSpec(total_dims=payload["total_dims"], fields=obs_fields, encoding_version=payload["encoding_version"])
 
     def _action_meta_factory(payload: dict) -> ActionSpaceMetadata:
         actions = tuple(ActionMetadata(**action) for action in payload["actions"])
@@ -82,3 +88,28 @@ def test_universe_metadata_round_trip() -> None:
     assert reconstructed_action_meta == action_meta
     assert reconstructed_meter_meta == meter_meta
     assert reconstructed_affordance_meta == affordance_meta
+
+
+def test_compiled_universe_msgpack_round_trip(tmp_path: Path) -> None:
+    compiler = UniverseCompiler()
+    compiled = compiler.compile(Path("configs/L0_0_minimal"))
+
+    artifact_path = tmp_path / "compiled.msgpack"
+    compiled.save_to_cache(artifact_path)
+    reconstructed = CompiledUniverse.load_from_cache(artifact_path)
+
+    assert reconstructed.metadata == compiled.metadata
+    assert reconstructed.observation_spec == compiled.observation_spec
+    assert reconstructed.action_space_metadata == compiled.action_space_metadata
+    assert reconstructed.meter_metadata == compiled.meter_metadata
+    assert reconstructed.affordance_metadata == compiled.affordance_metadata
+    assert torch.allclose(
+        reconstructed.optimization_data.base_depletions,
+        compiled.optimization_data.base_depletions,
+    )
+    assert torch.equal(
+        reconstructed.optimization_data.action_mask_table,
+        compiled.optimization_data.action_mask_table,
+    )
+    with pytest.raises(FrozenInstanceError):
+        reconstructed.metadata = None  # type: ignore[attr-defined]

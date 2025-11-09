@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
+from typing import Any
 
+import msgpack
 import torch
 
 from townlet.config import HamletConfig
 from townlet.environment.action_config import ActionSpaceConfig
 from townlet.universe.dto import (
+    ActionMetadata,
     ActionSpaceMetadata,
+    AffordanceInfo,
     AffordanceMetadata,
+    MeterInfo,
     MeterMetadata,
+    ObservationField,
     ObservationSpec,
     UniverseMetadata,
 )
@@ -132,3 +138,98 @@ class CompiledUniverse:
             )
 
         return True, "Checkpoint compatible."
+
+    # Serialization -----------------------------------------------------------
+
+    def save_to_cache(self, path: Path) -> None:
+        """Serialize compiled universe to MessagePack file."""
+
+        data = {
+            "hamlet_config": self.hamlet_config.model_dump(),
+            "variables_reference": [var.model_dump() for var in self.variables_reference],
+            "global_actions": self.global_actions.model_dump(),
+            "config_dir": str(self.config_dir),
+            "metadata": _dataclass_to_plain(self.metadata),
+            "observation_spec": _dataclass_to_plain(self.observation_spec),
+            "action_space_metadata": _dataclass_to_plain(self.action_space_metadata),
+            "meter_metadata": _dataclass_to_plain(self.meter_metadata),
+            "affordance_metadata": _dataclass_to_plain(self.affordance_metadata),
+            "optimization_data": {
+                "base_depletions": self.optimization_data.base_depletions.cpu().tolist(),
+                "cascade_data": self.optimization_data.cascade_data,
+                "modulation_data": self.optimization_data.modulation_data,
+                "action_mask_table": self.optimization_data.action_mask_table.cpu().tolist(),
+                "affordance_position_map": _serialize_affordance_positions(self.optimization_data.affordance_position_map),
+            },
+        }
+
+        packed = msgpack.packb(data, use_bin_type=True)
+        path.write_bytes(packed)
+
+    @classmethod
+    def load_from_cache(cls, path: Path) -> CompiledUniverse:
+        """Deserialize a compiled universe from MessagePack."""
+
+        payload = msgpack.unpackb(path.read_bytes(), raw=False)
+
+        optimization_payload = payload["optimization_data"]
+        action_mask = optimization_payload.get("action_mask_table")
+        if action_mask is None:
+            action_mask = [[False] * 0 for _ in range(24)]
+        return cls(
+            hamlet_config=HamletConfig.model_validate(payload["hamlet_config"]),
+            variables_reference=[VariableDef.model_validate(var) for var in payload["variables_reference"]],
+            global_actions=ActionSpaceConfig.model_validate(payload["global_actions"]),
+            config_dir=Path(payload["config_dir"]),
+            metadata=UniverseMetadata(**payload["metadata"]),
+            observation_spec=ObservationSpec(
+                total_dims=payload["observation_spec"]["total_dims"],
+                encoding_version=payload["observation_spec"]["encoding_version"],
+                fields=tuple(ObservationField(**field) for field in payload["observation_spec"]["fields"]),
+            ),
+            action_space_metadata=ActionSpaceMetadata(
+                total_actions=payload["action_space_metadata"]["total_actions"],
+                actions=tuple(ActionMetadata(**entry) for entry in payload["action_space_metadata"]["actions"]),
+            ),
+            meter_metadata=MeterMetadata(meters=tuple(MeterInfo(**entry) for entry in payload["meter_metadata"]["meters"])),
+            affordance_metadata=AffordanceMetadata(
+                affordances=tuple(AffordanceInfo(**entry) for entry in payload["affordance_metadata"]["affordances"])
+            ),
+            optimization_data=OptimizationData(
+                base_depletions=torch.tensor(optimization_payload["base_depletions"], dtype=torch.float32),
+                cascade_data=optimization_payload["cascade_data"],
+                modulation_data=optimization_payload["modulation_data"],
+                action_mask_table=torch.tensor(action_mask, dtype=torch.bool),
+                affordance_position_map=_deserialize_affordance_positions(optimization_payload["affordance_position_map"]),
+            ),
+        )
+
+
+def _dataclass_to_plain(obj: Any) -> Any:
+    if is_dataclass(obj):
+        return {f.name: _dataclass_to_plain(getattr(obj, f.name)) for f in fields(obj)}
+    if isinstance(obj, Mapping):
+        return {key: _dataclass_to_plain(value) for key, value in obj.items()}
+    if isinstance(obj, list | tuple):
+        return [_dataclass_to_plain(value) for value in obj]
+    return obj
+
+
+def _serialize_affordance_positions(position_map: dict[str, torch.Tensor | None]) -> dict[str, Any]:
+    serialized: dict[str, Any] = {}
+    for key, value in position_map.items():
+        if isinstance(value, torch.Tensor):
+            serialized[key] = value.tolist()
+        else:
+            serialized[key] = value
+    return serialized
+
+
+def _deserialize_affordance_positions(payload: dict[str, Any]) -> dict[str, torch.Tensor | None]:
+    restored: dict[str, torch.Tensor | None] = {}
+    for key, value in payload.items():
+        if value is None:
+            restored[key] = None
+        else:
+            restored[key] = torch.tensor(value)
+    return restored

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
+import torch
+
 from townlet.universe.compiled import CompiledUniverse
 from townlet.universe.compiler import UniverseCompiler
 
@@ -54,3 +56,23 @@ def test_compiled_universe_create_environment() -> None:
     from townlet.environment.vectorized_env import VectorizedHamletEnv
 
     assert isinstance(env, VectorizedHamletEnv)
+
+
+def test_compiled_universe_environment_rollout(cpu_device: torch.device) -> None:
+    compiler = UniverseCompiler()
+    compiled = compiler.compile(Path("configs/L0_0_minimal"))
+
+    env = compiled.create_environment(num_agents=2, device=str(cpu_device))
+
+    observations = env.reset()
+    assert observations.shape == (2, compiled.metadata.observation_dim)
+
+    wait_idx = env.wait_action_idx
+    actions = torch.full((2,), wait_idx, dtype=torch.long, device=env.device)
+
+    next_obs, rewards, dones, info = env.step(actions)
+
+    assert next_obs.shape == observations.shape
+    assert rewards.shape == (2,)
+    assert dones.shape == (2,)
+    assert "positions" in info

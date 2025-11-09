@@ -43,38 +43,115 @@ def test_stage5_computes_metadata_and_observation_spec(base_config_dir: Path, ba
     assert affordance_field.scope == "agent"
 
 
-@pytest.mark.parametrize(
-    ("pack_name", "expected_fields", "extra_asserts"),
-    [
-        (
-            "L0_0_minimal",
-            [
-                ("obs_grid", "agent"),
-                ("obs_pos", "agent"),
-                ("obs_energy", "agent"),
-                ("obs_health", "agent"),
-            ],
-            (("obs_time_sin", "global"),),
-        ),
-        (
-            "L2_partial_observability",
-            [
-                ("obs_local_window", "agent"),
-                ("obs_pos", "agent"),
-                ("obs_energy", "agent"),
-                ("obs_health", "agent"),
-            ],
-            (("obs_time_sin", "global"), ("obs_time_cos", "global")),
-        ),
-    ],
-)
-def test_observation_spec_fields_order_and_scope(
-    pack_name: str,
-    expected_fields: list[tuple[str, str]],
-    extra_asserts: tuple[str, ...],
-) -> None:
-    """Regress ObservationSpec ordering + scope for representative configs."""
+SNAPSHOT_CASES: dict[str, dict[str, object]] = {
+    "L0_0_minimal": {
+        "expected_dim": 38,
+        "fields": [
+            ("obs_grid", "agent", 9),
+            ("obs_pos", "agent", 2),
+            ("obs_energy", "agent", 1),
+            ("obs_health", "agent", 1),
+            ("obs_satiation", "agent", 1),
+            ("obs_money", "agent", 1),
+            ("obs_mood", "agent", 1),
+            ("obs_social", "agent", 1),
+            ("obs_fitness", "agent", 1),
+            ("obs_hygiene", "agent", 1),
+            ("obs_affordance", "agent", 15),
+            ("obs_time_sin", "global", 1),
+            ("obs_time_cos", "global", 1),
+            ("obs_interaction_progress", "agent", 1),
+            ("obs_lifetime_progress", "agent", 1),
+        ],
+    },
+    "L0_5_dual_resource": {
+        "expected_dim": 78,
+        "fields": [
+            ("obs_grid", "agent", 49),
+            ("obs_pos", "agent", 2),
+            ("obs_energy", "agent", 1),
+            ("obs_health", "agent", 1),
+            ("obs_satiation", "agent", 1),
+            ("obs_money", "agent", 1),
+            ("obs_mood", "agent", 1),
+            ("obs_social", "agent", 1),
+            ("obs_fitness", "agent", 1),
+            ("obs_hygiene", "agent", 1),
+            ("obs_affordance", "agent", 15),
+            ("obs_time_sin", "global", 1),
+            ("obs_time_cos", "global", 1),
+            ("obs_interaction_progress", "agent", 1),
+            ("obs_lifetime_progress", "agent", 1),
+        ],
+    },
+    "L1_full_observability": {
+        "expected_dim": 93,
+        "fields": [
+            ("obs_grid_encoding", "agent", 64),
+            ("obs_position", "agent", 2),
+            ("obs_energy", "agent", 1),
+            ("obs_health", "agent", 1),
+            ("obs_satiation", "agent", 1),
+            ("obs_money", "agent", 1),
+            ("obs_mood", "agent", 1),
+            ("obs_social", "agent", 1),
+            ("obs_fitness", "agent", 1),
+            ("obs_hygiene", "agent", 1),
+            ("obs_affordance_at_position", "agent", 15),
+            ("obs_time_sin", "global", 1),
+            ("obs_time_cos", "global", 1),
+            ("obs_interaction_progress", "agent", 1),
+            ("obs_lifetime_progress", "agent", 1),
+        ],
+    },
+    "L2_partial_observability": {
+        "expected_dim": 54,
+        "fields": [
+            ("obs_local_window", "agent", 25),
+            ("obs_pos", "agent", 2),
+            ("obs_energy", "agent", 1),
+            ("obs_health", "agent", 1),
+            ("obs_satiation", "agent", 1),
+            ("obs_money", "agent", 1),
+            ("obs_mood", "agent", 1),
+            ("obs_social", "agent", 1),
+            ("obs_fitness", "agent", 1),
+            ("obs_hygiene", "agent", 1),
+            ("obs_affordance", "agent", 15),
+            ("obs_time_sin", "global", 1),
+            ("obs_time_cos", "global", 1),
+            ("obs_interaction_progress", "agent", 1),
+            ("obs_lifetime_progress", "agent", 1),
+        ],
+    },
+    "L3_temporal_mechanics": {
+        "expected_dim": 54,
+        "fields": [
+            ("obs_local_window", "agent", 25),
+            ("obs_position", "agent", 2),
+            ("obs_energy", "agent", 1),
+            ("obs_health", "agent", 1),
+            ("obs_satiation", "agent", 1),
+            ("obs_money", "agent", 1),
+            ("obs_mood", "agent", 1),
+            ("obs_social", "agent", 1),
+            ("obs_fitness", "agent", 1),
+            ("obs_hygiene", "agent", 1),
+            ("obs_affordance_at_position", "agent", 15),
+            ("obs_time_sin", "global", 1),
+            ("obs_time_cos", "global", 1),
+            ("obs_interaction_progress", "agent", 1),
+            ("obs_lifetime_progress", "agent", 1),
+        ],
+    },
+}
 
+
+@pytest.mark.parametrize("pack_name", sorted(SNAPSHOT_CASES))
+def test_observation_spec_field_snapshots(pack_name: str) -> None:
+    """Regress ObservationSpec ordering, scopes, and dims for every reference pack."""
+
+    case = SNAPSHOT_CASES[pack_name]
     config_dir = Path("configs") / pack_name
     raw_configs = RawConfigs.from_config_dir(config_dir)
     compiler = UniverseCompiler()
@@ -82,12 +159,11 @@ def test_observation_spec_fields_order_and_scope(
 
     _, observation_spec = compiler._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
 
-    actual_pairs = [(field.name, field.scope) for field in observation_spec.fields[: len(expected_fields)]]
-    assert actual_pairs == expected_fields, f"{pack_name}: expected field ordering {expected_fields}, got {actual_pairs}"
+    expected_fields = case["fields"]
+    actual_triplets = [(field.name, field.scope, field.dims) for field in observation_spec.fields]
 
-    for field_name, expected_scope in extra_asserts:
-        field = observation_spec.get_field_by_name(field_name)
-        assert field.scope == expected_scope, f"{pack_name}: expected {field_name} scope {expected_scope}, got {field.scope}"
+    assert observation_spec.total_dims == case["expected_dim"]
+    assert actual_triplets == expected_fields, f"{pack_name}: ObservationSpec drift detected"
 
 
 def test_stage5_config_hash_changes_when_config_changes(tmp_path: Path, base_config_dir: Path) -> None:
@@ -121,3 +197,37 @@ def test_stage5_builds_rich_metadata(base_raw_configs: RawConfigs) -> None:
     bed_info = affordance_meta.get_affordance_by_name("Bed")
     assert bed_info.enabled
     assert bed_info.effects, "Bed affordance should expose summarized effects"
+
+
+def test_provenance_changes_when_git_sha_changes() -> None:
+    compiler = UniverseCompiler()
+    kwargs = {
+        "config_hash": "abc",
+        "compiler_version": "0.1.0",
+        "python_version": "3.11.9",
+        "torch_version": "2.2.0",
+        "pydantic_version": "2.6.0",
+    }
+
+    base = compiler._compute_provenance_id(git_sha="aaaabbbb", **kwargs)
+    changed = compiler._compute_provenance_id(git_sha="ccccdddd", **kwargs)
+
+    assert base != changed
+
+
+def test_stage5_metadata_records_expected_provenance(base_config_dir: Path, base_raw_configs: RawConfigs) -> None:
+    compiler = UniverseCompiler()
+    symbol_table = compiler._stage_2_build_symbol_tables(base_raw_configs)
+
+    metadata, _ = compiler._stage_5_compute_metadata(base_config_dir, base_raw_configs, symbol_table)
+
+    regenerated = compiler._compute_provenance_id(
+        config_hash=metadata.config_hash,
+        compiler_version=metadata.compiler_version,
+        git_sha=metadata.compiler_git_sha,
+        python_version=metadata.python_version,
+        torch_version=metadata.torch_version,
+        pydantic_version=metadata.pydantic_version,
+    )
+
+    assert metadata.provenance_id == regenerated
