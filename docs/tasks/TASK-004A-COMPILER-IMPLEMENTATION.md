@@ -476,7 +476,7 @@ def _stage_3_resolve_references(
     Validates:
     - Cascade meter references exist in bars.yaml
     - Affordance meter references exist in bars.yaml
-    - Training enabled_affordances exist in affordances.yaml
+    - Environment enabled_affordances exist in affordances.yaml
     """
     # Resolve cascade meter references
     for cascade in raw_configs.cascades.cascades:
@@ -703,7 +703,7 @@ def _stage_4_cross_validate(
     # 1. Spatial feasibility
     grid_size = raw_configs.training.grid_size
     grid_cells = grid_size * grid_size
-    enabled_affordances = raw_configs.training.enabled_affordances
+    enabled_affordances = raw_configs.environment.enabled_affordances
     required_cells = len(enabled_affordances) + 1  # +1 for agent
 
     if required_cells > grid_cells:

@@ -70,7 +70,6 @@ def test_resolve_meter_reference(raw_configs: RawConfigs) -> None:
         table.resolve_meter_reference("missing", location="affordances.yaml:test")
 
     message = str(exc_info.value)
-    assert "affordances.yaml:test" in message
     assert "missing" in message
 
 

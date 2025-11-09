@@ -32,6 +32,7 @@ def _clone_raw_configs(
         hamlet_config=hamlet_config,
         variables_reference=original.variables_reference,
         global_actions=global_actions or original.global_actions,
+        source_map=original.source_map,
     )
 
 
@@ -55,7 +56,7 @@ def test_stage3_detects_dangling_cascade_meter(base_raw_configs: RawConfigs) -> 
 
     errors = _run_stage3(mutated_raw)
 
-    assert any("ghost_meter" in message for message in errors)
+    assert any("[UAC-RES-001]" in message and "ghost_meter" in message for message in errors)
 
 
 def test_stage3_detects_invalid_environment_affordance(base_raw_configs: RawConfigs) -> None:
@@ -69,7 +70,7 @@ def test_stage3_detects_invalid_environment_affordance(base_raw_configs: RawConf
 
     errors = _run_stage3(mutated_raw)
 
-    assert any("UnknownAffordance" in message for message in errors)
+    assert any("[UAC-RES-004]" in message and "UnknownAffordance" in message for message in errors)
 
 
 def test_stage3_detects_invalid_action_cost_meter(base_raw_configs: RawConfigs) -> None:
@@ -81,4 +82,103 @@ def test_stage3_detects_invalid_action_cost_meter(base_raw_configs: RawConfigs) 
 
     errors = _run_stage3(mutated_raw)
 
-    assert any("phantom_meter" in message for message in errors)
+    assert any("[UAC-RES-005]" in message and "phantom_meter" in message for message in errors)
+
+
+def _mutated_affordance_raw_configs(base: RawConfigs, update: dict) -> RawConfigs:
+    affordances = list(base.affordances)
+    affordances[0] = affordances[0].model_copy(update=update)
+    return _clone_raw_configs(base, hamlet_overrides={"affordances": tuple(affordances)})
+
+
+def test_stage3_detects_invalid_costs_per_tick_meter(base_raw_configs: RawConfigs) -> None:
+    mutated_raw = _mutated_affordance_raw_configs(
+        base_raw_configs,
+        {"costs_per_tick": [{"meter": "invalid_cost_meter", "amount": 0.01}]},
+    )
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("invalid_cost_meter" in message for message in errors)
+
+
+def test_stage3_detects_invalid_effects_per_tick_meter(base_raw_configs: RawConfigs) -> None:
+    mutated_raw = _mutated_affordance_raw_configs(
+        base_raw_configs,
+        {"effects_per_tick": [{"meter": "invalid_effect_tick", "amount": 0.02}]},
+    )
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("invalid_effect_tick" in message for message in errors)
+
+
+def test_stage3_detects_missing_meter_field(base_raw_configs: RawConfigs) -> None:
+    mutated_raw = _mutated_affordance_raw_configs(
+        base_raw_configs,
+        {"effects": [{"amount": 0.5}]},
+    )
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("UAC-RES-003" in message for message in errors)
+
+
+def test_stage3_detects_invalid_completion_bonus_meter(base_raw_configs: RawConfigs) -> None:
+    mutated_raw = _mutated_affordance_raw_configs(
+        base_raw_configs,
+        {"completion_bonus": [{"meter": "invalid_bonus", "amount": 0.1}]},
+    )
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("invalid_bonus" in message for message in errors)
+
+
+def test_stage3_detects_invalid_effect_pipeline_meter(base_raw_configs: RawConfigs) -> None:
+    mutated_raw = _mutated_affordance_raw_configs(
+        base_raw_configs,
+        {
+            "effect_pipeline": {
+                "on_start": [{"meter": "invalid_pipeline", "amount": 0.1}],
+            }
+        },
+    )
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("invalid_pipeline" in message for message in errors)
+
+
+def test_stage3_detects_invalid_capability_meter(base_raw_configs: RawConfigs) -> None:
+    mutated_raw = _mutated_affordance_raw_configs(
+        base_raw_configs,
+        {"capabilities": [{"type": "meter_gated", "meter": "invalid_cap"}]},
+    )
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("invalid_cap" in message for message in errors)
+
+
+def test_stage3_detects_invalid_availability_meter(base_raw_configs: RawConfigs) -> None:
+    mutated_raw = _mutated_affordance_raw_configs(
+        base_raw_configs,
+        {"availability": [{"meter": "invalid_availability"}]},
+    )
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("invalid_availability" in message for message in errors)
+
+
+def test_stage3_detects_invalid_action_effect_meter(base_raw_configs: RawConfigs) -> None:
+    actions = list(base_raw_configs.global_actions.actions)
+    broken_action: ActionConfig = actions[0].model_copy(update={"effects": {**actions[0].effects, "fake_meter": 0.5}})
+    actions[0] = broken_action
+    mutated_actions = ActionSpaceConfig(actions=actions)
+    mutated_raw = _clone_raw_configs(base_raw_configs, global_actions=mutated_actions)
+
+    errors = _run_stage3(mutated_raw)
+
+    assert any("fake_meter" in message for message in errors)

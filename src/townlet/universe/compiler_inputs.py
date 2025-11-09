@@ -23,6 +23,7 @@ from townlet.config.training import TrainingConfig
 from townlet.environment.action_config import ActionSpaceConfig, load_global_actions_config
 from townlet.substrate.config import SubstrateConfig
 from townlet.universe.errors import CompilationErrorCollector
+from townlet.universe.source_map import SourceMap
 from townlet.vfs.schema import VariableDef, load_variables_reference_config
 
 _T = TypeVar("_T")
@@ -35,6 +36,7 @@ class RawConfigs:
     hamlet_config: HamletConfig
     variables_reference: list[VariableDef]
     global_actions: ActionSpaceConfig
+    source_map: SourceMap
 
     # --- Convenience accessors -------------------------------------------------
 
@@ -121,9 +123,10 @@ class RawConfigs:
             missing_hint=f"Add variables_reference.yaml to {config_dir} (see docs/tasks for schema).",
         )
 
+        global_actions_path = Path("configs") / "global_actions.yaml"
         global_actions = _load_config(
             "global_actions.yaml",
-            load_global_actions_config,
+            lambda: load_global_actions_config(global_actions_path),
             missing_hint="Ensure configs/global_actions.yaml exists (global action vocabulary).",
         )
 
@@ -133,8 +136,18 @@ class RawConfigs:
             # Defensive: reaching here would indicate check_and_raise failed to trigger.
             raise RuntimeError("Stage 1: Parse succeeded without fully loaded configs.")
 
+        source_map = SourceMap()
+        source_map.track_cascades(config_dir / "cascades.yaml")
+        source_map.track_affordances(config_dir / "affordances.yaml")
+        source_map.track_actions(global_actions_path)
+        source_map.track_training_environment_key(
+            config_dir / "training.yaml",
+            "environment.enabled_affordances",
+        )
+
         return cls(
             hamlet_config=hamlet_config,
             variables_reference=variables_reference,
             global_actions=global_actions,
+            source_map=source_map,
         )

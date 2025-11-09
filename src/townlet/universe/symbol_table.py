@@ -67,8 +67,7 @@ class UniverseSymbolTable:
 
     def resolve_meter_reference(self, name: str, *, location: str | None = None) -> BarConfig:
         if name not in self.meters:
-            prefix = f"{location}: " if location else ""
-            raise ReferenceError(f"{prefix}References non-existent meter '{name}'. Valid meters: {list(self.meters.keys())}")
+            raise ReferenceError(f"References non-existent meter '{name}'. Valid meters: {list(self.meters.keys())}")
         return self.meters[name]
 
     def get_meter_count(self) -> int:

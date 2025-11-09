@@ -393,7 +393,7 @@ class UniverseCompiler:
 def _validate_universe(self, ...):
     # 1. Spatial feasibility
     grid_cells = substrate.dimensions[0] * substrate.dimensions[1]
-    required_cells = len(training.enabled_affordances) + 1  # +1 for agent
+    required_cells = len(training.environment.enabled_affordances) + 1  # +1 for agent
     if required_cells > grid_cells:
         raise CompilationError(f"Grid too small: {grid_cells} cells, need {required_cells}")
 
