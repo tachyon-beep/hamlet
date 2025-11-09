@@ -1236,26 +1236,22 @@ class UniverseCompiler:
     def _load_observation_exposures(self, config_dir: Path, raw_configs: RawConfigs) -> list[dict[str, Any]]:
         yaml_path = config_dir / "variables_reference.yaml"
         exposures: list[dict[str, Any]] = []
-        try:
-            with yaml_path.open() as handle:
-                data = yaml.safe_load(handle) or {}
-        except FileNotFoundError:
-            data = {}
+        if not yaml_path.exists():
+            raise ValueError(
+                f"Missing variables_reference.yaml at {yaml_path}. " "Explicit observation exposures are required (no implicit defaults)."
+            )
+
+        with yaml_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
 
         raw_exposures = data.get("exposed_observations")
-        if raw_exposures:
-            exposures = [deepcopy(obs) for obs in raw_exposures]
-        else:
-            for var in raw_configs.variables_reference:
-                readable = getattr(var, "readable_by", []) or []
-                if "agent" in readable:
-                    exposures.append(
-                        {
-                            "id": f"obs_{var.id}",
-                            "source_variable": var.id,
-                            "exposed_to": ["agent"],
-                        }
-                    )
+        if not raw_exposures:
+            raise ValueError(
+                f"{yaml_path} must define 'exposed_observations'. "
+                "The compiler no longer infers default exposures; specify them explicitly."
+            )
+
+        exposures = [deepcopy(obs) for obs in raw_exposures]
 
         if raw_configs.environment.partial_observability:
             exposures = [obs for obs in exposures if obs.get("source_variable") != "grid_encoding"]
@@ -1411,7 +1407,7 @@ class UniverseCompiler:
                 return None
             return torch.tensor(coords, dtype=torch.float32, device=device)
 
-        if isinstance(position, (list, tuple)):
+        if isinstance(position, list | tuple):
             return torch.tensor(list(position), dtype=torch.float32, device=device)
 
         if isinstance(position, Number):

@@ -200,7 +200,7 @@ class TestPopulationCheckpointing:
         # Verify version
         assert checkpoint["version"] >= 2, "Checkpoint version should be >= 2"
 
-    def test_population_checkpoint_preserves_network_weights(self, cpu_device, test_config_pack_path):
+    def test_population_checkpoint_preserves_network_weights(self, cpu_device, test_config_pack_path, env_builder):
         """Q-network weights should be exactly preserved across checkpoint cycle."""
         # Create environment with CPU device (avoiding basic_env fixture which may use CUDA)
         env = env_builder(config_dir=test_config_pack_path, num_agents=1)
@@ -268,7 +268,7 @@ class TestPopulationCheckpointing:
                 original_weights[key], restored_weights[key], atol=1e-6
             ), f"Q-network weights for {key} should match exactly"
 
-    def test_population_checkpoint_preserves_replay_buffer(self, cpu_device, test_config_pack_path):
+    def test_population_checkpoint_preserves_replay_buffer(self, cpu_device, test_config_pack_path, env_builder):
         """Replay buffer should be preserved with exact contents across checkpoint cycle."""
         # Create environment with CPU device (avoiding basic_env fixture which may use CUDA)
         env = env_builder(config_dir=test_config_pack_path, num_agents=1)

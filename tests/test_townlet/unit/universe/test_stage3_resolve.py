@@ -32,6 +32,8 @@ def _clone_raw_configs(
         hamlet_config=hamlet_config,
         variables_reference=original.variables_reference,
         global_actions=global_actions or original.global_actions,
+        action_labels=original.action_labels,
+        environment_config=original.environment_config,
         source_map=original.source_map,
         config_dir=original.config_dir,
     )

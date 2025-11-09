@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from townlet.config.cues import CueCondition, CuesConfig, SimpleCueConfig, VisualCueConfig
+from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
 from townlet.environment.action_config import ActionConfig, ActionSpaceConfig
 from townlet.substrate.config import AspatialSubstrateConfig, SubstrateConfig
 from townlet.universe.compiler import UniverseCompiler
@@ -30,6 +31,8 @@ def _clone_raw_configs(
         hamlet_config=hamlet_config,
         variables_reference=original.variables_reference,
         global_actions=global_actions or original.global_actions,
+        action_labels=original.action_labels,
+        environment_config=original.environment_config,
         source_map=original.source_map,
         config_dir=original.config_dir,
     )
@@ -193,10 +196,13 @@ def test_stage4_warns_on_early_exit_without_permission(base_raw_configs: RawConf
     aff = affs[0].model_copy(
         update={
             "capabilities": [{"type": "multi_tick", "duration_ticks": 3, "early_exit_allowed": False}],
-            "effect_pipeline": {
-                "on_completion": [{"meter": "energy", "amount": 0.1}],
-                "on_early_exit": [{"meter": "mood", "amount": -0.1}],
-            },
+            "effect_pipeline": EffectPipeline(
+                on_start=affs[0].effect_pipeline.on_start,
+                per_tick=affs[0].effect_pipeline.per_tick,
+                on_completion=[AffordanceEffect(meter="energy", amount=0.1)],
+                on_early_exit=[AffordanceEffect(meter="mood", amount=-0.1)],
+                on_failure=affs[0].effect_pipeline.on_failure,
+            ),
         }
     )
     affs[0] = aff

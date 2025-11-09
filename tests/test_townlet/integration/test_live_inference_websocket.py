@@ -48,7 +48,7 @@ async def test_build_substrate_metadata_grid2d(tmp_path, test_config_pack_path):
 
 
 @pytest.mark.asyncio
-async def test_build_substrate_metadata_before_env_created(tmp_path):
+async def test_build_substrate_metadata_before_env_created(tmp_path, test_config_pack_path):
     """Test _build_substrate_metadata returns safe defaults when env is None."""
     checkpoint_dir = tmp_path / "checkpoints"
     checkpoint_dir.mkdir()
@@ -58,7 +58,7 @@ async def test_build_substrate_metadata_before_env_created(tmp_path):
         port=8768,
         step_delay=0.01,
         total_episodes=100,
-        config_dir=None,  # No config, env will be None
+        config_dir=test_config_pack_path,
     )
 
     # Don't call startup() - env should be None

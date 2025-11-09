@@ -300,11 +300,13 @@ Substrates support three configurable observation encoding modes via `observatio
 | Aspatial | ✅ **SPECIAL CASE** | Returns empty tensor (no position) | ✅ Unit (1 test) |
 
 **Key Requirements**:
+
 - Must use `observation_encoding="relative"` (normalized positions)
 - Grid3D POMDP enforces vision_range ≤ 2 (larger windows rejected)
 - Continuous substrates: Use full observability instead (POMDP conceptually invalid)
 
 **Test Files**:
+
 - Unit tests: `tests/test_townlet/unit/substrate/test_interface.py`
 - Integration tests: `tests/test_townlet/integration/test_substrate_observations.py`
 - Validation tests: `tests/test_townlet/unit/environment/test_pomdp_validation.py`
@@ -317,6 +319,7 @@ Substrates support three configurable observation encoding modes via `observatio
 **Purpose**: Declarative state space configuration for observation specs, access control, and action dependencies
 
 **Integration Status**:
+
 - ✅ VFS integrated into VectorizedHamletEnv (replaces legacy ObservationBuilder)
 - ✅ All config packs now use `variables_reference.yaml` for observation generation
 - ✅ Training validated (L0_0_minimal tested successfully)
@@ -360,11 +363,13 @@ VFS Pipeline: YAML Config → Schema Validation → Observation Spec → Runtime
 | `agent_private` | `[num_agents]` | `[num_agents, dims]` | Hidden state, internal rewards |
 
 **Type System**:
+
 - **Scalar types**: `scalar` (float), `bool`
 - **Vector types**: `vec2i`, `vec3i`, `vecNi` (int), `vecNf` (float)
 - **Storage**: PyTorch tensors (CPU/CUDA) with automatic device management
 
 **Access Control**:
+
 - **Readers**: agent, engine, acs (Adversarial Curriculum), bac (Behavioral Action Compiler)
 - **Writers**: engine, actions, bac
 - **Enforcement**: `registry.get(var_id, reader="agent")` raises `PermissionError` if denied
@@ -436,6 +441,7 @@ VFS maintains **exact compatibility** with current hardcoded dimensions to prese
 **Regression tests** ensure dimension compatibility: `tests/test_townlet/unit/vfs/test_observation_dimension_regression.py`
 
 **Test Coverage**:
+
 - **88 tests total** (76 unit + 12 integration) - ALL PASSING ✅
 - Schema validation: 23 tests (93% coverage)
 - Registry operations: 25 tests (83% coverage)
@@ -444,6 +450,7 @@ VFS maintains **exact compatibility** with current hardcoded dimensions to prese
 - End-to-end integration: 12 tests (YAML → observations)
 
 **Documentation**:
+
 - Configuration guide: `docs/config-schemas/variables.md`
 - Design document: `docs/plans/2025-11-06-variables-and-features-system.md`
 - Implementation plan: `docs/tasks/TASK-002-variables-and-features-system.md`
@@ -467,6 +474,7 @@ Quick fix:
 **Migration**: See `docs/vfs-integration-guide.md` for complete migration instructions.
 
 **Removed Files**:
+
 - `src/townlet/environment/observation_builder.py` (212 lines) - Replaced by VFS
 
 ---
@@ -476,16 +484,19 @@ Quick fix:
 **Architecture**: Action Space = Substrate Actions + Custom Actions
 
 **Global Vocabulary** (`configs/global_actions.yaml`):
+
 - All curriculum levels share the **same action vocabulary**
 - Enables checkpoint transfer (same action_dim across configs)
 - Custom actions: REST, MEDITATE (substrate-agnostic)
 
 **Per-Config Enabled Actions** (future - `training.yaml`):
+
 - Each config can specify which actions are **enabled**
 - Disabled actions masked at runtime (cannot be selected)
 - Currently: All actions enabled by default
 
 **Action Counts by Substrate**:
+
 - Grid2D: 6 substrate + 2 custom = **8 actions total**
 - Grid3D: 8 substrate + 2 custom = **10 actions total**
 - GridND (7D): 14 substrate + 2 custom = **16 actions total**
@@ -512,6 +523,7 @@ Quick fix:
 **Checkpoint Transfer**:
 
 All Grid2D configs have action_dim = 8, enabling checkpoint transfer:
+
 - L0_0_minimal: 8 actions (3×3 grid, 1 affordance)
 - L0_5_dual_resource: 8 actions (7×7 grid, 4 affordances)
 - L1_full_observability: 8 actions (8×8 grid, 14 affordances)
@@ -527,6 +539,7 @@ A Q-network trained on L0 can be transferred to L1 without architecture changes!
 - **Dynamic Deltas**: Movement deltas loaded from ActionConfig (no hardcoding)
 
 **Action Labels** (`src/townlet/environment/action_labels.py`):
+
 - Configurable domain-specific terminology for actions
 - **Presets**: `gaming` (LEFT/RIGHT/UP/DOWN), `6dof` (SWAY/HEAVE/SURGE), `cardinal` (NORTH/SOUTH), `math` (X_NEG/X_POS)
 - **Custom labels**: User-defined terminology for specialized domains
@@ -536,6 +549,7 @@ A Q-network trained on L0 can be transferred to L1 without architecture changes!
 - **Example**: 7D GridND uses D0_NEG, D1_NEG, ..., D6_NEG, D0_POS, ..., D6_POS, INTERACT, WAIT (16 actions total)
 
 **See Also**:
+
 - `docs/config-schemas/enabled_actions.md` - Detailed enabled_actions pattern
 - `configs/global_actions.yaml` - Global action vocabulary
 - `/home/john/hamlet/docs/plans/2025-11-06-composable-action-space.md` - Implementation plan
@@ -619,6 +633,7 @@ configs/L0_0_minimal/
 Defines the spatial substrate (coordinate system, topology, boundaries, distance metrics).
 
 **Available Substrate Types**:
+
 - `grid`: 2D discrete grid (Grid2DSubstrate)
 - `grid3d`: 3D discrete grid (Grid3DSubstrate)
 - `gridnd`: 4D-100D discrete grid (GridNDSubstrate)
@@ -627,6 +642,7 @@ Defines the spatial substrate (coordinate system, topology, boundaries, distance
 - `aspatial`: No positioning, pure resource management
 
 **Example (Standard 2D Grid)**:
+
 ```yaml
 version: "1.0"
 description: "8×8 square grid with hard boundaries"
@@ -642,6 +658,7 @@ grid:
 ```
 
 **Example (7D Hypercube Grid)**:
+
 ```yaml
 version: "1.0"
 description: "7D hypercube grid for high-dimensional RL research"
@@ -655,6 +672,7 @@ gridnd:
 ```
 
 **Example (4D Continuous Space)**:
+
 ```yaml
 version: "1.0"
 description: "4D continuous space for abstract state experiments"
@@ -674,17 +692,20 @@ continuousnd:
 ```
 
 **Boundary Modes**:
+
 - `clamp`: Hard walls (agent position clamped to edges)
 - `wrap`: Toroidal wraparound (Pac-Man style)
 - `bounce`: Elastic reflection (agent bounces back from boundary)
 - `sticky`: Sticky walls (agent stays in place when hitting boundary)
 
 **Distance Metrics**:
+
 - `manhattan`: L1 norm, |x1-x2| + |y1-y2| (matches 4-directional movement)
 - `euclidean`: L2 norm, sqrt((x1-x2)² + (y1-y2)²) (straight-line distance)
 - `chebyshev`: L∞ norm, max(|x1-x2|, |y1-y2|) (8-directional movement)
 
 **Observation Encoding Modes** (Phase 5C):
+
 - `relative`: Normalized coordinates [0,1] per dimension (N dims)
   - Grid-size independent, enables transfer learning
   - Example: 7D grid → 7 observation dims
@@ -696,6 +717,7 @@ continuousnd:
   - Example: 7D grid → 7 observation dims (raw coords)
 
 **Action Space Formula**:
+
 - **N-dimensional substrates**: 2N + 1 actions
   - GridND: 2N movement actions (±1 per dimension) + INTERACT
   - ContinuousND: 2N movement actions (±movement_delta per dimension) + INTERACT
@@ -706,6 +728,7 @@ continuousnd:
   - 1D continuous: 4 actions (LEFT, RIGHT, INTERACT, WAIT)
 
 **High-Dimensional Substrate Warnings**:
+
 - N≥10 dimensions triggers warning (action space ≥21 grows large)
 - Partial observability (POMDP) not supported for N≥4
   - 4D with vision_range=2: 5⁴ = 625 cells
@@ -713,6 +736,7 @@ continuousnd:
   - Use full observability with coordinate encoding instead
 
 **Aspatial Mode** (no positioning):
+
 ```yaml
 version: "1.0"
 description: "Aspatial universe (pure resource management)"
@@ -721,6 +745,7 @@ aspatial: {}
 ```
 
 **Template Configs**:
+
 - `configs/templates/substrate.yaml` - Standard 2D grid
 - `configs/templates/substrate_continuous_1d.yaml` - 1D continuous line
 - `configs/templates/substrate_continuous_2d.yaml` - 2D continuous plane
@@ -735,12 +760,14 @@ Defines domain-specific terminology for actions. If not specified, defaults to "
 **Key Concept**: Action labels separate **canonical action semantics** (what substrates interpret) from **user-facing labels** (what students see).
 
 **Example (Gaming Preset - Default)**:
+
 ```yaml
 preset: "gaming"
 # Automatically provides: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, FORWARD, BACKWARD
 ```
 
 **Example (Custom Submarine Labels)**:
+
 ```yaml
 custom:
   0: "PORT"       # Move left
@@ -754,6 +781,7 @@ custom:
 ```
 
 **Available Presets**:
+
 - `gaming`: Standard gaming controls (LEFT/RIGHT/UP/DOWN/FORWARD/BACKWARD)
 - `6dof`: Robotics 6-DoF terminology (SWAY_LEFT/RIGHT, HEAVE_UP/DOWN, SURGE_FORWARD/BACKWARD)
 - `cardinal`: Compass directions (NORTH/SOUTH/EAST/WEST/ASCEND/DESCEND)
@@ -761,12 +789,14 @@ custom:
 
 **Dimensionality Filtering**:
 Labels are automatically filtered to match substrate dimensionality:
+
 - **Aspatial (0D)**: INTERACT, WAIT (2 actions)
 - **1D**: LEFT, RIGHT, INTERACT, WAIT (4 actions)
 - **2D**: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT (6 actions)
 - **3D**: UP, DOWN, LEFT, RIGHT, INTERACT, WAIT, FORWARD, BACKWARD (8 actions)
 
 **Pedagogical Value**:
+
 - Demonstrates that labels are arbitrary, semantics matter
 - Enables domain-appropriate learning (robotics, marine, aviation, gaming)
 - Reveals how different communities label identical mathematical transformations
@@ -956,6 +986,7 @@ The frontend supports **two rendering modes** based on substrate type:
 **Component**: `Grid.vue` (SVG-based 2D grid)
 
 **Features**:
+
 - Grid cells rendered as SVG rectangles
 - Agents positioned at (x, y) coordinates
 - Affordances displayed as icons at grid positions
@@ -964,6 +995,7 @@ The frontend supports **two rendering modes** based on substrate type:
 - Novelty heatmap (RND exploration)
 
 **WebSocket Contract**:
+
 ```json
 {
   "substrate": {
@@ -983,6 +1015,7 @@ The frontend supports **two rendering modes** based on substrate type:
 ```
 
 **Topology Field** (Grid Substrates Only):
+
 - **Grid2D**: `topology: "square"` (4-connected 2D grid)
 - **Grid3D**: `topology: "cubic"` (6-connected 3D grid)
 - **GridND**: `topology: "hypercube"` (2N-connected ND grid)
@@ -997,6 +1030,7 @@ The frontend supports **two rendering modes** based on substrate type:
 **Component**: `AspatialView.vue` (Meters-only dashboard)
 
 **Features**:
+
 - Large meter bars with color coding (critical/warning/healthy)
 - Affordance list (no positions, just availability)
 - Recent actions log (temporal context without spatial context)
@@ -1004,6 +1038,7 @@ The frontend supports **two rendering modes** based on substrate type:
 - No agent trails (position-based feature)
 
 **WebSocket Contract**:
+
 ```json
 {
   "substrate": {
@@ -1019,6 +1054,7 @@ The frontend supports **two rendering modes** based on substrate type:
 
 **Rationale**:
 Aspatial universes have no concept of "position" - rendering a fake grid would:
+
 1. Be pedagogically harmful (teaches incorrect intuitions)
 2. Mislead operators about agent behavior
 3. Imply spatial relationships that don't exist
@@ -1030,12 +1066,14 @@ Instead, aspatial mode focuses on **meters** (primary learning signal) and **int
 ### Substrate Detection
 
 **Logic** (in `App.vue`):
+
 ```vue
 <Grid v-if="store.substrateType === 'grid2d'" ... />
 <AspatialView v-else-if="store.substrateType === 'aspatial'" ... />
 ```
 
 **Fallback** (for legacy checkpoints without substrate metadata):
+
 ```javascript
 const substrate = message.substrate || {
   type: "grid2d",  // Assume legacy spatial behavior
@@ -1050,10 +1088,12 @@ const substrate = message.substrate || {
 ### Running Frontend
 
 **Prerequisites**:
+
 1. Live inference server running (provides WebSocket endpoint)
 2. Node.js and npm installed
 
 **Commands**:
+
 ```bash
 # Terminal 1: Start inference server (from worktree with checkpoints)
 cd /home/john/hamlet/.worktrees/substrate-abstraction
@@ -1068,6 +1108,7 @@ npm run dev
 ```
 
 **Port Configuration**:
+
 - Frontend dev server: `localhost:5173` (Vite default)
 - WebSocket endpoint: `localhost:8766` (live_inference default)
 - Frontend auto-connects to WebSocket on component mount
@@ -1077,6 +1118,7 @@ npm run dev
 ### Customizing Visualization
 
 **Affordance Icons** (`frontend/src/utils/constants.js`):
+
 ```javascript
 export const AFFORDANCE_ICONS = {
   Bed: '🛏️',
@@ -1087,6 +1129,7 @@ export const AFFORDANCE_ICONS = {
 ```
 
 **Meter Colors** (`frontend/src/styles/tokens.js`):
+
 ```javascript
 '--color-success': '#22c55e',  // Healthy meters
 '--color-warning': '#f59e0b',  // Warning meters
@@ -1094,6 +1137,7 @@ export const AFFORDANCE_ICONS = {
 ```
 
 **Grid Cell Size** (`frontend/src/utils/constants.js`):
+
 ```javascript
 export const CELL_SIZE = 75  // Pixels per grid cell
 ```

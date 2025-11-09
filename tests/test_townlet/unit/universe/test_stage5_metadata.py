@@ -27,7 +27,7 @@ def test_stage5_computes_metadata_and_observation_spec(base_config_dir: Path, ba
     compiler = UniverseCompiler()
     symbol_table = compiler._stage_2_build_symbol_tables(base_raw_configs)
 
-    metadata, observation_spec = compiler._stage_5_compute_metadata(base_config_dir, base_raw_configs, symbol_table)
+    metadata, observation_spec, _ = compiler._stage_5_compute_metadata(base_config_dir, base_raw_configs, symbol_table)
 
     assert metadata.universe_name == base_config_dir.name
     assert metadata.meter_count == len(base_raw_configs.bars)
@@ -159,7 +159,7 @@ def test_observation_spec_field_snapshots(pack_name: str) -> None:
     compiler = UniverseCompiler()
     symbol_table = compiler._stage_2_build_symbol_tables(raw_configs)
 
-    _, observation_spec = compiler._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
+    _, observation_spec, _ = compiler._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
 
     expected_fields = case["fields"]
     actual_triplets = [(field.name, field.scope, field.dims) for field in observation_spec.fields]
@@ -175,7 +175,7 @@ def test_stage5_config_hash_changes_when_config_changes(tmp_path: Path, base_con
     original = RawConfigs.from_config_dir(temp_pack)
     compiler = UniverseCompiler()
     symbol_table = compiler._stage_2_build_symbol_tables(original)
-    metadata_before, _ = compiler._stage_5_compute_metadata(temp_pack, original, symbol_table)
+    metadata_before, _, _ = compiler._stage_5_compute_metadata(temp_pack, original, symbol_table)
 
     training_path = temp_pack / "training.yaml"
     text = training_path.read_text()
@@ -184,7 +184,7 @@ def test_stage5_config_hash_changes_when_config_changes(tmp_path: Path, base_con
 
     mutated = RawConfigs.from_config_dir(temp_pack)
     symbol_table_mut = compiler._stage_2_build_symbol_tables(mutated)
-    metadata_after, _ = compiler._stage_5_compute_metadata(temp_pack, mutated, symbol_table_mut)
+    metadata_after, _, _ = compiler._stage_5_compute_metadata(temp_pack, mutated, symbol_table_mut)
 
     assert metadata_before.config_hash != metadata_after.config_hash
 
@@ -260,7 +260,7 @@ def test_stage5_metadata_records_expected_provenance(base_config_dir: Path, base
     compiler = UniverseCompiler()
     symbol_table = compiler._stage_2_build_symbol_tables(base_raw_configs)
 
-    metadata, _ = compiler._stage_5_compute_metadata(base_config_dir, base_raw_configs, symbol_table)
+    metadata, _, _ = compiler._stage_5_compute_metadata(base_config_dir, base_raw_configs, symbol_table)
 
     regenerated = compiler._compute_provenance_id(
         config_hash=metadata.config_hash,

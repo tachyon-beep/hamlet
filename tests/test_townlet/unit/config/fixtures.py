@@ -53,6 +53,7 @@ VALID_ENVIRONMENT_PARAMS = {
     "vision_range": 8,
     "enable_temporal_mechanics": False,
     "enabled_affordances": None,  # None = all affordances
+    "randomize_affordances": True,
     "energy_move_depletion": 0.005,
     "energy_wait_depletion": 0.001,
     "energy_interact_depletion": 0.0,
