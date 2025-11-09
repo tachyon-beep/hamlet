@@ -81,7 +81,18 @@ class TestAffordanceMetadata:
     """Affordance metadata helpers."""
 
     def test_lookup(self):
-        metadata = AffordanceMetadata(affordances=(AffordanceInfo(id="bed", name="Bed", enabled=True, effects={"energy": 0.5}, cost=5.0),))
+        metadata = AffordanceMetadata(
+            affordances=(
+                AffordanceInfo(
+                    id="bed",
+                    name="Bed",
+                    enabled=True,
+                    effects={"energy": 0.5},
+                    cost=5.0,
+                    category="rest",
+                ),
+            )
+        )
         assert metadata.get_affordance_by_name("Bed").enabled
         with pytest.raises(KeyError):
             metadata.get_affordance_by_name("Shower")
@@ -92,12 +103,30 @@ def test_universe_metadata_instantiation():
     metadata = UniverseMetadata(
         universe_name="L0_0_minimal",
         schema_version="1.0",
+        substrate_type="grid",
+        position_dim=2,
+        meter_count=2,
+        meter_names=("energy", "mood"),
+        meter_name_to_index={"energy": 0, "mood": 1},
+        affordance_count=1,
+        affordance_ids=("Bed",),
+        affordance_id_to_index={"Bed": 0},
+        action_count=5,
+        observation_dim=42,
+        grid_size=3,
+        grid_cells=9,
+        max_sustainable_income=10.0,
+        total_affordance_costs=5.0,
+        economic_balance=2.0,
+        ticks_per_day=24,
+        config_version="1.0",
+        compiler_version="0.1.0",
         compiled_at="2025-11-07T12:00:00Z",
         config_hash="abc123",
-        obs_dim=42,
-        action_dim=5,
-        num_meters=8,
-        num_affordances=14,
-        position_dim=2,
+        provenance_id="prov",
+        compiler_git_sha="deadbeef",
+        python_version="3.11.0",
+        torch_version="2.1.0",
+        pydantic_version="2.6.0",
     )
-    assert metadata.obs_dim == 42
+    assert metadata.observation_dim == 42

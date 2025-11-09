@@ -2,20 +2,43 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import sys
+from collections import defaultdict
+from copy import deepcopy
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.cascade import CascadeConfig
 from townlet.config.effect_pipeline import EffectPipeline
 from townlet.environment.substrate_action_validator import SubstrateActionValidator
 from townlet.substrate.config import SubstrateConfig
+from townlet.universe.adapters.vfs_adapter import vfs_to_observation_spec
 from townlet.universe.compiler_inputs import RawConfigs
+from townlet.universe.dto import (
+    ActionMetadata,
+    ActionSpaceMetadata,
+    AffordanceInfo,
+    AffordanceMetadata,
+    MeterInfo,
+    MeterMetadata,
+    ObservationSpec,
+    UniverseMetadata,
+)
+from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 
 from .errors import CompilationErrorCollector
 from .symbol_table import UniverseSymbolTable
 
 logger = logging.getLogger(__name__)
+
+SCHEMA_VERSION = "1.0"
+COMPILER_VERSION = "0.1.0"
 
 
 class UniverseCompiler:
@@ -23,6 +46,11 @@ class UniverseCompiler:
 
     def __init__(self) -> None:
         self._symbol_table = UniverseSymbolTable()
+        self._metadata: UniverseMetadata | None = None
+        self._observation_spec: ObservationSpec | None = None
+        self._action_metadata: ActionSpaceMetadata | None = None
+        self._meter_metadata: MeterMetadata | None = None
+        self._affordance_metadata: AffordanceMetadata | None = None
 
     def compile(self, config_dir: Path, use_cache: bool = True):  # pragma: no cover - placeholder
         """Compile a config pack into a CompiledUniverse.
@@ -46,6 +74,19 @@ class UniverseCompiler:
         for warning in stage4_errors.warnings:
             logger.warning(warning)
         stage4_errors.check_and_raise("Stage 4: Cross-Validation")
+
+        metadata, observation_spec = self._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
+        (
+            action_space_metadata,
+            meter_metadata,
+            affordance_metadata,
+        ) = self._stage_5_build_rich_metadata(raw_configs)
+
+        self._metadata = metadata
+        self._observation_spec = observation_spec
+        self._action_metadata = action_space_metadata
+        self._meter_metadata = meter_metadata
+        self._affordance_metadata = affordance_metadata
 
         raise NotImplementedError("UniverseCompiler.compile is not yet fully implemented")
 
@@ -796,3 +837,297 @@ class UniverseCompiler:
                 dfs(node, [])
 
         return cycles
+
+    def _stage_5_compute_metadata(
+        self,
+        config_dir: Path,
+        raw_configs: RawConfigs,
+        symbol_table: UniverseSymbolTable,
+    ) -> tuple[UniverseMetadata, ObservationSpec]:
+        """Stage 5 – compute derived metadata and observation specification."""
+
+        import torch
+        from pydantic import __version__ as pydantic_version  # lazy import to avoid startup penalty
+
+        exposures = self._load_observation_exposures(config_dir, raw_configs)
+        obs_builder = VFSObservationSpecBuilder()
+        vfs_fields = obs_builder.build_observation_spec(raw_configs.variables_reference, exposures)
+        observation_spec = vfs_to_observation_spec(vfs_fields)
+
+        sorted_bars = sorted(raw_configs.bars, key=lambda bar: bar.index)
+        meter_names = tuple(bar.name for bar in sorted_bars)
+        meter_name_to_index = {bar.name: bar.index for bar in sorted_bars}
+
+        affordances = tuple(raw_configs.affordances)
+        affordance_ids = tuple(aff.id for aff in affordances)
+        affordance_id_to_index = {aff.id: idx for idx, aff in enumerate(affordances)}
+
+        action_count = len(raw_configs.global_actions.actions)
+
+        max_income = self._compute_max_income(raw_configs.affordances)
+        total_costs = self._compute_total_costs(raw_configs.affordances)
+        economic_balance = max_income / total_costs if total_costs > 0 else float("inf")
+
+        grid_size, grid_cells = self._derive_grid_dimensions(raw_configs.substrate)
+
+        config_hash = self._compute_config_hash(config_dir)
+        compiler_git_sha = self._get_git_sha()
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        provenance_id = self._compute_provenance_id(
+            config_hash=config_hash,
+            compiler_version=COMPILER_VERSION,
+            git_sha=compiler_git_sha,
+            python_version=python_version,
+            torch_version=torch.__version__,
+            pydantic_version=pydantic_version,
+        )
+
+        metadata = UniverseMetadata(
+            universe_name=config_dir.name,
+            schema_version=SCHEMA_VERSION,
+            substrate_type=self._label_substrate_type(raw_configs.substrate),
+            position_dim=self._infer_position_dim(raw_configs.substrate),
+            meter_count=len(sorted_bars),
+            meter_names=meter_names,
+            meter_name_to_index=meter_name_to_index,
+            affordance_count=len(affordance_ids),
+            affordance_ids=affordance_ids,
+            affordance_id_to_index=affordance_id_to_index,
+            action_count=action_count,
+            observation_dim=observation_spec.total_dims,
+            grid_size=grid_size,
+            grid_cells=grid_cells,
+            max_sustainable_income=max_income,
+            total_affordance_costs=total_costs,
+            economic_balance=economic_balance,
+            ticks_per_day=24,
+            config_version=self._resolve_config_version(raw_configs),
+            compiler_version=COMPILER_VERSION,
+            compiled_at=datetime.now(UTC).isoformat(),
+            config_hash=config_hash,
+            provenance_id=provenance_id,
+            compiler_git_sha=compiler_git_sha,
+            python_version=python_version,
+            torch_version=torch.__version__,
+            pydantic_version=pydantic_version,
+        )
+
+        return metadata, observation_spec
+
+    def _stage_5_build_rich_metadata(
+        self,
+        raw_configs: RawConfigs,
+    ) -> tuple[ActionSpaceMetadata, MeterMetadata, AffordanceMetadata]:
+        """Stage 5 – build training-facing metadata structures."""
+
+        actions_meta: list[ActionMetadata] = []
+        for action in raw_configs.global_actions.actions:
+            actions_meta.append(
+                ActionMetadata(
+                    id=action.id,
+                    name=action.name,
+                    type=action.type,
+                    enabled=getattr(action, "enabled", True),
+                    source=getattr(action, "source", "custom"),
+                    costs=dict(action.costs),
+                    description=action.description or "",
+                )
+            )
+
+        action_space_metadata = ActionSpaceMetadata(
+            total_actions=len(actions_meta),
+            actions=tuple(actions_meta),
+        )
+
+        meter_infos = [
+            MeterInfo(
+                name=bar.name,
+                index=bar.index,
+                critical=getattr(bar, "critical", False),
+                initial_value=bar.initial,
+                observable=True,
+                description=bar.description or "",
+            )
+            for bar in sorted(raw_configs.bars, key=lambda bar: bar.index)
+        ]
+        meter_metadata = MeterMetadata(meters=tuple(meter_infos))
+
+        enabled_affordances = raw_configs.environment.enabled_affordances
+        enabled_set = set(enabled_affordances) if enabled_affordances else None
+
+        affordance_infos: list[AffordanceInfo] = []
+        for aff in raw_configs.affordances:
+            if enabled_set is None:
+                is_enabled = True
+            else:
+                is_enabled = aff.name in enabled_set or aff.id in enabled_set
+            affordance_infos.append(
+                AffordanceInfo(
+                    id=aff.id,
+                    name=aff.name,
+                    enabled=is_enabled,
+                    effects=self._summarize_affordance_effects(aff),
+                    cost=self._extract_money_cost(aff),
+                    category=getattr(aff, "category", None),
+                    description=aff.description or "",
+                )
+            )
+
+        affordance_metadata = AffordanceMetadata(affordances=tuple(affordance_infos))
+
+        return action_space_metadata, meter_metadata, affordance_metadata
+
+    def _derive_grid_dimensions(self, substrate: SubstrateConfig) -> tuple[int | None, int | None]:
+        if substrate.type == "grid" and substrate.grid is not None:
+            width = substrate.grid.width
+            height = substrate.grid.height
+            return width, width * height
+        return None, None
+
+    def _label_substrate_type(self, substrate: SubstrateConfig) -> str:
+        if substrate.type != "grid":
+            return substrate.type
+        if substrate.grid is None:
+            return "grid"
+        return f"grid_{substrate.grid.topology}"
+
+    def _infer_position_dim(self, substrate: SubstrateConfig) -> int:
+        if substrate.type == "aspatial":
+            return 0
+        if substrate.type == "grid":
+            if substrate.grid and substrate.grid.topology == "cubic":
+                return 3
+            return 2
+        if substrate.type == "gridnd" and substrate.gridnd is not None:
+            return len(substrate.gridnd.dimension_sizes)
+        if substrate.type == "continuous" and substrate.continuous is not None:
+            return substrate.continuous.dimensions
+        if substrate.type == "continuousnd" and substrate.continuous is not None:
+            return len(substrate.continuous.bounds)
+        return 0
+
+    def _resolve_config_version(self, raw_configs: RawConfigs) -> str:
+        return getattr(raw_configs.hamlet_config, "version", "1.0")
+
+    def _load_observation_exposures(self, config_dir: Path, raw_configs: RawConfigs) -> list[dict[str, Any]]:
+        yaml_path = config_dir / "variables_reference.yaml"
+        exposures: list[dict[str, Any]] = []
+        try:
+            with yaml_path.open() as handle:
+                data = yaml.safe_load(handle) or {}
+        except FileNotFoundError:
+            data = {}
+
+        raw_exposures = data.get("exposed_observations")
+        if raw_exposures:
+            exposures = [deepcopy(obs) for obs in raw_exposures]
+        else:
+            for var in raw_configs.variables_reference:
+                readable = getattr(var, "readable_by", []) or []
+                if "agent" in readable:
+                    exposures.append(
+                        {
+                            "id": f"obs_{var.id}",
+                            "source_variable": var.id,
+                            "exposed_to": ["agent"],
+                        }
+                    )
+
+        if raw_configs.environment.partial_observability:
+            exposures = [obs for obs in exposures if obs.get("source_variable") != "grid_encoding"]
+        else:
+            exposures = [obs for obs in exposures if obs.get("source_variable") != "local_window"]
+
+        return exposures
+
+    def _compute_config_hash(self, config_dir: Path) -> str:
+        files_to_hash = [
+            config_dir / "training.yaml",
+            config_dir / "bars.yaml",
+            config_dir / "cascades.yaml",
+            config_dir / "affordances.yaml",
+            config_dir / "substrate.yaml",
+            config_dir / "cues.yaml",
+            config_dir / "variables_reference.yaml",
+            Path("configs") / "global_actions.yaml",
+        ]
+
+        digest = hashlib.sha256()
+        for file_path in sorted(files_to_hash):
+            if not file_path.exists():
+                continue
+            digest.update(str(file_path.resolve()).encode("utf-8"))
+            with file_path.open("rb") as handle:
+                digest.update(handle.read())
+        return digest.hexdigest()
+
+    def _compute_provenance_id(
+        self,
+        *,
+        config_hash: str,
+        compiler_version: str,
+        git_sha: str,
+        python_version: str,
+        torch_version: str,
+        pydantic_version: str,
+    ) -> str:
+        payload = "|".join(
+            [
+                config_hash,
+                compiler_version,
+                git_sha,
+                python_version,
+                torch_version,
+                pydantic_version,
+            ]
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _get_git_sha(self) -> str:
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout.strip()
+        except Exception:
+            return "unknown"
+
+    def _summarize_affordance_effects(self, affordance: AffordanceConfig) -> dict[str, float]:
+        totals: defaultdict[str, float] = defaultdict(float)
+
+        def _add_entries(entries: object | None) -> None:
+            if not entries:
+                return
+            for entry in entries:
+                meter = self._get_meter(entry)
+                amount = self._get_amount(entry)
+                if meter and amount is not None:
+                    totals[meter] += amount
+
+        pipeline = affordance.effect_pipeline
+        if pipeline is not None:
+            _add_entries(pipeline.on_start)
+            _add_entries(pipeline.per_tick)
+            _add_entries(pipeline.on_completion)
+            _add_entries(pipeline.on_early_exit)
+            _add_entries(pipeline.on_failure)
+        else:
+            _add_entries(getattr(affordance, "effects", []))
+            _add_entries(getattr(affordance, "effects_per_tick", []))
+            _add_entries(getattr(affordance, "completion_bonus", []))
+
+        return dict(totals)
+
+    def _extract_money_cost(self, affordance: AffordanceConfig) -> float:
+        total = 0.0
+        for entry in getattr(affordance, "costs", []) or []:
+            if self._get_meter(entry) == "money":
+                amount = self._get_amount(entry)
+                if amount is not None:
+                    total += amount
+        return total

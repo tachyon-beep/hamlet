@@ -16,6 +16,7 @@ class AffordanceInfo:
     enabled: bool
     effects: Mapping[str, float]
     cost: float
+    category: str | None = None
     description: str = ""
 
     def __post_init__(self) -> None:
