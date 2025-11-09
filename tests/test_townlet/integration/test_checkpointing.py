@@ -27,6 +27,7 @@ import torch
 
 from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.curriculum.static import StaticCurriculum
 from townlet.demo.runner import DemoRunner
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
@@ -47,6 +48,11 @@ def env_builder(env_factory, cpu_device):
         return env
 
     return _build
+
+
+def _init_curriculum(curriculum, num_agents: int) -> None:
+    if hasattr(curriculum, "initialize_population"):
+        curriculum.initialize_population(num_agents)
 
 
 # =============================================================================
@@ -161,7 +167,7 @@ class TestPopulationCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = AdaptiveIntrinsicExploration(
             obs_dim=basic_env.observation_dim,
@@ -210,7 +216,7 @@ class TestPopulationCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=0.5,
@@ -278,7 +284,7 @@ class TestPopulationCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration()
 
@@ -351,7 +357,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum1.initialize_population(3)
+        _init_curriculum(curriculum1, 3)
 
         # Advance agents to different stages
         curriculum1.tracker.agent_stages[0] = 2
@@ -373,7 +379,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum2.initialize_population(3)
+        _init_curriculum(curriculum2, 3)
 
         # Verify fresh curriculum starts at stage 1
         assert torch.all(curriculum2.tracker.agent_stages == 1), "Fresh curriculum should start all agents at stage 1"
@@ -392,7 +398,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum1.initialize_population(2)
+        _init_curriculum(curriculum1, 2)
 
         # Simulate episode completions to build history
         for _ in range(10):
@@ -409,7 +415,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum2.initialize_population(2)
+        _init_curriculum(curriculum2, 2)
 
         # Load saved state
         curriculum2.load_state_dict(state)
@@ -549,7 +555,7 @@ class TestRunnerCheckpointing:
                     survival_advance_threshold=0.7,
                     survival_retreat_threshold=0.3,
                 )
-                runner.curriculum.initialize_population(1)
+                runner._init_curriculum(runner.curriculum, 1)
 
                 runner.exploration = AdaptiveIntrinsicExploration(
                     obs_dim=runner.env.observation_dim,
@@ -604,7 +610,7 @@ class TestRunnerCheckpointing:
             ) as runner1:
                 runner1.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner1.curriculum.initialize_population(1)
+                runner1._init_curriculum(runner1.curriculum, 1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
                 runner1.population = VectorizedPopulation(
                     env=runner1.env,
@@ -626,7 +632,7 @@ class TestRunnerCheckpointing:
             ) as runner2:
                 runner2.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner2.curriculum.initialize_population(1)
+                runner2._init_curriculum(runner2.curriculum, 1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
                 runner2.population = VectorizedPopulation(
                     env=runner2.env,
@@ -657,7 +663,7 @@ class TestRunnerCheckpointing:
             ) as runner1:
                 runner1.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner1.curriculum.initialize_population(1)
+                runner1._init_curriculum(runner1.curriculum, 1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
                 runner1.population = VectorizedPopulation(
                     env=runner1.env,
@@ -689,7 +695,7 @@ class TestRunnerCheckpointing:
             ) as runner2:
                 runner2.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner2.curriculum.initialize_population(1)
+                runner2._init_curriculum(runner2.curriculum, 1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
                 runner2.population = VectorizedPopulation(
                     env=runner2.env,
@@ -734,8 +740,11 @@ class TestCheckpointRoundTrip:
         # Create environment and components
         env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
-        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(env.meter_name_to_index.keys()),
+        )
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=0.5,
@@ -815,8 +824,11 @@ class TestCheckpointRoundTrip:
         # Setup
         env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=2)
 
-        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(2)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(env.meter_name_to_index.keys()),
+        )
+        _init_curriculum(curriculum, 2)
 
         exploration = AdaptiveIntrinsicExploration(
             obs_dim=env.observation_dim,
@@ -858,7 +870,7 @@ class TestCheckpointRoundTrip:
         env2.reset()  # Initialize environment
 
         curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(2)
+        _init_curriculum(curriculum2, 2)
 
         exploration2 = AdaptiveIntrinsicExploration(
             obs_dim=env2.observation_dim,
@@ -914,12 +926,11 @@ class TestVariableMeterCheckpoints:
 
     def test_checkpoint_includes_meter_metadata(self, cpu_device, task001_env_4meter):
         """Saved checkpoint should include meter count and names in metadata."""
-        curriculum = AdversarialCurriculum(
-            max_steps_per_episode=100,
-            survival_advance_threshold=0.7,
-            survival_retreat_threshold=0.3,
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=0.5,
@@ -962,8 +973,11 @@ class TestVariableMeterCheckpoints:
     def test_loading_checkpoint_validates_meter_count(self, cpu_device, task001_env_4meter, basic_env, tmp_path):
         """Loading checkpoint should fail if meter counts don't match."""
         # Create 4-meter population and save checkpoint (no training needed)
-        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        _init_curriculum(curriculum, 1)
         exploration = EpsilonGreedyExploration()
 
         pop_4meter = VectorizedPopulation(
@@ -984,8 +998,11 @@ class TestVariableMeterCheckpoints:
         assert checkpoint_4meter["universe_metadata"]["meter_count"] == 4
 
         # Try to load into 8-meter environment (should fail)
-        curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(1)
+        curriculum2 = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        _init_curriculum(curriculum2, 1)
         exploration2 = EpsilonGreedyExploration()
 
         pop_8meter = VectorizedPopulation(
@@ -1006,7 +1023,7 @@ class TestVariableMeterCheckpoints:
     def test_loading_checkpoint_with_matching_meters_succeeds(self, cpu_device, task001_env_4meter):
         """Loading checkpoint should succeed if meter counts match."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
         exploration = EpsilonGreedyExploration()
 
         pop1 = VectorizedPopulation(
@@ -1028,7 +1045,7 @@ class TestVariableMeterCheckpoints:
 
         # Create new population with same meter count
         curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(1)
+        _init_curriculum(curriculum2, 1)
         exploration2 = EpsilonGreedyExploration()
 
         pop2 = VectorizedPopulation(
@@ -1052,7 +1069,7 @@ class TestVariableMeterCheckpoints:
         """Legacy checkpoints (no metadata) should load with warning."""
         # Create a real checkpoint first to get proper network state
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
         exploration = EpsilonGreedyExploration()
 
         population = VectorizedPopulation(
@@ -1075,7 +1092,7 @@ class TestVariableMeterCheckpoints:
 
         # Create new population
         curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(1)
+        _init_curriculum(curriculum2, 1)
         exploration2 = EpsilonGreedyExploration()
 
         population2 = VectorizedPopulation(

@@ -208,9 +208,33 @@ class RawConfigs:
         combined: list[ActionConfig] = []
         next_id = 0
 
+        meter_names = {bar.name for bar in hamlet_config.bars}
+        meter_trim_hint_added = False
+
+        def _trim_meter_payload(payload: dict[str, float]) -> dict[str, float]:
+            nonlocal meter_trim_hint_added
+            if not payload:
+                return payload
+            missing = [meter for meter in payload if meter not in meter_names]
+            if missing:
+                if not meter_trim_hint_added:
+                    errors.add_hint(
+                        "Action costs/effects referencing meters absent from bars.yaml were ignored for this config. "
+                        "Ensure variable-meter configs define compatible action costs."
+                    )
+                    meter_trim_hint_added = True
+                payload = {meter: amount for meter, amount in payload.items() if meter in meter_names}
+            return payload
+
         def _clone(action: ActionConfig) -> ActionConfig:
             nonlocal next_id
-            cloned = action.model_copy(update={"id": next_id})
+            cloned = action.model_copy(
+                update={
+                    "id": next_id,
+                    "costs": _trim_meter_payload(dict(action.costs)),
+                    "effects": _trim_meter_payload(dict(action.effects)),
+                }
+            )
             next_id += 1
             return cloned
 

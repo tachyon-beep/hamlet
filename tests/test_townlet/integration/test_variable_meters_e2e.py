@@ -13,6 +13,7 @@ import pytest
 import torch
 
 from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
@@ -23,7 +24,8 @@ class TestVariableMetersEndToEnd:
     def test_4meter_training_basic(self, cpu_device, task001_env_4meter):
         """Train agent on 4-meter config for basic episode."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=50)
-        curriculum.initialize_population(1)
+        if hasattr(curriculum, "initialize_population"):
+            curriculum.initialize_population(1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=1.0,
@@ -58,7 +60,8 @@ class TestVariableMetersEndToEnd:
     def test_8meter_backward_compatibility(self, cpu_device, basic_env):
         """Verify 8-meter configs still work (backward compatibility)."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=50)
-        curriculum.initialize_population(1)
+        if hasattr(curriculum, "initialize_population"):
+            curriculum.initialize_population(1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=1.0,
@@ -92,8 +95,12 @@ class TestVariableMetersEndToEnd:
 
     def test_checkpoint_save_load_4meter(self, cpu_device, task001_env_4meter, tmp_path):
         """Test checkpoint save/load with 4-meter config."""
-        curriculum = AdversarialCurriculum(max_steps_per_episode=50)
-        curriculum.initialize_population(1)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        if hasattr(curriculum, "initialize_population"):
+            curriculum.initialize_population(1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=0.5,
@@ -126,8 +133,12 @@ class TestVariableMetersEndToEnd:
         torch.save(checkpoint, checkpoint_path)
 
         # Create second population and load
-        curriculum2 = AdversarialCurriculum(max_steps_per_episode=50)
-        curriculum2.initialize_population(1)
+        curriculum2 = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        if hasattr(curriculum2, "initialize_population"):
+            curriculum2.initialize_population(1)
 
         exploration2 = EpsilonGreedyExploration(
             epsilon=1.0,
@@ -155,8 +166,12 @@ class TestVariableMetersEndToEnd:
 
     def test_cross_meter_count_rejection(self, cpu_device, task001_env_4meter, basic_env):
         """Test that loading 4-meter checkpoint into 8-meter env fails."""
-        curriculum = AdversarialCurriculum(max_steps_per_episode=50)
-        curriculum.initialize_population(1)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        if hasattr(curriculum, "initialize_population"):
+            curriculum.initialize_population(1)
 
         exploration = EpsilonGreedyExploration()
 
@@ -175,8 +190,12 @@ class TestVariableMetersEndToEnd:
         checkpoint_4meter = pop_4meter.get_checkpoint_state()
 
         # Create 8-meter population
-        curriculum2 = AdversarialCurriculum(max_steps_per_episode=50)
-        curriculum2.initialize_population(1)
+        curriculum2 = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        if hasattr(curriculum2, "initialize_population"):
+            curriculum2.initialize_population(1)
 
         exploration2 = EpsilonGreedyExploration()
 
@@ -298,12 +317,12 @@ class TestVariableMetersEndToEnd:
         network expects num_meters features in the observation but receives
         a different count if hardcoded.
         """
-        from townlet.curriculum.adversarial import AdversarialCurriculum
-        from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
-        from townlet.population.vectorized import VectorizedPopulation
-
-        curriculum = AdversarialCurriculum(max_steps_per_episode=50)
-        curriculum.initialize_population(1)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter_pomdp.meter_name_to_index.keys()),
+        )
+        if hasattr(curriculum, "initialize_population"):
+            curriculum.initialize_population(1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=1.0,

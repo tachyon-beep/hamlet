@@ -526,6 +526,12 @@ class VectorizedHamletEnv:
         Returns:
             observations: [num_agents, observation_dim]
         """
+        # Refresh affordance layout each episode so randomization/configured layouts stay in sync
+        if self.randomize_affordances:
+            self.randomize_affordance_positions()
+        else:
+            self._apply_configured_affordance_positions()
+
         # Use substrate for position initialization (supports grid and aspatial)
         self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
 
