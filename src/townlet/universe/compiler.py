@@ -33,10 +33,26 @@ class UniverseCompiler:
         return RawConfigs.from_config_dir(config_dir)
 
     def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbolTable:
-        """Stage 2 – placeholder until implemented."""
+        """Stage 2 – register meters, variables, actions, cascades, and affordances."""
 
-        del raw_configs
-        raise NotImplementedError
+        table = UniverseSymbolTable()
+
+        for bar in raw_configs.bars:
+            table.register_meter(bar)
+
+        for variable in raw_configs.variables_reference:
+            table.register_variable(variable)
+
+        for action in raw_configs.global_actions.actions:
+            table.register_action(action)
+
+        for cascade in raw_configs.cascades:
+            table.register_cascade(cascade)
+
+        for affordance in raw_configs.affordances:
+            table.register_affordance(affordance)
+
+        return table
 
     def _stage_3_resolve_references(
         self,

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from townlet.universe.compiler import UniverseCompiler
+from townlet.universe.compiler_inputs import RawConfigs
 
 
 @pytest.mark.parametrize("pack_name", ["L0_0_minimal", "L1_full_observability"])
@@ -24,3 +25,13 @@ def test_compile_not_implemented():
     config_dir = Path("configs/L0_0_minimal")
     with pytest.raises(NotImplementedError):
         compiler.compile(config_dir)
+
+
+def test_stage2_builds_symbol_table():
+    compiler = UniverseCompiler()
+    raw_configs = RawConfigs.from_config_dir(Path("configs/L0_0_minimal"))
+
+    table = compiler._stage_2_build_symbol_tables(raw_configs)
+
+    assert "energy" in table.meters
+    assert table.actions
