@@ -55,3 +55,27 @@ def test_register_action_by_id(raw_configs: RawConfigs) -> None:
     assert table.get_action(action.id) is action
     with pytest.raises(CompilationError):
         table.register_action(action)
+
+
+def test_resolve_meter_reference(raw_configs: RawConfigs) -> None:
+    table = UniverseSymbolTable()
+    bar = raw_configs.bars[0]
+    table.register_meter(bar)
+
+    resolved = table.resolve_meter_reference(bar.name, location="cascades.yaml:test")
+    assert resolved is bar
+
+    with pytest.raises(ReferenceError) as exc_info:
+        table.resolve_meter_reference("missing", location="affordances.yaml:test")
+
+    message = str(exc_info.value)
+    assert "affordances.yaml:test" in message
+    assert "missing" in message
+
+
+def test_affordance_ids_sorted(raw_configs: RawConfigs) -> None:
+    table = UniverseSymbolTable()
+    for aff in raw_configs.affordances:
+        table.register_affordance(aff)
+
+    assert table.affordance_ids == sorted([aff.id for aff in raw_configs.affordances])

@@ -23,8 +23,15 @@ class UniverseCompiler:
         and emit CompiledUniverse artifacts.
         """
 
-        _ = self._stage_1_parse_individual_files(config_dir)
-        # TODO(compiler): implement caching and subsequent stages.
+        raw_configs = self._stage_1_parse_individual_files(config_dir)
+
+        symbol_table = self._stage_2_build_symbol_tables(raw_configs)
+        self._symbol_table = symbol_table
+
+        errors = CompilationErrorCollector(stage="Stage 3: Resolve References")
+        self._stage_3_resolve_references(raw_configs, symbol_table, errors)
+        errors.check_and_raise("Stage 3: Resolve References")
+
         raise NotImplementedError("UniverseCompiler.compile is not yet fully implemented")
 
     def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:

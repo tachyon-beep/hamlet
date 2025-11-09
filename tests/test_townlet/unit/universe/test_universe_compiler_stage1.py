@@ -1,11 +1,14 @@
 """Tests for the UniverseCompiler Stage 1 loader."""
 
+import shutil
 from pathlib import Path
 
 import pytest
 
 from townlet.universe.compiler import UniverseCompiler
 from townlet.universe.compiler_inputs import RawConfigs
+from townlet.universe.errors import CompilationError
+from townlet.universe.symbol_table import UniverseSymbolTable
 
 
 @pytest.mark.parametrize("pack_name", ["L0_0_minimal", "L1_full_observability"])
@@ -35,3 +38,50 @@ def test_stage2_builds_symbol_table():
 
     assert "energy" in table.meters
     assert table.actions
+
+
+def test_stage1_reports_missing_files(tmp_path: Path) -> None:
+    compiler = UniverseCompiler()
+
+    with pytest.raises(CompilationError) as exc_info:
+        compiler._stage_1_parse_individual_files(tmp_path)
+
+    error = exc_info.value
+    assert error.stage == "Stage 1: Parse"
+    combined = "\n".join(error.errors)
+    assert "variables_reference.yaml" in combined
+    assert "hamlet_config" in combined
+
+
+def test_stage1_reports_invalid_yaml(tmp_path: Path) -> None:
+    compiler = UniverseCompiler()
+    source_pack = Path("configs/L0_0_minimal")
+    test_pack = tmp_path / "broken_pack"
+    shutil.copytree(source_pack, test_pack)
+    (test_pack / "bars.yaml").write_text("bars: [broken::")
+
+    with pytest.raises(CompilationError) as exc_info:
+        compiler._stage_1_parse_individual_files(test_pack)
+
+    combined = "\n".join(exc_info.value.errors)
+    assert "bars" in combined or "YAML" in combined
+
+
+def test_compile_executes_stage2_before_stage3(monkeypatch) -> None:
+    compiler = UniverseCompiler()
+    called: dict[str, bool] = {"stage2": False}
+
+    def fake_stage2(self: UniverseCompiler, raw_configs: RawConfigs) -> UniverseSymbolTable:  # type: ignore[override]
+        called["stage2"] = True
+        return UniverseSymbolTable()
+
+    def fake_stage3(self: UniverseCompiler, raw_configs: RawConfigs, table: UniverseSymbolTable, errors):  # type: ignore[override]
+        raise NotImplementedError("Stage 3 not implemented")
+
+    monkeypatch.setattr(UniverseCompiler, "_stage_2_build_symbol_tables", fake_stage2, raising=False)
+    monkeypatch.setattr(UniverseCompiler, "_stage_3_resolve_references", fake_stage3, raising=False)
+
+    with pytest.raises(NotImplementedError):
+        compiler.compile(Path("configs/L0_0_minimal"))
+
+    assert called["stage2"] is True

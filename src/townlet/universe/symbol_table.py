@@ -61,6 +61,12 @@ class UniverseSymbolTable:
     def get_meter_names(self) -> list[str]:
         return [meter.name for meter in sorted(self.meters.values(), key=lambda m: m.index)]
 
+    def resolve_meter_reference(self, name: str, *, location: str | None = None) -> BarConfig:
+        if name not in self.meters:
+            prefix = f"{location}: " if location else ""
+            raise ReferenceError(f"{prefix}References non-existent meter '{name}'. Valid meters: {list(self.meters.keys())}")
+        return self.meters[name]
+
     def get_meter_count(self) -> int:
         return len(self.meters)
 
@@ -72,3 +78,10 @@ class UniverseSymbolTable:
 
     def get_affordance_count(self) -> int:
         return len(self.affordances)
+
+    @property
+    def affordance_ids(self) -> list[str]:
+        return sorted(self.affordances.keys())
+
+    def get_affordance(self, affordance_id: str) -> AffordanceConfig:
+        return self.affordances[affordance_id]
