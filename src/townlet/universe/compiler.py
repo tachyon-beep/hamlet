@@ -1062,10 +1062,9 @@ class UniverseCompiler:
                     }
                 )
 
-        affordance_count = len(raw_configs.affordances)
+        affordance_count = metadata.affordance_count
         action_mask_table = torch.zeros(
-            24,
-            max(affordance_count, 1),
+            (24, affordance_count),
             dtype=torch.bool,
             device=torch_device,
         )
@@ -1085,7 +1084,7 @@ class UniverseCompiler:
             base_depletions=base_depletions,
             cascade_data=dict(cascade_data),
             modulation_data=modulation_data,
-            action_mask_table=action_mask_table if affordance_count else None,
+            action_mask_table=action_mask_table,
             affordance_position_map=affordance_position_map,
         )
 

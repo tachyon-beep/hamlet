@@ -44,6 +44,8 @@ def test_stage6_builds_action_mask_with_operating_hours() -> None:
 
     optimization = compiler._stage_6_optimize(raw_configs, metadata)
 
+    assert optimization.action_mask_table.shape == (24, metadata.affordance_count)
+
     bed_idx = next(idx for idx, aff in enumerate(raw_configs.affordances) if aff.name == "Bed")
     bar_idx = next(idx for idx, aff in enumerate(raw_configs.affordances) if aff.name == "Bar")
 
