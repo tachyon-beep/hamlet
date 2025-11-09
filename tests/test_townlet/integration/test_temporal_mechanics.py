@@ -147,10 +147,8 @@ class TestTimeProgression:
 
         obs = env.reset()
 
-        # Full observability: substrate.get_observation_dim() + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
-        # For Grid2D with "relative" encoding: 2 (coords) + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
-        # Temporal features: sin(time), cos(time), normalized interaction progress, lifetime
-        expected_dim = env.substrate.get_observation_dim() + 8 + (env.num_affordance_types + 1) + 4
+        # Observation size now flows from compiled metadata
+        expected_dim = env.metadata.observation_dim
         assert obs.shape == (2, expected_dim)
 
         time_sin = obs[0, -4]

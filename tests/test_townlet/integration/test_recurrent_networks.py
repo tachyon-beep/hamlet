@@ -49,7 +49,6 @@ class TestLSTMHiddenStatePersistence:
                     "energy_move_depletion": 0.0001,
                     "energy_wait_depletion": 0.00001,
                     "energy_interact_depletion": 0.0,
-                    "enabled_affordances": [],
                 }
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
@@ -132,17 +131,12 @@ class TestLSTMHiddenStatePersistence:
                     "partial_observability": True,
                     "vision_range": 2,
                     "enable_temporal_mechanics": False,
-                    "enabled_affordances": [],
                 }
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
         config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="lstm_hidden_state_reset")
         env = cpu_env_factory(config_dir=config_dir, num_agents=1)
-
-        # Disable all affordances in environment (force death)
-        env.enabled_affordances = []
-        env.deployed_affordances = {}
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(
@@ -264,7 +258,6 @@ class TestLSTMHiddenStatePersistence:
                     "energy_move_depletion": 0.0001,
                     "energy_wait_depletion": 0.00001,
                     "energy_interact_depletion": 0.0,
-                    "enabled_affordances": [],
                 }
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
@@ -622,8 +615,7 @@ class TestLSTMForwardPass:
         obs = env.reset()
 
         # Verify observation shape (POMDP)
-        # 5×5 grid (25) + position (2) + meters (8) + affordance (15) + temporal (4) = 54
-        expected_obs_dim = 25 + 2 + 8 + 15 + 4
+        expected_obs_dim = env.metadata.observation_dim
         assert obs.shape == (1, expected_obs_dim), f"Expected obs shape (1, {expected_obs_dim}), got {obs.shape}"
 
         # Reset hidden state

@@ -91,8 +91,16 @@ class TestEnvironmentActionSpace:
         ],
         ids=["grid2d", "aspatial", "continuous1d"],
     )
-    def test_env_action_dim_matches_substrate(self, env_factory, cpu_device, config_dir):
+    def test_env_action_dim_matches_compiled_metadata(self, env_factory, cpu_device, config_dir):
+        """VectorizedHamletEnv should honor compiled metadata for action sizing."""
+
         env = env_factory(config_dir=config_dir, num_agents=1, device_override=cpu_device)
+
+        expected_action_dim = env.metadata.action_count
+        assert env.action_dim == expected_action_dim, f"env.action_dim should match compiled metadata for {config_dir}"
+        assert env.action_space.action_dim == expected_action_dim, f"Composed action_space must match compiled metadata for {config_dir}"
+
+        # Substrate portion of the action space should align with substrate definition.
         assert (
-            env.action_dim == env.substrate.action_space_size
-        ), f"Expected env.action_dim to equal substrate.action_space_size for {config_dir}"
+            env.action_space.substrate_action_count == env.substrate.action_space_size
+        ), "Substrate action slice must reflect substrate.action_space_size"

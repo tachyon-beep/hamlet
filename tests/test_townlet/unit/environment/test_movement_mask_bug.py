@@ -8,159 +8,14 @@ Bug Location: src/townlet/environment/vectorized_env.py:595
 See: docs/bugs/movement-mask-dynamic-action-spaces.md
 """
 
-from pathlib import Path
-
-import pytest
 import torch
-import yaml
-
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
-@pytest.fixture
-def aspatial_env(tmp_path, compile_universe, cpu_device):
-    """Create aspatial environment for testing."""
-    import shutil
+def _action_tensor(env, action_name: str) -> torch.Tensor:
+    """Helper to build one-step action tensors on the correct device."""
 
-    config_pack = tmp_path / "aspatial_test"
-    shutil.copytree(Path("configs/test"), config_pack)
-
-    # Override substrate with aspatial definition
-    substrate_yaml = config_pack / "substrate.yaml"
-    substrate_yaml.write_text(
-        """
-version: "1.0"
-description: "Aspatial substrate for testing action costs"
-type: "aspatial"
-aspatial: {}
-"""
-    )
-
-    # Remove spatial variables from VFS
-    vfs_yaml = config_pack / "variables_reference.yaml"
-    with open(vfs_yaml) as f:
-        vfs_config = yaml.safe_load(f)
-
-    vfs_config["variables"] = [var for var in vfs_config["variables"] if var["id"] not in ["grid_encoding", "local_window", "position"]]
-    if "exposed_observations" in vfs_config:
-        vfs_config["exposed_observations"] = [
-            obs for obs in vfs_config["exposed_observations"] if obs["id"] not in ["obs_grid_encoding", "obs_local_window", "obs_position"]
-        ]
-
-    with open(vfs_yaml, "w") as f:
-        yaml.safe_dump(vfs_config, f, sort_keys=False)
-
-    # Disable affordance placement (aspatial has no positions)
-    training_yaml = config_pack / "training.yaml"
-    with open(training_yaml) as f:
-        training_config = yaml.safe_load(f)
-
-    training_config["environment"]["enabled_affordances"] = []
-
-    with open(training_yaml, "w") as f:
-        yaml.safe_dump(training_config, f, sort_keys=False)
-
-    universe = compile_universe(config_pack)
-    return VectorizedHamletEnv.from_universe(
-        universe,
-        num_agents=1,
-        device=cpu_device,
-    )
-
-
-@pytest.fixture
-def continuous1d_env(tmp_path, compile_universe, cpu_device):
-    """Create 1D continuous environment for testing."""
-    import shutil
-
-    config_pack = tmp_path / "continuous1d_test"
-    shutil.copytree(Path("configs/test"), config_pack)
-
-    # Override substrate
-    substrate_yaml = config_pack / "substrate.yaml"
-    substrate_yaml.write_text(
-        """
-version: "1.0"
-description: "1D continuous substrate for testing action costs"
-type: "continuous"
-continuous:
-  dimensions: 1
-  bounds: [[0.0, 10.0]]
-  boundary: "clamp"
-  movement_delta: 0.5
-  interaction_radius: 0.8
-  distance_metric: "euclidean"
-  observation_encoding: "relative"
-"""
-    )
-
-    # Use 1D variables reference
-    continuous1d_config = Path("configs/L1_continuous_1D")
-    shutil.copy(continuous1d_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
-
-    training_yaml = config_pack / "training.yaml"
-    with open(training_yaml) as f:
-        training_config = yaml.safe_load(f)
-
-    training_config["environment"]["enabled_affordances"] = []
-
-    with open(training_yaml, "w") as f:
-        yaml.safe_dump(training_config, f, sort_keys=False)
-
-    universe = compile_universe(config_pack)
-    return VectorizedHamletEnv.from_universe(
-        universe,
-        num_agents=1,
-        device=cpu_device,
-    )
-
-
-@pytest.fixture
-def continuous3d_env(tmp_path, compile_universe, cpu_device):
-    """Create 3D continuous environment for testing."""
-    import shutil
-
-    config_pack = tmp_path / "continuous3d_test"
-    shutil.copytree(Path("configs/test"), config_pack)
-
-    substrate_yaml = config_pack / "substrate.yaml"
-    substrate_yaml.write_text(
-        """
-version: "1.0"
-description: "3D continuous substrate for testing action costs"
-type: "continuous"
-continuous:
-  dimensions: 3
-  bounds:
-    - [0.0, 10.0]
-    - [0.0, 10.0]
-    - [0.0, 10.0]
-  boundary: "clamp"
-  movement_delta: 0.5
-  interaction_radius: 0.8
-  distance_metric: "euclidean"
-  observation_encoding: "relative"
-"""
-    )
-
-    continuous3d_config = Path("configs/L1_continuous_3D")
-    shutil.copy(continuous3d_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
-
-    training_yaml = config_pack / "training.yaml"
-    with open(training_yaml) as f:
-        training_config = yaml.safe_load(f)
-
-    training_config["environment"]["enabled_affordances"] = []
-
-    with open(training_yaml, "w") as f:
-        yaml.safe_dump(training_config, f, sort_keys=False)
-
-    universe = compile_universe(config_pack)
-    return VectorizedHamletEnv.from_universe(
-        universe,
-        num_agents=1,
-        device=cpu_device,
-    )
+    action_id = env.action_space.get_action_by_name(action_name).id
+    return torch.tensor([action_id], dtype=torch.long, device=env.device)
 
 
 def test_aspatial_interact_should_not_pay_movement_cost(aspatial_env):
@@ -177,19 +32,23 @@ def test_aspatial_interact_should_not_pay_movement_cost(aspatial_env):
     env = aspatial_env
     env.reset()
 
+    # Remove affordance side-effects so we isolate pure movement costs.
+    env._handle_interactions = lambda interact_mask: {}
+
     # Record initial energy
     initial_energy = env.meters[0, env.energy_idx].item()
 
     # Agent takes INTERACT action (action 0 for aspatial)
-    interact_action = torch.tensor([0], dtype=torch.long, device=torch.device("cpu"))
+    interact_action = _action_tensor(env, "INTERACT")
     env.step(interact_action)
 
     # Check energy cost
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    # Should only pay base_depletion (0.5%), NOT movement costs
-    expected_cost = 0.005  # base_depletion from bars.yaml
+    # Should only pay base_depletion + interact cost (if any), NOT movement costs
+    base_depletion = env.base_depletions[env.energy_idx].item()
+    expected_cost = base_depletion + env.interact_energy_cost
     actual_cost = energy_cost
 
     assert abs(actual_cost - expected_cost) < 1e-6, f"INTERACT should cost {expected_cost:.3%}, but cost {actual_cost:.3%}"
@@ -213,7 +72,7 @@ def test_aspatial_wait_should_not_pay_movement_cost(aspatial_env):
     initial_energy = env.meters[0, env.energy_idx].item()
 
     # Agent takes WAIT action (action 1 for aspatial)
-    wait_action = torch.tensor([1], dtype=torch.long, device=torch.device("cpu"))
+    wait_action = _action_tensor(env, "WAIT")
     env.step(wait_action)
 
     # Check energy cost
@@ -221,7 +80,8 @@ def test_aspatial_wait_should_not_pay_movement_cost(aspatial_env):
     energy_cost = initial_energy - final_energy
 
     # Should pay base_depletion + wait_cost, NOT movement costs
-    expected_cost = 0.006  # 0.005 base + 0.001 wait
+    base_depletion = env.base_depletions[env.energy_idx].item()
+    expected_cost = base_depletion + env.wait_energy_cost
     actual_cost = energy_cost
 
     assert abs(actual_cost - expected_cost) < 1e-6, f"WAIT should cost {expected_cost:.3%}, but cost {actual_cost:.3%}"
@@ -240,11 +100,13 @@ def test_1d_interact_should_not_pay_movement_cost(continuous1d_env):
     env = continuous1d_env
     env.reset()
 
+    env._handle_interactions = lambda interact_mask: {}
+
     # Record initial energy
     initial_energy = env.meters[0, env.energy_idx].item()
 
     # Agent takes INTERACT action (action 2 for 1D)
-    interact_action = torch.tensor([2], dtype=torch.long, device=torch.device("cpu"))
+    interact_action = _action_tensor(env, "INTERACT")
     env.step(interact_action)
 
     # Check energy cost
@@ -276,7 +138,7 @@ def test_1d_wait_should_not_pay_movement_cost(continuous1d_env):
     initial_energy = env.meters[0, env.energy_idx].item()
 
     # Agent takes WAIT action (action 3 for 1D)
-    wait_action = torch.tensor([3], dtype=torch.long, device=torch.device("cpu"))
+    wait_action = _action_tensor(env, "WAIT")
     env.step(wait_action)
 
     # Check energy cost
@@ -308,7 +170,7 @@ def test_aspatial_hygiene_satiation_only_pay_base_depletion(aspatial_env):
     initial_satiation = env.meters[0, env.satiation_idx].item() if env.satiation_idx is not None else None
 
     # Agent takes INTERACT action
-    interact_action = torch.tensor([0], dtype=torch.long, device=torch.device("cpu"))
+    interact_action = _action_tensor(env, "INTERACT")
     env.step(interact_action)
 
     # Check hygiene/satiation changes match base_depletion (not movement penalties)
@@ -347,7 +209,7 @@ def test_1d_movement_should_pay_movement_cost(continuous1d_env):
     initial_energy = env.meters[0, env.energy_idx].item()
 
     # Agent takes LEFT action (action 0 for 1D)
-    left_action = torch.tensor([0], dtype=torch.long, device=torch.device("cpu"))
+    left_action = _action_tensor(env, "LEFT")
     env.step(left_action)
 
     # Check energy cost
@@ -368,7 +230,7 @@ def test_3d_interact_should_not_pay_movement_cost(continuous3d_env):
 
     initial_energy = env.meters[0, env.energy_idx].item()
 
-    interact_action = torch.tensor([6], dtype=torch.long, device=torch.device("cpu"))
+    interact_action = _action_tensor(env, "INTERACT")
     env.step(interact_action)
 
     final_energy = env.meters[0, env.energy_idx].item()
@@ -385,7 +247,7 @@ def test_3d_wait_should_not_pay_movement_cost(continuous3d_env):
 
     initial_energy = env.meters[0, env.energy_idx].item()
 
-    wait_action = torch.tensor([7], dtype=torch.long, device=torch.device("cpu"))
+    wait_action = _action_tensor(env, "WAIT")
     env.step(wait_action)
 
     final_energy = env.meters[0, env.energy_idx].item()
@@ -406,7 +268,7 @@ def test_3d_vertical_movement_should_pay_movement_cost(continuous3d_env):
 
     initial_energy = env.meters[0, env.energy_idx].item()
 
-    up_z_action = torch.tensor([4], dtype=torch.long, device=torch.device("cpu"))
+    up_z_action = _action_tensor(env, "UP_Z")
     env.step(up_z_action)
 
     final_energy = env.meters[0, env.energy_idx].item()

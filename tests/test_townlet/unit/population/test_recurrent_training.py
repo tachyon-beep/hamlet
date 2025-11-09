@@ -141,7 +141,7 @@ class TestRecurrentNetworkInitialization:
 class TestLSTMHiddenStateManagement:
     """Test LSTM hidden state reset and management."""
 
-    def test_reset_hidden_state_zeros_specific_agent(self, cpu_device, test_config_pack_path):
+    def test_reset_hidden_state_zeros_specific_agent(self, cpu_device, recurrent_env_builder):
         """_reset_hidden_state() should zero hidden state for specific agent only.
 
         This is called when an agent dies or episode ends, to clear its memory.
@@ -200,7 +200,7 @@ class TestLSTMHiddenStateManagement:
 class TestEpisodeBuffering:
     """Test episode storage for sequential replay buffer."""
 
-    def test_store_episode_and_reset_adds_to_buffer(self, cpu_device, test_config_pack_path):
+    def test_store_episode_and_reset_adds_to_buffer(self, cpu_device, recurrent_env_builder):
         """_store_episode_and_reset() should store episode sequence and reset container.
 
         Coverage target: lines 212-232 (_store_episode_and_reset)
@@ -250,7 +250,7 @@ class TestEpisodeBuffering:
         # Verify buffer size increased (use len() for SequentialReplayBuffer)
         assert len(population.replay_buffer) > 0, "Replay buffer should contain stored episode"
 
-    def test_store_episode_skips_empty_episodes(self, cpu_device, test_config_pack_path):
+    def test_store_episode_skips_empty_episodes(self, cpu_device, recurrent_env_builder):
         """_store_episode_and_reset() should skip empty episodes.
 
         Coverage target: lines 216-217 (empty episode check)
@@ -285,7 +285,7 @@ class TestEpisodeBuffering:
         assert result is False, "Should return False for empty episode"
         assert len(population.replay_buffer) == 0, "Buffer should remain empty"
 
-    def test_flush_episode_stores_and_finalizes(self, cpu_device, test_config_pack_path):
+    def test_flush_episode_stores_and_finalizes(self, cpu_device, recurrent_env_builder):
         """flush_episode() should store episode and finalize agent state.
 
         Coverage target: lines 341-348 (flush_episode for recurrent)
@@ -338,7 +338,7 @@ class TestEpisodeBuffering:
 class TestRecurrentTraining:
     """Test LSTM training loop."""
 
-    def test_recurrent_training_path_via_step_population(self, cpu_device, test_config_pack_path):
+    def test_recurrent_training_path_via_step_population(self, cpu_device, recurrent_env_builder):
         """step_population() should trigger LSTM training when buffer has enough episodes.
 
         This indirectly tests the recurrent training path (lines 529-616) by ensuring

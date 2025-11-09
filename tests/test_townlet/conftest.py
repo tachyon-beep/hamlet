@@ -438,6 +438,36 @@ def aspatial_env(
     )
 
 
+@pytest.fixture
+def continuous1d_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    device: torch.device,
+) -> VectorizedHamletEnv:
+    """Continuous 1D environment for movement/action-mask tests."""
+
+    universe = compile_universe(Path("configs/L1_continuous_1D"))
+    return VectorizedHamletEnv.from_universe(
+        universe,
+        num_agents=1,
+        device=device,
+    )
+
+
+@pytest.fixture
+def continuous3d_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    device: torch.device,
+) -> VectorizedHamletEnv:
+    """Continuous 3D environment for movement/action-mask tests."""
+
+    universe = compile_universe(Path("configs/L1_continuous_3D"))
+    return VectorizedHamletEnv.from_universe(
+        universe,
+        num_agents=1,
+        device=device,
+    )
+
+
 # Parameterization helper for multi-substrate tests
 SUBSTRATE_FIXTURES = ["grid2d_3x3_env", "grid2d_8x8_env", "aspatial_env"]
 

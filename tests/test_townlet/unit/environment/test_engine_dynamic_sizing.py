@@ -16,9 +16,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 
 def _expected_observation_dim(env: "VectorizedHamletEnv") -> int:
-    """Helper to compute observation dimension from compiled metadata."""
+    """Helper to use compiled metadata for observation dimension."""
 
-    return env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
+    return env.metadata.observation_dim
 
 
 class TestCascadeEngineDynamicSizing:

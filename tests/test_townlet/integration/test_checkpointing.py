@@ -55,6 +55,13 @@ def _init_curriculum(curriculum, num_agents: int) -> None:
         curriculum.initialize_population(num_agents)
 
 
+def _select_active_meters(env, limit: int = 6) -> list[str]:
+    """Return a capped list of active meters to satisfy CurriculumDecision constraints."""
+
+    meter_names = list(env.meter_name_to_index.keys())
+    return meter_names[:limit]
+
+
 # =============================================================================
 # TEST CLASS 1: Environment Checkpointing (3 tests)
 # =============================================================================
@@ -555,7 +562,7 @@ class TestRunnerCheckpointing:
                     survival_advance_threshold=0.7,
                     survival_retreat_threshold=0.3,
                 )
-                runner._init_curriculum(runner.curriculum, 1)
+                _init_curriculum(runner.curriculum, 1)
 
                 runner.exploration = AdaptiveIntrinsicExploration(
                     obs_dim=runner.env.observation_dim,
@@ -610,7 +617,7 @@ class TestRunnerCheckpointing:
             ) as runner1:
                 runner1.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner1._init_curriculum(runner1.curriculum, 1)
+                _init_curriculum(runner1.curriculum, 1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
                 runner1.population = VectorizedPopulation(
                     env=runner1.env,
@@ -632,7 +639,7 @@ class TestRunnerCheckpointing:
             ) as runner2:
                 runner2.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner2._init_curriculum(runner2.curriculum, 1)
+                _init_curriculum(runner2.curriculum, 1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
                 runner2.population = VectorizedPopulation(
                     env=runner2.env,
@@ -663,7 +670,7 @@ class TestRunnerCheckpointing:
             ) as runner1:
                 runner1.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner1._init_curriculum(runner1.curriculum, 1)
+                _init_curriculum(runner1.curriculum, 1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
                 runner1.population = VectorizedPopulation(
                     env=runner1.env,
@@ -695,7 +702,7 @@ class TestRunnerCheckpointing:
             ) as runner2:
                 runner2.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner2._init_curriculum(runner2.curriculum, 1)
+                _init_curriculum(runner2.curriculum, 1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
                 runner2.population = VectorizedPopulation(
                     env=runner2.env,
@@ -742,7 +749,7 @@ class TestCheckpointRoundTrip:
 
         curriculum = StaticCurriculum(
             difficulty_level=0.5,
-            active_meters=list(env.meter_name_to_index.keys()),
+            active_meters=_select_active_meters(env),
         )
         _init_curriculum(curriculum, 1)
 
@@ -824,10 +831,7 @@ class TestCheckpointRoundTrip:
         # Setup
         env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=2)
 
-        curriculum = StaticCurriculum(
-            difficulty_level=0.5,
-            active_meters=list(env.meter_name_to_index.keys()),
-        )
+        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
         _init_curriculum(curriculum, 2)
 
         exploration = AdaptiveIntrinsicExploration(

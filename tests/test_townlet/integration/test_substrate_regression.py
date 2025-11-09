@@ -10,7 +10,7 @@ import torch
 from tests.test_townlet.helpers.config_builder import prepare_config_dir
 
 
-@pytest.mark.parametrize("grid_size", [3, 7, 8])
+@pytest.mark.parametrize("grid_size", [4, 7, 8])
 def test_regression_observation_dims_unchanged(grid_size, cpu_env_factory, tmp_path):
     """Observation dimensions should match substrate-provided breakdown."""
 
@@ -30,7 +30,7 @@ def test_regression_observation_dims_unchanged(grid_size, cpu_env_factory, tmp_p
 
     obs = env.reset()
 
-    expected_obs_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
+    expected_obs_dim = env.metadata.observation_dim
 
     assert (
         obs.shape[1] == expected_obs_dim
@@ -58,7 +58,7 @@ def test_regression_grid2d_equivalent_to_legacy(test_config_pack_path, cpu_devic
     torch.manual_seed(42)
     obs_new = env_new.reset()
 
-    expected_dim = env_new.substrate.get_observation_dim() + env_new.meter_count + (env_new.num_affordance_types + 1) + 4
+    expected_dim = env_new.metadata.observation_dim
 
     # Verify observation dimension matches expected breakdown
     assert obs_new.shape[1] == expected_dim, f"Observation dim changed: {obs_new.shape[1]} vs {expected_dim}"

@@ -41,6 +41,7 @@ class TestTrainingEnvironmentConfigValidation:
             energy_move_depletion=0.005,
             energy_wait_depletion=0.001,
             energy_interact_depletion=0.0,
+            randomize_affordances=True,
         )
         assert config.grid_size == 8
         assert config.partial_observability is False
@@ -57,6 +58,7 @@ class TestTrainingEnvironmentConfigValidation:
             energy_move_depletion=0.005,
             energy_wait_depletion=0.001,
             energy_interact_depletion=0.0,
+            randomize_affordances=True,
         )
         assert config.partial_observability is True
         assert config.vision_range == 2
@@ -72,6 +74,7 @@ class TestTrainingEnvironmentConfigValidation:
             energy_move_depletion=0.005,
             energy_wait_depletion=0.003,
             energy_interact_depletion=0.0029,
+            randomize_affordances=False,
         )
         assert config.enabled_affordances == ["Bed"]
         assert len(config.enabled_affordances) == 1
@@ -88,6 +91,7 @@ class TestTrainingEnvironmentConfigValidation:
                 energy_move_depletion=0.005,
                 energy_wait_depletion=0.001,
                 energy_interact_depletion=0.0,
+                randomize_affordances=True,
             )
 
     def test_vision_range_must_be_non_negative(self):
@@ -102,6 +106,7 @@ class TestTrainingEnvironmentConfigValidation:
                 energy_move_depletion=0.005,
                 energy_wait_depletion=0.001,
                 energy_interact_depletion=0.0,
+                randomize_affordances=True,
             )
 
     def test_energy_costs_must_be_non_negative(self):
@@ -116,6 +121,7 @@ class TestTrainingEnvironmentConfigValidation:
                 energy_move_depletion=-0.005,  # Must be ge=0
                 energy_wait_depletion=0.001,
                 energy_interact_depletion=0.0,
+                randomize_affordances=True,
             )
 
     def test_enabled_affordances_can_be_null(self):
@@ -129,6 +135,7 @@ class TestTrainingEnvironmentConfigValidation:
             energy_move_depletion=0.005,
             energy_wait_depletion=0.001,
             energy_interact_depletion=0.0,
+            randomize_affordances=True,
         )
         assert config.enabled_affordances is None
 
@@ -143,6 +150,7 @@ class TestTrainingEnvironmentConfigValidation:
             energy_move_depletion=0.005,
             energy_wait_depletion=0.001,
             energy_interact_depletion=0.0,
+            randomize_affordances=True,
         )
         assert len(config.enabled_affordances) == 4
         assert "Bed" in config.enabled_affordances
@@ -159,6 +167,7 @@ class TestTrainingEnvironmentConfigValidation:
                 energy_move_depletion=0.005,
                 energy_wait_depletion=0.001,
                 energy_interact_depletion=0.0,
+                randomize_affordances=True,
             )
 
         error = str(exc_info.value)
@@ -182,6 +191,7 @@ class TestTrainingEnvironmentConfigCrossFieldValidation:
             energy_move_depletion=0.005,
             energy_wait_depletion=0.001,
             energy_interact_depletion=0.0,
+            randomize_affordances=True,
         )
 
         # Config created successfully (permissive semantics)
@@ -198,6 +208,7 @@ class TestTrainingEnvironmentConfigCrossFieldValidation:
             energy_move_depletion=0.005,
             energy_wait_depletion=0.001,
             energy_interact_depletion=0.0,
+            randomize_affordances=True,
         )
         # Vision range stored but not used
         assert config.vision_range == 2
@@ -217,6 +228,7 @@ environment:
   partial_observability: false
   vision_range: 8
   enable_temporal_mechanics: false
+  randomize_affordances: true
   enabled_affordances: null
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
@@ -240,6 +252,7 @@ environment:
   partial_observability: true
   vision_range: 2
   enable_temporal_mechanics: false
+  randomize_affordances: true
   enabled_affordances: null
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
@@ -262,6 +275,7 @@ environment:
   partial_observability: false
   vision_range: 3
   enable_temporal_mechanics: false
+  randomize_affordances: false
   enabled_affordances:
     - Bed
   energy_move_depletion: 0.005
@@ -284,6 +298,7 @@ environment:
   partial_observability: false
   vision_range: 8
   enable_temporal_mechanics: true
+  randomize_affordances: true
   enabled_affordances: null
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
@@ -323,6 +338,7 @@ environment:
   partial_observability: false
   vision_range: 2
   enable_temporal_mechanics: false
+  randomize_affordances: true
   enabled_affordances: null
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001

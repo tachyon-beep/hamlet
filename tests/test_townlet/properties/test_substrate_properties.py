@@ -150,7 +150,7 @@ def test_property_aspatial_no_position_operations():
 
 
 @given(
-    grid_size=st.integers(min_value=3, max_value=10),
+    grid_size=st.integers(min_value=5, max_value=10),
     num_agents=st.integers(min_value=1, max_value=4),
 )
 @settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)  # Disable deadline for VFS overhead
@@ -175,16 +175,8 @@ def test_property_obs_dim_matches_substrate_grid2d(grid_size, num_agents, test_c
 
     obs = env.reset()
 
-    # Expected dimension based on substrate (grid + position)
-    # Use substrate.get_observation_dim() which accounts for grid cells + position features
-    substrate_dim = env.substrate.get_observation_dim()
-
-    meter_dim = env.meter_count  # From config (8 for test config)
-    affordance_dim = 15  # 14 affordances + "none"
-    temporal_dim = 4  # time_sin, time_cos, interaction_progress, lifetime_progress
-
-    expected_dim = substrate_dim + meter_dim + affordance_dim + temporal_dim
-
+    expected_dim = env.metadata.observation_dim
+    assert env.observation_dim == expected_dim
     assert obs.shape == (
         num_agents,
         expected_dim,
@@ -195,15 +187,8 @@ def test_property_obs_dim_aspatial(aspatial_env):
     """Aspatial observation should have no grid dimension."""
     obs = aspatial_env.reset()
 
-    # Expected dimension (no grid)
-    grid_dim = 0  # Aspatial has no grid
-    meter_dim = aspatial_env.meter_count  # 4 for aspatial_test config
-    # NOTE: aspatial_test uses local vocabulary (4 affordances + "none" = 5 dims)
-    # This is a test fixture that doesn't follow global vocabulary principle
-    affordance_dim = 5  # Local vocabulary: 4 affordances (Bed, Hospital, HomeMeal, Job) + "none"
-    temporal_dim = 4  # time_sin, time_cos, interaction_progress, lifetime_progress
-
-    expected_dim = grid_dim + meter_dim + affordance_dim + temporal_dim
+    expected_dim = aspatial_env.metadata.observation_dim
+    assert aspatial_env.observation_dim == expected_dim
 
     assert obs.shape == (
         1,

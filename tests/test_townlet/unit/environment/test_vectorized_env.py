@@ -800,7 +800,9 @@ class TestRandomizeAffordancePositions:
 
         training_path = target / "training.yaml"
         training_data = yaml.safe_load(training_path.read_text())
-        training_data.setdefault("environment", {})["randomize_affordances"] = False
+        training_env = training_data.setdefault("environment", {})
+        training_env["randomize_affordances"] = False
+        training_env["enabled_affordances"] = ["Bed", "LuxuryBed"]
         training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
 
         affordance_path = target / "affordances.yaml"
