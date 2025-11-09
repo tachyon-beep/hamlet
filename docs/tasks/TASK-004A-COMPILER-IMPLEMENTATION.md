@@ -362,55 +362,35 @@ class UniverseSymbolTable:
         self.cues: dict[str, CueConfig] = {}  # Theory of Mind cues
         self.actions: dict[str, ActionConfig] = {}  # Global action vocabulary
 
-    def register_meter(self, name: str, config: BarConfig):
+    def register_meter(self, config: BarConfig):
         """Register meter for later reference resolution."""
-        if name in self.meters:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate meter name: '{name}'"],
-                hints=["Each meter must have unique name"]
-            )
-        self.meters[name] = config
+        if config.name in self.meters:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate meter '{config.name}' detected."])
+        self.meters[config.name] = config
 
-    def register_affordance(self, id: str, config: AffordanceConfig):
+    def register_affordance(self, config: AffordanceConfig):
         """Register affordance for later reference resolution."""
-        if id in self.affordances:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate affordance ID: '{id}'"],
-                hints=["Each affordance must have unique ID"]
-            )
-        self.affordances[id] = config
+        if config.id in self.affordances:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate affordance '{config.id}' detected."])
+        self.affordances[config.id] = config
 
-    def register_cue(self, meter_name: str, config: CueConfig):
+    def register_cue(self, cue: SimpleCueConfig | CompoundCueConfig):
         """Register cue for later validation."""
-        if meter_name in self.cues:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate cue for meter: '{meter_name}'"],
-                hints=["Each meter can have at most one cue definition"]
-            )
-        self.cues[meter_name] = config
+        if cue.cue_id in self.cues:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate cue '{cue.cue_id}' detected."])
+        self.cues[cue.cue_id] = cue
 
-    def register_variable(self, var_id: str, config: VariableDef):
+    def register_variable(self, config: VariableDef):
         """Register VFS variable for later reference resolution."""
-        if var_id in self.variables:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate variable ID: '{var_id}'"],
-                hints=["Each variable must have unique ID"]
-            )
-        self.variables[var_id] = config
+        if config.id in self.variables:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate variable '{config.id}' detected."])
+        self.variables[config.id] = config
 
-    def register_action(self, action_id: int, config: ActionConfig):
+    def register_action(self, config: ActionConfig):
         """Register action for later reference resolution."""
-        if action_id in self.actions:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate action ID: {action_id}"],
-                hints=["Each action must have unique ID"]
-            )
-        self.actions[action_id] = config
+        if config.id in self.actions:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate action id '{config.id}' detected."])
+        self.actions[config.id] = config
 
     def resolve_meter_reference(self, name: str, location: str) -> BarConfig:
         """
@@ -460,24 +440,23 @@ def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbo
 
     # Register VFS variables (CORRECTED: variables_reference instead of variables.variables)
     for var in raw_configs.variables_reference:
-        symbol_table.register_variable(var.id, var)
+        symbol_table.register_variable(var)
 
-    # Register meters (subset of variables)
-    # CORRECTED: raw_configs.bars uses BarsConfig type alias (per TASK-004A-PREREQUISITES Part 2)
-    for bar in raw_configs.bars.bars:
-        symbol_table.register_meter(bar.name, bar)
+    # Register meters (raw_configs exposes tuples already)
+    for bar in raw_configs.bars:
+        symbol_table.register_meter(bar)
 
     # Register affordances
-    for aff in raw_configs.affordances.affordances:
-        symbol_table.register_affordance(aff.id, aff)
+    for aff in raw_configs.affordances:
+        symbol_table.register_affordance(aff)
 
-    # Register cues
-    for meter_name, cue in raw_configs.cues.items():
-        symbol_table.register_cue(meter_name, cue)
+    # Register cues (flattened tuple of simple + compound cues)
+    for cue in raw_configs.cues:
+        symbol_table.register_cue(cue)
 
     # Register actions (CORRECTED: global_actions instead of actions)
     for action in raw_configs.global_actions.actions:
-        symbol_table.register_action(action.id, action)
+        symbol_table.register_action(action)
 
     return symbol_table
 ```
@@ -783,29 +762,18 @@ def _stage_4_cross_validate(
                         )
 
     # 5. Cues validation (NEW - Per COMPILER_ARCHITECTURE.md §5.3)
-    for meter_name, cue_config in raw_configs.cues.items():
-        # Validate cues reference valid meters
-        if meter_name not in symbol_table.meters:
-            errors.add_error(
-                f"cues.yaml:{meter_name}: References non-existent meter. "
-                f"Available meters: {list(symbol_table.meters.keys())}"
-            )
-            continue
+    for cue in raw_configs.cues:
+        if isinstance(cue, SimpleCueConfig):
+            referenced_meters = [cue.condition.meter]
+        else:  # Compound cue
+            referenced_meters = [condition.meter for condition in cue.conditions]
 
-        # Validate ranges cover full [0.0, 1.0] domain
-        ranges = [(cue.min_value, cue.max_value) for cue in cue_config.visual_cues]
-        if not self._ranges_cover_domain(ranges, 0.0, 1.0):
-            errors.add_error(
-                f"cues.yaml:{meter_name}: Cue ranges don't cover full [0.0, 1.0] domain. "
-                f"Every meter value must map to exactly one cue."
-            )
-
-        # Check for overlapping ranges
-        if self._ranges_overlap(ranges):
-            errors.add_error(
-                f"cues.yaml:{meter_name}: Cue ranges overlap. "
-                f"Each meter value must map to exactly ONE cue."
-            )
+        for meter_name in referenced_meters:
+            if meter_name not in symbol_table.meters:
+                errors.add_error(
+                    f"cues.yaml:{cue.cue_id}: References non-existent meter '{meter_name}'. "
+                    f"Available meters: {list(symbol_table.meters.keys())}"
+                )
 
     # 6. Capability conflicts (NEW - from research Finding 1)
     for aff in raw_configs.affordances.affordances:

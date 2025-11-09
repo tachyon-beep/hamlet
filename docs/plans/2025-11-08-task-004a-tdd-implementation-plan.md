@@ -725,6 +725,7 @@ from townlet.universe.symbol_table import UniverseSymbolTable
 from townlet.config.bar import BarConfig
 from townlet.config.affordance import AffordanceConfig
 from townlet.vfs.schema import VariableDef
+from townlet.universe.errors import CompilationError
 
 
 def test_symbol_table_initialization():
@@ -752,7 +753,7 @@ def test_register_variable():
         default=1.0
     )
 
-    table.register_variable("energy", var)
+    table.register_variable(var)
 
     assert "energy" in table.variables
     assert table.variables["energy"] == var
@@ -772,7 +773,7 @@ def test_register_meter():
         description="Energy level"
     )
 
-    table.register_meter("energy", meter)
+    table.register_meter(meter)
 
     assert "energy" in table.meters
     assert table.meters["energy"] == meter
@@ -785,28 +786,28 @@ def test_register_duplicate_raises():
     meter1 = BarConfig(name="energy", index=0, range=(0.0, 1.0), ...)
     meter2 = BarConfig(name="energy", index=1, range=(0.0, 1.0), ...)
 
-    table.register_meter("energy", meter1)
+    table.register_meter(meter1)
 
-    with pytest.raises(ValueError, match="already registered"):
-        table.register_meter("energy", meter2)
+    with pytest.raises(CompilationError, match="Duplicate meter"):
+        table.register_meter(meter2)
 
 
-def test_lookup_meter_by_name():
-    """Verify lookup by name."""
+def test_get_meter_by_name():
+    """Verify retrieval by name."""
     table = UniverseSymbolTable()
 
     meter = BarConfig(name="energy", ...)
-    table.register_meter("energy", meter)
+    table.register_meter(meter)
 
-    assert table.lookup_meter("energy") == meter
+    assert table.get_meter("energy") == meter
 
 
-def test_lookup_missing_meter_raises():
-    """Verify lookup of missing entity raises KeyError."""
+def test_get_meter_missing_raises():
+    """Verify missing meter raises KeyError."""
     table = UniverseSymbolTable()
 
     with pytest.raises(KeyError, match="energy"):
-        table.lookup_meter("energy")
+        table.get_meter("energy")
 ```
 
 **Run**: `uv run pytest tests/test_townlet/unit/universe/test_symbol_table.py`
@@ -852,61 +853,49 @@ class UniverseSymbolTable:
         self.cues: dict[str, "CueConfig"] = {}
         self.actions: dict[int, "ActionConfig"] = {}  # Keyed by action ID
 
-    def register_variable(self, var_id: str, var_def: "VariableDef"):
+    def register_variable(self, var_def: "VariableDef"):
         """Register a VFS variable definition."""
-        if var_id in self.variables:
-            raise ValueError(f"Variable '{var_id}' already registered")
-        self.variables[var_id] = var_def
+        if var_def.id in self.variables:
+            raise ValueError(f"Variable '{var_def.id}' already registered")
+        self.variables[var_def.id] = var_def
 
-    def register_meter(self, meter_name: str, meter_config: "BarConfig"):
+    def register_meter(self, meter_config: "BarConfig"):
         """Register a meter (bar)."""
-        if meter_name in self.meters:
-            raise ValueError(f"Meter '{meter_name}' already registered")
-        self.meters[meter_name] = meter_config
+        if meter_config.name in self.meters:
+            raise ValueError(f"Meter '{meter_config.name}' already registered")
+        self.meters[meter_config.name] = meter_config
 
-    def register_affordance(self, aff_id: str, aff_config: "AffordanceConfig"):
+    def register_affordance(self, aff_config: "AffordanceConfig"):
         """Register an affordance."""
-        if aff_id in self.affordances:
-            raise ValueError(f"Affordance '{aff_id}' already registered")
-        self.affordances[aff_id] = aff_config
+        if aff_config.id in self.affordances:
+            raise ValueError(f"Affordance '{aff_config.id}' already registered")
+        self.affordances[aff_config.id] = aff_config
 
-    def register_cue(self, cue_id: str, cue_config: "CueConfig"):
+    def register_cue(self, cue_config: "CueConfig"):
         """Register a cue."""
-        if cue_id in self.cues:
-            raise ValueError(f"Cue '{cue_id}' already registered")
-        self.cues[cue_id] = cue_config
+        if cue_config.cue_id in self.cues:
+            raise ValueError(f"Cue '{cue_config.cue_id}' already registered")
+        self.cues[cue_config.cue_id] = cue_config
 
-    def register_action(self, action_id: int, action_config: "ActionConfig"):
+    def register_action(self, action_config: "ActionConfig"):
         """Register an action."""
-        if action_id in self.actions:
-            raise ValueError(f"Action ID {action_id} already registered")
-        self.actions[action_id] = action_config
+        if action_config.id in self.actions:
+            raise ValueError(f"Action ID {action_config.id} already registered")
+        self.actions[action_config.id] = action_config
 
-    def lookup_variable(self, var_id: str) -> "VariableDef":
+    def get_variable(self, var_id: str) -> "VariableDef":
         """Lookup variable by ID."""
         if var_id not in self.variables:
             raise KeyError(f"Variable '{var_id}' not found in symbol table")
         return self.variables[var_id]
 
-    def lookup_meter(self, meter_name: str) -> "BarConfig":
+    def get_meter(self, meter_name: str) -> "BarConfig":
         """Lookup meter by name."""
         if meter_name not in self.meters:
             raise KeyError(f"Meter '{meter_name}' not found in symbol table")
         return self.meters[meter_name]
 
-    def lookup_affordance(self, aff_id: str) -> "AffordanceConfig":
-        """Lookup affordance by ID."""
-        if aff_id not in self.affordances:
-            raise KeyError(f"Affordance '{aff_id}' not found in symbol table")
-        return self.affordances[aff_id]
-
-    def lookup_cue(self, cue_id: str) -> "CueConfig":
-        """Lookup cue by ID."""
-        if cue_id not in self.cues:
-            raise KeyError(f"Cue '{cue_id}' not found in symbol table")
-        return self.cues[cue_id]
-
-    def lookup_action(self, action_id: int) -> "ActionConfig":
+    def get_action(self, action_id: int) -> "ActionConfig":
         """Lookup action by ID."""
         if action_id not in self.actions:
             raise KeyError(f"Action ID {action_id} not found in symbol table")
@@ -923,7 +912,7 @@ class UniverseSymbolTable:
 ```python
 # Add to UniverseSymbolTable class
 
-def get_all_meter_names(self) -> list[str]:
+def get_meter_names(self) -> list[str]:
     """Get all registered meter names (sorted by index)."""
     sorted_meters = sorted(self.meters.values(), key=lambda m: m.index)
     return [m.name for m in sorted_meters]
@@ -940,15 +929,15 @@ def get_affordance_count(self) -> int:
 **Test additions**:
 
 ```python
-def test_get_all_meter_names_sorted():
+def test_get_meter_names_sorted():
     """Verify meter names returned in index order."""
     table = UniverseSymbolTable()
 
-    table.register_meter("health", BarConfig(name="health", index=2, ...))
-    table.register_meter("energy", BarConfig(name="energy", index=0, ...))
-    table.register_meter("mood", BarConfig(name="mood", index=1, ...))
+    table.register_meter(BarConfig(name="health", index=2, ...))
+    table.register_meter(BarConfig(name="energy", index=0, ...))
+    table.register_meter(BarConfig(name="mood", index=1, ...))
 
-    names = table.get_all_meter_names()
+    names = table.get_meter_names()
     assert names == ["energy", "mood", "health"]  # Sorted by index
 ```
 
