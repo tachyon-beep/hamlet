@@ -21,6 +21,7 @@ class UniverseSymbolTable:
     meters: dict[str, BarConfig] = field(default_factory=dict)
     cascades: dict[str, CascadeConfig] = field(default_factory=dict)
     affordances: dict[str, AffordanceConfig] = field(default_factory=dict)
+    affordances_by_name: dict[str, AffordanceConfig] = field(default_factory=dict)
     variables: dict[str, VariableDef] = field(default_factory=dict)
     actions: dict[int, ActionConfig] = field(default_factory=dict)
     cues: dict[str, SimpleCueConfig | CompoundCueConfig] = field(default_factory=dict)
@@ -48,7 +49,10 @@ class UniverseSymbolTable:
     def register_affordance(self, config: AffordanceConfig) -> None:
         if config.id in self.affordances:
             raise CompilationError("Stage 2: Symbol Table", [f"Duplicate affordance '{config.id}' detected."])
+        if config.name in self.affordances_by_name:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate affordance name '{config.name}' detected."])
         self.affordances[config.id] = config
+        self.affordances_by_name[config.name] = config
 
     def register_cue(self, cue: SimpleCueConfig | CompoundCueConfig) -> None:
         if cue.cue_id in self.cues:
@@ -83,5 +87,12 @@ class UniverseSymbolTable:
     def affordance_ids(self) -> list[str]:
         return sorted(self.affordances.keys())
 
+    @property
+    def affordance_names(self) -> list[str]:
+        return sorted(self.affordances_by_name.keys())
+
     def get_affordance(self, affordance_id: str) -> AffordanceConfig:
         return self.affordances[affordance_id]
+
+    def get_affordance_by_name(self, affordance_name: str) -> AffordanceConfig:
+        return self.affordances_by_name[affordance_name]

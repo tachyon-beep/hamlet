@@ -988,7 +988,7 @@ def test_parse_l0_minimal_config(compiler):
     assert raw.cascades is not None
     assert raw.affordances is not None
     assert raw.cues is not None
-    assert raw.actions is not None
+    assert raw.global_actions is not None
     assert raw.training is not None
 
 

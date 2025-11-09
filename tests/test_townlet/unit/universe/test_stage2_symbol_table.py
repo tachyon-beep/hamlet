@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from townlet.config.affordance import AffordanceConfig
 from townlet.universe.compiler import UniverseCompiler
 from townlet.universe.compiler_inputs import RawConfigs
 from townlet.universe.errors import CompilationError
@@ -79,3 +80,15 @@ def test_affordance_ids_sorted(raw_configs: RawConfigs) -> None:
         table.register_affordance(aff)
 
     assert table.affordance_ids == sorted([aff.id for aff in raw_configs.affordances])
+    assert table.affordance_names == sorted([aff.name for aff in raw_configs.affordances])
+
+
+def test_register_affordance_rejects_duplicate_names(raw_configs: RawConfigs) -> None:
+    table = UniverseSymbolTable()
+    original = raw_configs.affordances[0]
+    duplicate = AffordanceConfig(**{**original.model_dump(), "id": "duplicate"})
+
+    table.register_affordance(original)
+
+    with pytest.raises(CompilationError):
+        table.register_affordance(duplicate)

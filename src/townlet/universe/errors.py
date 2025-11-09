@@ -31,6 +31,10 @@ class CompilationErrorCollector:
     def add(self, message: str) -> None:
         self.errors.append(message)
 
+    # Alias used throughout docs/specs
+    def add_error(self, message: str) -> None:
+        self.add(message)
+
     def add_hint(self, hint: str) -> None:
         self.hints.append(hint)
 

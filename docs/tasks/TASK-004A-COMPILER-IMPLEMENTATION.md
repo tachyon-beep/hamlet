@@ -518,23 +518,25 @@ def _stage_3_resolve_references(
             except ReferenceError as e:
                 errors.add_error(str(e))
 
-    # Resolve training enabled_affordances
-    for aff_id in raw_configs.training.enabled_affordances:
-        if aff_id not in symbol_table.affordances:
-            errors.add_error(
-                f"training.yaml:enabled_affordances: "
-                f"References non-existent affordance '{aff_id}'. "
-                f"Valid affordances: {symbol_table.affordance_ids}"
-            )
+    # Resolve environment enabled_affordances (names, not IDs)
+    enabled_affordances = raw_configs.environment.enabled_affordances
+    if enabled_affordances:
+        for aff_name in enabled_affordances:
+            if aff_name not in symbol_table.affordances_by_name:
+                errors.add_error(
+                    f"training.yaml:environment.enabled_affordances: "
+                    f"References non-existent affordance '{aff_name}'. "
+                    f"Valid affordances: {symbol_table.affordance_names}"
+                )
 
     # Resolve action cost meter references (NEW - from research Gap 2)
-    # CORRECTED: global_actions instead of actions
+    # CORRECTED: global_actions instead of actions.yaml
     for action in raw_configs.global_actions.actions:
         for cost in action.costs:
             try:
                 symbol_table.resolve_meter_reference(
                     cost.meter,
-                    location=f"actions.yaml:{action.name}:cost"
+                    location=f"global_actions.yaml:{action.name}:cost"
                 )
             except ReferenceError as e:
                 errors.add_error(str(e))
