@@ -7,6 +7,7 @@ environment:
   vision_range: 1  # Not used for aspatial substrates
   enable_temporal_mechanics: false
   enabled_affordances: ["Bed", "Hospital", "HomeMeal", "Job"]
+  randomize_affordances: true
   energy_move_depletion: 0.0  # No movement in aspatial
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0

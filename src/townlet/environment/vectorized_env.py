@@ -112,8 +112,13 @@ class VectorizedHamletEnv:
         enabled_affordances = env_cfg.enabled_affordances
         cascade_env_config = runtime.clone_environment_cascade_config()
         self.bars_config = cascade_env_config.bars
-        randomize_setting = getattr(env_cfg, "randomize_affordances", True)
-        self.randomize_affordances = True if randomize_setting is None else bool(randomize_setting)
+        randomize_setting = getattr(env_cfg, "randomize_affordances", None)
+        if randomize_setting is None:
+            raise ValueError(
+                "training.environment.randomize_affordances must be explicitly specified (true/false). "
+                "Implicit defaults are disallowed by PDR-002."
+            )
+        self.randomize_affordances = bool(randomize_setting)
 
         self.partial_observability = env_cfg.partial_observability
         self.vision_range = env_cfg.vision_range
@@ -421,7 +426,7 @@ class VectorizedHamletEnv:
                     f"Affordance '{affordance_name}' provided unsupported position mapping keys: {sorted(raw_position.keys())}."
                 )
             tensor = torch.tensor(coords, dtype=self.substrate.position_dtype, device=self.device)
-        elif isinstance(raw_position, (list, tuple)):
+        elif isinstance(raw_position, list | tuple):
             tensor = torch.tensor(list(raw_position), dtype=self.substrate.position_dtype, device=self.device)
         elif isinstance(raw_position, Number):
             tensor = torch.tensor([raw_position], dtype=self.substrate.position_dtype, device=self.device)
@@ -458,7 +463,7 @@ class VectorizedHamletEnv:
         global_actions: ActionSpaceConfig,
         enabled_action_names: list[str] | None,
     ) -> ComposedActionSpace:
-        enabled_set = set(enabled_action_names) if enabled_action_names else None
+        enabled_set = None if enabled_action_names is None else set(enabled_action_names)
         cloned_actions = [action.model_copy(deep=True) for action in global_actions.actions]
         for action in cloned_actions:
             action.enabled = True if enabled_set is None else action.name in enabled_set

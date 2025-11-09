@@ -32,6 +32,7 @@ environment:
 
   # Bed, Hospital, HomeMeal, and Job (agent can earn money!)
   enabled_affordances: ["Bed", "Hospital","HomeMeal","Job"]
+  randomize_affordances: true
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.0049
   energy_interact_depletion: 0.0029

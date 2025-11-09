@@ -17,6 +17,7 @@ environment:
   vision_range: 5  # Not used for continuous substrates
   enable_temporal_mechanics: false  # No time-based mechanics
   enabled_affordances: null  # All 14 affordances
+  randomize_affordances: true
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
