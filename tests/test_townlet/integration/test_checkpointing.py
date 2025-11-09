@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 import torch
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.curriculum.static import StaticCurriculum
 from townlet.demo.runner import DemoRunner
@@ -538,14 +537,14 @@ class TestRunnerCheckpointing:
     (environment, population, curriculum, exploration) correctly.
     """
 
-    def test_runner_checkpoint_includes_all_components(self, cpu_device, env_builder):
+    def test_runner_checkpoint_includes_all_components(self, cpu_device, env_builder, config_pack_factory):
         """Runner checkpoint should include state from all components."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}))
+            config_dir = config_pack_factory(modifier=lambda data: data["training"].update({"max_episodes": 1}))
 
             # Create runner with context manager
             with DemoRunner(
@@ -600,14 +599,14 @@ class TestRunnerCheckpointing:
                 # Verify checkpoint has curriculum state
                 assert "curriculum_state" in checkpoint, "Should have curriculum_state"
 
-    def test_runner_checkpoint_preserves_episode_number(self, cpu_device, env_builder):
+    def test_runner_checkpoint_preserves_episode_number(self, cpu_device, env_builder, config_pack_factory):
         """Runner should preserve episode counter across checkpoint cycle."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}))
+            config_dir = config_pack_factory(modifier=lambda data: data["training"].update({"max_episodes": 1}))
 
             with DemoRunner(
                 config_dir=config_dir,
@@ -653,14 +652,14 @@ class TestRunnerCheckpointing:
                 runner2.load_checkpoint()
                 assert runner2.current_episode == 42, "Episode number should be preserved after load"
 
-    def test_runner_checkpoint_round_trip_preserves_training_state(self, cpu_device, env_builder):
+    def test_runner_checkpoint_round_trip_preserves_training_state(self, cpu_device, env_builder, config_pack_factory):
         """Runner checkpoint round-trip should preserve complete training state."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}), name="runner_config")
+            config_dir = config_pack_factory(modifier=lambda data: data["training"].update({"max_episodes": 1}), name="runner_config")
 
             with DemoRunner(
                 config_dir=config_dir,
@@ -1129,11 +1128,11 @@ class TestVariableMeterCheckpoints:
 class TestDemoRunnerResourceManagement:
     """Test DemoRunner context manager and resource cleanup (QUICK-002)."""
 
-    def test_runner_closes_database_on_context_exit(self, tmp_path, cpu_device):
+    def test_runner_closes_database_on_context_exit(self, tmp_path, cpu_device, config_pack_factory):
         """DemoRunner should close database when exiting context manager."""
         checkpoint_dir = tmp_path / "checkpoints"
         checkpoint_dir.mkdir()
-        config_dir = prepare_config_dir(tmp_path, name="demo_runner_config")
+        config_dir = config_pack_factory(name="demo_runner_config")
 
         # Create runner in context manager
         with DemoRunner(
@@ -1153,11 +1152,11 @@ class TestDemoRunnerResourceManagement:
         with pytest.raises(sqlite3.ProgrammingError, match="closed"):
             conn.execute("SELECT 1")
 
-    def test_runner_cleanup_is_idempotent(self, tmp_path, cpu_device):
+    def test_runner_cleanup_is_idempotent(self, tmp_path, cpu_device, config_pack_factory):
         """Calling _cleanup() multiple times should be safe."""
         checkpoint_dir = tmp_path / "checkpoints"
         checkpoint_dir.mkdir()
-        config_dir = prepare_config_dir(tmp_path, name="demo_runner_cleanup")
+        config_dir = config_pack_factory(name="demo_runner_cleanup")
 
         runner = DemoRunner(
             config_dir=config_dir,
@@ -1171,11 +1170,11 @@ class TestDemoRunnerResourceManagement:
         runner._cleanup()  # Second call should be safe
         runner._cleanup()  # Third call should be safe
 
-    def test_runner_context_manager_propagates_exceptions(self, tmp_path, cpu_device):
+    def test_runner_context_manager_propagates_exceptions(self, tmp_path, cpu_device, config_pack_factory):
         """Context manager should propagate exceptions, not suppress them."""
         checkpoint_dir = tmp_path / "checkpoints"
         checkpoint_dir.mkdir()
-        config_dir = prepare_config_dir(tmp_path, name="demo_runner_exception")
+        config_dir = config_pack_factory(name="demo_runner_exception")
 
         # Exception inside with block should propagate
         with pytest.raises(ValueError, match="test exception"):

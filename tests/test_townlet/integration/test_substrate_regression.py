@@ -7,11 +7,9 @@ These tests verify backward compatibility and prevent behavioral regressions.
 import pytest
 import torch
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
-
 
 @pytest.mark.parametrize("grid_size", [4, 7, 8])
-def test_regression_observation_dims_unchanged(grid_size, cpu_env_factory, tmp_path):
+def test_regression_observation_dims_unchanged(grid_size, cpu_env_factory, config_pack_factory):
     """Observation dimensions should match substrate-provided breakdown."""
 
     def _modifier(cfg):
@@ -25,7 +23,7 @@ def test_regression_observation_dims_unchanged(grid_size, cpu_env_factory, tmp_p
             }
         )
 
-    config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name=f"regression_obs_dim_{grid_size}")
+    config_dir = config_pack_factory(modifier=_modifier, name=f"regression_obs_dim_{grid_size}")
     env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
     obs = env.reset()

@@ -27,7 +27,7 @@ import torch
 import yaml
 from pydantic import ValidationError
 
-from tests.test_townlet.helpers.config_builder import mutate_training_yaml, prepare_config_dir
+from tests.test_townlet.helpers.config_builder import mutate_training_yaml
 from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.runner import DemoRunner
@@ -863,9 +863,9 @@ class TestEpsilonConfiguration:
         assert exploration.rnd.epsilon_decay == 0.98
         assert exploration.rnd.epsilon_min == 0.02
 
-    def test_runner_loads_epsilon_from_yaml(self, tmp_path: Path):
+    def test_runner_loads_epsilon_from_yaml(self, tmp_path: Path, config_pack_factory):
         """DemoRunner should load epsilon params from training.yaml (integration test)."""
-        config_dir = prepare_config_dir(tmp_path, name="epsilon_config")
+        config_dir = config_pack_factory(name="epsilon_config")
 
         def mutator(data: dict) -> None:
             data["training"].update(
@@ -980,9 +980,9 @@ class TestTrainingHyperparameters:
         assert population.sequence_length == 16
         assert population.max_grad_norm == 5.0
 
-    def test_runner_loads_training_hyperparameters_from_yaml(self, tmp_path: Path):
+    def test_runner_loads_training_hyperparameters_from_yaml(self, tmp_path: Path, config_pack_factory):
         """DemoRunner should load training hyperparameters from config (integration test)."""
-        config_dir = prepare_config_dir(tmp_path, name="hyperparams_config")
+        config_dir = config_pack_factory(name="hyperparams_config")
 
         def mutator(data: dict) -> None:
             data["training"].update(
@@ -1022,9 +1022,9 @@ class TestMaxEpisodesConfiguration:
     with proper precedence (explicit > config > default).
     """
 
-    def test_explicit_max_episodes_overrides_config(self, tmp_path: Path):
+    def test_explicit_max_episodes_overrides_config(self, tmp_path: Path, config_pack_factory):
         """When max_episodes is explicitly provided, it should override config."""
-        config_dir = prepare_config_dir(tmp_path, name="max_episodes_override")
+        config_dir = config_pack_factory(name="max_episodes_override")
 
         def mutator(data: dict) -> None:
             data["training"].update({"max_episodes": 500})
@@ -1040,9 +1040,9 @@ class TestMaxEpisodesConfiguration:
 
         assert runner.max_episodes == 1000
 
-    def test_reads_max_episodes_from_config_when_not_provided(self, tmp_path: Path):
+    def test_reads_max_episodes_from_config_when_not_provided(self, tmp_path: Path, config_pack_factory):
         """When max_episodes is not provided, should read from config YAML."""
-        config_dir = prepare_config_dir(tmp_path, name="max_episodes_from_config")
+        config_dir = config_pack_factory(name="max_episodes_from_config")
 
         def mutator(data: dict) -> None:
             data["training"].update({"max_episodes": 500})
@@ -1058,9 +1058,9 @@ class TestMaxEpisodesConfiguration:
 
         assert runner.max_episodes == 500
 
-    def test_raises_error_when_max_episodes_missing(self, tmp_path: Path):
+    def test_raises_error_when_max_episodes_missing(self, tmp_path: Path, config_pack_factory):
         """PDR-002: When max_episodes is missing, should raise clear error (no-defaults principle)."""
-        config_dir = prepare_config_dir(tmp_path, name="max_episodes_missing")
+        config_dir = config_pack_factory(name="max_episodes_missing")
 
         def mutator(data: dict) -> None:
             data["training"].pop("max_episodes", None)

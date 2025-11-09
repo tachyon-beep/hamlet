@@ -12,7 +12,6 @@ Focus: Test training loop over multiple episodes with real components
 
 import torch
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
@@ -33,7 +32,7 @@ class TestMaskedLossIntegration:
     components instead of synthetic tensors.
     """
 
-    def test_masked_loss_during_training(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_masked_loss_during_training(self, cpu_device, cpu_env_factory, config_pack_factory):
         """Verify masked loss computed correctly during LSTM training.
 
         This test validates the critical contract:
@@ -60,7 +59,7 @@ class TestMaskedLossIntegration:
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
-        config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="masked_loss")
+        config_dir = config_pack_factory(modifier=_modifier, name="masked_loss")
         env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         # Create population with recurrent network

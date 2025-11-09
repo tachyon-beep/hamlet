@@ -17,7 +17,7 @@ import yaml
 # Add src to path for imports (integration tests may run standalone)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / "src"))
 
-from tests.test_townlet.helpers.config_builder import mutate_training_yaml, prepare_config_dir
+from tests.test_townlet.helpers.config_builder import mutate_training_yaml
 from tests.test_townlet.unit.config.fixtures import (
     PRODUCTION_CONFIG_PACKS,
     VALID_CURRICULUM_PARAMS,
@@ -46,18 +46,18 @@ def _apply_valid_sections(config_dir: Path) -> None:
 class TestHamletConfigComposition:
     """Test that HamletConfig composes all section DTOs correctly."""
 
-    def test_all_sections_required(self, tmp_path):
+    def test_all_sections_required(self, config_pack_factory):
         """All 5 sections must be present in config."""
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         mutate_training_yaml(config_dir, lambda data: data.pop("exploration", None))
 
         with pytest.raises(Exception) as exc_info:
             HamletConfig.load(config_dir)
         assert "exploration" in str(exc_info.value).lower()
 
-    def test_load_complete_config(self, tmp_path):
+    def test_load_complete_config(self, config_pack_factory):
         """Load complete config with all sections."""
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         _apply_valid_sections(config_dir)
 
         config = HamletConfig.load(config_dir)
@@ -73,7 +73,7 @@ class TestHamletConfigComposition:
         assert config.substrate.type in {"grid", "gridnd", "continuous", "continuousnd", "aspatial"}
         assert config.cues is not None
 
-    def test_config_sections_are_dtos_not_dicts(self, tmp_path):
+    def test_config_sections_are_dtos_not_dicts(self, config_pack_factory):
         """Verify sections are DTO objects, not raw dicts."""
         from townlet.config.curriculum import CurriculumConfig
         from townlet.config.environment import TrainingEnvironmentConfig
@@ -81,7 +81,7 @@ class TestHamletConfigComposition:
         from townlet.config.population import PopulationConfig
         from townlet.config.training import TrainingConfig
 
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         _apply_valid_sections(config_dir)
         config = HamletConfig.load(config_dir)
 
@@ -95,17 +95,17 @@ class TestHamletConfigComposition:
         # Should NOT be dicts
         assert not isinstance(config.training, dict)
 
-    def test_missing_cues_file_raises(self, tmp_path):
+    def test_missing_cues_file_raises(self, config_pack_factory):
         """cues.yaml is required – missing file must raise."""
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         (config_dir / "cues.yaml").unlink()
 
         with pytest.raises(FileNotFoundError):
             HamletConfig.load(config_dir)
 
-    def test_training_section_can_be_overridden_via_explicit_path(self, tmp_path):
+    def test_training_section_can_be_overridden_via_explicit_path(self, tmp_path, config_pack_factory):
         """training_config_path override must control training hyperparameters."""
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         _apply_valid_sections(config_dir)
 
         override_path = tmp_path / "custom_training.yaml"
@@ -131,9 +131,9 @@ class TestHamletConfigComposition:
 class TestHamletConfigCrossValidation:
     """Test cross-config validation rules in HamletConfig."""
 
-    def test_batch_size_must_not_exceed_buffer_capacity(self, tmp_path):
+    def test_batch_size_must_not_exceed_buffer_capacity(self, config_pack_factory):
         """batch_size cannot exceed replay_buffer_capacity."""
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         _apply_valid_sections(config_dir)
 
         def mutator(data: dict) -> None:
@@ -149,9 +149,9 @@ class TestHamletConfigCrossValidation:
         assert "batch_size" in error.lower()
         assert "replay_buffer_capacity" in error.lower() or "buffer" in error.lower()
 
-    def test_batch_size_equal_to_buffer_capacity_allowed(self, tmp_path):
+    def test_batch_size_equal_to_buffer_capacity_allowed(self, config_pack_factory):
         """batch_size == replay_buffer_capacity is allowed (edge case)."""
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         _apply_valid_sections(config_dir)
 
         def mutator(data: dict) -> None:
@@ -251,9 +251,9 @@ class TestHamletConfigErrorMessages:
         error = str(exc_info.value)
         assert "training.yaml" in error.lower()
 
-    def test_invalid_field_value_shows_field_name(self, tmp_path):
+    def test_invalid_field_value_shows_field_name(self, config_pack_factory):
         """Error message includes field name for invalid values."""
-        config_dir = prepare_config_dir(tmp_path)
+        config_dir = config_pack_factory()
         mutate_training_yaml(config_dir, lambda data: data["training"].update({"device": "invalid_device"}))
 
         with pytest.raises(ValueError) as exc_info:

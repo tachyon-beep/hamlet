@@ -15,7 +15,6 @@ from pathlib import Path
 import torch
 import torch.nn.functional as functional
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.agent.networks import RecurrentSpatialQNetwork
 from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
@@ -30,7 +29,7 @@ from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
 class TestLSTMHiddenStatePersistence:
     """Test LSTM hidden state lifecycle during episode execution."""
 
-    def test_hidden_state_persists_across_10_steps_within_episode(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_hidden_state_persists_across_10_steps_within_episode(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state evolves during episode rollout.
 
@@ -46,14 +45,14 @@ class TestLSTMHiddenStatePersistence:
                     "partial_observability": True,
                     "vision_range": 2,
                     "enable_temporal_mechanics": False,
-                    "energy_move_depletion": 0.0001,
-                    "energy_wait_depletion": 0.00001,
+                    "energy_move_depletion": 0.0,
+                    "energy_wait_depletion": 0.0,
                     "energy_interact_depletion": 0.0,
                 }
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
-        config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="lstm_hidden_state_survival")
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_survival")
         env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         # Create recurrent population
@@ -113,7 +112,7 @@ class TestLSTMHiddenStatePersistence:
             assert not torch.allclose(h_curr, h_next, atol=1e-6), f"Hidden state should change between steps {i} and {i + 1}"
             assert not torch.allclose(c_curr, c_next, atol=1e-6), f"Cell state should change between steps {i} and {i + 1}"
 
-    def test_hidden_state_resets_on_death(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_hidden_state_resets_on_death(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state resets when agent dies.
 
@@ -135,7 +134,7 @@ class TestLSTMHiddenStatePersistence:
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
-        config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="lstm_hidden_state_reset")
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_reset")
         env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         curriculum = StaticCurriculum()
@@ -177,7 +176,7 @@ class TestLSTMHiddenStatePersistence:
         assert torch.allclose(h, torch.zeros_like(h)), "Hidden state should be zeros after death"
         assert torch.allclose(c, torch.zeros_like(c)), "Cell state should be zeros after death"
 
-    def test_hidden_state_resets_after_flush_on_max_steps(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_hidden_state_resets_after_flush_on_max_steps(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state resets after flush_episode() on max_steps survival.
 
@@ -197,7 +196,7 @@ class TestLSTMHiddenStatePersistence:
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
-        config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="lstm_hidden_state_flush")
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_flush")
         env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         curriculum = StaticCurriculum()
@@ -238,7 +237,7 @@ class TestLSTMHiddenStatePersistence:
         assert torch.allclose(h, torch.zeros_like(h)), "Hidden state should be zeros after flush"
         assert torch.allclose(c, torch.zeros_like(c)), "Cell state should be zeros after flush"
 
-    def test_hidden_state_shape_correct_during_episode(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_hidden_state_shape_correct_during_episode(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state shape during multi-agent rollout.
 
@@ -262,7 +261,7 @@ class TestLSTMHiddenStatePersistence:
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
-        config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="lstm_hidden_state_shape")
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_shape")
         env = cpu_env_factory(config_dir=config_dir, num_agents=2)
 
         curriculum = StaticCurriculum()
@@ -311,7 +310,7 @@ class TestLSTMHiddenStatePersistence:
 class TestLSTMBatchTraining:
     """Test LSTM batch training with sequence sampling."""
 
-    def test_hidden_state_batch_size_correct_during_training(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_hidden_state_batch_size_correct_during_training(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state shape changes from num_agents to batch_size during training.
 
@@ -332,7 +331,7 @@ class TestLSTMBatchTraining:
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
-        config_dir = prepare_config_dir(tmp_path, modifier=_modifier, name="lstm_batch_size")
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_batch_size")
         env = cpu_env_factory(config_dir=config_dir, num_agents=2)
 
         curriculum = StaticCurriculum()

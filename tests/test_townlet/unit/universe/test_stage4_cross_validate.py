@@ -98,6 +98,47 @@ def test_stage4_warns_on_economic_imbalance(base_raw_configs: RawConfigs) -> Non
     assert any("UAC-VAL-002" in warning for warning in collector.warnings)
 
 
+def test_stage4_errors_when_critical_meter_unsustainable(base_raw_configs: RawConfigs) -> None:
+    bars = list(base_raw_configs.bars)
+    energy_index = next(idx for idx, bar in enumerate(bars) if bar.name == "energy")
+    bars[energy_index] = bars[energy_index].model_copy(update={"base_depletion": 1.5})
+    mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"bars": tuple(bars)})
+
+    errors = _run_stage4_expect_error(mutated_raw)
+
+    assert any("unsustainable" in message for message in errors)
+
+
+def test_stage4_warns_when_income_hours_insufficient(base_raw_configs: RawConfigs) -> None:
+    env = base_raw_configs.environment.model_copy(update={"enabled_affordances": ["Job"]})
+    affs = list(base_raw_configs.affordances)
+    job_index = next(idx for idx, aff in enumerate(affs) if aff.name == "Job")
+    affs[job_index] = affs[job_index].model_copy(update={"operating_hours": [8, 10]})
+    mutated_raw = _clone_raw_configs(
+        base_raw_configs,
+        hamlet_overrides={"environment": env, "affordances": tuple(affs)},
+    )
+
+    collector = _run_stage4_collector(mutated_raw)
+
+    assert any("Income stress" in warning for warning in collector.warnings)
+
+
+def test_stage4_warns_on_capacity_constraint(base_raw_configs: RawConfigs) -> None:
+    population = base_raw_configs.population.model_copy(update={"num_agents": 3})
+    affs = list(base_raw_configs.affordances)
+    bed_index = next(idx for idx, aff in enumerate(affs) if aff.name == "Bed")
+    affs[bed_index] = affs[bed_index].model_copy(update={"capacity": 1})
+    mutated_raw = _clone_raw_configs(
+        base_raw_configs,
+        hamlet_overrides={"population": population, "affordances": tuple(affs)},
+    )
+
+    collector = _run_stage4_collector(mutated_raw)
+
+    assert any("capacity" in warning for warning in collector.warnings)
+
+
 def test_stage4_detects_availability_meter_reference(base_raw_configs: RawConfigs) -> None:
     affs = list(base_raw_configs.affordances)
     affs[0] = affs[0].model_copy(update={"availability": [{"meter": "unknown", "min": 0.2}]})

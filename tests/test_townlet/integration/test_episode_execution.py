@@ -11,7 +11,6 @@ from pathlib import Path
 
 import torch
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
@@ -255,7 +254,7 @@ class TestEpisodeLifecycle:
         # At least some agents should have participated in episode
         assert step > 0, "Episode should run at least 1 step"
 
-    def test_episode_all_agents_die(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_episode_all_agents_die(self, cpu_device, cpu_env_factory, config_pack_factory):
         """Verify episode ends when all agents die.
 
         This test validates episode termination on complete failure:
@@ -266,8 +265,7 @@ class TestEpisodeLifecycle:
         Note: This test uses extreme depletion to force quick death for testing.
         """
         # Create small environment via compiler pipeline with aggressive depletion costs
-        config_dir = prepare_config_dir(
-            tmp_path,
+        config_dir = config_pack_factory(
             modifier=lambda cfg: cfg["environment"].update(
                 {
                     "grid_size": 5,
@@ -331,7 +329,7 @@ class TestEpisodeLifecycle:
             assert (survival_times > 0).all(), "Survival times should be positive"
             assert (survival_times <= step_count).all(), "Survival times should not exceed step count"
 
-    def test_episode_all_agents_survive_to_max_steps(self, cpu_device, cpu_env_factory, tmp_path):
+    def test_episode_all_agents_survive_to_max_steps(self, cpu_device, cpu_env_factory, config_pack_factory):
         """Verify episode ends at max_steps when all agents survive.
 
         This test validates episode termination on success:
@@ -341,8 +339,7 @@ class TestEpisodeLifecycle:
 
         Note: This test uses minimal depletion to prevent death.
         """
-        config_dir = prepare_config_dir(
-            tmp_path,
+        config_dir = config_pack_factory(
             modifier=lambda cfg: cfg["environment"].update(
                 {
                     "grid_size": 5,

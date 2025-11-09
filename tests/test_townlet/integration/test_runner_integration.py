@@ -11,20 +11,18 @@ import sqlite3
 
 import pytest
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
-
 
 class TestRunnerRecordingIntegration:
     """Test runner integration with recording system (migrated from test_recording)."""
 
-    def test_runner_initializes_recorder_attribute(self, tmp_path):
+    def test_runner_initializes_recorder_attribute(self, tmp_path, config_pack_factory):
         """Runner should have recorder attribute initialized to None."""
         from townlet.demo.runner import DemoRunner
 
         def modifier(data: dict) -> None:
             data["training"]["max_episodes"] = 2
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -39,7 +37,7 @@ class TestRunnerRecordingIntegration:
             assert hasattr(runner, "recorder")
             assert runner.recorder is None
 
-    def test_runner_config_has_recording_field(self, tmp_path):
+    def test_runner_config_has_recording_field(self, tmp_path, config_pack_factory):
         """Runner should load recording config when present."""
         from townlet.demo.runner import DemoRunner
 
@@ -52,7 +50,7 @@ class TestRunnerRecordingIntegration:
                 "compression": "lz4",
             }
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -72,7 +70,7 @@ class TestRunnerRecordingIntegration:
 class TestRunnerOrchestration:
     """Test runner orchestration of training loop, checkpointing, and database logging."""
 
-    def test_runner_episode_loop_execution(self, tmp_path):
+    def test_runner_episode_loop_execution(self, tmp_path, config_pack_factory):
         """Verify runner executes episode loop with env reset, steps, and done handling.
 
         Critical integration test: Runner orchestrates env reset, population steps,
@@ -87,7 +85,7 @@ class TestRunnerOrchestration:
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 3
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
         # Create runner
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
@@ -113,7 +111,7 @@ class TestRunnerOrchestration:
 
         assert episode_count == 3, f"Database should have 3 episode records, got {episode_count}"
 
-    def test_runner_checkpoint_save_at_interval(self, tmp_path):
+    def test_runner_checkpoint_save_at_interval(self, tmp_path, config_pack_factory):
         """Verify runner saves checkpoint every 100 episodes.
 
         Critical integration test: Runner should automatically save checkpoints
@@ -128,7 +126,7 @@ class TestRunnerOrchestration:
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 150
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
         # Create runner
         checkpoint_dir = tmp_path / "checkpoints"
         db_path = tmp_path / "test.db"
@@ -151,7 +149,7 @@ class TestRunnerOrchestration:
         assert 100 in checkpoint_episodes, f"Checkpoint should exist at episode 100, found: {checkpoint_episodes}"
         assert 150 in checkpoint_episodes, f"Checkpoint should exist at final episode 150, found: {checkpoint_episodes}"
 
-    def test_runner_database_logging_after_episode(self, tmp_path):
+    def test_runner_database_logging_after_episode(self, tmp_path, config_pack_factory):
         """Verify runner logs episode metrics to database after each episode.
 
         Critical integration test: After each episode, runner should write
@@ -166,7 +164,7 @@ class TestRunnerOrchestration:
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 5
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
 
         # Create runner
         db_path = tmp_path / "test.db"
@@ -215,7 +213,7 @@ class TestRunnerOrchestration:
 class TestRunnerAffordanceTransitions:
     """Test runner tracking of affordance transitions (Phase 2)."""
 
-    def test_runner_persists_transitions_to_database(self, tmp_path):
+    def test_runner_persists_transitions_to_database(self, tmp_path, config_pack_factory):
         """Runner should persist affordance transitions to database after episode.
 
         Integration test: When agent uses affordances in sequence (Bed → Hospital → Job),
@@ -247,7 +245,7 @@ class TestRunnerAffordanceTransitions:
                 }
             )
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
 
         # Create runner
         db_path = tmp_path / "test.db"
@@ -291,7 +289,7 @@ class TestRunnerAffordanceTransitions:
 class TestRunnerConfigValidation:
     """Test runner config validation and error messages (PDR-002 compliance)."""
 
-    def test_missing_required_environment_params_raises_helpful_error(self, tmp_path):
+    def test_missing_required_environment_params_raises_helpful_error(self, tmp_path, config_pack_factory):
         """Missing required environment params should raise ValueError with helpful message.
 
         Verifies PDR-002 no-defaults enforcement: all UAC parameters must be explicit.
@@ -311,7 +309,7 @@ class TestRunnerConfigValidation:
             ]:
                 env.pop(key, None)
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
 
         with pytest.raises(ValueError) as exc_info:
             DemoRunner(
@@ -323,7 +321,7 @@ class TestRunnerConfigValidation:
 
         assert "environment" in str(exc_info.value).lower()
 
-    def test_missing_required_training_params_raises_helpful_error(self, tmp_path):
+    def test_missing_required_training_params_raises_helpful_error(self, tmp_path, config_pack_factory):
         """Missing required training params should raise ValueError with helpful message."""
         from townlet.demo.runner import DemoRunner
 
@@ -341,7 +339,7 @@ class TestRunnerConfigValidation:
             ]:
                 train.pop(key, None)
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
 
         with pytest.raises(ValueError) as exc_info:
             DemoRunner(
@@ -357,14 +355,14 @@ class TestRunnerConfigValidation:
 class TestRunnerResourceCleanup:
     """Test runner resource cleanup and context manager protocol (QUICK-002)."""
 
-    def test_context_manager_cleanup_on_normal_exit(self, tmp_path):
+    def test_context_manager_cleanup_on_normal_exit(self, tmp_path, config_pack_factory):
         from townlet.demo.runner import DemoRunner
 
         def modifier(data: dict) -> None:
             data["training"]["max_episodes"] = 1
             data["environment"]["enabled_affordances"] = ["Bed"]
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -379,14 +377,14 @@ class TestRunnerResourceCleanup:
 
         assert runner.db._closed is True, "Database connection should be closed after context exit"
 
-    def test_idempotent_cleanup_safe_to_call_multiple_times(self, tmp_path):
+    def test_idempotent_cleanup_safe_to_call_multiple_times(self, tmp_path, config_pack_factory):
         from townlet.demo.runner import DemoRunner
 
         def modifier(data: dict) -> None:
             data["training"]["max_episodes"] = 1
             data["environment"]["enabled_affordances"] = ["Bed"]
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -404,14 +402,14 @@ class TestRunnerResourceCleanup:
 
         assert runner.db._closed is True
 
-    def test_context_manager_cleanup_on_exception(self, tmp_path):
+    def test_context_manager_cleanup_on_exception(self, tmp_path, config_pack_factory):
         from townlet.demo.runner import DemoRunner
 
         def modifier(data: dict) -> None:
             data["training"]["max_episodes"] = 1
             data["environment"]["enabled_affordances"] = ["Bed"]
 
-        config_dir = prepare_config_dir(tmp_path, modifier)
+        config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 

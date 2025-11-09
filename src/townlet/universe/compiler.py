@@ -20,8 +20,13 @@ import yaml
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.cascade import CascadeConfig
 from townlet.config.effect_pipeline import EffectPipeline
-from townlet.environment.cascade_config import EnvironmentConfig
-from townlet.environment.cascade_config import load_cascades_config as load_full_cascades_config
+from townlet.environment.cascade_config import (
+    BarConfig,
+    EnvironmentConfig,
+)
+from townlet.environment.cascade_config import (
+    load_cascades_config as load_full_cascades_config,
+)
 from townlet.environment.substrate_action_validator import SubstrateActionValidator
 from townlet.substrate.config import SubstrateConfig
 from townlet.universe.adapters.vfs_adapter import vfs_to_observation_spec
@@ -430,6 +435,7 @@ class UniverseCompiler:
         self._validate_capabilities_and_effect_pipelines(raw_configs, errors, _format_error)
         self._validate_affordance_positions(raw_configs, errors, _format_error)
         self._validate_substrate_action_compatibility(raw_configs, errors, _format_error, _add_hint)
+        self._validate_capacity_and_sustainability(raw_configs, errors, _format_error)
 
     def _validate_spatial_feasibility(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
         grid_size = getattr(raw_configs.environment, "grid_size", None)
@@ -452,14 +458,45 @@ class UniverseCompiler:
             errors.add(formatter("UAC-VAL-001", message, "training.yaml:environment.grid_size"))
 
     def _validate_economic_balance(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
+        enabled_lookup = self._build_enabled_affordance_lookup(getattr(raw_configs.environment, "enabled_affordances", None))
+
         total_income = self._compute_max_income(raw_configs.affordances)
         total_costs = self._compute_total_costs(raw_configs.affordances)
 
-        if total_income < total_costs:
+        if total_income <= 0.0 and total_costs > 0.0:
+            errors.add(
+                formatter(
+                    "UAC-VAL-002",
+                    "No income-generating affordances available while costs accrue. Universe is unwinnable.",
+                    "affordances.yaml",
+                )
+            )
+        elif total_income < total_costs:
             errors.add_warning(
                 formatter(
                     "UAC-VAL-002",
                     f"Economic imbalance: Total income ({total_income:.2f}) < total costs ({total_costs:.2f}).",
+                    "affordances.yaml",
+                )
+            )
+
+        income_hours = self._count_income_hours(raw_configs, enabled_lookup)
+        if total_income > 0.0 and income_hours == 0:
+            errors.add(
+                formatter(
+                    "UAC-VAL-002",
+                    (
+                        "Income-generating affordances exist but none are available during the day. "
+                        "Adjust operating_hours or enable additional jobs."
+                    ),
+                    "affordances.yaml",
+                )
+            )
+        elif 0 < income_hours < 12:
+            errors.add_warning(
+                formatter(
+                    "UAC-VAL-002",
+                    f"Income stress: jobs only available {income_hours:.0f}h/day. Costs accrue 24h/day.",
                     "affordances.yaml",
                 )
             )
@@ -739,6 +776,16 @@ class UniverseCompiler:
                     )
                 )
 
+    def _validate_capacity_and_sustainability(
+        self,
+        raw_configs: RawConfigs,
+        errors: CompilationErrorCollector,
+        formatter,
+    ) -> None:
+        enabled_lookup = self._build_enabled_affordance_lookup(getattr(raw_configs.environment, "enabled_affordances", None))
+        self._validate_meter_sustainability(raw_configs, enabled_lookup, errors, formatter)
+        self._validate_capacity_constraints(raw_configs, enabled_lookup, errors, formatter)
+
     @staticmethod
     def _ranges_cover_domain(ranges: list[tuple[float, float]], domain_min: float, domain_max: float) -> bool:
         if not ranges:
@@ -868,6 +915,178 @@ class UniverseCompiler:
             if amount:
                 total += amount
         return total
+
+    def _sum_positive_meter_entries(self, entries: object | None, meter_name: str) -> float:
+        total = 0.0
+        if not entries:
+            return total
+        for entry in entries:
+            if self._get_meter(entry) != meter_name:
+                continue
+            amount = self._get_amount(entry)
+            if amount is None or amount <= 0:
+                continue
+            total += amount
+        return total
+
+    def _build_enabled_affordance_lookup(self, enabled_affordances: list[str] | None) -> set[str] | None:
+        if not enabled_affordances:
+            return None
+        return {str(name) for name in enabled_affordances}
+
+    def _is_affordance_enabled(self, affordance: AffordanceConfig, enabled_lookup: set[str] | None) -> bool:
+        if enabled_lookup is None:
+            return True
+        return affordance.name in enabled_lookup or affordance.id in enabled_lookup
+
+    def _count_income_hours(self, raw_configs: RawConfigs, enabled_lookup: set[str] | None) -> float:
+        income_affordances = [
+            aff
+            for aff in raw_configs.affordances
+            if self._is_affordance_enabled(aff, enabled_lookup) and self._affordance_positive_amount_for_meter(aff, "money") > 0
+        ]
+        if not income_affordances:
+            return 0.0
+
+        if any(getattr(aff, "operating_hours", None) is None for aff in income_affordances):
+            return 24.0
+
+        hours_with_income = 0
+        for hour in range(24):
+            if any(self._affordance_open_for_hour(aff, hour) for aff in income_affordances):
+                hours_with_income += 1
+        return float(hours_with_income)
+
+    def _affordance_open_for_hour(self, affordance: AffordanceConfig, hour: int) -> bool:
+        operating_hours = getattr(affordance, "operating_hours", None)
+        if not operating_hours:
+            return True
+        open_hour, close_hour = operating_hours
+        return self._is_open(hour, open_hour, close_hour)
+
+    def _affordance_positive_amount_for_meter(self, affordance: AffordanceConfig, meter_name: str) -> float:
+        pipeline = getattr(affordance, "effect_pipeline", None)
+        total = 0.0
+        if pipeline is not None and not isinstance(pipeline, EffectPipeline):
+            pipeline = EffectPipeline.model_validate(pipeline)
+
+        if pipeline is not None:
+            total += self._sum_positive_meter_entries(pipeline.on_start, meter_name)
+            total += self._sum_positive_meter_entries(pipeline.per_tick, meter_name)
+            total += self._sum_positive_meter_entries(pipeline.on_completion, meter_name)
+            total += self._sum_positive_meter_entries(pipeline.on_early_exit, meter_name)
+            total += self._sum_positive_meter_entries(pipeline.on_failure, meter_name)
+        else:
+            total += self._sum_positive_meter_entries(getattr(affordance, "effects", []), meter_name)
+            total += self._sum_positive_meter_entries(getattr(affordance, "effects_per_tick", []), meter_name)
+            total += self._sum_positive_meter_entries(getattr(affordance, "completion_bonus", []), meter_name)
+
+        return total
+
+    def _compute_max_restoration_for_meter(
+        self,
+        meter_name: str,
+        affordances: tuple[AffordanceConfig, ...],
+        enabled_lookup: set[str] | None,
+    ) -> float:
+        max_restoration = 0.0
+        for affordance in affordances:
+            if not self._is_affordance_enabled(affordance, enabled_lookup):
+                continue
+            restoration = self._affordance_positive_amount_for_meter(affordance, meter_name)
+            if restoration > max_restoration:
+                max_restoration = restoration
+        return max_restoration
+
+    def _validate_meter_sustainability(
+        self,
+        raw_configs: RawConfigs,
+        enabled_lookup: set[str] | None,
+        errors: CompilationErrorCollector,
+        formatter,
+    ) -> None:
+        critical_meter_names = self._collect_critical_meter_names(raw_configs)
+        if not critical_meter_names:
+            return
+
+        for bar in raw_configs.bars:
+            if bar.name not in critical_meter_names:
+                continue
+            depletion = float(getattr(bar, "base_depletion", 0.0))
+            if depletion <= 0.0:
+                continue
+            restoration = self._compute_max_restoration_for_meter(bar.name, raw_configs.affordances, enabled_lookup)
+            if restoration <= 0.0:
+                errors.add(
+                    formatter(
+                        "UAC-VAL-005",
+                        f"Meter {bar.name} unsustainable: passive depletion {depletion:.4f}/tick but no restoring affordances are enabled.",
+                        f"bars.yaml:{bar.name}",
+                    )
+                )
+            elif restoration < depletion:
+                errors.add(
+                    formatter(
+                        "UAC-VAL-005",
+                        f"Meter {bar.name} unsustainable: depletion ({depletion:.4f}/tick) > max restoration ({restoration:.4f}/tick).",
+                        f"bars.yaml:{bar.name}",
+                    )
+                )
+
+    def _collect_critical_meter_names(self, raw_configs: RawConfigs) -> set[str]:
+        names: set[str] = set()
+        for bar in raw_configs.bars:
+            if self._is_meter_critical(bar):
+                names.add(bar.name)
+        return names
+
+    def _is_meter_critical(self, bar: BarConfig) -> bool:
+        if getattr(bar, "critical", False):
+            return True
+        tier = getattr(bar, "tier", None)
+        return isinstance(tier, str) and tier.lower() == "pivotal"
+
+    def _validate_capacity_constraints(
+        self,
+        raw_configs: RawConfigs,
+        enabled_lookup: set[str] | None,
+        errors: CompilationErrorCollector,
+        formatter,
+    ) -> None:
+        num_agents = getattr(raw_configs.population, "num_agents", 1)
+        if num_agents <= 1:
+            return
+
+        critical_affordances = self._find_critical_path_affordances(raw_configs, enabled_lookup)
+        for affordance in critical_affordances:
+            capacity = getattr(affordance, "capacity", None)
+            if capacity is None:
+                continue
+            if capacity < num_agents:
+                errors.add_warning(
+                    formatter(
+                        "UAC-VAL-005",
+                        f"Affordance {affordance.name} capacity {capacity} < num_agents ({num_agents}). Contentions may cause starvation.",
+                        f"affordances.yaml:{affordance.id}",
+                    )
+                )
+
+    def _find_critical_path_affordances(
+        self,
+        raw_configs: RawConfigs,
+        enabled_lookup: set[str] | None,
+    ) -> list[AffordanceConfig]:
+        critical_meters = self._collect_critical_meter_names(raw_configs)
+        if not critical_meters:
+            return []
+
+        critical_affordances: list[AffordanceConfig] = []
+        for affordance in raw_configs.affordances:
+            if not self._is_affordance_enabled(affordance, enabled_lookup):
+                continue
+            if any(self._affordance_positive_amount_for_meter(affordance, meter) > 0.0 for meter in critical_meters):
+                critical_affordances.append(affordance)
+        return critical_affordances
 
     def _get_meter(self, entry: object | None) -> str | None:
         if entry is None:

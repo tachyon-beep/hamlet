@@ -21,6 +21,7 @@ import pytest
 import torch
 import yaml
 
+from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.curriculum.static import StaticCurriculum
@@ -84,6 +85,21 @@ def temp_config_pack(tmp_path: Path, test_config_pack_path: Path) -> Path:
     target_pack = tmp_path / "config_pack"
     shutil.copytree(test_config_pack_path, target_pack)
     return target_pack
+
+
+@pytest.fixture
+def config_pack_factory(tmp_path: Path):
+    """Return helper to create isolated config packs with optional overrides."""
+
+    counter = 0
+
+    def _build(*, name: str | None = None, modifier: Callable[[dict[str, Any]], None] | None = None) -> Path:
+        nonlocal counter
+        counter += 1
+        pack_name = name or f"config_pack_{counter:04d}"
+        return prepare_config_dir(tmp_path, modifier=modifier, name=pack_name)
+
+    return _build
 
 
 @pytest.fixture
