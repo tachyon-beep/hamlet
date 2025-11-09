@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from townlet.universe.dto import (
     UniverseMetadata,
 )
 from townlet.universe.optimization import OptimizationData
+from townlet.universe.runtime import RuntimeUniverse
 from townlet.vfs.schema import VariableDef
 
 
@@ -139,6 +141,21 @@ class CompiledUniverse:
 
         return True, "Checkpoint compatible."
 
+    def to_runtime(self) -> RuntimeUniverse:
+        """Create a runtime-facing DTO for environment and training systems."""
+
+        return RuntimeUniverse(
+            hamlet_config=deepcopy(self.hamlet_config),
+            global_actions=deepcopy(self.global_actions),
+            variables_reference=tuple(deepcopy(var) for var in self.variables_reference),
+            metadata=self.metadata,
+            observation_spec=self.observation_spec,
+            action_space_metadata=self.action_space_metadata,
+            meter_metadata=self.meter_metadata,
+            affordance_metadata=self.affordance_metadata,
+            optimization_data=self.optimization_data,
+        )
+
     # Serialization -----------------------------------------------------------
 
     def save_to_cache(self, path: Path) -> None:
@@ -158,7 +175,11 @@ class CompiledUniverse:
                 "base_depletions": self.optimization_data.base_depletions.cpu().tolist(),
                 "cascade_data": self.optimization_data.cascade_data,
                 "modulation_data": self.optimization_data.modulation_data,
-                "action_mask_table": self.optimization_data.action_mask_table.cpu().tolist(),
+                "action_mask_table": (
+                    self.optimization_data.action_mask_table.cpu().tolist()
+                    if self.optimization_data.action_mask_table is not None
+                    else None
+                ),
                 "affordance_position_map": _serialize_affordance_positions(self.optimization_data.affordance_position_map),
             },
         }
@@ -175,7 +196,9 @@ class CompiledUniverse:
         optimization_payload = payload["optimization_data"]
         action_mask = optimization_payload.get("action_mask_table")
         if action_mask is None:
-            action_mask = [[False] * 0 for _ in range(24)]
+            action_mask_tensor = torch.zeros((24, 0), dtype=torch.bool)
+        else:
+            action_mask_tensor = torch.tensor(action_mask, dtype=torch.bool)
         return cls(
             hamlet_config=HamletConfig.model_validate(payload["hamlet_config"]),
             variables_reference=[VariableDef.model_validate(var) for var in payload["variables_reference"]],
@@ -199,7 +222,7 @@ class CompiledUniverse:
                 base_depletions=torch.tensor(optimization_payload["base_depletions"], dtype=torch.float32),
                 cascade_data=optimization_payload["cascade_data"],
                 modulation_data=optimization_payload["modulation_data"],
-                action_mask_table=torch.tensor(action_mask, dtype=torch.bool),
+                action_mask_table=action_mask_tensor,
                 affordance_position_map=_deserialize_affordance_positions(optimization_payload["affordance_position_map"]),
             ),
         )

@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from townlet.universe.compiler import UniverseCompiler
 
@@ -120,3 +121,20 @@ def test_compile_recovers_from_corrupted_cache(tmp_path: Path, monkeypatch: pyte
     UniverseCompiler().compile(config_dir, use_cache=True)
 
     assert counter["calls"] == 1
+
+
+def test_cache_handles_zero_affordances(tmp_path: Path) -> None:
+    config_dir = _copy_config_pack(tmp_path)
+    aff_path = config_dir / "affordances.yaml"
+    data = yaml.safe_load(aff_path.read_text())
+    data["affordances"] = []
+    aff_path.write_text(yaml.safe_dump(data))
+
+    training_path = config_dir / "training.yaml"
+    training = yaml.safe_load(training_path.read_text())
+    training.setdefault("environment", {})["enabled_affordances"] = None
+    training_path.write_text(yaml.safe_dump(training))
+
+    compiler = UniverseCompiler()
+    compiler.compile(config_dir, use_cache=True)
+    compiler.compile(config_dir, use_cache=True)  # ensure cache load works

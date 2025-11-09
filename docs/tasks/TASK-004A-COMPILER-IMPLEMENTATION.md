@@ -3,9 +3,10 @@
 **Status**: Ready (Prerequisites completed – see summary below)
 **Priority**: HIGH (Foundational for UAC system integrity)
 **Estimated Effort**: 52-72 hours (6.5-9 days)
-  - **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
-  - **Additions**: CuesCompiler (+3-4h), Capability Validation (+6-8h), ObservationSpec (+2h), Rich Metadata (+4h)
-  - **Total additions**: +15-18h (+40-33% increase)
+
+- **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
+- **Additions**: CuesCompiler (+3-4h), Capability Validation (+6-8h), ObservationSpec (+2h), Rich Metadata (+4h)
+- **Total additions**: +15-18h (+40-33% increase)
 **Dependencies**: TASK-003 (UAC Core DTOs - COMPLETE) + **TASK-004A-PREREQUISITES (REQUIRED)**
 **Enables**: All future UAC work + TASK-005 (BAC - requires ObservationSpec)
 **Authoritative Reference**: `docs/architecture/COMPILER_ARCHITECTURE.md`
@@ -1871,6 +1872,7 @@ class CompiledUniverse:
 **Per COMPILER_ARCHITECTURE.md §4.2**: Use SHA-256 hash of config file contents for robust cache invalidation.
 
 **Why hash-based over mtime-based:**
+
 - **Robust across filesystems**: mtime can be unreliable (git checkout, CI runners, network filesystems)
 - **Content-aware**: Only invalidates when config *actually* changes, not just timestamps
 - **Portable**: Works across different machines and deployment environments
@@ -2276,6 +2278,8 @@ All future UAC work depends on robust compilation:
 
 ---
 
+## Auxiliary Tasks
+
 ### Phase 3 Enhancement: Error Codes & Source Maps (3-4 hours)
 
 **Goal**: Add searchable error codes and file:line references for better developer experience.
@@ -2420,6 +2424,7 @@ for cascade in raw_configs.cascades.cascades:
 ```
 
 **Success Criteria**:
+
 - [ ] All CompilationError instances have error codes
 - [ ] File:line shown in error messages when available
 - [ ] Error codes documented and searchable
@@ -2450,6 +2455,7 @@ class BarConfig(BaseModel):
 ```
 
 Apply to:
+
 - `src/townlet/config/bar.py`: `BarConfig`
 - `src/townlet/config/training.py`: `TrainingConfig`
 - `src/townlet/config/population.py`: `PopulationConfig`
@@ -2517,6 +2523,7 @@ def _stage_4_cross_validate(
 ```
 
 **Success Criteria**:
+
 - [ ] All Pydantic models use `extra="forbid"`
 - [ ] Unknown fields in YAML raise clear errors
 - [ ] Safety limits enforced (meters, affordances, cascades)
@@ -2661,6 +2668,7 @@ def _find_critical_path_affordances(self, raw_configs: RawConfigs) -> list[str]:
 ```
 
 **Success Criteria**:
+
 - [ ] Operating hours feasibility checked
 - [ ] Depletion sustainability validated
 - [ ] Capacity constraints checked for multi-agent
@@ -2799,6 +2807,7 @@ def _stage_5_compute_metadata(
 ```
 
 **Success Criteria**:
+
 - [ ] Provenance ID computed from all semantic inputs
 - [ ] Git SHA captured (or "unknown" if not in repo)
 - [ ] Library versions captured
@@ -2933,6 +2942,7 @@ def check_checkpoint_compatibility(
 ```
 
 **Success Criteria**:
+
 - [ ] ObservationField has uuid field
 - [ ] UUIDs generated from semantics (not indices)
 - [ ] UUIDs stable across field reordering
@@ -3076,6 +3086,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 ```
 
 **Success Criteria**:
+
 - [ ] YAML normalized before hashing
 - [ ] Cosmetic changes (whitespace, comments, key order) don't change hash
 - [ ] Cache key includes compiler version
@@ -3147,18 +3158,21 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 **Breakdown by Source**:
 
 **Original Core** (37-54h):
+
 - Basic compiler pipeline (7 stages)
 - Error collection
 - Basic validation
 - Caching
 
 **COMPILER_ARCHITECTURE.md Additions** (+15-18h):
+
 - CuesCompiler integration: +3-4h
 - ObservationSpec UAC→BAC contract: +2h
 - Rich Metadata structures: +4h
 - Capability system validation: +6-8h
 
 **External Review Additions** (+14-21h):
+
 - Error codes & source maps: +3-4h
 - Security hardening: +1-2h
 - Economic feasibility checks: +4-6h
@@ -3167,6 +3181,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 - YAML normalization: +2-3h
 
 **TASK-004A-PREREQUISITES** (+8-12h):
+
 - Config schema alignment
 - DTO consolidation
 - ObservationSpec adapter
@@ -3178,6 +3193,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 **Total Increase from Original**: +37-51h (+100-134% from 37-54h baseline)
 
 **Why Worth It**:
+
 - Transforms compiler from **research-grade → audit-grade**
 - Prevents irreproducible runs (provenance)
 - Prevents silent failures (security hardening)
@@ -3187,6 +3203,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 - Dramatically improves debugging (error codes, source maps)
 
 **UPDATED per**:
+
 - COMPILER_ARCHITECTURE.md (authoritative reference)
 - TASK-004A-PREREQUISITES (integration blockers)
 - External Review 2025-11-08 (production hardening)

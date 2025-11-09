@@ -1,10 +1,13 @@
 """Demo runner for multi-day training."""
 
+from __future__ import annotations
+
 import logging
 import signal
 import time
 from collections import defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 import yaml
@@ -15,8 +18,16 @@ from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
+from townlet.training.checkpoint_utils import (
+    assert_checkpoint_dimensions,
+    attach_universe_metadata,
+    config_hash_warning,
+)
 from townlet.training.state import BatchedAgentState
 from townlet.training.tensorboard_logger import TensorBoardLogger
+
+if TYPE_CHECKING:
+    from townlet.universe.compiled import CompiledUniverse
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +224,7 @@ class DemoRunner:
         for agent_idx in range(self.population.num_agents):
             self.population.flush_episode(agent_idx)
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, universe: CompiledUniverse | None = None):
         """Save checkpoint at current episode."""
         # P1.1 Phase 5: Flush all agents before checkpoint
         self.flush_all_agents()
@@ -258,13 +269,16 @@ class DemoRunner:
         checkpoint["training_config"] = self.config
         checkpoint["config_dir"] = str(self.config_dir)
 
+        if universe is not None:
+            attach_universe_metadata(checkpoint, universe)
+
         torch.save(checkpoint, checkpoint_path)
         logger.info(f"Checkpoint saved: {checkpoint_path}")
 
         # Update system state
         self.db.set_system_state("last_checkpoint", str(checkpoint_path))
 
-    def load_checkpoint(self) -> int | None:
+    def load_checkpoint(self, universe: CompiledUniverse | None = None) -> int | None:
         """Load latest checkpoint if exists.
 
         Returns:
@@ -280,6 +294,12 @@ class DemoRunner:
         logger.info(f"Loading checkpoint: {latest_checkpoint}")
 
         checkpoint = torch.load(latest_checkpoint, weights_only=False)
+
+        if universe is not None:
+            warning = config_hash_warning(checkpoint, universe)
+            if warning:
+                logger.warning(warning)
+            assert_checkpoint_dimensions(checkpoint, universe)
 
         # P1.1: Check checkpoint version
         checkpoint_version = checkpoint.get("version", 1)  # Default to v1 for legacy checkpoints

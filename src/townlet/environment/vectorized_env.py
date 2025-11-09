@@ -27,6 +27,7 @@ from townlet.vfs.schema import VariableDef
 if TYPE_CHECKING:
     from townlet.environment.action_config import ActionConfig
     from townlet.population.runtime_registry import AgentRuntimeRegistry
+    from townlet.universe.compiled import CompiledUniverse
 
 
 class VectorizedHamletEnv:
@@ -471,6 +472,35 @@ class VectorizedHamletEnv:
             self.last_interaction_position.fill_(0)
 
         return self._get_observations()
+
+    @classmethod
+    def from_universe(
+        cls,
+        universe: CompiledUniverse,
+        *,
+        num_agents: int,
+        device: torch.device | str = "cpu",
+    ) -> VectorizedHamletEnv:
+        """Instantiate environment using metadata from a compiled universe."""
+
+        env_cfg = universe.hamlet_config.environment
+        curriculum = universe.hamlet_config.curriculum
+        torch_device = torch.device(device) if isinstance(device, str) else device
+
+        return cls(
+            num_agents=num_agents,
+            grid_size=env_cfg.grid_size,
+            partial_observability=env_cfg.partial_observability,
+            vision_range=env_cfg.vision_range,
+            enable_temporal_mechanics=env_cfg.enable_temporal_mechanics,
+            move_energy_cost=env_cfg.energy_move_depletion,
+            wait_energy_cost=env_cfg.energy_wait_depletion,
+            interact_energy_cost=env_cfg.energy_interact_depletion,
+            agent_lifespan=curriculum.max_steps_per_episode,
+            device=torch_device,
+            enabled_affordances=env_cfg.enabled_affordances,
+            config_pack_path=universe.config_dir,
+        )
 
     def _get_observations(self) -> torch.Tensor:
         """

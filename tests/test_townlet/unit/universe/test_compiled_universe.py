@@ -76,3 +76,16 @@ def test_compiled_universe_environment_rollout(cpu_device: torch.device) -> None
     assert rewards.shape == (2,)
     assert dones.shape == (2,)
     assert "positions" in info
+
+
+def test_vectorized_env_from_universe_factory(cpu_device: torch.device) -> None:
+    compiler = UniverseCompiler()
+    compiled = compiler.compile(Path("configs/L0_0_minimal"))
+
+    from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+    env = VectorizedHamletEnv.from_universe(compiled, num_agents=1, device=cpu_device)
+
+    assert env.config_pack_path == compiled.config_dir
+    assert env.observation_dim == compiled.metadata.observation_dim
+    assert env.num_agents == 1
