@@ -815,16 +815,32 @@ class UniverseCompiler:
     def _compute_max_income(self, affordances: tuple[AffordanceConfig, ...]) -> float:
         total = 0.0
         for affordance in affordances:
-            for entry in getattr(affordance, "effects", []) or []:
-                if self._get_meter(entry) == "money":
-                    amount = self._get_amount(entry)
-                    if amount and amount > 0:
-                        total += amount
-            for entry in getattr(affordance, "effects_per_tick", []) or []:
-                if self._get_meter(entry) == "money":
-                    amount = self._get_amount(entry)
-                    if amount and amount > 0:
-                        total += amount
+            pipeline = getattr(affordance, "effect_pipeline", None)
+            if pipeline is not None:
+                total += self._sum_money_entries(pipeline.on_start, positive_only=True)
+                total += self._sum_money_entries(pipeline.per_tick, positive_only=True)
+                total += self._sum_money_entries(pipeline.on_completion, positive_only=True)
+                total += self._sum_money_entries(pipeline.on_early_exit, positive_only=True)
+                total += self._sum_money_entries(pipeline.on_failure, positive_only=True)
+            else:
+                total += self._sum_money_entries(getattr(affordance, "effects", []), positive_only=True)
+                total += self._sum_money_entries(getattr(affordance, "effects_per_tick", []), positive_only=True)
+                total += self._sum_money_entries(getattr(affordance, "completion_bonus", []), positive_only=True)
+        return total
+
+    def _sum_money_entries(self, entries: object | None, *, positive_only: bool) -> float:
+        total = 0.0
+        if not entries:
+            return total
+        for entry in entries:
+            if self._get_meter(entry) != "money":
+                continue
+            amount = self._get_amount(entry)
+            if amount is None:
+                continue
+            if positive_only and amount <= 0:
+                continue
+            total += amount
         return total
 
     def _sum_amounts(self, entries: object | None) -> float:
@@ -1252,22 +1268,15 @@ class UniverseCompiler:
             raise RuntimeError(f"Cache directory {cache_dir} is not writable")
 
     def _compute_config_hash(self, config_dir: Path) -> str:
-        files_to_hash = [
-            config_dir / "training.yaml",
-            config_dir / "bars.yaml",
-            config_dir / "cascades.yaml",
-            config_dir / "affordances.yaml",
-            config_dir / "substrate.yaml",
-            config_dir / "cues.yaml",
-            config_dir / "variables_reference.yaml",
-            Path("configs") / "global_actions.yaml",
-        ]
+        yaml_files = sorted(config_dir.glob("*.yaml"))
+        yaml_files.append(Path("configs") / "global_actions.yaml")
 
         digest = hashlib.sha256()
-        for file_path in sorted(files_to_hash):
+        for file_path in yaml_files:
             if not file_path.exists():
                 continue
             normalized = self._normalize_yaml(file_path)
+            digest.update(file_path.name.encode("utf-8"))
             digest.update(normalized.encode("utf-8"))
         return digest.hexdigest()
 
@@ -1335,11 +1344,8 @@ class UniverseCompiler:
 
     def _extract_money_cost(self, affordance: AffordanceConfig) -> float:
         total = 0.0
-        for entry in getattr(affordance, "costs", []) or []:
-            if self._get_meter(entry) == "money":
-                amount = self._get_amount(entry)
-                if amount is not None:
-                    total += amount
+        total += self._sum_money_entries(getattr(affordance, "costs", []), positive_only=True)
+        total += self._sum_money_entries(getattr(affordance, "costs_per_tick", []), positive_only=True)
         return total
 
     @staticmethod

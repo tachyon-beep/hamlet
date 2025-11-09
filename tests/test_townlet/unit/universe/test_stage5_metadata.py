@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
 from townlet.universe.compiler import UniverseCompiler
 from townlet.universe.compiler_inputs import RawConfigs
 
@@ -197,6 +199,45 @@ def test_stage5_builds_rich_metadata(base_raw_configs: RawConfigs) -> None:
     bed_info = affordance_meta.get_affordance_by_name("Bed")
     assert bed_info.enabled
     assert bed_info.effects, "Bed affordance should expose summarized effects"
+
+
+def test_compute_max_income_includes_completion_bonus_and_pipeline() -> None:
+    compiler = UniverseCompiler()
+
+    legacy_affordance = SimpleNamespace(
+        effects=[{"meter": "money", "amount": 2.0}],
+        effects_per_tick=[{"meter": "money", "amount": 0.5}],
+        completion_bonus=[{"meter": "money", "amount": 3.0}],
+        effect_pipeline=None,
+    )
+
+    pipeline_affordance = SimpleNamespace(
+        effects=[],
+        effects_per_tick=[],
+        completion_bonus=[],
+        effect_pipeline=EffectPipeline(
+            on_start=[AffordanceEffect(meter="money", amount=1.0)],
+            per_tick=[AffordanceEffect(meter="money", amount=0.25)],
+            on_completion=[AffordanceEffect(meter="money", amount=4.0)],
+            on_early_exit=[AffordanceEffect(meter="money", amount=-2.0)],
+            on_failure=[AffordanceEffect(meter="health", amount=-1.0)],
+        ),
+    )
+
+    total = compiler._compute_max_income((legacy_affordance, pipeline_affordance))
+
+    assert total == pytest.approx(2.0 + 0.5 + 3.0 + 1.0 + 0.25 + 4.0)
+
+
+def test_extract_money_cost_includes_per_tick_costs() -> None:
+    compiler = UniverseCompiler()
+
+    affordance = SimpleNamespace(
+        costs=[{"meter": "money", "amount": 5.0}],
+        costs_per_tick=[{"meter": "money", "amount": 1.5}],
+    )
+
+    assert compiler._extract_money_cost(affordance) == pytest.approx(6.5)
 
 
 def test_provenance_changes_when_git_sha_changes() -> None:
