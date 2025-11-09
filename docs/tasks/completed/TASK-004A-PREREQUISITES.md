@@ -3,25 +3,22 @@
 **Task**: Resolve blockers before TASK-004A Universe Compiler implementation
 **Priority**: CRITICAL (Blocks TASK-004A)
 **Effort**: 8-12 hours
-**Status**: Blocked (Re-validated 2025-11-09)
+**Status**: ✅ Completed (2025-11-09)
 **Created**: 2025-11-08
 **Depends On**: TASK-003 (Complete ✅)
 **Blocks**: TASK-004A Universe Compiler Implementation
 
 ---
 
-## Executive Summary
+## Summary
 
-Independent peer review of TASK-004A identified **5 critical blockers** where the implementation plan assumptions don't match the actual repository state. These must be resolved before TASK-004A implementation can proceed.
+Independent peer review of TASK-004A identified five critical gaps between the plan and the repository. This task implemented the fixes:
 
-**Key Issues**:
-1. Config filenames mismatch (plan expects `variables.yaml`, repo has `variables_reference.yaml`)
-2. DTO package location mismatch (collection DTOs in wrong modules)
-3. ObservationSpec contract mismatch (VFS vs Universe DTO versions)
-4. HamletConfig relationship undefined (duplication risk)
-5. Missing adapters between VFS and Universe DTOs
-
-**This task resolves all blockers and updates TASK-004A spec to match reality.**
+1. **Config loaders** – Added `load_variables_reference_config` and `load_global_actions_config` (with tests).
+2. **DTO aliases** – Re-exported `BarsConfig`, `CascadesConfig`, and `AffordanceConfigCollection` from `townlet.config.*`.
+3. **ObservationSpec adapter** – Implemented `vfs_to_observation_spec` under `townlet.universe.adapters`.
+4. **HamletConfig integration** – Documented the data flow in `docs/architecture/COMPILER_HAMLETCONFIG_INTEGRATION.md` and required cues in `HamletConfig`.
+5. **Plan alignment** – Updated `docs/tasks/TASK-004A-COMPILER-IMPLEMENTATION.md` to reference the real helpers and mark the task “Ready.”
 
 ---
 

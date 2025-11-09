@@ -27,6 +27,7 @@ from tests.test_townlet.unit.config.fixtures import (
     VALID_TRAINING_PARAMS,
 )
 from townlet.config import HamletConfig
+from townlet.universe.compiler_inputs import RawConfigs
 
 
 def _apply_valid_sections(config_dir: Path) -> None:
@@ -261,3 +262,19 @@ class TestHamletConfigErrorMessages:
         error = str(exc_info.value)
         assert "device" in error.lower()
         assert "training" in error.lower()
+
+
+class TestRawConfigsIntegration:
+    """Ensure RawConfigs loads for all production packs."""
+
+    @pytest.mark.parametrize("pack_name", sorted(PRODUCTION_CONFIG_PACKS.keys()))
+    def test_raw_configs_loads(self, pack_name):
+        config_dir = PRODUCTION_CONFIG_PACKS[pack_name]
+        if not config_dir.exists():
+            pytest.skip(f"Config pack not found: {config_dir}")
+
+        raw = RawConfigs.from_config_dir(config_dir)
+
+        assert len(raw.variables_reference) > 0
+        assert len(raw.global_actions.actions) > 0
+        assert raw.training.max_episodes > 0
