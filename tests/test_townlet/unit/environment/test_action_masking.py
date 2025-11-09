@@ -18,10 +18,11 @@ Coverage:
 - Integration: combined masking scenarios
 """
 
+from pathlib import Path
+
 import pytest
 import torch
-
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+import yaml
 
 
 class TestBoundaryMasking:
@@ -509,22 +510,22 @@ class TestWaitAction:
 
         assert wait_cost < move_cost, f"WAIT cost ({wait_cost}) should be < movement cost ({move_cost})"
 
-    def test_wait_energy_cost_validation(self, test_config_pack_path, device):
+    def test_wait_energy_cost_validation(self, temp_config_pack: Path, env_factory, device):
         """Environment should reject configs where WAIT is more expensive than MOVE."""
-        with pytest.raises(ValueError):
-            VectorizedHamletEnv(
-                num_agents=1,
-                grid_size=8,
-                partial_observability=False,
-                device=device,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.01,  # More expensive than movement
-                config_pack_path=test_config_pack_path,
-                vision_range=8,
-                enable_temporal_mechanics=False,
-                interact_energy_cost=0.0,
-                agent_lifespan=1000,
-            )
+        training_yaml = temp_config_pack / "training.yaml"
+        with open(training_yaml) as f:
+            training_config = yaml.safe_load(f)
+
+        env_section = training_config.get("environment", {})
+        env_section["energy_move_depletion"] = 0.005
+        env_section["energy_wait_depletion"] = 0.01  # Invalid: WAIT more expensive than MOVE
+        training_config["environment"] = env_section
+
+        with open(training_yaml, "w") as f:
+            yaml.safe_dump(training_config, f, sort_keys=False)
+
+        with pytest.raises(ValueError, match="wait_energy_cost must be less than move_energy_cost"):
+            env_factory(config_dir=temp_config_pack, num_agents=1, device_override=device)
 
 
 class TestActionMaskingIntegration:

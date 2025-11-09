@@ -640,21 +640,9 @@ class TestApplyCustomAction:
             assert isinstance(env.meters, torch.Tensor)
             assert env.meters.shape == (1, 8)
 
-    def test_get_optional_action_idx_returns_int_or_none(self):
+    def test_get_optional_action_idx_returns_int_or_none(self, cpu_env_factory):
         """Should return action index for valid actions, None otherwise."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Valid action
@@ -674,21 +662,9 @@ class TestApplyCustomAction:
 class TestGetAffordancePositions:
     """Test VectorizedHamletEnv.get_affordance_positions()."""
 
-    def test_get_affordance_positions_returns_dict(self):
+    def test_get_affordance_positions_returns_dict(self, cpu_env_factory):
         """Should return dict with positions, ordering, and position_dim."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         positions = env.get_affordance_positions()
@@ -698,21 +674,9 @@ class TestGetAffordancePositions:
         assert "ordering" in positions
         assert "position_dim" in positions
 
-    def test_get_affordance_positions_has_correct_position_dim(self):
+    def test_get_affordance_positions_has_correct_position_dim(self, cpu_env_factory):
         """Should include position_dim matching substrate."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         checkpoint_data = env.get_affordance_positions()
@@ -720,21 +684,9 @@ class TestGetAffordancePositions:
         # Grid2D should have position_dim = 2
         assert checkpoint_data["position_dim"] == 2
 
-    def test_get_affordance_positions_includes_all_affordances(self):
+    def test_get_affordance_positions_includes_all_affordances(self, cpu_env_factory):
         """Should include all affordances in positions dict."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         checkpoint_data = env.get_affordance_positions()
@@ -742,21 +694,9 @@ class TestGetAffordancePositions:
         # Should have same affordances
         assert set(checkpoint_data["positions"].keys()) == set(env.affordances.keys())
 
-    def test_get_affordance_positions_converts_to_lists(self):
+    def test_get_affordance_positions_converts_to_lists(self, cpu_env_factory):
         """Should convert tensor positions to lists."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         checkpoint_data = env.get_affordance_positions()
@@ -769,21 +709,9 @@ class TestGetAffordancePositions:
 class TestSetAffordancePositions:
     """Test VectorizedHamletEnv.set_affordance_positions()."""
 
-    def test_set_affordance_positions_updates_affordances(self):
+    def test_set_affordance_positions_updates_affordances(self, cpu_env_factory):
         """Should update affordance positions from checkpoint data."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Get current positions
@@ -799,21 +727,9 @@ class TestSetAffordancePositions:
         restored_checkpoint = env.get_affordance_positions()
         assert restored_checkpoint["positions"] == original_checkpoint["positions"]
 
-    def test_set_affordance_positions_validates_position_dim(self):
+    def test_set_affordance_positions_validates_position_dim(self, cpu_env_factory):
         """Should validate position_dim matches substrate."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Create invalid checkpoint with wrong position_dim
@@ -830,21 +746,9 @@ class TestSetAffordancePositions:
 class TestRandomizeAffordancePositions:
     """Test VectorizedHamletEnv.randomize_affordance_positions()."""
 
-    def test_randomize_affordance_positions_changes_positions(self):
+    def test_randomize_affordance_positions_changes_positions(self, cpu_env_factory):
         """Should change affordance positions."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Get current positions
@@ -860,21 +764,9 @@ class TestRandomizeAffordancePositions:
         # (with 8x8 grid, very unlikely all stay the same)
         assert original_positions["positions"] != new_positions["positions"]
 
-    def test_randomize_affordance_positions_maintains_affordance_count(self):
+    def test_randomize_affordance_positions_maintains_affordance_count(self, cpu_env_factory):
         """Should keep same number of affordances."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         original_count = len(env.affordances)
@@ -883,22 +775,10 @@ class TestRandomizeAffordancePositions:
 
         assert len(env.affordances) == original_count
 
-    def test_randomize_affordance_positions_stays_in_bounds(self):
+    def test_randomize_affordance_positions_stays_in_bounds(self, cpu_env_factory):
         """Should keep all positions within grid bounds."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        grid_size = 8
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=grid_size,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
+        grid_size = env.grid_size
         env.reset()
 
         env.randomize_affordance_positions()
