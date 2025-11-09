@@ -210,6 +210,15 @@ def temp_yaml_file(temp_test_dir: Path) -> Path:
     return temp_test_dir / "test.yaml"
 
 
+@pytest.fixture
+def recording_output_dir(temp_test_dir: Path) -> Path:
+    """Provide a stable recording output directory under the test temp root."""
+
+    target = temp_test_dir / "recordings"
+    target.mkdir(exist_ok=True)
+    return target
+
+
 # =============================================================================
 # ENVIRONMENT FIXTURES
 # =============================================================================
