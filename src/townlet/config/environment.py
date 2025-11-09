@@ -61,6 +61,12 @@ class TrainingEnvironmentConfig(BaseModel):
     # Enabled affordances (REQUIRED - null or list)
     enabled_affordances: list[str] | None = Field(description="null = all affordances enabled, or list of affordance names for curriculum")
 
+    # Placement (optional override)
+    randomize_affordances: bool = Field(
+        default=True,
+        description="Whether the environment randomizes affordance placements each episode",
+    )
+
     # Action energy costs (ALL REQUIRED)
     energy_move_depletion: float = Field(ge=0.0, description="Energy cost per movement action (as fraction of energy meter)")
     energy_wait_depletion: float = Field(ge=0.0, description="Energy cost per WAIT action (as fraction of energy meter)")

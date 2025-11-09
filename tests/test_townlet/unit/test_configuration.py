@@ -94,7 +94,7 @@ class TestConfigPackLoading:
         )
 
         # Verify modified base depletion was loaded
-        energy_base = env.meter_dynamics.cascade_engine.get_base_depletion("energy")
+        energy_base = env.meter_dynamics.get_base_depletion("energy")
         assert energy_base == pytest.approx(0.010, rel=1e-6)
 
         # Verify action costs were set correctly

@@ -772,7 +772,7 @@ class VectorizedPopulation(PopulationManager):
 
         # Universe metadata for compatibility validation (TASK-001)
         # This allows detecting meter count mismatches when loading checkpoints
-        bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+        bars_config = self.env.bars_config
         checkpoint["universe_metadata"] = {
             "meter_count": bars_config.meter_count,
             "meter_names": bars_config.meter_names,
@@ -807,7 +807,7 @@ class VectorizedPopulation(PopulationManager):
         # Validate universe compatibility (TASK-001)
         if "universe_metadata" in checkpoint:
             metadata = checkpoint["universe_metadata"]
-            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+            bars_config = self.env.bars_config
             current_meter_count = bars_config.meter_count
 
             # Validate meter count matches
@@ -835,7 +835,7 @@ class VectorizedPopulation(PopulationManager):
             # Legacy checkpoint (no universe_metadata) - assume 8-meter default
             import warnings
 
-            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+            bars_config = self.env.bars_config
             current_meter_count = bars_config.meter_count
             warnings.warn(
                 f"Loading legacy checkpoint without universe_metadata. "

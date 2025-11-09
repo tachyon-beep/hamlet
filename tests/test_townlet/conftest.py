@@ -1522,7 +1522,22 @@ def task001_env_4meter_pomdp(
     Returns:
         VectorizedHamletEnv instance with 4 meters and partial observability
     """
-    universe = compile_universe(task001_config_4meter)
+    pomdp_config = task001_config_4meter.parent / "config_4m_pomdp"
+    shutil.copytree(task001_config_4meter, pomdp_config)
+
+    training_yaml = pomdp_config / "training.yaml"
+    with open(training_yaml) as f:
+        training_config = yaml.safe_load(f)
+
+    training_env = training_config.get("environment", {})
+    training_env["partial_observability"] = True
+    training_env["vision_range"] = 2
+    training_config["environment"] = training_env
+
+    with open(training_yaml, "w") as f:
+        yaml.safe_dump(training_config, f, sort_keys=False)
+
+    universe = compile_universe(pomdp_config)
     return VectorizedHamletEnv.from_universe(
         universe,
         num_agents=1,
@@ -1546,6 +1561,37 @@ def task001_env_12meter(
         VectorizedHamletEnv instance with 12 meters
     """
     universe = compile_universe(task001_config_12meter)
+    return VectorizedHamletEnv.from_universe(
+        universe,
+        num_agents=1,
+        device=cpu_device,
+    )
+
+
+@pytest.fixture
+def task001_env_12meter_pomdp(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    cpu_device: torch.device,
+    task001_config_12meter: Path,
+) -> VectorizedHamletEnv:
+    """12-meter POMDP environment for TASK-001 testing."""
+
+    pomdp_config = task001_config_12meter.parent / "config_12m_pomdp"
+    shutil.copytree(task001_config_12meter, pomdp_config)
+
+    training_yaml = pomdp_config / "training.yaml"
+    with open(training_yaml) as f:
+        training_config = yaml.safe_load(f)
+
+    training_env = training_config.get("environment", {})
+    training_env["partial_observability"] = True
+    training_env["vision_range"] = 2
+    training_config["environment"] = training_env
+
+    with open(training_yaml, "w") as f:
+        yaml.safe_dump(training_config, f, sort_keys=False)
+
+    universe = compile_universe(pomdp_config)
     return VectorizedHamletEnv.from_universe(
         universe,
         num_agents=1,

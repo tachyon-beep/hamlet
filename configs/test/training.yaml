@@ -15,6 +15,7 @@ environment:
   vision_range: 8
   enable_temporal_mechanics: false
   enabled_affordances: null  # All 14 affordances
+  randomize_affordances: true
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0

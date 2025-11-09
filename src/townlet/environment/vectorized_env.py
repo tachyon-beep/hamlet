@@ -7,8 +7,11 @@ environment with tensor operations [num_agents, ...].
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable
 from copy import deepcopy
+from numbers import Number
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -99,12 +102,18 @@ class VectorizedHamletEnv:
         runtime = universe.to_runtime()
         self.runtime = runtime
         self.universe = universe
+        self.config_pack_path = Path(universe.config_dir)
         self.num_agents = num_agents
         self.device = torch_device
+        self.optimization_data = universe.optimization_data
 
         env_cfg = runtime.clone_environment_config()
         curriculum = runtime.clone_curriculum_config()
         enabled_affordances = env_cfg.enabled_affordances
+        cascade_env_config = runtime.clone_environment_cascade_config()
+        self.bars_config = cascade_env_config.bars
+        randomize_setting = getattr(env_cfg, "randomize_affordances", True)
+        self.randomize_affordances = True if randomize_setting is None else bool(randomize_setting)
 
         self.partial_observability = env_cfg.partial_observability
         self.vision_range = env_cfg.vision_range
@@ -137,7 +146,6 @@ class VectorizedHamletEnv:
             self.action_labels = get_labels(preset="gaming", substrate_position_dim=self.substrate.position_dim)
 
         self.metadata = runtime.metadata
-        self.optimization_data = runtime.optimization_data
 
         # Update grid_size from compiler metadata / substrate (handles aspatial vs grid)
         self.grid_size = self.metadata.grid_size or env_cfg.grid_size
@@ -158,8 +166,21 @@ class VectorizedHamletEnv:
 
         self.meter_count = self.metadata.meter_count
         meter_count = self.meter_count
+        self.base_depletions = self.optimization_data.base_depletions.to(self.device)
 
         affordance_config = _build_affordance_collection(runtime.clone_affordance_configs())
+        metadata_affordance_lookup = dict(self.metadata.affordance_id_to_index)
+        self.affordance_name_to_id = {aff.name: aff.id for aff in affordance_config.affordances}
+        self.affordance_name_to_mask_idx = {
+            name: metadata_affordance_lookup.get(aff_id)
+            for name, aff_id in self.affordance_name_to_id.items()
+            if metadata_affordance_lookup.get(aff_id) is not None
+        }
+        self.affordance_positions_from_config = {aff.name: aff.position for aff in affordance_config.affordances}
+        optimization_position_map = getattr(self.optimization_data, "affordance_position_map", {})
+        self.affordance_positions_from_optimization = {
+            name: optimization_position_map.get(aff_id) for name, aff_id in self.affordance_name_to_id.items()
+        }
 
         # Extract ALL affordance names from YAML (defines observation vocabulary)
         # This is the FULL universe - what the agent can observe and reason about
@@ -255,12 +276,38 @@ class VectorizedHamletEnv:
         )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
 
-        # Initialize meter dynamics
+        # Precompute meter initialization tensor from bars config
+        self.initial_meter_values = torch.zeros(meter_count, dtype=torch.float32, device=self.device)
+        for bar in self.bars_config.bars:
+            self.initial_meter_values[bar.index] = bar.initial
+
+        # Build terminal conditions lookup once (compiler already validated names)
+        terminal_specs: list[dict[str, Any]] = []
+        for condition in self.bars_config.terminal_conditions:
+            meter_idx = meter_name_to_index.get(condition.meter)
+            if meter_idx is None:
+                continue
+            terminal_specs.append(
+                {
+                    "meter_idx": meter_idx,
+                    "operator": condition.operator,
+                    "value": condition.value,
+                }
+            )
+
+        # Initialize meter dynamics directly from optimization tensors
         self.meter_dynamics = MeterDynamics(
-            num_agents=num_agents,
+            base_depletions=self.optimization_data.base_depletions,
+            cascade_data=self.optimization_data.cascade_data,
+            modulation_data=self.optimization_data.modulation_data,
+            terminal_conditions=terminal_specs,
+            meter_name_to_index=meter_name_to_index,
             device=self.device,
-            environment_config=runtime.clone_environment_cascade_config(),
         )
+
+        # Cache action mask table (24 × affordance_count) for temporal mechanics
+        self.action_mask_table = self.optimization_data.action_mask_table.to(self.device).clone()
+        self.hours_per_day = self.action_mask_table.shape[0] if self.action_mask_table.ndim > 0 else 24
 
         # Initialize affordance engine (reuse affordance_config loaded above)
         # Pass meter_name_to_index for dynamic meter lookups (TASK-001)
@@ -317,8 +364,11 @@ class VectorizedHamletEnv:
             # When temporal mechanics are disabled, interaction progress is unused but kept for typing consistency.
             self.interaction_progress.zero_()
 
-        # Randomize affordance positions on initialization (will be re-randomized each episode)
-        self.randomize_affordance_positions()
+        # Initialize affordance positions per configuration
+        if self.randomize_affordances:
+            self.randomize_affordance_positions()
+        else:
+            self._apply_configured_affordance_positions()
 
     def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
         """Attach runtime registry for telemetry tracking."""
@@ -330,6 +380,78 @@ class VectorizedHamletEnv:
             return self.action_space.get_action_by_name(action_name).id
         except ValueError:
             return None
+
+    def _apply_configured_affordance_positions(self) -> None:
+        """Load static affordance positions from config/optimization data."""
+
+        if self.substrate.position_dim == 0:
+            empty = torch.zeros(0, dtype=self.substrate.position_dtype, device=self.device)
+            for name in self.affordances.keys():
+                self.affordances[name] = empty.clone()
+            return
+
+        for name in self.affordances.keys():
+            source = self.affordance_positions_from_config.get(name)
+            if source is None:
+                optimization_tensor = self.affordance_positions_from_optimization.get(name)
+                if isinstance(optimization_tensor, torch.Tensor):
+                    source = optimization_tensor.tolist()
+                else:
+                    source = optimization_tensor
+
+            tensor = self._position_to_tensor(source, name)
+            self.affordances[name] = tensor
+
+    def _position_to_tensor(self, raw_position: Any, affordance_name: str) -> torch.Tensor:
+        """Convert raw config/optimization positions into substrate tensors."""
+
+        if self.substrate.position_dim == 0:
+            return torch.zeros(0, dtype=self.substrate.position_dtype, device=self.device)
+
+        if raw_position is None:
+            raise ValueError(f"Affordance '{affordance_name}' requires explicit position when randomize_affordances is disabled.")
+
+        if isinstance(raw_position, torch.Tensor):
+            tensor = raw_position.to(device=self.device, dtype=self.substrate.position_dtype)
+        elif isinstance(raw_position, dict):
+            if set(raw_position.keys()) == {"q", "r"}:
+                coords = [raw_position["q"], raw_position["r"]]
+            else:
+                raise ValueError(
+                    f"Affordance '{affordance_name}' provided unsupported position mapping keys: {sorted(raw_position.keys())}."
+                )
+            tensor = torch.tensor(coords, dtype=self.substrate.position_dtype, device=self.device)
+        elif isinstance(raw_position, (list, tuple)):
+            tensor = torch.tensor(list(raw_position), dtype=self.substrate.position_dtype, device=self.device)
+        elif isinstance(raw_position, Number):
+            tensor = torch.tensor([raw_position], dtype=self.substrate.position_dtype, device=self.device)
+        else:
+            raise ValueError(f"Affordance '{affordance_name}' provided unsupported position type: {type(raw_position)!r}.")
+
+        if tensor.numel() != self.substrate.position_dim:
+            raise ValueError(
+                f"Affordance '{affordance_name}' position has {tensor.numel()} dims but substrate requires {self.substrate.position_dim}."
+            )
+
+        return tensor
+
+    def _is_affordance_open(self, affordance_name: str, hour: int | None = None) -> bool:
+        """Return True if an affordance is open for the specified (or current) hour."""
+
+        if not self.enable_temporal_mechanics:
+            return True
+
+        if self.action_mask_table.shape[1] == 0:
+            return False
+
+        idx = self.affordance_name_to_mask_idx.get(affordance_name)
+        if idx is None or idx >= self.action_mask_table.shape[1]:
+            # Missing metadata should not block interactions
+            return True
+
+        active_hour = self.time_of_day if hour is None else hour
+        hour_idx = active_hour % self.hours_per_day
+        return bool(self.action_mask_table[hour_idx, idx].item())
 
     def _compose_action_space(
         self,
@@ -405,11 +527,8 @@ class VectorizedHamletEnv:
         # Use substrate for position initialization (supports grid and aspatial)
         self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
 
-        # Initial meter values (normalized to [0, 1])
-        # [energy, hygiene, satiation, money, mood, social, health, fitness]
-        # Read initial values from bars.yaml config
-        initial_values = self.meter_dynamics.cascade_engine.get_initial_meter_values()
-        self.meters = initial_values.unsqueeze(0).expand(self.num_agents, -1).clone()
+        # Initial meter values (normalized to [0, 1]) from compiled bars config
+        self.meters = self.initial_meter_values.unsqueeze(0).expand(self.num_agents, -1).clone()
 
         self.dones = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
@@ -679,16 +798,10 @@ class VectorizedHamletEnv:
 
         # Check each affordance using AffordanceEngine
         for affordance_name, affordance_pos in self.affordances.items():
-            # Check if on affordance for interaction (using substrate)
+            if self.enable_temporal_mechanics and not self._is_affordance_open(affordance_name):
+                continue
+
             on_this_affordance = self.substrate.is_on_position(self.positions, affordance_pos)
-
-            # Check operating hours using AffordanceEngine
-            if self.enable_temporal_mechanics:
-                if not self.affordance_engine.is_affordance_open(affordance_name, self.time_of_day):
-                    # Affordance is closed, skip
-                    continue
-
-            # Valid if on affordance AND is open (affordability checked in handler)
             on_valid_affordance |= on_this_affordance
 
         action_masks[:, interact_action_idx] = on_valid_affordance
@@ -865,6 +978,9 @@ class VectorizedHamletEnv:
         successful_interactions = {}
 
         for affordance_name, affordance_pos in self.affordances.items():
+            if not self._is_affordance_open(affordance_name):
+                continue
+
             # Check if still on same affordance (using substrate)
             at_affordance = self.substrate.is_on_position(self.positions, affordance_pos) & interact_mask
 
@@ -946,6 +1062,9 @@ class VectorizedHamletEnv:
 
         # Check each affordance
         for affordance_name, affordance_pos in self.affordances.items():
+            if self.enable_temporal_mechanics and not self._is_affordance_open(affordance_name):
+                continue
+
             # Check which agents are on this affordance (using substrate)
             at_affordance = self.substrate.is_on_position(self.positions, affordance_pos) & interact_mask
 
@@ -1120,3 +1239,48 @@ class VectorizedHamletEnv:
 
         # Clamp meters to [0, 1]
         self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
+    def randomize_affordance_positions(self) -> None:
+        """Randomize affordance positions using substrate-provided layouts."""
+
+        if not self.randomize_affordances:
+            return
+
+        if not self.affordances:
+            return
+
+        # Aspatial universes have no coordinates; store empty tensors for consistency
+        if self.substrate.position_dim == 0:
+            empty = torch.zeros(0, dtype=self.substrate.position_dtype, device=self.device)
+            for name in self.affordances.keys():
+                self.affordances[name] = empty.clone()
+            return
+
+        try:
+            all_positions = self.substrate.get_all_positions()
+        except NotImplementedError:
+            all_positions = None
+
+        if all_positions:
+            total_positions = len(all_positions)
+            required_slots = len(self.affordances) + self.num_agents
+            if required_slots > total_positions:
+                raise ValueError(
+                    f"Substrate exposes {total_positions} positions but {len(self.affordances)} affordances + "
+                    f"{self.num_agents} agents require more space."
+                )
+
+            random.shuffle(all_positions)
+            for idx, name in enumerate(self.affordances.keys()):
+                tensor_pos = torch.tensor(
+                    all_positions[idx],
+                    dtype=self.substrate.position_dtype,
+                    device=self.device,
+                )
+                self.affordances[name] = tensor_pos
+            return
+
+        # Continuous substrates expose infinite positions; sample using initializer
+        sampled = self.substrate.initialize_positions(len(self.affordances), self.device)
+        for idx, name in enumerate(self.affordances.keys()):
+            self.affordances[name] = sampled[idx].clone()

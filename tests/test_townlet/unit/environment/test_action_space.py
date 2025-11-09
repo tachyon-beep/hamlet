@@ -1,5 +1,7 @@
 """Tests for dynamic action space sizing in VectorizedHamletEnv."""
 
+from pathlib import Path
+
 import pytest
 
 from townlet.substrate.aspatial import AspatialSubstrate
@@ -75,3 +77,22 @@ class TestActionSpaceDynamicSizing:
         """Environment action_dim matches Aspatial substrate."""
         substrate = AspatialSubstrate()
         assert substrate.action_space_size == 2
+
+
+class TestEnvironmentActionSpace:
+    """Ensure compiled universes expose substrate-driven action dimensions."""
+
+    @pytest.mark.parametrize(
+        "config_dir",
+        [
+            Path("configs/test"),
+            Path("configs/aspatial_test"),
+            Path("configs/L1_continuous_1D"),
+        ],
+        ids=["grid2d", "aspatial", "continuous1d"],
+    )
+    def test_env_action_dim_matches_substrate(self, env_factory, cpu_device, config_dir):
+        env = env_factory(config_dir=config_dir, num_agents=1, device_override=cpu_device)
+        assert (
+            env.action_dim == env.substrate.action_space_size
+        ), f"Expected env.action_dim to equal substrate.action_space_size for {config_dir}"

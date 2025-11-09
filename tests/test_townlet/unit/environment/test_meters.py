@@ -23,7 +23,6 @@ import torch
 
 from townlet.environment.cascade_config import load_environment_config
 from townlet.environment.cascade_engine import CascadeEngine
-from townlet.environment.meter_dynamics import MeterDynamics
 
 # =============================================================================
 # Fixtures
@@ -712,13 +711,13 @@ class TestCascadeIntegration:
 class TestCascadeEngineEquivalence:
     """Test that CascadeEngine produces same results as MeterDynamics."""
 
-    def test_equivalence_with_meter_dynamics_healthy(self, cascade_engine, cpu_device):
+    def test_equivalence_with_meter_dynamics_healthy(self, cascade_engine, cpu_device, cpu_env_factory):
         """CascadeEngine produces same results as MeterDynamics for healthy agent."""
         # Healthy agent
         meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
 
         # Apply with MeterDynamics
-        md = MeterDynamics(1, cpu_device)
+        md = cpu_env_factory(num_agents=1).meter_dynamics
         meters_md = meters.clone()
         meters_md = md.deplete_meters(meters_md)  # Includes base depletions + fitness modulation
         meters_md = md.apply_secondary_to_primary_effects(meters_md)
@@ -733,13 +732,13 @@ class TestCascadeEngineEquivalence:
         # Results should be very close (within floating point tolerance)
         assert torch.allclose(meters_md, meters_ce, atol=1e-5)
 
-    def test_equivalence_with_meter_dynamics_low_satiation(self, cascade_engine, cpu_device):
+    def test_equivalence_with_meter_dynamics_low_satiation(self, cascade_engine, cpu_device, cpu_env_factory):
         """Equivalence for agent with low satiation."""
         # Agent with low satiation (triggers cascades)
         meters = torch.tensor([[1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
 
         # Apply with MeterDynamics
-        md = MeterDynamics(1, cpu_device)
+        md = cpu_env_factory(num_agents=1).meter_dynamics
         meters_md = meters.clone()
         meters_md = md.deplete_meters(meters_md)
         meters_md = md.apply_secondary_to_primary_effects(meters_md)
@@ -754,7 +753,7 @@ class TestCascadeEngineEquivalence:
         # Results should match
         assert torch.allclose(meters_md, meters_ce, atol=1e-5)
 
-    def test_equivalence_multi_agent_batch(self, cascade_engine, cpu_device):
+    def test_equivalence_multi_agent_batch(self, cascade_engine, cpu_device, cpu_env_factory):
         """Equivalence for batch of multiple agents."""
         # Multiple agents with different states
         meters = torch.tensor(
@@ -768,7 +767,7 @@ class TestCascadeEngineEquivalence:
         )
 
         # Apply with MeterDynamics
-        md = MeterDynamics(4, cpu_device)
+        md = cpu_env_factory(num_agents=4).meter_dynamics
         meters_md = meters.clone()
         meters_md = md.deplete_meters(meters_md)
         meters_md = md.apply_secondary_to_primary_effects(meters_md)

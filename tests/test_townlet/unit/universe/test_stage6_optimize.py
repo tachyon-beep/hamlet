@@ -15,7 +15,7 @@ def _build_metadata(config_dir: Path) -> tuple[UniverseCompiler, RawConfigs, Uni
     compiler = UniverseCompiler()
     raw_configs = RawConfigs.from_config_dir(config_dir)
     symbol_table = compiler._stage_2_build_symbol_tables(raw_configs)
-    metadata, _ = compiler._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
+    metadata, _, _ = compiler._stage_5_compute_metadata(config_dir, raw_configs, symbol_table)
     return compiler, raw_configs, metadata
 
 

@@ -242,8 +242,7 @@ class TestVariableMetersEndToEnd:
 
         # Kill the agent by setting health to 0
         # Find health meter index from config
-        bars_config = env.meter_dynamics.cascade_engine.config.bars
-        health_idx = bars_config.meter_name_to_index.get("health", 0)
+        health_idx = env.meter_name_to_index.get("health", 0)
 
         # Set health to 0 (agent should be dead)
         env.meters[0, health_idx] = 0.0

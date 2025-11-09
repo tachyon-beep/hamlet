@@ -10,6 +10,7 @@ import sys
 from collections import defaultdict
 from copy import deepcopy
 from datetime import UTC, datetime
+from numbers import Number
 from pathlib import Path
 from typing import Any
 
@@ -1057,6 +1058,7 @@ class UniverseCompiler:
                     cost=self._extract_money_cost(aff),
                     category=getattr(aff, "category", None),
                     description=aff.description or "",
+                    position=self._normalize_affordance_position_metadata(getattr(aff, "position", None)),
                 )
             )
 
@@ -1136,7 +1138,9 @@ class UniverseCompiler:
                     open_hour, close_hour = hours
                     action_mask_table[hour, affordance_idx] = self._is_open(hour, open_hour, close_hour)
 
-        affordance_position_map = {aff.id: None for aff in raw_configs.affordances}
+        affordance_position_map = {
+            aff.id: self._tensorize_affordance_position(getattr(aff, "position", None), torch_device) for aff in raw_configs.affordances
+        }
 
         return OptimizationData(
             base_depletions=base_depletions,
@@ -1384,6 +1388,36 @@ class UniverseCompiler:
         total += self._sum_money_entries(getattr(affordance, "costs", []), positive_only=True)
         total += self._sum_money_entries(getattr(affordance, "costs_per_tick", []), positive_only=True)
         return total
+
+    def _normalize_affordance_position_metadata(self, position: Any) -> Any:
+        if position is None:
+            return None
+        if isinstance(position, list):
+            return tuple(position)
+        if isinstance(position, dict):
+            return dict(position)
+        return position
+
+    def _tensorize_affordance_position(self, position: Any, device: torch.device) -> torch.Tensor | None:
+        if position is None:
+            return None
+        if isinstance(position, torch.Tensor):
+            return position.to(device=device, dtype=torch.float32)
+
+        if isinstance(position, dict):
+            if set(position.keys()) == {"q", "r"}:
+                coords = [position["q"], position["r"]]
+            else:
+                return None
+            return torch.tensor(coords, dtype=torch.float32, device=device)
+
+        if isinstance(position, (list, tuple)):
+            return torch.tensor(list(position), dtype=torch.float32, device=device)
+
+        if isinstance(position, Number):
+            return torch.tensor([position], dtype=torch.float32, device=device)
+
+        return None
 
     @staticmethod
     def _is_open(hour: int, open_hour: int, close_hour: int) -> bool:
