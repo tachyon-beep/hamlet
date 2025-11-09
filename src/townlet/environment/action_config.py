@@ -1,8 +1,10 @@
 """Action configuration schemas for composable action space."""
 
+from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+import yaml
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 # VFS Integration (Phase 1 - TASK-002C)
 from townlet.vfs.schema import WriteSpec
@@ -83,3 +85,53 @@ class ActionConfig(BaseModel):
         elif self.delta is not None or self.teleport_to is not None:
             raise ValueError(f"Non-movement action '{self.name}' cannot have delta or teleport_to")
         return self
+
+
+class ActionSpaceConfig(BaseModel):
+    """Collection wrapper for action definitions."""
+
+    actions: list[ActionConfig]
+
+    def get_action_by_name(self, name: str) -> ActionConfig:
+        for action in self.actions:
+            if action.name == name:
+                return action
+        raise KeyError(f"Action '{name}' not found")
+
+
+def load_global_actions_config(global_actions_path: Path | None = None) -> ActionSpaceConfig:
+    """Load configs/global_actions.yaml and return all custom actions."""
+
+    yaml_path = Path(global_actions_path or Path("configs") / "global_actions.yaml")
+    if not yaml_path.exists():
+        raise FileNotFoundError(f"global_actions.yaml not found at {yaml_path}")
+
+    try:
+        with yaml_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Failed to parse {yaml_path}: {exc}") from exc
+
+    custom_actions = data.get("custom_actions")
+    if custom_actions is None:
+        raise ValueError(f"{yaml_path} must define 'custom_actions' list")
+
+    parsed_actions: list[ActionConfig] = []
+    for next_id, raw_action in enumerate(custom_actions):
+        base = {
+            **raw_action,
+            "id": raw_action.get("id", next_id),
+            "enabled": raw_action.get("enabled", True),
+            "source": raw_action.get("source", "custom"),
+            "delta": raw_action.get("delta"),
+            "teleport_to": raw_action.get("teleport_to"),
+            "description": raw_action.get("description"),
+            "icon": raw_action.get("icon"),
+            "source_affordance": raw_action.get("source_affordance"),
+        }
+        try:
+            parsed_actions.append(ActionConfig(**base))
+        except ValidationError as exc:
+            raise ValueError(f"Invalid action in {yaml_path}: {exc}") from exc
+
+    return ActionSpaceConfig(actions=parsed_actions)

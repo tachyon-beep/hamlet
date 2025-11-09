@@ -3,7 +3,7 @@
 **Task**: Resolve blockers before TASK-004A Universe Compiler implementation
 **Priority**: CRITICAL (Blocks TASK-004A)
 **Effort**: 8-12 hours
-**Status**: Not Started
+**Status**: Blocked (Re-validated 2025-11-09)
 **Created**: 2025-11-08
 **Depends On**: TASK-003 (Complete ✅)
 **Blocks**: TASK-004A Universe Compiler Implementation
@@ -22,6 +22,20 @@ Independent peer review of TASK-004A identified **5 critical blockers** where th
 5. Missing adapters between VFS and Universe DTOs
 
 **This task resolves all blockers and updates TASK-004A spec to match reality.**
+
+---
+
+## 2025-11-09 Reality Check
+
+| # | Blocker | Evidence Snapshot | Decision (Nov 9) |
+| - | --- | --- | --- |
+| 1 | Config loaders & filenames | ✅ `load_variables_reference_config` now lives in `townlet.vfs.schema` and `load_global_actions_config` + `ActionSpaceConfig` live in `townlet.environment.action_config`, with unit tests under `tests/test_townlet/unit/vfs/` and `tests/test_townlet/unit/environment/`. | **Resolved** – Stage 1 can import these helpers directly. |
+| 2 | DTO packages | `HamletConfig` exposes tuples of `BarConfig`/`CascadeConfig` from `townlet.config.*` (`src/townlet/config/hamlet.py:17-57`), but the richer `BarsConfig`/`CascadesConfig` live in `townlet.environment.*` (`src/townlet/environment/cascade_config.py:57-257`); `src/townlet/config/bar.py` ends right after `load_bars_config` with no alias. | Still blocking – Stage 2 expects aliases/type re-exports that simply aren’t present, so it would have to re-load YAML to reach the metadata. |
+| 3 | ObservationSpec adapter | VFS fields keep nested `shape` data (`src/townlet/vfs/schema.py:106-195`), the compiler DTO expects flattened spans (`src/townlet/universe/dto/observation_spec.py:7-43`), and `ls src/townlet/universe/adapters` shows only `__pycache__`. | Blocking – there is no adapter module to bridge the contracts, so the UAC→BAC handoff described in §3 of the architecture spec can’t be implemented. |
+| 4 | HamletConfig integration | No architecture note references `HamletConfig` (`rg --no-heading "HamletConfig" docs/architecture` returns nothing) and RawConfigs remain a doc-only sketch; yet Stage 1 relies on `HamletConfig.load`. | Blocking – we need an explicit integration write-up (or a section in this file) so compiler work doesn’t duplicate validation logic or guess how to compose the DTO outputs. |
+| 5 | TASK-004A spec alignment | Stage 1 in `docs/tasks/TASK-004A-COMPILER-IMPLEMENTATION.md:245-318` imports both missing loaders and assumes DTO aliases already exist. | Blocking until the codebase actually provides those imports; otherwise following the spec verbatim fails before Stage 2. |
+
+**Conclusion**: COMPILER_ARCHITECTURE.md still assumes these prerequisites. We either implement them up front (recommended) or rewrite TASK-004A to avoid the missing abstractions—the latter is more work than finishing this task.
 
 ---
 
@@ -45,6 +59,11 @@ configs/global_actions.yaml                     # ✅ EXISTS (shared, not per-pa
 
 **Impact**: Stage 1 parse will fail immediately - can't find config files.
 
+**2025-11-09 repo check**:
+- `VectorizedHamletEnv` still reads `variables_reference.yaml` and constructs `VariableDef` plus observation exposure data inline (`src/townlet/environment/vectorized_env.py:149-204`), so there is no reusable loader for the compiler to import.
+- Searches for `load_variables_reference_config` or `load_global_actions_config` under `src/` return nothing—the only references live in docs—so TASK-004A Stage 1 would immediately raise `ImportError`.
+- Conclusion: We still need the shared loader functions (or a Stage 1 rewrite) before implementation can start.
+
 ### Blocker #2: DTO Package Locations Inconsistent
 
 **Plan Expects**:
@@ -65,6 +84,11 @@ from townlet.config.bar import BarConfig, load_bars_config  # ✅ EXISTS (return
 ```
 
 **Impact**: RawConfigs dataclass can't be constructed - wrong imports.
+
+**2025-11-09 repo check**:
+- `HamletConfig` exposes tuples of simple `BarConfig`/`CascadeConfig` objects from `townlet.config.*` (`src/townlet/config/hamlet.py:17-57`) and therefore lacks helpers like `meter_name_to_index`.
+- The richer `BarsConfig`/`CascadesConfig` DTOs (with contiguous index validation and metadata) only exist under `townlet.environment.cascade_config` (`src/townlet/environment/cascade_config.py:57-257`).
+- Without aliases or a plan update, Stage 2 would need to re-load YAML just to recover this metadata, so the blocker is still valid.
 
 ### Blocker #3: ObservationSpec Has Two Incompatible Versions
 
@@ -92,6 +116,11 @@ class ObservationField:
 
 **Impact**: Stage 5 can't convert VFS builder output to Universe DTO - no adapter exists.
 
+**2025-11-09 repo check**:
+- VFS `ObservationField` still keeps nested `shape` lists with no `start_index`/`end_index` (`src/townlet/vfs/schema.py:106-195`), while the Universe DTO requires flattened spans and semantic tags (`src/townlet/universe/dto/observation_spec.py:7-43`).
+- `src/townlet/universe/adapters/` only contains `__pycache__`; there is no adapter module to bridge the two representations.
+- Therefore, the ObservationSpec handoff described in COMPILER_ARCHITECTURE.md (§3) cannot be implemented until this adapter exists.
+
 ### Blocker #4: HamletConfig Already Does Validation
 
 `HamletConfig.load()` already:
@@ -105,6 +134,11 @@ class ObservationField:
 - Run in parallel (duplication/divergence risk)?
 
 **Impact**: Risk of duplicate validation logic, inconsistent error messages, maintenance burden.
+
+**2025-11-09 repo check**:
+- COMPILER_ARCHITECTURE.md (§1-§2, `docs/architecture/COMPILER_ARCHITECTURE.md:108-249`) still assumes the compiler pipelines consume already-validated config objects, not raw YAML paths.
+- There is no `docs/architecture/COMPILER_HAMLETCONFIG_INTEGRATION.md` file yet, and RawConfigs remains a doc-only sketch, so contributors still lack guidance on how to reuse `HamletConfig` without duplicating validation.
+- We need to document (or implement) the integration strategy before TASK-004A proceeds to avoid two conflicting loaders.
 
 ### Blocker #5: Missing load_variables_config Function
 
@@ -120,6 +154,11 @@ from townlet.vfs.schema import load_variables_config  # ❌ DOESN'T EXIST
 ```
 
 **Impact**: Can't load variables in Stage 1.
+
+**2025-11-09 repo check**:
+- The latest TASK-004A implementation plan still imports `load_variables_reference_config` and `load_global_actions_config` in Stage 1 (`docs/tasks/TASK-004A-COMPILER-IMPLEMENTATION.md:245-318`), so the missing helpers block that plan verbatim.
+- No equivalent loader functions exist today (`rg -n "load_variables_reference_config" src` returns zero matches), which means TASK-004A would fail before reaching Stage 2.
+- We either finish Part 1 now or re-author the implementation plan; skipping the prerequisite is not viable.
 
 ---
 

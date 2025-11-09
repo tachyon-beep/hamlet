@@ -8,15 +8,18 @@ Phase 1: Basic types and validation
 Phase 2: Derivation graphs, complex types, expression parsing
 """
 
+from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+import yaml
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 __all__ = [
     "NormalizationSpec",
     "WriteSpec",
     "ObservationField",
     "VariableDef",
+    "load_variables_reference_config",
 ]
 
 
@@ -249,3 +252,28 @@ class VariableDef(BaseModel):
                 raise ValueError(f"Variable '{self.id}' with type '{self.type}' should not have 'dims' field")
         # vec2i, vec3i have implicit dims (2, 3) - no dims field needed
         return self
+
+
+def load_variables_reference_config(config_dir: Path) -> list[VariableDef]:
+    """Load and validate variables_reference.yaml."""
+
+    config_dir = Path(config_dir)
+    yaml_path = config_dir / "variables_reference.yaml"
+
+    if not yaml_path.exists():
+        raise FileNotFoundError(f"variables_reference.yaml is required but not found in {config_dir}.")
+
+    try:
+        with yaml_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Failed to parse {yaml_path}: {exc}") from exc
+
+    variables_block = data.get("variables")
+    if variables_block is None:
+        raise ValueError(f"{yaml_path} must include a top-level 'variables' list.")
+
+    try:
+        return [VariableDef(**raw_var) for raw_var in variables_block]
+    except ValidationError as exc:
+        raise ValueError(f"Invalid variables_reference.yaml: {exc}") from exc
