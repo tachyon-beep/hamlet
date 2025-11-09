@@ -39,6 +39,7 @@ class RawConfigs:
     variables_reference: list[VariableDef]
     global_actions: ActionSpaceConfig
     source_map: SourceMap
+    config_dir: Path
 
     # --- Convenience accessors -------------------------------------------------
 
@@ -160,6 +161,7 @@ class RawConfigs:
             variables_reference=variables_reference,
             global_actions=composed_actions,
             source_map=source_map,
+            config_dir=config_dir,
         )
 
     @staticmethod

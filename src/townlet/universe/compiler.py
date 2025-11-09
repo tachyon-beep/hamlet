@@ -17,9 +17,11 @@ import yaml
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.cascade import CascadeConfig
 from townlet.config.effect_pipeline import EffectPipeline
+from townlet.environment.cascade_config import load_cascades_config as load_full_cascades_config
 from townlet.environment.substrate_action_validator import SubstrateActionValidator
 from townlet.substrate.config import SubstrateConfig
 from townlet.universe.adapters.vfs_adapter import vfs_to_observation_spec
+from townlet.universe.compiled import CompiledUniverse
 from townlet.universe.compiler_inputs import RawConfigs
 from townlet.universe.dto import (
     ActionMetadata,
@@ -86,14 +88,26 @@ class UniverseCompiler:
             affordance_metadata,
         ) = self._stage_5_build_rich_metadata(raw_configs)
 
-        self._metadata = metadata
-        self._observation_spec = observation_spec
-        self._action_metadata = action_space_metadata
-        self._meter_metadata = meter_metadata
-        self._affordance_metadata = affordance_metadata
-        self._optimization_data = self._stage_6_optimize(raw_configs, metadata)
+        optimization_data = self._stage_6_optimize(raw_configs, metadata)
 
-        raise NotImplementedError("UniverseCompiler.compile is not yet fully implemented")
+        compiled = self._stage_7_emit_compiled_universe(
+            raw_configs=raw_configs,
+            metadata=metadata,
+            observation_spec=observation_spec,
+            action_space_metadata=action_space_metadata,
+            meter_metadata=meter_metadata,
+            affordance_metadata=affordance_metadata,
+            optimization_data=optimization_data,
+        )
+
+        self._metadata = compiled.metadata
+        self._observation_spec = compiled.observation_spec
+        self._action_metadata = compiled.action_space_metadata
+        self._meter_metadata = compiled.meter_metadata
+        self._affordance_metadata = compiled.affordance_metadata
+        self._optimization_data = compiled.optimization_data
+
+        return compiled
 
     def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
         """Stage 1 – load all YAML files into DTOs using shared loaders."""
@@ -997,30 +1011,108 @@ class UniverseCompiler:
         *,
         device: torch.device | None = None,
     ) -> OptimizationData:
-        """Stage 6 – placeholder optimization data (to be populated in future steps)."""
+        """Stage 6 – pre-compute optimization tensors and lookup tables."""
 
         torch_device = device or torch.device("cpu")
+        meter_lookup = metadata.meter_name_to_index
+
         base_depletions = torch.zeros(metadata.meter_count, dtype=torch.float32, device=torch_device)
         for bar in raw_configs.bars:
-            depletion = getattr(bar, "base_depletion", 0.0)
-            base_depletions[bar.index] = float(depletion)
+            index = meter_lookup.get(bar.name, bar.index)
+            base_depletions[index] = float(getattr(bar, "base_depletion", 0.0))
 
-        affordance_count = max(metadata.affordance_count, 1)
-        action_mask_table = torch.ones(
+        cascade_data: dict[str, list[dict[str, float]]] = defaultdict(list)
+        for cascade in raw_configs.cascades:
+            source_idx = meter_lookup.get(cascade.source)
+            target_idx = meter_lookup.get(cascade.target)
+            if source_idx is None or target_idx is None:
+                continue
+            cascade_data[cascade.category].append(
+                {
+                    "source_idx": source_idx,
+                    "target_idx": target_idx,
+                    "threshold": cascade.threshold,
+                    "strength": cascade.strength,
+                }
+            )
+
+        for category in cascade_data:
+            cascade_data[category].sort(key=lambda entry: entry["target_idx"])
+
+        modulation_data: list[dict[str, float]] = []
+        cascades_yaml = raw_configs.config_dir / "cascades.yaml"
+        try:
+            cascades_config = load_full_cascades_config(cascades_yaml)
+        except Exception:
+            cascades_config = None
+
+        if cascades_config:
+            for modulation in cascades_config.modulations:
+                source_idx = meter_lookup.get(modulation.source)
+                target_idx = meter_lookup.get(modulation.target)
+                if source_idx is None or target_idx is None:
+                    continue
+                modulation_data.append(
+                    {
+                        "source_idx": source_idx,
+                        "target_idx": target_idx,
+                        "base_multiplier": modulation.base_multiplier,
+                        "range": modulation.range,
+                        "baseline_depletion": modulation.baseline_depletion,
+                    }
+                )
+
+        affordance_count = len(raw_configs.affordances)
+        action_mask_table = torch.zeros(
             24,
-            affordance_count,
+            max(affordance_count, 1),
             dtype=torch.bool,
             device=torch_device,
         )
+
+        for hour in range(24):
+            for affordance_idx, affordance in enumerate(raw_configs.affordances):
+                hours = getattr(affordance, "operating_hours", None)
+                if not hours:
+                    action_mask_table[hour, affordance_idx] = True
+                    continue
+                open_hour, close_hour = hours
+                action_mask_table[hour, affordance_idx] = self._is_open(hour, open_hour, close_hour)
 
         affordance_position_map = {aff.id: None for aff in raw_configs.affordances}
 
         return OptimizationData(
             base_depletions=base_depletions,
-            cascade_data={},
-            modulation_data=[],
-            action_mask_table=action_mask_table,
+            cascade_data=dict(cascade_data),
+            modulation_data=modulation_data,
+            action_mask_table=action_mask_table if affordance_count else None,
             affordance_position_map=affordance_position_map,
+        )
+
+    def _stage_7_emit_compiled_universe(
+        self,
+        *,
+        raw_configs: RawConfigs,
+        metadata: UniverseMetadata,
+        observation_spec: ObservationSpec,
+        action_space_metadata: ActionSpaceMetadata,
+        meter_metadata: MeterMetadata,
+        affordance_metadata: AffordanceMetadata,
+        optimization_data: OptimizationData,
+    ) -> CompiledUniverse:
+        """Stage 7 – produce immutable CompiledUniverse artifact."""
+
+        return CompiledUniverse(
+            hamlet_config=raw_configs.hamlet_config,
+            variables_reference=raw_configs.variables_reference,
+            global_actions=raw_configs.global_actions,
+            config_dir=raw_configs.config_dir,
+            metadata=metadata,
+            observation_spec=observation_spec,
+            action_space_metadata=action_space_metadata,
+            meter_metadata=meter_metadata,
+            affordance_metadata=affordance_metadata,
+            optimization_data=optimization_data,
         )
 
     def _derive_grid_dimensions(self, substrate: SubstrateConfig) -> tuple[int | None, int | None]:
@@ -1181,3 +1273,19 @@ class UniverseCompiler:
                 if amount is not None:
                     total += amount
         return total
+
+    @staticmethod
+    def _is_open(hour: int, open_hour: int, close_hour: int) -> bool:
+        """Return True if an affordance is open for the given hour."""
+
+        hour %= 24
+        open_mod = open_hour % 24
+        close_mod = close_hour % 24
+
+        # 24/7 if interval covers full day
+        if (close_hour - open_hour) % 24 == 0:
+            return True
+
+        if open_mod < close_mod:
+            return open_mod <= hour < close_mod
+        return hour >= open_mod or hour < close_mod

@@ -31,6 +31,7 @@ def _clone_raw_configs(
         variables_reference=original.variables_reference,
         global_actions=global_actions or original.global_actions,
         source_map=original.source_map,
+        config_dir=original.config_dir,
     )
 
 

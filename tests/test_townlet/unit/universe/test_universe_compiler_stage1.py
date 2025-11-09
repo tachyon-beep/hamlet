@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from townlet.universe.compiled import CompiledUniverse
 from townlet.universe.compiler import UniverseCompiler
 from townlet.universe.compiler_inputs import RawConfigs
 from townlet.universe.errors import CompilationError
@@ -23,11 +24,12 @@ def test_stage1_parses_config_pack(pack_name: str):
     assert len(raw_configs.global_actions.actions) > 0
 
 
-def test_compile_not_implemented():
+def test_compile_returns_compiled_universe():
     compiler = UniverseCompiler()
-    config_dir = Path("configs/L0_0_minimal")
-    with pytest.raises(NotImplementedError):
-        compiler.compile(config_dir)
+    compiled = compiler.compile(Path("configs/L0_0_minimal"))
+
+    assert isinstance(compiled, CompiledUniverse)
+    assert compiled.metadata.universe_name == "L0_0_minimal"
 
 
 def test_stage2_builds_symbol_table():
@@ -69,19 +71,21 @@ def test_stage1_reports_invalid_yaml(tmp_path: Path) -> None:
 
 def test_compile_executes_stage2_before_stage3(monkeypatch) -> None:
     compiler = UniverseCompiler()
-    called: dict[str, bool] = {"stage2": False}
+    called: dict[str, bool] = {"stage2": False, "stage3": False}
 
     def fake_stage2(self: UniverseCompiler, raw_configs: RawConfigs) -> UniverseSymbolTable:  # type: ignore[override]
         called["stage2"] = True
         return UniverseSymbolTable()
 
     def fake_stage3(self: UniverseCompiler, raw_configs: RawConfigs, table: UniverseSymbolTable, errors):  # type: ignore[override]
-        raise NotImplementedError("Stage 3 not implemented")
+        called["stage3"] = True
+        errors.add_error("boom")
 
     monkeypatch.setattr(UniverseCompiler, "_stage_2_build_symbol_tables", fake_stage2, raising=False)
     monkeypatch.setattr(UniverseCompiler, "_stage_3_resolve_references", fake_stage3, raising=False)
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(CompilationError):
         compiler.compile(Path("configs/L0_0_minimal"))
 
     assert called["stage2"] is True
+    assert called["stage3"] is True
