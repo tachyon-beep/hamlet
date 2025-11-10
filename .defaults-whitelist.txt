@@ -127,6 +127,7 @@ src/townlet/universe/source_map.py:*
 src/townlet/universe/symbol_table.py:*
 src/townlet/vfs/schema.py:*
 src/townlet/universe/compiler_inputs.py:*
+src/townlet/config/capability_config.py:*
 
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS
