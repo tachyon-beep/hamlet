@@ -192,15 +192,16 @@ class VectorizedHamletEnv:
         meter_count = self.meter_count
         self.base_depletions = self.optimization_data.base_depletions.to(self.device)
 
-        affordance_config = _build_affordance_collection(runtime.clone_affordance_configs())
+        # Use modern affordances directly (with effect_pipeline) instead of legacy conversion
+        modern_affordances = runtime.clone_affordance_configs()
         metadata_affordance_lookup = dict(self.metadata.affordance_id_to_index)
-        self.affordance_name_to_id = {aff.name: aff.id for aff in affordance_config.affordances}
+        self.affordance_name_to_id = {aff.name: aff.id for aff in modern_affordances}
         self.affordance_name_to_mask_idx = {
             name: metadata_affordance_lookup.get(aff_id)
             for name, aff_id in self.affordance_name_to_id.items()
             if metadata_affordance_lookup.get(aff_id) is not None
         }
-        self.affordance_positions_from_config = {aff.name: aff.position for aff in affordance_config.affordances}
+        self.affordance_positions_from_config = {aff.name: aff.position for aff in modern_affordances}
         optimization_position_map = getattr(self.optimization_data, "affordance_position_map", {})
         self.affordance_positions_from_optimization = {
             name: optimization_position_map.get(aff_id) for name, aff_id in self.affordance_name_to_id.items()
@@ -208,7 +209,7 @@ class VectorizedHamletEnv:
 
         # Extract ALL affordance names from YAML (defines observation vocabulary)
         # This is the FULL universe - what the agent can observe and reason about
-        all_affordance_names = [aff.name for aff in affordance_config.affordances]
+        all_affordance_names = [aff.name for aff in modern_affordances]
 
         # Filter affordances for DEPLOYMENT (which ones actually exist on the grid)
         # enabled_affordances from training.yaml controls what the agent can interact with
@@ -334,10 +335,10 @@ class VectorizedHamletEnv:
         self.action_mask_table = self.optimization_data.action_mask_table.to(self.device).clone()
         self.hours_per_day = self.action_mask_table.shape[0] if self.action_mask_table.ndim > 0 else 24
 
-        # Initialize affordance engine (reuse affordance_config loaded above)
+        # Initialize affordance engine with modern affordances (effect_pipeline support)
         # Pass meter_name_to_index for dynamic meter lookups (TASK-001)
         self.affordance_engine = AffordanceEngine(
-            affordance_config,
+            modern_affordances,
             num_agents,
             self.device,
             self.meter_name_to_index,

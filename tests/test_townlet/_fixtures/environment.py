@@ -12,6 +12,7 @@ import pytest
 import torch
 
 from tests.test_townlet._fixtures.config import _apply_config_overrides
+from tests.test_townlet._fixtures.instant_affordances_helper import convert_to_instant_mode
 from tests.test_townlet.helpers.config_builder import mutate_training_yaml
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.universe.compiled import CompiledUniverse
@@ -40,6 +41,47 @@ def basic_env(
         VectorizedHamletEnv instance
     """
     universe = compile_universe(test_config_pack_path)
+    return VectorizedHamletEnv.from_universe(
+        universe,
+        num_agents=1,
+        device=device,
+    )
+
+
+@pytest.fixture
+def instant_env(
+    compile_universe: Callable[[Path | str], CompiledUniverse],
+    test_config_pack_path: Path,
+    device: torch.device,
+    tmp_path: Path,
+) -> VectorizedHamletEnv:
+    """Create an environment with INSTANT-mode affordances for testing immediate effects.
+
+    This fixture is for tests that verify instant affordance effects (e.g., "Doctor restores health").
+    All affordances are converted to interaction_type: instant, removing duration_ticks and multi-tick mechanics.
+
+    Configuration:
+        - 1 agent
+        - 8×8 grid
+        - Full observability
+        - No temporal mechanics
+        - ALL AFFORDANCES IN INSTANT MODE
+        - Device: CUDA if available, else CPU
+
+    Use this instead of basic_env when testing immediate effects, not temporal progression.
+
+    Returns:
+        VectorizedHamletEnv instance with instant-mode affordances
+    """
+    # Copy test config to temp directory
+    instant_config_pack = tmp_path / "instant_config"
+    shutil.copytree(test_config_pack_path, instant_config_pack)
+
+    # Convert affordances to instant mode
+    convert_to_instant_mode(instant_config_pack / "affordances.yaml")
+
+    # Compile and return environment
+    universe = compile_universe(instant_config_pack)
     return VectorizedHamletEnv.from_universe(
         universe,
         num_agents=1,
