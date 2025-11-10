@@ -26,7 +26,7 @@ run_metadata:
 # Environment configuration
 environment:
   partial_observability: false  # Agent sees full grid
-  vision_range: 3  # Full vision (not used when partial_observability=false)
+  vision_range: 5  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
   enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
   randomize_affordances: true
@@ -39,7 +39,7 @@ population:
   num_agents: 1  # Single agent
   learning_rate: 0.001  # Higher learning rate for faster learning
   gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
-  replay_buffer_capacity: 5000  # Smaller buffer for minimal world
+  replay_buffer_capacity: 50000  # Smaller buffer for minimal world
   network_type: simple  # Standard MLP Q-Network
 
 # Curriculum configuration (simpler than Level 1)

@@ -127,10 +127,10 @@ class RuntimeUniverse:
         return tuple(aff.model_copy(deep=True) for aff in self._hamlet_config.affordances)
 
     def clone_global_actions(self) -> ActionSpaceConfig:
-        return self._global_actions.model_copy()
+        return self._global_actions.model_copy(deep=True)
 
     def clone_action_labels_config(self) -> ActionLabelConfig | None:
-        return self.action_labels_config.model_copy() if self.action_labels_config else None
+        return self.action_labels_config.model_copy(deep=True) if self.action_labels_config else None
 
     def clone_environment_cascade_config(self) -> EnvironmentConfig:
         return self._environment_config.model_copy(deep=True)

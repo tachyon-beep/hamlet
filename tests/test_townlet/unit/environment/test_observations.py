@@ -73,8 +73,8 @@ class TestFullObservability:
         grid_dim = basic_env.substrate.get_observation_dim()
         meters = obs[0, grid_dim : grid_dim + basic_env.meter_count]
 
-        # Should have 8 meter values
-        assert meters.shape[0] == 8
+        # Should match meter count from metadata
+        assert meters.shape[0] == basic_env.metadata.meter_count
 
         # Meters should be normalized to [0, 1] range
         assert (meters >= 0.0).all()
@@ -145,7 +145,7 @@ class TestPartialObservability:
         # Expected: 25 (local grid) + 2 (position) + 8 (meters) + 15 (affordance) + 4 (temporal)
         expected_dim = 25 + 2 + 8 + 15 + 4
         assert obs.shape == (1, expected_dim)
-        assert obs.shape[1] == 54
+        assert obs.shape[1] == pomdp_env.metadata.observation_dim
 
     def test_observation_dim_property_matches_actual_shape(self, pomdp_env):
         """env.observation_dim property should match actual observation shape."""

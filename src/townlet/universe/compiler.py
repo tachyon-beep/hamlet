@@ -9,7 +9,6 @@ import os
 import sys
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from copy import deepcopy
 from datetime import UTC, datetime
 from numbers import Number
 from pathlib import Path
@@ -45,6 +44,7 @@ from townlet.universe.optimization import OptimizationData
 from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 from townlet.vfs.registry import VariableRegistry
 from townlet.vfs.schema import ObservationField as VFSObservationField
+from townlet.vfs.schema import VariableDef
 
 from .cues_compiler import CuesCompiler
 from .errors import CompilationError, CompilationErrorCollector, CompilationMessage
@@ -101,7 +101,7 @@ class UniverseCompiler:
                     MAX_CACHE_FILE_SIZE,
                 )
             else:
-                precomputed_hash, precomputed_provenance = self._build_cache_fingerprint(config_dir)
+                # Optimization: Check mtime first (fast) before computing hash (slow)
                 current_mtime = self._compute_config_mtime(config_dir)
                 try:
                     cached_universe = CompiledUniverse.load_from_cache(cache_path)
@@ -118,21 +118,24 @@ class UniverseCompiler:
                             cached_mtime,
                             current_mtime,
                         )
-                    elif (
-                        cached_universe.metadata.config_hash == precomputed_hash
-                        and cached_universe.metadata.provenance_id == precomputed_provenance
-                    ):
-                        logger.info("Loaded compiled universe from cache: %s", cache_path)
-                        return cached_universe
                     else:
-                        logger.info(
-                            "Cache stale for %s (cached=%s/%s, current=%s/%s). Recompiling.",
-                            cache_path,
-                            cached_universe.metadata.config_hash[:8],
-                            precomputed_hash[:8] if precomputed_hash else "unknown",
-                            (cached_universe.metadata.provenance_id or "")[:8],
-                            (precomputed_provenance or "unknown")[:8],
-                        )
+                        # mtime matches - now compute hash to check content equality
+                        precomputed_hash, precomputed_provenance = self._build_cache_fingerprint(config_dir)
+                        if (
+                            cached_universe.metadata.config_hash == precomputed_hash
+                            and cached_universe.metadata.provenance_id == precomputed_provenance
+                        ):
+                            logger.info("Loaded compiled universe from cache: %s", cache_path)
+                            return cached_universe
+                        else:
+                            logger.info(
+                                "Cache stale for %s (cached=%s/%s, current=%s/%s). Recompiling.",
+                                cache_path,
+                                cached_universe.metadata.config_hash[:8],
+                                precomputed_hash[:8] if precomputed_hash else "unknown",
+                                (cached_universe.metadata.provenance_id or "")[:8],
+                                (precomputed_provenance or "unknown")[:8],
+                            )
 
         raw_configs = self._stage_1_parse_individual_files(config_dir)
 
@@ -166,6 +169,7 @@ class UniverseCompiler:
 
         compiled = self._stage_7_emit_compiled_universe(
             raw_configs=raw_configs,
+            symbol_table=symbol_table,
             metadata=metadata,
             observation_spec=observation_spec,
             vfs_observation_fields=vfs_fields,
@@ -237,7 +241,7 @@ class UniverseCompiler:
             "affordances.yaml",
             "substrate.yaml",
             "cues.yaml",
-            "variables_reference.yaml",
+            "variables_reference.yaml",  # Required file, but variables list can be empty
         ]
 
         # Optional files
@@ -288,6 +292,167 @@ class UniverseCompiler:
 
         return RawConfigs.from_config_dir(config_dir)
 
+    def _auto_generate_standard_variables(self, raw_configs: RawConfigs) -> list[VariableDef]:
+        """Auto-generate standard system variables from substrate, bars, and affordances.
+
+        Standard variables represent directly observable state that is always available
+        in every universe. These are the fundamental building blocks for observations.
+
+        Standard variables include:
+        - Spatial: grid_encoding/local_window (what's on the grid), position (where agent is)
+        - Meters: One variable per meter from bars.yaml (agent internal state)
+        - Affordances: affordance_at_position one-hot encoding (what's at current position)
+        - Temporal: time_sin, time_cos, interaction_progress, lifetime_progress (time state)
+
+        Custom variables (defined in variables_reference.yaml) should extend these with:
+        1. Environmental phenomena: Weather, lighting, noise (world state)
+        2. Derived features: Ratios, deficits, progress metrics (computed from state)
+
+        All variables (standard + custom) are automatically exposed as observations.
+
+        Returns:
+            List of auto-generated VariableDef objects
+        """
+        variables: list[VariableDef] = []
+
+        # 1. SPATIAL VARIABLES (substrate-dependent)
+        substrate = raw_configs.substrate
+        if substrate.type == "grid" and substrate.grid is not None:
+            width = substrate.grid.width
+            height = substrate.grid.height
+            grid_cells = width * height
+
+            # Grid encoding for full observability
+            variables.append(
+                VariableDef(
+                    id="grid_encoding",
+                    scope="agent",
+                    type="vecNf",
+                    dims=grid_cells,
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=[0.0] * grid_cells,
+                    description=f"{width}×{height} grid encoding (0=empty, 1=agent, 2=affordance, 3=both)",
+                )
+            )
+
+            # Local window for POMDP (if partial observability enabled)
+            if raw_configs.environment.partial_observability:
+                vision_range = raw_configs.environment.vision_range or 3
+                window_size = vision_range * vision_range
+                variables.append(
+                    VariableDef(
+                        id="local_window",
+                        scope="agent",
+                        type="vecNf",
+                        dims=window_size,
+                        lifetime="tick",
+                        readable_by=["agent", "engine"],
+                        writable_by=["engine"],
+                        default=[0.0] * window_size,
+                        description=f"{vision_range}×{vision_range} local observation window (POMDP)",
+                    )
+                )
+
+            # Position (normalized coordinates)
+            variables.append(
+                VariableDef(
+                    id="position",
+                    scope="agent",
+                    type="vecNf",
+                    dims=2,
+                    lifetime="episode",
+                    readable_by=["agent", "engine", "acs"],
+                    writable_by=["actions", "engine"],
+                    default=[0.0, 0.0],
+                    description="Normalized agent position (x, y) in [0, 1] range",
+                )
+            )
+
+        elif substrate.type == "aspatial":
+            # Aspatial has no spatial variables
+            pass
+
+        # 2. METER VARIABLES (from bars.yaml)
+        for bar in sorted(raw_configs.bars, key=lambda b: b.index):
+            variables.append(
+                VariableDef(
+                    id=bar.name,
+                    scope="agent",
+                    type="scalar",
+                    lifetime="episode",
+                    readable_by=["agent", "engine", "acs"],
+                    writable_by=["actions", "engine"],
+                    default=1.0,  # Meters typically start at 100%
+                    description=f"{bar.name.capitalize()} level [0.0-1.0]",
+                )
+            )
+
+        # 3. AFFORDANCE VARIABLES
+        affordance_count = len(raw_configs.affordances) + 1  # +1 for "none"
+        variables.append(
+            VariableDef(
+                id="affordance_at_position",
+                scope="agent",
+                type="vecNf",
+                dims=affordance_count,
+                lifetime="tick",
+                readable_by=["agent", "engine"],
+                writable_by=["engine"],
+                default=[0.0] * (affordance_count - 1) + [1.0],  # Last element (none) = 1.0
+                description=f"One-hot encoding of affordance at agent position ({affordance_count} categories)",
+            )
+        )
+
+        # 4. TEMPORAL VARIABLES (standard)
+        variables.extend(
+            [
+                VariableDef(
+                    id="time_sin",
+                    scope="global",
+                    type="scalar",
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=0.0,
+                    description="Sine of current time (24-hour cycle)",
+                ),
+                VariableDef(
+                    id="time_cos",
+                    scope="global",
+                    type="scalar",
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=1.0,
+                    description="Cosine of current time (24-hour cycle)",
+                ),
+                VariableDef(
+                    id="interaction_progress",
+                    scope="agent",
+                    type="scalar",
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=0.0,
+                    description="Progress through current multi-tick interaction [0.0-1.0]",
+                ),
+                VariableDef(
+                    id="lifetime_progress",
+                    scope="agent",
+                    type="scalar",
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=0.0,
+                    description="Progress through episode lifetime [0.0-1.0]",
+                ),
+            ]
+        )
+
+        return variables
+
     def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbolTable:
         """Stage 2 – register meters, variables, actions, cascades, and affordances."""
 
@@ -296,8 +461,15 @@ class UniverseCompiler:
         for bar in raw_configs.bars:
             table.register_meter(bar)
 
-        for variable in raw_configs.variables_reference:
+        # Auto-generate standard system variables
+        auto_generated_vars = self._auto_generate_standard_variables(raw_configs)
+        for variable in auto_generated_vars:
             table.register_variable(variable)
+
+        # Register custom user-defined variables (if present)
+        if raw_configs.variables_reference is not None:
+            for variable in raw_configs.variables_reference:
+                table.register_variable(variable)
 
         for action in raw_configs.global_actions.actions:
             table.register_action(action)
@@ -1255,9 +1427,12 @@ class UniverseCompiler:
         import torch
         from pydantic import __version__ as pydantic_version  # lazy import to avoid startup penalty
 
-        exposures = self._load_observation_exposures(config_dir, raw_configs)
+        exposures = self._load_observation_exposures(raw_configs, symbol_table)
+
+        # Get all variables from symbol table (auto-generated + custom)
+        all_variables = list(symbol_table.variables.values())
         variable_registry = VariableRegistry(
-            variables=list(raw_configs.variables_reference),
+            variables=all_variables,
             num_agents=raw_configs.population.num_agents,
             device=torch.device("cpu"),
         )
@@ -1485,6 +1660,7 @@ class UniverseCompiler:
         self,
         *,
         raw_configs: RawConfigs,
+        symbol_table: UniverseSymbolTable,
         metadata: UniverseMetadata,
         observation_spec: ObservationSpec,
         vfs_observation_fields: tuple[VFSObservationField, ...],
@@ -1496,9 +1672,12 @@ class UniverseCompiler:
     ) -> CompiledUniverse:
         """Stage 7 – produce immutable CompiledUniverse artifact."""
 
+        # Get all variables from symbol table (auto-generated + custom)
+        all_variables = list(symbol_table.variables.values())
+
         universe = CompiledUniverse(
             hamlet_config=raw_configs.hamlet_config,
-            variables_reference=raw_configs.variables_reference,
+            variables_reference=all_variables,
             global_actions=raw_configs.global_actions,
             config_dir=raw_configs.config_dir,
             metadata=metadata,
@@ -1564,36 +1743,52 @@ class UniverseCompiler:
     def _resolve_config_version(self, raw_configs: RawConfigs) -> str:
         return getattr(raw_configs.hamlet_config, "version", "1.0")
 
-    def _load_observation_exposures(self, config_dir: Path, raw_configs: RawConfigs) -> list[dict[str, Any]]:
-        yaml_path = config_dir / "variables_reference.yaml"
+    def _auto_generate_standard_exposures(self, symbol_table: UniverseSymbolTable) -> list[dict[str, Any]]:
+        """Auto-generate standard observation exposures for all system variables.
+
+        Creates exposures for:
+        - Spatial variables (grid_encoding/local_window, position)
+        - All meters
+        - Affordance encoding
+        - Temporal variables
+
+        Returns:
+            List of exposure dictionaries matching the expected schema
+        """
         exposures: list[dict[str, Any]] = []
-        if not yaml_path.exists():
-            raise ValueError(
-                f"Missing variables_reference.yaml at {yaml_path}. Explicit observation exposures are required (no implicit defaults)."
+
+        # Get all variables from symbol table
+        for var_id, var in symbol_table.variables.items():
+            # Determine observation shape
+            if var.type == "scalar":
+                shape: list[int] = []
+            elif var.type == "vecNf" and var.dims:
+                shape = [var.dims]
+            else:
+                continue  # Skip unsupported types
+
+            # Create exposure with obs_ prefix
+            exposures.append(
+                {
+                    "id": f"obs_{var_id}",
+                    "source_variable": var_id,
+                    "exposed_to": ["agent"],
+                    "shape": shape,
+                }
             )
 
-        try:
-            with yaml_path.open() as handle:
-                data = yaml.safe_load(handle) or {}
-        except yaml.YAMLError as exc:
-            error_msg = str(exc)
-            if hasattr(exc, "problem_mark"):
-                mark = exc.problem_mark
-                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {getattr(exc, 'problem', None) or 'syntax error'}"
-            raise CompilationError(
-                stage="Stage 5: Metadata Collection",
-                errors=[CompilationMessage(code="YAML_SYNTAX_ERROR", message=error_msg, location=str(yaml_path))],
-                hints=["Validate YAML syntax with 'yamllint variables_reference.yaml'"],
-            ) from exc
+        return exposures
 
-        raw_exposures = data.get("exposed_observations")
-        if not raw_exposures:
-            raise ValueError(
-                f"{yaml_path} must define 'exposed_observations'. The compiler no longer infers default exposures; specify them explicitly."
-            )
+    def _load_observation_exposures(self, raw_configs: RawConfigs, symbol_table: UniverseSymbolTable) -> list[dict[str, Any]]:
+        """Auto-generate observation exposures for ALL variables in symbol table.
 
-        exposures = [deepcopy(obs) for obs in raw_exposures]
+        Design principle: All variables (standard + custom) are automatically observable.
+        The exposed_observations field in variables_reference.yaml is deprecated/ignored.
+        """
+        # Auto-generate exposures for ALL variables (standard system + custom computed)
+        exposures = self._auto_generate_standard_exposures(symbol_table)
 
+        # Filter based on POMDP mode (only keep grid_encoding OR local_window, not both)
         if raw_configs.environment.partial_observability:
             exposures = [obs for obs in exposures if obs.get("source_variable") != "grid_encoding"]
         else:

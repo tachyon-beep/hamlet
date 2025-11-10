@@ -33,7 +33,9 @@ def test_partial_observation_uses_substrate(cpu_env_factory):
         + 4
     )
     assert obs.shape[1] == expected_dim, f"Expected {expected_dim}, got {obs.shape[1]}"
-    assert obs.shape[1] == 54, f"L2 should have 54 dims, got {obs.shape[1]}"
+    assert obs.shape[1] == env.metadata.observation_dim, (
+        "L2 observation should match metadata: " f"expected {env.metadata.observation_dim}, got {obs.shape[1]}"
+    )
 
 
 def test_observation_dim_matches_actual_observation(cpu_env_factory, test_config_pack_path):

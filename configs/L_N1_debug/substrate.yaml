@@ -23,8 +23,8 @@ grid:
 
   # Grid dimensions: 3×3 (9 total cells)
   # Provides minimal space for single affordance (Bed) with navigation
-  width: 3
-  height: 3
+  width: 5
+  height: 5
 
   # Boundary behavior: "clamp" (hard walls, agents cannot move outside grid)
   # When agent tries to move outside: position clamped to grid edges
