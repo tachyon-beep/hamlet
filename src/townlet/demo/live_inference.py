@@ -828,7 +828,7 @@ class LiveInferenceServer:
             ):
                 affordance_name = self.env.last_interaction_affordance[0]
                 # Get required ticks from affordance engine
-                required_ticks = self.env.affordance_engine.get_required_ticks(affordance_name)
+                required_ticks = self.env.affordance_engine.get_duration_ticks(affordance_name)
                 if required_ticks > 0:
                     interaction_progress_normalized = interaction_progress_raw / required_ticks
 

@@ -30,6 +30,7 @@ exploration:
   embed_dim: 128
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 50
 
 training:

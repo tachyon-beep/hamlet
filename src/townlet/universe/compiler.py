@@ -266,7 +266,7 @@ class UniverseCompiler:
                 error_msg = str(exc)
                 if hasattr(exc, "problem_mark"):
                     mark = exc.problem_mark
-                    problem = exc.problem or "syntax error"
+                    problem = getattr(exc, "problem", None) or "syntax error"
                     error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {problem}"
                     if hasattr(exc, "context") and exc.context:
                         error_msg = f"{exc.context}\n  {error_msg}"
@@ -1552,7 +1552,7 @@ class UniverseCompiler:
             error_msg = str(exc)
             if hasattr(exc, "problem_mark"):
                 mark = exc.problem_mark
-                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {exc.problem or 'syntax error'}"
+                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {getattr(exc, 'problem', None) or 'syntax error'}"
             raise CompilationError(
                 stage="Stage 5: Metadata Collection",
                 errors=[CompilationMessage(code="YAML_SYNTAX_ERROR", message=error_msg, location=str(yaml_path))],
@@ -1584,7 +1584,7 @@ class UniverseCompiler:
             error_msg = str(exc)
             if hasattr(exc, "problem_mark"):
                 mark = exc.problem_mark
-                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {exc.problem or 'syntax error'}"
+                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {getattr(exc, 'problem', None) or 'syntax error'}"
                 if hasattr(exc, "context"):
                     error_msg = f"{exc.context}\n  {error_msg}"
 

@@ -52,6 +52,7 @@ exploration:
   embed_dim: 128
   initial_intrinsic_weight: 0.1  # Much lower - let extrinsic milestones drive learning
   variance_threshold: 100.0  # Fixed: increased from 10.0 to prevent premature annealing
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 100  # Track last 100 episodes for annealing
   epsilon_start: 1.0
   epsilon_min: 0.01

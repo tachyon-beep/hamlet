@@ -23,6 +23,16 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system ".[dev]"
 
+      - name: Validate configs first (fail-fast before pytest)
+        run: |
+          echo "Running config validation before pytest to catch invalid configs early"
+          uv run python scripts/validate_configs.py
+          if [ $? -ne 0 ]; then
+            echo "❌ Config validation failed. Fix configs before running tests."
+            exit 1
+          fi
+          echo "✅ Config validation passed"
+
       - name: Run complete test matrix (including slow markers)
         env:
           PYTEST_ADDOPTS: ""
