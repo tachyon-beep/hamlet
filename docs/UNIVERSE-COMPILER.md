@@ -108,7 +108,27 @@ End-to-end sanity check: `uv run scripts/validate_substrate_runtime.py --config 
 
 ## 10. Future Enhancements
 
-- CLI wrapper (`python -m townlet.universe.compiler {compile,inspect,validate}`) for ops tooling.
 - Incremental compilation (only re-run stages for changed YAML) once config packs grow further.
 - Extended cue processing (e.g., derived cues, behavior cues) by expanding `CuesCompiler` with specialized passes.
 - Shared cache registry for remote training clusters (content-addressed store instead of per-pack directories).
+
+## 11. CLI Tooling
+
+The repository now ships a lightweight CLI so ops/dev workflow can run compiler operations without writing ad-hoc scripts:
+
+```bash
+# Compile a pack (writes .compiled/universe.msgpack by default)
+python -m townlet.compiler compile configs/L1_full_observability
+
+# Inspect an existing artifact
+python -m townlet.compiler inspect configs/L1_full_observability/.compiled/universe.msgpack
+
+# Validate config packs without touching cache (useful for CI lint checks)
+python -m townlet.compiler validate configs/L1_full_observability
+```
+
+Flags:
+
+- `compile --no-cache`: Skip cache usage entirely (always rebuild, don’t write artifacts).
+- `inspect <artifact>`: Prints the metadata summary (universe name, counts, config hash) for debugging/deployment notes.
+- `validate`: Equivalent to `compile --no-cache` but discards the result immediately, so `.compiled/` never appears—handy for CI.
