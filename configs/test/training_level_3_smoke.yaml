@@ -28,6 +28,7 @@ exploration:
   epsilon_start: 1.0
   epsilon_min: 0.1
   epsilon_decay: 0.99
+  min_survival_fraction: 0.5
 training:
   device: cuda
   max_episodes: 6

@@ -594,6 +594,7 @@ def make_test_episode_metadata(
         timestamp=1234567890.0,
         affordance_layout={"Bed": (2, 3)},
         affordance_visits={"Bed": 1},
+        custom_action_uses={},
     )
 
 

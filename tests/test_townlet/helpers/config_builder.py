@@ -52,6 +52,7 @@ BASE_CONFIG = {
         "initial_intrinsic_weight": 1.0,
         "variance_threshold": 100.0,
         "survival_window": 100,
+        "min_survival_fraction": 0.5,
     },
     "training": {
         "device": "cpu",
