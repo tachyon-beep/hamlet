@@ -327,3 +327,55 @@ def test_apply_multi_tick_interaction_with_probabilistic_completion(mock_engine,
     updated_meters = mock_engine.apply_multi_tick_interaction(updated_meters, "test", 2, agent_mask)
     assert torch.allclose(updated_meters[:, 0], torch.tensor(0.2))  # energy += 0.1
     assert torch.allclose(updated_meters[:, 3], torch.tensor(0.5))  # money += 0.5 (success)
+
+
+# ============================================================================
+# TASK-004B Phase B: Cooldown and Prerequisite Tests
+# ============================================================================
+
+
+def test_cooldown_capability_detection(mock_engine, device):
+    """Test that cooldown capability can be detected correctly."""
+    cooldown_cap = MockCapability("cooldown", cooldown_ticks=10, scope="agent")
+    affordance = MockAffordanceConfig("test", capabilities=[cooldown_cap])
+
+    # Should detect cooldown capability
+    detected_cap = mock_engine._get_capability(affordance, "cooldown")
+    assert detected_cap is not None
+    assert detected_cap.type == "cooldown"
+    assert detected_cap.cooldown_ticks == 10
+    assert detected_cap.scope == "agent"
+
+    # Should not detect non-existent capabilities
+    skill_cap = mock_engine._get_capability(affordance, "skill_scaling")
+    assert skill_cap is None
+
+
+def test_prerequisite_capability_detection(mock_engine, device):
+    """Test that prerequisite capability can be detected correctly."""
+    prereq_cap = MockCapability("prerequisite", required_affordances=["Freshman", "Sophomore"])
+    affordance = MockAffordanceConfig("test", capabilities=[prereq_cap])
+
+    # Should detect prerequisite capability
+    detected_cap = mock_engine._get_capability(affordance, "prerequisite")
+    assert detected_cap is not None
+    assert detected_cap.type == "prerequisite"
+    assert detected_cap.required_affordances == ["Freshman", "Sophomore"]
+
+
+def test_multiple_capabilities_detection(mock_engine, device):
+    """Test detection of multiple capabilities on single affordance."""
+    cooldown_cap = MockCapability("cooldown", cooldown_ticks=50, scope="agent")
+    skill_cap = MockCapability("skill_scaling", skill="fitness", base_multiplier=1.0, max_multiplier=2.0)
+    prob_cap = MockCapability("probabilistic", success_probability=0.7)
+
+    affordance = MockAffordanceConfig("test", capabilities=[cooldown_cap, skill_cap, prob_cap])
+
+    # All three should be independently detectable
+    detected_cooldown = mock_engine._get_capability(affordance, "cooldown")
+    detected_skill = mock_engine._get_capability(affordance, "skill_scaling")
+    detected_prob = mock_engine._get_capability(affordance, "probabilistic")
+
+    assert detected_cooldown is not None and detected_cooldown.cooldown_ticks == 50
+    assert detected_skill is not None and detected_skill.max_multiplier == 2.0
+    assert detected_prob is not None and detected_prob.success_probability == 0.7

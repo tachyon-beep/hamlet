@@ -1,0 +1,74 @@
+# TASK-004B Phase B Example: Cooldown Capability
+#
+# Demonstrates cooldown system where agents must wait before re-using an affordance.
+#
+# Teaching Value:
+# - Real-world work cycle: Can't work continuously without breaks
+# - Resource planning: Must manage other needs during cooldown period
+# - Temporal strategy: Learn to interleave activities efficiently
+#
+# Expected Behavior:
+# - Agent works at Job, earns $22.5
+# - Must wait 20 ticks before working again (cooldown)
+# - During cooldown, agent should rest/eat/maintain other needs
+#
+# Usage:
+#   This is a single affordance example showing cooldown in isolation.
+#   Use with minimal config (L0_0_minimal) or integrate into larger configs.
+
+affordances:
+  - id: "OfficeJob"
+    name: "Office Job"
+    category: "income"
+
+    # Multi-tick + Cooldown + Meter-gated composition
+    capabilities:
+      # Takes 10 ticks to complete
+      - type: multi_tick
+        duration_ticks: 10
+        early_exit_allowed: false
+        resumable: false
+
+      # 20-tick cooldown after completion
+      # Can't work again until global_tick >= (completion_tick + 20)
+      - type: cooldown
+        cooldown_ticks: 20
+        scope: agent  # Per-agent cooldown (each agent tracks independently)
+
+      # Requires energy > 0.3 to start working
+      - type: meter_gated
+        meter: energy
+        min: 0.3
+
+    # Effect pipeline: Multi-stage effects
+    effect_pipeline:
+      on_start:
+        - {meter: mood, amount: -0.05}  # Start work: slight mood decrease
+
+      per_tick:
+        - {meter: energy, amount: -0.02}  # Each work tick depletes energy
+        - {meter: satiation, amount: -0.01}  # Work makes you hungry
+
+      on_completion:
+        - {meter: money, amount: 22.5}  # Payment on completion
+        - {meter: mood, amount: 0.1}  # Completion satisfaction
+
+    # Operating hours: 9am-5pm (working hours)
+    operating_hours: [9, 17]
+
+    # Metadata
+    teaching_note: |
+      Cooldown system teaches temporal planning:
+      - Can't work continuously (realistic burnout prevention)
+      - Must manage other needs during cooldown
+      - Learn to batch income with rest cycles
+
+      Economic balance:
+      - 10 ticks work + 20 ticks cooldown = 30 ticks per cycle
+      - Earns $22.5 per cycle
+      - Requires energy management (0.02 × 10 = 0.2 energy depletion)
+
+    design_intent: |
+      Models realistic work-rest cycles. Prevents degenerate strategies where agents
+      work continuously without attending to other needs. Forces agents to develop
+      balanced routines that interleave income generation with maintenance activities.

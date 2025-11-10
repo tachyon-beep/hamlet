@@ -1,0 +1,171 @@
+# TASK-004B Phase B Example: Combined Cooldown + Prerequisite
+#
+# Demonstrates capability composition: Career progression with both prerequisites and cooldowns.
+#
+# Teaching Value:
+# - Multi-stage career: Must start as Intern before becoming Employee
+# - Work-rest cycles: Each job has cooldown period
+# - Progressive difficulty: Higher positions require more energy but pay more
+# - Capability composition: Shows how cooldown + prerequisite work together
+#
+# Expected Behavior:
+# - Intern: No prerequisites, 10-tick cooldown, pays $10
+# - Employee: Requires Intern completion, 15-tick cooldown, pays $25
+# - Manager: Requires Employee completion, 20-tick cooldown, pays $50
+#
+# Strategic Learning:
+# - Can't spam same job (cooldown prevents continuous work)
+# - Must progress through career stages (prerequisites enforce ordering)
+# - Each promotion has longer cooldown but higher pay
+# - Optimal strategy: Progress through career, manage rest periods
+
+affordances:
+  # Entry Level: Internship
+  - id: "InternPosition"
+    name: "Intern"
+    category: "career"
+
+    capabilities:
+      # Multi-tick work
+      - type: multi_tick
+        duration_ticks: 5
+        early_exit_allowed: false
+        resumable: false
+
+      # Short cooldown (entry-level flexibility)
+      - type: cooldown
+        cooldown_ticks: 10
+        scope: agent
+
+      # Low energy requirement
+      - type: meter_gated
+        meter: energy
+        min: 0.2
+
+    effect_pipeline:
+      per_tick:
+        - {meter: energy, amount: -0.01}
+        - {meter: satiation, amount: -0.005}
+
+      on_completion:
+        - {meter: money, amount: 10.0}  # Entry-level pay
+        - {meter: education, amount: 0.05}  # Learn on the job
+
+    operating_hours: [9, 17]
+
+    teaching_note: |
+      Entry-level position with no barriers to entry.
+      Short work duration + short cooldown = fast turnaround.
+      Low pay teaches that career progression is necessary for financial success.
+
+  # Mid-Level: Full-Time Employee
+  - id: "EmployeePosition"
+    name: "Employee"
+    category: "career"
+
+    capabilities:
+      - type: multi_tick
+        duration_ticks: 8
+        early_exit_allowed: false
+        resumable: false
+
+      # PREREQUISITE: Must complete internship first
+      - type: prerequisite
+        required_affordances: ["InternPosition"]
+
+      # Longer cooldown (full-time positions are more demanding)
+      - type: cooldown
+        cooldown_ticks: 15
+        scope: agent
+
+      # Moderate energy requirement
+      - type: meter_gated
+        meter: energy
+        min: 0.35
+
+    effect_pipeline:
+      per_tick:
+        - {meter: energy, amount: -0.018}
+        - {meter: satiation, amount: -0.008}
+
+      on_completion:
+        - {meter: money, amount: 25.0}  # Professional-level pay
+        - {meter: education, amount: 0.08}  # More responsibility = more learning
+        - {meter: mood, amount: 0.05}  # Career satisfaction
+
+    operating_hours: [9, 17]
+
+    teaching_note: |
+      Mid-level position requiring prior internship experience.
+      Longer duration + longer cooldown = more demanding but better pay.
+      Prerequisite validation prevents agents from skipping career stages.
+
+  # Senior Level: Management Position
+  - id: "ManagerPosition"
+    name: "Manager"
+    category: "career"
+
+    capabilities:
+      - type: multi_tick
+        duration_ticks: 10
+        early_exit_allowed: false
+        resumable: false
+
+      # PREREQUISITE: Must have employee experience
+      - type: prerequisite
+        required_affordances: ["EmployeePosition"]
+
+      # Longest cooldown (leadership positions are most demanding)
+      - type: cooldown
+        cooldown_ticks: 20
+        scope: agent
+
+      # High energy requirement (management is exhausting)
+      - type: meter_gated
+        meter: energy
+        min: 0.5
+
+      # Skill-based performance (management effectiveness scales with education)
+      - type: skill_scaling
+        skill: education
+        base_multiplier: 1.0
+        max_multiplier: 1.5  # Educated managers earn 50% more
+
+    effect_pipeline:
+      per_tick:
+        - {meter: energy, amount: -0.025}
+        - {meter: satiation, amount: -0.012}
+        - {meter: mood, amount: -0.01}  # Management stress
+
+      on_completion:
+        - {meter: money, amount: 50.0}  # High pay (scaled by skill_scaling!)
+        - {meter: education, amount: 0.1}  # Leadership experience
+        - {meter: mood, amount: 0.15}  # Leadership satisfaction
+
+    operating_hours: [9, 18]  # Longer hours for managers
+
+    teaching_note: |
+      Senior position requiring full career progression.
+      Combines THREE capabilities:
+      1. Prerequisite: Can't manage without employee experience
+      2. Cooldown: Longest rest period (20 ticks)
+      3. Skill scaling: Pay scales with education (1.0x → 1.5x)
+
+      Strategic implications:
+      - Must complete Intern → Employee → Manager progression
+      - Each level has better pay but longer cooldowns
+      - Educated managers earn up to $75 (50 × 1.5)
+      - Demonstrates compound capability composition
+
+    design_intent: |
+      Models realistic career progression with multiple constraints:
+      - Can't skip stages (prerequisite enforcement)
+      - Higher positions are more demanding (cooldown + energy)
+      - Experience matters (skill scaling with education)
+
+      Career path analysis:
+      - Intern (5 work + 10 cooldown = 15 ticks) → $10
+      - Employee (8 work + 15 cooldown = 23 ticks) → $25
+      - Manager (10 work + 20 cooldown = 30 ticks) → $50-75
+
+      Full career cycle: 68 ticks, earnings: $85-110 (depending on education)

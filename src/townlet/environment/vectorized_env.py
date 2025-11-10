@@ -391,6 +391,23 @@ class VectorizedHamletEnv:
             # When temporal mechanics are disabled, interaction progress is unused but kept for typing consistency.
             self.interaction_progress.zero_()
 
+        # TASK-004B Phase B: Cooldown and prerequisite tracking
+        # cooldown_state[affordance_name] = tensor of tick when each agent can use this affordance again
+        # Value of 0 means ready now, >0 means must wait until global_tick >= cooldown_state
+        self.cooldown_state: dict[str, torch.Tensor] = {}
+
+        # completed_affordances[affordance_name] = boolean tensor of which agents have completed this affordance
+        # Used for prerequisite capability validation
+        self.completed_affordances: dict[str, torch.Tensor] = {}
+
+        # Initialize cooldown and completion tracking for all affordances
+        for affordance_name in all_affordance_names:
+            self.cooldown_state[affordance_name] = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+            self.completed_affordances[affordance_name] = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+
+        # Global tick counter for cooldown management (persists across episodes)
+        self.global_tick = 0
+
         # Initialize affordance positions per configuration
         if self.randomize_affordances:
             self.randomize_affordance_positions()
@@ -572,6 +589,18 @@ class VectorizedHamletEnv:
             self.interaction_progress.fill_(0)
             self.last_interaction_affordance = [None] * self.num_agents
             self.last_interaction_position.fill_(0)
+
+        # TASK-004B Phase B: Reset cooldown and prerequisite tracking
+        # Reset global tick counter at episode start
+        self.global_tick = 0
+
+        # Reset all cooldown timers
+        for affordance_name in self.cooldown_state:
+            self.cooldown_state[affordance_name].fill_(0)
+
+        # Reset all prerequisite completion tracking
+        for affordance_name in self.completed_affordances:
+            self.completed_affordances[affordance_name].fill_(False)
 
         return self._get_observations()
 
@@ -841,6 +870,52 @@ class VectorizedHamletEnv:
         # Respect config-disabled INTERACT entries by preserving the base mask.
         action_masks[:, interact_action_idx] = base_interact_mask & on_valid_affordance
 
+        # TASK-004B Phase B: Mask INTERACT for cooldown and prerequisite constraints
+        # For each affordance, check capabilities and mask accordingly
+        for affordance_name, affordance_pos in self.affordances.items():
+            # Get affordance config from engine
+            affordance_config = self.affordance_engine.affordance_map.get(affordance_name)
+            if affordance_config is None:
+                continue
+
+            # Identify agents on this affordance
+            agents_on_affordance = self.substrate.is_on_position(self.positions, affordance_pos)
+
+            # Check cooldown capability
+            cooldown_cap = self.affordance_engine._get_capability(affordance_config, "cooldown")
+            if cooldown_cap is not None:
+                # Mask INTERACT for agents whose cooldown hasn't expired
+                cooldown_tensor = self.cooldown_state.get(affordance_name)
+                if cooldown_tensor is not None:
+                    on_cooldown = self.global_tick < cooldown_tensor
+                    # Mask agents that are on this affordance AND on cooldown
+                    agents_to_mask = agents_on_affordance & on_cooldown
+                    action_masks[agents_to_mask, interact_action_idx] = False
+
+            # Check prerequisite capability
+            prereq_cap = self.affordance_engine._get_capability(affordance_config, "prerequisite")
+            if prereq_cap is not None and hasattr(prereq_cap, "required_affordances"):
+                # Check if all required affordances have been completed by each agent
+                has_all_prereqs = torch.ones(self.num_agents, dtype=torch.bool, device=self.device)
+
+                for required_aff_id in prereq_cap.required_affordances:
+                    # Find the affordance name from ID (prerequisite uses IDs, not names)
+                    required_aff_name = None
+                    for aff_name, aff_id in self.affordance_name_to_id.items():
+                        if aff_id == required_aff_id:
+                            required_aff_name = aff_name
+                            break
+
+                    if required_aff_name is not None:
+                        completed_tensor = self.completed_affordances.get(required_aff_name)
+                        if completed_tensor is not None:
+                            # Agent must have completed this prerequisite
+                            has_all_prereqs &= completed_tensor
+
+                # Mask agents that are on this affordance BUT lack prerequisites
+                agents_to_mask = agents_on_affordance & ~has_all_prereqs
+                action_masks[agents_to_mask, interact_action_idx] = False
+
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking
         # TASK-001: Use dynamic meter indices instead of hardcoded 0 and 6
@@ -867,6 +942,9 @@ class VectorizedHamletEnv:
             dones: [num_agents] bool
             info: dict with metadata
         """
+        # TASK-004B Phase B: Increment global tick counter for cooldown management
+        self.global_tick += 1
+
         # 1. Execute actions and track successful interactions
         successful_interactions = self._execute_actions(actions)
 
@@ -995,6 +1073,39 @@ class VectorizedHamletEnv:
 
         return successful_interactions
 
+    def _track_affordance_completion(self, affordance_name: str, agent_mask: torch.Tensor) -> None:
+        """
+        Track affordance completion for prerequisite and cooldown capabilities.
+
+        TASK-004B Phase B: After successful affordance completion:
+        1. Mark affordance as completed for prerequisite tracking
+        2. Set cooldown timer if affordance has cooldown capability
+
+        Args:
+            affordance_name: Name of completed affordance
+            agent_mask: [num_agents] bool tensor indicating which agents completed it
+        """
+        # Mark completion for prerequisite tracking
+        if affordance_name in self.completed_affordances:
+            self.completed_affordances[affordance_name] |= agent_mask
+
+        # Set cooldown timer if affordance has cooldown capability
+        affordance_config = self.affordance_engine.affordance_map.get(affordance_name)
+        if affordance_config is not None:
+            cooldown_cap = self.affordance_engine._get_capability(affordance_config, "cooldown")
+            if cooldown_cap is not None and hasattr(cooldown_cap, "cooldown_ticks"):
+                cooldown_duration = cooldown_cap.cooldown_ticks
+                # Set cooldown expiration time for agents that completed this affordance
+                if affordance_name in self.cooldown_state:
+                    # Agents on cooldown can't use this until global_tick >= cooldown_expiration
+                    cooldown_expiration = self.global_tick + cooldown_duration
+                    # Update only for agents in the mask
+                    self.cooldown_state[affordance_name] = torch.where(
+                        agent_mask,
+                        torch.tensor(cooldown_expiration, dtype=torch.long, device=self.device),
+                        self.cooldown_state[affordance_name],
+                    )
+
     def _handle_interactions(self, interact_mask: torch.Tensor) -> dict:
         """
         Handle INTERACT actions with multi-tick accumulation.
@@ -1076,6 +1187,9 @@ class VectorizedHamletEnv:
                     self.interaction_progress[agent_idx] = 0
                     self.last_interaction_affordance[agent_idx_int] = None
 
+                    # TASK-004B Phase B: Track completion for cooldown and prerequisite
+                    self._track_affordance_completion(affordance_name, single_agent_mask)
+
                 successful_interactions[agent_idx_int] = affordance_name
 
         return successful_interactions
@@ -1130,6 +1244,9 @@ class VectorizedHamletEnv:
                 affordance_name=affordance_name,
                 agent_mask=at_affordance,
             )
+
+            # TASK-004B Phase B: Track completion for cooldown and prerequisite
+            self._track_affordance_completion(affordance_name, at_affordance)
 
         return successful_interactions
 

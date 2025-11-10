@@ -1,0 +1,137 @@
+# TASK-004B Phase B Example: Prerequisite Capability
+#
+# Demonstrates prerequisite chains where affordances require completion of others first.
+#
+# Teaching Value:
+# - Sequential progression: Must complete Year 1 before Year 2
+# - Long-term planning: Multi-stage goals with dependencies
+# - Skill building: Education increases over time
+#
+# Expected Behavior:
+# - Agent can freely access UniversityFreshman (no prerequisites)
+# - UniversitySophomore is MASKED until Freshman is completed
+# - UniversityJunior is MASKED until both Freshman and Sophomore are completed
+# - Each completion grants 0.25 education (full degree = 0.75 education)
+#
+# Usage:
+#   This is a multi-affordance example showing prerequisite chains.
+#   Demonstrates how complex progression trees can be built.
+
+affordances:
+  # Year 1: No prerequisites (anyone can start)
+  - id: "UniversityFreshman"
+    name: "University Freshman"
+    category: "education"
+
+    capabilities:
+      # Takes 15 ticks to complete a year
+      - type: multi_tick
+        duration_ticks: 15
+        early_exit_allowed: false
+        resumable: true  # Can resume if interrupted
+
+      # Requires energy to study
+      - type: meter_gated
+        meter: energy
+        min: 0.4
+
+    effect_pipeline:
+      per_tick:
+        - {meter: energy, amount: -0.015}  # Studying depletes energy
+        - {meter: satiation, amount: -0.01}  # Studying makes you hungry
+        - {meter: money, amount: -1.0}  # Tuition cost per tick
+
+      on_completion:
+        - {meter: education, amount: 0.25}  # Gain education
+        - {meter: mood, amount: 0.2}  # Completion satisfaction
+
+    operating_hours: [8, 18]  # 8am-6pm (class hours)
+
+    teaching_note: |
+      First stage of education chain. No prerequisites required.
+      Agent must sustain 15 ticks of study while managing resources.
+
+  # Year 2: Requires Year 1 completion
+  - id: "UniversitySophomore"
+    name: "University Sophomore"
+    category: "education"
+
+    capabilities:
+      - type: multi_tick
+        duration_ticks: 15
+        early_exit_allowed: false
+        resumable: true
+
+      # PREREQUISITE: Must complete Freshman year first
+      - type: prerequisite
+        required_affordances: ["UniversityFreshman"]
+
+      - type: meter_gated
+        meter: energy
+        min: 0.4
+
+    effect_pipeline:
+      per_tick:
+        - {meter: energy, amount: -0.02}  # Harder courses, more energy
+        - {meter: satiation, amount: -0.012}
+        - {meter: money, amount: -1.2}  # Higher tuition
+
+      on_completion:
+        - {meter: education, amount: 0.25}
+        - {meter: mood, amount: 0.25}  # More satisfaction at higher levels
+
+    operating_hours: [8, 18]
+
+    teaching_note: |
+      Second stage of education chain. Demonstrates prerequisite validation:
+      - Action mask prevents INTERACT until UniversityFreshman completed
+      - Agents must plan multi-stage progression
+      - Teaches that some goals require foundational work
+
+  # Year 3: Requires Years 1 AND 2 completion
+  - id: "UniversityJunior"
+    name: "University Junior"
+    category: "education"
+
+    capabilities:
+      - type: multi_tick
+        duration_ticks: 20  # Senior year is longer
+        early_exit_allowed: false
+        resumable: true
+
+      # PREREQUISITE: Must complete both Freshman and Sophomore
+      - type: prerequisite
+        required_affordances: ["UniversityFreshman", "UniversitySophomore"]
+
+      - type: meter_gated
+        meter: energy
+        min: 0.5  # Senior year requires more energy
+
+    effect_pipeline:
+      per_tick:
+        - {meter: energy, amount: -0.025}  # Most demanding year
+        - {meter: satiation, amount: -0.015}
+        - {meter: money, amount: -1.5}  # Highest tuition
+
+      on_completion:
+        - {meter: education, amount: 0.25}
+        - {meter: mood, amount: 0.3}  # Maximum satisfaction
+        - {meter: money, amount: 50.0}  # Degree completion bonus (job placement)
+
+    operating_hours: [8, 18]
+
+    teaching_note: |
+      Final stage requiring ALL previous stages. Demonstrates:
+      - Multi-prerequisite validation (both Freshman AND Sophomore)
+      - Long-term payoff (degree completion bonus)
+      - Compound planning: Must maintain resources through 50+ ticks total
+
+    design_intent: |
+      Models realistic education progression where advanced courses require
+      foundational knowledge. Agents must plan multi-stage goals and sustain
+      resource management across extended time horizons.
+
+      Total education pipeline: 50 ticks (15+15+20)
+      Total cost: ~60 money
+      Total gain: 0.75 education + 50 money bonus
+      Net profit: -10 money (investment in education pays off through future opportunities)
