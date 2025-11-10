@@ -57,6 +57,12 @@ This pattern saves tokens and improves context efficiency:
 
 This approach helps you avoid reading 2000+ line files when only specific sections are relevant.
 
+### Universe Compiler (UAC) quick reference
+- **Source**: `src/townlet/universe/compiler.py` orchestrates the seven-stage pipeline (parse → symbol table → resolve → cross-validate → metadata → optimization → emit/cache).
+- **Helper modules**: `src/townlet/universe/{cues_compiler,compiled,compiler_inputs,optimization}.py` hold cue validation, artifact DTOs, stage 1 loader, and tensor prep logic, respectively.
+- **Docs**: Start with `docs/UNIVERSE-COMPILER.md` for the condensed implementation guide, then fall back to `docs/architecture/COMPILER_ARCHITECTURE.md` for the broader rationale.
+- **Tests to run**: `uv run pytest tests/test_townlet/unit/universe/` exercises each stage (Stage 1–7, cues, runtime). Use `UV_CACHE_DIR=.uv-cache` when sandboxed so uv can write its cache locally.
+
 ## Development Commands
 
 ### Setup

@@ -47,6 +47,7 @@ from townlet.vfs.observation_builder import VFSObservationSpecBuilder
 from townlet.vfs.registry import VariableRegistry
 from townlet.vfs.schema import ObservationField as VFSObservationField
 
+from .cues_compiler import CuesCompiler
 from .errors import CompilationError, CompilationErrorCollector, CompilationMessage
 from .symbol_table import UniverseSymbolTable
 
@@ -67,6 +68,7 @@ class UniverseCompiler:
 
     def __init__(self) -> None:
         self._symbol_table = UniverseSymbolTable()
+        self._cues_compiler = CuesCompiler()
         self._metadata: UniverseMetadata | None = None
         self._observation_spec: ObservationSpec | None = None
         self._action_metadata: ActionSpaceMetadata | None = None
@@ -431,10 +433,8 @@ class UniverseCompiler:
         self._validate_economic_balance(raw_configs, errors, _format_error, allow_unfeasible)
         self._validate_cascade_cycles(raw_configs, errors, _format_error)
         self._validate_operating_hours(raw_configs, errors, _format_error)
-        cues_config = raw_configs.hamlet_config.cues
         self._validate_availability_and_modes(raw_configs, symbol_table, errors, _format_error)
-        self._validate_basic_cues(cues_config, symbol_table, errors, _format_error)
-        self._validate_visual_cues(cues_config, symbol_table, errors, _format_error)
+        self._cues_compiler.validate(raw_configs.hamlet_config.cues, symbol_table, errors, _format_error)
         self._validate_capabilities_and_effect_pipelines(raw_configs, errors, _format_error)
         self._validate_affordance_positions(raw_configs, errors, _format_error)
         self._validate_substrate_action_compatibility(raw_configs, errors, _format_error, _add_hint)
@@ -627,90 +627,6 @@ class UniverseCompiler:
                         )
                     )
 
-    def _validate_basic_cues(
-        self,
-        cues_config,
-        symbol_table: UniverseSymbolTable,
-        errors: CompilationErrorCollector,
-        formatter,
-    ) -> None:
-        for cue in cues_config.simple_cues:
-            meter = cue.condition.meter
-            if meter not in symbol_table.meters:
-                errors.add(
-                    formatter(
-                        "UAC-VAL-005",
-                        f"Cue '{cue.cue_id}' references unknown meter '{meter}'",
-                        f"cues.yaml:{cue.cue_id}",
-                    )
-                )
-            threshold = cue.condition.threshold
-            if threshold < 0.0 or threshold > 1.0:
-                errors.add(
-                    formatter(
-                        "UAC-VAL-005",
-                        f"Cue threshold must be within [0.0, 1.0], got {threshold}",
-                        f"cues.yaml:{cue.cue_id}",
-                    )
-                )
-
-        for cue in cues_config.compound_cues:
-            for condition in cue.conditions:
-                if condition.meter not in symbol_table.meters:
-                    errors.add(
-                        formatter(
-                            "UAC-VAL-005",
-                            f"Cue '{cue.cue_id}' references unknown meter '{condition.meter}'",
-                            f"cues.yaml:{cue.cue_id}",
-                        )
-                    )
-                if condition.threshold < 0.0 or condition.threshold > 1.0:
-                    errors.add(
-                        formatter(
-                            "UAC-VAL-005",
-                            f"Cue threshold must be within [0.0, 1.0], got {condition.threshold}",
-                            f"cues.yaml:{cue.cue_id}",
-                        )
-                    )
-
-    def _validate_visual_cues(
-        self,
-        cues_config,
-        symbol_table: UniverseSymbolTable,
-        errors: CompilationErrorCollector,
-        formatter,
-    ) -> None:
-        if not cues_config.visual_cues:
-            return
-
-        for meter_name, cues in cues_config.visual_cues.items():
-            if meter_name not in symbol_table.meters:
-                errors.add(
-                    formatter(
-                        "UAC-VAL-009",
-                        f"Visual cue block references unknown meter '{meter_name}'",
-                        f"cues.yaml:{meter_name}",
-                    )
-                )
-                continue
-
-            ranges = [tuple(cue.range) for cue in cues]
-            if not self._ranges_cover_domain(ranges, 0.0, 1.0):
-                errors.add(
-                    formatter(
-                        "UAC-VAL-009",
-                        f"Visual cue ranges for '{meter_name}' do not cover [0.0, 1.0] without gaps.",
-                        f"cues.yaml:{meter_name}",
-                    )
-                )
-            if self._ranges_overlap(ranges):
-                errors.add(
-                    formatter(
-                        "UAC-VAL-009",
-                        f"Visual cue ranges for '{meter_name}' overlap.",
-                        f"cues.yaml:{meter_name}",
-                    )
-                )
 
     def _validate_capabilities_and_effect_pipelines(
         self,
@@ -814,36 +730,6 @@ class UniverseCompiler:
         enabled_lookup = self._build_enabled_affordance_lookup(getattr(raw_configs.environment, "enabled_affordances", None))
         self._validate_meter_sustainability(raw_configs, enabled_lookup, errors, formatter, allow_unfeasible)
         self._validate_capacity_constraints(raw_configs, enabled_lookup, errors, formatter)
-
-    @staticmethod
-    def _ranges_cover_domain(ranges: list[tuple[float, float]], domain_min: float, domain_max: float) -> bool:
-        if not ranges:
-            return False
-        sorted_ranges = sorted(ranges, key=lambda r: r[0])
-        eps = 1e-6
-        if abs(sorted_ranges[0][0] - domain_min) > eps:
-            return False
-        current_end = sorted_ranges[0][1]
-        for start, end in sorted_ranges[1:]:
-            if abs(start - current_end) > eps:
-                return False
-            current_end = end
-        if abs(current_end - domain_max) > eps:
-            return False
-        return True
-
-    @staticmethod
-    def _ranges_overlap(ranges: list[tuple[float, float]]) -> bool:
-        if not ranges:
-            return False
-        sorted_ranges = sorted(ranges, key=lambda r: r[0])
-        eps = 1e-6
-        current_end = sorted_ranges[0][1]
-        for start, end in sorted_ranges[1:]:
-            if start < current_end - eps:
-                return True
-            current_end = max(current_end, end)
-        return False
 
     def _position_in_bounds(self, position: object, substrate: SubstrateConfig) -> tuple[bool, str]:
         if substrate.type == "grid" and substrate.grid is not None:

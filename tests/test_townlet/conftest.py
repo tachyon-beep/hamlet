@@ -388,7 +388,7 @@ def cpu_env_factory(env_factory, cpu_device):
 @pytest.fixture
 def custom_env_builder(
     tmp_path: Path,
-    config_pack_factory,
+    test_config_pack_path: Path,
     env_factory,
     cpu_device,
 ):
@@ -400,14 +400,12 @@ def custom_env_builder(
         overrides: dict[str, Any] | None = None,
         source_pack: Path | str | None = None,
     ):
-        if source_pack is not None:
-            target_dir = tmp_path / f"config_pack_{uuid.uuid4().hex}"
-            shutil.copytree(Path(source_pack), target_dir)
-            if overrides:
-                mutate_training_yaml(target_dir, lambda data: _apply_config_overrides(data, overrides))
-        else:
-            modifier = (lambda data: _apply_config_overrides(data, overrides)) if overrides else None
-            target_dir = config_pack_factory(modifier=modifier)
+        source_path = Path(source_pack) if source_pack is not None else test_config_pack_path
+        target_dir = tmp_path / f"config_pack_{uuid.uuid4().hex}"
+        shutil.copytree(source_path, target_dir)
+
+        if overrides:
+            mutate_training_yaml(target_dir, lambda data: _apply_config_overrides(data, overrides))
 
         return env_factory(
             config_dir=target_dir,
