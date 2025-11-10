@@ -28,3 +28,6 @@ jobs:
 
       - name: Validate config packs
         run: uv run python scripts/validate_configs.py
+
+      - name: Run universe compiler CLI validation
+        run: uv run python scripts/validate_compiler_cli.py

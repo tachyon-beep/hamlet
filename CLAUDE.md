@@ -62,7 +62,7 @@ This approach helps you avoid reading 2000+ line files when only specific sectio
 - **Helper modules**: `src/townlet/universe/{cues_compiler,compiled,compiler_inputs,optimization}.py` hold cue validation, artifact DTOs, stage 1 loader, and tensor prep logic, respectively.
 - **Docs**: Start with `docs/UNIVERSE-COMPILER.md` for the condensed implementation guide, then fall back to `docs/architecture/COMPILER_ARCHITECTURE.md` for the broader rationale.
 - **Tests to run**: `uv run pytest tests/test_townlet/unit/universe/` exercises each stage (Stage 1–7, cues, runtime). Use `UV_CACHE_DIR=.uv-cache` when sandboxed so uv can write its cache locally.
-- **CLI**: `python -m townlet.compiler {compile,inspect,validate}` exposes the basic tooling from `docs/UNIVERSE-COMPILER.md` (useful for CI/ops checks).
+- **CLI**: `python -m townlet.compiler {compile,inspect,validate}` (with `inspect --format json` for machine-readable output). Use `python scripts/validate_compiler_cli.py` to run the CLI validator across every pack—wired into CI via `.github/workflows/config-validation.yml`.
 
 ## Development Commands
 

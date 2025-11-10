@@ -123,12 +123,19 @@ python -m townlet.compiler compile configs/L1_full_observability
 # Inspect an existing artifact
 python -m townlet.compiler inspect configs/L1_full_observability/.compiled/universe.msgpack
 
+# Inspect as JSON (for automation/CI logs)
+python -m townlet.compiler inspect --format json configs/L1_full_observability/.compiled/universe.msgpack
+
 # Validate config packs without touching cache (useful for CI lint checks)
 python -m townlet.compiler validate configs/L1_full_observability
+
+# Validate every config pack via CLI (script wraps the commands above)
+python scripts/validate_compiler_cli.py
 ```
 
 Flags:
 
 - `compile --no-cache`: Skip cache usage entirely (always rebuild, don’t write artifacts).
 - `inspect <artifact>`: Prints the metadata summary (universe name, counts, config hash) for debugging/deployment notes.
-- `validate`: Equivalent to `compile --no-cache` but discards the result immediately, so `.compiled/` never appears—handy for CI.
+- `inspect --format json`: Emit a JSON payload with artifact path + metadata hashes for machine-readable auditing.
+- `validate`: Equivalent to `compile --no-cache` but discards the result immediately, so `.compiled/` never appears—handy for CI. The helper script `scripts/validate_compiler_cli.py` iterates over every pack in `configs/`.

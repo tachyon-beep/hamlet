@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import json
 import sys
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from townlet.universe.compiled import CompiledUniverse
@@ -28,8 +30,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip cache reads/writes (always rebuild).",
     )
 
-    inspect_parser = subparsers.add_parser("inspect", help="Inspect a compiled universe artifact (MessagePack file).")
+    inspect_parser = subparsers.add_parser(
+        "inspect",
+        help="Inspect a compiled universe artifact (MessagePack file).",
+    )
     inspect_parser.add_argument("artifact", help="Path to .compiled/universe.msgpack")
+    inspect_parser.add_argument(
+        "--format",
+        choices=("table", "json"),
+        default="table",
+        help="Output format for inspection (default: table)",
+    )
 
     validate_parser = subparsers.add_parser("validate", help="Run compilation without touching the cache (lint-style check).")
     validate_parser.add_argument("config_dir", help="Path to config directory to validate")
@@ -80,14 +91,36 @@ def _cmd_compile(args: argparse.Namespace) -> int:
     return 0
 
 
+def _convert_for_json(value):
+    if isinstance(value, Mapping):
+        return {k: _convert_for_json(v) for k, v in dict(value).items()}
+    if isinstance(value, list | tuple):
+        return [_convert_for_json(v) for v in value]
+    return value
+
+
+def _metadata_to_dict(metadata) -> dict:
+    payload = {}
+    for field in dataclasses.fields(metadata):
+        payload[field.name] = _convert_for_json(getattr(metadata, field.name))
+    return payload
+
+
 def _cmd_inspect(args: argparse.Namespace) -> int:
     artifact_path = Path(args.artifact).resolve()
     if not artifact_path.exists():
         raise FileNotFoundError(f"Artifact not found: {artifact_path}")
 
     compiled = CompiledUniverse.load_from_cache(artifact_path)
-    _print_summary(compiled.metadata)
-    print(f"Artifact path: {artifact_path}")
+    if args.format == "json":
+        payload = {
+            "artifact": str(artifact_path),
+            "metadata": _metadata_to_dict(compiled.metadata),
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        _print_summary(compiled.metadata)
+        print(f"Artifact path: {artifact_path}")
     return 0
 
 
