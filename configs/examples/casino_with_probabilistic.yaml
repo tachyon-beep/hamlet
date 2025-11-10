@@ -1,0 +1,46 @@
+# Example: Casino affordance with probabilistic capability
+#
+# This demonstrates random success/failure outcomes
+# Success (30%): Win money, feel happy
+# Failure (70%): Lose money, feel disappointed
+
+version: "2.0"
+description: "Casino gambling with probabilistic outcomes"
+status: "EXAMPLE"
+
+affordances:
+  - id: "Casino"
+    name: "Slot Machine"
+    category: "gambling"
+    interaction_type: "instant"
+    operating_hours: [0, 24]  # Open 24/7
+    
+    # TASK-004B: Capability composition
+    capabilities:
+      - type: probabilistic
+        success_probability: 0.3  # 30% chance to win
+    
+    # TASK-004B: Effect pipeline
+    effect_pipeline:
+      on_start:
+        - { meter: money, amount: -0.05 }  # $5 bet (always paid)
+      
+      on_completion:  # SUCCESS path (30% probability)
+        - { meter: money, amount: 0.20 }   # $20 jackpot!
+        - { meter: mood, amount: 0.10 }    # Happy
+      
+      on_failure:  # FAILURE path (70% probability)
+        - { meter: mood, amount: -0.05 }   # Disappointed
+
+teaching_note: |
+  Probabilistic interactions enable:
+  - Gambling and risk-taking behaviors
+  - Stochastic rewards (variable ratio schedules)
+  - Success/failure asymmetry (net negative EV, but with variance)
+  
+  Expected value calculation:
+  - Success: 0.3 × (+$15 net) = +$4.50
+  - Failure: 0.7 × (-$5 net) = -$3.50
+  - Total EV = +$1.00 per play (slightly positive in this example)
+  
+  Agents must learn to evaluate risk vs reward.

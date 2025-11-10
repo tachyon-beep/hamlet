@@ -81,6 +81,60 @@ class AffordanceEngine:
         # Map affordance NAME to config object (for apply_instant_interaction calls)
         self.affordance_map = {aff.name: aff for aff in self.affordances}
 
+    def _get_capability(self, affordance, capability_type: str):
+        """
+        Get a specific capability from an affordance if it exists.
+
+        Args:
+            affordance: AffordanceConfig object
+            capability_type: Type of capability ("skill_scaling", "probabilistic", etc.)
+
+        Returns:
+            Capability object if found, None otherwise
+        """
+        # Check if affordance has capabilities field (new format)
+        if not hasattr(affordance, 'capabilities'):
+            return None
+
+        capabilities = getattr(affordance, 'capabilities', [])
+        for cap in capabilities:
+            if hasattr(cap, 'type') and cap.type == capability_type:
+                return cap
+        return None
+
+    def _compute_skill_multiplier(
+        self,
+        affordance,
+        meters: torch.Tensor,
+        agent_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute skill-based effect multiplier for each agent.
+
+        Args:
+            affordance: AffordanceConfig object
+            meters: [num_agents, num_meters] current meter values
+            agent_mask: [num_agents] bool mask of agents
+
+        Returns:
+            multiplier: [num_agents] float tensor, 1.0 if no skill_scaling capability
+        """
+        skill_scaling = self._get_capability(affordance, "skill_scaling")
+        if skill_scaling is None:
+            # No skill scaling, return 1.0 for all agents
+            return torch.ones(meters.shape[0], device=self.device)
+
+        # Get skill meter value
+        skill_meter_idx = self.meter_name_to_idx[skill_scaling.skill]
+        skill_values = meters[:, skill_meter_idx]
+
+        # Linear interpolation: base + (max - base) * skill
+        multiplier = skill_scaling.base_multiplier + (
+            skill_scaling.max_multiplier - skill_scaling.base_multiplier
+        ) * skill_values
+
+        return multiplier
+
     def get_affordance(self, affordance_id: str):
         """Get affordance config by ID."""
         return self.affordance_map_by_id.get(affordance_id)
@@ -119,16 +173,21 @@ class AffordanceEngine:
         check_affordability: bool = False,
     ) -> torch.Tensor:
         """
-        Apply instant affordance interaction.
+        Apply instant affordance interaction with TASK-004B capability support.
+
+        Supports:
+        - skill_scaling: Effects scale based on skill meter
+        - probabilistic: Random success/failure with different outcomes
+        - effect_pipeline: Multi-stage effects (on_start, on_completion, on_failure)
 
         Args:
-            meters: [num_agents, 8] current meter values
+            meters: [num_agents, num_meters] current meter values
             affordance_name: Name of affordance (e.g., "Shower")
             agent_mask: [num_agents] bool mask of agents to apply to
             check_affordability: If True, check if agents can afford costs
 
         Returns:
-            updated_meters: [num_agents, 8] after effects applied
+            updated_meters: [num_agents, num_meters] after effects applied
         """
         affordance = self.affordance_map.get(affordance_name)
         if affordance is None:
@@ -148,15 +207,62 @@ class AffordanceEngine:
             can_afford = self._check_affordability(meters, affordance.costs)
             agent_mask = agent_mask & can_afford
 
-        # Apply costs
-        for cost in affordance.costs:
-            meter_idx = self.meter_name_to_idx[cost.meter]
-            updated_meters[agent_mask, meter_idx] -= cost.amount
+        # Compute skill-based multiplier (1.0 if no skill_scaling capability)
+        multiplier = self._compute_skill_multiplier(affordance, meters, agent_mask)
 
-        # Apply effects
-        for effect in affordance.effects:
-            meter_idx = self.meter_name_to_idx[effect.meter]
-            updated_meters[agent_mask, meter_idx] += effect.amount
+        # Check for effect_pipeline (new format) vs effects (legacy format)
+        effect_pipeline = getattr(affordance, 'effect_pipeline', None)
+
+        if effect_pipeline is not None and hasattr(effect_pipeline, 'on_start'):
+            # NEW FORMAT: Use effect_pipeline
+
+            # Apply on_start effects (entry costs)
+            for effect in effect_pipeline.on_start:
+                meter_idx = self.meter_name_to_idx[effect.meter]
+                effect_amount = effect.amount * multiplier
+                updated_meters[agent_mask, meter_idx] += effect_amount
+
+            # Check for probabilistic capability
+            probabilistic = self._get_capability(affordance, "probabilistic")
+
+            if probabilistic is not None:
+                # Probabilistic interaction: roll for success/failure
+                success_roll = torch.rand(meters.shape[0], device=self.device)
+                success_mask = success_roll < probabilistic.success_probability
+
+                # Apply success effects (on_completion)
+                success_agents = agent_mask & success_mask
+                for effect in effect_pipeline.on_completion:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    effect_amount = effect.amount * multiplier[success_agents]
+                    updated_meters[success_agents, meter_idx] += effect_amount
+
+                # Apply failure effects (on_failure)
+                failure_agents = agent_mask & (~success_mask)
+                for effect in effect_pipeline.on_failure:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    effect_amount = effect.amount * multiplier[failure_agents]
+                    updated_meters[failure_agents, meter_idx] += effect_amount
+            else:
+                # Deterministic interaction: apply on_completion to all
+                for effect in effect_pipeline.on_completion:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    effect_amount = effect.amount * multiplier
+                    updated_meters[agent_mask, meter_idx] += effect_amount
+
+        else:
+            # LEGACY FORMAT: Use costs and effects lists
+
+            # Apply costs
+            for cost in affordance.costs:
+                meter_idx = self.meter_name_to_idx[cost.meter]
+                updated_meters[agent_mask, meter_idx] -= cost.amount
+
+            # Apply effects with skill scaling
+            for effect in affordance.effects:
+                meter_idx = self.meter_name_to_idx[effect.meter]
+                effect_amount = effect.amount * multiplier
+                updated_meters[agent_mask, meter_idx] += effect_amount
 
         # Clamp meters to [0, 1]
         updated_meters = torch.clamp(updated_meters, 0.0, 1.0)
@@ -172,17 +278,22 @@ class AffordanceEngine:
         check_affordability: bool = False,
     ) -> torch.Tensor:
         """
-        Apply multi-tick affordance interaction for a single tick.
+        Apply multi-tick affordance interaction for a single tick with TASK-004B capability support.
+
+        Supports:
+        - skill_scaling: Effects scale based on skill meter
+        - probabilistic: On final tick, random success/failure with different outcomes
+        - effect_pipeline: Multi-stage effects (per_tick, on_completion, on_failure)
 
         Args:
-            meters: [num_agents, 8] current meter values
+            meters: [num_agents, num_meters] current meter values
             affordance_name: Name of affordance (e.g., "Bed", "Job")
             current_tick: Current tick number [0, required_ticks-1]
             agent_mask: [num_agents] bool mask of agents to apply to
             check_affordability: If True, check if agents can afford costs
 
         Returns:
-            updated_meters: [num_agents, 8] after per-tick effects applied
+            updated_meters: [num_agents, num_meters] after per-tick effects applied
         """
         affordance = self.affordance_map.get(affordance_name)
         if affordance is None:
@@ -202,24 +313,72 @@ class AffordanceEngine:
             can_afford = self._check_affordability(meters, affordance.costs_per_tick)
             agent_mask = agent_mask & can_afford
 
-        # Apply per-tick costs
-        for cost in affordance.costs_per_tick:
-            meter_idx = self.meter_name_to_idx[cost.meter]
-            updated_meters[agent_mask, meter_idx] -= cost.amount
+        # Compute skill-based multiplier (1.0 if no skill_scaling capability)
+        multiplier = self._compute_skill_multiplier(affordance, meters, agent_mask)
 
-        # Apply per-tick effects
-        for effect in affordance.effects_per_tick:
-            meter_idx = self.meter_name_to_idx[effect.meter]
-            updated_meters[agent_mask, meter_idx] += effect.amount
-
+        # Check for effect_pipeline (new format) vs legacy format
+        effect_pipeline = getattr(affordance, 'effect_pipeline', None)
         required_ticks = affordance.required_ticks or 1
-
-        # Check if this is the final tick - if so, apply completion bonus
         is_final_tick = current_tick == (required_ticks - 1)
-        if is_final_tick and len(affordance.completion_bonus) > 0:
-            for effect in affordance.completion_bonus:
+
+        if effect_pipeline is not None and hasattr(effect_pipeline, 'per_tick'):
+            # NEW FORMAT: Use effect_pipeline
+
+            # Apply per_tick effects with skill scaling
+            for effect in effect_pipeline.per_tick:
                 meter_idx = self.meter_name_to_idx[effect.meter]
-                updated_meters[agent_mask, meter_idx] += effect.amount
+                effect_amount = effect.amount * multiplier
+                updated_meters[agent_mask, meter_idx] += effect_amount
+
+            # On final tick, check for probabilistic and apply completion effects
+            if is_final_tick:
+                probabilistic = self._get_capability(affordance, "probabilistic")
+
+                if probabilistic is not None:
+                    # Probabilistic completion: roll for success/failure
+                    success_roll = torch.rand(meters.shape[0], device=self.device)
+                    success_mask = success_roll < probabilistic.success_probability
+
+                    # Apply success effects (on_completion)
+                    success_agents = agent_mask & success_mask
+                    for effect in effect_pipeline.on_completion:
+                        meter_idx = self.meter_name_to_idx[effect.meter]
+                        effect_amount = effect.amount * multiplier[success_agents]
+                        updated_meters[success_agents, meter_idx] += effect_amount
+
+                    # Apply failure effects (on_failure)
+                    failure_agents = agent_mask & (~success_mask)
+                    for effect in effect_pipeline.on_failure:
+                        meter_idx = self.meter_name_to_idx[effect.meter]
+                        effect_amount = effect.amount * multiplier[failure_agents]
+                        updated_meters[failure_agents, meter_idx] += effect_amount
+                else:
+                    # Deterministic completion: apply on_completion to all
+                    for effect in effect_pipeline.on_completion:
+                        meter_idx = self.meter_name_to_idx[effect.meter]
+                        effect_amount = effect.amount * multiplier
+                        updated_meters[agent_mask, meter_idx] += effect_amount
+
+        else:
+            # LEGACY FORMAT: Use costs_per_tick, effects_per_tick, completion_bonus
+
+            # Apply per-tick costs
+            for cost in affordance.costs_per_tick:
+                meter_idx = self.meter_name_to_idx[cost.meter]
+                updated_meters[agent_mask, meter_idx] -= cost.amount
+
+            # Apply per-tick effects with skill scaling
+            for effect in affordance.effects_per_tick:
+                meter_idx = self.meter_name_to_idx[effect.meter]
+                effect_amount = effect.amount * multiplier
+                updated_meters[agent_mask, meter_idx] += effect_amount
+
+            # Check if this is the final tick - if so, apply completion bonus with skill scaling
+            if is_final_tick and len(affordance.completion_bonus) > 0:
+                for effect in affordance.completion_bonus:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    effect_amount = effect.amount * multiplier
+                    updated_meters[agent_mask, meter_idx] += effect_amount
 
         # Clamp meters to [0, 1]
         updated_meters = torch.clamp(updated_meters, 0.0, 1.0)

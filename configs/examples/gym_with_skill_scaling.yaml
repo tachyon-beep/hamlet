@@ -1,0 +1,41 @@
+# Example: Gym affordance with skill_scaling capability
+# 
+# This demonstrates how Gym effectiveness improves as fitness increases
+# Beginners (fitness=0.0): 1.0x effect multiplier
+# Experts (fitness=1.0): 2.0x effect multiplier
+
+version: "2.0"
+description: "Gym with skill scaling demonstration"
+status: "EXAMPLE"
+
+affordances:
+  - id: "Gym"
+    name: "Fitness Center"
+    category: "fitness"
+    interaction_type: "instant"
+    operating_hours: [6, 22]  # 6am-10pm
+    
+    # TASK-004B: Capability composition
+    capabilities:
+      - type: skill_scaling
+        skill: fitness
+        base_multiplier: 1.0  # Beginner gains
+        max_multiplier: 2.0    # Expert gains (2x effect)
+    
+    # TASK-004B: Effect pipeline
+    effect_pipeline:
+      on_start:
+        - { meter: energy, amount: -0.15 }  # Workout energy cost
+      
+      on_completion:
+        - { meter: fitness, amount: 0.05 }  # 0.05 → 0.1 as skill improves
+        - { meter: health, amount: 0.02 }   # 0.02 → 0.04 as skill improves
+
+teaching_note: |
+  Skill scaling creates realistic learning curves:
+  - Beginner (fitness=0.1): +0.05 fitness gain (slow progress)
+  - Intermediate (fitness=0.5): +0.075 fitness gain (moderate)
+  - Expert (fitness=0.9): +0.095 fitness gain (near maximum)
+  
+  This models real-world skill development where experts see
+  diminishing returns but still outperform beginners.

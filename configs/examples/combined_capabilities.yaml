@@ -1,0 +1,58 @@
+# Example: University course with skill_scaling AND probabilistic
+#
+# This demonstrates capability composition:
+# - Exam difficulty scales with education level (harder exams as you progress)
+# - Exam has probabilistic success (60% pass rate)
+# - Success/failure outcomes both scaled by skill
+
+version: "2.0"
+description: "University with combined skill scaling and probabilistic outcomes"
+status: "EXAMPLE"
+
+affordances:
+  - id: "UniversityExam"
+    name: "Final Exam"
+    category: "education"
+    interaction_type: "instant"
+    operating_hours: [9, 17]  # Business hours
+    
+    # TASK-004B: Capability composition
+    capabilities:
+      - type: skill_scaling
+        skill: education
+        base_multiplier: 1.0    # Beginner student
+        max_multiplier: 1.5     # Advanced student (50% boost)
+      
+      - type: probabilistic
+        success_probability: 0.6  # 60% pass rate
+    
+    # TASK-004B: Effect pipeline
+    effect_pipeline:
+      on_start:
+        - { meter: energy, amount: -0.20 }  # Exam stress
+        - { meter: money, amount: -0.30 }   # $30 exam fee
+      
+      on_completion:  # PASS (60% probability)
+        - { meter: education, amount: 0.15 }  # 0.15 → 0.225 as skill improves
+        - { meter: mood, amount: 0.10 }       # Proud
+        - { meter: social, amount: 0.05 }     # Celebration
+      
+      on_failure:  # FAIL (40% probability)
+        - { meter: education, amount: 0.03 }  # 0.03 → 0.045 (still learn something)
+        - { meter: mood, amount: -0.15 }      # Discouraged
+
+teaching_note: |
+  Combined capabilities create complex interactions:
+  
+  Beginner student (education=0.1):
+  - Pass: +0.15 education (small gain)
+  - Fail: +0.03 education (minimal)
+  
+  Advanced student (education=0.9):
+  - Pass: +0.225 education (1.5x multiplier)
+  - Fail: +0.045 education (still scaled)
+  
+  This models:
+  - Experts extract more value from same experience
+  - Even failures provide learning opportunities (scaled by skill)
+  - Stochastic outcomes with skill-based variance
