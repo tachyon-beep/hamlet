@@ -12,7 +12,6 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 10  # Not used for continuous (required by runner, will be ignored)
   partial_observability: false
   vision_range: 5  # Not used for continuous substrates
   enable_temporal_mechanics: false  # No time-based mechanics

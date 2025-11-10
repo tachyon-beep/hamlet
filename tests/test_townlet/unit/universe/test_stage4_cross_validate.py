@@ -54,8 +54,15 @@ def _run_stage4_expect_error(raw_configs: RawConfigs) -> CompilationError:
 
 
 def test_stage4_detects_spatial_infeasibility(base_raw_configs: RawConfigs) -> None:
-    env = base_raw_configs.environment.model_copy(update={"grid_size": 1, "enabled_affordances": ["Bed", "Hospital", "HomeMeal"]})
-    mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"environment": env})
+    # Mutate substrate to have only 1 cell (1×1 grid), but enable 3 affordances
+    # This should trigger spatial infeasibility error (1 cell < 3 affordances + 1 agent)
+    substrate = base_raw_configs.substrate.model_copy(deep=True)
+    if substrate.grid is not None:
+        substrate.grid.width = 1
+        substrate.grid.height = 1
+
+    env = base_raw_configs.environment.model_copy(update={"enabled_affordances": ["Bed", "Hospital", "HomeMeal"]})
+    mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"environment": env, "substrate": substrate})
 
     error = _run_stage4_expect_error(mutated_raw)
 

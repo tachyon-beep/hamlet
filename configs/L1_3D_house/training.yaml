@@ -20,7 +20,6 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 8  # 8×8 grid world
   partial_observability: false  # LEVEL 1: Agent sees full grid
   vision_range: 8  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-based mechanics

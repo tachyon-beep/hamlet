@@ -2,7 +2,6 @@
 # Minimal config for testing aspatial substrate (no spatial positioning)
 
 environment:
-  grid_size: 4  # Not used for aspatial but must fit agents + affordances for compiler sanity checks
   partial_observability: false
   vision_range: 1  # Not used for aspatial substrates
   enable_temporal_mechanics: false

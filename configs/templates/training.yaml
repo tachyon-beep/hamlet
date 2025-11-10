@@ -19,7 +19,6 @@ run_metadata:
   output_subdir: PACK_NAME_HERE
 
 environment:
-  grid_size: 8
   partial_observability: false
   vision_range: 8
   enable_temporal_mechanics: false

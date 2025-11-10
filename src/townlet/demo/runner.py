@@ -366,7 +366,8 @@ class DemoRunner:
 
         # Extract config parameters from DTOs (all required, validated at load time)
         num_agents = self.hamlet_config.population.num_agents
-        grid_size = self.hamlet_config.environment.grid_size
+        # Get grid_size from compiled metadata (substrate.yaml is source of truth)
+        grid_size = runtime_universe.metadata.grid_size
         partial_observability = self.hamlet_config.environment.partial_observability
         vision_range = self.hamlet_config.environment.vision_range
         enable_temporal_mechanics = self.hamlet_config.environment.enable_temporal_mechanics

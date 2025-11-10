@@ -559,11 +559,38 @@ class UniverseCompiler:
         self._validate_capacity_and_sustainability(raw_configs, errors, _format_error, allow_unfeasible)
 
     def _validate_spatial_feasibility(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
-        grid_size = getattr(raw_configs.environment, "grid_size", None)
-        if grid_size is None or grid_size <= 0:
+        """Validate that substrate has enough space for all affordances + agent.
+
+        Reads spatial dimensions from substrate.yaml (single source of truth).
+        Only applies to discrete grid substrates (grid, gridnd).
+        """
+        substrate = raw_configs.substrate
+
+        # Calculate grid cells based on substrate type
+        grid_cells: int | None = None
+        dimensions_str = ""
+
+        if substrate.type == "grid" and substrate.grid is not None:
+            # Grid2D (square) or Grid3D (cubic)
+            if substrate.grid.topology == "square":
+                grid_cells = substrate.grid.width * substrate.grid.height
+                dimensions_str = f"{substrate.grid.width}×{substrate.grid.height}"
+            elif substrate.grid.topology == "cubic":
+                if substrate.grid.depth is not None:
+                    grid_cells = substrate.grid.width * substrate.grid.height * substrate.grid.depth
+                    dimensions_str = f"{substrate.grid.width}×{substrate.grid.height}×{substrate.grid.depth}"
+        elif substrate.type == "gridnd" and substrate.gridnd is not None:
+            # GridND (N-dimensional discrete grid)
+            grid_cells = 1
+            for dim_size in substrate.gridnd.dimension_sizes:
+                grid_cells *= dim_size
+            dimensions_str = "×".join(str(d) for d in substrate.gridnd.dimension_sizes)
+        else:
+            # Continuous, aspatial - no spatial feasibility check
             return
 
-        grid_cells = grid_size * grid_size
+        if grid_cells is None or grid_cells <= 0:
+            return
 
         # Enforce upper bound for DoS protection
         if grid_cells > MAX_GRID_CELLS:
@@ -571,7 +598,7 @@ class UniverseCompiler:
                 formatter(
                     "UAC-VAL-001",
                     f"Grid size exceeds safety limit: {grid_cells} cells (max {MAX_GRID_CELLS})",
-                    "training.yaml:environment.grid_size",
+                    "substrate.yaml:grid",
                 )
             )
             return
@@ -585,10 +612,10 @@ class UniverseCompiler:
         required_cells = required + 1  # +1 for the agent
         if required_cells > grid_cells:
             message = (
-                f"Spatial impossibility: Grid has {grid_cells} cells ({grid_size}×{grid_size}) but need {required_cells} "
+                f"Spatial impossibility: Grid has {grid_cells} cells ({dimensions_str}) but need {required_cells} "
                 f"({required} affordances + 1 agent)."
             )
-            errors.add(formatter("UAC-VAL-001", message, "training.yaml:environment.grid_size"))
+            errors.add(formatter("UAC-VAL-001", message, "substrate.yaml:grid"))
 
     def _enforce_security_limits(self, raw_configs: RawConfigs, errors: CompilationErrorCollector) -> None:
         checks = (

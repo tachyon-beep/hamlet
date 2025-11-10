@@ -83,4 +83,4 @@ training:
     - "RIGHT"
     - "INTERACT"
     - "WAIT"
-    - "REST"
+    #- "REST"

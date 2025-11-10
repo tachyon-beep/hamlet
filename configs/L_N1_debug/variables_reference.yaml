@@ -1,5 +1,5 @@
 # Variable & Feature System (VFS) Configuration - REQUIRED
-# Config: L0_0_minimal (3×3 Grid2D, full observability, 1 affordance (Bed only))
+# Config: L_N1_debug (3×3 Grid2D, minimal debug configuration)
 #
 # Purpose: Defines observation space for reinforcement learning
 #   - Variables: State components (position, meters, affordances, temporal)

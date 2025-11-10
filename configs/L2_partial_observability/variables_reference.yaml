@@ -1,6 +1,14 @@
-# TEMPORARY REFERENCE VARIABLES (Cycle 0.2)
-# Config: L2_partial_observability (8×8 Grid2D, POMDP 5×5 window)
-# Expected observation_dim: 54 (25 window + 2 position + 8 meters + 15 affordance + 4 temporal)
+# Variable & Feature System (VFS) Configuration - REQUIRED
+# Config: L2_partial_observability (8×8 Grid2D, POMDP with 5×5 vision window)
+#
+# Purpose: Defines observation space for reinforcement learning
+#   - Variables: State components (position, meters, affordances, temporal)
+#   - Observations: What agents see (exposures with normalization)
+#   - Shapes: Explicit dimensionality for network architecture
+#
+# Status: REQUIRED (not temporary) - part of VFS integration (TASK-002C)
+# Impact: Changes to this file affect observation dimensions → breaks checkpoints
+# DO NOT MODIFY without understanding checkpoint compatibility implications
 
 version: "1.0"
 

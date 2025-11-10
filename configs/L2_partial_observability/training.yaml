@@ -21,7 +21,6 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 8  # 8×8 grid world
   partial_observability: true  # LEVEL 2: Agent sees only 5×5 local window
   vision_range: 2  # 5×5 window (2*2+1)
   enable_temporal_mechanics: false  # LEVEL 2: No time-of-day (added in L3)

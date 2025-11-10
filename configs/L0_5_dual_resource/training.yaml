@@ -25,7 +25,6 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 5  # 7×7 grid - room for 4 affordances with navigation space
   partial_observability: false  # Agent sees full grid
   vision_range: 5  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # ENABLED: Multi-tick affordances (Bed=5 ticks, Job=4 ticks)

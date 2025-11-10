@@ -284,7 +284,7 @@ class LiveInferenceServer:
 
         logger.info(
             "Environment config: grid=%s, POMDP=%s, vision=%s, temporal=%s, affordances=%s",
-            env_cfg.grid_size,
+            self.runtime_universe.metadata.grid_size,  # Read from substrate.yaml via metadata
             partial_observability,
             vision_range,
             enable_temporal_mechanics,

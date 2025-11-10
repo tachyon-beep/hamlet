@@ -14,7 +14,6 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 8
   partial_observability: true
   vision_range: 2
   enabled_affordances: null  # null = all 14 affordances enabled

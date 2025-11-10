@@ -171,12 +171,16 @@ class VectorizedHamletEnv:
 
         self.metadata = runtime.metadata
 
-        # Update grid_size from compiler metadata / substrate (handles aspatial vs grid)
-        self.grid_size = self.metadata.grid_size or env_cfg.grid_size
+        # Get grid_size from substrate (single source of truth)
+        # For grid substrates, read directly from substrate dimensions
+        # For non-grid substrates (aspatial, continuous), grid_size will be None
         if hasattr(self.substrate, "width") and hasattr(self.substrate, "height"):
             if self.substrate.width != self.substrate.height:
                 raise ValueError(f"Non-square grids not yet supported: {self.substrate.width}×{self.substrate.height}")
-            self.grid_size = self.substrate.width  # Override with substrate for grid
+            self.grid_size = self.substrate.width
+        else:
+            # For non-grid substrates (aspatial, continuous), use metadata if available
+            self.grid_size = self.metadata.grid_size
 
         self.vfs_variables = [var.model_copy(deep=True) for var in runtime.variables_reference]
         self.vfs_observation_spec = [deepcopy(field) for field in runtime.vfs_observation_fields]

@@ -10,7 +10,6 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 8
   partial_observability: false  # LEVEL 1: Agent sees full grid
   vision_range: 8
   enable_temporal_mechanics: false

@@ -1,6 +1,14 @@
-# TEMPORARY REFERENCE VARIABLES (Cycle 0.2)
-# Config: L0_5_dual_resource (7×7 Grid2D, full observability)
-# Expected observation_dim: 78 (51 substrate + 8 meters + 15 affordance + 4 temporal)
+# Variable & Feature System (VFS) Configuration - REQUIRED
+# Config: L0_5_dual_resource (7×7 Grid2D, full observability, 4 affordances (energy + resource management))
+#
+# Purpose: Defines observation space for reinforcement learning
+#   - Variables: State components (position, meters, affordances, temporal)
+#   - Observations: What agents see (exposures with normalization)
+#   - Shapes: Explicit dimensionality for network architecture
+#
+# Status: REQUIRED (not temporary) - part of VFS integration (TASK-002C)
+# Impact: Changes to this file affect observation dimensions → breaks checkpoints
+# DO NOT MODIFY without understanding checkpoint compatibility implications
 
 version: "1.0"
 
