@@ -284,6 +284,7 @@ class TestRecordingWriterProcessing:
             timestamp=1234567890.0,
             affordance_layout={"Bed": (2, 3)},
             affordance_visits={"Bed": 1},
+            custom_action_uses={},
         )
 
         with patch.object(writer, "_write_episode") as mock_write, patch("townlet.recording.recorder.logger") as mock_logger:
@@ -314,6 +315,7 @@ class TestRecordingWriterProcessing:
             timestamp=1234567890.0,
             affordance_layout={"Bed": (2, 3)},
             affordance_visits={"Bed": 1},
+            custom_action_uses={},
         )
 
         with patch.object(writer, "_write_episode") as mock_write, patch("townlet.recording.recorder.logger") as mock_logger:

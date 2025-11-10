@@ -112,7 +112,8 @@ def test_stage4_errors_when_critical_meter_unsustainable(base_raw_configs: RawCo
 
 
 def test_stage4_warns_when_income_hours_insufficient(base_raw_configs: RawConfigs) -> None:
-    env = base_raw_configs.environment.model_copy(update={"enabled_affordances": ["Job"]})
+    # Enable temporal mechanics so operating_hours are respected
+    env = base_raw_configs.environment.model_copy(update={"enabled_affordances": ["Job"], "enable_temporal_mechanics": True})
     affs = list(base_raw_configs.affordances)
     job_index = next(idx for idx, aff in enumerate(affs) if aff.name == "Job")
     affs[job_index] = affs[job_index].model_copy(update={"operating_hours": [8, 10]})

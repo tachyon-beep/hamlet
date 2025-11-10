@@ -145,6 +145,7 @@ class TestEpisodeMetadata:
             timestamp=1699123456.78,
             affordance_layout={"Bed": (2, 3), "Hospital": (5, 1)},
             affordance_visits={"Bed": 15, "Hospital": 2},
+            custom_action_uses={},
         )
 
         # Serialize to msgpack
@@ -209,6 +210,7 @@ class TestEpisodeEndMarker:
             timestamp=1699123456.78,
             affordance_layout={"Bed": (2, 3)},
             affordance_visits={"Bed": 5},
+            custom_action_uses={},
         )
 
         marker = EpisodeEndMarker(metadata=metadata)

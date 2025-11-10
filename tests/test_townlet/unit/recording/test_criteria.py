@@ -520,4 +520,5 @@ def _make_metadata(episode_id, survival_steps, total_reward, curriculum_stage=1)
         timestamp=time.time(),
         affordance_layout={},
         affordance_visits={},
+        custom_action_uses={},
     )

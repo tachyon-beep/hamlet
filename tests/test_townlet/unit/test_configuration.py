@@ -488,7 +488,7 @@ class TestAffordanceConfigSchema:
                     "name": "Test Bed",
                     "category": "energy",
                     "interaction_type": "multi_tick",
-                    "required_ticks": 5,
+                    "duration_ticks": 5,
                     "costs_per_tick": [{"meter": "money", "amount": 0.01}],
                     "effects_per_tick": [{"meter": "energy", "amount": 0.075, "type": "linear"}],
                     "completion_bonus": [
@@ -497,7 +497,7 @@ class TestAffordanceConfigSchema:
                     ],
                     "operating_hours": [0, 24],
                 },
-                {"interaction_type": "multi_tick", "required_ticks": 5, "completion_bonus_len": 2},
+                {"interaction_type": "multi_tick", "duration_ticks": 5, "completion_bonus_len": 2},
             ),
         ],
         ids=["instant_minimal", "multi_tick_bonus"],
@@ -505,8 +505,8 @@ class TestAffordanceConfigSchema:
     def test_valid_affordance_payloads(self, payload: dict, expectations: dict):
         affordance = AffordanceConfig(**payload)
         assert affordance.interaction_type == expectations["interaction_type"]
-        if "required_ticks" in expectations:
-            assert affordance.required_ticks == expectations["required_ticks"]
+        if "duration_ticks" in expectations:
+            assert affordance.duration_ticks == expectations["duration_ticks"]
         if "effects_len" in expectations:
             assert len(affordance.effects) == expectations["effects_len"]
         if "completion_bonus_len" in expectations:
@@ -540,10 +540,10 @@ class TestAffordanceConfigSchema:
                     "interaction_type": "multi_tick",
                     "operating_hours": [0, 24],
                 },
-                {"required_ticks"},
+                {"duration_ticks"},
             ),
         ],
-        ids=["missing_required_fields", "invalid_interaction_type", "missing_required_ticks"],
+        ids=["missing_required_fields", "invalid_interaction_type", "missing_duration_ticks"],
     )
     def test_invalid_affordance_payloads(self, payload: dict, expected_fields: set[str]):
         with pytest.raises(ValidationError) as exc_info:
@@ -601,7 +601,7 @@ class TestAffordanceConfigLoading:
         assert bed is not None
         assert bed.name == "Bed"
         assert bed.interaction_type == "dual"
-        assert bed.required_ticks == 5
+        assert bed.duration_ticks == 5
 
         assert affordance_collection.get_affordance("NonExistent") is None
 
