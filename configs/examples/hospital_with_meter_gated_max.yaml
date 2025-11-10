@@ -1,0 +1,162 @@
+# TASK-004B Phase D Example: Meter Gated with Max Bound
+#
+# Demonstrates meter_gated capability where affordances require maximum meter values.
+#
+# Teaching Value:
+# - Conditional access based on need (hospital only when sick)
+# - Models realistic constraints: can't check into hospital when healthy
+# - Teaches triage: seek help when actually needed
+# - Prevents wasting resources on unnecessary care
+#
+# Expected Behavior:
+# - Hospital requires health <= 0.5 to enter (only helps sick agents)
+# - If agent's health > 0.5, INTERACT action is masked
+# - Agent must wait until health drops below threshold
+# - Emergency clinic has lower threshold (health <= 0.3) for critical care
+#
+# Strategic Learning:
+# - Don't seek medical care when healthy (wastes money)
+# - Monitor health meter and seek help at appropriate time
+# - Different facilities have different thresholds (triage system)
+
+affordances:
+  - id: "GeneralHospital"
+    name: "General Hospital"
+    category: "health"
+
+    capabilities:
+      # Only available when health is low
+      - type: meter_gated
+        meter: health
+        max: 0.5  # Can only enter if health <= 0.5 (sick)
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -15.0}  # Hospital visit cost
+
+      on_completion:
+        - {meter: health, amount: 0.3}   # Restore health
+        - {meter: energy, amount: -0.1}  # Medical procedures are tiring
+        - {meter: mood, amount: -0.05}   # Hospital visits aren't fun
+
+    operating_hours: [0, 24]  # 24/7 availability
+
+    teaching_note: |
+      Meter gating with max bound creates conditional access:
+      - Agent cannot enter hospital when health > 0.5
+      - Only available when genuinely needed (sick)
+      - Forces agent to wait until condition worsens
+
+      Without meter gating:
+      - Agent could visit hospital even when healthy
+      - Wastes money ($15) on unnecessary care
+      - Creates inefficient behavior (preemptive treatment)
+
+      With meter gating:
+      - Agent must wait until health <= 0.5 to access
+      - Teaches to monitor meters and seek help appropriately
+      - Models realistic triage (help those who need it)
+
+      Economic balance:
+      - Cost: $15
+      - Benefit: +0.3 health
+      - Entry requirement: health <= 0.5
+      - After treatment: health = 0.5 + 0.3 = 0.8 (now healthy)
+      - Must wait until health drops to 0.5 again to re-enter
+
+    design_intent: |
+      Models realistic healthcare where you can't access care when healthy.
+      Teaches agents to seek help when needed, not preemptively.
+
+
+  - id: "EmergencyClinic"
+    name: "Emergency Clinic"
+    category: "health"
+
+    capabilities:
+      # Only for critical health (more restrictive)
+      - type: meter_gated
+        meter: health
+        max: 0.3  # Critical care only (health <= 0.3)
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -30.0}  # More expensive
+
+      on_completion:
+        - {meter: health, amount: 0.5}   # Better healing
+        - {meter: energy, amount: -0.15} # More intensive
+        - {meter: mood, amount: -0.08}   # Emergency care is stressful
+
+    operating_hours: [0, 24]  # 24/7 emergency
+
+    teaching_note: |
+      Emergency clinic demonstrates tiered healthcare:
+      - More restrictive access (health <= 0.3 vs 0.5)
+      - Higher cost ($30 vs $15)
+      - Better treatment (+0.5 health vs +0.3)
+
+      Creates strategic choice:
+      1. General Hospital (health 0.3-0.5): Cheaper but modest healing
+      2. Emergency Clinic (health <= 0.3): Expensive but strong healing
+
+      Teaches:
+      - Different facilities for different severity levels
+      - Risk management: wait too long → need emergency care (expensive)
+      - Proactive care: treat at General Hospital to avoid emergency
+
+
+  - id: "PreventiveCareCenter"
+    name: "Preventive Care Center"
+    category: "health"
+
+    capabilities:
+      # Available in middle health range (0.3 - 0.7)
+      - type: meter_gated
+        meter: health
+        min: 0.3  # Not for emergency patients
+        max: 0.7  # Not for healthy patients
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -10.0}  # Affordable preventive care
+
+      on_completion:
+        - {meter: health, amount: 0.2}   # Modest improvement
+        - {meter: energy, amount: 0.05}  # Wellness consultation boosts energy
+        - {meter: mood, amount: 0.05}    # Preventive care feels good
+
+    operating_hours: [8, 18]  # Business hours only (not 24/7)
+
+    teaching_note: |
+      Preventive care demonstrates range-based meter gating:
+      - min: 0.3 (not for emergencies - too sick, go to hospital)
+      - max: 0.7 (not for healthy - no need for care)
+      - Target range: health ∈ [0.3, 0.7]
+
+      Strategic positioning:
+      - Cheaper than hospital/emergency ($10 vs $15/$30)
+      - Modest healing (+0.2 vs +0.3/+0.5)
+      - Best for maintaining health in middle range
+
+      Optimal strategy:
+      1. Healthy (health > 0.7): No care needed, save money
+      2. Moderate (health 0.3-0.7): Preventive care, affordable maintenance
+      3. Sick (health 0.3-0.5): General hospital, serious treatment
+      4. Critical (health < 0.3): Emergency clinic, urgent intervention
+
+      Teaches:
+      - Preventive care is cost-effective (maintain vs repair)
+      - Different facilities for different health states
+      - Proactive health management saves money long-term
+
+    design_intent: |
+      Models realistic healthcare tiers:
+      - Preventive care (maintenance): cheap, moderate benefit, limited hours
+      - General hospital (treatment): moderate cost, good benefit, 24/7
+      - Emergency clinic (crisis): expensive, strong benefit, 24/7
+
+      Agents learn:
+      - Preventive care beats reactive care (cost-benefit)
+      - Don't wait until emergency (expensive)
+      - Monitor health and seek appropriate level of care

@@ -1,0 +1,120 @@
+# TASK-004B Phase D Example: Meter Gated with Min Bound
+#
+# Demonstrates meter_gated capability where affordances require minimum meter values.
+#
+# Teaching Value:
+# - Agents must maintain resources to access certain affordances
+# - Models realistic constraints: can't work out when exhausted
+# - Teaches resource management: must plan to keep meters above thresholds
+#
+# Expected Behavior:
+# - Gym requires energy >= 0.2 to enter
+# - If agent's energy < 0.2, INTERACT action is masked
+# - Agent must rest/eat to recover energy before returning to gym
+# - Prevents degenerate strategies (working out until death)
+#
+# Strategic Learning:
+# - Must maintain energy buffer above 0.2 to access gym
+# - Forces agents to balance fitness goals with energy management
+# - Teaches proactive resource management (don't wait until empty)
+
+affordances:
+  - id: "FitnessGym"
+    name: "Fitness Gym"
+    category: "health"
+
+    capabilities:
+      # Requires minimum energy to enter
+      - type: meter_gated
+        meter: energy
+        min: 0.2  # Can't work out when exhausted
+
+      # Skill scaling: effectiveness improves with fitness
+      - type: skill_scaling
+        skill: fitness
+        base_multiplier: 1.0
+        max_multiplier: 2.0
+
+    effect_pipeline:
+      on_start:
+        - {meter: energy, amount: -0.08}  # Initial workout cost
+
+      on_completion:
+        - {meter: fitness, amount: 0.05}  # Scaled by skill (0.05 → 0.1)
+        - {meter: health, amount: 0.02}   # Cardiovascular benefits
+        - {meter: mood, amount: 0.03}     # Endorphin boost
+
+    operating_hours: [6, 22]  # 6am-10pm
+
+    teaching_note: |
+      Meter gating with min bound prevents harmful behaviors:
+      - Agent cannot enter gym when energy < 0.2
+      - Forces agent to rest before working out again
+      - Prevents death from over-exercise
+
+      Without meter gating:
+      - Agent could work out continuously until energy = 0 (death)
+      - No incentive to maintain energy buffer
+      - Degenerate strategy: maximize fitness, ignore energy
+
+      With meter gating:
+      - Agent must keep energy >= 0.2 to access gym
+      - Creates rhythm: work out → rest → work out
+      - Teaches sustainable resource management
+
+      Economic balance:
+      - Entry cost: 0.08 energy
+      - Minimum to enter: 0.2 energy
+      - After workout: 0.2 - 0.08 = 0.12 energy remaining
+      - Must recover 0.08 energy to re-enter (0.12 → 0.2)
+
+    design_intent: |
+      Models realistic gym access where you need energy to exercise.
+      Teaches agents to maintain resource buffers, not drain to zero.
+
+
+  - id: "EliteGym"
+    name: "Elite Fitness Center"
+    category: "health"
+
+    capabilities:
+      # Higher energy requirement for elite gym
+      - type: meter_gated
+        meter: energy
+        min: 0.4  # Need more energy for intense training
+
+      # Prerequisite: Must have basic fitness first
+      - type: prerequisite
+        required_affordances: ["FitnessGym"]
+
+      # Better skill scaling (1.2x → 3.0x)
+      - type: skill_scaling
+        skill: fitness
+        base_multiplier: 1.2
+        max_multiplier: 3.0
+
+    effect_pipeline:
+      on_start:
+        - {meter: energy, amount: -0.15}  # Higher cost
+
+      on_completion:
+        - {meter: fitness, amount: 0.08}  # Better gains (scaled 0.08 → 0.24)
+        - {meter: health, amount: 0.04}
+        - {meter: mood, amount: 0.05}
+
+    operating_hours: [6, 22]
+
+    teaching_note: |
+      Elite gym demonstrates compound meter gating:
+      - Higher energy requirement (0.4 vs 0.2)
+      - Prerequisite requirement (must complete basic gym first)
+      - Better rewards for agents who qualify
+
+      Creates progression:
+      1. Basic gym (energy >= 0.2, anyone can start)
+      2. Elite gym (energy >= 0.4, requires basic gym completion)
+
+      Teaches:
+      - Progressive unlocking of better affordances
+      - Higher requirements = better rewards
+      - Resource management becomes more complex with progression

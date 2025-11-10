@@ -926,6 +926,32 @@ class VectorizedHamletEnv:
                 agents_to_mask = agents_on_affordance & ~has_all_prereqs
                 action_masks[agents_to_mask, interact_action_idx] = False
 
+            # TASK-004B Phase D: Check meter_gated capability
+            meter_gated_cap = self.affordance_engine._get_capability(affordance_config, "meter_gated")
+            if meter_gated_cap is not None and hasattr(meter_gated_cap, "meter"):
+                # Get meter index
+                meter_name = meter_gated_cap.meter
+                meter_idx = self.meter_name_to_index.get(meter_name)
+
+                if meter_idx is not None:
+                    # Get meter values for all agents
+                    meter_values = self.meters[:, meter_idx]
+
+                    # Check bounds (at least one must be specified per DTO validation)
+                    within_bounds = torch.ones(self.num_agents, dtype=torch.bool, device=self.device)
+
+                    if hasattr(meter_gated_cap, "min") and meter_gated_cap.min is not None:
+                        # Meter must be >= min
+                        within_bounds &= (meter_values >= meter_gated_cap.min)
+
+                    if hasattr(meter_gated_cap, "max") and meter_gated_cap.max is not None:
+                        # Meter must be <= max
+                        within_bounds &= (meter_values <= meter_gated_cap.max)
+
+                    # Mask agents that are on this affordance BUT outside meter bounds
+                    agents_to_mask = agents_on_affordance & ~within_bounds
+                    action_masks[agents_to_mask, interact_action_idx] = False
+
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking
         # TASK-001: Use dynamic meter indices instead of hardcoded 0 and 6

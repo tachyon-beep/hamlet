@@ -450,3 +450,68 @@ def test_multi_tick_with_early_exit_effects(mock_engine, device):
     # Early exit should apply mood penalty (not completion bonus)
     # Note: This test verifies effect pipeline structure; actual early_exit application
     # happens in VectorizedHamletEnv._handle_early_exit, which requires full env context
+
+
+# ============================================================================
+# TASK-004B Phase D: Meter Gated Tests
+# ============================================================================
+
+
+def test_meter_gated_capability_detection_min_only(mock_engine, device):
+    """Test detection of meter_gated capability with min bound only."""
+    meter_gated_cap = MockCapability("meter_gated", meter="energy", min=0.2)
+    affordance = MockAffordanceConfig("test", capabilities=[meter_gated_cap])
+
+    # Should detect meter_gated capability
+    detected_cap = mock_engine._get_capability(affordance, "meter_gated")
+    assert detected_cap is not None
+    assert detected_cap.type == "meter_gated"
+    assert detected_cap.meter == "energy"
+    assert detected_cap.min == 0.2
+    assert not hasattr(detected_cap, "max") or detected_cap.max is None
+
+
+def test_meter_gated_capability_detection_max_only(mock_engine, device):
+    """Test detection of meter_gated capability with max bound only."""
+    meter_gated_cap = MockCapability("meter_gated", meter="health", max=0.5)
+    affordance = MockAffordanceConfig("test", capabilities=[meter_gated_cap])
+
+    # Should detect meter_gated capability
+    detected_cap = mock_engine._get_capability(affordance, "meter_gated")
+    assert detected_cap is not None
+    assert detected_cap.type == "meter_gated"
+    assert detected_cap.meter == "health"
+    assert detected_cap.max == 0.5
+    assert not hasattr(detected_cap, "min") or detected_cap.min is None
+
+
+def test_meter_gated_capability_detection_both_bounds(mock_engine, device):
+    """Test detection of meter_gated capability with both min and max."""
+    meter_gated_cap = MockCapability("meter_gated", meter="mood", min=0.2, max=0.8)
+    affordance = MockAffordanceConfig("test", capabilities=[meter_gated_cap])
+
+    # Should detect meter_gated capability
+    detected_cap = mock_engine._get_capability(affordance, "meter_gated")
+    assert detected_cap is not None
+    assert detected_cap.type == "meter_gated"
+    assert detected_cap.meter == "mood"
+    assert detected_cap.min == 0.2
+    assert detected_cap.max == 0.8
+
+
+def test_combined_meter_gated_with_other_capabilities(mock_engine, device):
+    """Test that meter_gated can be combined with other capabilities."""
+    meter_gated_cap = MockCapability("meter_gated", meter="energy", min=0.3)
+    skill_cap = MockCapability("skill_scaling", skill="fitness", base_multiplier=1.0, max_multiplier=2.0)
+    cooldown_cap = MockCapability("cooldown", cooldown_ticks=20, scope="agent")
+
+    affordance = MockAffordanceConfig("test", capabilities=[meter_gated_cap, skill_cap, cooldown_cap])
+
+    # All three should be independently detectable
+    detected_meter = mock_engine._get_capability(affordance, "meter_gated")
+    detected_skill = mock_engine._get_capability(affordance, "skill_scaling")
+    detected_cooldown = mock_engine._get_capability(affordance, "cooldown")
+
+    assert detected_meter is not None and detected_meter.meter == "energy"
+    assert detected_skill is not None and detected_skill.skill == "fitness"
+    assert detected_cooldown is not None and detected_cooldown.cooldown_ticks == 20
