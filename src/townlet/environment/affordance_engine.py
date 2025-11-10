@@ -286,7 +286,7 @@ class AffordanceEngine:
         Args:
             meters: [num_agents, num_meters] current meter values
             affordance_name: Name of affordance (e.g., "Bed", "Job")
-            current_tick: Current tick number [0, required_ticks-1]
+            current_tick: Current tick number [0, duration_ticks-1]
             agent_mask: [num_agents] bool mask of agents to apply to
             check_affordability: If True, check if agents can afford costs
 
@@ -316,8 +316,8 @@ class AffordanceEngine:
 
         # Check for effect_pipeline (new format) vs legacy format
         effect_pipeline = getattr(affordance, "effect_pipeline", None)
-        required_ticks = affordance.required_ticks or 1
-        is_final_tick = current_tick == (required_ticks - 1)
+        duration_ticks = affordance.duration_ticks or 1
+        is_final_tick = current_tick == (duration_ticks - 1)
 
         if effect_pipeline is not None and hasattr(effect_pipeline, "per_tick"):
             # NEW FORMAT: Use effect_pipeline
@@ -513,12 +513,12 @@ class AffordanceEngine:
             affordance_name: Name of affordance
 
         Returns:
-            Number of required ticks (1 for instant affordances)
+            Number of duration ticks (1 for instant affordances)
         """
         affordance = self.affordance_map.get(affordance_name)
-        if affordance is None or affordance.required_ticks is None:
+        if affordance is None or affordance.duration_ticks is None:
             return 1
-        return affordance.required_ticks
+        return affordance.duration_ticks
 
     def apply_interaction(
         self,

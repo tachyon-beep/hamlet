@@ -48,7 +48,7 @@ def _build_affordance_collection(raw_affordances: tuple[Any, ...]) -> Affordance
             "name": raw.name,
             "category": data.get("category") or "unspecified",
             "interaction_type": interaction_type,
-            "required_ticks": data.get("required_ticks"),
+            "duration_ticks": data.get("duration_ticks") or data.get("required_ticks"),
             "costs": data.get("costs") or [],
             "costs_per_tick": data.get("costs_per_tick") or [],
             "effects": data.get("effects") or [],

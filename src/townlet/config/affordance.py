@@ -51,7 +51,7 @@ class AffordanceConfig(BaseModel):
     completion_bonus: list[dict[str, Any]] = Field(default_factory=list, description="Completion bonuses (deprecated, auto-migrated)")
 
     # Temporal metadata
-    required_ticks: int | None = None
+    duration_ticks: int | None = None
     operating_hours: list[int] | None = Field(default=None, description="Operating hours [open, close] or None for always open")
     modes: dict[str, ModeConfig] = Field(default_factory=dict, description="Optional operating modes (coffee vs bar, etc.)")
     availability: list[BarConstraint] = Field(default_factory=list, description="Meter-based availability constraints")
