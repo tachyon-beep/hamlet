@@ -400,10 +400,16 @@ class VectorizedHamletEnv:
         # Used for prerequisite capability validation
         self.completed_affordances: dict[str, torch.Tensor] = {}
 
-        # Initialize cooldown and completion tracking for all affordances
+        # TASK-004B Phase C: Resumable multi-tick progress tracking
+        # saved_progress[affordance_name] = tensor of saved progress (ticks completed) for each agent
+        # Used when affordance has resumable=true capability to persist progress when interrupted
+        self.saved_progress: dict[str, torch.Tensor] = {}
+
+        # Initialize cooldown, completion, and saved progress tracking for all affordances
         for affordance_name in all_affordance_names:
             self.cooldown_state[affordance_name] = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
             self.completed_affordances[affordance_name] = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+            self.saved_progress[affordance_name] = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
 
         # Global tick counter for cooldown management (persists across episodes)
         self.global_tick = 0
@@ -601,6 +607,10 @@ class VectorizedHamletEnv:
         # Reset all prerequisite completion tracking
         for affordance_name in self.completed_affordances:
             self.completed_affordances[affordance_name].fill_(False)
+
+        # TASK-004B Phase C: Reset saved progress for resumable interactions
+        for affordance_name in self.saved_progress:
+            self.saved_progress[affordance_name].fill_(0)
 
         return self._get_observations()
 
@@ -1019,10 +1029,19 @@ class VectorizedHamletEnv:
             movement_deltas = self._movement_deltas[actions[substrate_mask]]  # [num_substrate_agents, position_dim]
             self.positions[substrate_mask] = self.substrate.apply_movement(self.positions[substrate_mask], movement_deltas)
 
-        # Reset progress for agents that moved away (temporal mechanics)
+        # TASK-004B Phase C: Handle early exit and resumable for agents that moved away
         if self.enable_temporal_mechanics and old_positions is not None:
             for agent_idx in range(self.num_agents):
                 if not torch.equal(old_positions[agent_idx], self.positions[agent_idx]):
+                    # Agent moved - check if they were in a multi-tick interaction
+                    affordance_name = self.last_interaction_affordance[agent_idx]
+                    ticks_completed = int(self.interaction_progress[agent_idx].item())
+
+                    if affordance_name is not None and ticks_completed > 0:
+                        # Handle early exit (apply effects, save progress if resumable)
+                        self._handle_early_exit(agent_idx, affordance_name, ticks_completed)
+
+                    # Reset current interaction state (saved progress preserved in _handle_early_exit if resumable)
                     self.interaction_progress[agent_idx] = 0
                     self.last_interaction_affordance[agent_idx] = None
 
@@ -1072,6 +1091,58 @@ class VectorizedHamletEnv:
             successful_interactions = self._handle_interactions(interact_mask)
 
         return successful_interactions
+
+    def _handle_early_exit(self, agent_idx: int, affordance_name: str, ticks_completed: int) -> None:
+        """
+        Handle early exit from multi-tick interaction (TASK-004B Phase C).
+
+        When agent leaves before completing a multi-tick interaction:
+        1. Check if affordance has early_exit_allowed capability
+        2. If yes, apply on_early_exit effects from effect pipeline
+        3. Check if affordance has resumable capability
+        4. If resumable, save progress for later resumption
+        5. If not resumable, progress is lost (handled by caller)
+
+        Args:
+            agent_idx: Agent leaving the interaction
+            affordance_name: Name of the affordance being exited
+            ticks_completed: Number of ticks completed before exit
+        """
+        # Get affordance config
+        affordance_config = self.affordance_engine.affordance_map.get(affordance_name)
+        if affordance_config is None:
+            return
+
+        # Check if this is a multi-tick interaction
+        multi_tick_cap = self.affordance_engine._get_capability(affordance_config, "multi_tick")
+        if multi_tick_cap is None:
+            return
+
+        # Only process early exit if ticks were completed but not finished
+        required_ticks = getattr(multi_tick_cap, "duration_ticks", 0)
+        if ticks_completed == 0 or ticks_completed >= required_ticks:
+            return  # Not an early exit scenario
+
+        # Apply early_exit effects if allowed
+        if getattr(multi_tick_cap, "early_exit_allowed", False):
+            effect_pipeline = getattr(affordance_config, "effect_pipeline", None)
+            if effect_pipeline is not None and hasattr(effect_pipeline, "on_early_exit"):
+                # Create single-agent mask
+                agent_mask = torch.zeros(self.num_agents, dtype=torch.bool, device=self.device)
+                agent_mask[agent_idx] = True
+
+                # Apply early_exit effects
+                for effect in effect_pipeline.on_early_exit:
+                    meter_idx = self.affordance_engine.meter_name_to_idx.get(effect.meter)
+                    if meter_idx is not None:
+                        self.meters[agent_mask, meter_idx] += effect.amount
+
+                self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
+        # Save progress if resumable
+        if getattr(multi_tick_cap, "resumable", False):
+            if affordance_name in self.saved_progress:
+                self.saved_progress[affordance_name][agent_idx] = ticks_completed
 
     def _track_affordance_completion(self, affordance_name: str, agent_mask: torch.Tensor) -> None:
         """
@@ -1161,8 +1232,19 @@ class VectorizedHamletEnv:
                     # Continue progress
                     self.interaction_progress[agent_idx] += 1
                 else:
-                    # New affordance - reset progress
-                    self.interaction_progress[agent_idx] = 1
+                    # TASK-004B Phase C: Check for saved progress (resumable interactions)
+                    saved = int(self.saved_progress.get(affordance_name, torch.zeros(self.num_agents, device=self.device))[agent_idx].item())
+
+                    if saved > 0:
+                        # Resume from saved progress
+                        self.interaction_progress[agent_idx] = saved + 1  # Continue from next tick
+                        # Clear saved progress (now active again)
+                        if affordance_name in self.saved_progress:
+                            self.saved_progress[affordance_name][agent_idx] = 0
+                    else:
+                        # New affordance - start from tick 1
+                        self.interaction_progress[agent_idx] = 1
+
                     self.last_interaction_affordance[agent_idx_int] = affordance_name
                     self.last_interaction_position[agent_idx_int] = current_pos.clone()
 
@@ -1186,6 +1268,10 @@ class VectorizedHamletEnv:
                 if ticks_done == required_ticks:
                     self.interaction_progress[agent_idx] = 0
                     self.last_interaction_affordance[agent_idx_int] = None
+
+                    # TASK-004B Phase C: Clear saved progress on normal completion
+                    if affordance_name in self.saved_progress:
+                        self.saved_progress[affordance_name][agent_idx] = 0
 
                     # TASK-004B Phase B: Track completion for cooldown and prerequisite
                     self._track_affordance_completion(affordance_name, single_agent_mask)

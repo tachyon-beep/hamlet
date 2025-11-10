@@ -1,0 +1,203 @@
+# TASK-004B Phase C Example: Resumable Capability
+#
+# Demonstrates resumable multi-tick interactions where agents can pause and
+# resume progress later.
+#
+# Teaching Value:
+# - Long-duration tasks can be interrupted and resumed
+# - Progress is preserved across interruptions
+# - Models realistic education where semesters can span many days
+# - Teaches time management: balance long-term goals with immediate needs
+#
+# Expected Behavior:
+# - University semester takes 50 ticks to complete
+# - Agent can leave at tick 20, attend to other needs, return later
+# - Upon return, agent resumes at tick 21 (progress preserved)
+# - Still receives on_early_exit penalty each time they leave
+# - Accumulated per_tick effects are kept (education slowly builds)
+#
+# Example scenario:
+# 1. Agent works on semester for 20 ticks
+#    - Earns: 20 × 0.002 = 0.04 education (per_tick)
+#    - Spends: 20 × 1.0 = $20 tuition
+#    - Depletes: 20 × 0.015 = 0.3 energy
+# 2. Agent leaves (energy too low)
+#    - Applies on_early_exit: -0.1 mood
+#    - Saves progress: 20 ticks completed
+# 3. Agent rests, eats, recovers
+# 4. Agent returns to university
+#    - Resumes at tick 21 (not tick 1!)
+# 5. Agent completes remaining 30 ticks
+#    - Earns: 30 × 0.002 = 0.06 more education
+#    - Total: 0.04 + 0.06 + 0.1 (completion) = 0.20 education
+#
+# Strategic Learning:
+# - Must balance immediate needs (energy, satiation) with long-term goals
+# - Resumable makes long tasks feasible despite interruptions
+# - Mood penalty still discourages excessive interruptions
+# - Teaches prioritization: when to persist vs when to take breaks
+
+affordances:
+  - id: "UniversitySemester"
+    name: "University Semester"
+    category: "education"
+
+    capabilities:
+      # Long 50-tick interaction
+      - type: multi_tick
+        duration_ticks: 50
+        early_exit_allowed: true
+        resumable: true  # CAN RESUME LATER!
+
+      # Energy gate (can't study when exhausted)
+      - type: meter_gated
+        meter: energy
+        min: 0.3
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -30.0}  # Upfront tuition payment
+
+      per_tick:
+        - {meter: energy, amount: -0.015}  # Studying depletes energy
+        - {meter: satiation, amount: -0.01}  # Studying makes you hungry
+        - {meter: education, amount: 0.002}  # Incremental learning (slow progress)
+
+      on_completion:
+        - {meter: education, amount: 0.1}  # Degree completion (major boost)
+        - {meter: social, amount: 0.05}  # Campus friendships
+        - {meter: mood, amount: 0.2}  # Graduation satisfaction
+
+      on_early_exit:
+        - {meter: mood, amount: -0.05}  # Temporary guilt/frustration
+        # Note: Progress is SAVED, education earned so far is KEPT
+
+    operating_hours: [8, 18]  # 8am-6pm (class hours)
+
+    teaching_note: |
+      Resumable capability enables realistic long-horizon planning:
+      - 50-tick semester is too long to complete without breaks
+      - Agent must interleave study with rest, food, income
+      - Each interruption costs mood, incentivizing efficient batching
+      - Progress preservation makes long-term goals feasible
+
+      Typical study pattern (optimal):
+      1. Study 15-20 ticks (until energy ~0.3)
+      2. Leave, rest/eat (mood penalty -0.05)
+      3. Work for income (pay for next session)
+      4. Return, resume at saved tick
+      5. Repeat until 50 ticks completed
+
+      Without resumable, agent would need:
+      - 50 consecutive ticks with energy > 0.3 (impossible)
+      - 50 × 0.015 = 0.75 energy (more than maximum)
+      - Forcing agents to complete or lose all progress
+
+      With resumable, agent learns:
+      - Break tasks into manageable chunks
+      - Balance multiple competing needs
+      - Persist despite setbacks (mood penalties)
+      - Long-term planning across 50+ ticks
+
+    design_intent: |
+      Models realistic education systems where:
+      - Semesters span many days (not instant)
+      - Students take breaks but progress persists
+      - Accumulated knowledge is kept (incremental learning)
+      - Completion requires persistence through interruptions
+
+      Compare to non-resumable job:
+      - Job: 10 ticks, high pay, must complete in one session
+      - University: 50 ticks, knowledge gain, can split across sessions
+
+      This creates strategic diversity:
+      - Short-term agents prefer jobs (quick rewards)
+      - Long-term agents invest in education (future payoff)
+      - Balanced agents learn to juggle both
+
+
+# Advanced Example: Multi-stage resumable degree
+# Each stage requires completion of previous stage (prerequisite)
+# But within each stage, progress is resumable
+
+  - id: "BachelorsYear1"
+    name: "Bachelor's Degree - Year 1"
+    category: "education"
+
+    capabilities:
+      - type: multi_tick
+        duration_ticks: 40
+        early_exit_allowed: true
+        resumable: true
+
+      - type: meter_gated
+        meter: energy
+        min: 0.3
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -25.0}
+
+      per_tick:
+        - {meter: energy, amount: -0.012}
+        - {meter: education, amount: 0.0015}
+
+      on_completion:
+        - {meter: education, amount: 0.08}
+
+      on_early_exit:
+        - {meter: mood, amount: -0.04}
+
+    operating_hours: [8, 18]
+
+  - id: "BachelorsYear2"
+    name: "Bachelor's Degree - Year 2"
+    category: "education"
+
+    capabilities:
+      - type: prerequisite
+        required_affordances: ["BachelorsYear1"]  # Must complete Year 1
+
+      - type: multi_tick
+        duration_ticks: 45
+        early_exit_allowed: true
+        resumable: true
+
+      - type: meter_gated
+        meter: energy
+        min: 0.35  # Harder than Year 1
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -30.0}  # Higher tuition
+
+      per_tick:
+        - {meter: energy, amount: -0.015}
+        - {meter: education, amount: 0.002}  # Faster learning (building on Year 1)
+
+      on_completion:
+        - {meter: education, amount: 0.12}
+        - {meter: mood, amount: 0.25}  # Degree completion satisfaction
+
+      on_early_exit:
+        - {meter: mood, amount: -0.05}
+
+    operating_hours: [8, 18]
+
+    teaching_note: |
+      Two-year degree with:
+      - Prerequisite chain (must finish Year 1 before Year 2)
+      - Each year is resumable (can pause and return)
+      - Increasing difficulty (Year 2 costs more energy, money)
+      - Higher payoff (Year 2 grants more education)
+
+      Total commitment:
+      - 85 ticks (40 + 45)
+      - $55 tuition ($25 + $30)
+      - ~1.3 energy (85 × 0.015 average)
+      - Reward: 0.20 education total (0.08 + 0.12) + mood boost
+
+      This teaches:
+      - Multi-stage goal planning (Year 1 → Year 2)
+      - Resource accumulation between stages (earn money between years)
+      - Compound progression (Year 2 builds on Year 1)

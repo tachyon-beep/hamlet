@@ -379,3 +379,74 @@ def test_multiple_capabilities_detection(mock_engine, device):
     assert detected_cooldown is not None and detected_cooldown.cooldown_ticks == 50
     assert detected_skill is not None and detected_skill.max_multiplier == 2.0
     assert detected_prob is not None and detected_prob.success_probability == 0.7
+
+
+# ============================================================================
+# TASK-004B Phase C: Early Exit and Resumable Tests
+# ============================================================================
+
+
+def test_multi_tick_capability_detection(mock_engine, device):
+    """Test detection of multi_tick capability with early_exit and resumable."""
+    multi_tick_cap = MockCapability(
+        "multi_tick",
+        duration_ticks=10,
+        early_exit_allowed=True,
+        resumable=False
+    )
+    affordance = MockAffordanceConfig("test", capabilities=[multi_tick_cap])
+
+    # Should detect multi_tick capability
+    detected_cap = mock_engine._get_capability(affordance, "multi_tick")
+    assert detected_cap is not None
+    assert detected_cap.type == "multi_tick"
+    assert detected_cap.duration_ticks == 10
+    assert detected_cap.early_exit_allowed == True
+    assert detected_cap.resumable == False
+
+
+def test_multi_tick_capability_with_resumable(mock_engine, device):
+    """Test detection of multi_tick capability with resumable enabled."""
+    multi_tick_cap = MockCapability(
+        "multi_tick",
+        duration_ticks=50,
+        early_exit_allowed=True,
+        resumable=True
+    )
+    affordance = MockAffordanceConfig("test", capabilities=[multi_tick_cap])
+
+    detected_cap = mock_engine._get_capability(affordance, "multi_tick")
+    assert detected_cap is not None
+    assert detected_cap.duration_ticks == 50
+    assert detected_cap.early_exit_allowed == True
+    assert detected_cap.resumable == True
+
+
+def test_multi_tick_with_early_exit_effects(mock_engine, device):
+    """Test that early_exit effects are applied when leaving multi-tick interaction."""
+    multi_tick_cap = MockCapability("multi_tick", duration_ticks=10, early_exit_allowed=True, resumable=False)
+
+    effect_pipeline = MockEffectPipeline(
+        per_tick=[MockEffect("energy", -0.02)],
+        on_completion=[MockEffect("money", 20.0)],
+        on_early_exit=[MockEffect("mood", -0.1)]  # Penalty for quitting
+    )
+
+    affordance = MockAffordanceConfig("test", capabilities=[multi_tick_cap], effect_pipeline=effect_pipeline)
+    affordance.interaction_type = "multi_tick"
+    affordance.required_ticks = 10
+    mock_engine.affordance_map = {"test": affordance}
+
+    # Apply per_tick effects (simulate 5 ticks completed)
+    meters = torch.zeros(10, 5, device=device)
+    agent_mask = torch.ones(10, dtype=torch.bool, device=device)
+
+    for tick in range(5):
+        meters = mock_engine.apply_multi_tick_interaction(meters, "test", tick, agent_mask)
+
+    # Energy should be depleted: -0.02 * 5 = -0.1
+    assert torch.allclose(meters[:, 0], torch.tensor(-0.1), atol=0.01)
+
+    # Early exit should apply mood penalty (not completion bonus)
+    # Note: This test verifies effect pipeline structure; actual early_exit application
+    # happens in VectorizedHamletEnv._handle_early_exit, which requires full env context

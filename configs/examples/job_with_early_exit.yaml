@@ -1,0 +1,84 @@
+# TASK-004B Phase C Example: Early Exit Capability
+#
+# Demonstrates early_exit_allowed where agents can leave multi-tick interactions
+# before completion with consequences.
+#
+# Teaching Value:
+# - Agents can quit jobs early but face penalties
+# - Teaches cost-benefit analysis: stay and complete vs leave early
+# - Models realistic job scenarios where quitting has social/mood consequences
+#
+# Expected Behavior:
+# - Agent starts 10-tick job, earns $2.25 per tick
+# - If agent leaves after 5 ticks:
+#   * Keeps $11.25 earned from 5 ticks (5 × $2.25)
+#   * Does NOT get $5 completion bonus
+#   * Receives -0.05 mood penalty for quitting
+# - If agent completes full 10 ticks:
+#   * Earns $22.50 from per-tick pay (10 × $2.25)
+#   * Gets $5.00 completion bonus
+#   * Total: $27.50
+#
+# Strategic Learning:
+# - Early exit is sometimes rational (emergency low energy)
+# - But completion bonus rewards persistence
+# - Mood penalty teaches social cost of quitting
+
+affordances:
+  - id: "ContractJob"
+    name: "Contract Job"
+    category: "income"
+
+    capabilities:
+      # 10-tick work duration
+      - type: multi_tick
+        duration_ticks: 10
+        early_exit_allowed: true  # Can quit early!
+        resumable: false  # Cannot return to continue
+
+      # Requires energy to start
+      - type: meter_gated
+        meter: energy
+        min: 0.25
+
+    effect_pipeline:
+      on_start:
+        - {meter: energy, amount: -0.03}  # Initial energy cost
+
+      per_tick:
+        - {meter: money, amount: 2.25}  # Earn money each tick
+        - {meter: energy, amount: -0.015}  # Energy depletion per tick
+        - {meter: satiation, amount: -0.01}  # Hunger per tick
+
+      on_completion:
+        - {meter: money, amount: 5.0}  # Completion bonus ($5)
+        - {meter: mood, amount: 0.08}  # Satisfaction from completing
+
+      on_early_exit:
+        - {meter: mood, amount: -0.05}  # Quitting feels bad
+        # Note: Per-tick earnings are KEPT (agent leaves with partial pay)
+
+    operating_hours: [9, 17]  # 9am-5pm
+
+    teaching_note: |
+      Early exit demonstrates opportunity cost and commitment:
+      - Quitting after 5 ticks: Earn $11.25, lose $10.75 potential ($5 bonus + 5 more ticks)
+      - Mood penalty teaches social/psychological cost of quitting
+      - Agent must learn when early exit is rational (emergency) vs when to persist
+
+      Economic breakdown:
+      - Partial completion (5 ticks): $11.25 - 0.05 mood
+      - Full completion (10 ticks): $27.50 + 0.08 mood
+      - Delta: $16.25 + 0.13 mood for completing
+
+      Typical early exit scenarios:
+      1. Energy emergency (must eat/rest urgently)
+      2. Better opportunity appears (higher-paying job opens)
+      3. Cascading meter failures (health dropping rapidly)
+
+    design_intent: |
+      Models realistic job flexibility where agents can quit but face consequences.
+      Teaches planning and commitment: starting a job is a commitment, but breaking
+      it should be possible with appropriate penalties. Agents learn to weigh:
+      - Immediate needs (emergency rest) vs long-term gains (completion bonus)
+      - Sunk costs (already spent 3 ticks) vs opportunity costs (7 more needed)
