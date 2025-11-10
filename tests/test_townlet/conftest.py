@@ -13,6 +13,7 @@ Usage:
 
 import copy
 import shutil
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,7 @@ import pytest
 import torch
 import yaml
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
+from tests.test_townlet.helpers.config_builder import mutate_training_yaml, prepare_config_dir
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.curriculum.static import StaticCurriculum
@@ -100,6 +101,18 @@ def config_pack_factory(tmp_path: Path):
         return prepare_config_dir(tmp_path, modifier=modifier, name=pack_name)
 
     return _build
+
+
+def _apply_config_overrides(config_data: dict[str, Any], overrides: dict[str, Any] | None) -> None:
+    """Merge section overrides into config_data in-place."""
+
+    if not overrides:
+        return
+
+    for section, updates in overrides.items():
+        current = config_data.get(section) or {}
+        current.update(updates)
+        config_data[section] = current
 
 
 @pytest.fixture
@@ -368,6 +381,39 @@ def cpu_env_factory(env_factory, cpu_device):
 
     def _build_env(**kwargs):
         return env_factory(device_override=cpu_device, **kwargs)
+
+    return _build_env
+
+
+@pytest.fixture
+def custom_env_builder(
+    tmp_path: Path,
+    config_pack_factory,
+    env_factory,
+    cpu_device,
+):
+    """Factory to build environments with optional training overrides."""
+
+    def _build_env(
+        *,
+        num_agents: int = 1,
+        overrides: dict[str, Any] | None = None,
+        source_pack: Path | str | None = None,
+    ):
+        if source_pack is not None:
+            target_dir = tmp_path / f"config_pack_{uuid.uuid4().hex}"
+            shutil.copytree(Path(source_pack), target_dir)
+            if overrides:
+                mutate_training_yaml(target_dir, lambda data: _apply_config_overrides(data, overrides))
+        else:
+            modifier = (lambda data: _apply_config_overrides(data, overrides)) if overrides else None
+            target_dir = config_pack_factory(modifier=modifier)
+
+        return env_factory(
+            config_dir=target_dir,
+            num_agents=num_agents,
+            device_override=cpu_device,
+        )
 
     return _build_env
 

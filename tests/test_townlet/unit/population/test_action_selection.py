@@ -22,53 +22,13 @@ Critical Behaviors:
 5. Random exploration only samples from valid actions (respects masks)
 """
 
-import shutil
-import uuid
-
 import pytest
 import torch
-import yaml
 
 from townlet.agent.networks import SimpleQNetwork
 from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
-
-
-@pytest.fixture
-def cpu_env_factory(env_factory, cpu_device):
-    """Helper to create CPU-bound environments for population tests."""
-
-    def _build(**kwargs):
-        return env_factory(device_override=cpu_device, **kwargs)
-
-    return _build
-
-
-@pytest.fixture
-def custom_env_builder(tmp_path, test_config_pack_path, env_factory, cpu_device):
-    """Clone the base pack, apply overrides, and build an environment."""
-
-    def _build(*, num_agents: int = 1, overrides: dict | None = None):
-        target = tmp_path / f"population_env_{uuid.uuid4().hex}"
-        shutil.copytree(test_config_pack_path, target)
-
-        if overrides:
-            training_yaml = target / "training.yaml"
-            with open(training_yaml) as f:
-                training_config = yaml.safe_load(f)
-
-            for section, updates in overrides.items():
-                current = training_config.get(section, {}) or {}
-                current.update(updates)
-                training_config[section] = current
-
-            with open(training_yaml, "w") as f:
-                yaml.safe_dump(training_config, f, sort_keys=False)
-
-        return env_factory(config_dir=target, num_agents=num_agents, device_override=cpu_device)
-
-    return _build
 
 
 class TestGreedyActionSelection:

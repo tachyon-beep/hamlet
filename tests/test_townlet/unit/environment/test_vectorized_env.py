@@ -19,7 +19,6 @@ Testing Strategy:
 from __future__ import annotations
 
 import shutil
-import uuid
 from pathlib import Path
 
 import pytest
@@ -27,44 +26,6 @@ import torch
 import yaml
 
 from townlet.universe.errors import CompilationError
-
-
-@pytest.fixture
-def cpu_env_factory(env_factory, cpu_device):
-    """Helper to build CPU-bound environments for these tests."""
-
-    def _build(**kwargs):
-        return env_factory(device_override=cpu_device, **kwargs)
-
-    return _build
-
-
-@pytest.fixture
-def custom_env_builder(tmp_path, test_config_pack_path, env_factory, cpu_device):
-    """Return a builder that clones config packs with training overrides."""
-
-    def _build(*, num_agents: int = 1, overrides: dict | None = None, source_pack: Path | None = None):
-        source = Path(source_pack) if source_pack is not None else test_config_pack_path
-        target = tmp_path / f"env_{uuid.uuid4().hex}"
-        shutil.copytree(source, target)
-
-        if overrides:
-            training_path = target / "training.yaml"
-            with open(training_path) as f:
-                training_data = yaml.safe_load(f)
-
-            for section, updates in overrides.items():
-                section_data = training_data.get(section, {}) or {}
-                section_data.update(updates)
-                training_data[section] = section_data
-
-            with open(training_path, "w") as f:
-                yaml.safe_dump(training_data, f, sort_keys=False)
-
-        return env_factory(config_dir=target, num_agents=num_agents, device_override=cpu_device)
-
-    return _build
-
 
 # =============================================================================
 # PHASE 15A: INITIALIZATION & SETUP
