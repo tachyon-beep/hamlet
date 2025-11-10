@@ -1683,6 +1683,13 @@ class UniverseCompiler:
         torch_version: str,
         pydantic_version: str,
     ) -> str:
+        """Compute full provenance ID including all dependencies.
+
+        Note: This is for debugging/reproducibility only. Cache invalidation uses
+        config_mtime + config_hash, NOT provenance_id, so dependency version changes
+        don't trigger unnecessary recompilation. This is intentional - the compiler
+        logic is version-stable, and dependency updates don't affect compiled output.
+        """
         payload = "|".join(
             [
                 config_hash,

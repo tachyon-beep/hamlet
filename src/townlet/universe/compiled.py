@@ -93,8 +93,14 @@ class CompiledUniverse:
     # Runtime helpers -------------------------------------------------------
 
     def create_environment(self, num_agents: int, device: str = "cpu"):
-        """Instantiate a VectorizedHamletEnv using this compiled universe."""
+        """Instantiate a VectorizedHamletEnv using this compiled universe.
 
+        Note: Import is deferred to avoid circular dependency:
+        - compiled.py imports environment.vectorized_env
+        - vectorized_env.py imports universe.compiled
+        This lazy import breaks the cycle by deferring the environment import
+        until runtime (when CompiledUniverse is already defined).
+        """
         from townlet.environment.vectorized_env import VectorizedHamletEnv
 
         return VectorizedHamletEnv(
