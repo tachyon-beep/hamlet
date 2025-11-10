@@ -1,0 +1,219 @@
+# TASK-004B Phase E Example: Modes
+#
+# Demonstrates modes system where a single affordance has different behaviors
+# at different times of day.
+#
+# Teaching Value:
+# - Same physical location, different services/effects by time
+# - Models realistic time-based business operations
+# - Teaches agents to time their interactions strategically
+#
+# Expected Behavior:
+# - Morning (6am-11am): Coffee shop mode - energy boost
+# - Evening (6pm-2am): Bar mode - mood boost
+# - Outside these hours: Location is closed (no mode active)
+#
+# Strategic Learning:
+# - Agents must plan around operating hours
+# - Different times provide different benefits
+# - Location reuse creates spatial efficiency
+
+affordances:
+  - id: "CafeBar"
+    name: "Cafe & Bar"
+    category: "social"
+
+    # Multiple modes with different hours and purposes
+    modes:
+      coffee_shop:
+        hours: [6, 11]  # 6am-11am (morning coffee service)
+
+      bar:
+        hours: [18, 2]  # 6pm-2am (evening bar service, wraps midnight)
+
+    # Base effects (used when mode doesn't override)
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -8.0}  # Base cost
+
+      on_completion:
+        - {meter: mood, amount: 0.08}   # Social atmosphere
+        - {meter: social, amount: 0.05} # Meet people
+
+    teaching_note: |
+      Modes system demonstrates time-based specialization:
+      - Morning (6am-11am): Coffee shop mode active
+      - Evening (6pm-2am): Bar mode active
+      - Midday/late night: Closed (no mode active)
+
+      Strategic implications:
+      - Agents must time visits to catch desired mode
+      - Morning: Need energy boost → coffee shop
+      - Evening: Need mood boost → bar
+      - Same location serves different needs at different times
+
+      Spatial efficiency:
+      - One physical location, two services
+      - Reduces grid clutter (don't need separate Coffee + Bar)
+      - Models realistic business (cafes that become bars at night)
+
+    design_intent: |
+      Models dual-purpose establishments common in real cities:
+      - Morning: Serves coffee to workers
+      - Evening: Serves alcohol to socializers
+      - Closed during midday/late night
+
+      Teaches strategic timing:
+      - Visit during right hours for desired benefit
+      - Plan daily schedule around business hours
+      - Understand temporal availability patterns
+
+
+  - id: "UniversityLibrary"
+    name: "University Library"
+    category: "education"
+
+    # Different study environments by time
+    modes:
+      quiet_study:
+        hours: [6, 17]  # 6am-5pm (daytime quiet hours)
+
+      group_study:
+        hours: [17, 23]  # 5pm-11pm (evening group sessions)
+
+    effect_pipeline:
+      on_start:
+        - {meter: energy, amount: -0.05}
+
+      on_completion:
+        - {meter: education, amount: 0.1}   # Learning
+        - {meter: mood, amount: 0.05}       # Intellectual satisfaction
+
+    teaching_note: |
+      Library modes demonstrate environment variation:
+      - Daytime (6am-5pm): Quiet study mode (solo learning)
+      - Evening (5pm-11pm): Group study mode (collaborative learning)
+
+      Different modes could have different effects:
+      - Quiet study: More education, less social
+      - Group study: Less education, more social
+
+      (Note: Mode-specific effects are a future enhancement.
+      Currently modes control hours only; effects are uniform.)
+
+    design_intent: |
+      Models institutional spaces with different atmospheres:
+      - Daytime: Silent, focused individual work
+      - Evening: Collaborative, social group work
+      - Creates time-based variety in learning environments
+
+
+  - id: "FitnessCenter"
+    name: "24-Hour Fitness Center"
+    category: "health"
+
+    # Different class schedules by time
+    modes:
+      morning_yoga:
+        hours: [6, 8]  # 6am-8am (morning yoga class)
+
+      afternoon_strength:
+        hours: [12, 14]  # 12pm-2pm (lunch hour strength training)
+
+      evening_cardio:
+        hours: [18, 20]  # 6pm-8pm (evening cardio class)
+
+      late_night_open:
+        hours: [20, 6]  # 8pm-6am (overnight open gym, wraps midnight)
+
+    effect_pipeline:
+      on_start:
+        - {meter: energy, amount: -0.1}
+        - {meter: money, amount: -15.0}  # Class/membership fee
+
+      on_completion:
+        - {meter: fitness, amount: 0.08}
+        - {meter: health, amount: 0.05}
+        - {meter: mood, amount: 0.06}
+
+    capabilities:
+      - type: meter_gated
+        meter: energy
+        min: 0.25  # Need energy to exercise
+
+    teaching_note: |
+      Fitness center with 4 modes demonstrates complex scheduling:
+      - Morning (6am-8am): Yoga class
+      - Midday (12pm-2pm): Strength training
+      - Evening (6pm-8pm): Cardio class
+      - Late night (8pm-6am): Open gym (wraps midnight)
+
+      Strategic variety:
+      - Multiple time slots throughout day
+      - Late night mode provides flexibility for night owls
+      - Agents can choose slot based on their schedule
+
+      Midnight wrapping:
+      - late_night_open: [20, 6] means 8pm to 6am next day
+      - Covers overnight hours (20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6)
+      - Agents can exercise any time except 8am-12pm and 2pm-6pm
+
+    design_intent: |
+      Models 24-hour fitness centers with scheduled classes:
+      - Structured classes at specific times (yoga, strength, cardio)
+      - Open gym during overnight hours
+      - Provides flexibility while maintaining structure
+
+
+  - id: "Restaurant"
+    name: "All-Day Restaurant"
+    category: "food"
+
+    # Different menus by meal time
+    modes:
+      breakfast:
+        hours: [6, 11]  # 6am-11am (breakfast service)
+
+      lunch:
+        hours: [11, 15]  # 11am-3pm (lunch service)
+
+      dinner:
+        hours: [17, 22]  # 5pm-10pm (dinner service)
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -12.0}  # Average meal cost
+
+      on_completion:
+        - {meter: satiation, amount: 0.4}
+        - {meter: mood, amount: 0.1}
+        - {meter: energy, amount: 0.05}  # Food provides energy
+
+    teaching_note: |
+      Restaurant with meal-time modes:
+      - Morning (6am-11am): Breakfast menu
+      - Midday (11am-3pm): Lunch menu
+      - Evening (5pm-10pm): Dinner menu
+      - Closed between meals (11pm-6am, 3pm-5pm)
+
+      Strategic meal timing:
+      - Must eat during appropriate meal windows
+      - Can't get breakfast at 8pm (breakfast mode inactive)
+      - Can't get dinner at 7am (dinner mode inactive)
+      - Teaches agents to plan meals around service hours
+
+      Future enhancement (mode-specific effects):
+      - Breakfast: More energy boost, less satiation
+      - Lunch: Balanced
+      - Dinner: More satiation, less energy
+      - Would teach agents to match meal type to current needs
+
+    design_intent: |
+      Models restaurants with time-based menu switching:
+      - Different offerings at breakfast vs dinner
+      - Gap times when closed (late night, mid-afternoon)
+      - Teaches agents to time meals appropriately
+      - Realistic constraint: can't get breakfast at midnight
+
+      (Full mode-specific effects implementation is future work.
+      Current system validates hours and provides base effects.)

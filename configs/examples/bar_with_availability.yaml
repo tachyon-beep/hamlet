@@ -1,0 +1,190 @@
+# TASK-004B Phase E Example: Availability Constraints
+#
+# Demonstrates availability field with multiple BarConstraint objects that gate access.
+#
+# Teaching Value:
+# - Multiple meter constraints can gate a single affordance
+# - All constraints must be satisfied simultaneously
+# - Models complex access requirements
+#
+# Expected Behavior:
+# - Bar requires BOTH mood >= 0.2 AND money >= 5.0
+# - If either constraint fails, INTERACT is masked
+# - Teaches resource coordination: need multiple meters in good state
+#
+# Strategic Learning:
+# - Can't just focus on one meter, must maintain multiple
+# - Compound requirements create interesting decision making
+# - Some affordances require "prerequisites" in resource state
+
+affordances:
+  - id: "SocialBar"
+    name: "Social Bar"
+    category: "social"
+
+    # Multiple availability constraints (ALL must be satisfied)
+    availability:
+      - {meter: mood, min: 0.2}     # Can't drink when too depressed
+      - {meter: money, min: 5.0}    # Need cash to afford drinks
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -10.0}  # Drinks cost money
+
+      on_completion:
+        - {meter: mood, amount: 0.15}    # Socializing improves mood
+        - {meter: social, amount: 0.1}   # Build friendships
+        - {meter: health, amount: -0.05} # Alcohol is unhealthy
+
+    operating_hours: [18, 2]  # 6pm-2am (bar hours, wraps midnight)
+
+    teaching_note: |
+      Availability constraints create compound requirements:
+      - Must have mood >= 0.2 (not too depressed)
+      - Must have money >= 5.0 (can afford entry)
+      - Both conditions checked simultaneously
+
+      Without availability:
+      - Agent could enter bar when depressed (unrealistic)
+      - Agent could enter bar when broke (would fail on payment anyway)
+
+      With availability:
+      - Action is masked preemptively if conditions not met
+      - Agent learns to prepare: build mood and save money before going
+      - Teaches coordination: need multiple resources in good state
+
+      Strategic implications:
+      - Can't just focus on mood or money, need BOTH
+      - Creates planning challenge: how to get both above threshold
+      - Failed attempts (money < 5) don't waste a turn (masked)
+
+
+  - id: "LuxurySpa"
+    name: "Luxury Spa"
+    category: "health"
+
+    # Complex availability: requires high money AND low stress
+    availability:
+      - {meter: money, min: 50.0}    # Expensive spa treatment
+      - {meter: mood, max: 0.6}       # Only for stressed people (not for already happy)
+      - {meter: health, max: 0.8}     # Only for those needing health boost
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -50.0}  # Expensive
+
+      on_completion:
+        - {meter: health, amount: 0.3}   # Major health restoration
+        - {meter: mood, amount: 0.4}     # Stress relief
+        - {meter: energy, amount: 0.2}   # Rejuvenation
+        - {meter: hygiene, amount: 0.3}  # Spa cleanliness
+
+    operating_hours: [8, 20]  # 8am-8pm
+
+    teaching_note: |
+      Luxury spa demonstrates range-based availability:
+      - Requires money >= 50 (wealthy clients only)
+      - Requires mood <= 0.6 (for stressed people, not happy ones)
+      - Requires health <= 0.8 (for people needing restoration)
+
+      Creates niche targeting:
+      - Not for poor agents (money < 50)
+      - Not for happy agents (mood > 0.6)
+      - Not for healthy agents (health > 0.8)
+      - Target audience: wealthy but stressed/sick individuals
+
+      Strategic niche:
+      - Premium option for agents who can afford it
+      - Only accessible when in moderate distress
+      - Teaches market segmentation: different affordances for different states
+
+
+  - id: "EmergencyRoom"
+    name: "Emergency Room"
+    category: "health"
+
+    # Urgency-based availability: only when critically low health OR energy
+    availability:
+      - {meter: health, max: 0.2}  # Critical health emergency
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -100.0}  # Very expensive
+
+      on_completion:
+        - {meter: health, amount: 0.6}    # Major healing
+        - {meter: energy, amount: 0.4}    # Stabilization
+
+    operating_hours: [0, 24]  # 24/7 emergency care
+
+    teaching_note: |
+      Emergency room demonstrates critical care gating:
+      - Only accessible when health <= 0.2 (critical condition)
+      - Very expensive ($100) but provides major healing
+      - Available 24/7 for emergencies
+
+      Compared to regular hospital:
+      - Hospital: health <= 0.5, costs $15, heals +0.3
+      - Emergency: health <= 0.2, costs $100, heals +0.6
+
+      Teaches triage:
+      - Don't wait until emergency (expensive)
+      - Seek care earlier at regular hospital (cheaper)
+      - Emergency room is last resort
+
+      Risk management:
+      - Waiting too long = emergency room (100x more expensive)
+      - Proactive care = regular hospital (affordable)
+      - Preventive care = cheapest (maintain health > 0.5)
+
+
+  - id: "GourmetRestaurant"
+    name: "Gourmet Restaurant"
+    category: "food"
+
+    # Compound availability: need money AND social connections AND moderate hunger
+    availability:
+      - {meter: money, min: 30.0}      # Expensive dining
+      - {meter: social, min: 0.4}      # Reservation requires social connections
+      - {meter: satiation, min: 0.2}   # Not for starving (too uncivilized)
+      - {meter: satiation, max: 0.7}   # Not for full (no appetite)
+
+    effect_pipeline:
+      on_start:
+        - {meter: money, amount: -35.0}
+
+      on_completion:
+        - {meter: satiation, amount: 0.4}  # Gourmet meal
+        - {meter: mood, amount: 0.2}       # Fine dining experience
+        - {meter: social, amount: 0.05}    # Networking
+
+    operating_hours: [17, 23]  # 5pm-11pm (dinner service)
+
+    teaching_note: |
+      Gourmet restaurant demonstrates prestige access:
+      - Requires money >= 30 (wealthy)
+      - Requires social >= 0.4 (connected, can get reservation)
+      - Requires satiation ∈ [0.2, 0.7] (moderate hunger)
+
+      Four-way constraint teaches:
+      - Need wealth (money)
+      - Need connections (social)
+      - Need appropriate appetite (not starving, not full)
+      - Precise timing required to satisfy all constraints
+
+      Strategic complexity:
+      - Must build multiple resources before accessing
+      - Can't access when desperately hungry (satiation < 0.2)
+      - Can't access when just ate (satiation > 0.7)
+      - Teaches preparation and timing
+
+    design_intent: |
+      Models prestige establishments where access requires:
+      1. Economic capital (money >= 30)
+      2. Social capital (social >= 0.4 for reservation)
+      3. Appropriate state (moderate hunger, not extreme)
+
+      Creates strategic layering:
+      - Basic food: available to all, anytime
+      - Regular restaurant: requires money only
+      - Gourmet restaurant: requires money + social + timing

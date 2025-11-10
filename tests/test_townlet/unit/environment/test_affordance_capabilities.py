@@ -515,3 +515,42 @@ def test_combined_meter_gated_with_other_capabilities(mock_engine, device):
     assert detected_meter is not None and detected_meter.meter == "energy"
     assert detected_skill is not None and detected_skill.skill == "fitness"
     assert detected_cooldown is not None and detected_cooldown.cooldown_ticks == 20
+
+
+# ============================================================================
+# TASK-004B Phase E: Availability and Modes Tests
+# ============================================================================
+
+
+def test_availability_constraints_detection(mock_engine, device):
+    """Test that availability constraints can be added to affordance config."""
+    # Mock BarConstraint objects
+    bar_constraint1 = MockCapability("availability", meter="energy", min=0.2)
+    bar_constraint2 = MockCapability("availability", meter="mood", min=0.3)
+
+    affordance = MockAffordanceConfig("test", capabilities=[])
+    affordance.availability = [bar_constraint1, bar_constraint2]
+
+    # Should be able to access availability list
+    assert hasattr(affordance, "availability")
+    assert len(affordance.availability) == 2
+    assert affordance.availability[0].meter == "energy"
+    assert affordance.availability[1].meter == "mood"
+
+
+def test_modes_detection(mock_engine, device):
+    """Test that modes can be added to affordance config."""
+    # Mock ModeConfig objects
+    mode_morning = MockCapability("mode", hours=(6, 11))
+    mode_evening = MockCapability("mode", hours=(18, 23))
+
+    affordance = MockAffordanceConfig("test", capabilities=[])
+    affordance.modes = {"morning": mode_morning, "evening": mode_evening}
+
+    # Should be able to access modes dict
+    assert hasattr(affordance, "modes")
+    assert len(affordance.modes) == 2
+    assert "morning" in affordance.modes
+    assert "evening" in affordance.modes
+    assert affordance.modes["morning"].hours == (6, 11)
+    assert affordance.modes["evening"].hours == (18, 23)

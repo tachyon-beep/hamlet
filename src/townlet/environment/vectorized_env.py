@@ -486,11 +486,39 @@ class VectorizedHamletEnv:
         return tensor
 
     def _is_affordance_open(self, affordance_name: str, hour: int | None = None) -> bool:
-        """Return True if an affordance is open for the specified (or current) hour."""
+        """
+        Return True if an affordance is open for the specified (or current) hour.
+
+        TASK-004B Phase E: Supports mode-based hours if defined.
+        """
 
         if not self.enable_temporal_mechanics:
             return True
 
+        # TASK-004B Phase E: Check modes if defined
+        affordance_config = self.affordance_engine.affordance_map.get(affordance_name)
+        if affordance_config is not None and hasattr(affordance_config, "modes") and affordance_config.modes:
+            # Modes defined - check if any mode is active for current hour
+            active_hour = self.time_of_day if hour is None else hour
+
+            for mode_name, mode_config in affordance_config.modes.items():
+                if hasattr(mode_config, "hours") and mode_config.hours is not None:
+                    start_hour, end_hour = mode_config.hours
+
+                    # Handle midnight wrap (e.g., 18-2 means 6pm to 2am)
+                    if start_hour <= end_hour:
+                        # Normal range (e.g., 9-17 means 9am to 5pm)
+                        if start_hour <= active_hour <= end_hour:
+                            return True
+                    else:
+                        # Wraps midnight (e.g., 18-2 means 6pm to 2am next day)
+                        if active_hour >= start_hour or active_hour <= end_hour:
+                            return True
+
+            # No mode is active for this hour
+            return False
+
+        # Fallback to action_mask_table (precomputed operating_hours)
         if self.action_mask_table.shape[1] == 0:
             return False
 
@@ -951,6 +979,30 @@ class VectorizedHamletEnv:
                     # Mask agents that are on this affordance BUT outside meter bounds
                     agents_to_mask = agents_on_affordance & ~within_bounds
                     action_masks[agents_to_mask, interact_action_idx] = False
+
+            # TASK-004B Phase E: Check availability constraints (BarConstraint list)
+            if hasattr(affordance_config, "availability") and affordance_config.availability:
+                # All availability constraints must be satisfied
+                satisfies_availability = torch.ones(self.num_agents, dtype=torch.bool, device=self.device)
+
+                for bar_constraint in affordance_config.availability:
+                    meter_name = bar_constraint.meter
+                    meter_idx = self.meter_name_to_index.get(meter_name)
+
+                    if meter_idx is not None:
+                        meter_values = self.meters[:, meter_idx]
+
+                        # Check min bound
+                        if hasattr(bar_constraint, "min") and bar_constraint.min is not None:
+                            satisfies_availability &= (meter_values >= bar_constraint.min)
+
+                        # Check max bound
+                        if hasattr(bar_constraint, "max") and bar_constraint.max is not None:
+                            satisfies_availability &= (meter_values <= bar_constraint.max)
+
+                # Mask agents that don't satisfy availability constraints
+                agents_to_mask = agents_on_affordance & ~satisfies_availability
+                action_masks[agents_to_mask, interact_action_idx] = False
 
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking
