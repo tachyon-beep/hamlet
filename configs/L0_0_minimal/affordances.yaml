@@ -1,47 +1,6 @@
 version: '2.0'
 description: Unified affordance definitions for Level 1 (instant) and Level 2 (temporal)
 status: PRODUCTION - Dual-mode ready
-meters:
-- id: 0
-  name: energy
-  range:
-  - 0.0
-  - 1.0
-- id: 1
-  name: hygiene
-  range:
-  - 0.0
-  - 1.0
-- id: 2
-  name: satiation
-  range:
-  - 0.0
-  - 1.0
-- id: 3
-  name: money
-  range:
-  - 0.0
-  - 1.0
-- id: 4
-  name: mood
-  range:
-  - 0.0
-  - 1.0
-- id: 5
-  name: social
-  range:
-  - 0.0
-  - 1.0
-- id: 6
-  name: health
-  range:
-  - 0.0
-  - 1.0
-- id: 7
-  name: fitness
-  range:
-  - 0.0
-  - 1.0
 affordances:
 - id: '0'
   name: Bed
