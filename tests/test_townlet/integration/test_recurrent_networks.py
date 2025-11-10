@@ -10,6 +10,7 @@ Test Organization:
 - TestLSTMForwardPass: Forward pass with POMDP (1 test)
 """
 
+import pytest
 from pathlib import Path
 
 import torch
@@ -20,6 +21,8 @@ from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
+
+pytestmark = pytest.mark.slow
 
 # =============================================================================
 # TEST CLASS 1: LSTM Hidden State Persistence

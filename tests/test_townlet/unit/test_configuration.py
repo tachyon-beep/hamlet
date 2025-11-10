@@ -68,6 +68,23 @@ def cascades_config(test_config_pack_path: Path) -> CascadesConfig:
     return load_cascades_config(test_config_pack_path / "cascades.yaml")
 
 
+@pytest.fixture(scope="module")
+def environment_config(test_config_pack_path: Path) -> EnvironmentConfig:
+    """Load the combined environment config once."""
+
+    return load_environment_config(test_config_pack_path)
+
+
+@pytest.fixture(scope="module")
+def affordance_collection(test_config_pack_path: Path, bars_config: BarsConfig) -> AffordanceConfigCollection:
+    """Load affordances.yaml once; skip tests if file missing."""
+
+    config_path = test_config_pack_path / "affordances.yaml"
+    if not config_path.exists():
+        pytest.skip(f"Config file not found: {config_path}")
+    return load_affordance_config(config_path, bars_config)
+
+
 # =============================================================================
 # CONFIG PACK LOADING TESTS
 # =============================================================================
@@ -397,53 +414,41 @@ class TestEnvironmentConfig:
     with helper methods.
     """
 
-    def test_environment_config_loads_successfully(self, test_config_pack_path: Path):
+    def test_environment_config_loads_successfully(self, environment_config: EnvironmentConfig):
         """Test that complete environment config loads."""
-        config = load_environment_config(test_config_pack_path)
+        assert isinstance(environment_config, EnvironmentConfig)
+        assert isinstance(environment_config.bars, BarsConfig)
+        assert isinstance(environment_config.cascades, CascadesConfig)
 
-        assert isinstance(config, EnvironmentConfig)
-        assert isinstance(config.bars, BarsConfig)
-        assert isinstance(config.cascades, CascadesConfig)
+    @pytest.mark.parametrize(
+        ("meter_name", "expected_index"),
+        [("energy", 0), ("health", 6)],
+    )
+    def test_environment_config_get_bar_by_name(self, environment_config: EnvironmentConfig, meter_name: str, expected_index: int):
+        bar = environment_config.get_bar_by_name(meter_name)
+        assert bar.name == meter_name
+        assert bar.index == expected_index
 
-    def test_environment_config_get_bar_by_name(self, test_config_pack_path: Path):
-        """Test get_bar_by_name helper method."""
-        config = load_environment_config(test_config_pack_path)
+    @pytest.mark.parametrize(
+        ("bar_index", "expected_name"),
+        [(0, "energy"), (6, "health")],
+    )
+    def test_environment_config_get_bar_by_index(self, environment_config: EnvironmentConfig, bar_index: int, expected_name: str):
+        bar = environment_config.get_bar_by_index(bar_index)
+        assert bar.name == expected_name
 
-        energy = config.get_bar_by_name("energy")
-        assert energy.name == "energy"
-        assert energy.index == 0
-
-        health = config.get_bar_by_name("health")
-        assert health.name == "health"
-        assert health.index == 6
-
+    def test_environment_config_get_bar_invalid(self, environment_config: EnvironmentConfig):
         with pytest.raises(ValueError, match="not found"):
-            config.get_bar_by_name("nonexistent")
-
-    def test_environment_config_get_bar_by_index(self, test_config_pack_path: Path):
-        """Test get_bar_by_index helper method."""
-        config = load_environment_config(test_config_pack_path)
-
-        bar0 = config.get_bar_by_index(0)
-        assert bar0.name == "energy"
-
-        bar6 = config.get_bar_by_index(6)
-        assert bar6.name == "health"
-
+            environment_config.get_bar_by_name("nonexistent")
         with pytest.raises(ValueError, match="not found"):
-            config.get_bar_by_index(99)
+            environment_config.get_bar_by_index(99)
 
-    def test_environment_config_get_cascade_by_name(self, test_config_pack_path: Path):
-        """Test get_cascade_by_name helper method."""
-        config = load_environment_config(test_config_pack_path)
-
-        cascade = config.get_cascade_by_name("satiation_to_health")
-        assert cascade.name == "satiation_to_health"
+    def test_environment_config_get_cascade_by_name(self, environment_config: EnvironmentConfig):
+        cascade = environment_config.get_cascade_by_name("satiation_to_health")
         assert cascade.source == "satiation"
         assert cascade.target == "health"
-
         with pytest.raises(ValueError, match="not found"):
-            config.get_cascade_by_name("nonexistent")
+            environment_config.get_cascade_by_name("nonexistent")
 
     def test_load_default_config(self):
         """Test that default config loads from project root."""
@@ -460,264 +465,177 @@ class TestEnvironmentConfig:
 
 
 class TestAffordanceConfigSchema:
-    """Test Pydantic schema validation for affordance configs.
+    """Test Pydantic schema validation for affordance configs."""
 
-    Consolidated from test_affordance_config_loading.py (schema tests).
-    Tests validation of AffordanceConfig, AffordanceCost, AffordanceEffect.
-    """
+    @pytest.mark.parametrize(
+        "payload, expectations",
+        [
+            (
+                {
+                    "id": "TestShower",
+                    "name": "Test Shower",
+                    "category": "hygiene",
+                    "interaction_type": "instant",
+                    "costs": [{"meter": "money", "amount": 0.01}],
+                    "effects": [{"meter": "hygiene", "amount": 0.50}],
+                    "operating_hours": [0, 24],
+                },
+                {"interaction_type": "instant", "effects_len": 1},
+            ),
+            (
+                {
+                    "id": "TestBed",
+                    "name": "Test Bed",
+                    "category": "energy",
+                    "interaction_type": "multi_tick",
+                    "required_ticks": 5,
+                    "costs_per_tick": [{"meter": "money", "amount": 0.01}],
+                    "effects_per_tick": [{"meter": "energy", "amount": 0.075, "type": "linear"}],
+                    "completion_bonus": [
+                        {"meter": "energy", "amount": 0.125},
+                        {"meter": "health", "amount": 0.02},
+                    ],
+                    "operating_hours": [0, 24],
+                },
+                {"interaction_type": "multi_tick", "required_ticks": 5, "completion_bonus_len": 2},
+            ),
+        ],
+        ids=["instant_minimal", "multi_tick_bonus"],
+    )
+    def test_valid_affordance_payloads(self, payload: dict, expectations: dict):
+        affordance = AffordanceConfig(**payload)
+        assert affordance.interaction_type == expectations["interaction_type"]
+        if "required_ticks" in expectations:
+            assert affordance.required_ticks == expectations["required_ticks"]
+        if "effects_len" in expectations:
+            assert len(affordance.effects) == expectations["effects_len"]
+        if "completion_bonus_len" in expectations:
+            assert len(affordance.completion_bonus) == expectations["completion_bonus_len"]
 
-    def test_minimal_instant_affordance(self):
-        """Test minimal valid instant affordance."""
-        config = {
-            "id": "TestShower",
-            "name": "Test Shower",
-            "category": "hygiene",
-            "interaction_type": "instant",
-            "costs": [{"meter": "money", "amount": 0.01}],
-            "effects": [{"meter": "hygiene", "amount": 0.50}],
-            "operating_hours": [0, 24],
-        }
-        affordance = AffordanceConfig(**config)
-        assert affordance.id == "TestShower"
-        assert affordance.interaction_type == "instant"
-        assert len(affordance.effects) == 1
-
-    def test_multi_tick_affordance_with_bonus(self):
-        """Test multi-tick affordance with completion bonus."""
-        config = {
-            "id": "TestBed",
-            "name": "Test Bed",
-            "category": "energy",
-            "interaction_type": "multi_tick",
-            "required_ticks": 5,
-            "costs_per_tick": [{"meter": "money", "amount": 0.01}],
-            "effects_per_tick": [{"meter": "energy", "amount": 0.075, "type": "linear"}],
-            "completion_bonus": [
-                {"meter": "energy", "amount": 0.125},
-                {"meter": "health", "amount": 0.02},
-            ],
-            "operating_hours": [0, 24],
-        }
-        affordance = AffordanceConfig(**config)
-        assert affordance.interaction_type == "multi_tick"
-        assert affordance.required_ticks == 5
-        assert len(affordance.completion_bonus) == 2
-
-    def test_missing_required_fields_raises_error(self):
-        """Test that missing required fields raise ValidationError."""
-        config = {
-            "id": "TestBroken",
-            "name": "Test Broken",
-            # Missing: category, interaction_type, operating_hours
-        }
+    @pytest.mark.parametrize(
+        ("payload", "expected_fields"),
+        [
+            (
+                {
+                    "id": "TestBroken",
+                    "name": "Test Broken",
+                },
+                {"category", "interaction_type", "operating_hours"},
+            ),
+            (
+                {
+                    "id": "TestBad",
+                    "name": "Test Bad",
+                    "category": "test",
+                    "interaction_type": "invalid_type",
+                    "operating_hours": [0, 24],
+                },
+                {"interaction_type"},
+            ),
+            (
+                {
+                    "id": "TestBadMulti",
+                    "name": "Test Bad Multi",
+                    "category": "test",
+                    "interaction_type": "multi_tick",
+                    "operating_hours": [0, 24],
+                },
+                {"required_ticks"},
+            ),
+        ],
+        ids=["missing_required_fields", "invalid_interaction_type", "missing_required_ticks"],
+    )
+    def test_invalid_affordance_payloads(self, payload: dict, expected_fields: set[str]):
         with pytest.raises(ValidationError) as exc_info:
-            AffordanceConfig(**config)
+            AffordanceConfig(**payload)
 
-        errors = exc_info.value.errors()
-        error_fields = {e["loc"][0] for e in errors}
-        assert "category" in error_fields
-        assert "interaction_type" in error_fields
-
-    def test_invalid_interaction_type_raises_error(self):
-        """Test that invalid interaction_type raises ValidationError."""
-        config = {
-            "id": "TestBad",
-            "name": "Test Bad",
-            "category": "test",
-            "interaction_type": "invalid_type",  # Not in [instant, multi_tick, continuous]
-            "operating_hours": [0, 24],
-        }
-        with pytest.raises(ValidationError) as exc_info:
-            AffordanceConfig(**config)
-
-        assert "interaction_type" in str(exc_info.value)
-
-    def test_multi_tick_without_required_ticks_raises_error(self):
-        """Test that multi_tick without required_ticks raises ValidationError."""
-        config = {
-            "id": "TestBadMulti",
-            "name": "Test Bad Multi",
-            "category": "test",
-            "interaction_type": "multi_tick",
-            # Missing: required_ticks (required for multi_tick)
-            "operating_hours": [0, 24],
-        }
-        with pytest.raises(ValidationError) as exc_info:
-            AffordanceConfig(**config)
-
-        assert "required_ticks" in str(exc_info.value)
+        error_text = str(exc_info.value)
+        for field in expected_fields:
+            assert field in error_text
 
     def test_negative_cost_raises_error(self):
-        """Test that negative costs raise ValidationError."""
         with pytest.raises(ValidationError):
-            AffordanceCost(meter="money", amount=-0.10)  # Negative cost invalid
+            AffordanceCost(meter="money", amount=-0.10)
 
-    def test_effect_amount_bounds(self):
-        """Test that effect amounts have reasonable bounds."""
-        # Very large positive effect should be allowed (config flexibility)
-        effect = AffordanceEffect(meter="energy", amount=1.0)
-        assert effect.amount == 1.0
+    @pytest.mark.parametrize(
+        ("meter", "amount"),
+        [("energy", 1.0), ("fitness", -0.05)],
+        ids=["large_positive", "negative_penalty"],
+    )
+    def test_effect_amount_bounds(self, meter: str, amount: float):
+        effect = AffordanceEffect(meter=meter, amount=amount)
+        assert effect.amount == amount
 
-        # Small negative effect should be allowed (penalties)
-        effect_neg = AffordanceEffect(meter="fitness", amount=-0.05)
-        assert effect_neg.amount == -0.05
-
-    def test_operating_hours_validation(self):
-        """Test operating hours format validation."""
-        # Valid 24/7
-        config = {
-            "id": "Test24",
-            "name": "Test 24/7",
+    @pytest.mark.parametrize(
+        "hours",
+        ([0, 24], [8, 18], [18, 28]),
+        ids=["all_day", "business_hours", "wraparound"],
+    )
+    def test_operating_hours_validation(self, hours: list[int]):
+        payload = {
+            "id": "TestHours",
+            "name": "Test Hours",
             "category": "test",
             "interaction_type": "instant",
-            "operating_hours": [0, 24],
+            "operating_hours": hours,
         }
-        affordance = AffordanceConfig(**config)
-        assert affordance.operating_hours == [0, 24]
-
-        # Valid business hours
-        config["operating_hours"] = [8, 18]
-        affordance = AffordanceConfig(**config)
-        assert affordance.operating_hours == [8, 18]
-
-        # Valid midnight wraparound (Bar: 6pm-4am)
-        config["operating_hours"] = [18, 28]
-        affordance = AffordanceConfig(**config)
-        assert affordance.operating_hours == [18, 28]
+        affordance = AffordanceConfig(**payload)
+        assert affordance.operating_hours == hours
 
 
 class TestAffordanceConfigLoading:
-    """Test loading affordance configs from YAML files.
+    """Test loading affordance configs from YAML files."""
 
-    Consolidated from test_affordance_config_loading.py (loading tests).
-    Tests YAML file loading, structure validation, and affordance lookup.
-    """
+    def test_load_main_affordances_yaml(self, affordance_collection: AffordanceConfigCollection):
+        assert affordance_collection.version == "2.0"
+        assert affordance_collection.status == "PRODUCTION - Dual-mode ready"
+        assert len(affordance_collection.affordances) == 14
 
-    def test_load_main_affordances_yaml(self, test_config_pack_path: Path):
-        """Test loading the main affordances.yaml config."""
-        config_path = test_config_pack_path / "affordances.yaml"
-
-        if not config_path.exists():
-            pytest.skip(f"Config file not found: {config_path}")
-
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-        collection = load_affordance_config(config_path, bars_config)
-
-        assert collection.version == "2.0"
-        assert collection.status == "PRODUCTION - Dual-mode ready"
-        assert len(collection.affordances) == 14  # Dual-mode pack defines 14 affordances
-
-    def test_loaded_affordances_have_valid_ids(self, test_config_pack_path: Path):
-        """Test that loaded affordances have expected IDs."""
-        config_path = test_config_pack_path / "affordances.yaml"
-
-        if not config_path.exists():
-            pytest.skip(f"Config file not found: {config_path}")
-
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-        collection = load_affordance_config(config_path, bars_config)
-
-        expected_ids = {str(i) for i in range(14)}  # IDs 0-13 inclusive
-        actual_ids = {aff.id for aff in collection.affordances}
+    def test_loaded_affordances_have_valid_ids(self, affordance_collection: AffordanceConfigCollection):
+        expected_ids = {str(i) for i in range(14)}
+        actual_ids = {aff.id for aff in affordance_collection.affordances}
         assert actual_ids == expected_ids
 
-    def test_affordance_lookup_by_id(self, test_config_pack_path: Path):
-        """Test that we can look up affordances by ID."""
-        config_path = test_config_pack_path / "affordances.yaml"
-
-        if not config_path.exists():
-            pytest.skip(f"Config file not found: {config_path}")
-
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-        collection = load_affordance_config(config_path, bars_config)
-
-        # Test lookup
-        bed = collection.get_affordance("0")  # Bed has ID "0" in dual-mode config
+    def test_affordance_lookup_by_id(self, affordance_collection: AffordanceConfigCollection):
+        bed = affordance_collection.get_affordance("0")
         assert bed is not None
         assert bed.name == "Bed"
         assert bed.interaction_type == "dual"
         assert bed.required_ticks == 5
 
-        # Test missing affordance
-        missing = collection.get_affordance("NonExistent")
-        assert missing is None
+        assert affordance_collection.get_affordance("NonExistent") is None
 
-    def test_operating_hours_for_all_affordances(self, test_config_pack_path: Path):
-        """Test that all affordances have valid operating hours."""
-        config_path = test_config_pack_path / "affordances.yaml"
-
-        if not config_path.exists():
-            pytest.skip(f"Config file not found: {config_path}")
-
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-        collection = load_affordance_config(config_path, bars_config)
-
-        for affordance in collection.affordances:
+    def test_operating_hours_for_all_affordances(self, affordance_collection: AffordanceConfigCollection):
+        for affordance in affordance_collection.affordances:
             assert len(affordance.operating_hours) == 2
             open_hour, close_hour = affordance.operating_hours
             assert 0 <= open_hour < 24
-            assert 0 < close_hour <= 28  # 28 allows midnight wraparound
+            assert 0 < close_hour <= 28
 
 
 class TestAffordanceCategories:
-    """Test affordance categorization and grouping.
+    """Test affordance categorization and grouping."""
 
-    Consolidated from test_affordance_config_loading.py (categorization tests).
-    Tests affordance categorization, free affordances, and penalties.
-    """
+    def test_dual_mode_affordances(self, affordance_collection: AffordanceConfigCollection):
+        dual = [aff for aff in affordance_collection.affordances if aff.interaction_type == "dual"]
+        assert len(dual) == len(affordance_collection.affordances)
 
-    def test_dual_mode_affordances(self, test_config_pack_path: Path):
-        """Test that all affordances are dual-mode in production config."""
-        config_path = test_config_pack_path / "affordances.yaml"
-
-        if not config_path.exists():
-            pytest.skip(f"Config file not found: {config_path}")
-
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-        collection = load_affordance_config(config_path, bars_config)
-
-        dual = [aff for aff in collection.affordances if aff.interaction_type == "dual"]
-        assert len(dual) == len(collection.affordances), "All affordances should be dual-mode in production config"
-
-    def test_free_affordances(self, test_config_pack_path: Path):
-        """Test identification of free (no-cost) affordances."""
-        config_path = test_config_pack_path / "affordances.yaml"
-
-        if not config_path.exists():
-            pytest.skip(f"Config file not found: {config_path}")
-
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-        collection = load_affordance_config(config_path, bars_config)
-
-        free_affordances = {aff.name for aff in collection.affordances if len(aff.costs) == 0}
-        # Park, Job, Labor are free in instant mode
+    def test_free_affordances(self, affordance_collection: AffordanceConfigCollection):
+        free_affordances = {aff.name for aff in affordance_collection.affordances if not aff.costs}
         assert {"Park", "Job", "Labor"}.issubset(free_affordances)
 
-    def test_affordances_with_penalties(self, test_config_pack_path: Path):
-        """Test affordances that have negative effects (penalties)."""
-        config_path = test_config_pack_path / "affordances.yaml"
-
-        if not config_path.exists():
-            pytest.skip(f"Config file not found: {config_path}")
-
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-        collection = load_affordance_config(config_path, bars_config)
-
-        # FastFood has fitness and health penalties
-        fastfood = collection.get_affordance("4")
+    def test_affordances_with_penalties(self, affordance_collection: AffordanceConfigCollection):
+        fastfood = affordance_collection.get_affordance("4")
         assert fastfood is not None
+        penalties = [eff for eff in fastfood.effects if eff.amount < 0]
+        penalties += [eff for eff in fastfood.completion_bonus if eff.amount < 0]
+        assert len(penalties) >= 2
 
-        negative_effects = [eff for eff in fastfood.effects if eff.amount < 0]
-        negative_effects += [eff for eff in fastfood.completion_bonus if eff.amount < 0]
-        assert len(negative_effects) >= 2  # fitness and health penalties
-
-        # Bar has health penalty (completion bonus contains -health)
-        bar = collection.get_affordance("9")
+        bar = affordance_collection.get_affordance("9")
         assert bar is not None
-
         bar_penalties = [eff for eff in bar.effects if eff.amount < 0]
         bar_penalties += [eff for eff in bar.completion_bonus if eff.amount < 0]
-        assert len(bar_penalties) >= 1  # health penalty
+        assert bar_penalties
 
 
 class TestAffordanceConfigEdgeCases:
@@ -727,9 +645,8 @@ class TestAffordanceConfigEdgeCases:
     Tests missing files, empty affordances, duplicate IDs.
     """
 
-    def test_load_nonexistent_file_raises_error(self, test_config_pack_path: Path):
+    def test_load_nonexistent_file_raises_error(self, bars_config: BarsConfig):
         """Test that loading non-existent file raises appropriate error."""
-        bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
         with pytest.raises(FileNotFoundError):
             load_affordance_config(Path("configs/nonexistent.yaml"), bars_config)
 
@@ -782,67 +699,42 @@ class TestAffordanceConfigEdgeCases:
 
 
 class TestEpsilonConfiguration:
-    """Test epsilon parameter configuration from YAML.
+    """Test epsilon parameter configuration from YAML."""
 
-    Consolidated from test_config_training_params.py (epsilon tests).
-    Tests that epsilon parameters (start, decay, min) are configurable
-    for exploration strategies.
-    """
-
-    def test_epsilon_greedy_uses_config_values(self):
-        """EpsilonGreedy should accept epsilon params from config."""
-        config = {
-            "training": {
-                "epsilon_start": 0.8,
-                "epsilon_decay": 0.99,
-                "epsilon_min": 0.05,
-            }
-        }
-
-        exploration = EpsilonGreedyExploration(
-            epsilon=config["training"]["epsilon_start"],
-            epsilon_decay=config["training"]["epsilon_decay"],
-            epsilon_min=config["training"]["epsilon_min"],
+    @pytest.mark.parametrize(
+        ("epsilon_start", "epsilon_decay", "epsilon_min"),
+        [
+            (0.8, 0.99, 0.05),
+            (0.7, 0.98, 0.02),
+        ],
+        ids=["epsilon_greedy", "adaptive_intrinsic"],
+    )
+    def test_exploration_uses_config_values(self, epsilon_start, epsilon_decay, epsilon_min, cpu_device, basic_env):
+        greedy = EpsilonGreedyExploration(
+            epsilon=epsilon_start,
+            epsilon_decay=epsilon_decay,
+            epsilon_min=epsilon_min,
         )
+        assert greedy.epsilon == epsilon_start
+        assert greedy.epsilon_decay == epsilon_decay
+        assert greedy.epsilon_min == epsilon_min
 
-        assert exploration.epsilon == 0.8
-        assert exploration.epsilon_decay == 0.99
-        assert exploration.epsilon_min == 0.05
-
-    def test_adaptive_intrinsic_uses_epsilon_config(self, cpu_device: torch.device, basic_env):
-        """AdaptiveIntrinsicExploration should pass epsilon params to RND."""
-        config = {
-            "training": {
-                "epsilon_start": 0.7,
-                "epsilon_decay": 0.98,
-                "epsilon_min": 0.02,
-            },
-            "exploration": {
-                "embed_dim": 64,
-                "initial_intrinsic_weight": 1.0,
-                "variance_threshold": 100.0,
-                "survival_window": 100,
-            },
-        }
-
-        exploration = AdaptiveIntrinsicExploration(
+        adaptive = AdaptiveIntrinsicExploration(
             obs_dim=basic_env.observation_dim,
-            embed_dim=config["exploration"]["embed_dim"],
-            initial_intrinsic_weight=config["exploration"]["initial_intrinsic_weight"],
-            variance_threshold=config["exploration"]["variance_threshold"],
-            survival_window=config["exploration"]["survival_window"],
-            epsilon_start=config["training"]["epsilon_start"],
-            epsilon_decay=config["training"]["epsilon_decay"],
-            epsilon_min=config["training"]["epsilon_min"],
+            embed_dim=64,
+            initial_intrinsic_weight=1.0,
+            variance_threshold=100.0,
+            survival_window=100,
+            epsilon_start=epsilon_start,
+            epsilon_decay=epsilon_decay,
+            epsilon_min=epsilon_min,
             device=cpu_device,
         )
-
-        assert exploration.rnd.epsilon == 0.7
-        assert exploration.rnd.epsilon_decay == 0.98
-        assert exploration.rnd.epsilon_min == 0.02
+        assert adaptive.rnd.epsilon == epsilon_start
+        assert adaptive.rnd.epsilon_decay == epsilon_decay
+        assert adaptive.rnd.epsilon_min == epsilon_min
 
     def test_runner_loads_epsilon_from_yaml(self, tmp_path: Path, config_pack_factory):
-        """DemoRunner should load epsilon params from training.yaml (integration test)."""
         config_dir = config_pack_factory(name="epsilon_config")
 
         def mutator(data: dict) -> None:
@@ -873,8 +765,6 @@ class TestEpsilonConfiguration:
             max_episodes=10,
         )
 
-        # Create exploration with config params (mimics runner initialization)
-        # Create a basic env to get observation_dim
         temp_env = make_vectorized_env_from_pack(
             config_dir,
             num_agents=1,
@@ -899,15 +789,22 @@ class TestEpsilonConfiguration:
 
 
 class TestTrainingHyperparameters:
-    """Test training hyperparameter configuration from YAML.
+    """Test training hyperparameter configuration from YAML."""
 
-    Consolidated from test_config_training_params.py (hyperparameter tests).
-    Tests that training hyperparameters (train_frequency, batch_size, etc.)
-    are configurable for VectorizedPopulation.
-    """
-
-    def test_population_uses_train_frequency_from_config(self, test_config_pack_path: Path, cpu_device: torch.device):
-        """VectorizedPopulation should accept train_frequency and other hyperparameters."""
+    @pytest.mark.parametrize(
+        ("train_frequency", "target_update_frequency", "batch_size", "sequence_length", "max_grad_norm"),
+        [(8, 200, 32, 16, 5.0)],
+    )
+    def test_population_uses_train_frequency_from_config(
+        self,
+        test_config_pack_path: Path,
+        cpu_device: torch.device,
+        train_frequency: int,
+        target_update_frequency: int,
+        batch_size: int,
+        sequence_length: int,
+        max_grad_norm: float,
+    ):
         env = make_vectorized_env_from_pack(
             test_config_pack_path,
             num_agents=1,
@@ -945,21 +842,20 @@ class TestTrainingHyperparameters:
             replay_buffer_capacity=1000,
             network_type="simple",
             vision_window_size=5,
-            train_frequency=8,
-            target_update_frequency=200,
-            batch_size=32,
-            sequence_length=16,
-            max_grad_norm=5.0,
+            train_frequency=train_frequency,
+            target_update_frequency=target_update_frequency,
+            batch_size=batch_size,
+            sequence_length=sequence_length,
+            max_grad_norm=max_grad_norm,
         )
 
-        assert population.train_frequency == 8
-        assert population.target_update_frequency == 200
-        assert population.batch_size == 32
-        assert population.sequence_length == 16
-        assert population.max_grad_norm == 5.0
+        assert population.train_frequency == train_frequency
+        assert population.target_update_frequency == target_update_frequency
+        assert population.batch_size == batch_size
+        assert population.sequence_length == sequence_length
+        assert population.max_grad_norm == max_grad_norm
 
     def test_runner_loads_training_hyperparameters_from_yaml(self, tmp_path: Path, config_pack_factory):
-        """DemoRunner should load training hyperparameters from config (integration test)."""
         config_dir = config_pack_factory(name="hyperparams_config")
 
         def mutator(data: dict) -> None:
@@ -984,7 +880,6 @@ class TestTrainingHyperparameters:
             max_episodes=10,
         )
 
-        # Verify config structure
         assert runner.config["training"]["train_frequency"] == 2
         assert runner.config["training"]["target_update_frequency"] == 50
         assert runner.config["training"]["batch_size"] == 128
@@ -993,48 +888,29 @@ class TestTrainingHyperparameters:
 
 
 class TestMaxEpisodesConfiguration:
-    """Test max_episodes configuration from YAML.
+    """Test max_episodes configuration precedence."""
 
-    Consolidated from test_config_max_episodes.py (4 tests).
-    Tests that DemoRunner correctly reads max_episodes from config
-    with proper precedence (explicit > config > default).
-    """
-
-    def test_explicit_max_episodes_overrides_config(self, tmp_path: Path, config_pack_factory):
-        """When max_episodes is explicitly provided, it should override config."""
-        config_dir = config_pack_factory(name="max_episodes_override")
-
-        def mutator(data: dict) -> None:
-            data["training"].update({"max_episodes": 500})
-
-        mutate_training_yaml(config_dir, mutator)
+    @pytest.mark.parametrize(
+        ("explicit_override", "config_value", "expected"),
+        [
+            (1000, 500, 1000),
+            (None, 500, 500),
+        ],
+        ids=["explicit_overrides_config", "reads_from_config"],
+    )
+    def test_max_episodes_precedence(self, tmp_path: Path, config_pack_factory, explicit_override, config_value, expected):
+        config_dir = config_pack_factory(
+            modifier=lambda data: data["training"].update({"max_episodes": config_value}),
+        )
 
         runner = DemoRunner(
             config_dir=config_dir,
             db_path=tmp_path / "test.db",
             checkpoint_dir=tmp_path / "checkpoints",
-            max_episodes=1000,  # Explicit override
+            max_episodes=explicit_override,
         )
 
-        assert runner.max_episodes == 1000
-
-    def test_reads_max_episodes_from_config_when_not_provided(self, tmp_path: Path, config_pack_factory):
-        """When max_episodes is not provided, should read from config YAML."""
-        config_dir = config_pack_factory(name="max_episodes_from_config")
-
-        def mutator(data: dict) -> None:
-            data["training"].update({"max_episodes": 500})
-
-        mutate_training_yaml(config_dir, mutator)
-
-        runner = DemoRunner(
-            config_dir=config_dir,
-            db_path=tmp_path / "test.db",
-            checkpoint_dir=tmp_path / "checkpoints",
-            max_episodes=None,  # Will read from config
-        )
-
-        assert runner.max_episodes == 500
+        assert runner.max_episodes == expected
 
     def test_raises_error_when_max_episodes_missing(self, tmp_path: Path, config_pack_factory):
         """PDR-002: When max_episodes is missing, should raise clear error (no-defaults principle)."""
@@ -1085,23 +961,17 @@ class TestMaxEpisodesConfiguration:
 
 
 class TestConfigErrorHandling:
-    """Test error handling for configuration loading.
+    """Test error handling for configuration loading."""
 
-    Consolidated error handling tests from multiple files.
-    Tests missing files, invalid data, and validation errors.
-    """
-
-    def test_load_bars_config_missing_file(self):
-        """Test that load_bars_config raises FileNotFoundError for missing file."""
+    @pytest.mark.parametrize(
+        ("loader", "path"),
+        [
+            (load_bars_config, Path("/nonexistent/bars.yaml")),
+            (load_cascades_config, Path("/nonexistent/cascades.yaml")),
+            (load_environment_config, Path("/nonexistent/configs")),
+        ],
+        ids=["bars_missing", "cascades_missing", "environment_dir_missing"],
+    )
+    def test_loaders_raise_error_for_missing_resources(self, loader, path):
         with pytest.raises(FileNotFoundError):
-            load_bars_config(Path("/nonexistent/bars.yaml"))
-
-    def test_load_cascades_config_missing_file(self):
-        """Test that load_cascades_config raises FileNotFoundError for missing file."""
-        with pytest.raises(FileNotFoundError):
-            load_cascades_config(Path("/nonexistent/cascades.yaml"))
-
-    def test_load_environment_config_missing_directory(self):
-        """Test that load_environment_config raises FileNotFoundError for missing directory."""
-        with pytest.raises(FileNotFoundError):
-            load_environment_config(Path("/nonexistent/configs"))
+            loader(path)

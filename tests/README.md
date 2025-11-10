@@ -401,6 +401,16 @@ uv run pytest -m gpu
 - Full curriculum (200 episodes, opt-in): `uv run pytest -m slow tests/test_townlet/slow/test_training_levels.py`
 - Smoke configs reside in `configs/test/training_level_{1,2,3}_smoke.yaml`; their slow counterparts keep the longer `training_level_{1,2,3}.yaml` settings.
 
+### Slow Integration Suites
+
+Several integration files (e.g., `test_training_loop.py`, `test_recurrent_networks.py`, `test_temporal_mechanics.py`) are marked `@pytest.mark.slow` because they require dozens of episodes or long sequential replay runs. These suites are skipped by default; opt in with:
+
+```bash
+uv run pytest -m slow tests/test_townlet/integration
+```
+
+CI only runs these periodically, so include the same marker when validating major changes to training/runtime orchestration.
+
 ### Run with Coverage
 ```bash
 uv run pytest --cov=townlet --cov-report=term-missing
@@ -424,7 +434,7 @@ Custom markers are defined in `conftest.py` and can be used to categorize tests:
 
 | Marker | Description | Usage |
 |--------|-------------|-------|
-| `@pytest.mark.slow` | Long-running test | `pytest -m slow` to run only slow tests |
+| `@pytest.mark.slow` | Long-running test (opt-in) | `pytest -m slow` |
 | `@pytest.mark.gpu` | Requires GPU | Skipped automatically if no CUDA |
 | `@pytest.mark.integration` | Integration test | `pytest -m integration` |
 | `@pytest.mark.e2e` | End-to-end test | `pytest -m e2e` |

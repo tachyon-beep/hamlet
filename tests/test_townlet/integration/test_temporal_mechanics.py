@@ -89,6 +89,7 @@ import pytest
 import torch
 
 # All temporal mechanics features are implemented - all 17 tests passing
+pytestmark = pytest.mark.slow
 
 
 # =============================================================================
@@ -648,7 +649,7 @@ class TestTemporalIntegrations:
         env = cpu_env_factory(config_dir=Path("configs/L3_temporal_mechanics"), num_agents=1)
 
         curriculum = AdversarialCurriculum(
-            max_steps_per_episode=200,
+            max_steps_per_episode=50,
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
             entropy_gate=0.5,

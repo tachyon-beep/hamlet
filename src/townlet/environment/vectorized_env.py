@@ -837,7 +837,9 @@ class VectorizedHamletEnv:
             on_this_affordance = self.substrate.is_on_position(self.positions, affordance_pos)
             on_valid_affordance |= on_this_affordance
 
-        action_masks[:, interact_action_idx] = on_valid_affordance
+        base_interact_mask = action_masks[:, interact_action_idx].clone()
+        # Respect config-disabled INTERACT entries by preserving the base mask.
+        action_masks[:, interact_action_idx] = base_interact_mask & on_valid_affordance
 
         # P3.1: Mask all actions for dead agents (health <= 0 OR energy <= 0)
         # This must be LAST to override all other masking

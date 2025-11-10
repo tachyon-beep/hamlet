@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 import torch
 
+from tests.test_townlet._fixtures.environment import SUBSTRATE_FIXTURES as _SUBSTRATE_FIXTURES
+
 pytest_plugins = [
     "tests.test_townlet._fixtures.config",
     "tests.test_townlet._fixtures.devices",
@@ -16,6 +18,9 @@ pytest_plugins = [
     "tests.test_townlet._fixtures.database",
     "tests.test_townlet._fixtures.utils",
 ]
+
+# Re-export for tests that import from the legacy location
+SUBSTRATE_FIXTURES = _SUBSTRATE_FIXTURES
 
 
 def pytest_configure(config: pytest.Config) -> None:

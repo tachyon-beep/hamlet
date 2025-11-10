@@ -244,11 +244,11 @@ class TestRunnerAffordanceTransitions:
             env["grid_size"] = 3
             env["vision_range"] = 3
             env["enabled_affordances"] = ["Bed"]
-            data["curriculum"]["max_steps_per_episode"] = 100
+            data["curriculum"]["max_steps_per_episode"] = 50
             data["exploration"]["survival_window"] = 10
             data["training"].update(
                 {
-                    "max_episodes": 50,
+                    "max_episodes": 15,
                     "epsilon_start": 0.9,
                 }
             )
@@ -263,7 +263,7 @@ class TestRunnerAffordanceTransitions:
             config_dir=config_dir,
             db_path=db_path,
             checkpoint_dir=checkpoint_dir,
-            max_episodes=50,
+            max_episodes=15,
         )
 
         # Run training

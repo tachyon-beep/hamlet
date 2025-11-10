@@ -10,11 +10,14 @@ Task 13b: Multi-Episode Training Loop Integration Tests
 Focus: Test training loop over multiple episodes with real components
 """
 
+import pytest
 import torch
 
 from townlet.curriculum.static import StaticCurriculum
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
+
+pytestmark = pytest.mark.slow
 
 # =============================================================================
 # TEST CLASS 1: Masked Loss Integration
