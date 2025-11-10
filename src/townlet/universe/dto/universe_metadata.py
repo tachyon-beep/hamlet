@@ -50,6 +50,7 @@ class UniverseMetadata:
     compiler_version: str = "0.0.0"
     compiled_at: str = ""
     config_hash: str = ""
+    config_mtime: float = 0.0  # Maximum modification time of all config files (for cache invalidation)
     provenance_id: str = ""
     compiler_git_sha: str = ""
     python_version: str = ""

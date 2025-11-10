@@ -177,7 +177,7 @@ class AffordanceEngine:
         Args:
             meters: [num_agents, 8] current meter values
             affordance_name: Name of affordance (e.g., "Bed", "Job")
-            current_tick: Current tick number [0, required_ticks-1]
+            current_tick: Current tick number [0, duration_ticks-1]
             agent_mask: [num_agents] bool mask of agents to apply to
             check_affordability: If True, check if agents can afford costs
 
@@ -212,10 +212,10 @@ class AffordanceEngine:
             meter_idx = self.meter_name_to_idx[effect.meter]
             updated_meters[agent_mask, meter_idx] += effect.amount
 
-        required_ticks = affordance.required_ticks or 1
+        duration_ticks = affordance.duration_ticks or 1
 
         # Check if this is the final tick - if so, apply completion bonus
-        is_final_tick = current_tick == (required_ticks - 1)
+        is_final_tick = current_tick == (duration_ticks - 1)
         if is_final_tick and len(affordance.completion_bonus) > 0:
             for effect in affordance.completion_bonus:
                 meter_idx = self.meter_name_to_idx[effect.meter]
@@ -348,20 +348,20 @@ class AffordanceEngine:
 
         return 0.0
 
-    def get_required_ticks(self, affordance_name: str) -> int:
+    def get_duration_ticks(self, affordance_name: str) -> int:
         """
-        Get the required number of ticks for a multi-tick affordance.
+        Get the duration in ticks for a multi-tick affordance.
 
         Args:
             affordance_name: Name of affordance
 
         Returns:
-            Number of required ticks (1 for instant affordances)
+            Number of duration ticks (1 for instant affordances)
         """
         affordance = self.affordance_map.get(affordance_name)
-        if affordance is None or affordance.required_ticks is None:
+        if affordance is None or affordance.duration_ticks is None:
             return 1
-        return affordance.required_ticks
+        return affordance.duration_ticks
 
     def apply_interaction(
         self,

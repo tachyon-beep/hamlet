@@ -86,7 +86,7 @@ bars:
     index: 3
     tier: "resource"
     range: [0.0, 1.0]  # $0-$100 normalized to [0.0, 1.0]
-    initial: 1.0        # Start with $100 (full money) - agent has runway to learn cycles
+    initial: 0.3        # Start with $30 (30% money) - agent has runway to learn cycles
     base_depletion: 0.0  # No passive decay
     description: "Currency for purchasing affordances. No cascade effects."
 

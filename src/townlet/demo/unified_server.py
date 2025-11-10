@@ -22,6 +22,10 @@ from pathlib import Path
 
 import yaml
 
+# Import DemoRunner at module level to avoid Python 3.13 atexit threading issues
+# (importing TensorBoard/TensorFlow in background threads triggers atexit registration errors)
+from townlet.demo.runner import DemoRunner
+
 logger = logging.getLogger(__name__)
 
 
@@ -342,9 +346,6 @@ class UnifiedServer:
         """
         try:
             logger.info("[Training] Initializing DemoRunner...")
-
-            # Import here to avoid circular dependencies
-            from townlet.demo.runner import DemoRunner
 
             # Type narrowing: checkpoint_dir is guaranteed to be set by start()
             assert self.checkpoint_dir is not None, "checkpoint_dir must be set by start() before calling _run_training()"

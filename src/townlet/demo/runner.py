@@ -487,6 +487,11 @@ class DemoRunner:
         # Note: final metrics will be logged at end of training
         self.tb_logger.log_hyperparameters(hparams=self.hparams, metrics={})
 
+        # Check for shutdown before starting training loop
+        if self.should_shutdown:
+            logger.info("[Training] Shutdown requested during initialization, exiting before training starts")
+            return
+
         # Mark training started
         self.db.set_system_state("training_status", "running")
         self.db.set_system_state("start_time", str(time.time()))
@@ -539,6 +544,11 @@ class DemoRunner:
                 last_agent_state: BatchedAgentState | None = None
 
                 for step in range(max_steps):
+                    # Check for shutdown request every 10 steps for faster Ctrl+C response
+                    if step % 10 == 0 and self.should_shutdown:
+                        logger.info(f"[Training] Shutdown requested during episode {self.current_episode+1}, step {step}/{max_steps}")
+                        break
+
                     agent_state = self.population.step_population(self.env)
                     last_agent_state = agent_state
 

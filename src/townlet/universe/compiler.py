@@ -82,6 +82,10 @@ class UniverseCompiler:
 
         config_dir = Path(config_dir).resolve()  # Resolve to absolute path
         self._validate_config_dir(config_dir)
+
+        # Phase 0: Validate YAML syntax before doing any work
+        self._phase_0_validate_yaml_syntax(config_dir)
+
         cache_path = self._cache_artifact_path(config_dir)
         precomputed_hash: str | None = None
         precomputed_provenance: str | None = None
@@ -98,25 +102,37 @@ class UniverseCompiler:
                 )
             else:
                 precomputed_hash, precomputed_provenance = self._build_cache_fingerprint(config_dir)
+                current_mtime = self._compute_config_mtime(config_dir)
                 try:
                     cached_universe = CompiledUniverse.load_from_cache(cache_path)
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.warning("Failed to load cached universe from %s: %s", cache_path, exc)
                 else:
-                    if (
+                    # Check both content hash AND modification time for cache validity
+                    # mtime check catches ANY file change (comments, whitespace, field removal)
+                    cached_mtime = cached_universe.metadata.config_mtime
+                    if current_mtime > cached_mtime:
+                        logger.info(
+                            "Cache stale for %s (config files modified: cached_mtime=%.2f, current_mtime=%.2f). Recompiling.",
+                            cache_path,
+                            cached_mtime,
+                            current_mtime,
+                        )
+                    elif (
                         cached_universe.metadata.config_hash == precomputed_hash
                         and cached_universe.metadata.provenance_id == precomputed_provenance
                     ):
                         logger.info("Loaded compiled universe from cache: %s", cache_path)
                         return cached_universe
-                    logger.info(
-                        "Cache stale for %s (cached=%s/%s, current=%s/%s). Recompiling.",
-                        cache_path,
-                        cached_universe.metadata.config_hash[:8],
-                        precomputed_hash[:8] if precomputed_hash else "unknown",
-                        (cached_universe.metadata.provenance_id or "")[:8],
-                        (precomputed_provenance or "unknown")[:8],
-                    )
+                    else:
+                        logger.info(
+                            "Cache stale for %s (cached=%s/%s, current=%s/%s). Recompiling.",
+                            cache_path,
+                            cached_universe.metadata.config_hash[:8],
+                            precomputed_hash[:8] if precomputed_hash else "unknown",
+                            (cached_universe.metadata.provenance_id or "")[:8],
+                            (precomputed_provenance or "unknown")[:8],
+                        )
 
         raw_configs = self._stage_1_parse_individual_files(config_dir)
 
@@ -207,6 +223,65 @@ class UniverseCompiler:
                 "Config directory path contains '..' after resolution: %s. " "This may indicate a path traversal attempt.",
                 config_dir,
             )
+
+    def _phase_0_validate_yaml_syntax(self, config_dir: Path) -> None:
+        """Phase 0 – validate all YAML files can be parsed before compilation begins."""
+        errors = CompilationErrorCollector(stage="Phase 0: YAML Syntax Validation")
+
+        # Required config files (consolidated structure)
+        # Note: training.yaml contains training/environment/population/curriculum/exploration sections
+        required_files = [
+            "training.yaml",
+            "bars.yaml",
+            "cascades.yaml",
+            "affordances.yaml",
+            "substrate.yaml",
+            "cues.yaml",
+            "variables_reference.yaml",
+        ]
+
+        # Optional files
+        optional_files = ["action_labels.yaml"]
+
+        # Also check global actions (outside config_dir)
+        global_actions_path = Path("configs") / "global_actions.yaml"
+        all_files_to_check = [(config_dir / f, f, True) for f in required_files]
+        all_files_to_check.extend([(config_dir / f, f, False) for f in optional_files])
+        all_files_to_check.append((global_actions_path, "global_actions.yaml", True))
+
+        for file_path, file_name, is_required in all_files_to_check:
+            if not file_path.exists():
+                if is_required:
+                    errors.add(
+                        f"{file_name}: File not found",
+                        code="MISSING_FILE",
+                        location=str(file_path),
+                    )
+                continue
+
+            try:
+                with file_path.open() as handle:
+                    yaml.safe_load(handle)
+            except yaml.YAMLError as exc:
+                error_msg = str(exc)
+                if hasattr(exc, "problem_mark"):
+                    mark = exc.problem_mark
+                    problem = exc.problem or "syntax error"
+                    error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {problem}"
+                    if hasattr(exc, "context") and exc.context:
+                        error_msg = f"{exc.context}\n  {error_msg}"
+
+                errors.add(
+                    error_msg,
+                    code="YAML_SYNTAX_ERROR",
+                    location=file_name,
+                )
+
+        if errors.errors:
+            errors.add_hint("Check YAML indentation (use spaces, not tabs)")
+            errors.add_hint("Ensure lists use proper '- item' syntax")
+            errors.add_hint("Validate YAML syntax at yamllint.com or with 'yamllint <file>'")
+            errors.check_and_raise()
 
     def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
         """Stage 1 – load all YAML files into DTOs using shared loaders."""
@@ -1191,6 +1266,9 @@ class UniverseCompiler:
             pydantic_version=pydantic_version,
         )
 
+        # Compute config mtime for cache invalidation
+        config_mtime = self._compute_config_mtime(config_dir)
+
         metadata = UniverseMetadata(
             universe_name=config_dir.name,
             schema_version=SCHEMA_VERSION,
@@ -1214,6 +1292,7 @@ class UniverseCompiler:
             compiler_version=COMPILER_VERSION,
             compiled_at=datetime.now(UTC).isoformat(),
             config_hash=config_hash,
+            config_mtime=config_mtime,
             provenance_id=provenance_id,
             compiler_git_sha=compiler_git_sha,
             python_version=python_version,
@@ -1463,8 +1542,19 @@ class UniverseCompiler:
                 f"Missing variables_reference.yaml at {yaml_path}. " "Explicit observation exposures are required (no implicit defaults)."
             )
 
-        with yaml_path.open() as handle:
-            data = yaml.safe_load(handle) or {}
+        try:
+            with yaml_path.open() as handle:
+                data = yaml.safe_load(handle) or {}
+        except yaml.YAMLError as exc:
+            error_msg = str(exc)
+            if hasattr(exc, "problem_mark"):
+                mark = exc.problem_mark
+                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {exc.problem or 'syntax error'}"
+            raise CompilationError(
+                stage="Stage 5: Metadata Collection",
+                errors=[CompilationMessage(code="YAML_SYNTAX_ERROR", message=error_msg, location=str(yaml_path))],
+                hints=["Validate YAML syntax with 'yamllint variables_reference.yaml'"],
+            ) from exc
 
         raw_exposures = data.get("exposed_observations")
         if not raw_exposures:
@@ -1483,9 +1573,34 @@ class UniverseCompiler:
         return exposures
 
     def _normalize_yaml(self, file_path: Path) -> str:
-        with file_path.open() as handle:
-            data = yaml.safe_load(handle) or {}
-        return yaml.dump(data, sort_keys=True)
+        try:
+            with file_path.open() as handle:
+                data = yaml.safe_load(handle) or {}
+            return yaml.dump(data, sort_keys=True)
+        except yaml.YAMLError as exc:
+            # Transform raw YAML errors into friendly syntax errors
+            error_msg = str(exc)
+            if hasattr(exc, "problem_mark"):
+                mark = exc.problem_mark
+                error_msg = f"line {mark.line + 1}, column {mark.column + 1}: {exc.problem or 'syntax error'}"
+                if hasattr(exc, "context"):
+                    error_msg = f"{exc.context}\n  {error_msg}"
+
+            raise CompilationError(
+                stage="Config Validation",
+                errors=[
+                    CompilationMessage(
+                        code="YAML_SYNTAX_ERROR",
+                        message=error_msg,
+                        location=str(file_path),
+                    )
+                ],
+                hints=[
+                    "Check YAML indentation (use spaces, not tabs)",
+                    "Ensure lists use proper '- item' syntax",
+                    "Validate YAML syntax at yamllint.com or with 'yamllint <file>'",
+                ],
+            ) from exc
 
     def _build_cache_fingerprint(self, config_dir: Path) -> tuple[str, str]:
         config_hash = self._compute_config_hash(config_dir)
@@ -1538,6 +1653,25 @@ class UniverseCompiler:
             digest.update(file_path.name.encode("utf-8"))
             digest.update(normalized.encode("utf-8"))
         return digest.hexdigest()
+
+    def _compute_config_mtime(self, config_dir: Path) -> float:
+        """Compute maximum modification time of all config files.
+
+        Returns the latest mtime across all YAML files in the config directory
+        and global_actions.yaml. This ensures cache is invalidated when ANY
+        config file changes (including comment/whitespace-only changes).
+        """
+        yaml_files = sorted(config_dir.glob("*.yaml"))
+        yaml_files.append(Path("configs") / "global_actions.yaml")
+
+        max_mtime = 0.0
+        for file_path in yaml_files:
+            if not file_path.exists():
+                continue
+            mtime = file_path.stat().st_mtime
+            if mtime > max_mtime:
+                max_mtime = mtime
+        return max_mtime
 
     def _compute_provenance_id(
         self,

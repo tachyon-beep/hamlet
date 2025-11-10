@@ -48,7 +48,7 @@ def _build_affordance_collection(raw_affordances: tuple[Any, ...]) -> Affordance
             "name": raw.name,
             "category": data.get("category") or "unspecified",
             "interaction_type": interaction_type,
-            "required_ticks": data.get("required_ticks"),
+            "duration_ticks": data.get("duration_ticks"),
             "costs": data.get("costs") or [],
             "costs_per_tick": data.get("costs_per_tick") or [],
             "effects": data.get("effects") or [],
@@ -1033,8 +1033,8 @@ class VectorizedHamletEnv:
             if not at_affordance.any():
                 continue
 
-            # Get required ticks from AffordanceEngine
-            required_ticks = self.affordance_engine.get_required_ticks(affordance_name)
+            # Get duration ticks from AffordanceEngine
+            duration_ticks = self.affordance_engine.get_duration_ticks(affordance_name)
 
             # Track successful interactions
             agent_indices = torch.where(at_affordance)[0]
@@ -1072,7 +1072,7 @@ class VectorizedHamletEnv:
                 )
 
                 # Reset progress if completed
-                if ticks_done == required_ticks:
+                if ticks_done == duration_ticks:
                     self.interaction_progress[agent_idx] = 0
                     self.last_interaction_affordance[agent_idx_int] = None
 

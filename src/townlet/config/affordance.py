@@ -12,12 +12,12 @@ for later compiler stages.
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from townlet.config.affordance_masking import BarConstraint, ModeConfig
 from townlet.config.base import format_validation_error, load_yaml_section
 from townlet.config.capability_config import CapabilityConfig
-from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
+from townlet.config.effect_pipeline import EffectPipeline
 from townlet.environment.affordance_config import (
     AffordanceConfigCollection as _AffordanceConfigCollection,
 )
@@ -43,15 +43,12 @@ class AffordanceConfig(BaseModel):
     teaching_note: str | None = None
     design_intent: str | None = None
 
-    # Costs & effects (legacy fields retained for backwards compatibility)
+    # Costs
     costs: list[dict[str, Any]] = Field(default_factory=list, description="Instant costs applied when interaction starts")
     costs_per_tick: list[dict[str, Any]] = Field(default_factory=list, description="Costs applied every tick")
-    effects: list[dict[str, Any]] | None = Field(default=None, description="Instant effects (deprecated, auto-migrated to effect_pipeline)")
-    effects_per_tick: list[dict[str, Any]] = Field(default_factory=list, description="Per-tick effects (deprecated, auto-migrated)")
-    completion_bonus: list[dict[str, Any]] = Field(default_factory=list, description="Completion bonuses (deprecated, auto-migrated)")
 
     # Temporal metadata
-    required_ticks: int | None = None
+    duration_ticks: int | None = None
     operating_hours: list[int] | None = Field(default=None, description="Operating hours [open, close] or None for always open")
     modes: dict[str, ModeConfig] = Field(default_factory=dict, description="Optional operating modes (coffee vs bar, etc.)")
     availability: list[BarConstraint] = Field(default_factory=list, description="Meter-based availability constraints")
@@ -62,13 +59,6 @@ class AffordanceConfig(BaseModel):
 
     # Spatial metadata
     position: list[int] | dict[str, int] | int | None = None
-
-    @field_validator("effects")
-    @classmethod
-    def validate_effects_not_empty(cls, value: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
-        if value is not None and len(value) == 0:
-            raise ValueError("effects cannot be empty when provided")
-        return value
 
     @field_validator("operating_hours")
     @classmethod
@@ -108,30 +98,6 @@ class AffordanceConfig(BaseModel):
                 raise ValueError("Integer position (graph node id) must be >= 0")
             return value
         raise ValueError(f"Invalid position format ({type(value)}). Expected list[int], dict[str, int], int, or None.")
-
-    @model_validator(mode="after")
-    def migrate_effects_to_pipeline(self) -> "AffordanceConfig":
-        """Populate effect_pipeline from legacy effect fields if necessary."""
-
-        if self.effect_pipeline is not None:
-            return self
-
-        pipeline = EffectPipeline()
-
-        def _extend(target: list[AffordanceEffect], entries: list[dict[str, Any]] | None) -> None:
-            if not entries:
-                return
-            for entry in entries:
-                target.append(AffordanceEffect.model_validate(entry))
-
-        _extend(pipeline.on_completion, self.effects)
-        _extend(pipeline.per_tick, self.effects_per_tick)
-        _extend(pipeline.on_completion, self.completion_bonus)
-
-        if pipeline.has_effects():
-            object.__setattr__(self, "effect_pipeline", pipeline)
-
-        return self
 
 
 def load_affordances_config(config_dir: Path) -> list[AffordanceConfig]:

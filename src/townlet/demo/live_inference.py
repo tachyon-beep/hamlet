@@ -773,10 +773,10 @@ class LiveInferenceServer:
             q_values_list.extend([float("nan")] * (6 - len(q_values_list)))
 
         # Log Q-values and chosen action to file for debugging
-        action_names = ["Up", "Down", "Left", "Right", "Interact", "Wait"]
+        action_names_dict = self.env.get_action_label_names()
         padded_for_log = q_values_list[:6]
         log_line = (
-            f"Step {self.current_step}: Action={action_names[last_action]}, "
+            f"Step {self.current_step}: Action={action_names_dict.get(last_action, 'UNKNOWN')}, "
             f"Q-values: Up={padded_for_log[0]:.2f}, Down={padded_for_log[1]:.2f}, "
             f"Left={padded_for_log[2]:.2f}, Right={padded_for_log[3]:.2f}, "
             f"Interact={padded_for_log[4]:.2f}, Wait={padded_for_log[5]:.2f}\n"
