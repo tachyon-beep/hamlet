@@ -8,9 +8,9 @@
 
 ## AI-Friendly Summary (Skim This First!)
 
-**What**: End-to-end reference for the seven-stage UniverseCompiler pipeline located in `src/townlet/universe/compiler.py`, including inputs, validation rules, emitted artifacts, and caching semantics.  
-**Why**: TASK-004A promotes “compile once, execute many” so environments stop re-loading YAML at runtime; this doc is the single place that ties the architecture spec in `docs/architecture/COMPILER_ARCHITECTURE.md` to the actual implementation.  
-**Who Must Read**: Anyone modifying config loaders, validation rules, or runtime consumers.  
+**What**: End-to-end reference for the seven-stage UniverseCompiler pipeline located in `src/townlet/universe/compiler.py`, including inputs, validation rules, emitted artifacts, and caching semantics.
+**Why**: TASK-004A promotes “compile once, execute many” so environments stop re-loading YAML at runtime; this doc is the single place that ties the architecture spec in `docs/architecture/COMPILER_ARCHITECTURE.md` to the actual implementation.
+**Who Must Read**: Anyone modifying config loaders, validation rules, or runtime consumers.
 **Reading Strategy**: Section 2 for a quick refresher on the pipeline, Sections 4–6 before changing validation/metadata logic, Section 7 for cache/provenance questions.
 
 ## 1. Scope & Responsibilities
@@ -112,4 +112,3 @@ End-to-end sanity check: `uv run scripts/validate_substrate_runtime.py --config 
 - Incremental compilation (only re-run stages for changed YAML) once config packs grow further.
 - Extended cue processing (e.g., derived cues, behavior cues) by expanding `CuesCompiler` with specialized passes.
 - Shared cache registry for remote training clusters (content-addressed store instead of per-pack directories).
-

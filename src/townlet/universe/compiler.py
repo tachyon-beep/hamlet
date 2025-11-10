@@ -627,7 +627,6 @@ class UniverseCompiler:
                         )
                     )
 
-
     def _validate_capabilities_and_effect_pipelines(
         self,
         raw_configs: RawConfigs,

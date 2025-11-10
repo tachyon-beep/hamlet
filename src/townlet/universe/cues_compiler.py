@@ -9,7 +9,6 @@ from townlet.config.cues import CuesConfig
 from .errors import CompilationErrorCollector
 from .symbol_table import UniverseSymbolTable
 
-
 Formatter = Callable[[str, str, str | None], object]
 
 
@@ -142,4 +141,3 @@ class CuesCompiler:
                 return True
             current_end = max(current_end, end)
         return False
-

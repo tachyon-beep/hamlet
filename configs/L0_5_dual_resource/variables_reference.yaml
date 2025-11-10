@@ -8,7 +8,7 @@ variables:
   # Substrate encoding: 49 grid cells + 2 position = 51 dims
   - {id: "grid_encoding", scope: "agent", type: "vecNf", dims: 49, lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
   - {id: "position", scope: "agent", type: "vecNf", dims: 2, lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: [0,0]}
-  
+
   # Meters: 8 scalars
   - {id: "energy", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
   - {id: "health", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
@@ -18,10 +18,10 @@ variables:
   - {id: "social", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
   - {id: "fitness", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
   - {id: "hygiene", scope: "agent", type: "scalar", lifetime: "episode", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}
-  
+
   # Affordance: 15 dims
   - {id: "affordance_at_position", scope: "agent", type: "vecNf", dims: 15, lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]}
-  
+
   # Temporal: 4 scalars
   - {id: "time_sin", scope: "global", type: "scalar", lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: 0.0}
   - {id: "time_cos", scope: "global", type: "scalar", lifetime: "tick", readable_by: ["agent"], writable_by: ["engine"], default: 1.0}

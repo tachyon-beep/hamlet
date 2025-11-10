@@ -22,7 +22,7 @@ class AffordanceInfo:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "effects", MappingProxyType(dict(self.effects)))
-        if isinstance(self.position, Sequence) and not isinstance(self.position, (str, bytes, tuple)):
+        if isinstance(self.position, Sequence) and not isinstance(self.position, str | bytes | tuple):
             object.__setattr__(self, "position", tuple(self.position))
 
 

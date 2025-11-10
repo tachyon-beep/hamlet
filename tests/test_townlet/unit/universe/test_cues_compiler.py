@@ -65,4 +65,3 @@ def test_cues_compiler_detects_overlapping_visual_ranges(base_raw_configs: RawCo
     with pytest.raises(CompilationError):
         collector.check_and_raise("Cues")
     assert any(issue.code == "UAC-VAL-009" for issue in collector.issues)
-
