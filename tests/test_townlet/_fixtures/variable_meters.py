@@ -127,7 +127,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "energy",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.05}],
-                "effects": [{"meter": "energy", "amount": 0.50}, {"meter": "health", "amount": 0.02}],
+                "effect_pipeline": {"instant": [{"meter": "energy", "amount": 0.50}, {"meter": "health", "amount": 0.02}]},
                 "operating_hours": [0, 24],
             },
             {
@@ -136,7 +136,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "energy",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.11}],
-                "effects": [{"meter": "energy", "amount": 0.75}, {"meter": "health", "amount": 0.05}],
+                "effect_pipeline": {"instant": [{"meter": "energy", "amount": 0.75}, {"meter": "health", "amount": 0.05}]},
                 "operating_hours": [0, 24],
             },
             {
@@ -145,7 +145,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "hygiene",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.03}],
-                "effects": [{"meter": "mood", "amount": 0.20}],  # Use mood instead of hygiene
+                "effect_pipeline": {"instant": [{"meter": "mood", "amount": 0.20}]},  # Use mood instead of hygiene
                 "operating_hours": [0, 24],
             },
             {
@@ -154,7 +154,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "food",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.04}],
-                "effects": [{"meter": "energy", "amount": 0.20}, {"meter": "mood", "amount": 0.10}],
+                "effect_pipeline": {"instant": [{"meter": "energy", "amount": 0.20}, {"meter": "mood", "amount": 0.10}]},
                 "operating_hours": [0, 24],
             },
             {
@@ -163,7 +163,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "food",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.06}],
-                "effects": [{"meter": "energy", "amount": 0.30}],
+                "effect_pipeline": {"instant": [{"meter": "energy", "amount": 0.30}]},
                 "operating_hours": [0, 24],
             },
             {
@@ -172,7 +172,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "food",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.12}],
-                "effects": [{"meter": "energy", "amount": 0.40}, {"meter": "mood", "amount": 0.15}],
+                "effect_pipeline": {"instant": [{"meter": "energy", "amount": 0.40}, {"meter": "mood", "amount": 0.15}]},
                 "operating_hours": [11, 22],
             },
             {
@@ -181,7 +181,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "fitness",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.08}, {"meter": "energy", "amount": 0.10}],
-                "effects": [{"meter": "health", "amount": 0.15}, {"meter": "mood", "amount": 0.05}],
+                "effect_pipeline": {"instant": [{"meter": "health", "amount": 0.15}, {"meter": "mood", "amount": 0.05}]},
                 "operating_hours": [6, 22],
             },
             {
@@ -190,7 +190,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "health",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.15}],
-                "effects": [{"meter": "health", "amount": 0.60}],
+                "effect_pipeline": {"instant": [{"meter": "health", "amount": 0.60}]},
                 "operating_hours": [0, 24],
             },
             {
@@ -199,7 +199,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "income",
                 "interaction_type": "instant",
                 "costs": [{"meter": "energy", "amount": 0.15}],
-                "effects": [{"meter": "money", "amount": 0.225}, {"meter": "mood", "amount": -0.05}],
+                "effect_pipeline": {"instant": [{"meter": "money", "amount": 0.225}, {"meter": "mood", "amount": -0.05}]},
                 "operating_hours": [8, 18],
             },
             {
@@ -208,7 +208,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "leisure",
                 "interaction_type": "instant",
                 "costs": [],
-                "effects": [{"meter": "mood", "amount": 0.20}],
+                "effect_pipeline": {"instant": [{"meter": "mood", "amount": 0.20}]},
                 "operating_hours": [6, 20],
             },
             {
@@ -217,7 +217,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "leisure",
                 "interaction_type": "instant",
                 "costs": [],
-                "effects": [{"meter": "mood", "amount": 0.15}],
+                "effect_pipeline": {"instant": [{"meter": "mood", "amount": 0.15}]},
                 "operating_hours": [8, 20],
             },
             {
@@ -226,7 +226,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "social",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.15}],
-                "effects": [{"meter": "mood", "amount": 0.25}],
+                "effect_pipeline": {"instant": [{"meter": "mood", "amount": 0.25}]},
                 "operating_hours": [18, 28],
             },
             {
@@ -235,7 +235,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "leisure",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.10}],
-                "effects": [{"meter": "mood", "amount": 0.30}],
+                "effect_pipeline": {"instant": [{"meter": "mood", "amount": 0.30}]},
                 "operating_hours": [12, 24],
             },
             {
@@ -244,7 +244,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "category": "social",
                 "interaction_type": "instant",
                 "costs": [{"meter": "money", "amount": 0.08}],
-                "effects": [{"meter": "mood", "amount": 0.20}],
+                "effect_pipeline": {"instant": [{"meter": "mood", "amount": 0.20}]},
                 "operating_hours": [18, 23],
             },
         ],

@@ -85,8 +85,9 @@ def test_duplicate_affordance_registration_raises():
         id="Bed",
         name="Bed",
         category="rest",
+        interaction_type="instant",
         costs=[],
-        effects=[{"meter": "energy", "amount": 0.5}],
+        effect_pipeline={"instant": [{"meter": "energy", "amount": 0.5}]},
     )
 
     table.register_affordance(affordance)

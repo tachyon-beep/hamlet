@@ -55,14 +55,14 @@ affordances:
     duration_ticks: 5
   costs_per_tick:
   - meter: money
-    amount: 0.02
+    amount: 0.1
   effect_pipeline:
     per_tick:
     - meter: energy
-      amount: 0.075
+      amount: 0.2
     on_completion:
     - meter: energy
-      amount: 0.125
+      amount: 0.4
     - meter: health
       amount: 0.02
   operating_hours:
@@ -125,20 +125,20 @@ affordances:
   interaction_type: dual
   costs:
   - meter: money
-    amount: 0.07
+    amount: 0.1
   capabilities:
   - type: multi_tick
-    duration_ticks: 3
+    duration_ticks: 5
   costs_per_tick:
   - meter: money
-    amount: 0.04
+    amount: 0.05
   effect_pipeline:
     per_tick:
     - meter: satiation
       amount: 0.1125
     on_completion:
     - meter: satiation
-      amount: 0.1125
+      amount: 0.2
     - meter: health
       amount: 0.03
   operating_hours:
@@ -329,10 +329,12 @@ affordances:
   effect_pipeline:
     per_tick:
     - meter: money
-      amount: 0.075
+      amount: 0.2
+    - meter: energy
+      amount: -0.15
     on_completion:
     - meter: money
-      amount: 0.075
+      amount: 0.2
     - meter: energy
       amount: -0.15
     - meter: social

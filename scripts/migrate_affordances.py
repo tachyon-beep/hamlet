@@ -11,7 +11,7 @@ def migrate_affordance(aff):
     """Migrate a single affordance from legacy to modern format."""
 
     # Check if this affordance uses legacy format
-    has_legacy_format = "effects_per_tick" in aff or "completion_bonus" in aff or "required_ticks" in aff
+    has_legacy_format = "effects_per_tick" in aff or "completion_bonus" in aff or "required_ticks" in aff or "effects" in aff
 
     if not has_legacy_format:
         return aff  # Already modern format
@@ -20,15 +20,20 @@ def migrate_affordance(aff):
     required_ticks = aff.pop("required_ticks", None)
     effects_per_tick = aff.pop("effects_per_tick", [])
     completion_bonus = aff.pop("completion_bonus", [])
+    aff.pop("effects", None)  # Remove legacy 'effects' field (unused)
 
     # Add multi_tick capability if required_ticks exists
     if required_ticks is not None:
         capabilities = aff.get("capabilities", [])
 
-        # Add multi_tick capability
-        multi_tick_cap = {"type": "multi_tick", "required_ticks": required_ticks}
+        # Add multi_tick capability (use duration_ticks, not required_ticks)
+        multi_tick_cap = {"type": "multi_tick", "duration_ticks": required_ticks}
         capabilities.append(multi_tick_cap)
         aff["capabilities"] = capabilities
+
+        # For dual-type affordances, also set duration_ticks at top level
+        if aff.get("interaction_type") == "dual":
+            aff["duration_ticks"] = required_ticks
 
     # Create effect_pipeline if we have effects
     if effects_per_tick or completion_bonus:
