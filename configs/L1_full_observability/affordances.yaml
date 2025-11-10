@@ -26,6 +26,7 @@ affordances:
       amount: 0.125
     - meter: health
       amount: 0.02
+  duration_ticks: 5
 - id: '1'
   name: LuxuryBed
   category: energy_restoration
@@ -50,6 +51,7 @@ affordances:
       amount: 0.1875
     - meter: health
       amount: 0.05
+  duration_ticks: 6
 - id: '2'
   name: Shower
   category: hygiene
@@ -72,6 +74,7 @@ affordances:
     on_completion:
     - meter: hygiene
       amount: 0.1
+  duration_ticks: 3
 - id: '3'
   name: HomeMeal
   category: food
@@ -96,6 +99,7 @@ affordances:
       amount: 0.1125
     - meter: health
       amount: 0.03
+  duration_ticks: 2
 - id: '4'
   name: FastFood
   category: food
@@ -128,6 +132,7 @@ affordances:
       amount: -0.03
     - meter: health
       amount: -0.02
+  duration_ticks: 2
 - id: '5'
   name: Doctor
   category: health
@@ -150,6 +155,7 @@ affordances:
     on_completion:
     - meter: health
       amount: 0.0625
+  duration_ticks: 3
 - id: '6'
   name: Hospital
   category: health
@@ -172,6 +178,7 @@ affordances:
     on_completion:
     - meter: health
       amount: 0.1
+  duration_ticks: 6
 - id: '7'
   name: Therapist
   category: mood
@@ -194,6 +201,7 @@ affordances:
     on_completion:
     - meter: mood
       amount: 0.1
+  duration_ticks: 4
 - id: '8'
   name: Recreation
   category: mood
@@ -220,6 +228,7 @@ affordances:
       amount: 0.0625
     - meter: energy
       amount: 0.03
+  duration_ticks: 3
 - id: '9'
   name: Bar
   category: social
@@ -256,6 +265,7 @@ affordances:
       amount: -0.15
     - meter: health
       amount: -0.05
+  duration_ticks: 2
 - id: '10'
   name: Job
   category: income
@@ -280,6 +290,7 @@ affordances:
       amount: 0.02
     - meter: health
       amount: -0.03
+  duration_ticks: 8
 - id: '11'
   name: Labor
   category: income
@@ -306,6 +317,7 @@ affordances:
       amount: -0.05
     - meter: social
       amount: 0.01
+  duration_ticks: 6
 - id: '12'
   name: Gym
   category: fitness
@@ -330,6 +342,7 @@ affordances:
       amount: 0.075
     - meter: energy
       amount: -0.08
+  duration_ticks: 4
 - id: '13'
   name: Park
   category: fitness
@@ -358,3 +371,4 @@ affordances:
       amount: 0.0375
     - meter: energy
       amount: -0.15
+  duration_ticks: 3
