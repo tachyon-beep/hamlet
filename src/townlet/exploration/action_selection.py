@@ -53,16 +53,18 @@ def epsilon_greedy_action_selection(
 
     # Random actions (sample only from valid actions)
     if action_masks is not None:
-        # Sample from valid actions per agent
-        random_actions = torch.zeros(batch_size, dtype=torch.long, device=device)
-        for i in range(batch_size):
-            valid_actions = torch.where(action_masks[i])[0]
-            if len(valid_actions) == 0:
-                # Fallback: if no valid actions (shouldn't happen), use action 0
-                random_actions[i] = 0
-            else:
-                random_idx = torch.randint(0, len(valid_actions), (1,), device=device)
-                random_actions[i] = valid_actions[random_idx]
+        # Vectorized sampling from valid actions using multinomial
+        # Convert bool mask to probability distribution (1 for valid, 0 for invalid)
+        probs = action_masks.float()
+
+        # Add small epsilon to avoid division by zero (defensive)
+        probs = probs + 1e-8
+
+        # Normalize to create valid probability distribution
+        probs = probs / probs.sum(dim=1, keepdim=True)
+
+        # Vectorized sampling (10-100× faster than Python loop)
+        random_actions = torch.multinomial(probs, num_samples=1).squeeze(1)
     else:
         # No masking: sample uniformly from all actions
         random_actions = torch.randint(0, num_actions, (batch_size,), device=device)

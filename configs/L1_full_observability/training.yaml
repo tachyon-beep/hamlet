@@ -34,7 +34,7 @@ population:
   num_agents: 1  # Single agent for now
   learning_rate: 0.00025  # Standard Atari DQN learning rate
   gamma: 0.99
-  replay_buffer_capacity: 10000
+  replay_buffer_capacity: 50000  # 50k capacity for better experience diversity (166-500 episodes)
   network_type: simple  # Standard MLP Q-Network
 
 # Curriculum configuration (adversarial difficulty adjustment)

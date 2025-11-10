@@ -39,7 +39,7 @@ population:
   num_agents: 1  # Single agent
   learning_rate: 0.001  # Higher learning rate for faster learning
   gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
-  replay_buffer_capacity: 5000  # Smaller buffer for minimal world
+  replay_buffer_capacity: 50000  # 50k capacity for better experience diversity (166-500 episodes)
   network_type: simple  # Standard MLP Q-Network
 
 # Curriculum configuration (simpler than Level 1)

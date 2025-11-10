@@ -149,12 +149,21 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
 
         Returns:
             True if agent performance is consistent enough to reduce exploration
-        """
-        if len(self.survival_history) < self.survival_window:
-            return False  # Not enough data
 
+        Note:
+            Uses incremental window checking (min 10 episodes) to avoid abrupt
+            behavior changes when hitting full window size. This provides smoother
+            annealing onset and earlier feedback on performance consistency.
+        """
+        # Need minimum data for reliable variance calculation
+        if len(self.survival_history) < 10:
+            return False
+
+        # Use whatever recent data we have (up to window size)
+        # This allows incremental checking instead of waiting for full window
+        window_size = min(self.survival_window, len(self.survival_history))
         recent_survivals = torch.tensor(
-            self.survival_history[-self.survival_window :],
+            self.survival_history[-window_size:],
             dtype=torch.float32,
         )
         variance = torch.var(recent_survivals).item()
