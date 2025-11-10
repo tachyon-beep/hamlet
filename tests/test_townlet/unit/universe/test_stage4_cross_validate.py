@@ -103,7 +103,8 @@ def test_stage4_errors_when_critical_meter_unsustainable(base_raw_configs: RawCo
     bars = list(base_raw_configs.bars)
     energy_index = next(idx for idx, bar in enumerate(bars) if bar.name == "energy")
     bars[energy_index] = bars[energy_index].model_copy(update={"base_depletion": 1.5})
-    mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"bars": tuple(bars)})
+    training = base_raw_configs.training.model_copy(update={"allow_unfeasible_universe": False})
+    mutated_raw = _clone_raw_configs(base_raw_configs, hamlet_overrides={"bars": tuple(bars), "training": training})
 
     error = _run_stage4_expect_error(mutated_raw)
 

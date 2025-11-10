@@ -21,6 +21,7 @@ class TestRunnerRecordingIntegration:
 
         def modifier(data: dict) -> None:
             data["training"]["max_episodes"] = 2
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"
@@ -49,6 +50,7 @@ class TestRunnerRecordingIntegration:
                 "max_queue_size": 100,
                 "compression": "lz4",
             }
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"
@@ -84,6 +86,7 @@ class TestRunnerOrchestration:
             env["vision_range"] = 8
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 3
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
         # Create runner
@@ -125,6 +128,7 @@ class TestRunnerOrchestration:
             env["vision_range"] = 8
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 150
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
         # Create runner
@@ -163,6 +167,7 @@ class TestRunnerOrchestration:
             env["vision_range"] = 8
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 5
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
 
@@ -244,6 +249,7 @@ class TestRunnerAffordanceTransitions:
                     "epsilon_start": 0.9,
                 }
             )
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
 
@@ -308,6 +314,7 @@ class TestRunnerConfigValidation:
                 "energy_interact_depletion",
             ]:
                 env.pop(key, None)
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
 
@@ -338,6 +345,7 @@ class TestRunnerConfigValidation:
                 "epsilon_min",
             ]:
                 train.pop(key, None)
+            train["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
 
@@ -361,6 +369,9 @@ class TestRunnerResourceCleanup:
         def modifier(data: dict) -> None:
             data["training"]["max_episodes"] = 1
             data["environment"]["enabled_affordances"] = ["Bed"]
+            data["training"]["allow_unfeasible_universe"] = True
+            data["training"]["allow_unfeasible_universe"] = True
+            data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
         db_path = tmp_path / "test.db"

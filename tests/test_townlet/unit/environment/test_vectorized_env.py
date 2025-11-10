@@ -778,6 +778,8 @@ class TestRandomizeAffordancePositions:
         training_env = training_data.setdefault("environment", {})
         training_env["randomize_affordances"] = False
         training_env["enabled_affordances"] = ["Bed", "LuxuryBed"]
+        training_block = training_data.setdefault("training", {})
+        training_block["allow_unfeasible_universe"] = True
         training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
 
         affordance_path = target / "affordances.yaml"

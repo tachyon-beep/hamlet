@@ -64,6 +64,7 @@ BASE_CONFIG = {
         "epsilon_start": 1.0,
         "epsilon_decay": 0.99,
         "epsilon_min": 0.01,
+        "allow_unfeasible_universe": True,
     },
 }
 

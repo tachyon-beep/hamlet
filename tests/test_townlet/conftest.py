@@ -1049,7 +1049,7 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "description": "Agent moves listlessly",
             },
         ],
-        "composite_cues": [],
+        "compound_cues": [],
     }
 
     with open(config_4m / "cues.yaml", "w") as f:
