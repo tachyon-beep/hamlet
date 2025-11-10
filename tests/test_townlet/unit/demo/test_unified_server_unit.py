@@ -17,7 +17,7 @@ def minimal_config_dir(tmp_path: Path) -> Path:
     config_dir = tmp_path / "config_pack"
     config_dir.mkdir()
     training_yaml = config_dir / "training.yaml"
-    training_yaml.write_text("run_metadata:\n" "  output_subdir: 'Phase 1: Demo'\n" "environment:\n" "  grid_size: 8\n")
+    training_yaml.write_text("run_metadata:\n  output_subdir: 'Phase 1: Demo'\nenvironment:\n  grid_size: 8\n")
     return config_dir
 
 

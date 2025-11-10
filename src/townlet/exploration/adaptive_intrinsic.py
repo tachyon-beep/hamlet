@@ -27,6 +27,8 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         initial_intrinsic_weight: float = 1.0,
         min_intrinsic_weight: float = 0.0,
         variance_threshold: float = 100.0,  # Increased from 10.0 to prevent premature annealing
+        min_survival_fraction: float = 0.4,  # Fraction of max_episode_length (e.g., 0.4 = 40%)
+        max_episode_length: int = 500,  # From curriculum config - used to compute absolute threshold
         survival_window: int = 100,
         decay_rate: float = 0.99,
         epsilon_start: float = 1.0,
@@ -44,6 +46,8 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             initial_intrinsic_weight: Starting intrinsic weight
             min_intrinsic_weight: Minimum intrinsic weight (floor)
             variance_threshold: Variance threshold for annealing trigger
+            min_survival_fraction: Fraction of max_episode_length before allowing annealing (prevents "stable failure")
+            max_episode_length: Maximum steps per episode (from curriculum config)
             survival_window: Number of episodes to track for variance
             decay_rate: Exponential decay rate (weight *= decay_rate)
             epsilon_start: Initial epsilon for epsilon-greedy
@@ -67,6 +71,9 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self.current_intrinsic_weight = initial_intrinsic_weight
         self.min_intrinsic_weight = min_intrinsic_weight
         self.variance_threshold = variance_threshold
+        self.min_survival_fraction = min_survival_fraction
+        self.max_episode_length = max_episode_length
+        self.min_survival_for_annealing = int(min_survival_fraction * max_episode_length)  # Compute absolute threshold
         self.survival_window = survival_window
         self.decay_rate = decay_rate
         self.device = device
@@ -96,19 +103,20 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self,
         observations: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute weighted intrinsic rewards.
+        """Compute intrinsic rewards (normalized RND novelty).
+
+        Note: Weight is applied in replay buffer sampling, NOT here.
+        This prevents double-weighting bug.
 
         Args:
             observations: [batch, obs_dim] state observations
 
         Returns:
-            [batch] intrinsic rewards scaled by current weight
+            [batch] normalized intrinsic rewards (unweighted)
         """
-        # Get RND novelty
-        rnd_novelty = self.rnd.compute_intrinsic_rewards(observations)
-
-        # Scale by current weight
-        return rnd_novelty * self.current_intrinsic_weight
+        # Get RND novelty (already normalized)
+        # Weight will be applied once in replay buffer sampling
+        return self.rnd.compute_intrinsic_rewards(observations)
 
     def update(self, batch: dict[str, torch.Tensor]) -> None:
         """Update RND predictor network from experience batch.
@@ -155,9 +163,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         # DEFENSIVE: Only anneal if BOTH low variance AND good performance
         # Low variance + low survival = "consistently failing" (NOT ready to anneal)
         # Low variance + high survival = "consistently succeeding" (ready to anneal)
-        min_survival_for_annealing = 50.0  # Don't anneal until surviving at least 50 steps
-
-        return variance < self.variance_threshold and mean_survival > min_survival_for_annealing
+        return variance < self.variance_threshold and mean_survival > self.min_survival_for_annealing
 
     def anneal_weight(self) -> None:
         """Reduce intrinsic weight via exponential decay."""
@@ -183,6 +189,8 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             "current_intrinsic_weight": self.current_intrinsic_weight,
             "min_intrinsic_weight": self.min_intrinsic_weight,
             "variance_threshold": self.variance_threshold,
+            "min_survival_fraction": self.min_survival_fraction,
+            "max_episode_length": self.max_episode_length,
             "survival_window": self.survival_window,
             "decay_rate": self.decay_rate,
             "survival_history": self.survival_history,
@@ -200,6 +208,11 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self.variance_threshold = state["variance_threshold"]
         self.survival_window = state["survival_window"]
         self.decay_rate = state["decay_rate"]
+
+        # Gracefully handle new parameters (backwards compatibility)
+        self.min_survival_fraction = state.get("min_survival_fraction", 0.4)
+        self.max_episode_length = state.get("max_episode_length", 500)
+        self.min_survival_for_annealing = int(self.min_survival_fraction * self.max_episode_length)
 
         # Gracefully handle missing survival_history (backwards compatibility)
         if "survival_history" in state:

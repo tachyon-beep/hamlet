@@ -132,7 +132,7 @@ class HamletConfig(BaseModel):
         elif total_entities > grid_cells * 0.8:
             logger.warning(
                 f"Grid capacity warning: {self.environment.grid_size}×{self.environment.grid_size} grid "
-                f"is {total_entities}/{grid_cells} ({total_entities/grid_cells*100:.0f}%) full. "
+                f"is {total_entities}/{grid_cells} ({total_entities / grid_cells * 100:.0f}%) full. "
                 f"High density may reduce agent mobility. "
                 f"This may be intentional for your experiment."
             )

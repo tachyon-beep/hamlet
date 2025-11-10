@@ -276,6 +276,24 @@ class TensorBoardLogger:
         for affordance, count in affordance_counts.items():
             self.writer.add_scalar(f"{prefix}Affordances/{affordance}", count, episode)
 
+    def log_custom_action_usage(
+        self,
+        episode: int,
+        action_counts: dict[str, int],
+        agent_id: str = "agent_0",
+    ):
+        """Log custom action usage statistics (REST, MEDITATE, etc.).
+
+        Args:
+            episode: Current episode
+            action_counts: Dict of action_name -> use_count
+            agent_id: Agent identifier
+        """
+        prefix = f"{agent_id}/" if agent_id else ""
+
+        for action, count in action_counts.items():
+            self.writer.add_scalar(f"{prefix}CustomActions/{action}", count, episode)
+
     def log_custom_metric(
         self,
         tag: str,

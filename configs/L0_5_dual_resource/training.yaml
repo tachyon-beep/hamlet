@@ -25,17 +25,17 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 7  # 7×7 grid - room for 4 affordances with navigation space
+  grid_size: 5  # 7×7 grid - room for 4 affordances with navigation space
   partial_observability: false  # Agent sees full grid
-  vision_range: 7  # Full vision (not used when partial_observability=false)
-  enable_temporal_mechanics: true  # ENABLED: Multi-tick affordances (Bed=5 ticks, Job=4 ticks)
+  vision_range: 5  # Full vision (not used when partial_observability=false)
+  enable_temporal_mechanics: false  # ENABLED: Multi-tick affordances (Bed=5 ticks, Job=4 ticks)
 
   # Bed, Hospital, HomeMeal, and Job (agent can earn money!)
   enabled_affordances: ["Bed", "Hospital","HomeMeal","Job"]
   randomize_affordances: true
-  energy_move_depletion: 0.015
-  energy_wait_depletion: 0.012
-  energy_interact_depletion: 0.01
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.003
+  energy_interact_depletion: 0.003
 
 # Population configuration
 population:
@@ -55,10 +55,11 @@ curriculum:
 
 # Exploration configuration
 exploration:
-  embed_dim: 64  # Smaller embedding (simpler observations)
-  initial_intrinsic_weight: 0.7  # Lower intrinsic weight (extrinsic is clearer)
-  variance_threshold: 50.0  # Lower threshold for faster annealing
-  survival_window: 50  # Smaller window
+  embed_dim: 128  # Smaller embedding (simpler observations)
+  initial_intrinsic_weight: 0.8  # Higher for harder problem without REST (up from 0.5)
+  variance_threshold: 100.0  # More forgiving variance (up from 50.0)
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
+  survival_window: 100  # Smaller window
 
 # Training configuration
 training:
@@ -84,8 +85,8 @@ training:
     - "RIGHT"
     - "INTERACT"
     - "WAIT"
-    - "REST"
-    - "MEDITATE"
+    #- "REST"
+    #- "MEDITATE"
 
 # Recording configuration
 recording:

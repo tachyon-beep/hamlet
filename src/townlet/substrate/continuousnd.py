@@ -81,7 +81,7 @@ class ContinuousNDSubstrate(SpatialSubstrate):
         # Warn at N≥10 (action space grows large)
         if num_dims >= 10:
             warnings.warn(
-                f"ContinuousND with {num_dims} dimensions has {2*num_dims+2} actions. "
+                f"ContinuousND with {num_dims} dimensions has {2 * num_dims + 2} actions. "
                 f"Large action spaces may be challenging to train. "
                 f"Verify this is intentional for your research.",
                 UserWarning,

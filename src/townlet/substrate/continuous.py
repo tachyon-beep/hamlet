@@ -282,7 +282,7 @@ class ContinuousSubstrate(SpatialSubstrate):
         elif self.observation_encoding == "absolute":
             return self._encode_absolute(positions, affordances)
         else:
-            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. " f"Must be 'relative', 'scaled', or 'absolute'.")
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. Must be 'relative', 'scaled', or 'absolute'.")
 
     def get_observation_dim(self) -> int:
         """Return dimensionality of position encoding.

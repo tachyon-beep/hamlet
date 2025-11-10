@@ -58,7 +58,7 @@ class ObservationField:
         if self.dims <= 0:
             raise ValueError(f"Observation field '{self.name}' must have dims > 0")
         if self.end_index <= self.start_index:
-            raise ValueError(f"Observation field '{self.name}' has invalid indices: " f"{self.start_index}..{self.end_index}")
+            raise ValueError(f"Observation field '{self.name}' has invalid indices: {self.start_index}..{self.end_index}")
         if self.categorical_labels is not None:
             if not self.categorical_labels:
                 raise ValueError(f"Observation field '{self.name}' categorical labels cannot be empty")

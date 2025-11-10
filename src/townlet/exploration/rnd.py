@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
@@ -11,6 +12,57 @@ import torch.nn.functional as F  # noqa: N812
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.exploration.base import ExplorationStrategy
 from townlet.training.state import BatchedAgentState
+
+
+class RunningMeanStd:
+    """Running mean and standard deviation tracker.
+
+    Uses Welford's online algorithm for numerical stability.
+    Adapted from OpenAI's RND implementation and CleanRL.
+    """
+
+    def __init__(self, epsilon: float = 1e-4):
+        """Initialize running statistics.
+
+        Args:
+            epsilon: Small constant to avoid division by zero
+        """
+        self.mean = 0.0
+        self.var = 1.0
+        self.count = epsilon
+
+    def update(self, x: np.ndarray) -> None:
+        """Update running statistics with new batch.
+
+        Args:
+            x: Array of shape [batch_size] or [batch_size, ...]
+        """
+        batch_mean = np.mean(x)
+        batch_var = np.var(x)
+        batch_count = x.size if isinstance(x.size, int) else np.prod(x.shape)
+
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean: float, batch_var: float, batch_count: int) -> None:
+        """Update from pre-computed batch statistics.
+
+        Args:
+            batch_mean: Mean of batch
+            batch_var: Variance of batch
+            batch_count: Number of samples in batch
+        """
+        delta = batch_mean - self.mean
+        total_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / total_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        m2 = m_a + m_b + delta**2 * self.count * batch_count / total_count
+        new_var = m2 / total_count
+
+        self.mean = new_mean
+        self.var = new_var
+        self.count = total_count
 
 
 class RNDNetwork(nn.Module):
@@ -98,6 +150,9 @@ class RNDExploration(ExplorationStrategy):
         self.obs_buffer: list[torch.Tensor] = []
         self.step_counter = 0
 
+        # Running statistics for intrinsic reward normalization
+        self.reward_rms = RunningMeanStd()
+
     def select_actions(
         self,
         q_values: torch.Tensor,
@@ -124,13 +179,13 @@ class RNDExploration(ExplorationStrategy):
         self,
         observations: torch.Tensor,  # [batch, obs_dim]
     ) -> torch.Tensor:
-        """Compute RND novelty signal (prediction error).
+        """Compute normalized RND novelty signal (prediction error).
 
         Args:
             observations: [batch, obs_dim] state observations
 
         Returns:
-            [batch] intrinsic rewards (MSE between fixed and predictor)
+            [batch] normalized intrinsic rewards
         """
         with torch.no_grad():
             target_features: torch.Tensor = self.fixed_network(observations)
@@ -138,7 +193,15 @@ class RNDExploration(ExplorationStrategy):
             # MSE per sample (high error = novel = high reward)
             mse_per_sample = ((target_features - predicted_features) ** 2).mean(dim=1)
 
-        return cast(torch.Tensor, mse_per_sample)
+            # Update running statistics
+            mse_numpy = mse_per_sample.cpu().numpy()
+            self.reward_rms.update(mse_numpy)
+
+            # Normalize by running standard deviation
+            # This brings intrinsic rewards to comparable magnitude with extrinsic rewards
+            normalized = mse_per_sample / (np.sqrt(self.reward_rms.var) + 1e-8)
+
+        return cast(torch.Tensor, normalized)
 
     def update(self, batch: dict[str, torch.Tensor]) -> None:
         """Update predictor network from experience batch.
@@ -227,7 +290,7 @@ class RNDExploration(ExplorationStrategy):
         """Return serializable state for checkpoint saving.
 
         Returns:
-            Dict with network weights, optimizer state, and epsilon
+            Dict with network weights, optimizer state, epsilon, and normalization stats
         """
         return {
             "fixed_network": self.fixed_network.state_dict(),
@@ -238,6 +301,10 @@ class RNDExploration(ExplorationStrategy):
             "epsilon_decay": self.epsilon_decay,
             "obs_dim": self.obs_dim,
             "embed_dim": self.embed_dim,
+            # Normalization statistics
+            "reward_rms_mean": self.reward_rms.mean,
+            "reward_rms_var": self.reward_rms.var,
+            "reward_rms_count": self.reward_rms.count,
         }
 
     def load_state(self, state: dict[str, Any]) -> None:
@@ -248,11 +315,13 @@ class RNDExploration(ExplorationStrategy):
         """
         self.fixed_network.load_state_dict(state["fixed_network"])
         self.predictor_network.load_state_dict(state["predictor_network"])
-
-        # Gracefully handle missing optimizer (backwards compatibility)
-        if "optimizer" in state:
-            self.optimizer.load_state_dict(state["optimizer"])
+        self.optimizer.load_state_dict(state["optimizer"])
 
         self.epsilon = state["epsilon"]
         self.epsilon_min = state["epsilon_min"]
         self.epsilon_decay = state["epsilon_decay"]
+
+        # Restore normalization statistics
+        self.reward_rms.mean = state["reward_rms_mean"]
+        self.reward_rms.var = state["reward_rms_var"]
+        self.reward_rms.count = state["reward_rms_count"]

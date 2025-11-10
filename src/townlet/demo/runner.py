@@ -398,6 +398,8 @@ class DemoRunner:
             embed_dim=self.hamlet_config.exploration.embed_dim,
             initial_intrinsic_weight=self.hamlet_config.exploration.initial_intrinsic_weight,
             variance_threshold=self.hamlet_config.exploration.variance_threshold,
+            min_survival_fraction=self.hamlet_config.exploration.min_survival_fraction,
+            max_episode_length=self.hamlet_config.curriculum.max_steps_per_episode,
             survival_window=self.hamlet_config.exploration.survival_window,
             epsilon_start=self.hamlet_config.training.epsilon_start,
             epsilon_decay=self.hamlet_config.training.epsilon_decay,
@@ -538,6 +540,7 @@ class DemoRunner:
                 episode_intrinsic_reward = torch.zeros(num_agents, device=self.env.device)
                 final_meters = [None for _ in range(num_agents)]
                 affordance_visits = [defaultdict(int) for _ in range(num_agents)]
+                custom_action_uses = [defaultdict(int) for _ in range(num_agents)]  # Track REST, MEDITATE, etc.
                 # NEW: Transition tracking
                 affordance_transitions = [defaultdict(lambda: defaultdict(int)) for _ in range(num_agents)]
                 last_affordance = [None for _ in range(num_agents)]
@@ -546,7 +549,7 @@ class DemoRunner:
                 for step in range(max_steps):
                     # Check for shutdown request every 10 steps for faster Ctrl+C response
                     if step % 10 == 0 and self.should_shutdown:
-                        logger.info(f"[Training] Shutdown requested during episode {self.current_episode+1}, step {step}/{max_steps}")
+                        logger.info(f"[Training] Shutdown requested during episode {self.current_episode + 1}, step {step}/{max_steps}")
                         break
 
                     agent_state = self.population.step_population(self.env)
@@ -590,6 +593,14 @@ class DemoRunner:
 
                                 # Update last affordance for next transition
                                 last_affordance[agent_idx] = affordance_name
+
+                    # Track custom action uses (REST, MEDITATE, etc.)
+                    for idx in range(num_agents):
+                        action_id = int(agent_state.actions[idx].item())
+                        # Custom actions start after substrate actions
+                        if action_id >= self.env.action_space.substrate_action_count:
+                            action = self.env.action_space.get_action_by_id(action_id)
+                            custom_action_uses[idx][action.name] += 1
 
                     for idx in range(num_agents):
                         if agent_state.dones[idx] and final_meters[idx] is None:
@@ -693,6 +704,7 @@ class DemoRunner:
                         timestamp=episode_timestamp,
                         affordance_layout=self.env.get_affordance_positions(),
                         affordance_visits={k: v for k, v in affordance_visits[0].items()},  # Agent 0 visits
+                        custom_action_uses={k: v for k, v in custom_action_uses[0].items()},  # Agent 0 custom actions
                     )
                     self.recorder.finish_episode(metadata)
 
@@ -756,6 +768,14 @@ class DemoRunner:
                             agent_id=self.population.agent_ids[idx],
                         )
 
+                for idx, uses in enumerate(custom_action_uses):
+                    if uses:
+                        self.tb_logger.log_custom_action_usage(
+                            episode=self.current_episode,
+                            action_counts=dict(uses),
+                            agent_id=self.population.agent_ids[idx],
+                        )
+
                 # Heartbeat log every HEARTBEAT_INTERVAL episodes
                 if self.current_episode % self.HEARTBEAT_INTERVAL == 0:
                     elapsed = time.time() - episode_start
@@ -788,10 +808,21 @@ class DemoRunner:
                         meter_names = ["energy", "hygiene", "satiation", "money", "mood", "social", "health", "fitness"]
                         final_meter_values = {name: final_meters[0][i].item() for i, name in enumerate(meter_names)}
 
-                    # Get affordance usage for agent 0
-                    affordance_summary = (
-                        ", ".join(f"{name}: {count}" for name, count in affordance_visits[0].items()) if affordance_visits[0] else "None"
-                    )
+                    # Get affordance usage for agent 0 with tick counts and completed interactions
+                    if affordance_visits[0]:
+                        summary_parts = []
+                        for name, tick_count in affordance_visits[0].items():
+                            # Get duration_ticks to calculate completed interactions
+                            try:
+                                duration = self.env.affordance_engine.get_duration_ticks(name)
+                                completed = tick_count // duration
+                                summary_parts.append(f"{name}: {tick_count} ({completed})")
+                            except Exception:
+                                # Fallback if duration lookup fails
+                                summary_parts.append(f"{name}: {tick_count}")
+                        affordance_summary = ", ".join(summary_parts)
+                    else:
+                        affordance_summary = "None"
 
                     logger.info("=" * 80)
                     logger.info(f"📊 SUMMARY - Episode {self.current_episode}/{self.max_episodes}")
@@ -801,7 +832,12 @@ class DemoRunner:
                         f"Rewards:        Total: {total_reward:.2f} | "
                         f"Extrinsic: {extrinsic_reward:.2f} | Intrinsic: {weighted_intrinsic:.2f}"
                     )
-                    logger.info(f"Exploration:    ε: {epsilon_value:.3f} | Intrinsic Weight: {intrinsic_weight_value:.3f}")
+                    # Check if annealing would trigger (for status display)
+                    annealing_active = self.exploration.should_anneal() if hasattr(self.exploration, "should_anneal") else False
+                    annealing_status = "🔻 ANNEALING" if annealing_active else "✓ exploring"
+                    logger.info(
+                        f"Exploration:    ε: {epsilon_value:.3f} | Intrinsic Weight: {intrinsic_weight_value:.3f} | {annealing_status}"
+                    )
                     if training_metrics["training_step"] > 0:
                         logger.info(
                             f"Training:       Steps: {training_metrics['training_step']} | "
@@ -814,6 +850,22 @@ class DemoRunner:
                             f"Money: ${final_meter_values.get('money', 0) * 100:.1f}"
                         )
                     logger.info(f"Affordances:    {affordance_summary}")
+
+                    # Log custom action usage (REST, MEDITATE, etc.)
+                    if custom_action_uses[0]:
+                        custom_summary_parts = [f"{name}: {count}" for name, count in custom_action_uses[0].items()]
+                        custom_summary = ", ".join(custom_summary_parts)
+                        logger.info(f"Custom Actions: {custom_summary}")
+
+                    # Log total interaction ticks for debugging
+                    total_interaction_ticks = sum(affordance_visits[0].values()) if affordance_visits[0] else 0
+                    total_custom_actions = sum(custom_action_uses[0].values()) if custom_action_uses[0] else 0
+                    total_interactions = total_interaction_ticks + total_custom_actions
+                    logger.info(
+                        f"Interactions:   {total_interaction_ticks} affordance ticks + {total_custom_actions} custom actions = "
+                        f"{total_interactions}/{int(step_counts_cpu[0].item())} steps "
+                        f"({100 * total_interactions / max(1, int(step_counts_cpu[0].item())):.1f}%)"
+                    )
                     logger.info("=" * 80)
 
                 # Checkpoint every CHECKPOINT_INTERVAL episodes

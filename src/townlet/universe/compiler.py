@@ -220,7 +220,7 @@ class UniverseCompiler:
         path_str = str(config_dir)
         if ".." in path_str:
             logger.warning(
-                "Config directory path contains '..' after resolution: %s. " "This may indicate a path traversal attempt.",
+                "Config directory path contains '..' after resolution: %s. This may indicate a path traversal attempt.",
                 config_dir,
             )
 
@@ -493,8 +493,7 @@ class UniverseCompiler:
                     errors.add(
                         _format_error(
                             "UAC-RES-004",
-                            f"References non-existent affordance '{affordance_name}'. "
-                            f"Valid affordances: {symbol_table.affordance_names}",
+                            f"References non-existent affordance '{affordance_name}'. Valid affordances: {symbol_table.affordance_names}",
                             "training.yaml:environment.enabled_affordances",
                         )
                     )
@@ -871,7 +870,7 @@ class UniverseCompiler:
                     x, y = position
                     if 0 <= x < width and 0 <= y < height:
                         return True, ""
-                    return False, f"Position {position} outside grid bounds 0-{width-1}, 0-{height-1}."
+                    return False, f"Position {position} outside grid bounds 0-{width - 1}, 0-{height - 1}."
                 if len(position) == 3:
                     if grid.depth is None:
                         return False, "Position includes depth but substrate is 2D."
@@ -986,6 +985,10 @@ class UniverseCompiler:
         ]
         if not income_affordances:
             return 0.0
+
+        # If temporal mechanics are disabled, operating_hours are ignored (all affordances available 24/7)
+        if not raw_configs.environment.enable_temporal_mechanics:
+            return 24.0
 
         if any(getattr(aff, "operating_hours", None) is None for aff in income_affordances):
             return 24.0
@@ -1539,7 +1542,7 @@ class UniverseCompiler:
         exposures: list[dict[str, Any]] = []
         if not yaml_path.exists():
             raise ValueError(
-                f"Missing variables_reference.yaml at {yaml_path}. " "Explicit observation exposures are required (no implicit defaults)."
+                f"Missing variables_reference.yaml at {yaml_path}. Explicit observation exposures are required (no implicit defaults)."
             )
 
         try:
@@ -1559,8 +1562,7 @@ class UniverseCompiler:
         raw_exposures = data.get("exposed_observations")
         if not raw_exposures:
             raise ValueError(
-                f"{yaml_path} must define 'exposed_observations'. "
-                "The compiler no longer infers default exposures; specify them explicitly."
+                f"{yaml_path} must define 'exposed_observations'. The compiler no longer infers default exposures; specify them explicitly."
             )
 
         exposures = [deepcopy(obs) for obs in raw_exposures]

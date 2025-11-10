@@ -33,9 +33,7 @@ def config_hash_warning(checkpoint: Mapping[str, Any], universe: CompiledUnivers
 
     checkpoint_hash = checkpoint.get("config_hash")
     if checkpoint_hash is None:
-        return (
-            "Checkpoint missing config_hash; transfer learning may be unstable." " Retrain or regenerate checkpoint with Stage 7 compiler."
-        )
+        return "Checkpoint missing config_hash; transfer learning may be unstable. Retrain or regenerate checkpoint with Stage 7 compiler."
 
     if checkpoint_hash != universe.metadata.config_hash:
         return (
@@ -51,11 +49,11 @@ def assert_checkpoint_dimensions(checkpoint: Mapping[str, Any], universe: Compil
 
     obs_dim = checkpoint.get("observation_dim")
     if obs_dim is not None and obs_dim != universe.metadata.observation_dim:
-        raise ValueError("Checkpoint observation_dim mismatch:" f" checkpoint={obs_dim}, current={universe.metadata.observation_dim}")
+        raise ValueError(f"Checkpoint observation_dim mismatch: checkpoint={obs_dim}, current={universe.metadata.observation_dim}")
 
     action_dim = checkpoint.get("action_dim")
     if action_dim is not None and action_dim != universe.metadata.action_count:
-        raise ValueError("Checkpoint action_dim mismatch:" f" checkpoint={action_dim}, current={universe.metadata.action_count}")
+        raise ValueError(f"Checkpoint action_dim mismatch: checkpoint={action_dim}, current={universe.metadata.action_count}")
 
     expected_uuids = [field.uuid for field in universe.observation_spec.fields]
     checkpoint_uuids = checkpoint.get("observation_field_uuids")

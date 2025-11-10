@@ -519,9 +519,9 @@ class TestVFSEnvironmentIntegration:
         )
 
         # Also verify the position is within [0,1] range
-        assert torch.all(vfs_position >= 0.0) and torch.all(vfs_position <= 1.0), (
-            f"Position outside [0,1] range: {vfs_position.tolist()}. " f"This violates the VFS schema contract."
-        )
+        assert torch.all(vfs_position >= 0.0) and torch.all(
+            vfs_position <= 1.0
+        ), f"Position outside [0,1] range: {vfs_position.tolist()}. This violates the VFS schema contract."
 
     def test_position_normalization_pomdp(self, cpu_env_factory):
         """Verify positions are normalized in POMDP mode (this should already work)."""
@@ -540,9 +540,9 @@ class TestVFSEnvironmentIntegration:
         # Position should be normalized to [0,1]
         expected_normalized = torch.tensor([[1.0, 1.0]], device=env.device)
 
-        assert torch.allclose(vfs_position, expected_normalized, atol=1e-6), (
-            f"Position not properly normalized in POMDP mode! " f"Expected {expected_normalized.tolist()}, got {vfs_position.tolist()}."
-        )
+        assert torch.allclose(
+            vfs_position, expected_normalized, atol=1e-6
+        ), f"Position not properly normalized in POMDP mode! Expected {expected_normalized.tolist()}, got {vfs_position.tolist()}."
 
         assert torch.all(vfs_position >= 0.0) and torch.all(vfs_position <= 1.0), f"Position outside [0,1] range: {vfs_position.tolist()}"
 

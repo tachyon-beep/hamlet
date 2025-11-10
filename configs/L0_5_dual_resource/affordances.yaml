@@ -8,10 +8,9 @@ affordances:
   interaction_type: dual
   costs:
   - meter: money
-    amount: 0.1
+    amount: 0.02
   capabilities:
   - type: multi_tick
-    duration_ticks: 5
   costs_per_tick:
   - meter: money
     amount: 0.1
@@ -37,19 +36,18 @@ affordances:
     amount: 0.2
   capabilities:
   - type: multi_tick
-    duration_ticks: 6
   costs_per_tick:
   - meter: money
-    amount: 0.2
+    amount: 0.05
   effect_pipeline:
     per_tick:
     - meter: energy
-      amount: 0.09375
+      amount: 0.2
     on_completion:
     - meter: energy
-      amount: 0.1875
+      amount: 0.3
     - meter: health
-      amount: 0.05
+      amount: 0.1
   operating_hours:
   - 0
   - 24
@@ -63,7 +61,6 @@ affordances:
     amount: 0.03
   capabilities:
   - type: multi_tick
-    duration_ticks: 3
   costs_per_tick:
   - meter: money
     amount: 0.01
@@ -87,10 +84,9 @@ affordances:
     amount: 0.1
   capabilities:
   - type: multi_tick
-    duration_ticks: 5
   costs_per_tick:
   - meter: money
-    amount: 0.05
+    amount: 0.01
   effect_pipeline:
     per_tick:
     - meter: satiation
@@ -113,7 +109,6 @@ affordances:
     amount: 0.1
   capabilities:
   - type: multi_tick
-    duration_ticks: 2
   costs_per_tick:
   - meter: money
     amount: 0.05
@@ -147,7 +142,6 @@ affordances:
     amount: 0.08
   capabilities:
   - type: multi_tick
-    duration_ticks: 2
   costs_per_tick:
   - meter: money
     amount: 0.04
@@ -171,7 +165,6 @@ affordances:
     amount: 0.15
   capabilities:
   - type: multi_tick
-    duration_ticks: 3
   costs_per_tick:
   - meter: money
     amount: 0.05
@@ -195,7 +188,6 @@ affordances:
     amount: 0.15
   capabilities:
   - type: multi_tick
-    duration_ticks: 3
   costs_per_tick:
   - meter: money
     amount: 0.05
@@ -219,7 +211,6 @@ affordances:
     amount: 0.06
   capabilities:
   - type: multi_tick
-    duration_ticks: 2
   costs_per_tick:
   - meter: money
     amount: 0.03
@@ -247,7 +238,6 @@ affordances:
     amount: 0.15
   capabilities:
   - type: multi_tick
-    duration_ticks: 2
   costs_per_tick:
   - meter: money
     amount: 0.075
@@ -283,21 +273,20 @@ affordances:
   costs: []
   capabilities:
   - type: multi_tick
-    duration_ticks: 4
   costs_per_tick: []
   effect_pipeline:
     per_tick:
     - meter: money
-      amount: 0.2
+      amount: 0.4
     - meter: energy
-      amount: -0.15
+      amount: -0.02
+    - meter: health
+      amount: -0.01
     on_completion:
     - meter: money
-      amount: 0.2
-    - meter: energy
-      amount: -0.15
+      amount: 0.5
     - meter: social
-      amount: 0.02
+      amount: 0.05
     - meter: health
       amount: -0.03
   operating_hours:
@@ -311,7 +300,6 @@ affordances:
   costs: []
   capabilities:
   - type: multi_tick
-    duration_ticks: 4
   costs_per_tick: []
   effect_pipeline:
     per_tick:
@@ -341,7 +329,6 @@ affordances:
     amount: 0.08
   capabilities:
   - type: multi_tick
-    duration_ticks: 3
   costs_per_tick:
   - meter: money
     amount: 0.02667
@@ -365,7 +352,6 @@ affordances:
   costs: []
   capabilities:
   - type: multi_tick
-    duration_ticks: 3
   costs_per_tick: []
   effect_pipeline:
     per_tick:

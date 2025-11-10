@@ -127,7 +127,7 @@ class TrainingConfig(BaseModel):
             episodes_to_01 = math.log(0.1) / math.log(self.epsilon_decay)
         except (ZeroDivisionError, ValueError) as exc:
             logger.warning(
-                "epsilon_decay=%s produced invalid episodes_to_01 calculation (%s). " "Skipping exact episode estimate.",
+                "epsilon_decay=%s produced invalid episodes_to_01 calculation (%s). Skipping exact episode estimate.",
                 self.epsilon_decay,
                 exc,
             )

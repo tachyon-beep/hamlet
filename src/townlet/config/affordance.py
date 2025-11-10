@@ -12,7 +12,7 @@ for later compiler stages.
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from townlet.config.affordance_masking import BarConstraint, ModeConfig
 from townlet.config.base import format_validation_error, load_yaml_section
@@ -98,6 +98,25 @@ class AffordanceConfig(BaseModel):
                 raise ValueError("Integer position (graph node id) must be >= 0")
             return value
         raise ValueError(f"Invalid position format ({type(value)}). Expected list[int], dict[str, int], int, or None.")
+
+    @model_validator(mode="after")
+    def validate_no_redundant_duration_ticks(self) -> "AffordanceConfig":
+        """Reject configs with duration_ticks in both root and capabilities (legacy migration artifact)."""
+
+        if not self.capabilities:
+            return self
+
+        # Check if any multi_tick capability has duration_ticks set (not None)
+        for cap in self.capabilities:
+            if hasattr(cap, "type") and cap.type == "multi_tick":
+                if hasattr(cap, "duration_ticks") and cap.duration_ticks is not None:
+                    raise ValueError(
+                        f"Affordance '{self.id}': Remove 'duration_ticks' from capabilities array. "
+                        f"Only the root-level 'duration_ticks' field is used. "
+                        f"(Legacy migration artifact - capabilities[].duration_ticks is ignored at runtime)"
+                    )
+
+        return self
 
 
 def load_affordances_config(config_dir: Path) -> list[AffordanceConfig]:

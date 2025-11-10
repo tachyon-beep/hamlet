@@ -56,7 +56,7 @@ def iter_affordance_positions(affordances: object) -> Iterator[torch.Tensor]:
     elif isinstance(affordances, Iterable):
         items = affordances
     else:
-        raise TypeError("Unsupported affordance container. Provide a mapping, iterable, or " "AffordancePositionProvider implementation.")
+        raise TypeError("Unsupported affordance container. Provide a mapping, iterable, or AffordancePositionProvider implementation.")
 
     for item in items:
         position = item

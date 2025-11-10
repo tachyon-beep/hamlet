@@ -22,9 +22,9 @@ def test_l0_and_l1_have_same_action_dim():
     )
 
     # CRITICAL: Same action_dim enables checkpoint transfer
-    assert env_l0.action_dim == env_l1.action_dim, (
-        f"L0 and L1 must have same action_dim for checkpoint transfer. " f"L0: {env_l0.action_dim}, L1: {env_l1.action_dim}"
-    )
+    assert (
+        env_l0.action_dim == env_l1.action_dim
+    ), f"L0 and L1 must have same action_dim for checkpoint transfer. L0: {env_l0.action_dim}, L1: {env_l1.action_dim}"
 
 
 def test_l0_and_l1_share_global_vocabulary():
@@ -45,7 +45,7 @@ def test_l0_and_l1_share_global_vocabulary():
     l0_action_names = {action.name for action in env_l0.action_space.actions}
     l1_action_names = {action.name for action in env_l1.action_space.actions}
 
-    assert l0_action_names == l1_action_names, f"L0 and L1 must share action vocabulary. " f"L0: {l0_action_names}, L1: {l1_action_names}"
+    assert l0_action_names == l1_action_names, f"L0 and L1 must share action vocabulary. L0: {l0_action_names}, L1: {l1_action_names}"
 
     # Verify custom actions present
     expected_custom = {"REST", "MEDITATE"}

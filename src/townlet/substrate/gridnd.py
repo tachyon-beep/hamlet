@@ -58,7 +58,7 @@ class GridNDSubstrate(SpatialSubstrate):
         num_dims = len(dimension_sizes)
         if num_dims < 4:
             raise ValueError(
-                f"GridND requires at least 4 dimensions, got {num_dims}. " f"Use Grid2DSubstrate (2D) or Grid3DSubstrate (3D) instead."
+                f"GridND requires at least 4 dimensions, got {num_dims}. Use Grid2DSubstrate (2D) or Grid3DSubstrate (3D) instead."
             )
 
         if num_dims > 100:
@@ -67,7 +67,7 @@ class GridNDSubstrate(SpatialSubstrate):
         # Warn at N≥10 (action space grows large)
         if num_dims >= 10:
             warnings.warn(
-                f"GridND with {num_dims} dimensions has {2*num_dims+2} actions. "
+                f"GridND with {num_dims} dimensions has {2 * num_dims + 2} actions. "
                 f"Large action spaces may be challenging to train. "
                 f"Verify this is intentional for your research.",
                 UserWarning,
@@ -473,7 +473,7 @@ class GridNDSubstrate(SpatialSubstrate):
         # Warn on large counts
         if total_positions > 100_000:
             warnings.warn(
-                f"get_all_positions() generating {total_positions:,} positions. " f"This may be slow and use significant memory.",
+                f"get_all_positions() generating {total_positions:,} positions. This may be slow and use significant memory.",
                 UserWarning,
             )
 
@@ -516,6 +516,6 @@ class GridNDSubstrate(SpatialSubstrate):
         raise NotImplementedError(
             f"Partial observability (POMDP) is not supported for {self.position_dim}D grids. "
             f"Local window size would be (2*{vision_range}+1)^{self.position_dim} = "
-            f"{(2*vision_range+1)**self.position_dim} cells, which is impractical. "
+            f"{(2 * vision_range + 1) ** self.position_dim} cells, which is impractical. "
             f"Use full observability with 'relative' or 'scaled' observation_encoding instead."
         )

@@ -62,7 +62,7 @@ class BarConfig(BaseModel):
     def validate_range_order(cls, v: list[float]) -> list[float]:
         """Ensure range[0] < range[1]."""
         if len(v) == 2 and v[0] >= v[1]:
-            raise ValueError(f"range min ({v[0]}) must be < max ({v[1]}). " f"Got reversed or equal bounds: {v}")
+            raise ValueError(f"range min ({v[0]}) must be < max ({v[1]}). Got reversed or equal bounds: {v}")
         return v
 
     @model_validator(mode="after")

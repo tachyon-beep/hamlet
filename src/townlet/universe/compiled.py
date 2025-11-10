@@ -56,7 +56,7 @@ class CompiledUniverse:
         object.__setattr__(self, "vfs_observation_fields", tuple(self.vfs_observation_fields))
         if self.metadata.meter_count != len(self.hamlet_config.bars):
             raise ValueError(
-                "Metadata meter_count does not match bars length. " f"{self.metadata.meter_count} vs {len(self.hamlet_config.bars)}"
+                f"Metadata meter_count does not match bars length. {self.metadata.meter_count} vs {len(self.hamlet_config.bars)}"
             )
         if self.metadata.affordance_count != len(self.hamlet_config.affordances):
             raise ValueError(

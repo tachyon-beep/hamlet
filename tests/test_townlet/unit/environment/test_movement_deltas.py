@@ -26,7 +26,7 @@ class TestMovementDeltasFromActionConfig:
         expected_delta = torch.tensor(up_action.delta, device=env.device, dtype=env.substrate.position_dtype)
         actual_delta = env._movement_deltas[up_action.id]
 
-        assert torch.equal(actual_delta, expected_delta), f"Delta mismatch for UP action: expected {expected_delta}, " f"got {actual_delta}"
+        assert torch.equal(actual_delta, expected_delta), f"Delta mismatch for UP action: expected {expected_delta}, got {actual_delta}"
 
     def test_all_movement_deltas_match_action_config(self, env_factory, cpu_device):
         """All movement actions should have correct deltas from ActionConfig."""
@@ -49,9 +49,9 @@ class TestMovementDeltasFromActionConfig:
                 )
                 actual_delta = env._movement_deltas[action.id]
 
-                assert torch.equal(actual_delta, expected_delta), (
-                    f"Delta mismatch for {action.name} (id={action.id}): " f"expected {expected_delta}, got {actual_delta}"
-                )
+                assert torch.equal(
+                    actual_delta, expected_delta
+                ), f"Delta mismatch for {action.name} (id={action.id}): expected {expected_delta}, got {actual_delta}"
 
     def test_non_movement_actions_have_zero_deltas(self, env_factory, cpu_device):
         """INTERACT and WAIT actions should have zero deltas."""

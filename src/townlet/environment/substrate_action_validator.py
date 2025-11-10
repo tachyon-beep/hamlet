@@ -52,13 +52,13 @@ class SubstrateActionValidator:
     def _validate_aspatial(self, result: ValidationResult) -> None:
         for action in self._actions:
             if action.type == "movement":
-                result.errors.append("Aspatial substrate cannot define movement actions. Found movement action '" f"{action.name}'.")
+                result.errors.append(f"Aspatial substrate cannot define movement actions. Found movement action '{action.name}'.")
 
     def _validate_grid_square(self, result: ValidationResult) -> None:
         required: set[tuple[int, ...]] = {(0, -1), (0, 1), (-1, 0), (1, 0)}
         missing = required - self._movement_deltas()
         if missing:
-            result.errors.append("Square grid requires 4-way movement (up/down/left/right). Missing deltas: " f"{sorted(missing)}")
+            result.errors.append(f"Square grid requires 4-way movement (up/down/left/right). Missing deltas: {sorted(missing)}")
 
     def _validate_grid_cubic(self, result: ValidationResult) -> None:
         required: set[tuple[int, ...]] = {
@@ -71,7 +71,7 @@ class SubstrateActionValidator:
         }
         missing = required - self._movement_deltas()
         if missing:
-            result.errors.append("Cubic grid requires 6-way movement (horizontal + vertical). Missing deltas: " f"{sorted(missing)}")
+            result.errors.append(f"Cubic grid requires 6-way movement (horizontal + vertical). Missing deltas: {sorted(missing)}")
 
     def _validate_hex_grid(self, result: ValidationResult) -> None:
         required: set[tuple[int, ...]] = {
@@ -84,12 +84,11 @@ class SubstrateActionValidator:
         }
         missing = required - self._movement_deltas()
         if missing:
-            result.errors.append("Hex grid requires 6 axial movements. Missing deltas: " f"{sorted(missing)}")
+            result.errors.append(f"Hex grid requires 6 axial movements. Missing deltas: {sorted(missing)}")
 
     def _ensure_interact_action(self, result: ValidationResult) -> None:
         if any(action.name.upper() == "INTERACT" for action in self._actions):
             return
         result.warnings.append(
-            "Global action space does not define an INTERACT action. Some substrates expect "
-            "agents to interact with affordances explicitly."
+            "Global action space does not define an INTERACT action. Some substrates expect agents to interact with affordances explicitly."
         )

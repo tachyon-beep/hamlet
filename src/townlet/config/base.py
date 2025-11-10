@@ -47,9 +47,7 @@ def load_yaml_section(config_dir: Path, filename: str, section: str) -> Any:
 
     if section not in data:
         available_sections = list(data.keys()) if isinstance(data, dict) else []
-        raise KeyError(
-            f"Section '{section}' not found in {filename}\n" f"Available sections: {available_sections}\n" f"File path: {config_file}"
-        )
+        raise KeyError(f"Section '{section}' not found in {filename}\nAvailable sections: {available_sections}\nFile path: {config_file}")
 
     return data[section]
 
