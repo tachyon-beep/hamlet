@@ -410,14 +410,41 @@ class AffordanceEngine:
 
         # Apply effects from effect_pipeline (modern schema: AffordanceEffect objects)
         if hasattr(affordance, "effect_pipeline") and affordance.effect_pipeline:
-            on_start = getattr(affordance.effect_pipeline, "on_start", [])
-            for effect in on_start:
-                meter_idx = self.meter_name_to_idx[effect.meter]
-                result_meters[agent_mask, meter_idx] = torch.clamp(
-                    result_meters[agent_mask, meter_idx] + effect.amount,
-                    0.0,
-                    1.0,
-                )
+            pipeline = affordance.effect_pipeline
+
+            # For dual-mode affordances with no on_start, synthesize instant effects
+            # from per_tick (scaled by duration) + on_completion
+            if affordance.interaction_type == "dual" and not pipeline.on_start and (pipeline.per_tick or pipeline.on_completion):
+                duration = affordance.duration_ticks or 1
+
+                # Apply scaled per_tick effects
+                for effect in pipeline.per_tick:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    total_effect = effect.amount * duration
+                    result_meters[agent_mask, meter_idx] = torch.clamp(
+                        result_meters[agent_mask, meter_idx] + total_effect,
+                        0.0,
+                        1.0,
+                    )
+
+                # Apply completion effects
+                for effect in pipeline.on_completion:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    result_meters[agent_mask, meter_idx] = torch.clamp(
+                        result_meters[agent_mask, meter_idx] + effect.amount,
+                        0.0,
+                        1.0,
+                    )
+            else:
+                # Standard instant mode: use on_start effects
+                on_start = getattr(pipeline, "on_start", [])
+                for effect in on_start:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    result_meters[agent_mask, meter_idx] = torch.clamp(
+                        result_meters[agent_mask, meter_idx] + effect.amount,
+                        0.0,
+                        1.0,
+                    )
 
         # Apply costs (modern dict format)
         for cost in affordance.costs:

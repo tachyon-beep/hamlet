@@ -430,7 +430,7 @@ class TestInstantAffordanceEffects:
     # Job - Income Generation
 
     def test_job_generates_income(self, instant_env):
-        """Job should generate $22.50."""
+        """Job should generate $28.13 in instant mode (per_tick + completion)."""
         instant_env.reset()
 
         instant_env.positions[0] = instant_env.affordances["Job"]
@@ -441,9 +441,9 @@ class TestInstantAffordanceEffects:
         actions = torch.tensor([4], device=instant_env.device)
         instant_env.step(actions)
 
-        # Money should increase
+        # Money should increase by per_tick (0.05625 * 4) + completion (0.05625) = 0.28125
         assert instant_env.meters[0, 3] > initial_money
-        assert abs(instant_env.meters[0, 3] - (initial_money + 0.225)) < 0.01
+        assert abs(instant_env.meters[0, 3] - (initial_money + 0.28125)) < 0.01
 
     def test_job_costs_energy(self, instant_env):
         """Job should cost 15% energy (office work)."""
