@@ -970,11 +970,11 @@ class VectorizedHamletEnv:
 
                     if hasattr(meter_gated_cap, "min") and meter_gated_cap.min is not None:
                         # Meter must be >= min
-                        within_bounds &= (meter_values >= meter_gated_cap.min)
+                        within_bounds &= meter_values >= meter_gated_cap.min
 
                     if hasattr(meter_gated_cap, "max") and meter_gated_cap.max is not None:
                         # Meter must be <= max
-                        within_bounds &= (meter_values <= meter_gated_cap.max)
+                        within_bounds &= meter_values <= meter_gated_cap.max
 
                     # Mask agents that are on this affordance BUT outside meter bounds
                     agents_to_mask = agents_on_affordance & ~within_bounds
@@ -994,11 +994,11 @@ class VectorizedHamletEnv:
 
                         # Check min bound
                         if hasattr(bar_constraint, "min") and bar_constraint.min is not None:
-                            satisfies_availability &= (meter_values >= bar_constraint.min)
+                            satisfies_availability &= meter_values >= bar_constraint.min
 
                         # Check max bound
                         if hasattr(bar_constraint, "max") and bar_constraint.max is not None:
-                            satisfies_availability &= (meter_values <= bar_constraint.max)
+                            satisfies_availability &= meter_values <= bar_constraint.max
 
                 # Mask agents that don't satisfy availability constraints
                 agents_to_mask = agents_on_affordance & ~satisfies_availability
@@ -1311,7 +1311,9 @@ class VectorizedHamletEnv:
                     self.interaction_progress[agent_idx] += 1
                 else:
                     # TASK-004B Phase C: Check for saved progress (resumable interactions)
-                    saved = int(self.saved_progress.get(affordance_name, torch.zeros(self.num_agents, device=self.device))[agent_idx].item())
+                    saved = int(
+                        self.saved_progress.get(affordance_name, torch.zeros(self.num_agents, device=self.device))[agent_idx].item()
+                    )
 
                     if saved > 0:
                         # Resume from saved progress

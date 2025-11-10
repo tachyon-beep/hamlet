@@ -93,12 +93,12 @@ class AffordanceEngine:
             Capability object if found, None otherwise
         """
         # Check if affordance has capabilities field (new format)
-        if not hasattr(affordance, 'capabilities'):
+        if not hasattr(affordance, "capabilities"):
             return None
 
-        capabilities = getattr(affordance, 'capabilities', [])
+        capabilities = getattr(affordance, "capabilities", [])
         for cap in capabilities:
-            if hasattr(cap, 'type') and cap.type == capability_type:
+            if hasattr(cap, "type") and cap.type == capability_type:
                 return cap
         return None
 
@@ -129,9 +129,7 @@ class AffordanceEngine:
         skill_values = meters[:, skill_meter_idx]
 
         # Linear interpolation: base + (max - base) * skill
-        multiplier = skill_scaling.base_multiplier + (
-            skill_scaling.max_multiplier - skill_scaling.base_multiplier
-        ) * skill_values
+        multiplier = skill_scaling.base_multiplier + (skill_scaling.max_multiplier - skill_scaling.base_multiplier) * skill_values
 
         return multiplier
 
@@ -211,9 +209,9 @@ class AffordanceEngine:
         multiplier = self._compute_skill_multiplier(affordance, meters, agent_mask)
 
         # Check for effect_pipeline (new format) vs effects (legacy format)
-        effect_pipeline = getattr(affordance, 'effect_pipeline', None)
+        effect_pipeline = getattr(affordance, "effect_pipeline", None)
 
-        if effect_pipeline is not None and hasattr(effect_pipeline, 'on_start'):
+        if effect_pipeline is not None and hasattr(effect_pipeline, "on_start"):
             # NEW FORMAT: Use effect_pipeline
 
             # Apply on_start effects (entry costs)
@@ -317,11 +315,11 @@ class AffordanceEngine:
         multiplier = self._compute_skill_multiplier(affordance, meters, agent_mask)
 
         # Check for effect_pipeline (new format) vs legacy format
-        effect_pipeline = getattr(affordance, 'effect_pipeline', None)
+        effect_pipeline = getattr(affordance, "effect_pipeline", None)
         required_ticks = affordance.required_ticks or 1
         is_final_tick = current_tick == (required_ticks - 1)
 
-        if effect_pipeline is not None and hasattr(effect_pipeline, 'per_tick'):
+        if effect_pipeline is not None and hasattr(effect_pipeline, "per_tick"):
             # NEW FORMAT: Use effect_pipeline
 
             # Apply per_tick effects with skill scaling
