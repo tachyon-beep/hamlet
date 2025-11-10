@@ -536,6 +536,35 @@ class TestTerminalConditions:
         result = cascade_engine.check_terminal_conditions(meters, dones)
         assert result[0]  # Dead (energy=0)
 
+    def test_terminal_conditions_preserve_done_state(self, cascade_engine, cpu_device):
+        """Once done, stays done even if meters recover (monotonic property)."""
+        # Agent already dead, but all meters are healthy
+        meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
+        dones = torch.ones(1, dtype=torch.bool, device=cpu_device)  # Already done
+
+        result = cascade_engine.check_terminal_conditions(meters, dones)
+        assert result[0]  # Must stay done (monotonic property)
+
+    def test_terminal_conditions_monotonic_batch(self, cascade_engine, cpu_device):
+        """Terminal state is monotonic across batch of agents."""
+        meters = torch.tensor(
+            [
+                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Healthy but already done
+                [0.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Dead (energy=0)
+                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0],  # Dead (health=0)
+                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Alive
+            ],
+            device=cpu_device,
+        )
+        dones = torch.tensor([True, False, False, False], dtype=torch.bool, device=cpu_device)
+
+        result = cascade_engine.check_terminal_conditions(meters, dones)
+
+        assert result[0]  # Agent 0: stays done (was already done)
+        assert result[1]  # Agent 1: newly dead (energy=0)
+        assert result[2]  # Agent 2: newly dead (health=0)
+        assert not result[3]  # Agent 3: alive
+
 
 # =============================================================================
 # Meter Clamping Tests

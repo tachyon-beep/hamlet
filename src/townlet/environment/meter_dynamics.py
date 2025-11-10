@@ -125,7 +125,10 @@ class MeterDynamics:
         return self._apply_cascades(meters, ["secondary_to_pivotal_weak"])
 
     def check_terminal_conditions(self, meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
-        """Evaluate terminal conditions using compiler-provided thresholds."""
+        """Evaluate terminal conditions using compiler-provided thresholds.
+
+        Preserves monotonic property: once done, stays done until reset.
+        """
 
         terminal_mask = torch.zeros_like(dones, dtype=torch.bool)
 
@@ -149,7 +152,8 @@ class MeterDynamics:
 
             terminal_mask |= current
 
-        return terminal_mask
+        # Preserve previous done states (monotonic property)
+        return terminal_mask | dones
 
     def get_base_depletion(self, meter_name: str) -> float:
         """Expose base depletion for configuration tests."""
