@@ -10,9 +10,9 @@ Test Organization:
 - TestLSTMForwardPass: Forward pass with POMDP (1 test)
 """
 
-import pytest
 from pathlib import Path
 
+import pytest
 import torch
 import torch.nn.functional as functional
 
