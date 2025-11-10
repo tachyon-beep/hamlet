@@ -69,6 +69,28 @@ def _build_affordance_collection(raw_affordances: tuple[Any, ...]) -> Affordance
     )
 
 
+def _resolve_deployable_affordances(
+    all_affordance_names: list[str],
+    enabled_affordances: list[str] | None,
+    name_to_id: dict[str, str],
+) -> list[str]:
+    """Return affordances that should be deployed, respecting IDs and names in config."""
+
+    if enabled_affordances is None:
+        return all_affordance_names
+
+    enabled_lookup = {str(entry) for entry in enabled_affordances}
+    deployable: list[str] = []
+    for name in all_affordance_names:
+        if name in enabled_lookup:
+            deployable.append(name)
+            continue
+        aff_id = name_to_id.get(name)
+        if aff_id is not None and aff_id in enabled_lookup:
+            deployable.append(name)
+    return deployable
+
+
 class VectorizedHamletEnv:
     """
     GPU-native vectorized Hamlet environment.
@@ -190,10 +212,11 @@ class VectorizedHamletEnv:
 
         # Filter affordances for DEPLOYMENT (which ones actually exist on the grid)
         # enabled_affordances from training.yaml controls what the agent can interact with
-        if enabled_affordances is not None:
-            affordance_names_to_deploy = [name for name in all_affordance_names if name in enabled_affordances]
-        else:
-            affordance_names_to_deploy = all_affordance_names
+        affordance_names_to_deploy = _resolve_deployable_affordances(
+            all_affordance_names,
+            enabled_affordances,
+            self.affordance_name_to_id,
+        )
 
         # DEPLOYED affordances: have positions on grid, can be interacted with
         # Positions will be randomized by randomize_affordance_positions() before first use

@@ -25,7 +25,24 @@ import pytest
 import torch
 import yaml
 
+from townlet.environment.vectorized_env import _resolve_deployable_affordances
 from townlet.universe.errors import CompilationError
+
+# =============================================================================
+# AFFORDANCE FILTERING HELPERS
+# =============================================================================
+
+
+class TestResolveDeployableAffordances:
+    def test_supports_enabled_ids_and_names(self):
+        all_names = ["Bed", "Doctor", "FastFood"]
+        name_to_id = {"Bed": "0", "Doctor": "5", "FastFood": "4"}
+        enabled = ["5", "FastFood"]
+
+        result = _resolve_deployable_affordances(all_names, enabled, name_to_id)
+
+        assert result == ["Doctor", "FastFood"]
+
 
 # =============================================================================
 # PHASE 15A: INITIALIZATION & SETUP

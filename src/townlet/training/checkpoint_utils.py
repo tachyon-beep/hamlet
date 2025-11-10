@@ -1,11 +1,21 @@
-"""Helpers for embedding CompiledUniverse metadata into checkpoints."""
+"""Helpers for checkpoint metadata and secure loading."""
 
 from __future__ import annotations
 
+import hashlib
+import logging
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
+import torch
+
 from townlet.universe.compiled import CompiledUniverse
+
+_DIGEST_SUFFIX = ".sha256"
+_DIGEST_BUFFER_SIZE = 1024 * 1024  # 1 MiB chunks keep memory bounded
+
+logger = logging.getLogger(__name__)
 
 
 def attach_universe_metadata(checkpoint: dict[str, Any], universe: CompiledUniverse) -> None:
@@ -53,3 +63,65 @@ def assert_checkpoint_dimensions(checkpoint: Mapping[str, Any], universe: Compil
         raise ValueError("Checkpoint missing observation_field_uuids; regenerate the checkpoint with the latest compiler.")
     if list(checkpoint_uuids) != expected_uuids:
         raise ValueError("Checkpoint observation field UUIDs mismatch current universe specification.")
+
+
+def _digest_path(checkpoint_path: Path) -> Path:
+    return checkpoint_path.with_suffix(checkpoint_path.suffix + _DIGEST_SUFFIX)
+
+
+def _compute_sha256(checkpoint_path: Path) -> str:
+    digest = hashlib.sha256()
+    with checkpoint_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(_DIGEST_BUFFER_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def persist_checkpoint_digest(checkpoint_path: Path) -> str:
+    """Compute and store the SHA256 digest alongside the checkpoint file."""
+
+    digest = _compute_sha256(checkpoint_path)
+    digest_path = _digest_path(checkpoint_path)
+    digest_path.write_text(digest + "\n", encoding="utf-8")
+    return digest
+
+
+def verify_checkpoint_digest(checkpoint_path: Path, *, required: bool = False) -> bool:
+    """Verify the checkpoint SHA256 digest, optionally requiring the digest file."""
+
+    digest_path = _digest_path(checkpoint_path)
+    if not digest_path.exists():
+        if required:
+            raise FileNotFoundError(
+                f"Missing checksum file for {checkpoint_path}. Expected {digest_path}. Recreate the checkpoint on Townlet >=P2."
+            )
+        logger.warning("Missing checksum for checkpoint %s (expected %s); skipping verification.", checkpoint_path, digest_path)
+        return False
+
+    expected = digest_path.read_text(encoding="utf-8").strip()
+    actual = _compute_sha256(checkpoint_path)
+    if actual != expected:
+        raise ValueError(
+            f"Checkpoint digest mismatch for {checkpoint_path}. Expected {expected} but computed {actual}. "
+            "The file may be corrupted or tampered."
+        )
+    return True
+
+
+def safe_torch_load(
+    checkpoint_path: Path | str,
+    *,
+    map_location: torch.device | str | None = None,
+) -> Any:
+    """Load a checkpoint enforcing PyTorch's weights-only safety guard."""
+
+    try:
+        return torch.load(checkpoint_path, map_location=map_location, weights_only=True)
+    except RuntimeError as exc:  # pragma: no cover - depends on torch internals
+        message = str(exc)
+        if "weights_only=True" in message:
+            raise RuntimeError(
+                f"Checkpoint {checkpoint_path} contains custom Python objects and cannot be loaded with weights_only=True. "
+                "Re-export the checkpoint using Townlet >= P2 to enable secure loading."
+            ) from exc
+        raise

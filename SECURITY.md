@@ -114,7 +114,7 @@ When using HAMLET, follow these best practices:
 
 ### PyTorch Model Loading
 
-HAMLET uses PyTorch's `torch.load()` for loading model checkpoints. **Only load checkpoints from trusted sources**, as PyTorch uses pickle which can execute arbitrary code.
+HAMLET now enforces PyTorch's `weights_only=True` guard for all runtime checkpoint loads and stores a `.sha256` digest next to every checkpoint. When loading, we verify the digest (if present) and refuse to hydrate pickled Python objects. If you encounter the "weights only load failed" error, regenerate the checkpoint with the current release instead of bypassing the guard. **Only load checkpoints from trusted sources.**
 
 ### YAML Config Loading
 

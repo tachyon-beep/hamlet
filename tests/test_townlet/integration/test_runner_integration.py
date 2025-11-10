@@ -114,7 +114,7 @@ class TestRunnerOrchestration:
 
         assert episode_count == 3, f"Database should have 3 episode records, got {episode_count}"
 
-    def test_runner_checkpoint_save_at_interval(self, tmp_path, config_pack_factory):
+    def test_runner_checkpoint_save_at_interval(self, tmp_path, config_pack_factory, monkeypatch):
         """Verify runner saves checkpoint every 100 episodes.
 
         Critical integration test: Runner should automatically save checkpoints
@@ -122,12 +122,14 @@ class TestRunnerOrchestration:
         """
         from townlet.demo.runner import DemoRunner
 
+        monkeypatch.setattr(DemoRunner, "CHECKPOINT_INTERVAL", 5)
+
         def modifier(data: dict) -> None:
             env = data["environment"]
             env["enabled_affordances"] = ["Bed"]
             env["vision_range"] = 8
             data["exploration"]["survival_window"] = 10
-            data["training"]["max_episodes"] = 150
+            data["training"]["max_episodes"] = 15
             data["training"]["allow_unfeasible_universe"] = True
 
         config_dir = config_pack_factory(modifier=modifier)
@@ -138,7 +140,7 @@ class TestRunnerOrchestration:
             config_dir=config_dir,
             db_path=db_path,
             checkpoint_dir=checkpoint_dir,
-            max_episodes=150,
+            max_episodes=15,
         )
 
         # Run training
@@ -147,11 +149,12 @@ class TestRunnerOrchestration:
         # Verify: Checkpoint file exists at checkpoint_dir
         checkpoints = list(checkpoint_dir.glob("checkpoint_ep*.pt"))
 
-        # Should have at least checkpoint at episode 100 and final checkpoint at 150
+        # Should have checkpoints at interval episodes and final checkpoint
         checkpoint_episodes = [int(cp.stem.replace("checkpoint_ep", "")) for cp in checkpoints]
 
-        assert 100 in checkpoint_episodes, f"Checkpoint should exist at episode 100, found: {checkpoint_episodes}"
-        assert 150 in checkpoint_episodes, f"Checkpoint should exist at final episode 150, found: {checkpoint_episodes}"
+        assert 5 in checkpoint_episodes, f"Checkpoint should exist at episode 5, found: {checkpoint_episodes}"
+        assert 10 in checkpoint_episodes, f"Checkpoint should exist at episode 10, found: {checkpoint_episodes}"
+        assert 15 in checkpoint_episodes, f"Checkpoint should exist at final episode 15, found: {checkpoint_episodes}"
 
     def test_runner_database_logging_after_episode(self, tmp_path, config_pack_factory):
         """Verify runner logs episode metrics to database after each episode.

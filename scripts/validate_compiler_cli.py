@@ -46,7 +46,11 @@ def main() -> int:
         return 1
 
     for config_dir in config_dirs:
-        print(f"🔧 Validating {config_dir.relative_to(REPO_ROOT)} via CLI ...")
+        try:
+            display_path = config_dir.relative_to(REPO_ROOT)
+        except ValueError:
+            display_path = config_dir
+        print(f"🔧 Validating {display_path} via CLI ...")
         run_cli_validate(config_dir)
 
     print("✅ Universe compiler CLI validation passed")

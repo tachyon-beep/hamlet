@@ -23,6 +23,7 @@ from townlet.substrate.continuous import ContinuousSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
 from townlet.substrate.gridnd import GridNDSubstrate
+from townlet.training.checkpoint_utils import safe_torch_load, verify_checkpoint_digest
 from townlet.universe.compiled import CompiledUniverse
 from townlet.universe.compiler import UniverseCompiler
 from townlet.universe.runtime import RuntimeUniverse
@@ -377,7 +378,8 @@ class LiveInferenceServer:
         # Load checkpoint
         logger.info(f"Loading checkpoint: {latest_checkpoint.name} (episode {episode_num})")
 
-        checkpoint = torch.load(latest_checkpoint, weights_only=False)
+        verify_checkpoint_digest(latest_checkpoint, required=False)
+        checkpoint = safe_torch_load(latest_checkpoint)
 
         # Load Q-network weights
         if "population_state" in checkpoint:

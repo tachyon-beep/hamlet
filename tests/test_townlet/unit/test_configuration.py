@@ -53,6 +53,21 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 
+
+@pytest.fixture(scope="module")
+def bars_config(test_config_pack_path: Path) -> BarsConfig:
+    """Load bars.yaml once per module."""
+
+    return load_bars_config(test_config_pack_path / "bars.yaml")
+
+
+@pytest.fixture(scope="module")
+def cascades_config(test_config_pack_path: Path) -> CascadesConfig:
+    """Load cascades.yaml once per module."""
+
+    return load_cascades_config(test_config_pack_path / "cascades.yaml")
+
+
 # =============================================================================
 # CONFIG PACK LOADING TESTS
 # =============================================================================
@@ -129,72 +144,53 @@ class TestBarsConfig:
         assert "bars" in data
         assert "terminal_conditions" in data
 
-    def test_bars_config_loads_successfully(self, test_config_pack_path: Path):
+    def test_bars_config_loads_successfully(self, bars_config: BarsConfig):
         """Test that bars.yaml validates successfully with Pydantic."""
-        bars_path = test_config_pack_path / "bars.yaml"
-        config = load_bars_config(bars_path)
+        assert isinstance(bars_config, BarsConfig)
+        assert bars_config.version == "1.0"
+        assert len(bars_config.bars) == 8
+        assert len(bars_config.terminal_conditions) == 2
 
-        assert isinstance(config, BarsConfig)
-        assert config.version == "1.0"
-        assert len(config.bars) == 8
-        assert len(config.terminal_conditions) == 2
+    @pytest.mark.parametrize(
+        ("meter_name", "expected_index"),
+        [
+            ("energy", 0),
+            ("health", 6),
+            ("satiation", 2),
+            ("fitness", 7),
+            ("mood", 4),
+            ("hygiene", 1),
+            ("social", 5),
+            ("money", 3),
+        ],
+    )
+    def test_bars_config_has_meter_indices(self, bars_config: BarsConfig, meter_name: str, expected_index: int):
+        bar = next((bar for bar in bars_config.bars if bar.name == meter_name), None)
+        assert bar is not None, f"{meter_name} missing from bars configuration"
+        assert bar.index == expected_index
 
-    def test_bars_config_has_all_meters(self, test_config_pack_path: Path):
-        """Test that all 8 meters are defined with correct indices."""
-        bars_path = test_config_pack_path / "bars.yaml"
-        config = load_bars_config(bars_path)
+    @pytest.mark.parametrize(
+        ("meter_name", "expected_depletion"),
+        [
+            ("energy", 0.005),
+            ("hygiene", 0.003),
+            ("satiation", 0.004),
+            ("money", 0.0),
+            ("mood", 0.001),
+            ("social", 0.006),
+            ("health", 0.0),
+            ("fitness", 0.002),
+        ],
+    )
+    def test_bars_config_base_depletions(self, bars_config: BarsConfig, meter_name: str, expected_depletion: float):
+        bar = next(bar for bar in bars_config.bars if bar.name == meter_name)
+        assert bar.base_depletion == expected_depletion, f"{meter_name}: expected {expected_depletion}"
 
-        meter_names = {bar.name for bar in config.bars}
-        expected_names = {
-            "energy",
-            "health",
-            "satiation",
-            "fitness",
-            "mood",
-            "hygiene",
-            "social",
-            "money",
-        }
-
-        assert meter_names == expected_names, f"Expected {expected_names}, got {meter_names}"
-
-        indices = {bar.index for bar in config.bars}
-        assert indices == {0, 1, 2, 3, 4, 5, 6, 7}, f"Expected indices 0-7, got {indices}"
-
-    def test_bars_config_validates_depletion_rates(self, test_config_pack_path: Path):
-        """Test that base depletion rates match meter_dynamics.py."""
-        bars_path = test_config_pack_path / "bars.yaml"
-        config = load_bars_config(bars_path)
-
-        # Expected values from meter_dynamics.py
-        expected_depletions = {
-            "energy": 0.005,
-            "hygiene": 0.003,
-            "satiation": 0.004,
-            "money": 0.0,
-            "mood": 0.001,
-            "social": 0.006,
-            "health": 0.0,  # No base depletion - handled by fitness modulation
-            "fitness": 0.002,
-        }
-
-        for bar in config.bars:
-            expected = expected_depletions[bar.name]
-            assert bar.base_depletion == expected, f"{bar.name}: expected base_depletion={expected}, got {bar.base_depletion}"
-
-    def test_bars_config_validates_terminal_conditions(self, test_config_pack_path: Path):
-        """Test that terminal conditions are correct."""
-        bars_path = test_config_pack_path / "bars.yaml"
-        config = load_bars_config(bars_path)
-
-        assert len(config.terminal_conditions) == 2
-
-        meters = {tc.meter for tc in config.terminal_conditions}
-        assert meters == {"health", "energy"}
-
-        for tc in config.terminal_conditions:
-            assert tc.operator == "<="
-            assert tc.value == 0.0
+    @pytest.mark.parametrize("meter_name", ["health", "energy"])
+    def test_bars_config_terminal_conditions(self, bars_config: BarsConfig, meter_name: str):
+        tc = next(tc for tc in bars_config.terminal_conditions if tc.meter == meter_name)
+        assert tc.operator == "<="
+        assert tc.value == 0.0
 
     def test_bar_config_rejects_invalid_range(self):
         """Test that BarConfig rejects non-standard ranges."""
@@ -279,24 +275,18 @@ class TestCascadesConfig:
         assert "modulations" in data
         assert "cascades" in data
 
-    def test_cascades_config_loads_successfully(self, test_config_pack_path: Path):
+    def test_cascades_config_loads_successfully(self, cascades_config: CascadesConfig):
         """Test that cascades.yaml validates successfully with Pydantic."""
-        cascades_path = test_config_pack_path / "cascades.yaml"
-        config = load_cascades_config(cascades_path)
+        assert isinstance(cascades_config, CascadesConfig)
+        assert cascades_config.version == "1.0"
+        assert cascades_config.math_type == "gradient_penalty"
+        assert len(cascades_config.modulations) == 1
+        assert len(cascades_config.cascades) == 10
 
-        assert isinstance(config, CascadesConfig)
-        assert config.version == "1.0"
-        assert config.math_type == "gradient_penalty"
-        assert len(config.modulations) == 1
-        assert len(config.cascades) == 10
-
-    def test_cascades_config_validates_modulation(self, test_config_pack_path: Path):
+    def test_cascades_config_validates_modulation(self, cascades_config: CascadesConfig):
         """Test that fitness-health modulation is configured correctly."""
-        cascades_path = test_config_pack_path / "cascades.yaml"
-        config = load_cascades_config(cascades_path)
-
-        assert len(config.modulations) == 1
-        mod = config.modulations[0]
+        assert len(cascades_config.modulations) == 1
+        mod = cascades_config.modulations[0]
 
         assert mod.name == "fitness_health_modulation"
         assert mod.source == "fitness"
@@ -306,44 +296,32 @@ class TestCascadesConfig:
         assert mod.range == 2.5
         assert mod.baseline_depletion == 0.001
 
-    def test_cascades_config_validates_cascade_strengths(self, test_config_pack_path: Path):
-        """Test that cascade strengths match meter_dynamics.py."""
-        cascades_path = test_config_pack_path / "cascades.yaml"
-        config = load_cascades_config(cascades_path)
+    @pytest.mark.parametrize(
+        ("cascade_name", "expected_strength"),
+        [
+            ("satiation_to_health", 0.004),
+            ("satiation_to_energy", 0.005),
+            ("mood_to_energy", 0.005),
+            ("hygiene_to_satiation", 0.002),
+            ("hygiene_to_fitness", 0.002),
+            ("hygiene_to_mood", 0.003),
+            ("social_to_mood", 0.004),
+            ("hygiene_to_health", 0.0005),
+            ("hygiene_to_energy", 0.0005),
+            ("social_to_energy", 0.0008),
+        ],
+    )
+    def test_cascades_config_strengths(self, cascades_config: CascadesConfig, cascade_name: str, expected_strength: float):
+        cascade = next(c for c in cascades_config.cascades if c.name == cascade_name)
+        assert cascade.strength == expected_strength
 
-        # Expected values from meter_dynamics.py
-        expected_strengths = {
-            "satiation_to_health": 0.004,
-            "satiation_to_energy": 0.005,
-            "mood_to_energy": 0.005,
-            "hygiene_to_satiation": 0.002,
-            "hygiene_to_fitness": 0.002,
-            "hygiene_to_mood": 0.003,
-            "social_to_mood": 0.004,
-            "hygiene_to_health": 0.0005,
-            "hygiene_to_energy": 0.0005,
-            "social_to_energy": 0.0008,
-        }
-
-        cascades_by_name = {c.name: c for c in config.cascades}
-
-        for name, expected_strength in expected_strengths.items():
-            cascade = cascades_by_name[name]
-            assert cascade.strength == expected_strength, f"{name}: expected strength={expected_strength}, got {cascade.strength}"
-
-    def test_cascades_config_validates_thresholds(self, test_config_pack_path: Path):
+    def test_cascades_config_validates_thresholds(self, cascades_config: CascadesConfig):
         """Test that all cascades use 30% threshold."""
-        cascades_path = test_config_pack_path / "cascades.yaml"
-        config = load_cascades_config(cascades_path)
-
-        for cascade in config.cascades:
+        for cascade in cascades_config.cascades:
             assert cascade.threshold == 0.3, f"{cascade.name}: expected threshold=0.3, got {cascade.threshold}"
 
-    def test_cascades_config_validates_execution_order(self, test_config_pack_path: Path):
+    def test_cascades_config_validates_execution_order(self, cascades_config: CascadesConfig):
         """Test that execution order is defined correctly."""
-        cascades_path = test_config_pack_path / "cascades.yaml"
-        config = load_cascades_config(cascades_path)
-
         expected_order = [
             "modulations",
             "primary_to_pivotal",
@@ -351,7 +329,7 @@ class TestCascadesConfig:
             "secondary_to_pivotal_weak",
         ]
 
-        assert config.execution_order == expected_order
+        assert cascades_config.execution_order == expected_order
 
     def test_cascade_config_rejects_invalid_threshold(self):
         """Test that CascadeConfig rejects invalid thresholds."""

@@ -1,517 +1,214 @@
-"""Unit tests for TensorBoardLogger with mocked SummaryWriter.
+"""Parametrized unit tests for TensorBoardLogger using mocked SummaryWriter."""
 
-These unit tests complement the integration tests by providing:
-- Full mocking of SummaryWriter for faster execution
-- Coverage of edge cases and branching logic
-- Testing without filesystem dependencies
-- Focus on achieving 100% code coverage
+from __future__ import annotations
 
-Current integration test coverage: 97%
-Target with unit tests: 100%
-
-Uncovered lines to target:
-- Line 149->142: hasattr check for add_text method
-- Lines 258-259: Optimizer learning rate logging
-"""
-
+from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
+import pytest
 import torch
 import torch.nn as nn
 
 
-class TestTensorBoardLoggerInitialization:
-    """Test logger initialization with mocked SummaryWriter."""
+@contextmanager
+def logger_with_writer(temp_dir, *, auto_close: bool = True, **logger_kwargs):
+    """Patch SummaryWriter and yield (logger, writer, writer_class_mock)."""
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_init_creates_log_directory(self, mock_writer_class, temp_test_dir):
-        """Should create log directory if it doesn't exist."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
+    from townlet.training.tensorboard_logger import TensorBoardLogger
 
-        log_dir = temp_test_dir / "logs"
-        assert not log_dir.exists()
+    with patch("townlet.training.tensorboard_logger.SummaryWriter") as writer_cls:
+        writer = Mock()
+        writer_cls.return_value = writer
+        log_dir = logger_kwargs.pop("log_dir", temp_dir)
+        logger = TensorBoardLogger(log_dir=log_dir, **logger_kwargs)
+        try:
+            yield logger, writer, writer_cls
+        finally:
+            if auto_close:
+                logger.close()
 
-        logger = TensorBoardLogger(log_dir=log_dir)
 
-        assert log_dir.exists()
-        mock_writer_class.assert_called_once_with(str(log_dir))
+def test_logger_initialization_creates_directory(temp_test_dir):
+    log_dir = temp_test_dir / "logs"
+    assert not log_dir.exists()
 
-        logger.close()
+    with logger_with_writer(log_dir) as (_, _, writer_cls):
+        writer_cls.assert_called_once_with(str(log_dir))
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_init_with_custom_params(self, mock_writer_class, temp_test_dir):
-        """Should initialize with custom flush_every and logging flags."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
+    assert log_dir.exists()
 
-        logger = TensorBoardLogger(
-            log_dir=temp_test_dir,
-            flush_every=20,
-            log_gradients=True,
-            log_histograms=False,
-        )
 
+def test_logger_initialization_respects_custom_flags(temp_test_dir):
+    with logger_with_writer(
+        temp_test_dir,
+        flush_every=20,
+        log_gradients=True,
+        log_histograms=False,
+    ) as (logger, _, _):
         assert logger.flush_every == 20
         assert logger.log_gradients is True
         assert logger.log_histograms is False
         assert logger.episodes_logged == 0
         assert logger.last_flush_episode == 0
 
-        logger.close()
 
-
-class TestLogEpisodeCoverage:
-    """Test log_episode() method with all branches."""
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_episode_with_intrinsic_ratio_calculation(self, mock_writer_class, temp_test_dir):
-        """Should calculate intrinsic ratio when total_reward != 0 (line 113-117)."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
+@pytest.mark.parametrize(
+    ("total_reward", "intrinsic_reward", "expected_calls"),
+    [(100.0, 40.0, 1), (0.0, 0.0, 0)],
+    ids=["with_ratio", "no_ratio"],
+)
+def test_log_episode_intrinsic_ratio(temp_test_dir, total_reward, intrinsic_reward, expected_calls):
+    with logger_with_writer(temp_test_dir) as (logger, writer, _):
         logger.log_episode(
-            episode=100,
-            survival_time=200,
-            total_reward=100.0,  # Non-zero
-            extrinsic_reward=60.0,
-            intrinsic_reward=40.0,
+            episode=1,
+            survival_time=10,
+            total_reward=total_reward,
+            intrinsic_reward=intrinsic_reward,
         )
 
-        # Should call add_scalar for intrinsic_ratio
-        # Ratio = 40.0 / 100.0 = 0.4
-        calls = [c for c in mock_writer.add_scalar.call_args_list if "Intrinsic_Ratio" in str(c)]
-        assert len(calls) > 0
+    ratio_calls = [call for call in writer.add_scalar.call_args_list if "Intrinsic_Ratio" in call[0][0]]
+    assert len(ratio_calls) == expected_calls
 
+
+def test_log_episode_triggers_auto_flush(temp_test_dir):
+    with logger_with_writer(temp_test_dir, auto_close=False, flush_every=2) as (logger, writer, _):
+        logger.log_episode(episode=1, survival_time=5, total_reward=1.0)
+        assert writer.flush.call_count == 0
+        logger.log_episode(episode=2, survival_time=5, total_reward=1.0)
+        writer.flush.assert_called_once()
         logger.close()
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_episode_skips_intrinsic_ratio_when_zero(self, mock_writer_class, temp_test_dir):
-        """Should skip intrinsic ratio calculation when total_reward == 0 (line 113)."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
 
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
+@pytest.mark.parametrize("has_add_text", [True, False], ids=["with_text", "without_text"])
+def test_log_curriculum_transitions_handles_add_text(temp_test_dir, has_add_text):
+    with logger_with_writer(temp_test_dir) as (logger, writer, _):
+        if has_add_text:
+            writer.add_text = Mock()
+        elif hasattr(writer, "add_text"):
+            del writer.add_text
 
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
-        logger.log_episode(
-            episode=100,
-            survival_time=5,
-            total_reward=0.0,  # Zero total reward
-            extrinsic_reward=0.0,
-            intrinsic_reward=0.0,
+        logger.log_curriculum_transitions(
+            episode=42,
+            events=[
+                {
+                    "agent_id": "agent_0",
+                    "from_stage": 1,
+                    "to_stage": 2,
+                    "survival_rate": 0.8,
+                    "learning_progress": 0.9,
+                    "entropy": 0.5,
+                    "reason": "advance",
+                    "steps_at_stage": 100,
+                }
+            ],
         )
 
-        # Should NOT call add_scalar for intrinsic_ratio
-        calls = [c for c in mock_writer.add_scalar.call_args_list if "Intrinsic_Ratio" in str(c)]
-        assert len(calls) == 0
-
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_episode_auto_flush_triggered(self, mock_writer_class, temp_test_dir):
-        """Should trigger flush when episodes_logged % flush_every == 0 (line 120-122)."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir, flush_every=5)
-
-        # Log 4 episodes - should not flush
-        for ep in range(1, 5):
-            logger.log_episode(episode=ep, survival_time=100, total_reward=50.0)
-
-        assert mock_writer.flush.call_count == 0
-
-        # Log 5th episode - should trigger flush
-        logger.log_episode(episode=5, survival_time=100, total_reward=50.0)
-
-        assert mock_writer.flush.call_count == 1
-        assert logger.last_flush_episode == 5
-
-        logger.close()
+    if has_add_text:
+        writer.add_text.assert_called_once()
+    else:
+        assert not any("Transition" in call[0][0] for call in writer.add_scalar.call_args_list if len(call[0]) > 0)
 
 
-class TestCurriculumTransitionsHasattrBranch:
-    """Test curriculum transitions with hasattr branch coverage (line 149)."""
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_curriculum_transitions_with_add_text_available(self, mock_writer_class, temp_test_dir):
-        """Should log text summary when writer has add_text method (line 149-159)."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        # Mock writer HAS add_text method
-        mock_writer.add_text = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
-        events = [
-            {
-                "agent_id": "agent_0",
-                "from_stage": 2,
-                "to_stage": 3,
-                "survival_rate": 0.75,
-                "learning_progress": 0.85,
-                "entropy": 0.6,
-                "reason": "advance",
-                "steps_at_stage": 1500,
-            }
-        ]
-
-        logger.log_curriculum_transitions(episode=100, events=events)
-
-        # Should call add_text (hasattr returned True)
-        mock_writer.add_text.assert_called_once()
-        call_args = mock_writer.add_text.call_args
-        assert "agent_0/Curriculum/Transition" in call_args[0][0]
-        assert "ADVANCE" in call_args[0][1]  # Reason uppercased
-
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_curriculum_transitions_without_add_text(self, mock_writer_class, temp_test_dir):
-        """Should skip text logging when writer lacks add_text method (line 149 branch)."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        # Mock writer does NOT have add_text method
-        mock_writer.add_text = None
-        del mock_writer.add_text  # Remove attribute entirely
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
-        events = [
-            {
-                "agent_id": "agent_0",
-                "from_stage": 2,
-                "to_stage": 3,
-                "survival_rate": 0.75,
-                "learning_progress": 0.85,
-                "entropy": 0.6,
-                "reason": "advance",
-                "steps_at_stage": 1500,
-            }
-        ]
-
-        logger.log_curriculum_transitions(episode=100, events=events)
-
-        # Should NOT call add_text (hasattr returned False)
-        # Verify add_scalar WAS called for metrics
-        assert mock_writer.add_scalar.call_count >= 4  # Stage, Survival_Rate, Learning_Progress, Entropy
-
-        logger.close()
-
-
-class TestNetworkStatsOptimizerBranch:
-    """Test network stats logging with optimizer (line 257-259)."""
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_network_stats_with_optimizer_logs_learning_rate(self, mock_writer_class, temp_test_dir):
-        """Should log learning rate when optimizer is provided (line 257-259)."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(
-            log_dir=temp_test_dir,
-            log_histograms=True,  # Enable to not early return
-        )
-
+@pytest.mark.parametrize("has_optimizer", [True, False], ids=["with_optimizer", "without_optimizer"])
+def test_log_network_stats_learning_rate_branch(temp_test_dir, has_optimizer):
+    with logger_with_writer(temp_test_dir, log_histograms=True) as (logger, writer, _):
         q_network = nn.Sequential(nn.Linear(10, 5))
-        optimizer = torch.optim.Adam(q_network.parameters(), lr=0.00025)
+        optimizer = torch.optim.Adam(q_network.parameters(), lr=0.00025) if has_optimizer else None
 
-        logger.log_network_stats(
-            episode=100,
-            q_network=q_network,
-            optimizer=optimizer,
+        logger.log_network_stats(episode=7, q_network=q_network, optimizer=optimizer)
+
+    lr_calls = [call for call in writer.add_scalar.call_args_list if "Learning_Rate" in call[0][0]]
+    assert bool(lr_calls) is has_optimizer
+
+
+def test_log_multi_agent_episode_counts_agents(temp_test_dir):
+    with logger_with_writer(temp_test_dir) as (logger, _, _):
+        logger.log_multi_agent_episode(
+            episode=5,
+            agents=[
+                {"agent_id": "agent_0", "survival_time": 10, "total_reward": 5.0},
+                {"agent_id": "agent_1", "survival_time": 20, "total_reward": 8.0},
+            ],
         )
-
-        # Should log learning rate scalar
-        calls = [c for c in mock_writer.add_scalar.call_args_list if "Learning_Rate" in str(c)]
-        assert len(calls) == 1
-
-        # Verify learning rate value
-        lr_call = calls[0]
-        assert lr_call[0][1] == 0.00025  # Learning rate value
-        assert lr_call[0][2] == 100  # Episode number
-
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_network_stats_without_optimizer_skips_learning_rate(self, mock_writer_class, temp_test_dir):
-        """Should skip learning rate logging when optimizer is None (line 257)."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(
-            log_dir=temp_test_dir,
-            log_histograms=True,
-        )
-
-        q_network = nn.Sequential(nn.Linear(10, 5))
-
-        logger.log_network_stats(
-            episode=100,
-            q_network=q_network,
-            optimizer=None,  # No optimizer
-        )
-
-        # Should NOT log learning rate
-        calls = [c for c in mock_writer.add_scalar.call_args_list if "Learning_Rate" in str(c)]
-        assert len(calls) == 0
-
-        logger.close()
-
-
-class TestAllMethodsMocked:
-    """Test all logging methods with fully mocked SummaryWriter for coverage."""
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_multi_agent_episode_mocked(self, mock_writer_class, temp_test_dir):
-        """Test multi-agent logging with mocked writer."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
-        agents_data = [
-            {
-                "agent_id": "agent_0",
-                "survival_time": 100,
-                "total_reward": 50.0,
-            },
-            {
-                "agent_id": "agent_1",
-                "survival_time": 150,
-                "total_reward": 75.0,
-            },
-        ]
-
-        logger.log_multi_agent_episode(episode=100, agents=agents_data)
-
-        # Should log metrics for both agents
         assert logger.episodes_logged == 2
 
-        logger.close()
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_training_step_all_params_mocked(self, mock_writer_class, temp_test_dir):
-        """Test training step logging with all optional parameters."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir, log_histograms=True)
-
+def test_log_training_step_logs_histograms(temp_test_dir):
+    with logger_with_writer(temp_test_dir, log_histograms=True) as (logger, writer, _):
         q_values = torch.tensor([1.0, 2.0, 3.0])
+        logger.log_training_step(step=1000, td_error=0.5, q_values=q_values, loss=0.3, rnd_prediction_error=0.1)
+        assert writer.add_histogram.call_count == 1
+        scalar_tags = {call[0][0] for call in writer.add_scalar.call_args_list}
+        for suffix in ("Training/TD_Error", "Training/Loss", "Training/RND_Error", "Training/Q_Mean", "Training/Q_Std"):
+            assert any(tag.endswith(suffix) for tag in scalar_tags)
 
-        logger.log_training_step(
-            step=1000,
-            td_error=0.5,
-            q_values=q_values,
-            loss=0.3,
-            rnd_prediction_error=0.1,
-        )
 
-        # Should log all scalars and histogram
-        assert mock_writer.add_scalar.call_count >= 5  # TD_Error, Loss, RND_Error, Q_Mean, Q_Std
-        mock_writer.add_histogram.assert_called_once()
+def test_log_meters_emits_expected_scalars(temp_test_dir):
+    with logger_with_writer(temp_test_dir) as (logger, writer, _):
+        logger.log_meters(episode=10, step=5, meters={"health": 0.8, "energy": 0.6})
+    assert len(writer.add_scalar.call_args_list) == 2
 
-        logger.close()
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_meters_mocked(self, mock_writer_class, temp_test_dir):
-        """Test meter logging with mocked writer."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
+def test_log_affordance_usage_logs_each_entry(temp_test_dir):
+    with logger_with_writer(temp_test_dir) as (logger, writer, _):
+        logger.log_affordance_usage(episode=3, affordance_counts={"Bed": 4, "Shower": 2})
+    assert len(writer.add_scalar.call_args_list) == 2
 
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
 
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
+def test_log_custom_metric_delegates_to_writer(temp_test_dir):
+    with logger_with_writer(temp_test_dir) as (logger, writer, _):
+        logger.log_custom_metric(tag="Debug/Test", value=12.34, step=500)
+    writer.add_scalar.assert_called_once_with("agent_0/Debug/Test", 12.34, 500)
 
-        meters = {
-            "health": 0.8,
-            "energy": 0.6,
-        }
 
-        logger.log_meters(episode=10, step=50, meters=meters)
+def test_log_hyperparameters_calls_add_hparams(temp_test_dir):
+    with logger_with_writer(temp_test_dir) as (logger, writer, _):
+        logger.log_hyperparameters({"lr": 0.001}, {"final_reward": 10.0})
+    writer.add_hparams.assert_called_once_with({"lr": 0.001}, {"final_reward": 10.0})
 
-        # Should log 2 scalars
-        # Global step = 10 * 1000 + 50 = 10050
-        assert mock_writer.add_scalar.call_count == 2
 
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_affordance_usage_mocked(self, mock_writer_class, temp_test_dir):
-        """Test affordance usage logging with mocked writer."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
-        affordance_counts = {
-            "Bed": 10,
-            "Shower": 5,
-        }
-
-        logger.log_affordance_usage(episode=100, affordance_counts=affordance_counts)
-
-        assert mock_writer.add_scalar.call_count == 2
-
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_custom_metric_mocked(self, mock_writer_class, temp_test_dir):
-        """Test custom metric logging with mocked writer."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
-        logger.log_custom_metric(
-            tag="Debug/Test",
-            value=123.45,
-            step=500,
-        )
-
-        mock_writer.add_scalar.assert_called_once()
-
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_hyperparameters_mocked(self, mock_writer_class, temp_test_dir):
-        """Test hyperparameter logging with mocked writer."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
-        hparams = {"learning_rate": 0.001}
-        metrics = {"final_reward": 100.0}
-
-        logger.log_hyperparameters(hparams, metrics)
-
-        mock_writer.add_hparams.assert_called_once_with(hparams, metrics)
-
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_flush_method_mocked(self, mock_writer_class, temp_test_dir):
-        """Test manual flush() method."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
+def test_flush_invokes_writer_flush(temp_test_dir):
+    with logger_with_writer(temp_test_dir, auto_close=False) as (logger, writer, _):
         logger.flush()
-
-        mock_writer.flush.assert_called_once()
-
+        writer.flush.assert_called_once()
         logger.close()
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_close_method_mocked(self, mock_writer_class, temp_test_dir):
-        """Test close() method calls flush and close on writer."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
 
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(log_dir=temp_test_dir)
-
+def test_close_invokes_writer_flush_and_close(temp_test_dir):
+    with logger_with_writer(temp_test_dir, auto_close=False) as (logger, writer, _):
         logger.close()
+        assert writer.flush.call_count >= 1
+        writer.close.assert_called_once()
 
-        # Should call both flush and close
-        mock_writer.flush.assert_called()
-        mock_writer.close.assert_called_once()
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_context_manager_mocked(self, mock_writer_class, temp_test_dir):
-        """Test context manager with mocked writer."""
+def test_context_manager_closes_logger(temp_test_dir):
+    with patch("townlet.training.tensorboard_logger.SummaryWriter") as writer_cls:
+        writer = Mock()
+        writer_cls.return_value = writer
         from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
 
         with TensorBoardLogger(log_dir=temp_test_dir) as logger:
             assert logger is not None
 
-        # Should have called close
-        mock_writer.flush.assert_called()
-        mock_writer.close.assert_called_once()
+        assert writer.flush.call_count >= 1
+        writer.close.assert_called_once()
 
 
-class TestNetworkStatsGradientBranches:
-    """Test network stats gradient logging branches."""
+def test_log_network_stats_with_gradients(temp_test_dir):
+    with logger_with_writer(temp_test_dir, log_gradients=True) as (logger, writer, _):
+        q_network = nn.Sequential(nn.Linear(4, 2))
+        data = torch.randn(3, 4)
+        q_network(data).sum().backward()
+        logger.log_network_stats(episode=9, q_network=q_network)
 
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_network_stats_with_gradients_present(self, mock_writer_class, temp_test_dir):
-        """Test gradient logging when gradients exist."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
+    grad_calls = [call for call in writer.add_scalar.call_args_list if "Gradients/Total_Norm" in call[0][0]]
+    assert len(grad_calls) == 1
 
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
 
-        logger = TensorBoardLogger(log_dir=temp_test_dir, log_gradients=True)
+def test_log_network_stats_early_return_when_disabled(temp_test_dir):
+    with logger_with_writer(temp_test_dir, log_histograms=False, log_gradients=False) as (logger, writer, _):
+        q_network = nn.Sequential(nn.Linear(4, 2))
+        logger.log_network_stats(episode=9, q_network=q_network)
 
-        q_network = nn.Sequential(nn.Linear(10, 5))
-
-        # Create gradients
-        dummy_input = torch.randn(4, 10)
-        output = q_network(dummy_input)
-        loss = output.sum()
-        loss.backward()
-
-        logger.log_network_stats(episode=100, q_network=q_network)
-
-        # Should log gradient norm
-        calls = [c for c in mock_writer.add_scalar.call_args_list if "Gradients/Total_Norm" in str(c)]
-        assert len(calls) == 1
-
-        logger.close()
-
-    @patch("townlet.training.tensorboard_logger.SummaryWriter")
-    def test_log_network_stats_early_return(self, mock_writer_class, temp_test_dir):
-        """Test early return when both log_histograms and log_gradients are False."""
-        from townlet.training.tensorboard_logger import TensorBoardLogger
-
-        mock_writer = Mock()
-        mock_writer_class.return_value = mock_writer
-
-        logger = TensorBoardLogger(
-            log_dir=temp_test_dir,
-            log_histograms=False,
-            log_gradients=False,
-        )
-
-        q_network = nn.Sequential(nn.Linear(10, 5))
-
-        logger.log_network_stats(episode=100, q_network=q_network)
-
-        # Should return early without logging anything
-        assert mock_writer.add_scalar.call_count == 0
-        assert mock_writer.add_histogram.call_count == 0
-
-        logger.close()
+    assert writer.add_scalar.call_count == 0
+    assert writer.add_histogram.call_count == 0

@@ -22,6 +22,9 @@ from townlet.training.checkpoint_utils import (
     assert_checkpoint_dimensions,
     attach_universe_metadata,
     config_hash_warning,
+    persist_checkpoint_digest,
+    safe_torch_load,
+    verify_checkpoint_digest,
 )
 from townlet.training.state import BatchedAgentState
 from townlet.training.tensorboard_logger import TensorBoardLogger
@@ -35,6 +38,10 @@ logger = logging.getLogger(__name__)
 
 class DemoRunner:
     """Orchestrates multi-day demo training with checkpointing."""
+
+    HEARTBEAT_INTERVAL = 10
+    SUMMARY_INTERVAL = 50
+    CHECKPOINT_INTERVAL = 100
 
     def __init__(
         self,
@@ -142,7 +149,8 @@ class DemoRunner:
         first_checkpoint_path = checkpoint_files[0]
 
         try:
-            checkpoint = torch.load(first_checkpoint_path, weights_only=False)
+            verify_checkpoint_digest(first_checkpoint_path, required=False)
+            checkpoint = safe_torch_load(first_checkpoint_path)
 
             # Phase 4+ checkpoints have substrate_metadata
             if "substrate_metadata" not in checkpoint:
@@ -277,6 +285,7 @@ class DemoRunner:
             attach_universe_metadata(checkpoint, universe)
 
         torch.save(checkpoint, checkpoint_path)
+        persist_checkpoint_digest(checkpoint_path)
         logger.info(f"Checkpoint saved: {checkpoint_path}")
 
         # Update system state
@@ -297,7 +306,8 @@ class DemoRunner:
         latest_checkpoint = checkpoints[-1]
         logger.info(f"Loading checkpoint: {latest_checkpoint}")
 
-        checkpoint = torch.load(latest_checkpoint, weights_only=False)
+        verify_checkpoint_digest(latest_checkpoint, required=False)
+        checkpoint = safe_torch_load(latest_checkpoint)
 
         if universe is None:
             universe = self.compiled_universe
@@ -736,8 +746,8 @@ class DemoRunner:
                             agent_id=self.population.agent_ids[idx],
                         )
 
-                # Heartbeat log every 10 episodes
-                if self.current_episode % 10 == 0:
+                # Heartbeat log every HEARTBEAT_INTERVAL episodes
+                if self.current_episode % self.HEARTBEAT_INTERVAL == 0:
                     elapsed = time.time() - episode_start
                     stage_overview = "/".join(str(int(s.item())) for s in stages_cpu)
 
@@ -757,8 +767,8 @@ class DemoRunner:
                         f"Time: {elapsed:.2f}s"
                     )
 
-                # Detailed summary every 50 episodes
-                if self.current_episode % 50 == 0:
+                # Detailed summary every SUMMARY_INTERVAL episodes
+                if self.current_episode % self.SUMMARY_INTERVAL == 0:
                     # Get training metrics
                     training_metrics = self.population.get_training_metrics()
 
@@ -796,8 +806,8 @@ class DemoRunner:
                     logger.info(f"Affordances:    {affordance_summary}")
                     logger.info("=" * 80)
 
-                # Checkpoint every 100 episodes
-                if self.current_episode % 100 == 0:
+                # Checkpoint every CHECKPOINT_INTERVAL episodes
+                if self.current_episode % self.CHECKPOINT_INTERVAL == 0:
                     self.save_checkpoint(self.compiled_universe)
 
                 # Decay epsilon for next episode and sync telemetry
