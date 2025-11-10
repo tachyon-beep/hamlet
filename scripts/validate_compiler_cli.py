@@ -10,6 +10,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIGS_ROOT = REPO_ROOT / "configs"
+# `aspatial_test` is a trimmed-down pack used by substrate unit tests; it intentionally violates
+# several Stage 4 assumptions (no spatial layout, partial schema), so the CLI validator would fail
+# every run. We skip it here to keep CI signal clean while still covering all real packs.
 EXCLUDED_DIRS = {"templates", "aspatial_test"}
 
 
