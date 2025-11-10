@@ -62,8 +62,8 @@ class TestVectorizedHamletEnvInitialization:
             compile_universe(config_pack)
 
     def test_init_raises_if_config_pack_not_found(self, compile_universe):
-        """Should raise FileNotFoundError if config pack directory doesn't exist."""
-        with pytest.raises(CompilationError, match="Config file not found"):
+        """Should raise CompilationError if config pack directory doesn't exist."""
+        with pytest.raises(CompilationError, match="Config directory does not exist"):
             compile_universe(Path("/nonexistent/path"))
 
     def test_env_init_does_not_construct_cascade_engine(self, monkeypatch, cpu_env_factory):

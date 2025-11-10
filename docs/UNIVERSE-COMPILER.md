@@ -185,20 +185,142 @@ Run the targeted universe compiler suite before landing changes:
 End-to-end sanity check: `uv run scripts/validate_substrate_runtime.py --config configs/L1_full_observability` (ensures compiled metadata
 matches runtime behavior).
 
-## 10. Related Documents
+## 10. Troubleshooting
+
+### Common Compilation Errors
+
+#### UAC-RES-001: Dangling meter reference
+**Error**: `Affordance 'Job' references non-existent meter 'stamina'`
+**Cause**: Affordance effect references a meter not defined in `bars.yaml`
+**Fix**: Add the meter to `bars.yaml` or fix the typo in affordance effects
+
+#### UAC-VAL-001: Spatial impossibility
+**Error**: `Grid has 9 cells (3×3) but need 15 (14 affordances + 1 agent)`
+**Cause**: Grid too small for all affordances
+**Fix**: Increase `grid_size` in `training.yaml` or reduce enabled affordances
+
+#### UAC-VAL-001: Grid size exceeds safety limit
+**Error**: `Grid size exceeds safety limit: 1000000 cells (max 10000)`
+**Cause**: Grid size too large (DoS protection triggered)
+**Fix**: Reduce `grid_size` to ≤100 (100×100 = 10000 cells max)
+
+#### UAC-VAL-003: Cascade circularity detected
+**Error**: `Cascade circularity detected: energy → health → fitness → energy`
+**Cause**: Cascades form a cycle (A affects B affects C affects A)
+**Fix**: Remove one cascade to break the cycle, or redesign meter relationships
+
+#### UAC-VAL-006: Substrate action incompatibility
+**Error**: `Action 'MOVE_UP' not supported by substrate type 'aspatial'`
+**Cause**: Enabled action doesn't match substrate capabilities
+**Fix**: Remove unsupported actions from `enabled_actions` in `training.yaml`
+
+### Cache Issues
+
+#### Cache corruption
+**Symptom**: Warning: `Failed to load cached universe from .compiled/universe.msgpack`
+**Cause**: Corrupted cache file or incompatible format
+**Fix**: Delete `.compiled/` directory and recompile
+
+#### Cache file too large
+**Symptom**: Warning: `Cache file exceeds size limit (15000000 bytes > 10485760 bytes)`
+**Cause**: Unusually large config pack (>10MB cache)
+**Fix**: Check for unexpectedly large configs; normal packs are ~50KB
+
+#### Stale cache
+**Symptom**: Cache loaded but results don't match config changes
+**Cause**: Cache fingerprint matches but content differs (rare)
+**Fix**: Delete `.compiled/` directory or use `compile(use_cache=False)`
+
+### Performance Issues
+
+#### Slow compilation (>1 second)
+**Possible Causes**:
+- Large config pack (many meters/cascades/affordances)
+- Stage 4 validation with complex cascades
+- Cold cache (first compile always slower)
+
+**Investigation**:
+```bash
+# Profile compilation stages
+python -c "
+from pathlib import Path
+from townlet.universe.compiler import UniverseCompiler
+import time
+
+config_dir = Path('configs/L1_full_observability')
+start = time.time()
+compiler = UniverseCompiler()
+compiled = compiler.compile(config_dir, use_cache=False)
+print(f'Compilation time: {time.time() - start:.3f}s')
+"
+```
+
+### Validation Warnings
+
+#### Economic balance warnings
+**Warning**: `Income stress: jobs only available 8h/day. Costs accrue 24h/day.`
+**Meaning**: Agents may not earn enough to survive long-term
+**Action**: Review affordance costs and job payments; adjust if needed
+**Note**: This is a **pedagogical warning** (teaches failure modes), not an error
+
+#### POMDP configuration warnings
+**Warning**: `POMDP enabled with large vision_range (5). Consider reducing to 2.`
+**Meaning**: Observation space may be too large
+**Action**: Review `vision_range` setting; larger values increase compute cost
+**Note**: Not an error; system will work but may be slower
+
+### Developer Tips
+
+#### Enable debug logging
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+from townlet.universe.compiler import UniverseCompiler
+compiler = UniverseCompiler()
+compiled = compiler.compile(Path('configs/L1_full_observability'))
+```
+
+#### Inspect compiled artifacts
+```python
+from pathlib import Path
+from townlet.universe.compiled import CompiledUniverse
+
+# Load cached artifact directly
+cache_path = Path('configs/L1_full_observability/.compiled/universe.msgpack')
+compiled = CompiledUniverse.load_from_cache(cache_path)
+
+print(f"Meters: {compiled.metadata.meter_count}")
+print(f"Affordances: {compiled.metadata.affordance_count}")
+print(f"Observation dim: {compiled.observation_spec.total_dim}")
+print(f"Config hash: {compiled.metadata.config_hash[:16]}")
+```
+
+#### Force recompilation
+```python
+# Method 1: Disable cache
+compiled = compiler.compile(config_dir, use_cache=False)
+
+# Method 2: Delete cache directory
+import shutil
+shutil.rmtree(config_dir / '.compiled', ignore_errors=True)
+compiled = compiler.compile(config_dir)
+```
+
+## 11. Related Documents
 
 - `docs/architecture/COMPILER_ARCHITECTURE.md` – canonical design rationale and diagrams.
 - `docs/tasks/TASK-004A-COMPILER-IMPLEMENTATION.md` – task checklist and acceptance criteria for this workstream.
 - `docs/tasks/STREAM-001-UAC-BAC-FOUNDATION.md` – broader roadmap covering downstream compilers (Brain/BAC).
 - `docs/vfs/vfs-integration-guide.md` – explains how VFS variables map into observation specs.
 
-## 11. Future Enhancements
+## 12. Future Enhancements
 
 - Incremental compilation (only re-run stages for changed YAML) once config packs grow further.
 - Extended cue processing (e.g., derived cues, behavior cues) by expanding `CuesCompiler` with specialized passes.
 - Shared cache registry for remote training clusters (content-addressed store instead of per-pack directories).
 
-## 12. CLI Tooling
+## 13. CLI Tooling
 
 The repository now ships a lightweight CLI so ops/dev workflow can run compiler operations without writing ad-hoc scripts:
 

@@ -60,6 +60,8 @@ MAX_AFFORDANCES = 100
 MAX_CASCADES = 500
 MAX_ACTIONS = 50
 MAX_VARIABLES = 200
+MAX_GRID_CELLS = 10000  # 100×100 maximum (DoS protection)
+MAX_CACHE_FILE_SIZE = 10 * 1024 * 1024  # 10MB (cache bomb protection)
 
 
 class UniverseCompiler:
@@ -78,32 +80,43 @@ class UniverseCompiler:
     def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
         """Compile a config pack into a CompiledUniverse (with optional caching)."""
 
-        config_dir = Path(config_dir)
+        config_dir = Path(config_dir).resolve()  # Resolve to absolute path
+        self._validate_config_dir(config_dir)
         cache_path = self._cache_artifact_path(config_dir)
         precomputed_hash: str | None = None
         precomputed_provenance: str | None = None
 
         if use_cache and cache_path.exists():
-            precomputed_hash, precomputed_provenance = self._build_cache_fingerprint(config_dir)
-            try:
-                cached_universe = CompiledUniverse.load_from_cache(cache_path)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Failed to load cached universe from %s: %s", cache_path, exc)
-            else:
-                if (
-                    cached_universe.metadata.config_hash == precomputed_hash
-                    and cached_universe.metadata.provenance_id == precomputed_provenance
-                ):
-                    logger.info("Loaded compiled universe from cache: %s", cache_path)
-                    return cached_universe
-                logger.info(
-                    "Cache stale for %s (cached=%s/%s, current=%s/%s). Recompiling.",
+            # Validate cache file size before loading (cache bomb protection)
+            cache_size = cache_path.stat().st_size
+            if cache_size > MAX_CACHE_FILE_SIZE:
+                logger.warning(
+                    "Cache file %s exceeds size limit (%d bytes > %d bytes). Recompiling.",
                     cache_path,
-                    cached_universe.metadata.config_hash[:8],
-                    precomputed_hash[:8] if precomputed_hash else "unknown",
-                    (cached_universe.metadata.provenance_id or "")[:8],
-                    (precomputed_provenance or "unknown")[:8],
+                    cache_size,
+                    MAX_CACHE_FILE_SIZE,
                 )
+            else:
+                precomputed_hash, precomputed_provenance = self._build_cache_fingerprint(config_dir)
+                try:
+                    cached_universe = CompiledUniverse.load_from_cache(cache_path)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("Failed to load cached universe from %s: %s", cache_path, exc)
+                else:
+                    if (
+                        cached_universe.metadata.config_hash == precomputed_hash
+                        and cached_universe.metadata.provenance_id == precomputed_provenance
+                    ):
+                        logger.info("Loaded compiled universe from cache: %s", cache_path)
+                        return cached_universe
+                    logger.info(
+                        "Cache stale for %s (cached=%s/%s, current=%s/%s). Recompiling.",
+                        cache_path,
+                        cached_universe.metadata.config_hash[:8],
+                        precomputed_hash[:8] if precomputed_hash else "unknown",
+                        (cached_universe.metadata.provenance_id or "")[:8],
+                        (precomputed_provenance or "unknown")[:8],
+                    )
 
         raw_configs = self._stage_1_parse_individual_files(config_dir)
 
@@ -163,6 +176,37 @@ class UniverseCompiler:
         self._optimization_data = compiled.optimization_data
 
         return compiled
+
+    def _validate_config_dir(self, config_dir: Path) -> None:
+        """Validate config_dir for security and sanity.
+
+        Ensures:
+        - Path is a directory
+        - Path doesn't contain suspicious traversal patterns
+        - Path exists
+
+        Raises:
+            CompilationError: If validation fails
+        """
+        if not config_dir.exists():
+            raise CompilationError(
+                stage="Config Directory Validation",
+                errors=[f"Config directory does not exist: {config_dir}"],
+            )
+
+        if not config_dir.is_dir():
+            raise CompilationError(
+                stage="Config Directory Validation",
+                errors=[f"Config path is not a directory: {config_dir}"],
+            )
+
+        # Warn about suspicious patterns (though resolve() already normalized them)
+        path_str = str(config_dir)
+        if ".." in path_str:
+            logger.warning(
+                "Config directory path contains '..' after resolution: %s. " "This may indicate a path traversal attempt.",
+                config_dir,
+            )
 
     def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
         """Stage 1 – load all YAML files into DTOs using shared loaders."""
@@ -446,6 +490,18 @@ class UniverseCompiler:
             return
 
         grid_cells = grid_size * grid_size
+
+        # Enforce upper bound for DoS protection
+        if grid_cells > MAX_GRID_CELLS:
+            errors.add(
+                formatter(
+                    "UAC-VAL-001",
+                    f"Grid size exceeds safety limit: {grid_cells} cells (max {MAX_GRID_CELLS})",
+                    "training.yaml:environment.grid_size",
+                )
+            )
+            return
+
         enabled_affordances = raw_configs.environment.enabled_affordances
         if enabled_affordances is None:
             required = len(raw_configs.affordances)
@@ -1033,7 +1089,7 @@ class UniverseCompiler:
     def _iter_entries(entries: object | None) -> Iterable[object]:
         if entries is None:
             return ()
-        if isinstance(entries, Iterable) and not isinstance(entries, (str, bytes)):
+        if isinstance(entries, Iterable) and not isinstance(entries, str | bytes):
             return entries
         return ()
 
@@ -1044,6 +1100,18 @@ class UniverseCompiler:
         return graph
 
     def _detect_cycles(self, graph: dict[str, list[str]]) -> list[list[str]]:
+        """Detect cycles in cascade dependency graph using depth-first search.
+
+        Algorithm: DFS with path tracking to identify back edges (cycles).
+        Time Complexity: O(V + E) where V=number of meters, E=number of cascades
+        Space Complexity: O(V) for visited set and recursion stack
+
+        Args:
+            graph: Adjacency list mapping source meter -> list of target meters
+
+        Returns:
+            List of cycles, where each cycle is a list of meter names forming a loop
+        """
         cycles: list[list[str]] = []
         visited: set[str] = set()
         stack: set[str] = set()
