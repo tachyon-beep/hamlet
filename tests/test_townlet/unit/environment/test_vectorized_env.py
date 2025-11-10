@@ -503,6 +503,20 @@ class TestGetActionMasks:
         open_masks = env.get_action_masks()
         assert open_masks[0, env.interact_action_idx]
 
+    def test_get_action_masks_respect_training_enabled_actions(self, custom_env_builder):
+        env = custom_env_builder(
+            overrides={"training": {"enabled_actions": ["INTERACT", "WAIT"]}},
+            num_agents=2,
+        )
+        env.reset()
+
+        masks = env.get_action_masks()
+        disabled_ids = [action.id for action in env.action_space.get_disabled_actions()]
+        assert disabled_ids, "Expected at least one disabled action from enabled_actions override"
+
+        for disabled_id in disabled_ids:
+            assert torch.all(~masks[:, disabled_id]), f"Action {disabled_id} should be masked for all agents"
+
 
 # =============================================================================
 # PLACEHOLDER: PHASE 15C, 15D tests will be added incrementally

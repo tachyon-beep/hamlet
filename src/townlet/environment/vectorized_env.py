@@ -321,11 +321,13 @@ class VectorizedHamletEnv:
         )
 
         # Build composed action space from substrate + global custom actions
-        # TODO(Phase 4.2): Load enabled_actions from training.yaml when TrainingConfig DTO exists
-        # For now, all actions enabled by default (None = all enabled)
-        enabled_actions = None  # Will be loaded from training.yaml in Task 4.2
+        # Compiler metadata already encodes enabled flags from training.enabled_actions
+        action_metadata = universe.action_space_metadata
+        enabled_names = [action.name for action in action_metadata.actions if action.enabled]
+        enabled_param = None if len(enabled_names) == action_metadata.total_actions else enabled_names
+
         global_actions = runtime.clone_global_actions()
-        self.action_space = self._compose_action_space(global_actions, enabled_actions)
+        self.action_space = self._compose_action_space(global_actions, enabled_param)
         self.action_dim = self.metadata.action_count
         if self.action_space.action_dim != self.action_dim:
             raise ValueError(

@@ -1281,7 +1281,7 @@ class UniverseCompiler:
                     id=action.id,
                     name=action.name,
                     type=action.type,
-                    enabled=getattr(action, "enabled", True),
+                    enabled=action.enabled,
                     source=getattr(action, "source", "custom"),
                     costs=dict(action.costs),
                     description=action.description or "",

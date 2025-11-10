@@ -2,10 +2,12 @@
 
 **Purpose**: Control which actions from global vocabulary are available in this config.
 
-**Location**: `training.yaml` → `environment.enabled_actions`
+**Location**: `training.yaml` → `training.enabled_actions`
 
-**Pattern**: All curriculum levels share same action vocabulary (same action_dim).
-Disabled actions are masked out at runtime but still occupy action IDs.
+**Pattern**: All curriculum levels share the same action vocabulary (same `action_dim`).
+Disabled actions are masked out at runtime but still occupy action IDs, so checkpoints stay compatible.
+Set `enabled_actions: null` (or omit the field) to enable the entire vocabulary, or use an explicit list to gate
+actions per config. Passing an empty list intentionally disables every action (useful for curriculum tests).
 
 ## Example
 
@@ -21,10 +23,13 @@ custom_actions:
 
 Total actions: 6 substrate (Grid2D) + 4 custom = **10 actions**
 
-### L0_0_minimal/training.yaml
+### L0_0_minimal/training.yaml (excerpt)
 
 ```yaml
-environment:
+training:
+  device: cuda
+  max_episodes: 500
+  # ... other hyperparameters ...
   enabled_actions:
     - "UP"
     - "DOWN"
@@ -36,11 +41,13 @@ environment:
 ```
 
 **Result**: 7 enabled, 3 disabled, action_dim = 10
+**Live reference**: `configs/L0_0_minimal/training.yaml`
 
-### L1_full_observability/training.yaml
+### L1_full_observability/training.yaml (excerpt)
 
 ```yaml
-environment:
+training:
+  # ...
   enabled_actions:
     - "UP"
     - "DOWN"
@@ -50,11 +57,10 @@ environment:
     - "WAIT"
     - "REST"
     - "MEDITATE"
-    - "TELEPORT_HOME"
-    - "SPRINT"
 ```
 
 **Result**: 10 enabled, 0 disabled, action_dim = 10
+**Live reference**: `configs/L0_5_dual_resource/training.yaml`
 
 ## Checkpoint Transfer
 
@@ -69,7 +75,8 @@ L1 Q-network outputs 10 Q-values (all actions available).
 
 **Phase 1 (Current)**: No formal DTO validation. Configs manually specify enabled_actions.
 
-**Phase 2 (TASK-004A)**: TrainingConfig Pydantic DTO will validate enabled_actions list.
+**Phase 2 (TASK-004A)**: TrainingConfig Pydantic DTO validates `enabled_actions` (duplicates, empty entries) and the
+compiler validates names against the global vocabulary.
 
 ## Best Practices
 
@@ -81,7 +88,13 @@ L1 Q-network outputs 10 Q-values (all actions available).
 
 ## Validation (Future - TASK-004A)
 
-TrainingConfig DTO will validate:
-- All enabled_actions exist in global vocabulary
-- No duplicate action names
-- No typos in action names
+TrainingConfig + Stage 1 validation enforce:
+- Entries are non-empty, deduplicated strings (trimmed automatically)
+- All listed names must exist in the combined substrate + `configs/global_actions.yaml` vocabulary
+- Compiler raises `[UAC-ACT-001]` with file/line context when a name is invalid
+
+## Migration Checklist
+
+1. Add an explicit `enabled_actions` list under the `training:` block of every pack (copy one of the `configs/L0_*/training.yaml` examples).
+2. Keep the list ordered and documented (comments explain why certain custom actions stay disabled).
+3. Run `uv run pytest tests/test_townlet/unit/universe/test_raw_configs.py` to ensure Stage 1 sees the new mask and that action metadata reflects the intended unlocks.

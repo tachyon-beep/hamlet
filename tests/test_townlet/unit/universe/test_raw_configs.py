@@ -1,6 +1,9 @@
 """Smoke tests for RawConfigs loader."""
 
+import shutil
 from pathlib import Path
+
+import yaml
 
 from townlet.universe.compiler_inputs import RawConfigs
 
@@ -13,3 +16,22 @@ def test_raw_configs_from_config_dir():
     assert raw.environment.grid_size > 0
     assert len(raw.variables_reference) > 0
     assert len(raw.global_actions.actions) > 0
+
+
+def test_raw_configs_respects_training_enabled_actions(tmp_path):
+    source = Path("configs/L0_0_minimal")
+    target = tmp_path / "mask_pack"
+    shutil.copytree(source, target)
+
+    training_path = target / "training.yaml"
+    data = yaml.safe_load(training_path.read_text())
+    data.setdefault("training", {})["enabled_actions"] = ["INTERACT", "WAIT"]
+    training_path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    raw = RawConfigs.from_config_dir(target)
+
+    enabled_names = {action.name for action in raw.global_actions.actions if action.enabled}
+    assert enabled_names == {"INTERACT", "WAIT"}
+
+    disabled_names = {action.name for action in raw.global_actions.actions if not action.enabled}
+    assert "UP" in disabled_names  # Movement disabled via config

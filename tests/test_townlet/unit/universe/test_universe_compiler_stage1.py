@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from townlet.universe.compiled import CompiledUniverse
 from townlet.universe.compiler import UniverseCompiler
@@ -89,3 +90,21 @@ def test_compile_executes_stage2_before_stage3(monkeypatch) -> None:
 
     assert called["stage2"] is True
     assert called["stage3"] is True
+
+
+def test_stage1_rejects_unknown_enabled_action(tmp_path: Path) -> None:
+    compiler = UniverseCompiler()
+    source_pack = Path("configs/L0_0_minimal")
+    test_pack = tmp_path / "invalid_actions"
+    shutil.copytree(source_pack, test_pack)
+
+    training_path = test_pack / "training.yaml"
+    data = yaml.safe_load(training_path.read_text())
+    data.setdefault("training", {})["enabled_actions"] = ["UP", "DOES_NOT_EXIST"]
+    training_path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    with pytest.raises(CompilationError) as exc_info:
+        compiler._stage_1_parse_individual_files(test_pack)
+
+    combined = "\n".join(exc_info.value.errors)
+    assert "UAC-ACT-001" in combined

@@ -206,7 +206,15 @@ class RawConfigs:
             return None
 
         combined: list[ActionConfig] = []
+        available_names: set[str] = set()
         next_id = 0
+
+        enabled_lookup: set[str] | None
+        training_enabled = hamlet_config.training.enabled_actions
+        if training_enabled is None:
+            enabled_lookup = None
+        else:
+            enabled_lookup = set(training_enabled)
 
         meter_names = {bar.name for bar in hamlet_config.bars}
         meter_trim_hint_added = False
@@ -226,23 +234,54 @@ class RawConfigs:
                 payload = {meter: amount for meter, amount in payload.items() if meter in meter_names}
             return payload
 
+        def _is_enabled(action_name: str, base_enabled: bool) -> bool:
+            if not base_enabled:
+                return False
+            if enabled_lookup is None:
+                return True
+            return action_name in enabled_lookup
+
         def _clone(action: ActionConfig) -> ActionConfig:
             nonlocal next_id
+            base_enabled = getattr(action, "enabled", True)
             cloned = action.model_copy(
                 update={
                     "id": next_id,
                     "costs": _trim_meter_payload(dict(action.costs)),
                     "effects": _trim_meter_payload(dict(action.effects)),
+                    "enabled": _is_enabled(action.name, base_enabled),
                 }
             )
             next_id += 1
             return cloned
 
         for action in substrate_actions:
-            combined.append(_clone(action))
+            cloned = _clone(action)
+            combined.append(cloned)
+            available_names.add(cloned.name)
 
         for action in custom_actions.actions:
-            combined.append(_clone(action))
+            cloned = _clone(action)
+            combined.append(cloned)
+            available_names.add(cloned.name)
+
+        if enabled_lookup is not None:
+            missing = sorted(name for name in enabled_lookup if name not in available_names)
+            if missing:
+                missing_list = ", ".join(missing)
+                errors.add(
+                    "training.enabled_actions references unknown actions: "
+                    f"{missing_list}. Ensure names match substrate defaults or configs/global_actions.yaml.",
+                    code="UAC-ACT-001",
+                    location="training.yaml:enabled_actions",
+                )
+                hint = (
+                    "Review docs/config-schemas/enabled_actions.md for canonical action names "
+                    "and confirm the training config lists only those identifiers."
+                )
+                if hint not in errors.hints:
+                    errors.add_hint(hint)
+                return None
 
         return ActionSpaceConfig(actions=combined)
 

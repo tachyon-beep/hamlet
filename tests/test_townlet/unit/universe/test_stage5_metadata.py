@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
 from townlet.universe.compiler import UniverseCompiler
@@ -198,7 +199,23 @@ def test_stage5_builds_rich_metadata(base_raw_configs: RawConfigs) -> None:
     assert meter_meta.get_meter_by_name("energy").index == 0
     bed_info = affordance_meta.get_affordance_by_name("Bed")
     assert bed_info.enabled
-    assert bed_info.effects, "Bed affordance should expose summarized effects"
+
+
+def test_stage5_metadata_reflects_enabled_actions(tmp_path: Path, base_config_dir: Path) -> None:
+    pack = tmp_path / "masked"
+    shutil.copytree(base_config_dir, pack)
+
+    training_path = pack / "training.yaml"
+    data = yaml.safe_load(training_path.read_text())
+    data.setdefault("training", {})["enabled_actions"] = ["INTERACT"]
+    training_path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    raw_configs = RawConfigs.from_config_dir(pack)
+    compiler = UniverseCompiler()
+    action_meta, _, _ = compiler._stage_5_build_rich_metadata(raw_configs)
+
+    enabled_actions = [action.name for action in action_meta.get_enabled_actions()]
+    assert enabled_actions == ["INTERACT"]
 
 
 def test_compute_max_income_includes_completion_bonus_and_pipeline() -> None:

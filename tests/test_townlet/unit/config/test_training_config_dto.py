@@ -138,6 +138,44 @@ class TestTrainingConfigValidation:
         assert "epsilon_start" in error
         assert "epsilon_min" in error
 
+    def test_enabled_actions_must_be_unique(self):
+        base_kwargs = dict(
+            device="cuda",
+            max_episodes=100,
+            train_frequency=4,
+            target_update_frequency=32,
+            batch_size=16,
+            max_grad_norm=10.0,
+            epsilon_start=1.0,
+            epsilon_decay=0.995,
+            epsilon_min=0.1,
+            sequence_length=8,
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            TrainingConfig(**base_kwargs, enabled_actions=["UP", "UP"])
+
+        assert "duplicate" in str(exc_info.value)
+
+    def test_enabled_actions_rejects_empty_strings(self):
+        base_kwargs = dict(
+            device="cuda",
+            max_episodes=100,
+            train_frequency=4,
+            target_update_frequency=32,
+            batch_size=16,
+            max_grad_norm=10.0,
+            epsilon_start=1.0,
+            epsilon_decay=0.995,
+            epsilon_min=0.1,
+            sequence_length=8,
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            TrainingConfig(**base_kwargs, enabled_actions=["  "])
+
+        assert "non-empty" in str(exc_info.value)
+
 
 class TestTrainingConfigWarnings:
     """Test semantic warnings (not errors - permissive semantics)."""
@@ -214,6 +252,9 @@ training:
   epsilon_decay: 0.995
   epsilon_min: 0.01
   sequence_length: 8
+  enabled_actions:
+    - "UP"
+    - "WAIT"
 """
         )
 
@@ -223,6 +264,7 @@ training:
         assert config.max_episodes == 5000
         assert config.epsilon_decay == 0.995
         assert config.batch_size == 64
+        assert config.enabled_actions == ["UP", "WAIT"]
 
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""

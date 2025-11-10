@@ -75,3 +75,12 @@ training:
   epsilon_decay: 0.99  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
   epsilon_min: 0.01  # Minimum exploration rate
   allow_unfeasible_universe: true  # Minimal world intentionally violates feasibility checks
+  enabled_actions:
+    # Progressively expand this list in higher curriculum levels (L0 keeps custom actions limited to REST)
+    - "UP"
+    - "DOWN"
+    - "LEFT"
+    - "RIGHT"
+    - "INTERACT"
+    - "WAIT"
+    - "REST"

@@ -42,3 +42,21 @@ Existing runtime code (e.g., `VectorizedHamletEnv`) still loads configs independ
 1. Keep HamletConfig-based compilation path for compiler/testing work.
 2. Gradually migrate runtime consumers to accept `CompiledUniverse` and drop direct YAML loading once the compiler is stable.
 3. Eventually delete the legacy loaders in runtime modules after all consumers use compiled artifacts.
+
+## Strict DTO Enforcement
+
+- All compiler-facing DTOs now specify `ConfigDict(extra="forbid")`. Any unknown YAML key is rejected during Stage 1 instead of being silently ignored later in the pipeline.
+- Operators should run `uv run pytest tests/test_townlet/unit/config/test_training_config_dto.py -k extra` (or equivalent) after adding new fields to confirm schemas were updated everywhere.
+- The compiler’s Stage 4 guard rails (`UAC-VAL-006`) treat over-sized packs as a security violation, so prefer reusing existing DTOs over inventing ad-hoc sections.
+
+## Training-Driven Action Masking
+
+- `training.enabled_actions` is consumed directly by Stage 1 via HamletConfig. The field must list canonical action names from `configs/global_actions.yaml` and/or substrate defaults.
+- Stage 1 threads the list into `RawConfigs.global_actions`, so `_stage_5_build_rich_metadata` and `VectorizedHamletEnv` both read the same enabled flags. No runtime recomputation is required.
+- Config packs should check in explicit lists. See `configs/L0_0_minimal/training.yaml` (movement + REST only) and `configs/L0_5_dual_resource/training.yaml` (movement + REST/MEDITATE) for templates.
+
+## Operator Migration Notes
+
+1. **Clean up stray YAML keys** – `extra="forbid"` will now flag typos like `grid_sie` or `trainig`. Fix the source YAML rather than suppressing the error.
+2. **Adopt `enabled_actions`** – add the field under the `training:` block, copying one of the reference packs, to control curriculum action unlocks.
+3. **Expect guard-rail errors** – hitting limits such as `MAX_AFFORDANCES` now surfaces `UAC-VAL-006`. Trim the pack or split it into multiple scenarios before re-running the compiler.

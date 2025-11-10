@@ -12,7 +12,7 @@ import math
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
 
@@ -42,6 +42,8 @@ class TrainingConfig(BaseModel):
         ... )
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     # Compute device (REQUIRED)
     device: Literal["cpu", "cuda", "mps"] = Field(description="Compute device: 'cuda' (GPU), 'cpu' (CPU-only), 'mps' (Apple Silicon)")
 
@@ -69,6 +71,36 @@ class TrainingConfig(BaseModel):
             "Use only when intentionally building stress-test or instructional worlds."
         ),
     )
+
+    enabled_actions: list[str] | None = Field(
+        default=None,
+        description=(
+            "Optional list of action names from the global vocabulary that should remain enabled for this config. "
+            "Set to null to enable all actions, or [] to intentionally disable the entire action space when running diagnostics."
+        ),
+    )
+
+    @field_validator("enabled_actions")
+    @classmethod
+    def _validate_enabled_actions(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        stripped = []
+        seen: set[str] = set()
+        duplicates: list[str] = []
+        for raw_name in value:
+            name = raw_name.strip()
+            if not name:
+                raise ValueError("enabled_actions entries must be non-empty strings.")
+            stripped.append(name)
+            if name in seen:
+                duplicates.append(name)
+            else:
+                seen.add(name)
+        if duplicates:
+            dup_list = ", ".join(sorted(set(duplicates)))
+            raise ValueError(f"enabled_actions must not contain duplicate names: {dup_list}.")
+        return stripped
 
     @model_validator(mode="after")
     def validate_epsilon_order(self) -> "TrainingConfig":

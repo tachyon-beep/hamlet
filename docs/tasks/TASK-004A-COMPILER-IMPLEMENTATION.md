@@ -1285,9 +1285,9 @@ def _stage_5_build_rich_metadata(
             id=action.id,
             name=action.name,
             type=action.type,  # "movement", "interaction", "passive", "custom"
-            enabled=True,  # Could be extended with training.enabled_actions
-            source="substrate" if action.source == "substrate" else "custom",
-            costs={cost.meter: cost.amount for cost in action.costs},
+            enabled=action.enabled,  # Derived from training.enabled_actions during Stage 1 compose step
+            source=action.source,
+            costs=dict(action.costs),
             description=action.description or f"{action.name} action"
         )
         action_metadatas.append(action_metadata)
@@ -1296,6 +1296,9 @@ def _stage_5_build_rich_metadata(
         actions=action_metadatas,
         action_dim=len(action_metadatas)
     )
+
+    # Stage 1 now threads `training.enabled_actions` through RawConfigs.global_actions, so
+    # ActionMetadata.enabled is authoritative and the runtime no longer recomputes masks.
 
     # 2. MeterMetadata
     meter_infos = []
@@ -2249,7 +2252,7 @@ All future UAC work depends on robust compilation:
 - [ ] Stage 1 catches file not found, malformed YAML, invalid schema
 - [ ] Stage 2 registers all meters and affordances
 - [ ] Stage 3 detects dangling references with clear error messages
-- [ ] Stage 4 validates spatial feasibility, economic balance, cascade circularity
+- [x] Stage 4 validates spatial feasibility, economic balance, cascade circularity (implemented in `_stage_4_cross_validate` with economic 2.0 + capacity checks)
 - [ ] Stage 5 computes correct observation_dim (scales with meter_count)
 - [ ] Stage 6 pre-computes optimization data (tensors, lookup tables)
 - [ ] Stage 7 emits immutable CompiledUniverse
@@ -2431,10 +2434,10 @@ for cascade in raw_configs.cascades.cascades:
 
 **Success Criteria**:
 
-- [ ] All CompilationError instances have error codes
-- [ ] File:line shown in error messages when available
-- [ ] Error codes documented and searchable
-- [ ] Source map tracks YAML key locations
+- [x] All CompilationError instances have error codes (see `townlet.universe.errors.CompilationMessage`)
+- [x] File:line shown in error messages when available (populated from SourceMap during Stage 1/4 diagnostics)
+- [x] Error codes documented and searchable (UAC-VAL/UAC-ACT catalog now referenced in docs)
+- [x] Source map tracks YAML key locations
 
 ---
 
@@ -2530,10 +2533,10 @@ def _stage_4_cross_validate(
 
 **Success Criteria**:
 
-- [ ] All Pydantic models use `extra="forbid"`
-- [ ] Unknown fields in YAML raise clear errors
-- [ ] Safety limits enforced (meters, affordances, cascades)
-- [ ] Error messages indicate security concern
+- [x] All Pydantic models use `extra="forbid"`
+- [x] Unknown fields in YAML raise clear errors
+- [x] Safety limits enforced (meters, affordances, cascades)
+- [x] Error messages indicate security concern
 
 ---
 
@@ -2675,11 +2678,11 @@ def _find_critical_path_affordances(self, raw_configs: RawConfigs) -> list[str]:
 
 **Success Criteria**:
 
-- [ ] Operating hours feasibility checked
-- [ ] Depletion sustainability validated
-- [ ] Capacity constraints checked for multi-agent
-- [ ] Clear error messages for infeasible configs
-- [ ] Warnings for stressed but possible configs
+- [x] Operating hours feasibility checked
+- [x] Depletion sustainability validated
+- [x] Capacity constraints checked for multi-agent
+- [x] Clear error messages for infeasible configs
+- [x] Warnings for stressed but possible configs
 
 ---
 
@@ -2949,11 +2952,11 @@ def check_checkpoint_compatibility(
 
 **Success Criteria**:
 
-- [ ] ObservationField has uuid field
-- [ ] UUIDs generated from semantics (not indices)
-- [ ] UUIDs stable across field reordering
-- [ ] Checkpoints store field UUIDs
-- [ ] Checkpoint validation checks UUID compatibility
+- [x] ObservationField has uuid field
+- [x] UUIDs generated from semantics (not indices)
+- [x] UUIDs stable across field reordering
+- [x] Checkpoints store field UUIDs
+- [x] Checkpoint validation checks UUID compatibility
 
 ---
 

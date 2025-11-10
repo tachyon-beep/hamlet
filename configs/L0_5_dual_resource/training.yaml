@@ -76,6 +76,16 @@ training:
   epsilon_start: 1.0  # Initial exploration rate
   epsilon_decay: 0.995  # Decay per episode (was 0.9995 - too slow, reaches ε=0.1 at ~460 episodes)
   epsilon_min: 0.01  # Minimum exploration rate
+  enabled_actions:
+    # L0.5 unlocks the full custom vocabulary (REST + MEDITATE) to pair with new affordances
+    - "UP"
+    - "DOWN"
+    - "LEFT"
+    - "RIGHT"
+    - "INTERACT"
+    - "WAIT"
+    - "REST"
+    - "MEDITATE"
 
 # Recording configuration
 recording:

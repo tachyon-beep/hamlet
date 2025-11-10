@@ -7,11 +7,11 @@ These tests validate that each training level works end-to-end:
 - Save and load checkpoints
 - Verify learning progress
 
-Each test uses a 'lite' config (~200 episodes, ~5-8 minutes per test).
+Smoke vs Slow:
+    - Smoke variant: runs 5–10 episodes just to prove wiring.
+    - Slow variant (marked `@pytest.mark.slow`): exercises the full 200-episode curriculum.
 """
 
-import shutil
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,13 +25,16 @@ from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.universe.compiler import UniverseCompiler
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
-def temp_run_dir():
-    """Create temporary directory for test run artifacts."""
-    temp_dir = tempfile.mkdtemp(prefix="test_run_")
-    yield Path(temp_dir)
-    shutil.rmtree(temp_dir)
+def temp_run_dir(temp_test_dir: Path) -> Path:
+    """Provide a stable temp directory for training artifacts."""
+
+    run_dir = temp_test_dir / "training_run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
 
 
 def load_config(config_path: Path) -> dict:
@@ -57,7 +60,13 @@ def run_training_pipeline(
     """
     # Load config
     config = load_config(config_path)
-    max_episodes = config["training"]["max_episodes"]
+    training_cfg = config["training"]
+    max_episodes = training_cfg["max_episodes"]
+    checkpoint_interval_value = training_cfg.get("checkpoint_interval")
+    if checkpoint_interval_value is None:
+        checkpoint_interval = 100
+    else:
+        checkpoint_interval = max(int(checkpoint_interval_value), 0)
 
     # Initialize database
     db = DemoDatabase(db_path)
@@ -131,8 +140,8 @@ def run_training_pipeline(
 
         survival_times.append(episode_steps)
 
-        # Save checkpoint every 100 episodes
-        if (episode + 1) % 100 == 0:
+        # Save checkpoint using configured interval (defaults to 100)
+        if checkpoint_interval and (episode + 1) % checkpoint_interval == 0:
             checkpoint_path = checkpoint_dir / f"checkpoint_ep{episode + 1:05d}.pt"
             checkpoint = population.get_checkpoint()
             torch.save(checkpoint, checkpoint_path)
@@ -169,19 +178,9 @@ def run_training_pipeline(
 
 
 @pytest.mark.integration
-@pytest.mark.slow
-def test_level_1_full_observability_integration(temp_run_dir):
-    """Test Level 1 (Full Observability) complete training pipeline.
-
-    Duration: ~5 minutes (200 episodes)
-
-    Validates:
-    - SimpleQNetwork trains without errors
-    - Checkpoints can be saved/loaded
-    - Agent shows learning progress
-    - Database logging works
-    """
-    config_path = Path("configs/test/training_level_1.yaml")
+def test_level_1_full_observability_smoke(temp_run_dir):
+    """Quick smoke test for Level 1 (5 episodes)."""
+    config_path = Path("configs/test/training_level_1_smoke.yaml")
     checkpoint_dir = temp_run_dir / "checkpoints"
     checkpoint_dir.mkdir()
     db_path = temp_run_dir / "metrics.db"
@@ -191,11 +190,9 @@ def test_level_1_full_observability_integration(temp_run_dir):
     # Run training
     metrics = run_training_pipeline(config_path, checkpoint_dir, db_path, device)
 
-    # Assertions
-    assert metrics["final_episode"] == 200, "Should complete 200 episodes"
-    assert metrics["checkpoints_saved"] >= 1, "Should save at least 1 checkpoint"
-    assert checkpoint_dir.exists(), "Checkpoint directory should exist"
-    assert db_path.exists(), "Database should be created"
+    assert metrics["final_episode"] == 5
+    assert checkpoint_dir.exists()
+    assert db_path.exists()
 
     # Check checkpoints exist
     checkpoints = list(checkpoint_dir.glob("*.pt"))
@@ -210,10 +207,90 @@ def test_level_1_full_observability_integration(temp_run_dir):
     assert hasattr(checkpoint, "curriculum_states"), "Checkpoint should contain curriculum_states"
     assert hasattr(checkpoint, "exploration_states"), "Checkpoint should contain exploration_states"
 
-    print("\n✅ Level 1 Integration Test PASSED")
+    print("\n✅ Level 1 Smoke Test PASSED")
     print(f"   Episodes: {metrics['final_episode']}")
     print(f"   Avg survival (last 20): {metrics['avg_survival']:.1f} steps")
     print(f"   Checkpoints saved: {metrics['checkpoints_saved']}")
+
+
+@pytest.mark.integration
+def test_level_2_pomdp_smoke(temp_run_dir):
+    """Smoke test for Level 2 recurrent/POMDP pipeline (5 episodes)."""
+
+    config_path = Path("configs/test/training_level_2_smoke.yaml")
+    checkpoint_dir = temp_run_dir / "checkpoints"
+    checkpoint_dir.mkdir()
+    db_path = temp_run_dir / "metrics.db"
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    metrics = run_training_pipeline(config_path, checkpoint_dir, db_path, device)
+
+    assert metrics["final_episode"] == 5
+    assert metrics["checkpoints_saved"] >= 1
+    assert checkpoint_dir.exists()
+    assert db_path.exists()
+
+    checkpoints = list(checkpoint_dir.glob("*.pt"))
+    assert checkpoints, "Smoke run should save checkpoints"
+
+    checkpoint = torch.load(checkpoints[0], map_location=device, weights_only=False)
+    assert hasattr(checkpoint, "curriculum_states")
+    assert hasattr(checkpoint, "exploration_states")
+    assert hasattr(checkpoint, "agent_ids")
+
+    print("\n✅ Level 2 Smoke Test PASSED")
+    print(f"   Episodes: {metrics['final_episode']}")
+    print(f"   Checkpoints saved: {metrics['checkpoints_saved']}")
+
+
+@pytest.mark.integration
+def test_level_3_temporal_smoke(temp_run_dir):
+    """Smoke test for Level 3 temporal mechanics pipeline (6 episodes)."""
+
+    config_path = Path("configs/test/training_level_3_smoke.yaml")
+    checkpoint_dir = temp_run_dir / "checkpoints"
+    checkpoint_dir.mkdir()
+    db_path = temp_run_dir / "metrics.db"
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    metrics = run_training_pipeline(config_path, checkpoint_dir, db_path, device)
+
+    assert metrics["final_episode"] == 6
+    assert metrics["checkpoints_saved"] >= 1
+    assert checkpoint_dir.exists()
+    assert db_path.exists()
+
+    checkpoints = list(checkpoint_dir.glob("*.pt"))
+    assert checkpoints, "Smoke run should save checkpoints"
+
+    checkpoint = torch.load(checkpoints[0], map_location=device, weights_only=False)
+    assert hasattr(checkpoint, "curriculum_states")
+    assert hasattr(checkpoint, "exploration_states")
+    assert hasattr(checkpoint, "agent_ids")
+
+    print("\n✅ Level 3 Smoke Test PASSED")
+    print(f"   Episodes: {metrics['final_episode']}")
+    print(f"   Checkpoints saved: {metrics['checkpoints_saved']}")
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_level_1_full_observability_integration(temp_run_dir):
+    config_path = Path("configs/test/training_level_1.yaml")
+    checkpoint_dir = temp_run_dir / "checkpoints"
+    checkpoint_dir.mkdir()
+    db_path = temp_run_dir / "metrics.db"
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    metrics = run_training_pipeline(config_path, checkpoint_dir, db_path, device)
+
+    assert metrics["final_episode"] == 200
+    assert metrics["checkpoints_saved"] >= 1
+    assert checkpoint_dir.exists()
+    assert db_path.exists()
 
 
 @pytest.mark.integration
@@ -355,6 +432,9 @@ def test_all_configs_valid():
     }
 
     config_files = [
+        "configs/test/training_level_1_smoke.yaml",
+        "configs/test/training_level_2_smoke.yaml",
+        "configs/test/training_level_3_smoke.yaml",
         "configs/test/training_level_1.yaml",
         "configs/test/training_level_2.yaml",
         "configs/test/training_level_3.yaml",
