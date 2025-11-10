@@ -34,7 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "inspect",
         help="Inspect a compiled universe artifact (MessagePack file).",
     )
-    inspect_parser.add_argument("artifact", help="Path to .compiled/universe.msgpack")
+    inspect_parser.add_argument("artifact", help="Path to config directory or .compiled/universe.msgpack artifact")
     inspect_parser.add_argument(
         "--format",
         choices=("table", "json"),
@@ -108,6 +108,11 @@ def _metadata_to_dict(metadata) -> dict:
 
 def _cmd_inspect(args: argparse.Namespace) -> int:
     artifact_path = Path(args.artifact).resolve()
+
+    # Auto-resolve config directory to artifact path for better UX
+    if artifact_path.is_dir():
+        artifact_path = artifact_path / ".compiled" / "universe.msgpack"
+
     if not artifact_path.exists():
         raise FileNotFoundError(f"Artifact not found: {artifact_path}")
 

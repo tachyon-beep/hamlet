@@ -35,7 +35,7 @@ metadata, optimization tensors, and runtime views.
 | 4. Cross-Validation | `_stage_4_cross_validate` + helpers + `CuesCompiler` | Enforce spatial feasibility, economic balance, cascade cycles, temporal rules, substrate/action alignment, capability semantics, and cue integrity. |
 | 5. Metadata & ObservationSpec | `_stage_5_compute_metadata`, `_stage_5_build_rich_metadata` | Use `VFSObservationSpecBuilder` + `vfs_to_observation_spec` to compute dims, populate meter/action/affordance metadata, and derive hash/provenance. |
 | 6. Optimization Data | `_stage_6_optimize` | Pre-compute tensors (base depletions, cascade/modulation tables, hourly action masks, position maps) in deterministic order. |
-| 7. Emit Artifact | `_stage_7_emit_compiled_universe` | Construct frozen `CompiledUniverse`, serialize/cache via MessagePack, expose runtime DTOs.
+| 7. Emit Artifact | `_stage_7_emit_compiled_universe` | Construct frozen `CompiledUniverse`, serialize/cache via MessagePack, expose runtime DTOs. |
 
 The compiler is intentionally pure and deterministic: given the same YAML content and compiler version, the emitted artifact (including
 `.metadata.config_hash` and `.metadata.provenance_id`) is stable, which unlocks cache hits and checkpoint validation.
@@ -63,7 +63,71 @@ availability ranges, effect-pipeline compatibility, substrate/action constraints
 Any collector with accumulated issues uses `CompilationErrorCollector.check_and_raise()` so contributors see all failures at once; warnings
 (e.g., economic stress) accompany raised errors so operators retain full context.
 
-## 5. Metadata, ObservationSpec, & Runtime Contract
+## 5. Understanding Compiler Warnings
+
+The compiler emits **warnings** for configurations that are semantically valid but may exhibit unexpected behavior. Unlike errors,
+warnings do not block compilation—they inform operators of potential pedagogical opportunities or legacy schema issues.
+
+### Common Warning Codes
+
+**`[UAC-VAL-002]` Economic Imbalance**
+
+```text
+affordances.yaml - Economic imbalance: Total income (0.64) < total costs (1.36).
+affordances.yaml - Income-generating affordances exist but none are available during the day.
+```
+
+**When Expected**: Early curriculum levels (L0_0_minimal, L0_5_dual_resource) intentionally create scarcity to teach agents resource prioritization.
+
+**When Concerning**: Production universes where agents should achieve sustainable equilibrium.
+
+**Action**: For pedagogical configs, this is a *feature* (agents learn to explore/exploit tradeoffs). For production, balance job payments
+against affordance costs or adjust operating hours.
+
+**`[UAC-VAL-008]` Per-tick Effects Without multi_tick Capability**
+
+```text
+/home/john/hamlet/configs/L0_0_minimal/affordances.yaml:32 - Per-tick effects defined without multi_tick capability.
+```
+
+**When Expected**: All current affordances (Sleep, Shower, Job, etc.) use legacy per-tick schema but lack explicit `multi_tick: true` in
+capabilities. Runtime correctly applies these effects each tick, but the schema is verbose.
+
+**When Concerning**: New affordances written after TASK-004A should declare `multi_tick: true` explicitly to match documented schema.
+
+**Action**: Legacy affordances are functional—no action required. For new affordances, add `capabilities: [multi_tick]` to silence the warning.
+
+### Configuring Warning Behavior
+
+**Promote Warnings to Errors** (strict validation):
+
+```yaml
+# training.yaml
+allow_unfeasible_universe: false  # Default: true for pedagogical configs
+```
+
+When `allow_unfeasible_universe: false`, economic imbalance and sustainability warnings become compilation errors. This is recommended for
+production or research universes where agents should not face intentional scarcity.
+
+**Suppress Expected Warnings** (future enhancement):
+
+Currently, warnings cannot be individually suppressed. A future enhancement may add per-code suppression:
+
+```yaml
+# training.yaml (proposed)
+suppress_warnings: [UAC-VAL-002, UAC-VAL-008]
+```
+
+### Pedagogical Philosophy
+
+From `CLAUDE.md`:
+
+> "The project deliberately produces 'interesting failures' (like reward hacking) as teaching moments rather than bugs to fix."
+
+Warnings align with this philosophy—they surface opportunities for students to discover emergent behaviors (e.g., agents finding creative
+solutions to economic imbalance) rather than enforcing rigid correctness. When in doubt, warnings are learning opportunities, not bugs.
+
+## 6. Metadata, ObservationSpec, & Runtime Contract
 
 - ObservationSpec generation relies on the VFS schema (`variables_reference.yaml` + explicit `exposed_observations`). Full observability
 strips `local_window`, POMDP strips `grid_encoding` per training config.
@@ -74,7 +138,7 @@ information is consumed by `VectorizedHamletEnv`, `DemoRunner`, and analytics/te
 - Runtime integration happens via `CompiledUniverse.to_runtime()` which emits read-only DTO proxies for environment/curriculum/exploration
 constructors—no YAML reads happen past compile time (see `tests/test_townlet/unit/environment/test_vectorized_env_runtime.py`).
 
-## 6. Caching & Provenance
+## 7. Caching & Provenance
 
 - Cache artifacts live in `<config_dir>/.compiled/universe.msgpack`. The compiler normalizes YAML (sorted keys) before hashing, then folds
 in file names to avoid collisions.
@@ -85,7 +149,7 @@ full recompilation + warning).
 - Checkpoints store `config_hash`, obs/action dims, meter counts, and observation-field UUIDs (`townlet/training/checkpoint_utils.py`).
 Loading mismatched checkpoints yields friendly warnings/errors.
 
-## 7. Usage Patterns
+## 8. Usage Patterns
 
 ```python
 from pathlib import Path
@@ -104,7 +168,7 @@ print(runtime.metadata.observation_dim)
 compiled universes.
 - **Training integration**: `DemoRunner` compiles once per run and reuses the runtime view for curriculum/exploration/population setup.
 
-## 8. Testing Checklist
+## 9. Testing Checklist
 
 Run the targeted universe compiler suite before landing changes:
 
@@ -121,20 +185,20 @@ Run the targeted universe compiler suite before landing changes:
 End-to-end sanity check: `uv run scripts/validate_substrate_runtime.py --config configs/L1_full_observability` (ensures compiled metadata
 matches runtime behavior).
 
-## 9. Related Documents
+## 10. Related Documents
 
 - `docs/architecture/COMPILER_ARCHITECTURE.md` – canonical design rationale and diagrams.
 - `docs/tasks/TASK-004A-COMPILER-IMPLEMENTATION.md` – task checklist and acceptance criteria for this workstream.
 - `docs/tasks/STREAM-001-UAC-BAC-FOUNDATION.md` – broader roadmap covering downstream compilers (Brain/BAC).
 - `docs/vfs/vfs-integration-guide.md` – explains how VFS variables map into observation specs.
 
-## 10. Future Enhancements
+## 11. Future Enhancements
 
 - Incremental compilation (only re-run stages for changed YAML) once config packs grow further.
 - Extended cue processing (e.g., derived cues, behavior cues) by expanding `CuesCompiler` with specialized passes.
 - Shared cache registry for remote training clusters (content-addressed store instead of per-pack directories).
 
-## 11. CLI Tooling
+## 12. CLI Tooling
 
 The repository now ships a lightweight CLI so ops/dev workflow can run compiler operations without writing ad-hoc scripts:
 
@@ -142,11 +206,14 @@ The repository now ships a lightweight CLI so ops/dev workflow can run compiler 
 # Compile a pack (writes .compiled/universe.msgpack by default)
 python -m townlet.compiler compile configs/L1_full_observability
 
-# Inspect an existing artifact
-python -m townlet.compiler inspect configs/L1_full_observability/.compiled/universe.msgpack
+# Inspect an existing artifact (auto-resolves config directory to artifact path)
+python -m townlet.compiler inspect configs/L1_full_observability
 
 # Inspect as JSON (for automation/CI logs)
-python -m townlet.compiler inspect --format json configs/L1_full_observability/.compiled/universe.msgpack
+python -m townlet.compiler inspect --format json configs/L1_full_observability
+
+# Can also pass full artifact path directly
+python -m townlet.compiler inspect configs/L1_full_observability/.compiled/universe.msgpack
 
 # Validate config packs without touching cache (useful for CI lint checks)
 python -m townlet.compiler validate configs/L1_full_observability
