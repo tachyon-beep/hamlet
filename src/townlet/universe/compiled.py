@@ -8,7 +8,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
-import msgpack
+import msgpack  # type: ignore[import]
 import torch
 
 from townlet.config import HamletConfig

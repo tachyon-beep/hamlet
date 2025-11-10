@@ -40,7 +40,10 @@ def _semantic_from_name(name: str) -> str | None:
     return None
 
 
-def _scope_from_metadata(exposed_to: list[str] | None, variable_scope: str | None) -> str:
+def _scope_from_metadata(
+    exposed_to: list[str] | None,
+    variable_scope: str | None,
+) -> Literal["global", "agent", "agent_private"]:
     candidates = exposed_to or []
     if variable_scope == "global":
         return "global"

@@ -3,9 +3,30 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, TypedDict, cast
 
 import torch
+
+
+class _CascadeEntry(TypedDict):
+    source_idx: int
+    target_idx: int
+    threshold: float
+    strength: float
+
+
+class _ModulationEntry(TypedDict):
+    source_idx: int
+    target_idx: int
+    base_multiplier: float
+    range: float
+    baseline_depletion: float
+
+
+class _TerminalCondition(TypedDict):
+    meter_idx: int
+    operator: str
+    value: float
 
 
 class MeterDynamics:
@@ -27,38 +48,50 @@ class MeterDynamics:
         self.base_depletions = base_depletions.to(device=device, dtype=torch.float32).clone()
         self.meter_name_to_index = dict(meter_name_to_index)
 
-        self._cascade_tables = {
-            category: [
-                {
-                    "source_idx": int(entry["source_idx"]),
-                    "target_idx": int(entry["target_idx"]),
-                    "threshold": float(entry["threshold"]),
-                    "strength": float(entry["strength"]),
-                }
-                for entry in entries
-            ]
-            for category, entries in cascade_data.items()
-        }
+        self._cascade_tables: dict[str, list[_CascadeEntry]] = {}
+        for category, entries in cascade_data.items():
+            normalized_entries: list[_CascadeEntry] = []
+            for entry in entries:
+                normalized_entries.append(
+                    cast(
+                        _CascadeEntry,
+                        {
+                            "source_idx": int(entry["source_idx"]),
+                            "target_idx": int(entry["target_idx"]),
+                            "threshold": float(entry["threshold"]),
+                            "strength": float(entry["strength"]),
+                        },
+                    )
+                )
+            self._cascade_tables[category] = normalized_entries
 
-        self._modulations = [
-            {
-                "source_idx": int(entry["source_idx"]),
-                "target_idx": int(entry["target_idx"]),
-                "base_multiplier": float(entry["base_multiplier"]),
-                "range": float(entry["range"]),
-                "baseline_depletion": float(entry["baseline_depletion"]),
-            }
-            for entry in modulation_data
-        ]
+        self._modulations: list[_ModulationEntry] = []
+        for entry in modulation_data:
+            self._modulations.append(
+                cast(
+                    _ModulationEntry,
+                    {
+                        "source_idx": int(entry["source_idx"]),
+                        "target_idx": int(entry["target_idx"]),
+                        "base_multiplier": float(entry["base_multiplier"]),
+                        "range": float(entry["range"]),
+                        "baseline_depletion": float(entry["baseline_depletion"]),
+                    },
+                )
+            )
 
-        self._terminal_conditions = [
-            {
-                "meter_idx": int(entry["meter_idx"]),
-                "operator": entry["operator"],
-                "value": float(entry["value"]),
-            }
-            for entry in terminal_conditions
-        ]
+        self._terminal_conditions: list[_TerminalCondition] = []
+        for entry in terminal_conditions:
+            self._terminal_conditions.append(
+                cast(
+                    _TerminalCondition,
+                    {
+                        "meter_idx": int(entry["meter_idx"]),
+                        "operator": entry["operator"],
+                        "value": float(entry["value"]),
+                    },
+                )
+            )
 
     def deplete_meters(self, meters: torch.Tensor, depletion_multiplier: float = 1.0) -> torch.Tensor:
         """Apply base depletion and modulations using precomputed tensors."""

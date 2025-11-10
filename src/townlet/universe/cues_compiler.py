@@ -6,10 +6,10 @@ from collections.abc import Callable
 
 from townlet.config.cues import CuesConfig
 
-from .errors import CompilationErrorCollector
+from .errors import CompilationErrorCollector, CompilationMessage
 from .symbol_table import UniverseSymbolTable
 
-Formatter = Callable[[str, str, str | None], object]
+Formatter = Callable[[str, str, str | None], CompilationMessage]
 
 
 class CuesCompiler:
@@ -34,34 +34,34 @@ class CuesCompiler:
         errors: CompilationErrorCollector,
         formatter: Formatter,
     ) -> None:
-        for cue in cues_config.simple_cues:
-            meter = cue.condition.meter
+        for simple_cue in cues_config.simple_cues:
+            meter = simple_cue.condition.meter
             if meter not in symbol_table.meters:
                 errors.add(
                     formatter(
                         "UAC-VAL-005",
-                        f"Cue '{cue.cue_id}' references unknown meter '{meter}'",
-                        f"cues.yaml:{cue.cue_id}",
+                        f"Cue '{simple_cue.cue_id}' references unknown meter '{meter}'",
+                        f"cues.yaml:{simple_cue.cue_id}",
                     )
                 )
-            threshold = cue.condition.threshold
+            threshold = simple_cue.condition.threshold
             if threshold < 0.0 or threshold > 1.0:
                 errors.add(
                     formatter(
                         "UAC-VAL-005",
                         f"Cue threshold must be within [0.0, 1.0], got {threshold}",
-                        f"cues.yaml:{cue.cue_id}",
+                        f"cues.yaml:{simple_cue.cue_id}",
                     )
                 )
 
-        for cue in cues_config.compound_cues:
-            for condition in cue.conditions:
+        for compound_cue in cues_config.compound_cues:
+            for condition in compound_cue.conditions:
                 if condition.meter not in symbol_table.meters:
                     errors.add(
                         formatter(
                             "UAC-VAL-005",
-                            f"Cue '{cue.cue_id}' references unknown meter '{condition.meter}'",
-                            f"cues.yaml:{cue.cue_id}",
+                            f"Cue '{compound_cue.cue_id}' references unknown meter '{condition.meter}'",
+                            f"cues.yaml:{compound_cue.cue_id}",
                         )
                     )
                 if condition.threshold < 0.0 or condition.threshold > 1.0:
@@ -69,7 +69,7 @@ class CuesCompiler:
                         formatter(
                             "UAC-VAL-005",
                             f"Cue threshold must be within [0.0, 1.0], got {condition.threshold}",
-                            f"cues.yaml:{cue.cue_id}",
+                            f"cues.yaml:{compound_cue.cue_id}",
                         )
                     )
 
@@ -94,7 +94,7 @@ class CuesCompiler:
                 )
                 continue
 
-            ranges = [tuple(cue.range) for cue in cues]
+            ranges: list[tuple[float, float]] = [(float(cue.range[0]), float(cue.range[1])) for cue in cues]
             if not self._ranges_cover_domain(ranges, 0.0, 1.0):
                 errors.add(
                     formatter(

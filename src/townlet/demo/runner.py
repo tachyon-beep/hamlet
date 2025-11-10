@@ -7,7 +7,7 @@ import signal
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
 import yaml
@@ -242,7 +242,7 @@ class DemoRunner:
         checkpoint_path = self.checkpoint_dir / f"checkpoint_ep{self.current_episode:05d}.pt"
 
         # P1.1 Phase 2: Use population's complete checkpoint state
-        checkpoint = {
+        checkpoint: dict[str, Any] = {
             "version": 3,  # Phase 5: Version 3 includes substrate metadata
             "episode": self.current_episode,
             "timestamp": time.time(),

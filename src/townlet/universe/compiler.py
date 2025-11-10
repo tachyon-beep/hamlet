@@ -8,22 +8,21 @@ import logging
 import os
 import sys
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from datetime import UTC, datetime
 from numbers import Number
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 import yaml
 
 from townlet.config.affordance import AffordanceConfig
+from townlet.config.bar import BarConfig
 from townlet.config.cascade import CascadeConfig
 from townlet.config.effect_pipeline import EffectPipeline
-from townlet.environment.cascade_config import (
-    BarConfig,
-    EnvironmentConfig,
-)
+from townlet.environment.cascade_config import EnvironmentConfig
 from townlet.environment.cascade_config import (
     load_cascades_config as load_full_cascades_config,
 )
@@ -295,7 +294,7 @@ class UniverseCompiler:
         for affordance in raw_configs.affordances:
             for attr_name, label in meter_fields:
                 entries = getattr(affordance, attr_name, None)
-                if not entries:
+                if not entries or not isinstance(entries, Sequence):
                     continue
                 base_location = f"affordances.yaml:{affordance.id}:{label}"
                 for idx, entry in enumerate(entries):
@@ -313,7 +312,7 @@ class UniverseCompiler:
 
             # Capabilities (meter-gated)
             capabilities = getattr(affordance, "capabilities", None)
-            if capabilities:
+            if capabilities and isinstance(capabilities, Sequence):
                 for idx, capability in enumerate(capabilities):
                     if _get_attr(capability, "type") == "meter_gated":
                         meter = _get_meter(capability)
@@ -334,24 +333,25 @@ class UniverseCompiler:
             if effect_pipeline:
                 for stage_name in ("on_start", "per_tick", "on_completion", "on_early_exit", "on_failure"):
                     stage_effects = _get_attr(effect_pipeline, stage_name)
-                    if stage_effects:
-                        base_location = f"affordances.yaml:{affordance.id}:effect_pipeline.{stage_name}"
-                        for idx, entry in enumerate(stage_effects):
-                            meter = _get_meter(entry)
-                            if meter:
-                                _record_meter_reference(
-                                    meter,
-                                    base_location,
-                                    code="UAC-RES-002",
-                                    hint_key="invalid_meter",
-                                    hint_text="Meter references must match names defined in bars.yaml (case-sensitive).",
-                                )
-                            else:
-                                _handle_missing_meter(f"{base_location}[{idx}]")
+                    if not stage_effects or not isinstance(stage_effects, Sequence):
+                        continue
+                    base_location = f"affordances.yaml:{affordance.id}:effect_pipeline.{stage_name}"
+                    for idx, entry in enumerate(stage_effects):
+                        meter = _get_meter(entry)
+                        if meter:
+                            _record_meter_reference(
+                                meter,
+                                base_location,
+                                code="UAC-RES-002",
+                                hint_key="invalid_meter",
+                                hint_text="Meter references must match names defined in bars.yaml (case-sensitive).",
+                            )
+                        else:
+                            _handle_missing_meter(f"{base_location}[{idx}]")
 
             # Availability constraints
             availability = getattr(affordance, "availability", None)
-            if availability:
+            if availability and isinstance(availability, Sequence):
                 for idx, constraint in enumerate(availability):
                     meter = _get_meter(constraint)
                     location = f"affordances.yaml:{affordance.id}:availability[{idx}]"
@@ -807,9 +807,7 @@ class UniverseCompiler:
 
     def _sum_money_entries(self, entries: object | None, *, positive_only: bool) -> float:
         total = 0.0
-        if not entries:
-            return total
-        for entry in entries:
+        for entry in self._iter_entries(entries):
             if self._get_meter(entry) != "money":
                 continue
             amount = self._get_amount(entry)
@@ -822,19 +820,15 @@ class UniverseCompiler:
 
     def _sum_amounts(self, entries: object | None) -> float:
         total = 0.0
-        if not entries:
-            return total
-        for entry in entries:
+        for entry in self._iter_entries(entries):
             amount = self._get_amount(entry)
-            if amount:
+            if amount is not None:
                 total += amount
         return total
 
     def _sum_positive_meter_entries(self, entries: object | None, meter_name: str) -> float:
         total = 0.0
-        if not entries:
-            return total
-        for entry in entries:
+        for entry in self._iter_entries(entries):
             if self._get_meter(entry) != meter_name:
                 continue
             amount = self._get_amount(entry)
@@ -1034,6 +1028,14 @@ class UniverseCompiler:
         if isinstance(value, int | float):
             return float(value)
         return None
+
+    @staticmethod
+    def _iter_entries(entries: object | None) -> Iterable[object]:
+        if entries is None:
+            return ()
+        if isinstance(entries, Iterable) and not isinstance(entries, (str, bytes)):
+            return entries
+        return ()
 
     def _build_cascade_graph(self, cascades: tuple[CascadeConfig, ...]) -> dict[str, list[str]]:
         graph: dict[str, list[str]] = {}
@@ -1240,7 +1242,8 @@ class UniverseCompiler:
             target_idx = meter_lookup.get(cascade.target)
             if source_idx is None or target_idx is None:
                 continue
-            cascade_data[cascade.category].append(
+            category_key = cascade.category or "uncategorized"
+            cascade_data[category_key].append(
                 {
                     "source_idx": source_idx,
                     "target_idx": target_idx,
@@ -1249,8 +1252,8 @@ class UniverseCompiler:
                 }
             )
 
-        for category in cascade_data:
-            cascade_data[category].sort(key=lambda entry: entry["target_idx"])
+        for category, entries in cascade_data.items():
+            entries.sort(key=lambda entry: entry["target_idx"])
 
         modulation_data: list[dict[str, float]] = []
         cascades_yaml = raw_configs.config_dir / "cascades.yaml"
@@ -1340,7 +1343,7 @@ class UniverseCompiler:
             )
 
         try:
-            universe.metadata = metadata  # type: ignore[attr-defined]
+            setattr(cast(Any, universe), "metadata", metadata)
         except dataclasses.FrozenInstanceError:
             pass
         else:
@@ -1508,9 +1511,7 @@ class UniverseCompiler:
         totals: defaultdict[str, float] = defaultdict(float)
 
         def _add_entries(entries: object | None) -> None:
-            if not entries:
-                return
-            for entry in entries:
+            for entry in self._iter_entries(entries):
                 meter = self._get_meter(entry)
                 amount = self._get_amount(entry)
                 if meter and amount is not None:

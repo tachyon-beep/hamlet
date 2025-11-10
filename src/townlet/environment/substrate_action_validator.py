@@ -55,13 +55,13 @@ class SubstrateActionValidator:
                 result.errors.append("Aspatial substrate cannot define movement actions. Found movement action '" f"{action.name}'.")
 
     def _validate_grid_square(self, result: ValidationResult) -> None:
-        required = {(0, -1), (0, 1), (-1, 0), (1, 0)}
+        required: set[tuple[int, ...]] = {(0, -1), (0, 1), (-1, 0), (1, 0)}
         missing = required - self._movement_deltas()
         if missing:
             result.errors.append("Square grid requires 4-way movement (up/down/left/right). Missing deltas: " f"{sorted(missing)}")
 
     def _validate_grid_cubic(self, result: ValidationResult) -> None:
-        required = {
+        required: set[tuple[int, ...]] = {
             (0, -1, 0),
             (0, 1, 0),
             (-1, 0, 0),
@@ -74,7 +74,7 @@ class SubstrateActionValidator:
             result.errors.append("Cubic grid requires 6-way movement (horizontal + vertical). Missing deltas: " f"{sorted(missing)}")
 
     def _validate_hex_grid(self, result: ValidationResult) -> None:
-        required = {
+        required: set[tuple[int, ...]] = {
             (1, 0),
             (0, 1),
             (-1, 0),

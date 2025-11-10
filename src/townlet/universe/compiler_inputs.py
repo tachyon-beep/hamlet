@@ -82,7 +82,9 @@ class RawConfigs:
     @property
     def cues(self) -> tuple[SimpleCueConfig | CompoundCueConfig, ...]:
         cues_config: CuesConfig = self.hamlet_config.cues
-        return tuple(cues_config.simple_cues + cues_config.compound_cues)
+        combined: list[SimpleCueConfig | CompoundCueConfig] = list(cues_config.simple_cues)
+        combined.extend(cues_config.compound_cues)
+        return tuple(combined)
 
     @property
     def substrate(self) -> SubstrateConfig:
