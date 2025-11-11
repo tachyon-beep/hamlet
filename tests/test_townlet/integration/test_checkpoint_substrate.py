@@ -43,7 +43,7 @@ def test_checkpoint_validates_position_dim(env_cpu):
 
 
 def test_checkpoint_rejects_legacy_format(env_cpu):
-    """BREAKING CHANGE: Legacy checkpoints (no position_dim) should be rejected."""
+    """BREAKING CHANGE: Legacy checkpoints (no position_dim) should be strictly rejected (pre-release, 0 users)."""
     # Create legacy checkpoint (no position_dim field)
     legacy_checkpoint = {
         "positions": {"Bed": [2, 3]},
@@ -51,6 +51,10 @@ def test_checkpoint_rejects_legacy_format(env_cpu):
         # No position_dim field!
     }
 
-    # Should raise clear error for legacy format
-    with pytest.raises(ValueError, match="legacy checkpoint.*pre-Phase 4"):
+    # Should raise clear error with guidance
+    with pytest.raises(ValueError) as exc_info:
         env_cpu.set_affordance_positions(legacy_checkpoint)
+
+    error_msg = str(exc_info.value)
+    assert "position_dim" in error_msg
+    assert "no longer supported" in error_msg.lower()

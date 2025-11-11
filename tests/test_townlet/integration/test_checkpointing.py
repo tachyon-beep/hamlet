@@ -19,7 +19,6 @@ Total: 38 tests → 15 comprehensive integration tests
 
 import sqlite3
 import tempfile
-import warnings
 from pathlib import Path
 
 import pytest
@@ -1068,8 +1067,8 @@ class TestVariableMeterCheckpoints:
         # Verify metadata matched
         assert checkpoint["universe_metadata"]["meter_count"] == 4
 
-    def test_legacy_checkpoint_loads_with_default_assumption(self, cpu_device, basic_env):
-        """Legacy checkpoints (no metadata) should load with warning."""
+    def test_checkpoint_rejects_missing_universe_metadata(self, cpu_device, basic_env):
+        """Checkpoints without universe_metadata should be strictly rejected (pre-release, 0 users)."""
         # Create a real checkpoint first to get proper network state
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
         _init_curriculum(curriculum, 1)
@@ -1109,15 +1108,15 @@ class TestVariableMeterCheckpoints:
             network_type="simple",
         )
 
-        # Loading legacy checkpoint should warn but succeed
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        # Loading checkpoint without universe_metadata should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
             population2.load_checkpoint_state(legacy_checkpoint)
 
-            # Verify warning was issued
-            assert len(w) == 1
-            assert "legacy checkpoint" in str(w[0].message).lower()
-            assert "universe_metadata" in str(w[0].message)
+        # Verify error message provides clear guidance
+        error_msg = str(exc_info.value)
+        assert "universe_metadata" in error_msg
+        assert "no longer supported" in error_msg.lower()
+        assert "retrain" in error_msg.lower()
 
 
 # =============================================================================
