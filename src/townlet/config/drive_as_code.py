@@ -7,6 +7,8 @@ Philosophy: Reward functions are compositions of extrinsic structure, modifiers,
 shaping bonuses, and intrinsic computation. All components configurable via YAML.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -100,3 +102,102 @@ class ModifierConfig(BaseModel):
             raise ValueError(f"Ranges must end at 1.0, got {sorted_ranges[-1].max}")
 
         return self
+
+
+class BarBonusConfig(BaseModel):
+    """Bar-based bonus for constant_base_with_shaped_bonus strategy.
+
+    Applies a bonus/penalty based on deviation from center point.
+    Formula: bonus = scale * (bar_value - center)
+
+    Example:
+        >>> energy_bonus = BarBonusConfig(
+        ...     bar="energy",
+        ...     center=0.5,  # Neutral point
+        ...     scale=0.5,   # Magnitude
+        ... )
+        # energy=1.0 → bonus = 0.5 * (1.0 - 0.5) = +0.25
+        # energy=0.0 → bonus = 0.5 * (0.0 - 0.5) = -0.25
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    bar: str = Field(description="Bar name")
+    center: float = Field(ge=0.0, le=1.0, description="Neutral point (no bonus/penalty)")
+    scale: float = Field(gt=0.0, description="Magnitude of bonus/penalty")
+
+
+class VariableBonusConfig(BaseModel):
+    """VFS variable-based bonus.
+
+    Applies a weighted bonus from a VFS-computed variable.
+    Formula: bonus = weight * variable_value
+
+    Example:
+        >>> urgency_bonus = VariableBonusConfig(
+        ...     variable="energy_urgency",
+        ...     weight=0.5,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variable: str = Field(description="VFS variable name")
+    weight: float = Field(description="Weight (can be negative for penalties)")
+
+
+class ExtrinsicStrategyConfig(BaseModel):
+    """Configuration for extrinsic reward strategies.
+
+    Supports 9 strategy types:
+    - multiplicative: reward = base * bar1 * bar2 * ...
+    - constant_base_with_shaped_bonus: reward = base + sum(bar_bonuses) + sum(variable_bonuses)
+    - additive_unweighted: reward = base + sum(bars)
+    - weighted_sum: reward = sum(weight_i * source_i)
+    - polynomial: reward = sum(weight_i * source_i^exponent_i)
+    - threshold_based: reward = sum(threshold bonuses/penalties)
+    - aggregation: reward = base + op(bars) where op ∈ {min, max, mean, product}
+    - vfs_variable: reward = variable (delegate to VFS)
+    - hybrid: reward = weighted combination of multiple strategies
+
+    Example:
+        >>> strategy = ExtrinsicStrategyConfig(
+        ...     type="constant_base_with_shaped_bonus",
+        ...     base_reward=1.0,
+        ...     bar_bonuses=[
+        ...         BarBonusConfig(bar="energy", center=0.5, scale=0.5),
+        ...     ],
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[
+        "multiplicative",
+        "constant_base_with_shaped_bonus",
+        "additive_unweighted",
+        "weighted_sum",
+        "polynomial",
+        "threshold_based",
+        "aggregation",
+        "vfs_variable",
+        "hybrid",
+    ] = Field(description="Strategy type")
+
+    # constant_base_with_shaped_bonus fields
+    base_reward: float | None = Field(default=None, description="Base survival reward")
+    bar_bonuses: list[BarBonusConfig] = Field(default_factory=list, description="Bar-based bonuses")
+    variable_bonuses: list[VariableBonusConfig] = Field(default_factory=list, description="VFS variable bonuses")
+
+    # multiplicative / additive_unweighted fields
+    base: float | None = Field(default=None, description="Base value")
+    bars: list[str] = Field(default_factory=list, description="Bar names")
+
+    # vfs_variable fields
+    variable: str | None = Field(default=None, description="VFS variable name")
+
+    # TODO: Add fields for other strategy types (weighted_sum, polynomial, threshold_based, aggregation, hybrid)
+    # These will be added incrementally as needed
+
+    # Modifier application (optional)
+    apply_modifiers: list[str] = Field(default_factory=list, description="Modifier names to apply to extrinsic rewards")
