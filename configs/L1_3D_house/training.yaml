@@ -64,6 +64,7 @@ training:
   batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
   sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
   max_grad_norm: 10.0  # Gradient clipping threshold
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate

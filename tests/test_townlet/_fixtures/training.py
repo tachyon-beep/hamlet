@@ -101,6 +101,7 @@ def vectorized_population(
         replay_buffer_capacity=1000,
         batch_size=32,
         device=device,
+        use_double_dqn=False,
     )
 
 
@@ -139,4 +140,5 @@ def non_training_recurrent_population(
         batch_size=8,
         train_frequency=10000,
         sequence_length=8,
+        use_double_dqn=False,
     )

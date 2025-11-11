@@ -417,6 +417,7 @@ class DemoRunner:
         batch_size = self.hamlet_config.training.batch_size
         sequence_length = self.hamlet_config.training.sequence_length
         max_grad_norm = self.hamlet_config.training.max_grad_norm
+        use_double_dqn = self.hamlet_config.training.use_double_dqn
 
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
@@ -441,6 +442,7 @@ class DemoRunner:
             batch_size=batch_size,
             sequence_length=sequence_length,
             max_grad_norm=max_grad_norm,
+            use_double_dqn=use_double_dqn,
         )
 
         self.curriculum.initialize_population(num_agents)

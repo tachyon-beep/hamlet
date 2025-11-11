@@ -68,6 +68,7 @@ training:
   batch_size: 16  # Smaller batch for LSTM (recurrent: 16, feedforward: 64)
   sequence_length: 8  # Length of sequences for LSTM training
   max_grad_norm: 10.0  # Gradient clipping threshold
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
 
   # Epsilon-greedy exploration (slower decay for POMDP)
   epsilon_start: 1.0  # Initial exploration rate
