@@ -1196,35 +1196,31 @@ class TestCheckpointRoundTrip:
         assert abs(adaptive2.current_intrinsic_weight - 0.5) < 1e-6
 
 
-class TestCheckpointBackwardsCompatibility:
-    """Test handling of missing checkpoint fields (backwards compatibility)."""
+class TestCheckpointStrictValidation:
+    """Test strict checkpoint validation (NO backwards compatibility - pre-release, 0 users)."""
 
-    def test_rnd_handles_missing_optimizer(self, cpu_device, basic_env):
-        """RND should handle checkpoints without optimizer state (legacy)."""
+    def test_rnd_rejects_missing_optimizer(self, cpu_device, basic_env):
+        """RND should reject checkpoints without optimizer state."""
         rnd = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = rnd.checkpoint_state()
         # Simulate legacy checkpoint without optimizer
         del state["optimizer"]
 
-        # Should not crash (though training may be suboptimal)
+        # Should raise KeyError (strict validation)
         rnd2 = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
-        try:
+        with pytest.raises(KeyError):
             rnd2.load_state(state)
-        except KeyError:
-            pytest.fail("RND should handle missing optimizer gracefully")
 
-    def test_adaptive_handles_missing_survival_history(self, cpu_device, basic_env):
-        """AdaptiveIntrinsic should handle checkpoints without survival history."""
+    def test_adaptive_rejects_missing_survival_history(self, cpu_device, basic_env):
+        """AdaptiveIntrinsic should reject checkpoints without survival history."""
         adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = adaptive.checkpoint_state()
         # Simulate legacy checkpoint without survival history
         del state["survival_history"]
 
-        # Should not crash (annealing may restart)
+        # Should raise KeyError (strict validation)
         adaptive2 = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
-        try:
+        with pytest.raises(KeyError):
             adaptive2.load_state(state)
-        except KeyError:
-            pytest.fail("Adaptive should handle missing survival_history gracefully")
