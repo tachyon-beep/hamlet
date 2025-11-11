@@ -75,6 +75,27 @@ class TrainingConfig(BaseModel):
     # Recurrent-specific (REQUIRED for all configs, used when network_type=recurrent)
     sequence_length: int = Field(gt=0, description="Length of sequences for LSTM training (recurrent networks only)")
 
+    # Reward strategy selection (REQUIRED)
+    reward_strategy: Literal["multiplicative", "adaptive"] = Field(
+        description=(
+            "Reward calculation strategy. "
+            "'multiplicative': Original health × energy formula (demonstrates Low Energy Delirium bug). "
+            "'adaptive': Additive with crisis suppression (fixes bug, see docs/teachable_moments/low_energy_delerium.md)."
+        )
+    )
+
+    # Adaptive reward strategy parameters (optional, used only when reward_strategy='adaptive')
+    base_reward: float = Field(
+        default=1.0,
+        gt=0.0,
+        description="Base survival reward for adaptive strategy (constant term, default: 1.0)",
+    )
+    bonus_scale: float = Field(
+        default=0.5,
+        gt=0.0,
+        description="Multiplier for health/energy bonuses in adaptive strategy (default: 0.5)",
+    )
+
     allow_unfeasible_universe: bool = Field(
         default=False,
         description=(

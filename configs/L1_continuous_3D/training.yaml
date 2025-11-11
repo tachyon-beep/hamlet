@@ -56,6 +56,9 @@ training:
   sequence_length: 8
   max_grad_norm: 10.0
   use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
