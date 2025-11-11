@@ -10,6 +10,64 @@ HAMLET is a pedagogical Deep Reinforcement Learning (DRL) environment where agen
 
 **Key insight**: The project deliberately produces "interesting failures" (like reward hacking) as teaching moments rather than bugs to fix.
 
+## CRITICAL: Pre-Release Status - ZERO Backwards Compatibility Required
+
+**THIS PROJECT IS PRE-RELEASE WITH ZERO USERS AND ZERO DOWNLOADS.**
+
+**ABSOLUTE RULES:**
+
+1. **NO backwards compatibility arrangements** - Delete old code paths immediately
+2. **NO fallback mechanisms** - Breaking changes are free and encouraged
+3. **NO deprecation warnings** - Just break things and update references
+4. **NO migration paths** - Old configs/code should fail loudly, not be supported
+5. **NO "support both old and new"** - Technical debt for a non-existent user base is inexcusable
+
+**Why this matters:**
+
+- Every fallback path is technical debt that serves zero users
+- Every "support both" pattern doubles maintenance burden for no benefit
+- Every deprecation warning delays inevitable breaking changes
+- Clean breaks now = simpler codebase at launch
+
+**When you see:**
+- "Let's support the old way too" → **NO. Delete it.**
+- "We should maintain backwards compatibility" → **NO. We have zero users.**
+- "Let's add a fallback for old configs" → **NO. Break them and update the templates.**
+- "What if someone was using the old API?" → **They don't exist. Break it.**
+
+**Examples of correct behavior:**
+- VFS integration: Deleted all old observation code, required `variables_reference.yaml` for all packs
+- reward_strategy field: Made it REQUIRED, broke old configs, updated all test fixtures
+- Obsolete code: `src/hamlet/` marked obsolete, work exclusively in `src/townlet/`
+
+**ANTIPATTERNS - These are WRONG and should be removed immediately:**
+
+❌ **ANTIPATTERN**: `if hasattr(obj, 'old_field')` checks for old vs new attributes
+- Why it's wrong: Maintaining dual code paths for zero users
+- Fix: Delete the old code path, update all references to new field
+
+❌ **ANTIPATTERN**: `try/except` blocks catching old config formats
+- Why it's wrong: Silent fallbacks hide breaking changes that should fail loudly
+- Fix: Let it raise, update the config, delete the try/except
+
+❌ **ANTIPATTERN**: Version checks or feature flags for "legacy support"
+- Why it's wrong: We have no legacy users to support
+- Fix: Delete version checks, delete old code paths
+
+❌ **ANTIPATTERN**: Making fields "Optional" when they should be required
+- Why it's wrong: Implicit defaults create non-reproducible configs
+- Fix: Make fields required, update all configs with explicit values
+
+❌ **ANTIPATTERN**: Code comments saying "for backwards compatibility"
+- Why it's wrong: If you're writing this comment, you're doing it wrong
+- Fix: Delete the backwards compatibility code and the comment
+
+❌ **ANTIPATTERN**: Keeping obsolete code "just in case"
+- Why it's wrong: Dead code confuses future developers and bloats the codebase
+- Fix: Delete it. Git history preserves it if you really need it later
+
+**The rule is simple: If it's old and not in use, DELETE IT. Don't maintain it, don't support it, don't document it. Pre-release means freedom to break everything without consequence. Backwards compatibility patterns are ANTIPATTERNS at this stage.**
+
 ## AI-Friendly Documentation Pattern
 
 **All documentation files in `docs/` use structured frontmatter** to help AI assistants understand content before reading the entire file. This saves tokens and improves context efficiency.
