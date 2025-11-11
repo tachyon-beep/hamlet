@@ -320,7 +320,24 @@ class UniverseCompiler:
         if substrate.type == "grid" and substrate.grid is not None:
             width = substrate.grid.width
             height = substrate.grid.height
-            grid_cells = width * height
+
+            # Check for 3D grid (depth field)
+            depth = getattr(substrate.grid, "depth", None)
+            is_3d = depth is not None
+
+            # Calculate grid cells based on dimensionality
+            if is_3d:
+                grid_cells = width * height * depth
+                grid_desc = f"{width}×{height}×{depth} grid encoding (0=empty, 1=agent, 2=affordance, 3=both)"
+                position_dims = 3
+                position_default = [0.0, 0.0, 0.0]
+                position_desc = "Normalized agent position (x, y, z) in [0, 1] range"
+            else:
+                grid_cells = width * height
+                grid_desc = f"{width}×{height} grid encoding (0=empty, 1=agent, 2=affordance, 3=both)"
+                position_dims = 2
+                position_default = [0.0, 0.0]
+                position_desc = "Normalized agent position (x, y) in [0, 1] range"
 
             # Grid encoding for full observability
             variables.append(
@@ -333,15 +350,24 @@ class UniverseCompiler:
                     readable_by=["agent", "engine"],
                     writable_by=["engine"],
                     default=[0.0] * grid_cells,
-                    description=f"{width}×{height} grid encoding (0=empty, 1=agent, 2=affordance, 3=both)",
+                    description=grid_desc,
                 )
             )
 
             # Local window for POMDP (if partial observability enabled)
             if raw_configs.environment.partial_observability:
                 vision_range = raw_configs.environment.vision_range or 3
-                window_size = (2 * vision_range + 1) ** 2  # Fixed: (2r+1)² for full window
-                window_dim = 2 * vision_range + 1  # Window is (2r+1) × (2r+1)
+                if is_3d:
+                    # 3D POMDP: (2r+1)³ window
+                    window_size = (2 * vision_range + 1) ** 3
+                    window_dim = 2 * vision_range + 1
+                    window_desc = f"{window_dim}×{window_dim}×{window_dim} local observation window (POMDP 3D)"
+                else:
+                    # 2D POMDP: (2r+1)² window
+                    window_size = (2 * vision_range + 1) ** 2
+                    window_dim = 2 * vision_range + 1
+                    window_desc = f"{window_dim}×{window_dim} local observation window (POMDP)"
+
                 variables.append(
                     VariableDef(
                         id="local_window",
@@ -352,7 +378,7 @@ class UniverseCompiler:
                         readable_by=["agent", "engine"],
                         writable_by=["engine"],
                         default=[0.0] * window_size,
-                        description=f"{window_dim}×{window_dim} local observation window (POMDP)",
+                        description=window_desc,
                     )
                 )
 
@@ -362,12 +388,12 @@ class UniverseCompiler:
                     id="position",
                     scope="agent",
                     type="vecNf",
-                    dims=2,
+                    dims=position_dims,
                     lifetime="episode",
                     readable_by=["agent", "engine", "acs"],
                     writable_by=["actions", "engine"],
-                    default=[0.0, 0.0],
-                    description="Normalized agent position (x, y) in [0, 1] range",
+                    default=position_default,
+                    description=position_desc,
                 )
             )
 

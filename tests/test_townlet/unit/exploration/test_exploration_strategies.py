@@ -816,6 +816,8 @@ class TestAdaptiveIntrinsicStatePersistence:
             "variance_threshold": 25.0,
             "survival_window": 150,
             "decay_rate": 0.97,
+            "min_survival_fraction": 0.5,
+            "max_episode_length": 1000,
             "survival_history": [50.0, 60.0, 70.0],
         }
 
@@ -827,6 +829,8 @@ class TestAdaptiveIntrinsicStatePersistence:
         assert abs(exploration.variance_threshold - 25.0) < 1e-6
         assert exploration.survival_window == 150
         assert abs(exploration.decay_rate - 0.97) < 1e-6
+        assert abs(exploration.min_survival_fraction - 0.5) < 1e-6
+        assert exploration.max_episode_length == 1000
         assert exploration.survival_history == [50.0, 60.0, 70.0]
 
     def test_checkpoint_restore_roundtrip(self):
