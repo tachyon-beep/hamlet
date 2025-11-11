@@ -610,10 +610,11 @@ class TestAdaptiveIntrinsicAnnealingLogic:
             survival_window=100,
             variance_threshold=100.0,
             decay_rate=0.99,
+            max_episode_length=200,  # 100-109 survival = 50-54% completion (>40% threshold)
             device=torch.device("cpu"),
         )
 
-        # Add 100 episodes of consistent success (95-105 steps, mean=100)
+        # Add 100 episodes of consistent success (100-109 steps, mean=104.5, >40% of max_episode_length)
         for i in range(100):
             exploration.update_on_episode_end(survival_time=100.0 + (i % 10))
 
@@ -679,47 +680,6 @@ class TestAdaptiveIntrinsicAnnealingLogic:
         assert len(exploration.survival_history) == 10
         assert abs(exploration.survival_history[0] - 5.0) < 1e-6
         assert abs(exploration.survival_history[-1] - 14.0) < 1e-6
-
-
-class TestAdaptiveIntrinsicRewardScaling:
-    """Test intrinsic reward computation with weight scaling."""
-
-    def test_compute_intrinsic_rewards_scales_by_weight(self):
-        """Intrinsic rewards should be scaled by current weight."""
-        exploration = AdaptiveIntrinsicExploration(
-            obs_dim=10,
-            initial_intrinsic_weight=0.5,
-            device=torch.device("cpu"),
-        )
-
-        observations = torch.randn(4, 10)
-
-        # Get rewards with weight=0.5
-        rewards_half = exploration.compute_intrinsic_rewards(observations)
-
-        # All rewards should be non-negative (MSE property)
-        assert torch.all(rewards_half >= 0)
-
-        # Now set weight to 1.0
-        exploration.current_intrinsic_weight = 1.0
-        rewards_full = exploration.compute_intrinsic_rewards(observations)
-
-        # Should be exactly 2x (weight doubled)
-        assert torch.allclose(rewards_full, rewards_half * 2.0, atol=1e-5)
-
-    def test_compute_intrinsic_rewards_zero_weight(self):
-        """Zero weight should give zero rewards."""
-        exploration = AdaptiveIntrinsicExploration(
-            obs_dim=10,
-            initial_intrinsic_weight=0.0,
-            device=torch.device("cpu"),
-        )
-
-        observations = torch.randn(4, 10)
-        rewards = exploration.compute_intrinsic_rewards(observations)
-
-        # All should be zero
-        assert torch.allclose(rewards, torch.zeros(4))
 
 
 class TestAdaptiveIntrinsicActionSelection:

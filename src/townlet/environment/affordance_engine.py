@@ -49,7 +49,7 @@ class AffordanceEngine:
         Initialize AffordanceEngine.
 
         Args:
-            affordance_config: Loaded affordance configuration (legacy) or tuple of modern affordances
+            affordance_config: Tuple of affordances from compiled universe or legacy AffordanceConfigCollection
             num_agents: Number of agents in parallel
             device: torch.device for GPU/CPU
             meter_name_to_idx: Mapping of meter names to indices (from bars_config)
@@ -57,10 +57,11 @@ class AffordanceEngine:
         self.num_agents = num_agents
         self.device = device
 
-        # Support both legacy AffordanceConfigCollection and modern tuple of affordances
+        # Modern compiler output: tuple of AffordanceConfig objects
         if isinstance(affordance_config, tuple):
             self.affordances = affordance_config
         else:
+            # Legacy loader: AffordanceConfigCollection with .affordances list
             self.affordances = affordance_config.affordances
 
         self.meter_name_to_idx = meter_name_to_idx
@@ -160,12 +161,31 @@ class AffordanceEngine:
             meter_idx = self.meter_name_to_idx[cost["meter"]]
             updated_meters[agent_mask, meter_idx] -= cost["amount"]
 
-        # Apply effects from effect_pipeline (modern schema: AffordanceEffect objects)
+        # Apply effects from effect_pipeline (modern schema only)
         if hasattr(affordance, "effect_pipeline") and affordance.effect_pipeline:
             on_start = getattr(affordance.effect_pipeline, "on_start", [])
-            for effect in on_start:
-                meter_idx = self.meter_name_to_idx[effect.meter]
-                updated_meters[agent_mask, meter_idx] += effect.amount
+
+            # For dual-mode affordances, if on_start is empty, simulate full multi-tick cycle
+            if not on_start and affordance.interaction_type == "dual":
+                # Get duration and per_tick effects
+                duration = self.get_duration_ticks(affordance_name)
+                per_tick = getattr(affordance.effect_pipeline, "per_tick", [])
+                on_completion = getattr(affordance.effect_pipeline, "on_completion", [])
+
+                # Apply per_tick effects × duration
+                for effect in per_tick:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    updated_meters[agent_mask, meter_idx] += effect.amount * duration
+
+                # Apply completion bonus
+                for effect in on_completion:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    updated_meters[agent_mask, meter_idx] += effect.amount
+            else:
+                # Apply on_start effects (instant-mode affordances)
+                for effect in on_start:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    updated_meters[agent_mask, meter_idx] += effect.amount
 
         # Clamp meters to [0, 1]
         updated_meters = torch.clamp(updated_meters, 0.0, 1.0)

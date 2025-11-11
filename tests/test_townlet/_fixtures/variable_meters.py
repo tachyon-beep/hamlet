@@ -485,6 +485,13 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
     with open(config_4m / "variables_reference.yaml", "w") as f:
         yaml.safe_dump(vfs_config, f, sort_keys=False)
 
+    # Set allow_unfeasible_universe to bypass Stage 4 validation
+    # (this is a test fixture for variable meters, not universe feasibility)
+    training_path = config_4m / "training.yaml"
+    training_data = yaml.safe_load(training_path.read_text())
+    training_data.setdefault("training", {})["allow_unfeasible_universe"] = True
+    training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
+
     return config_4m
 
 
@@ -875,6 +882,13 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
 
     with open(config_12m / "variables_reference.yaml", "w") as f:
         yaml.safe_dump(vfs_config, f, sort_keys=False)
+
+    # Set allow_unfeasible_universe to bypass Stage 4 validation
+    # (this is a test fixture for variable meters, not universe feasibility)
+    training_path = config_12m / "training.yaml"
+    training_data = yaml.safe_load(training_path.read_text())
+    training_data.setdefault("training", {})["allow_unfeasible_universe"] = True
+    training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
 
     return config_12m
 

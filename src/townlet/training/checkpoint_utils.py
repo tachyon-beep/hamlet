@@ -110,10 +110,47 @@ def safe_torch_load(
     checkpoint_path: Path | str,
     *,
     map_location: torch.device | str | None = None,
+    weights_only: bool = True,
 ) -> Any:
-    """Load a checkpoint enforcing PyTorch's weights-only safety guard."""
+    """Load a checkpoint with optional PyTorch weights-only safety guard.
+
+    Args:
+        checkpoint_path: Path to checkpoint file
+        map_location: Device to map tensors to
+        weights_only: If True, only load tensors/parameters (safer but may fail with numpy types).
+                     If False, allow arbitrary Python objects (use only for trusted checkpoints).
+
+    Note:
+        PyTorch 2.6+ requires explicit allowlisting of numpy types when weights_only=True.
+        For locally-generated test checkpoints, weights_only=False is acceptable.
+        For external/untrusted checkpoints, always use weights_only=True.
+    """
+    if not weights_only:
+        # Trusted checkpoint (e.g., test-generated) - allow arbitrary objects
+        return torch.load(checkpoint_path, map_location=map_location, weights_only=False)
 
     try:
+        # PyTorch 2.6+ requires explicit allowlisting of numpy types
+        import numpy as np
+
+        # Add numpy types to safe globals for PyTorch 2.6+ compatibility
+        safe_globals = [np.dtype]
+
+        try:
+            from numpy._core.multiarray import scalar as np_scalar
+
+            safe_globals.append(np_scalar)
+        except (ImportError, AttributeError):
+            # Older numpy versions use numpy.core.multiarray instead
+            try:
+                from numpy.core.multiarray import scalar as np_scalar  # type: ignore[attr-defined]
+
+                safe_globals.append(np_scalar)
+            except (ImportError, AttributeError):
+                pass  # If neither import works, proceed without it
+
+        torch.serialization.add_safe_globals(safe_globals)
+
         return torch.load(checkpoint_path, map_location=map_location, weights_only=True)
     except RuntimeError as exc:  # pragma: no cover - depends on torch internals
         message = str(exc)

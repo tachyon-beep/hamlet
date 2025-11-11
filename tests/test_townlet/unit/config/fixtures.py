@@ -48,7 +48,6 @@ VALID_TRAINING_PARAMS = {
 }
 
 VALID_ENVIRONMENT_PARAMS = {
-    "grid_size": 8,
     "partial_observability": False,
     "vision_range": 8,
     "enable_temporal_mechanics": False,

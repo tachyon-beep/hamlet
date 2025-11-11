@@ -340,7 +340,8 @@ class UniverseCompiler:
             # Local window for POMDP (if partial observability enabled)
             if raw_configs.environment.partial_observability:
                 vision_range = raw_configs.environment.vision_range or 3
-                window_size = vision_range * vision_range
+                window_size = (2 * vision_range + 1) ** 2  # Fixed: (2r+1)² for full window
+                window_dim = 2 * vision_range + 1  # Window is (2r+1) × (2r+1)
                 variables.append(
                     VariableDef(
                         id="local_window",
@@ -351,7 +352,7 @@ class UniverseCompiler:
                         readable_by=["agent", "engine"],
                         writable_by=["engine"],
                         default=[0.0] * window_size,
-                        description=f"{vision_range}×{vision_range} local observation window (POMDP)",
+                        description=f"{window_dim}×{window_dim} local observation window (POMDP)",
                     )
                 )
 
@@ -463,10 +464,18 @@ class UniverseCompiler:
 
         # Auto-generate standard system variables
         auto_generated_vars = self._auto_generate_standard_variables(raw_configs)
-        for variable in auto_generated_vars:
-            table.register_variable(variable)
 
-        # Register custom user-defined variables (if present)
+        # Get user-defined variable IDs to avoid duplicates
+        user_defined_var_ids = set()
+        if raw_configs.variables_reference is not None:
+            user_defined_var_ids = {var.id for var in raw_configs.variables_reference}
+
+        # Register auto-generated variables only if not overridden by user
+        for variable in auto_generated_vars:
+            if variable.id not in user_defined_var_ids:
+                table.register_variable(variable)
+
+        # Register custom user-defined variables (these take precedence over auto-generated)
         if raw_configs.variables_reference is not None:
             for variable in raw_configs.variables_reference:
                 table.register_variable(variable)

@@ -13,8 +13,11 @@ def test_raw_configs_from_config_dir():
     raw = RawConfigs.from_config_dir(config_dir)
 
     assert raw.training.max_episodes > 0
-    assert raw.environment.grid_size > 0
-    assert len(raw.variables_reference) > 0
+    # grid_size is now in substrate.yaml, not environment.yaml
+    assert raw.substrate.grid is not None
+    assert raw.substrate.grid.width > 0
+    # variables_reference can be empty list (auto-generated only)
+    assert raw.variables_reference is not None
     assert len(raw.global_actions.actions) > 0
 
 

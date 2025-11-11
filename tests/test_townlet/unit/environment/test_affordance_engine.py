@@ -18,19 +18,28 @@ the environment integration layer.
 import pytest
 import torch
 
-from townlet.environment.affordance_config import load_affordance_config
 from townlet.environment.affordance_engine import (
     AffordanceEngine,
     create_affordance_engine,
 )
-from townlet.environment.cascade_config import load_bars_config
+from townlet.universe.compiler import UniverseCompiler
 
 
 @pytest.fixture
 def affordance_engine_components(cpu_device, test_config_pack_path):
-    """Load bars_config and affordance_config for tests (TASK-001 fix)."""
-    bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-    affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml", bars_config)
+    """Compile universe and extract affordance metadata for tests."""
+    compiler = UniverseCompiler()
+    compiled = compiler.compile(test_config_pack_path)
+
+    # Create a simple bars_config-like object with meter_name_to_index
+    class BarsConfigCompat:
+        def __init__(self, meter_name_to_index):
+            self.meter_name_to_index = meter_name_to_index
+
+    # AffordanceEngine expects AffordanceConfigCollection from hamlet_config
+    bars_config = BarsConfigCompat(compiled.metadata.meter_name_to_index)
+    affordance_config = compiled.hamlet_config.affordances
+
     return bars_config, affordance_config
 
 

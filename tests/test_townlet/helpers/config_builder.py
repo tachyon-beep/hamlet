@@ -23,7 +23,7 @@ TEST_CONFIG_SRC = CONFIGS_DIR / "test"
 
 BASE_CONFIG = {
     "environment": {
-        "grid_size": 8,
+        # grid_size moved to substrate.yaml
         "partial_observability": False,
         "vision_range": 8,
         "enable_temporal_mechanics": False,

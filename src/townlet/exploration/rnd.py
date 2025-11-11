@@ -178,11 +178,13 @@ class RNDExploration(ExplorationStrategy):
     def compute_intrinsic_rewards(
         self,
         observations: torch.Tensor,  # [batch, obs_dim]
+        update_stats: bool = False,
     ) -> torch.Tensor:
         """Compute normalized RND novelty signal (prediction error).
 
         Args:
             observations: [batch, obs_dim] state observations
+            update_stats: If True, update running mean/std statistics (use during training rollouts)
 
         Returns:
             [batch] normalized intrinsic rewards
@@ -193,9 +195,10 @@ class RNDExploration(ExplorationStrategy):
             # MSE per sample (high error = novel = high reward)
             mse_per_sample = ((target_features - predicted_features) ** 2).mean(dim=1)
 
-            # Update running statistics
-            mse_numpy = mse_per_sample.cpu().numpy()
-            self.reward_rms.update(mse_numpy)
+            # Optionally update running statistics (only during training rollouts)
+            if update_stats:
+                mse_numpy = mse_per_sample.cpu().numpy()
+                self.reward_rms.update(mse_numpy)
 
             # Normalize by running standard deviation
             # This brings intrinsic rewards to comparable magnitude with extrinsic rewards
@@ -316,7 +319,6 @@ class RNDExploration(ExplorationStrategy):
         self.fixed_network.load_state_dict(state["fixed_network"])
         self.predictor_network.load_state_dict(state["predictor_network"])
         self.optimizer.load_state_dict(state["optimizer"])
-
         self.epsilon = state["epsilon"]
         self.epsilon_min = state["epsilon_min"]
         self.epsilon_decay = state["epsilon_decay"]

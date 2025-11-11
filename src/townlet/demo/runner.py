@@ -99,7 +99,7 @@ class DemoRunner:
         # Load config using HamletConfig DTO (enforces no-defaults validation)
         self.hamlet_config = HamletConfig.load(self.config_dir, training_config_path=self.training_config_path)
 
-        # Also load raw YAML for backward compatibility and optional sections (e.g., recording)
+        # Also load raw YAML for optional sections (e.g., recording)
         with open(self.training_config_path) as f:
             self.config = yaml.safe_load(f)
 
@@ -150,28 +150,24 @@ class DemoRunner:
 
         try:
             verify_checkpoint_digest(first_checkpoint_path, required=False)
-            checkpoint = safe_torch_load(first_checkpoint_path)
+            checkpoint = safe_torch_load(first_checkpoint_path, weights_only=False)
 
-            # Phase 4+ checkpoints have substrate_metadata
+            # Validate checkpoint has required metadata
             if "substrate_metadata" not in checkpoint:
                 raise ValueError(
-                    f"Old checkpoints detected in {self.checkpoint_dir}.\n"
-                    "\n"
-                    "BREAKING CHANGE: Phase 4 changed checkpoint format.\n"
-                    "Legacy checkpoints (Version 2) are no longer compatible.\n"
+                    f"Unsupported checkpoint format detected in {self.checkpoint_dir}.\n"
+                    "Checkpoint missing 'substrate_metadata' field.\n"
                     "\n"
                     "Action required:\n"
                     f"  1. Delete checkpoint directory: {self.checkpoint_dir}\n"
-                    "  2. Retrain model from scratch with Phase 4+ code\n"
+                    "  2. Retrain model from scratch\n"
                     "\n"
-                    "If you need to preserve old models, checkout pre-Phase 4 git commit.\n"
-                    "\n"
-                    f"Detected old checkpoint: {first_checkpoint_path.name}"
+                    f"Detected checkpoint: {first_checkpoint_path.name}"
                 )
         except Exception as e:
             # If we can't load checkpoint, let the normal loading code handle it
             # (might be corrupted, wrong format, etc.)
-            if "Old checkpoints detected" in str(e):
+            if "Unsupported checkpoint format" in str(e):
                 raise  # Re-raise our validation error
             # Otherwise ignore (will fail later during actual load)
 
@@ -307,7 +303,7 @@ class DemoRunner:
         logger.info(f"Loading checkpoint: {latest_checkpoint}")
 
         verify_checkpoint_digest(latest_checkpoint, required=False)
-        checkpoint = safe_torch_load(latest_checkpoint)
+        checkpoint = safe_torch_load(latest_checkpoint, weights_only=False)
 
         if universe is None:
             universe = self.compiled_universe
@@ -318,10 +314,9 @@ class DemoRunner:
             assert_checkpoint_dimensions(checkpoint, universe)
 
         # P1.1: Check checkpoint version
-        checkpoint_version = checkpoint.get("version", 1)  # Default to v1 for legacy checkpoints
+        checkpoint_version = checkpoint.get("version")
         if checkpoint_version != 2:
-            logger.warning(f"Loading v{checkpoint_version} checkpoint (current version is 2)")
-            # Future: Add migration logic here if needed
+            raise ValueError(f"Unsupported checkpoint version: {checkpoint_version}\n" f"Expected version 2. Please retrain from scratch.")
 
         self.current_episode = checkpoint["episode"]
 

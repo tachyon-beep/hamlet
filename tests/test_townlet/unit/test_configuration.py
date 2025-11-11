@@ -624,18 +624,54 @@ class TestAffordanceCategories:
         free_affordances = {aff.name for aff in affordance_collection.affordances if not aff.costs}
         assert {"Park", "Job", "Labor"}.issubset(free_affordances)
 
-    def test_affordances_with_penalties(self, affordance_collection: AffordanceConfigCollection):
-        fastfood = affordance_collection.get_affordance("4")
-        assert fastfood is not None
-        penalties = [eff for eff in fastfood.effects if eff.amount < 0]
-        penalties += [eff for eff in fastfood.completion_bonus if eff.amount < 0]
-        assert len(penalties) >= 2
+    def test_affordances_with_penalties(self, test_config_pack_path: Path):
+        """Test that certain affordances have penalty effects (negative amounts)."""
+        import yaml
 
-        bar = affordance_collection.get_affordance("9")
-        assert bar is not None
-        bar_penalties = [eff for eff in bar.effects if eff.amount < 0]
-        bar_penalties += [eff for eff in bar.completion_bonus if eff.amount < 0]
-        assert bar_penalties
+        affordances_path = test_config_pack_path / "affordances.yaml"
+        with open(affordances_path) as f:
+            data = yaml.safe_load(f)
+
+        # Find FastFood (id=4) and Bar (id=9)
+        affordances = {aff["id"]: aff for aff in data["affordances"]}
+
+        # FastFood should have penalties
+        fastfood = affordances["4"]
+        fastfood_penalties = []
+
+        # Check all possible effect locations (legacy and modern schemas)
+        for effect_list in [
+            fastfood.get("effects", []),
+            fastfood.get("completion_bonus", []),
+        ]:
+            fastfood_penalties += [eff for eff in effect_list if eff.get("amount", 0) < 0]
+
+        # Check effect_pipeline fields
+        if "effect_pipeline" in fastfood:
+            pipeline = fastfood["effect_pipeline"]
+            for stage in ["on_start", "per_tick", "on_completion", "on_early_exit", "on_failure"]:
+                if stage in pipeline:
+                    fastfood_penalties += [eff for eff in pipeline[stage] if eff.get("amount", 0) < 0]
+
+        assert len(fastfood_penalties) >= 2, f"FastFood should have at least 2 penalties, got {len(fastfood_penalties)}"
+
+        # Bar should have penalties
+        bar = affordances["9"]
+        bar_penalties = []
+
+        for effect_list in [
+            bar.get("effects", []),
+            bar.get("completion_bonus", []),
+        ]:
+            bar_penalties += [eff for eff in effect_list if eff.get("amount", 0) < 0]
+
+        if "effect_pipeline" in bar:
+            pipeline = bar["effect_pipeline"]
+            for stage in ["on_start", "per_tick", "on_completion", "on_early_exit", "on_failure"]:
+                if stage in pipeline:
+                    bar_penalties += [eff for eff in pipeline[stage] if eff.get("amount", 0) < 0]
+
+        assert bar_penalties, "Bar should have penalty effects"
 
 
 class TestAffordanceConfigEdgeCases:

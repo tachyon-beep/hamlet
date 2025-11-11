@@ -180,6 +180,7 @@ class TestEpisodeMetadata:
             timestamp=1699123456.78,
             affordance_layout={"Bed": (2, 3)},
             affordance_visits={},  # No visits
+            custom_action_uses={},  # No custom actions used
         )
 
         # Serialize and deserialize

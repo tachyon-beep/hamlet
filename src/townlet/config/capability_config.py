@@ -10,24 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class MultiTickCapability(BaseModel):
     """Multi-tick interaction semantics.
 
-    NOTE: duration_ticks is DEPRECATED in capabilities array.
-    Use root-level AffordanceConfig.duration_ticks instead (the only one used at runtime).
-    This field is kept optional for backwards compatibility but should be omitted in new configs.
+    Use root-level AffordanceConfig.duration_ticks to configure duration.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["multi_tick"]
-    duration_ticks: int | None = Field(default=None, description="DEPRECATED: Use root-level duration_ticks instead")
     early_exit_allowed: bool = False
     resumable: bool = False
-
-    @model_validator(mode="after")
-    def validate_duration_ticks_if_present(self) -> MultiTickCapability:
-        """Validate duration_ticks > 0 if provided."""
-        if self.duration_ticks is not None and self.duration_ticks <= 0:
-            raise ValueError("duration_ticks must be > 0 if provided")
-        return self
 
 
 class CooldownCapability(BaseModel):

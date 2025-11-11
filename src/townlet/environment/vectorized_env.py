@@ -1012,7 +1012,7 @@ class VectorizedHamletEnv:
         """
         if not self.enable_temporal_mechanics:
             # Instant interactions (Level 1-2)
-            return self._handle_interactions_legacy(interact_mask)
+            return self._handle_instant_interactions(interact_mask)
 
         # Multi-tick interaction logic using AffordanceEngine
         successful_interactions = {}
@@ -1085,9 +1085,9 @@ class VectorizedHamletEnv:
 
         return successful_interactions
 
-    def _handle_interactions_legacy(self, interact_mask: torch.Tensor) -> dict:
+    def _handle_instant_interactions(self, interact_mask: torch.Tensor) -> dict:
         """
-        Handle INTERACT action at affordances (instant mode).
+        Handle INTERACT action at affordances (instant mode - no temporal mechanics).
 
         Uses AffordanceEngine for all logic - no hardcoded costs!
 
@@ -1182,10 +1182,7 @@ class VectorizedHamletEnv:
         }
 
     def set_affordance_positions(self, checkpoint_data: dict) -> None:
-        """Set affordance positions from checkpoint (Phase 4+ only).
-
-        BREAKING CHANGE: Only loads Phase 4+ checkpoints with position_dim field.
-        Legacy checkpoints will not load.
+        """Set affordance positions from checkpoint.
 
         Args:
             checkpoint_data: Dictionary with 'positions', 'ordering', and 'position_dim'
@@ -1193,23 +1190,18 @@ class VectorizedHamletEnv:
         Raises:
             ValueError: If checkpoint missing position_dim or incompatible with substrate
         """
-        # Validate position_dim exists (no default fallback)
+        # Validate position_dim exists
         if "position_dim" not in checkpoint_data:
             raise ValueError(
                 "Checkpoint missing 'position_dim' field.\n"
-                "This is a legacy checkpoint (pre-Phase 4).\n"
-                "\n"
-                "BREAKING CHANGE: Phase 4 changed checkpoint format.\n"
-                "Legacy checkpoints (Version 2) are no longer compatible.\n"
+                "This checkpoint format is no longer supported.\n"
                 "\n"
                 "Action required:\n"
-                "  1. Delete old checkpoint directories: checkpoints_level*/\n"
-                "  2. Retrain models from scratch with Phase 4+ code\n"
-                "\n"
-                "If you need to preserve old models, checkout pre-Phase 4 git commit."
+                "  1. Delete old checkpoint directories\n"
+                "  2. Retrain models from scratch\n"
             )
 
-        # Validate compatibility (no backward compatibility)
+        # Validate compatibility
         checkpoint_position_dim = checkpoint_data["position_dim"]
         if checkpoint_position_dim != self.substrate.position_dim:
             raise ValueError(
@@ -1217,7 +1209,7 @@ class VectorizedHamletEnv:
                 f"but current substrate requires {self.substrate.position_dim}D."
             )
 
-        # Simple loading (no backward compat branches)
+        # Load checkpoint data
         positions = checkpoint_data["positions"]
         ordering = checkpoint_data["ordering"]
 

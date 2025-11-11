@@ -62,7 +62,7 @@ class UnifiedServer:
         if training_config_path:
             self.training_config_path = Path(training_config_path)
         else:
-            # Legacy: assume training.yaml inside config_dir
+            # Default: assume training.yaml inside config_dir
             self.training_config_path = self.config_dir / "training.yaml"
         if not self.training_config_path.exists():
             raise FileNotFoundError(f"Training config not found: {self.training_config_path}")

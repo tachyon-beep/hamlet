@@ -38,10 +38,10 @@ def test_stage5_computes_metadata_and_observation_spec(base_config_dir: Path, ba
     assert metadata.config_hash
     assert metadata.provenance_id
 
-    grid_field = observation_spec.get_field_by_name("obs_grid")
+    grid_field = observation_spec.get_field_by_name("obs_grid_encoding")
     assert grid_field.dims == 9
     assert grid_field.scope == "agent", "Grid encoding should stay agent scoped under full observability"
-    affordance_field = observation_spec.get_field_by_name("obs_affordance")
+    affordance_field = observation_spec.get_field_by_name("obs_affordance_at_position")
     assert affordance_field.dims == 15
     assert affordance_field.scope == "agent"
 
@@ -50,17 +50,17 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
     "L0_0_minimal": {
         "expected_dim": 38,
         "fields": [
-            ("obs_grid", "agent", 9),
-            ("obs_pos", "agent", 2),
+            ("obs_grid_encoding", "agent", 9),
+            ("obs_position", "agent", 2),
             ("obs_energy", "agent", 1),
-            ("obs_health", "agent", 1),
+            ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
             ("obs_money", "agent", 1),
             ("obs_mood", "agent", 1),
             ("obs_social", "agent", 1),
+            ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            ("obs_hygiene", "agent", 1),
-            ("obs_affordance", "agent", 15),
+            ("obs_affordance_at_position", "agent", 15),
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
             ("obs_interaction_progress", "agent", 1),
@@ -70,17 +70,17 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
     "L0_5_dual_resource": {
         "expected_dim": 78,
         "fields": [
-            ("obs_grid", "agent", 49),
-            ("obs_pos", "agent", 2),
+            ("obs_grid_encoding", "agent", 49),
+            ("obs_position", "agent", 2),
             ("obs_energy", "agent", 1),
-            ("obs_health", "agent", 1),
+            ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
             ("obs_money", "agent", 1),
             ("obs_mood", "agent", 1),
             ("obs_social", "agent", 1),
+            ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            ("obs_hygiene", "agent", 1),
-            ("obs_affordance", "agent", 15),
+            ("obs_affordance_at_position", "agent", 15),
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
             ("obs_interaction_progress", "agent", 1),
@@ -93,13 +93,13 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
             ("obs_grid_encoding", "agent", 64),
             ("obs_position", "agent", 2),
             ("obs_energy", "agent", 1),
-            ("obs_health", "agent", 1),
+            ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
             ("obs_money", "agent", 1),
             ("obs_mood", "agent", 1),
             ("obs_social", "agent", 1),
+            ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            ("obs_hygiene", "agent", 1),
             ("obs_affordance_at_position", "agent", 15),
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
@@ -108,19 +108,19 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L2_partial_observability": {
-        "expected_dim": 54,
+        "expected_dim": 33,
         "fields": [
-            ("obs_local_window", "agent", 25),
-            ("obs_pos", "agent", 2),
+            ("obs_local_window", "agent", 4),
+            ("obs_position", "agent", 2),
             ("obs_energy", "agent", 1),
-            ("obs_health", "agent", 1),
+            ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
             ("obs_money", "agent", 1),
             ("obs_mood", "agent", 1),
             ("obs_social", "agent", 1),
+            ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            ("obs_hygiene", "agent", 1),
-            ("obs_affordance", "agent", 15),
+            ("obs_affordance_at_position", "agent", 15),
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
             ("obs_interaction_progress", "agent", 1),
@@ -128,18 +128,18 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L3_temporal_mechanics": {
-        "expected_dim": 54,
+        "expected_dim": 33,
         "fields": [
-            ("obs_local_window", "agent", 25),
+            ("obs_local_window", "agent", 4),
             ("obs_position", "agent", 2),
             ("obs_energy", "agent", 1),
-            ("obs_health", "agent", 1),
+            ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
             ("obs_money", "agent", 1),
             ("obs_mood", "agent", 1),
             ("obs_social", "agent", 1),
+            ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            ("obs_hygiene", "agent", 1),
             ("obs_affordance_at_position", "agent", 15),
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),

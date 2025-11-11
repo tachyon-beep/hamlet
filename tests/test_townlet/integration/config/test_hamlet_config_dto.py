@@ -64,7 +64,6 @@ class TestHamletConfigComposition:
 
         # Verify all sections loaded
         assert config.training.device == VALID_TRAINING_PARAMS["device"]
-        assert config.environment.grid_size == VALID_ENVIRONMENT_PARAMS["grid_size"]
         assert config.population.num_agents == VALID_POPULATION_PARAMS["num_agents"]
         assert config.curriculum.max_steps_per_episode == VALID_CURRICULUM_PARAMS["max_steps_per_episode"]
         assert config.exploration.embed_dim == VALID_EXPLORATION_PARAMS["embed_dim"]
@@ -125,7 +124,7 @@ class TestHamletConfigComposition:
         assert config.training.max_episodes == 123
         assert config.training.epsilon_start == 0.5
         # Environment comes from config_dir (not override file)
-        assert config.environment.grid_size == VALID_ENVIRONMENT_PARAMS["grid_size"]
+        assert config.environment.partial_observability == VALID_ENVIRONMENT_PARAMS["partial_observability"]
 
 
 class TestHamletConfigCrossValidation:
@@ -180,10 +179,6 @@ class TestHamletConfigProductionPacks:
         assert len(config.affordances) > 0
         assert config.substrate.type in {"grid", "gridnd", "continuous", "continuousnd", "aspatial"}
 
-        if pack_name == "L0_0_minimal":
-            assert config.environment.grid_size == 3
-        if pack_name == "L0_5_dual_resource":
-            assert config.environment.grid_size == 7
         if pack_name == "L1_full_observability":
             assert config.environment.partial_observability is False
         if pack_name == "L2_partial_observability":
@@ -204,7 +199,6 @@ class TestHamletConfigProductionPacks:
             pytest.skip(f"Config pack not found: {config_dir}")
 
         config = HamletConfig.load(config_dir)
-        assert config.environment.grid_size == 8  # L2 is 8×8
         assert config.environment.partial_observability is True  # L2 is POMDP
         assert config.environment.vision_range == 2  # 5×5 window
         assert config.population.network_type == "recurrent"  # L2 uses LSTM
@@ -216,7 +210,6 @@ class TestHamletConfigProductionPacks:
             pytest.skip(f"Config pack not found: {config_dir}")
 
         config = HamletConfig.load(config_dir)
-        assert config.environment.grid_size == 8  # L3 is 8×8
         assert config.environment.enable_temporal_mechanics is True  # L3 has temporal
         assert config.population.network_type == "recurrent"  # L3 uses LSTM
 
@@ -231,7 +224,6 @@ class TestHamletConfigProductionPacks:
 
             # Basic sanity checks
             assert config.training.max_episodes > 0, f"{pack_name}: max_episodes must be positive"
-            assert config.environment.grid_size > 0, f"{pack_name}: grid_size must be positive"
             assert config.population.num_agents > 0, f"{pack_name}: num_agents must be positive"
             assert config.curriculum.max_steps_per_episode > 0, f"{pack_name}: max_steps must be positive"
             assert config.exploration.embed_dim > 0, f"{pack_name}: embed_dim must be positive"
@@ -275,6 +267,6 @@ class TestRawConfigsIntegration:
 
         raw = RawConfigs.from_config_dir(config_dir)
 
-        assert len(raw.variables_reference) > 0
+        assert isinstance(raw.variables_reference, list)  # Empty list is valid (auto-generated variables only)
         assert len(raw.global_actions.actions) > 0
         assert raw.training.max_episodes > 0

@@ -480,7 +480,7 @@ class VectorizedPopulation(PopulationManager):
         # 7. Compute intrinsic rewards (if RND-based exploration)
         intrinsic_rewards = torch.zeros_like(rewards)
         if isinstance(self.exploration, RNDExploration | AdaptiveIntrinsicExploration):
-            intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs)
+            intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs, update_stats=True)
 
         # 7. Store transition in replay buffer
         if self.is_recurrent:
@@ -804,43 +804,37 @@ class VectorizedPopulation(PopulationManager):
         Raises:
             ValueError: If checkpoint universe metadata doesn't match current environment
         """
-        # Validate universe compatibility (TASK-001)
-        if "universe_metadata" in checkpoint:
-            metadata = checkpoint["universe_metadata"]
-            bars_config = self.env.bars_config
-            current_meter_count = bars_config.meter_count
+        # Validate universe compatibility
+        if "universe_metadata" not in checkpoint:
+            raise ValueError(
+                "Checkpoint missing 'universe_metadata' field.\n"
+                "This checkpoint format is no longer supported.\n"
+                "Please retrain from scratch."
+            )
 
-            # Validate meter count matches
-            checkpoint_meter_count = metadata.get("meter_count")
-            if checkpoint_meter_count != current_meter_count:
-                raise ValueError(
-                    f"Checkpoint meter count mismatch: checkpoint has {checkpoint_meter_count} meters, "
-                    f"but current environment has {current_meter_count} meters. "
-                    f"Cannot load checkpoint trained on different universe configuration."
-                )
+        metadata = checkpoint["universe_metadata"]
+        bars_config = self.env.bars_config
+        current_meter_count = bars_config.meter_count
 
-            # Validate obs_dim matches (secondary check)
-            checkpoint_obs_dim = metadata.get("obs_dim")
-            current_obs_dim = self.env.observation_dim
-            if checkpoint_obs_dim != current_obs_dim:
-                import warnings
+        # Validate meter count matches
+        checkpoint_meter_count = metadata.get("meter_count")
+        if checkpoint_meter_count != current_meter_count:
+            raise ValueError(
+                f"Checkpoint meter count mismatch: checkpoint has {checkpoint_meter_count} meters, "
+                f"but current environment has {current_meter_count} meters. "
+                f"Cannot load checkpoint trained on different universe configuration."
+            )
 
-                warnings.warn(
-                    f"Checkpoint obs_dim mismatch: checkpoint has {checkpoint_obs_dim}, "
-                    f"current env has {current_obs_dim}. This may indicate grid size or "
-                    f"observability mode differences. Proceeding with caution.",
-                    UserWarning,
-                )
-        else:
-            # Legacy checkpoint (no universe_metadata) - assume 8-meter default
+        # Validate obs_dim matches (secondary check)
+        checkpoint_obs_dim = metadata.get("obs_dim")
+        current_obs_dim = self.env.observation_dim
+        if checkpoint_obs_dim != current_obs_dim:
             import warnings
 
-            bars_config = self.env.bars_config
-            current_meter_count = bars_config.meter_count
             warnings.warn(
-                f"Loading legacy checkpoint without universe_metadata. "
-                f"Assuming 8-meter configuration. Current environment has {current_meter_count} meters. "
-                f"If this doesn't match, loading will likely fail.",
+                f"Checkpoint obs_dim mismatch: checkpoint has {checkpoint_obs_dim}, "
+                f"current env has {current_obs_dim}. This may indicate grid size or "
+                f"observability mode differences. Proceeding with caution.",
                 UserWarning,
             )
 

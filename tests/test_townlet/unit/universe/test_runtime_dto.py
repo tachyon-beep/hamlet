@@ -33,7 +33,7 @@ def test_runtime_views_are_read_only() -> None:
     runtime = compiled.to_runtime()
 
     with pytest.raises(AttributeError):
-        runtime.hamlet_config.environment.grid_size = 10  # type: ignore[attr-defined]
+        runtime.hamlet_config.environment.vision_range = 10  # type: ignore[attr-defined]
 
     with pytest.raises(AttributeError):
         runtime.global_actions.actions = []  # type: ignore[attr-defined]
@@ -46,7 +46,7 @@ def test_runtime_clone_helpers_return_mutable_copies() -> None:
     runtime = compiled.to_runtime()
 
     env_copy = runtime.clone_environment_config()
-    env_copy.grid_size = env_copy.grid_size + 1  # Should succeed without raising
+    env_copy.vision_range = env_copy.vision_range + 1  # Should succeed without raising
 
     actions_copy = runtime.clone_global_actions()
     actions_copy.actions[0].enabled = False

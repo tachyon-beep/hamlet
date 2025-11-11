@@ -59,8 +59,9 @@ class TestRawConfigsPropertyAccessors:
     def test_environment_property_returns_environment_config(self, raw_configs: RawConfigs):
         """Verify .environment returns environment config from hamlet_config."""
         env = raw_configs.environment
-        assert hasattr(env, "grid_size")
-        assert env.grid_size > 0
+        # grid_size moved to substrate.yaml - check for partial_observability instead
+        assert hasattr(env, "partial_observability")
+        assert isinstance(env.partial_observability, bool)
 
     def test_training_property_returns_training_config(self, raw_configs: RawConfigs):
         """Verify .training returns training config from hamlet_config."""

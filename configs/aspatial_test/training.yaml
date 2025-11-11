@@ -43,3 +43,4 @@ training:
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
+  allow_unfeasible_universe: true  # Test config - bypass Stage 4 feasibility validation

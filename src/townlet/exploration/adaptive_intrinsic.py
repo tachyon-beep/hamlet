@@ -102,6 +102,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
     def compute_intrinsic_rewards(
         self,
         observations: torch.Tensor,
+        update_stats: bool = False,
     ) -> torch.Tensor:
         """Compute intrinsic rewards (normalized RND novelty).
 
@@ -110,13 +111,14 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
 
         Args:
             observations: [batch, obs_dim] state observations
+            update_stats: If True, update running mean/std statistics (use during training rollouts)
 
         Returns:
             [batch] normalized intrinsic rewards (unweighted)
         """
         # Get RND novelty (already normalized)
         # Weight will be applied once in replay buffer sampling
-        return self.rnd.compute_intrinsic_rewards(observations)
+        return self.rnd.compute_intrinsic_rewards(observations, update_stats=update_stats)
 
     def update(self, batch: dict[str, torch.Tensor]) -> None:
         """Update RND predictor network from experience batch.
@@ -217,14 +219,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self.variance_threshold = state["variance_threshold"]
         self.survival_window = state["survival_window"]
         self.decay_rate = state["decay_rate"]
-
-        # Gracefully handle new parameters (backwards compatibility)
-        self.min_survival_fraction = state.get("min_survival_fraction", 0.4)
-        self.max_episode_length = state.get("max_episode_length", 500)
+        self.min_survival_fraction = state["min_survival_fraction"]
+        self.max_episode_length = state["max_episode_length"]
         self.min_survival_for_annealing = int(self.min_survival_fraction * self.max_episode_length)
-
-        # Gracefully handle missing survival_history (backwards compatibility)
-        if "survival_history" in state:
-            self.survival_history = state["survival_history"]
-        else:
-            self.survival_history = []
+        self.survival_history = state["survival_history"]
