@@ -327,6 +327,7 @@ class UniverseCompiler:
 
             # Calculate grid cells based on dimensionality
             if is_3d:
+                assert depth is not None  # Type narrowing for mypy
                 grid_cells = width * height * depth
                 grid_desc = f"{width}×{height}×{depth} grid encoding (0=empty, 1=agent, 2=affordance, 3=both)"
                 position_dims = 3
@@ -1843,12 +1844,14 @@ class UniverseCompiler:
 
         # Build observation activity metadata for masking
         # Convert observation_spec fields back to VFS format for activity building
+        from typing import Literal
+
         from townlet.vfs.schema import ObservationField as VFSObservField
 
         vfs_fields_for_activity = []
         for field in observation_spec.fields:
             # Map semantic_type from observation spec to VFS field
-            semantic_map = {
+            semantic_map: dict[str | None, Literal["bars", "spatial", "affordance", "temporal", "custom"]] = {
                 "position": "spatial",
                 "meter": "bars",
                 "affordance": "affordance",
@@ -1870,7 +1873,7 @@ class UniverseCompiler:
                 )
             )
 
-        field_uuids = {field.name: field.uuid for field in observation_spec.fields}
+        field_uuids = {field.name: field.uuid for field in observation_spec.fields if field.uuid is not None}
         observation_activity = VFSAdapter.build_observation_activity(
             observation_spec=vfs_fields_for_activity,
             field_uuids=field_uuids,

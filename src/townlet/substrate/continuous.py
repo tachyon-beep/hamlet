@@ -638,8 +638,9 @@ class Continuous2DSubstrate(ContinuousSubstrate):
         Returns:
             List of ActionConfig objects
         """
-        num_directions = self.action_discretization.get("num_directions", 8)
-        num_magnitudes = self.action_discretization.get("num_magnitudes", 3)
+        discretization = self.action_discretization or {}
+        num_directions = discretization.get("num_directions", 8)
+        num_magnitudes = discretization.get("num_magnitudes", 3)
 
         actions = []
         action_id = 0

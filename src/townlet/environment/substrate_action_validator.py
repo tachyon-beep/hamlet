@@ -46,7 +46,8 @@ class SubstrateActionValidator:
         deltas: set[tuple[int, ...]] = set()
         for action in self._actions:
             if action.type == "movement" and action.delta is not None:
-                deltas.add(tuple(action.delta))
+                # Cast to int since movement deltas should be integers for grid substrates
+                deltas.add(tuple(int(d) for d in action.delta))
         return deltas
 
     def _validate_aspatial(self, result: ValidationResult) -> None:

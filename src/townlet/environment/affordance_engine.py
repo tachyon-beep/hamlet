@@ -62,7 +62,7 @@ class AffordanceEngine:
             self.affordances = affordance_config
         else:
             # Legacy loader: AffordanceConfigCollection with .affordances list
-            self.affordances = affordance_config.affordances
+            self.affordances = tuple(affordance_config.affordances)
 
         self.meter_name_to_idx = meter_name_to_idx
 
@@ -114,10 +114,10 @@ class AffordanceEngine:
         if close_hour > 24:
             close_hour_adjusted = close_hour % 24
             # Open if: time >= open_hour OR time < close_hour_adjusted
-            return time_of_day >= open_hour or time_of_day < close_hour_adjusted
+            return bool(time_of_day >= open_hour or time_of_day < close_hour_adjusted)
         else:
             # Normal hours: time >= open_hour AND time < close_hour
-            return open_hour <= time_of_day < close_hour
+            return bool(open_hour <= time_of_day < close_hour)
 
     def apply_instant_interaction(
         self,
@@ -376,7 +376,7 @@ class AffordanceEngine:
         # Find money cost (most affordances only have money cost)
         for cost in costs:
             if cost["meter"] == "money":
-                return cost["amount"]
+                return float(cost["amount"])
 
         return 0.0
 
@@ -393,7 +393,7 @@ class AffordanceEngine:
         affordance = self.affordance_map.get(affordance_name)
         if affordance is None or affordance.duration_ticks is None:
             return 1
-        return affordance.duration_ticks
+        return int(affordance.duration_ticks)
 
     def apply_interaction(
         self,

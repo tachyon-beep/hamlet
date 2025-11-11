@@ -131,21 +131,22 @@ def safe_torch_load(
 
     try:
         # PyTorch 2.6+ requires explicit allowlisting of numpy types
+        # Add numpy types to safe globals for PyTorch 2.6+ compatibility
+
         import numpy as np
 
-        # Add numpy types to safe globals for PyTorch 2.6+ compatibility
-        safe_globals = [np.dtype]
+        safe_globals: list[Any] = [np.dtype]
 
         try:
-            from numpy._core.multiarray import scalar as np_scalar
+            from numpy._core.multiarray import scalar as np_scalar_new
 
-            safe_globals.append(np_scalar)
+            safe_globals.append(np_scalar_new)
         except (ImportError, AttributeError):
             # Older numpy versions use numpy.core.multiarray instead
             try:
-                from numpy.core.multiarray import scalar as np_scalar  # type: ignore[attr-defined]
+                from numpy.core.multiarray import scalar as np_scalar_old  # type: ignore[attr-defined]
 
-                safe_globals.append(np_scalar)
+                safe_globals.append(np_scalar_old)
             except (ImportError, AttributeError):
                 pass  # If neither import works, proceed without it
 

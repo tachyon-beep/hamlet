@@ -220,7 +220,7 @@ class GridNDSubstrate(SpatialSubstrate):
         n_dims = len(self.dimension_sizes)
         for dim_idx in range(n_dims):
             # Negative direction (DIM{N}_NEG)
-            delta = [0] * n_dims
+            delta: list[int | float] = [0] * n_dims
             delta[dim_idx] = -1
             actions.append(
                 ActionConfig(

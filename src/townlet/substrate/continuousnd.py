@@ -387,7 +387,7 @@ class ContinuousNDSubstrate(SpatialSubstrate):
         # Generate movement actions for each dimension
         for dim_idx in range(n_dims):
             # Negative direction
-            delta = [0] * n_dims
+            delta: list[int | float] = [0] * n_dims
             delta[dim_idx] = -1  # Scaled by movement_delta in apply_movement()
             actions.append(
                 ActionConfig(
