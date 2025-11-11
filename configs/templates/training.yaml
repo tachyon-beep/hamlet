@@ -52,3 +52,16 @@ exploration:
 training:
   device: cuda
   max_episodes: 5000
+
+  # Q-learning hyperparameters
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 64
+  sequence_length: 8
+  max_grad_norm: 10.0
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Epsilon-greedy exploration
+  epsilon_start: 1.0
+  epsilon_decay: 0.995
+  epsilon_min: 0.01
