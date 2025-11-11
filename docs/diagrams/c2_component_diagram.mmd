@@ -1,0 +1,70 @@
+graph TB
+    subgraph "HAMLET/Townlet System (src/townlet/)"
+        direction TB
+
+        subgraph "Cold Path (Configuration & Compilation)"
+            Config[Config Loader<br/>config/]
+            VFS[Variable & Feature System<br/>vfs/]
+            Compiler[Universe Compiler<br/>universe/compiler.py<br/>7-stage pipeline]
+
+            Config --> VFS
+            VFS --> Compiler
+        end
+
+        subgraph "Hot Path (Runtime Execution)"
+            direction TB
+
+            Orchestrator[Orchestration Layer<br/>demo/runner.py]
+            Population[Population Manager<br/>population/vectorized.py]
+            Curriculum[Curriculum Manager<br/>curriculum/adversarial.py]
+            Environment[Vectorized Environment<br/>environment/vectorized_env.py]
+            Substrate[Spatial Substrate<br/>substrate/grid2d.py]
+            Agent[Q-Network<br/>agent/networks.py]
+            Exploration[Exploration Strategy<br/>exploration/rnd.py]
+            Training[Replay Buffer<br/>training/replay_buffer.py]
+
+            Orchestrator -->|Initializes| Population
+            Orchestrator -->|Configures| Curriculum
+            Population -->|Requests difficulty| Curriculum
+            Population -->|Calls step| Environment
+            Population -->|Selects actions| Exploration
+            Population -->|Trains| Agent
+            Population -->|Stores transitions| Training
+
+            Environment -->|Uses| Substrate
+            Environment -->|Computes rewards| Environment
+
+            Exploration -->|Reads Q-values| Agent
+            Training -->|Samples batches| Agent
+        end
+
+        subgraph "Persistence & Visualization"
+            Inference[Live Inference Server<br/>demo/live_inference.py]
+            Database[SQLite Metrics DB<br/>demo/database.py]
+            Recorder[Episode Recorder<br/>recording/recorder.py]
+
+            Orchestrator -->|Logs metrics| Database
+            Orchestrator -->|Saves checkpoints| Filesystem2[(Checkpoints)]
+            Orchestrator -->|Triggers| Inference
+            Orchestrator -->|Records episodes| Recorder
+
+            Inference -->|Loads from| Filesystem2
+            Inference -->|Broadcasts telemetry| WebSocket2[WebSocket]
+        end
+
+        Compiler -->|Produces| CompiledUniverse[CompiledUniverse<br/>Immutable Artifact]
+        CompiledUniverse -->|Consumed by| Orchestrator
+    end
+
+    style Config fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff
+    style VFS fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff
+    style Compiler fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff
+    style CompiledUniverse fill:#a78bfa,stroke:#7c3aed,stroke-width:3px,color:#fff
+
+    style Orchestrator fill:#f59e0b,stroke:#d97706,stroke-width:2px
+    style Population fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff
+    style Environment fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
+    style Agent fill:#ec4899,stroke:#db2777,stroke-width:2px,color:#fff
+
+    style Inference fill:#06b6d4,stroke:#0891b2,stroke-width:2px
+    style Database fill:#64748b,stroke:#475569,stroke-width:2px,color:#fff

@@ -1,0 +1,260 @@
+================================================================================
+        TOWNLET MODULE DEPENDENCY GRAPH (Visual Representation)
+================================================================================
+
+LAYER 0: FOUNDATION
+┌──────────────────────────────────────────────────────────────────────────┐
+│  VFS (4 files)                                                           │
+│  - schema.py (13 imports)                                                │
+│  - registry.py (3 imports)                                               │
+│  - observation_builder.py (2 imports)                                    │
+│  INTERNAL COHESION: 100% ✓ ISOLATED                                      │
+│  EXPORTS: VariableDef, ObservationField, VariableRegistry               │
+└──────────────────────────────────────────────────────────────────────────┘
+                                    ▲
+                                    │ (13 imports)
+                                    │
+            ┌───────────────────────┼───────────────────────┐
+            │                       │                       │
+            ▼                       ▼                       ▼
+        CONFIG              ENVIRONMENT              UNIVERSE
+
+
+LAYER 1: CONFIGURATION & SCHEMAS
+┌──────────────────────────────────────────────────────────────────────────┐
+│  CONFIG (15 files)                      SUBSTRATE.CONFIG                 │
+│  - base.py (9 imports)              - config.py (8 imports)              │
+│  - affordance.py (5 imports)                                             │
+│  - bar.py (5 imports)                                                    │
+│  - cascade.py (5 imports)            INTERNAL: 88.6%                    │
+│  - hamlet.py (master config)         IMPORT TO: environment (1),        │
+│  - ... 10 more files                              substrate (8)          │
+│                                                                           │
+│  INTERNAL COHESION: 88.6% (mostly self-contained)                       │
+│  EXPORTS: Config DTOs, load functions, validation                        │
+└──────────────────────────────────────────────────────────────────────────┘
+            │                           │
+            │ (30% of universe's        │ (27.6% to environment)
+            │  imports come from here)  │
+            │                           ▼
+            │                      SUBSTRATE
+            │         ┌────────────────────────────────┐
+            │         │  SUBSTRATE (10 files)          │
+            │         │  - grid2d.py, grid3d.py...    │
+            │         │  - base.py (7 imports)         │
+            │         │  - continuous.py, aspatial.py │
+            │         │  - factory.py                  │
+            │         │                                │
+            │         │  INTERNAL: 72.4%              │
+            │         │  EXPORTS: Spatial implementations
+            │         └────────────────────────────────┘
+            │                  │
+            │                  │ (8 imports to
+            │                  │  environment)
+            │                  ▼
+            │              ENVIRONMENT ◄─ SUBSTRATE (CYCLE!)
+            └──────────► │   (13 files)   (action_config)
+                         │   - vectorized_env.py
+                         │   - affordance_engine.py
+                         │   - cascade_engine.py
+                         │   - action_builder.py
+                         │   - affordance_config.py
+                         │
+                         │  INTERNAL: 66.7%
+                         │  IMPORTS: substrate (3), vfs (2)
+                         └────────────────────────────────────┐
+                                          │                   │
+                                          │ (15.7%)          │ (20%)
+                                          ▼                   ▼
+                                        [UNIVERSE]        [back to substrate]
+                                          │
+                                          │ (11 imports to vfs)
+                                          ▼
+                                   [see below]
+
+
+LAYER 2: UNIVERSE COMPILER (THE HUB)
+┌──────────────────────────────────────────────────────────────────────────┐
+│  UNIVERSE (18 files) - 7-STAGE COMPILATION PIPELINE                      │
+│                                                                           │
+│  Core Files:                                                             │
+│    - compiler.py          Main pipeline orchestrator                    │
+│    - symbol_table.py      Cross-reference resolution                    │
+│    - compiled.py          Output data structure (4 imports)             │
+│    - compiler_inputs.py   Input adapter                                │
+│    - cues_compiler.py     UI metadata compilation                      │
+│    - runtime.py           Runtime wrapper                               │
+│                                                                           │
+│  DTO Layer:                                                              │
+│    - dto/observation_spec.py    (3 imports)                             │
+│    - dto/affordance_metadata.py                                         │
+│    - dto/meter_metadata.py                                              │
+│    - dto/action_metadata.py                                             │
+│    - dto/observation_activity.py (2 imports)                            │
+│                                                                           │
+│  Adapters:                                                               │
+│    - adapters/vfs_adapter.py   (VFS integration bridge)                 │
+│                                                                           │
+│  INTERNAL COHESION: 31.4%                                               │
+│  IMPORTS FROM: config (30%), environment (15.7%), vfs (15.7%),         │
+│                 substrate (7.1%), internal (31.4%)                      │
+│                                                                           │
+│  PATTERN: Hexagonal/Ports & Adapters                                    │
+│           - INBOUND: config (raw YAML)                                  │
+│           - CORE: compilation stages                                    │
+│           - OUTBOUND: compiled universe DTOs                            │
+└──────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ (output)
+                                    ▼
+                          CompiledUniverse
+
+
+LAYER 3: TRAINING LOOP (HOT PATH)
+┌──────────────────────────────────────────────────────────────────────────┐
+│  TRAINING (6 files)                    EXPLORATION (6 files)             │
+│  - state.py (10 imports)              - base.py (4 imports)             │
+│  - replay_buffer.py                   - epsilon_greedy.py              │
+│  - checkpoint_utils.py (2 imports)    - rnd.py (2 imports)             │
+│  - tensorboard_logger.py              - adaptive_intrinsic.py          │
+│  - sequential_replay_buffer.py        - action_selection.py            │
+│                                                                           │
+│  INTERNAL: 0% (depends only on      INTERNAL: 60%                       │
+│  universe: compiled universe)        IMPORTS: training (40%)             │
+│  EXPORTS: BatchedAgentState,         EXPORTS: Exploration strategies    │
+│           PopulationCheckpoint,                                          │
+│           Training DTOs                                                  │
+│                                                                           │
+│  ISOLATION: Perfect - no circular   AGENT (2 files)                     │
+│  dependencies, hot path only        - networks.py                       │
+│                                      - SimpleQNetwork                    │
+│                                      - RecurrentSpatialQNetwork         │
+│                                      - StructuredQNetwork               │
+└──────────────────────────────────────────────────────────────────────────┘
+            ▲                              ▲                  ▲
+            │ (used by)                    │ (used by)        │ (used by)
+            │                              │                  │
+         POPULATION              CURRICULUM           TRAINING LOOP
+            │                        │
+            │ POPULATION (4 files)   │ CURRICULUM (4 files)
+            │ - vectorized.py        │ - base.py
+            │ - base.py              │ - adversarial.py (13 imports)
+            │ - runtime_registry.py  │ - static.py (12 imports)
+            │                        │
+            │ IMPORTS:               │ IMPORTS:
+            │ - exploration (4)      │ - training (3)
+            │ - training (4)         │ - internal (2)
+            │ - agent (1)            │
+            │ - curriculum (1)       │ EXPORTS: CurriculumDecision
+            │ - internal (2)         │
+            │                        │
+            │ EXPORTS:               │ PATTERN: Strategy pattern
+            │ VectorizedPopulation   │
+            │ PopulationManager      │
+            │                        │
+            │ PATTERN: Manages       │
+            │ batched agents         │
+
+
+LAYER 4: APPLICATION & ORCHESTRATION
+┌──────────────────────────────────────────────────────────────────────────┐
+│  DEMO (5 files) - INTEGRATION HUB                                        │
+│  - runner.py                                                             │
+│  - unified_server.py                                                     │
+│  - live_inference.py                                                     │
+│  - database.py (3 imports)                                               │
+│                                                                           │
+│  IMPORTS FROM:                                                           │
+│    - universe (4)       ├─ Compiled universe                            │
+│    - training (4)       ├─ Checkpoint utils, state                      │
+│    - substrate (4)      ├─ Grid2D, Grid3D, GridND, Continuous          │
+│    - environment (2)    ├─ VectorizedHamletEnv                         │
+│    - population (2)     ├─ VectorizedPopulation                        │
+│    - exploration (2)    ├─ AdaptiveIntrinsicExploration                │
+│    - curriculum (2)     ├─ AdversarialCurriculum                       │
+│    - recording (1)      ├─ ReplayManager                                │
+│    - config (1)         └─ HamletConfig                                 │
+│                                                                           │
+│  ROLE: Glue layer binding all subsystems                                │
+│  FAN-IN: 9 modules (highest in codebase)                                │
+│  INTERNAL: 12% (thin orchestrator)                                       │
+│                                                                           │
+│  EXPORTS: DemoRunner (training), live_inference (visualization)         │
+└──────────────────────────────────────────────────────────────────────────┘
+            │
+            ├──────────────────────────┬──────────────────────────┐
+            │                          │                          ▼
+    ┌───────┴──────────┐   RECORDING (8 files)            COMPILER (2 files)
+    │ Environment      │   - video_export.py              - __main__.py
+    │ Vectorized Env   │   - video_renderer.py            - CLI interface
+    │ Affordances      │   - replay.py (2 imports)        - CompileCommand
+    │ Cascades         │   - recorder.py                  - InspectCommand
+    │ Meters           │   - data_structures.py           - ValidateCommand
+    │                  │   - criteria.py                  │
+    └──────────────────┘   - __main__.py                  │
+                           │                              │
+                           │ INTERNAL: 83.3%             │ Imports 100%
+                           │ IMPORTS: demo (1)            │ from universe
+                           │                              │
+                           │ EXPORTS: Video rendering,   │ ROLE:
+                           │ episode replay, criteria     │ Config validation
+                           │                              │ metadata export
+                           └──────────────────────────────┴──────────────────┐
+                                                                             │
+                                                      All feed to: UNIVERSE
+                                                      Compiler for validation
+
+
+DEPENDENCY FLOW SUMMARY
+═══════════════════════════════════════════════════════════════════════════
+
+INITIALIZATION FLOW (Cold Path):
+  1. Load YAML configs                 (config module)
+  2. Parse & validate configs          (config module)
+  3. Feed to universe compiler         (universe module)
+  4. 7-stage compilation pipeline      (universe module)
+     - Parse configs
+     - Build symbol table
+     - Resolve cross-references
+     - Validate affordances/cascades
+     - Generate metadata
+     - Optimize representations
+     - Emit CompiledUniverse
+  5. Output: CompiledUniverse DTOs
+
+TRAINING FLOW (Hot Path):
+  1. Load CompiledUniverse            (universe → training)
+  2. Create VectorizedHamletEnv       (demo → environment)
+  3. Create VectorizedPopulation      (demo → population)
+  4. Create CurriculumManager         (demo → curriculum)
+  5. Create ExplorationStrategy       (demo → exploration)
+  6. Training loop:
+     - Step environment                (environment ← population)
+     - Select actions                  (exploration → population)
+     - Log metrics                      (training → population)
+     - Save checkpoints                 (training ← population)
+  7. Visualize results                 (demo ← recording)
+
+
+KEY ARCHITECTURAL DECISIONS
+═══════════════════════════════════════════════════════════════════════════
+
+✓ PURE FOUNDATION LAYER (VFS):
+  No imports from other townlet modules (except stdlib + external)
+
+✓ CLEAR HOT/COLD SEPARATION:
+  config + universe (cold) → CompiledUniverse
+  CompiledUniverse → training loop (hot)
+
+✓ HUB & SPOKE TOPOLOGY:
+  Universe compiler is central hub for configuration
+  Demo is central hub for runtime orchestration
+
+⚠ BIDIRECTIONAL COUPLING:
+  environment ↔ substrate (medium concern)
+  Reason: ActionConfig bridging both layers
+
+✓ NO DOWNWARD VIOLATIONS:
+  Training never imports config
+  Config never imports training
+  Proper layering maintained

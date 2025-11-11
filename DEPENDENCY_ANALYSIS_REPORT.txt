@@ -1,0 +1,316 @@
+================================================================================
+                    HAMLET TOWNLET ARCHITECTURE ANALYSIS
+                           Dependency Report
+================================================================================
+
+PROJECT STRUCTURE: 98 Python files across 12 major modules
+
+================================================================================
+SECTION 1: TOP 10 MOST IMPORTED MODULES (Central Dependencies)
+================================================================================
+
+Rank  Module Name                              Import Count  Role
+────  ──────────────────────────────────────────  ──────────  ─────────────────
+ 1.   townlet.vfs.schema                        13           VFS type definitions
+ 2.   townlet.environment.action_config         12           Action space config
+ 3.   townlet.training.state                    10           Training DTOs
+ 4.   townlet.environment.cascade_config        10           Meter mechanics config
+ 5.   townlet.config.base                        9           Config loading utils
+ 6.   townlet.substrate.config                   8           Spatial config
+ 7.   townlet.substrate.base                     7           Spatial base class
+ 8.   townlet.config.affordance                  5           Affordance configs
+ 9.   townlet.config.bar                         5           Meter definitions
+10.   townlet.config.cascade                     5           Cascade definitions
+
+KEY INSIGHT: Top 3 dependencies (vfs.schema, action_config, training.state) are
+             all fundamental to runtime state and configuration.
+
+================================================================================
+SECTION 2: IDENTIFIED CIRCULAR DEPENDENCIES
+================================================================================
+
+CRITICAL FINDING: Two circular dependency chains detected
+
+Cycle 1: environment <-> substrate
+  - townlet.substrate imports from townlet.environment.action_config (8 times)
+  - townlet.environment imports from townlet.substrate.base (3 times)
+  - SEVERITY: Medium
+  - REASON: Substrate needs to know about action types; Environment needs
+           to know substrate characteristics
+  - RECOMMENDATION: Consider dependency inversion or abstract interface
+
+Cycle 2: demo <-> recording (minor)
+  - townlet.recording imports from townlet.demo.database (1 time)
+  - townlet.demo imports from townlet.recording.replay (2 times)
+  - SEVERITY: Low
+  - REASON: Inference server needs replay capability; Replayer needs DB
+  - RECOMMENDATION: Extract shared DB interface to third module
+
+================================================================================
+SECTION 3: LAYERED ARCHITECTURE PATTERNS
+================================================================================
+
+Detected Architectural Layers (by dependency direction):
+
+Layer 0 (Foundation - No external dependencies):
+  - vfs (Variable & Feature System)
+    Pure data model layer
+    Files: 4 (schema, registry, observation_builder, __init__)
+    Internal cohesion: 100%
+
+Layer 1 (Configuration):
+  - config (15 files)
+    Loads and validates YAML configs
+    Imports: 88.6% internal, 8.6% to environment, 2.9% to substrate
+    Hub for: affordance, bar, cascade, curriculum, exploration, training, etc.
+
+  - substrate.config (part of substrate module)
+    Spatial substrate configuration
+    Clean separation of config from implementation
+
+Layer 2 (Spatial & Mechanics):
+  - substrate (10 files)
+    Grid2D, Grid3D, GridND, Continuous, Aspatial
+    Imports: 72.4% internal, 27.6% to environment (action validation)
+
+  - environment (13 files)
+    Vectorized environment, affordances, cascades, meters
+    Imports: 66.7% internal, 20% to substrate, 13.3% to vfs
+    Core simulation engine
+
+Layer 3 (Universe Compiler):
+  - universe (18 files) - THE HUB MODULE
+    Configuration validation and compilation (7-stage pipeline)
+    Imports:
+      - config (30.0%) - sources raw configs
+      - environment (15.7%) - compilation target
+      - vfs (15.7%) - observation specs
+      - substrate (7.1%) - validates substrates
+      - internal (31.4%) - core compilation logic
+
+    Files:
+      - compiler.py: Main pipeline
+      - compiled.py: Output data structure
+      - symbol_table.py: Config cross-referencing
+      - cues_compiler.py: UI metadata
+      - dto/: Data transfer objects
+      - adapters/: vfs_adapter for VFS integration
+
+Layer 4 (Training Loop):
+  - training (6 files)
+    State management, checkpoints, TensorBoard logging
+    Imports: 100% from universe (compiled universe)
+    No upward dependencies - clean isolation
+
+  - exploration (6 files)
+    Epsilon-greedy, RND, adaptive intrinsic rewards
+    Imports: 60% internal, 40% to training
+    Supports multiple exploration strategies
+
+  - agent (2 files)
+    Neural network architectures
+    SimpleQNetwork: 29->256->128->action_dim
+    RecurrentSpatialQNetwork: CNN + LSTM for POMDP
+
+  - population (4 files)
+    Vectorized population management
+    Imports: 33.3% exploration, 33.3% training, 16.7% internal
+    Batched multi-agent training
+
+  - curriculum (4 files)
+    Difficulty progression management
+    Imports: 60% training, 40% internal
+
+Layer 5 (Application):
+  - demo (5 files) - INTEGRATION HUB
+    Orchestrates training and inference
+    Imports from ALL layers: universe, training, environment, exploration,
+                              population, curriculum, substrate, config
+    High fan-in: depends on 9 different modules
+    Role: glue layer for complete training pipeline
+
+  - recording (8 files) - SECONDARY HUB
+    Episode recording, replay, video export
+    Imports: 83.3% internal, 16.7% to demo
+
+  - compiler (2 files) - CLI INTERFACE
+    Command-line compilation interface
+    Imports: 100% from universe
+
+================================================================================
+SECTION 4: CROSS-CUTTING CONCERNS
+================================================================================
+
+Config Base (.config.base):
+  ROLE: Utility module providing YAML loading and validation
+  USAGE: Imported by 9 files across config module
+  PATTERN: Base configuration utilities (no-defaults principle)
+
+Training State (.training.state):
+  ROLE: Cold path DTOs using Pydantic
+  USAGE: Imported by training, population, curriculum modules
+  PATTERN: Cold path validation (CurriculumDecision, BatchedAgentState, etc.)
+
+VFS Schema (.vfs.schema):
+  ROLE: Foundation for Variable & Feature System
+  USAGE: Most imported module (13 times)
+  PATTERN: Foundational type definitions (VariableDef, ObservationField, etc.)
+
+================================================================================
+SECTION 5: ARCHITECTURAL PATTERNS EVIDENT FROM IMPORTS
+================================================================================
+
+PATTERN 1: HEXAGONAL ARCHITECTURE (Ports & Adapters)
+  Universe Compiler sits at the center:
+  - INBOUND PORTS: config module (raw configs)
+  - PROCESSORS: compilation pipeline (symbol table, dto generation)
+  - OUTBOUND PORTS: compiled.py (output), adapters/vfs_adapter (integration)
+
+PATTERN 2: DOMAIN-DRIVEN DESIGN (DDD)
+  Clear domain layers:
+  - DOMAIN LAYER: environment, substrate (mechanics)
+  - APPLICATION LAYER: training, population, curriculum (orchestration)
+  - INFRASTRUCTURE LAYER: config, universe compiler (bootstrapping)
+  - INTERFACE LAYER: demo, recording (external interfaces)
+
+PATTERN 3: LAYERED ARCHITECTURE
+  Strict unidirectional dependency flow (mostly):
+
+  ┌─────────────────────────────────────────┐
+  │ Application (demo, compiler, recording) │  <- User entry points
+  ├─────────────────────────────────────────┤
+  │ Training (population, curriculum,       │  <- Hot path execution
+  │           exploration, training)        │
+  ├─────────────────────────────────────────┤
+  │ Universe (compiler, compiled, symbol)   │  <- Cold path validation
+  ├─────────────────────────────────────────┤
+  │ Environment (affordances, cascades,     │  <- Domain mechanics
+  │             substrate, action config)   │
+  ├─────────────────────────────────────────┤
+  │ Config (base, affordance, bar, cues)   │  <- Raw configurations
+  ├─────────────────────────────────────────┤
+  │ VFS (schema, registry, observation)     │  <- Foundation
+  └─────────────────────────────────────────┘
+
+PATTERN 4: HUB & SPOKE
+  Two integration hubs identified:
+
+  HUB 1: Universe module (cold path)
+    - Spoke 1: config (input)
+    - Spoke 2: environment (output)
+    - Spoke 3: vfs (integration)
+    - Spoke 4: substrate (validation)
+
+  HUB 2: Demo module (runtime)
+    - Spoke 1: universe (config compilation)
+    - Spoke 2: training (training loop)
+    - Spoke 3: population (agent management)
+    - Spoke 4: exploration (strategy selection)
+    - Spoke 5: substrate (physics simulation)
+
+PATTERN 5: SEPARATION OF CONCERNS
+  Clear hot/cold path separation:
+
+  COLD PATH (Config time):
+    config -> universe compiler -> compiled universe
+    Heavy use of Pydantic validation
+    No torch tensors
+
+  HOT PATH (Runtime):
+    demo -> environment -> population -> training loop
+    Uses PyTorch tensors
+    Vectorized GPU operations
+    No config loading/validation
+
+================================================================================
+SECTION 6: IMPORT DIRECTION ANALYSIS
+================================================================================
+
+UPWARD DEPENDENCIES (Clean layering):
+  - config module internal: 88.6% ✓
+  - vfs module internal: 100% ✓ (ISOLATED)
+  - substrate internal: 72.4% ✓
+  - environment internal: 66.7% ✓
+  - training internal: 0% (depends only on universe) ✓
+
+INTERNAL DEPENDENCIES (Strong cohesion):
+  - universe internal: 31.4% (+ 70% to own layer) ✓
+  - demo internal: 12% (intentionally thin, orchestrator) ✓
+
+PROBLEMATIC DEPENDENCIES (Cycles):
+  - environment <-> substrate: MEDIUM CONCERN
+    Creates bidirectional coupling
+    Reason: ActionConfig needs substrate knowledge
+
+  - demo <-> recording: LOW CONCERN
+    Minor coupling in inference server context
+
+DOWNWARD VIOLATIONS (Should not exist):
+  ✓ No violations: training doesn't import population
+  ✓ No violations: config doesn't import universe
+  ✓ No violations: vfs doesn't import anything else
+
+================================================================================
+SECTION 7: MODULE COHESION ANALYSIS
+================================================================================
+
+HIGH COHESION (Related functions in same module):
+  - substrate (10 files): All grid/spatial types + config
+  - environment (13 files): All affordances, cascades, vectorized env
+  - config (15 files): All config loading utilities
+  - universe (18 files): All compilation stages + DTOs
+  - demo (5 files): Training runner, inference server, database
+
+MEDIUM COHESION:
+  - training (6 files): state, replay_buffer, checkpoint_utils, logger
+  - exploration (6 files): epsilon_greedy, rnd, adaptive_intrinsic
+
+LOW COHESION (Candidates for splitting):
+  - recording (8 files): video_renderer, video_export, replay, criteria
+    -> Could split into video_generation and replay_management
+
+================================================================================
+SECTION 8: KEY FINDINGS & RECOMMENDATIONS
+================================================================================
+
+STRENGTHS:
+  1. Clear separation of hot path (training) and cold path (config)
+  2. VFS layer properly isolated with 100% internal cohesion
+  3. No downward dependency violations (config doesn't import training)
+  4. Universe compiler acts as clear integration point
+  5. Demo module successfully orchestrates complex dependencies
+
+WEAKNESSES:
+  1. environment <-> substrate circular dependency (medium impact)
+  2. ActionConfig must be known by both layers (tight coupling)
+  3. Universe compiler has high fan-in (30% imports from config)
+  4. Demo module is thin orchestrator but depends on 9 modules
+
+RECOMMENDATIONS:
+  1. RESOLVE ENVIRONMENT-SUBSTRATE CYCLE:
+     Option A: Extract ActionConfigInterface abstract base
+     Option B: Move action validation to environment layer
+     Option C: Accept cycle and document as intentional (fastest)
+
+  2. REDUCE UNIVERSE COMPILER COMPLEXITY:
+     Current: 18 files, 30% of imports from config
+     Suggest: Split compiler.py into stages (parse, resolve, emit)
+     Benefit: Easier to understand compilation pipeline
+
+  3. STRENGTHEN VFS MODULE:
+     Current: 100% isolated
+     Consider: Expand VFS to include action derivations (future phase 2)
+
+  4. DOCUMENT COLD/HOT PATH SEPARATION:
+     Add architectural decision record (ADR) explaining:
+     - Why demo depends on so many modules (intentional orchestration)
+     - Why circular dependency environment <-> substrate exists
+     - Why training has minimal imports (hot path isolation)
+
+TESTING IMPLICATIONS:
+  - VFS layer: Unit tests sufficient (isolated)
+  - Config layer: Integration tests with universe compiler
+  - Environment: Mock substrate or vice versa (circular dependency)
+  - Demo: End-to-end tests (depends on all layers)
+
+================================================================================

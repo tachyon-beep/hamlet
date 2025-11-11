@@ -1,0 +1,21 @@
+graph TD
+    User[Researcher/Operator<br/>CLI User] -->|Configures via YAML| System(HAMLET/Townlet<br/>RL Training System)
+    User -->|Launches training| System
+    User -->|Monitors progress| System
+
+    System -->|Writes checkpoints| Filesystem[(Local Filesystem<br/>checkpoints/*.pt)]
+    System -->|Logs metrics| Database[(SQLite Database<br/>metrics.db)]
+    System -->|Streams telemetry| WebSocket[WebSocket Server<br/>port 8766]
+    System -->|Writes training curves| TensorBoard[(TensorBoard<br/>localhost:6006)]
+
+    Frontend[Vue.js Frontend<br/>Visualization] -->|Connects to| WebSocket
+    Frontend -->|Renders| Browser[Web Browser<br/>localhost:5173]
+
+    User -->|Views training| TensorBoard
+    User -->|Views live agents| Browser
+
+    System -->|Reads YAML configs| ConfigFiles[(configs/L0_0_minimal/<br/>YAML files)]
+
+    style System fill:#4a90e2,stroke:#2d5f8d,stroke-width:3px,color:#fff
+    style User fill:#52c41a,stroke:#389e0d,stroke-width:2px
+    style Frontend fill:#fa8c16,stroke:#d46b08,stroke-width:2px
