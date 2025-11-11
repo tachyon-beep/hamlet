@@ -618,14 +618,23 @@ class VectorizedPopulation(PopulationManager):
                 recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
                 recurrent_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
             else:
-                # Standard feedforward DQN training (unchanged)
+                # Standard feedforward DQN training
                 standard_buffer = cast(ReplayBuffer, self.replay_buffer)
                 batch = standard_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
 
+                # Compute Q-predictions from online network
                 q_pred = self.q_network(batch["observations"]).gather(1, batch["actions"].unsqueeze(1)).squeeze()
 
+                # Compute Q-targets (vanilla DQN vs Double DQN)
                 with torch.no_grad():
-                    q_next = self.target_network(batch["next_observations"]).max(1)[0]
+                    if self.use_double_dqn:
+                        # Double DQN: Use online network for action selection, target network for evaluation
+                        next_actions = self.q_network(batch["next_observations"]).argmax(1)
+                        q_next = self.target_network(batch["next_observations"]).gather(1, next_actions.unsqueeze(1)).squeeze()
+                    else:
+                        # Vanilla DQN: Use target network for both selection and evaluation
+                        q_next = self.target_network(batch["next_observations"]).max(1)[0]
+
                     q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
 
                 loss = F.mse_loss(q_pred, q_target)
