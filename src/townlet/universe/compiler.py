@@ -1214,6 +1214,35 @@ class UniverseCompiler:
                                 )
                             )
 
+            # Validate probabilistic effect pipeline completeness
+            has_probabilistic = any(self._get_attr_value(cap, "type") == "probabilistic" for cap in capabilities)
+
+            if has_probabilistic:
+                if pipeline is None:
+                    errors.add(
+                        formatter(
+                            "UAC-VAL-011",
+                            f"Probabilistic affordance '{affordance.id}' must define effect_pipeline with on_completion and on_failure",
+                            f"affordances.yaml:{affordance.id}",
+                        )
+                    )
+                else:
+                    missing_stages = []
+                    if not pipeline.on_completion:
+                        missing_stages.append("on_completion (success path)")
+                    if not pipeline.on_failure:
+                        missing_stages.append("on_failure (failure path)")
+
+                    if missing_stages:
+                        errors.add(
+                            formatter(
+                                "UAC-VAL-011",
+                                f"Probabilistic affordance '{affordance.id}' should define both success and failure effects. "
+                                f"Missing: {', '.join(missing_stages)}",
+                                f"affordances.yaml:{affordance.id}:effect_pipeline",
+                            )
+                        )
+
     def _validate_affordance_positions(
         self,
         raw_configs: RawConfigs,
