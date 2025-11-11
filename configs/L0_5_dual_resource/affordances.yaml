@@ -13,7 +13,7 @@ affordances:
   - type: multi_tick
   costs_per_tick:
   - meter: money
-    amount: 0.1
+    amount: 0.02
   effect_pipeline:
     per_tick:
     - meter: energy
