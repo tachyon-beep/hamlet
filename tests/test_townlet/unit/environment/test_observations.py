@@ -47,9 +47,6 @@ class TestFullObservability:
         observations match the compiled spec rather than trying to recompute dims manually.
         """
 
-        if env_fixture_name == "grid2d_3x3_env":  # pragma: no cover - blocked by validator until config is updated
-            pytest.skip("L0_0_minimal config violates economic validator; tracked for future fix.")
-
         try:
             env = request.getfixturevalue(env_fixture_name)
         except Exception as exc:  # pragma: no cover - fixture validation guardrail
@@ -134,20 +131,19 @@ class TestPartialObservability:
         obs = pomdp_env.reset()
         assert obs.shape[1] == pomdp_env.observation_dim
 
-    @pytest.mark.skip(reason="TODO VFS: Rewrite to test via environment")
     def test_position_is_normalized(self, pomdp_env):
         """POMDP: agent position should be normalized to [0, 1] range."""
-        obs = pomdp_env.reset()
+        pomdp_env.reset()
 
-        # Position is indices 25:27
-        position = obs[0, 25:27]
+        # Query position from VFS registry instead of hardcoded slicing
+        position = pomdp_env.vfs_registry.get("position", reader="agent")
 
-        # Should have 2 values (x, y)
-        assert position.shape[0] == 2
+        # Should have 2 values per agent (x, y)
+        assert position.shape == (1, 2), f"Expected (1, 2), got {position.shape}"
 
         # Should be normalized to [0, 1]
-        assert (position >= 0.0).all()
-        assert (position <= 1.0).all()
+        assert (position >= 0.0).all(), f"Position values should be >= 0.0: {position}"
+        assert (position <= 1.0).all(), f"Position values should be <= 1.0: {position}"
 
     def test_vision_window_size_is_5x5(self, pomdp_env):
         """POMDP with vision_range=2 should produce 5×5 window (2*2+1)."""
@@ -357,14 +353,16 @@ class TestTemporalFeatures:
         # lifetime_progress should be 0 at start
         assert lifetime_progress == 0.0
 
-    @pytest.mark.skip(reason="TODO VFS: Rewrite to test via environment")
     def test_lifetime_progress_starts_at_zero(self, basic_env):
         """lifetime_progress is 0.0 at episode start."""
-        obs = basic_env.reset()
+        basic_env.reset()
 
-        # Last dimension is lifetime_progress
-        lifetime_progress = obs[0, -1]
-        assert lifetime_progress == 0.0
+        # Query lifetime_progress from VFS registry instead of hardcoded slicing
+        lifetime_progress = basic_env.vfs_registry.get("lifetime_progress", reader="agent")
+
+        # Should be (num_agents,) shape with all zeros at episode start
+        assert lifetime_progress.shape == (1,), f"Expected (1,), got {lifetime_progress.shape}"
+        assert lifetime_progress[0] == 0.0, f"Expected 0.0, got {lifetime_progress[0]}"
 
 
 class TestObservationUpdates:
@@ -377,7 +375,6 @@ class TestObservationUpdates:
     - Lifetime progress increases linearly
     """
 
-    @pytest.mark.skip(reason="TODO VFS: Rewrite to test via environment")
     def test_movement_updates_grid_position_full_obs(self, test_config_pack_path, cpu_device, env_factory):
         """Full observability: moving agent updates position encoding."""
 
@@ -391,19 +388,17 @@ class TestObservationUpdates:
         # Force agent to center position where all movements are valid
         env.positions[0] = torch.tensor([4, 4], device=cpu_device, dtype=torch.long)
 
-        obs1 = env._get_observations()
-        grid_cells = env.substrate.width * env.substrate.height
-        grid_dim_total = env.substrate.get_observation_dim()
-        position_slice = slice(grid_cells, grid_dim_total)
-        position1 = obs1[0, position_slice]
+        # Query position from VFS registry instead of hardcoded slicing
+        env._get_observations()  # Refresh VFS registry
+        position1 = env.vfs_registry.get("position", reader="agent").clone()
 
         # Move UP (guaranteed valid from center)
         actions = torch.tensor([0], device=cpu_device)
-        obs2, _, _, _ = env.step(actions)
-        position2 = obs2[0, position_slice]
+        env.step(actions)
+        position2 = env.vfs_registry.get("position", reader="agent")
 
         # Position MUST change (agent moved from (4,4) to (3,4))
-        assert not torch.equal(position1, position2), "Position should update after movement"
+        assert not torch.equal(position1, position2), f"Position should update after movement: {position1} vs {position2}"
 
     def test_movement_updates_vision_window_pomdp(self, pomdp_env):
         """POMDP: moving agent updates vision window contents."""

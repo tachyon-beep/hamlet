@@ -29,6 +29,7 @@ class TestTrainingConfigValidation:
             batch_size=64,
             max_grad_norm=10.0,
             use_double_dqn=False,
+            reward_strategy="multiplicative",
             epsilon_start=1.0,
             epsilon_decay=0.995,
             epsilon_min=0.01,
@@ -135,6 +136,7 @@ class TestTrainingConfigValidation:
                 batch_size=64,
                 max_grad_norm=10.0,
                 use_double_dqn=False,
+                reward_strategy="multiplicative",
                 epsilon_start=0.01,  # Less than min
                 epsilon_decay=0.995,
                 epsilon_min=0.1,  # Greater than start
@@ -178,6 +180,7 @@ class TestDoubleDQNConfiguration:
             target_update_frequency=100,
             batch_size=64,
             max_grad_norm=10.0,
+            reward_strategy="multiplicative",
             epsilon_start=1.0,
             epsilon_decay=0.995,
             epsilon_min=0.01,
@@ -195,6 +198,7 @@ class TestDoubleDQNConfiguration:
             target_update_frequency=100,
             batch_size=64,
             max_grad_norm=10.0,
+            reward_strategy="multiplicative",
             epsilon_start=1.0,
             epsilon_decay=0.995,
             epsilon_min=0.01,
@@ -278,6 +282,7 @@ class TestTrainingConfigWarnings:
             batch_size=64,
             max_grad_norm=10.0,
             use_double_dqn=False,
+            reward_strategy="multiplicative",
             epsilon_start=1.0,
             epsilon_decay=0.9995,  # Very slow
             epsilon_min=0.01,
@@ -305,6 +310,7 @@ class TestTrainingConfigWarnings:
             batch_size=64,
             max_grad_norm=10.0,
             use_double_dqn=False,
+            reward_strategy="multiplicative",
             epsilon_start=1.0,
             epsilon_decay=0.9,  # Very fast
             epsilon_min=0.01,
@@ -335,6 +341,7 @@ training:
   batch_size: 64
   max_grad_norm: 10.0
   use_double_dqn: false
+  reward_strategy: multiplicative
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
@@ -410,6 +417,7 @@ training:
   batch_size: 32
   max_grad_norm: 10.0
   use_double_dqn: false
+  reward_strategy: multiplicative
   epsilon_start: 1.0
   epsilon_decay: 0.99
   epsilon_min: 0.01
@@ -434,6 +442,7 @@ training:
   batch_size: 64
   max_grad_norm: 10.0
   use_double_dqn: false
+  reward_strategy: multiplicative
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01

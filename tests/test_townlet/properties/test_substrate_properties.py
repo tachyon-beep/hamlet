@@ -14,7 +14,6 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import pytest
 import torch
 import yaml
 from hypothesis import HealthCheck, given, settings
@@ -150,7 +149,6 @@ def test_property_aspatial_no_position_operations():
 # =============================================================================
 
 
-@pytest.mark.skip(reason="Test modifies config after compilation - VFS expects compiled shapes. Needs refactor to trigger recompilation.")
 @given(
     grid_size=st.integers(min_value=5, max_value=10),
     num_agents=st.integers(min_value=1, max_value=4),
@@ -175,6 +173,21 @@ def test_property_obs_dim_matches_substrate_grid2d(grid_size, num_agents, test_c
         training_env = training_data.setdefault("environment", {})
         training_env["vision_range"] = grid_size
         training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
+
+        # Update variables_reference.yaml to match new grid dimensions
+        vfs_path = temp_pack / "variables_reference.yaml"
+        vfs_data = yaml.safe_load(vfs_path.read_text())
+        for var in vfs_data.get("variables", []):
+            if var["id"] == "grid_encoding":
+                # Update grid_encoding dims to match new grid size
+                var["dims"] = grid_size * grid_size
+                var["default"] = [0] * (grid_size * grid_size)
+        vfs_path.write_text(yaml.safe_dump(vfs_data, sort_keys=False))
+
+        # Delete .compiled directory to force recompilation with new config values
+        compiled_dir = temp_pack / ".compiled"
+        if compiled_dir.exists():
+            shutil.rmtree(compiled_dir)
 
         env = make_vectorized_env_from_pack(
             temp_pack,
