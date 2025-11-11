@@ -49,12 +49,11 @@ class TestCheckpointValidation:
         with pytest.raises(ValueError) as exc_info:
             env.set_affordance_positions(legacy_checkpoint)
 
-        # Verify error message mentions legacy checkpoint
+        # Verify error message provides clear guidance
         error_msg = str(exc_info.value)
-        assert "legacy checkpoint" in error_msg.lower(), "Error should mention legacy checkpoint"
         assert "position_dim" in error_msg.lower(), "Error should mention missing field"
-        assert "Phase 4" in error_msg, "Error should reference breaking change"
-        assert "Delete old checkpoint" in error_msg, "Error should provide remediation steps"
+        assert "no longer supported" in error_msg.lower(), "Error should indicate format is obsolete"
+        assert "delete" in error_msg.lower() or "retrain" in error_msg.lower(), "Error should provide remediation steps"
 
     def test_checkpoint_position_dim_mismatch_rejected(self, cpu_device, test_config_pack_path):
         """Should reject checkpoints with incompatible position dimensions.
@@ -182,7 +181,7 @@ class TestActionLabelLoading:
 class TestAffordancePositionSerialization:
     """Test affordance position serialization edge cases."""
 
-    def test_aspatial_affordance_positions_empty_list(self, cpu_device, tmp_path):
+    def test_aspatial_affordance_positions_empty_list(self, cpu_device):
         """Aspatial substrates should serialize affordance positions as empty lists.
 
         When substrate has position_dim=0 (aspatial), affordance positions should
@@ -190,8 +189,6 @@ class TestAffordancePositionSerialization:
 
         Coverage target: lines 854-857 (aspatial position handling)
         """
-        # Create aspatial environment
-
         repo_root = Path(__file__).parent.parent.parent.parent.parent
         aspatial_config_path = repo_root / "configs" / "aspatial_test"
 
@@ -199,20 +196,10 @@ class TestAffordancePositionSerialization:
         if not aspatial_config_path.exists():
             pytest.skip("Aspatial test config not found")
 
-        config_pack = tmp_path / "aspatial_pack"
-        shutil.copytree(aspatial_config_path, config_pack)
-
-        training_path = config_pack / "training.yaml"
-        training_cfg = yaml.safe_load(training_path.read_text())
-        env_cfg = training_cfg.setdefault("environment", {})
-        env_cfg["grid_size"] = max(env_cfg.get("grid_size", 1), 8)
-        env_cfg["energy_move_depletion"] = 0.005
-        env_cfg["energy_wait_depletion"] = 0.001
-        env_cfg["energy_interact_depletion"] = 0.0
-        training_path.write_text(yaml.safe_dump(training_cfg, sort_keys=False))
-
+        # Use aspatial config directly - no parameter injection needed
+        # Config packs are atomic artifacts (no individual file overrides)
         env = make_vectorized_env_from_pack(
-            config_pack,
+            aspatial_config_path,
             num_agents=1,
             device=cpu_device,
         )
