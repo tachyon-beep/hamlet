@@ -1129,6 +1129,9 @@ class UniverseCompiler:
         errors: CompilationErrorCollector,
         formatter,
     ) -> None:
+        # Build affordance ID set for prerequisite validation
+        affordance_ids = {aff.id for aff in raw_configs.affordances}
+
         for affordance in raw_configs.affordances:
             capabilities = getattr(affordance, "capabilities", []) or []
             types = [self._get_attr_value(cap, "type") for cap in capabilities]
@@ -1194,6 +1197,22 @@ class UniverseCompiler:
                         f"affordances.yaml:{affordance.id}:capabilities",
                     )
                 )
+
+            # Validate prerequisite affordance references
+            for idx, capability in enumerate(capabilities):
+                cap_type = self._get_attr_value(capability, "type")
+
+                if cap_type == "prerequisite":
+                    required = self._get_attr_value(capability, "required_affordances") or []
+                    for req_id in required:
+                        if req_id not in affordance_ids:
+                            errors.add(
+                                formatter(
+                                    "UAC-VAL-010",
+                                    f"Prerequisite affordance '{req_id}' does not exist in affordances.yaml",
+                                    f"affordances.yaml:{affordance.id}:capabilities[{idx}]",
+                                )
+                            )
 
     def _validate_affordance_positions(
         self,
