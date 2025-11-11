@@ -1211,7 +1211,8 @@ class VectorizedHamletEnv:
             self.intrinsic_weights = intrinsic_weights  # Store for population to access
             return rewards
         else:
-            return result
+            # Type narrowing: If not AdaptiveRewardStrategy, result is Tensor (not tuple)
+            return cast(torch.Tensor, result)
 
     def get_affordance_positions(self) -> dict:
         """Get current affordance positions (substrate-agnostic checkpointing).
