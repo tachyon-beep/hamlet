@@ -19,6 +19,21 @@ from townlet.demo.runner import DemoRunner
 class TestDoubleDoubleTraining:
     """Integration tests for Double DQN in full training loops."""
 
+    @staticmethod
+    def _create_fast_test_config(use_double_dqn: bool) -> dict:
+        """Create minimal config modifier for fast integration tests."""
+
+        def modifier(data: dict) -> None:
+            data["environment"]["enabled_affordances"] = ["Bed"]
+            data["environment"]["vision_range"] = 8
+            data["exploration"]["survival_window"] = 10
+            data["training"]["max_episodes"] = 10
+            data["training"]["use_double_dqn"] = use_double_dqn
+            data["training"]["allow_unfeasible_universe"] = True
+            data["curriculum"]["max_steps_per_episode"] = 50
+
+        return modifier
+
     def test_training_with_double_dqn_enabled(self, tmp_path, config_pack_factory):
         """Full training loop should work with Double DQN enabled.
 
@@ -28,18 +43,7 @@ class TestDoubleDoubleTraining:
         - Target network updates occur
         - Replay buffer fills
         """
-
-        def modifier(data: dict) -> None:
-            # Minimize affordances for fast tests
-            data["environment"]["enabled_affordances"] = ["Bed"]
-            data["environment"]["vision_range"] = 8
-            data["exploration"]["survival_window"] = 10
-            data["training"]["max_episodes"] = 10
-            data["training"]["use_double_dqn"] = True  # Enable Double DQN
-            data["training"]["allow_unfeasible_universe"] = True
-            data["curriculum"]["max_steps_per_episode"] = 50
-
-        config_dir = config_pack_factory(modifier=modifier)
+        config_dir = config_pack_factory(modifier=self._create_fast_test_config(use_double_dqn=True))
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -83,17 +87,7 @@ class TestDoubleDoubleTraining:
         - use_double_dqn=False works correctly
         - Q-learning still functions
         """
-
-        def modifier(data: dict) -> None:
-            data["environment"]["enabled_affordances"] = ["Bed"]
-            data["environment"]["vision_range"] = 8
-            data["exploration"]["survival_window"] = 10
-            data["training"]["max_episodes"] = 10
-            data["training"]["use_double_dqn"] = False  # Vanilla DQN
-            data["training"]["allow_unfeasible_universe"] = True
-            data["curriculum"]["max_steps_per_episode"] = 50
-
-        config_dir = config_pack_factory(modifier=modifier)
+        config_dir = config_pack_factory(modifier=self._create_fast_test_config(use_double_dqn=False))
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -134,12 +128,13 @@ class TestDoubleDoubleTraining:
         # Set checkpoint interval to 5 for faster testing
         monkeypatch.setattr(DemoRunner, "CHECKPOINT_INTERVAL", 5)
 
+        # Create config with 5 episodes to hit checkpoint interval
         def modifier(data: dict) -> None:
             data["environment"]["enabled_affordances"] = ["Bed"]
             data["environment"]["vision_range"] = 8
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 5
-            data["training"]["use_double_dqn"] = True  # Enable Double DQN
+            data["training"]["use_double_dqn"] = True
             data["training"]["allow_unfeasible_universe"] = True
             data["curriculum"]["max_steps_per_episode"] = 50
 
@@ -189,20 +184,11 @@ class TestDoubleDoubleTraining:
         # Verify: Training completed additional episodes
         assert runner2.current_episode == 10, "Should complete 10 total episodes"
 
-        # Verify: Database has all episode records
-        # Note: Episode 5 was saved by runner1, so runner2 starts from episode 6
-        # Database should have episodes 1-5 from runner1, then episodes 6-10 from runner2
-        # However, the checkpoint saves at episode 5, so runner2 resumes from episode 5
-        # and runs episodes 6-10 (5 more), giving us episodes 1-10 total
-        # But episode 5 is already in the DB, so we expect 9 unique episodes
+        # Verify: Database has episode records (runner2 resumes from checkpoint, adds new episodes)
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM episodes")
         episode_count = cursor.fetchone()[0]
         conn.close()
 
-        # We expect 9 episodes: 1-5 from runner1, then 6-10 from runner2 (episode 5 not duplicated)
-        # Actually, runner2 resumes from episode 5 and runs to episode 10, so 5 more episodes (6,7,8,9,10)
-        # So total is 5 (from runner1) + 5 (from runner2) = 10, but episode 5 was already saved
-        # Let's just check that we have at least 9 episodes
         assert episode_count >= 9, f"Database should have at least 9 episode records, got {episode_count}"
