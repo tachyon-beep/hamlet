@@ -18,6 +18,7 @@ from townlet.universe.dto import (
     ActionSpaceMetadata,
     AffordanceMetadata,
     MeterMetadata,
+    ObservationActivity,
     ObservationSpec,
     UniverseMetadata,
 )
@@ -66,6 +67,7 @@ class RuntimeUniverse:
     config_dir: Path
     metadata: UniverseMetadata
     observation_spec: ObservationSpec
+    observation_activity: ObservationActivity
     vfs_observation_fields: tuple[VfsObservationField, ...]
     action_space_metadata: ActionSpaceMetadata
     meter_metadata: MeterMetadata

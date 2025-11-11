@@ -27,7 +27,7 @@ from townlet.environment.cascade_config import (
 )
 from townlet.environment.substrate_action_validator import SubstrateActionValidator
 from townlet.substrate.config import SubstrateConfig
-from townlet.universe.adapters.vfs_adapter import vfs_to_observation_spec
+from townlet.universe.adapters.vfs_adapter import VFSAdapter, vfs_to_observation_spec
 from townlet.universe.compiled import CompiledUniverse
 from townlet.universe.compiler_inputs import RawConfigs
 from townlet.universe.dto import (
@@ -1841,6 +1841,41 @@ class UniverseCompiler:
         # Get all variables from symbol table (auto-generated + custom)
         all_variables = list(symbol_table.variables.values())
 
+        # Build observation activity metadata for masking
+        # Convert observation_spec fields back to VFS format for activity building
+        from townlet.vfs.schema import ObservationField as VFSObservField
+
+        vfs_fields_for_activity = []
+        for field in observation_spec.fields:
+            # Map semantic_type from observation spec to VFS field
+            semantic_map = {
+                "position": "spatial",
+                "meter": "bars",
+                "affordance": "affordance",
+                "temporal": "temporal",
+                None: "custom",
+            }
+            semantic_type = semantic_map.get(field.semantic_type, "custom")
+
+            # Create VFS field with curriculum_active=True (all fields in observation_spec are active)
+            vfs_fields_for_activity.append(
+                VFSObservField(
+                    id=field.name,
+                    source_variable=field.description or field.name,
+                    exposed_to=["agent"],
+                    shape=[field.dims] if field.dims > 0 else [],
+                    normalization=None,
+                    semantic_type=semantic_type,
+                    curriculum_active=True,  # All fields in observation_spec are active
+                )
+            )
+
+        field_uuids = {field.name: field.uuid for field in observation_spec.fields}
+        observation_activity = VFSAdapter.build_observation_activity(
+            observation_spec=vfs_fields_for_activity,
+            field_uuids=field_uuids,
+        )
+
         universe = CompiledUniverse(
             hamlet_config=raw_configs.hamlet_config,
             variables_reference=all_variables,
@@ -1848,6 +1883,7 @@ class UniverseCompiler:
             config_dir=raw_configs.config_dir,
             metadata=metadata,
             observation_spec=observation_spec,
+            observation_activity=observation_activity,
             vfs_observation_fields=vfs_observation_fields,
             action_space_metadata=action_space_metadata,
             meter_metadata=meter_metadata,

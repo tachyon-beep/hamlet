@@ -22,6 +22,7 @@ from townlet.universe.dto import (
     AffordanceMetadata,
     MeterInfo,
     MeterMetadata,
+    ObservationActivity,
     ObservationField,
     ObservationSpec,
     UniverseMetadata,
@@ -42,6 +43,7 @@ class CompiledUniverse:
     config_dir: Path
     metadata: UniverseMetadata
     observation_spec: ObservationSpec
+    observation_activity: ObservationActivity
     vfs_observation_fields: tuple[VfsObservationField, ...]
     action_space_metadata: ActionSpaceMetadata
     meter_metadata: MeterMetadata
@@ -165,6 +167,7 @@ class CompiledUniverse:
             config_dir=self.config_dir,
             metadata=self.metadata,
             observation_spec=self.observation_spec,
+            observation_activity=self.observation_activity,
             vfs_observation_fields=self.vfs_observation_fields,
             action_space_metadata=self.action_space_metadata,
             meter_metadata=self.meter_metadata,
@@ -186,6 +189,7 @@ class CompiledUniverse:
             "config_dir": str(self.config_dir),
             "metadata": _dataclass_to_plain(self.metadata),
             "observation_spec": _dataclass_to_plain(self.observation_spec),
+            "observation_activity": _dataclass_to_plain(self.observation_activity),
             "vfs_observation_fields": [field.model_dump() for field in self.vfs_observation_fields],
             "action_space_metadata": _dataclass_to_plain(self.action_space_metadata),
             "meter_metadata": _dataclass_to_plain(self.meter_metadata),
@@ -220,6 +224,21 @@ class CompiledUniverse:
             action_mask_tensor = torch.zeros((24, 0), dtype=torch.bool)
         else:
             action_mask_tensor = torch.tensor(action_mask, dtype=torch.bool)
+        activity_payload = payload.get("observation_activity")
+        if activity_payload:
+            observation_activity = ObservationActivity(
+                active_mask=tuple(activity_payload["active_mask"]),
+                group_slices={k: slice(v[0], v[1]) for k, v in activity_payload["group_slices"].items()},
+                active_field_uuids=tuple(activity_payload["active_field_uuids"]),
+            )
+        else:
+            # Backward compatibility: Create empty activity if not present
+            observation_activity = ObservationActivity(
+                active_mask=(),
+                group_slices={},
+                active_field_uuids=(),
+            )
+
         return cls(
             hamlet_config=HamletConfig.model_validate(payload["hamlet_config"]),
             variables_reference=[VariableDef.model_validate(var) for var in payload["variables_reference"]],
@@ -231,6 +250,7 @@ class CompiledUniverse:
                 encoding_version=payload["observation_spec"]["encoding_version"],
                 fields=tuple(ObservationField(**field) for field in payload["observation_spec"]["fields"]),
             ),
+            observation_activity=observation_activity,
             vfs_observation_fields=tuple(VfsObservationField(**field) for field in payload.get("vfs_observation_fields", [])),
             action_space_metadata=ActionSpaceMetadata(
                 total_actions=payload["action_space_metadata"]["total_actions"],

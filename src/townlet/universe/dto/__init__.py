@@ -6,6 +6,7 @@ from townlet.universe.dto.affordance_metadata import (
     AffordanceMetadata,
 )
 from townlet.universe.dto.meter_metadata import MeterInfo, MeterMetadata
+from townlet.universe.dto.observation_activity import ObservationActivity
 from townlet.universe.dto.observation_spec import (
     ObservationField,
     ObservationSpec,
@@ -20,6 +21,7 @@ __all__ = [
     "AffordanceMetadata",
     "MeterInfo",
     "MeterMetadata",
+    "ObservationActivity",
     "ObservationField",
     "ObservationSpec",
     "compute_observation_field_uuid",
