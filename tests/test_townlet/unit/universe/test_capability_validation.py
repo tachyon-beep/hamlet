@@ -249,3 +249,83 @@ affordances:
         assert "probabilistic" in error_msg.lower()
         assert "on_completion" in error_msg or "success" in error_msg.lower()
         assert "Casino" in error_msg
+
+
+class TestSkillScalingValidation:
+    """Test skill_scaling capability validation."""
+
+    def test_skill_scaling_with_valid_meter_passes(self, tmp_path: Path):
+        """Skill scaling referencing existing meter should pass validation."""
+        # Copy L0 config as base
+        source = Path("configs/L0_0_minimal")
+        target = tmp_path / "test_config"
+        shutil.copytree(source, target)
+
+        # Replace affordances.yaml with skill_scaling referencing energy
+        (target / "affordances.yaml").write_text(
+            """
+affordances:
+  - id: "Training"
+    name: "Gym Training"
+    capabilities:
+      - type: skill_scaling
+        skill: fitness
+        base_multiplier: 0.5
+        max_multiplier: 2.0
+    effect_pipeline:
+      on_completion:
+        - meter: energy
+          amount: -0.2
+"""
+        )
+
+        # Update training.yaml to reference new affordances
+        training_path = target / "training.yaml"
+        training = yaml.safe_load(training_path.read_text())
+        training["environment"]["enabled_affordances"] = ["Gym Training"]
+        training_path.write_text(yaml.safe_dump(training, sort_keys=False))
+
+        compiler = UniverseCompiler()
+        # Should not raise
+        universe = compiler.compile(target)
+        assert universe is not None
+
+    def test_skill_scaling_with_invalid_meter_fails(self, tmp_path: Path):
+        """Skill scaling referencing non-existent meter should fail validation."""
+        # Copy L0 config as base
+        source = Path("configs/L0_0_minimal")
+        target = tmp_path / "test_config"
+        shutil.copytree(source, target)
+
+        # Replace affordances.yaml with skill_scaling referencing INVALID meter
+        (target / "affordances.yaml").write_text(
+            """
+affordances:
+  - id: "Training"
+    name: "Gym Training"
+    capabilities:
+      - type: skill_scaling
+        skill: nonexistent_meter
+        base_multiplier: 0.5
+        max_multiplier: 2.0
+    effect_pipeline:
+      on_completion:
+        - meter: energy
+          amount: -0.2
+"""
+        )
+
+        # Update training.yaml to reference new affordances
+        training_path = target / "training.yaml"
+        training = yaml.safe_load(training_path.read_text())
+        training["environment"]["enabled_affordances"] = ["Gym Training"]
+        training_path.write_text(yaml.safe_dump(training, sort_keys=False))
+
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError) as exc_info:
+            compiler.compile(target)
+
+        error_msg = str(exc_info.value)
+        assert "nonexistent_meter" in error_msg
+        assert "skill" in error_msg.lower() or "meter" in error_msg.lower()
+        assert "non-existent" in error_msg.lower() or "does not exist" in error_msg.lower()

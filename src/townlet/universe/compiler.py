@@ -1243,6 +1243,23 @@ class UniverseCompiler:
                             )
                         )
 
+            # Validate skill_scaling meter references
+            meter_names = {bar.name for bar in raw_configs.bars}
+            for idx, capability in enumerate(capabilities):
+                cap_type = self._get_attr_value(capability, "type")
+
+                if cap_type == "skill_scaling":
+                    skill_meter = self._get_attr_value(capability, "skill")
+                    if skill_meter and skill_meter not in meter_names:
+                        errors.add(
+                            formatter(
+                                "UAC-VAL-012",
+                                f"Skill scaling capability references non-existent meter '{skill_meter}'. "
+                                f"Valid meters: {sorted(meter_names)}",
+                                f"affordances.yaml:{affordance.id}:capabilities[{idx}]",
+                            )
+                        )
+
     def _validate_affordance_positions(
         self,
         raw_configs: RawConfigs,
