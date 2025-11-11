@@ -1131,6 +1131,8 @@ class UniverseCompiler:
     ) -> None:
         # Build affordance ID set for prerequisite validation
         affordance_ids = {aff.id for aff in raw_configs.affordances}
+        # Build meter name set for skill_scaling validation
+        meter_names = {bar.name for bar in raw_configs.bars}
 
         for affordance in raw_configs.affordances:
             capabilities = getattr(affordance, "capabilities", []) or []
@@ -1244,7 +1246,6 @@ class UniverseCompiler:
                         )
 
             # Validate skill_scaling meter references
-            meter_names = {bar.name for bar in raw_configs.bars}
             for idx, capability in enumerate(capabilities):
                 cap_type = self._get_attr_value(capability, "type")
 
