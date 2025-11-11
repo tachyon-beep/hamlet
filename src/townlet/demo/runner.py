@@ -315,8 +315,8 @@ class DemoRunner:
 
         # P1.1: Check checkpoint version
         checkpoint_version = checkpoint.get("version")
-        if checkpoint_version != 2:
-            raise ValueError(f"Unsupported checkpoint version: {checkpoint_version}\n" f"Expected version 2. Please retrain from scratch.")
+        if checkpoint_version != 3:
+            raise ValueError(f"Unsupported checkpoint version: {checkpoint_version}\n" f"Expected version 3. Please retrain from scratch.")
 
         self.current_episode = checkpoint["episode"]
 

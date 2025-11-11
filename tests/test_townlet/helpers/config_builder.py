@@ -62,6 +62,7 @@ BASE_CONFIG = {
         "batch_size": 32,
         "sequence_length": 8,
         "max_grad_norm": 10.0,
+        "use_double_dqn": False,
         "epsilon_start": 1.0,
         "epsilon_decay": 0.99,
         "epsilon_min": 0.01,
