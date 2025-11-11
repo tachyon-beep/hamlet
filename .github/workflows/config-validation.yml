@@ -26,8 +26,5 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
-      - name: Validate config packs
-        run: uv run python scripts/validate_configs.py
-
-      - name: Run universe compiler CLI validation
+      - name: Validate config packs via universe compiler
         run: uv run python scripts/validate_compiler_cli.py
