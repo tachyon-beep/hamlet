@@ -59,6 +59,7 @@ class VectorizedPopulation(PopulationManager):
         batch_size: int | None = None,
         sequence_length: int = 8,
         max_grad_norm: float = 10.0,
+        use_double_dqn: bool = False,
     ):
         """
         Initialize vectorized population.
@@ -82,6 +83,7 @@ class VectorizedPopulation(PopulationManager):
             batch_size: Batch size for experience replay (default: 64 for feedforward, 16 for recurrent)
             sequence_length: Length of sequences for LSTM training (default: 8, recurrent only)
             max_grad_norm: Gradient clipping threshold (default: 10.0)
+            use_double_dqn: Use Double DQN algorithm (default: False for vanilla DQN)
         """
         self.env = env
         self.curriculum = curriculum
@@ -92,6 +94,7 @@ class VectorizedPopulation(PopulationManager):
         self.gamma = gamma
         self.network_type = network_type
         self.is_recurrent = network_type == "recurrent"
+        self.use_double_dqn = use_double_dqn
         self.tb_logger = tb_logger
 
         # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
