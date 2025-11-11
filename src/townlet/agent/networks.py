@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import torch
 import torch.nn as nn
+
+if TYPE_CHECKING:
+    from townlet.universe.dto import ObservationActivity
 
 
 class SimpleQNetwork(nn.Module):
@@ -284,3 +287,102 @@ class RecurrentSpatialQNetwork(nn.Module):
     def get_hidden_state(self) -> tuple[torch.Tensor, torch.Tensor] | None:
         """Get current LSTM hidden state."""
         return self.hidden_state
+
+
+class StructuredQNetwork(nn.Module):
+    """
+    Structured Q-Network with group encoders for semantic observation groups.
+
+    Uses ObservationActivity to identify semantic groups (spatial, bars, affordances, temporal, custom)
+    and processes each group with its own encoder MLP before combining for Q-value prediction.
+
+    Architecture:
+    - Group Encoders: Each semantic group → embedding_dim features (default 32)
+    - Concatenation: All group embeddings → combined_dim
+    - Q-Head: combined_dim → hidden_dim → action_dim
+
+    This architecture leverages observation structure for better inductive bias compared to
+    SimpleQNetwork which treats all observation dimensions uniformly.
+    """
+
+    def __init__(
+        self,
+        obs_dim: int,
+        action_dim: int,
+        observation_activity: ObservationActivity,
+        group_embed_dim: int = 32,
+        q_head_hidden_dim: int = 128,
+    ):
+        """
+        Initialize structured Q-network with group encoders.
+
+        Args:
+            obs_dim: Total observation dimension
+            action_dim: Number of actions
+            observation_activity: ObservationActivity with group_slices
+            group_embed_dim: Embedding dimension for each group encoder (default 32)
+            q_head_hidden_dim: Hidden dimension for final Q-head MLP (default 128)
+
+        Note (PDR-002):
+            Architecture parameters explicitly specified, no BAC defaults.
+        """
+        super().__init__()
+        self.obs_dim = obs_dim
+        self.action_dim = action_dim
+        self.observation_activity = observation_activity
+        self.group_embed_dim = group_embed_dim
+
+        # Create encoder for each semantic group
+        self.group_encoders = nn.ModuleDict()
+        total_embed_dim = 0
+
+        for group_name, group_slice in observation_activity.group_slices.items():
+            group_size = group_slice.stop - group_slice.start
+
+            # Skip empty groups
+            if group_size <= 0:
+                continue
+
+            # Create encoder: group_size → group_embed_dim
+            encoder = nn.Sequential(
+                nn.Linear(group_size, group_embed_dim),
+                nn.LayerNorm(group_embed_dim),
+                nn.ReLU(),
+            )
+            self.group_encoders[group_name] = encoder
+            total_embed_dim += group_embed_dim
+
+        # Q-head: combined embeddings → hidden → action_dim
+        self.q_head = nn.Sequential(
+            nn.Linear(total_embed_dim, q_head_hidden_dim),
+            nn.LayerNorm(q_head_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(q_head_hidden_dim, action_dim),
+        )
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass with structured group processing.
+
+        Args:
+            obs: [batch, obs_dim] observations
+
+        Returns:
+            q_values: [batch, action_dim]
+        """
+        # Extract and encode each group
+        group_embeddings = []
+
+        for group_name, encoder in self.group_encoders.items():
+            group_slice = self.observation_activity.group_slices[group_name]
+            group_obs = obs[:, group_slice]
+            group_embed = encoder(group_obs)
+            group_embeddings.append(group_embed)
+
+        # Concatenate all group embeddings
+        combined = torch.cat(group_embeddings, dim=1)  # [batch, total_embed_dim]
+
+        # Q-values
+        q_values = self.q_head(combined)  # [batch, action_dim]
+
+        return cast(torch.Tensor, q_values)
