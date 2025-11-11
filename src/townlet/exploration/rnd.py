@@ -72,7 +72,7 @@ class RNDNetwork(nn.Module):
     Matches SimpleQNetwork architecture for consistency.
     """
 
-    def __init__(self, obs_dim: int = 70, embed_dim: int = 128):
+    def __init__(self, obs_dim: int = 70, embed_dim: int = 128, active_mask: tuple[bool, ...] | None = None):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(obs_dim, 256),
@@ -81,6 +81,14 @@ class RNDNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(128, embed_dim),
         )
+
+        # Register active_mask as buffer (moves with model to device)
+        if active_mask is not None:
+            mask_tensor = torch.tensor(active_mask, dtype=torch.float32)
+        else:
+            # No masking: all dimensions active
+            mask_tensor = torch.ones(obs_dim, dtype=torch.float32)
+        self.register_buffer("active_mask", mask_tensor)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Transform observations to embeddings.
@@ -91,7 +99,9 @@ class RNDNetwork(nn.Module):
         Returns:
             [batch, embed_dim] embeddings
         """
-        return cast(torch.Tensor, self.net(x))
+        # Apply mask to zero out padding dimensions
+        masked_x = x * self.active_mask
+        return cast(torch.Tensor, self.net(masked_x))
 
 
 class RNDExploration(ExplorationStrategy):
@@ -112,6 +122,7 @@ class RNDExploration(ExplorationStrategy):
         epsilon_min: float = 0.01,
         epsilon_decay: float = 0.995,
         device: torch.device = torch.device("cpu"),
+        active_mask: tuple[bool, ...] | None = None,
     ):
         """Initialize RND with fixed and predictor networks.
 
@@ -124,6 +135,7 @@ class RNDExploration(ExplorationStrategy):
             epsilon_min: Minimum epsilon
             epsilon_decay: Epsilon decay rate
             device: Device for tensors
+            active_mask: Optional mask for active observation dimensions (padding dimensions will be zeroed)
         """
         self.obs_dim = obs_dim
         self.embed_dim = embed_dim
@@ -136,12 +148,12 @@ class RNDExploration(ExplorationStrategy):
         self.epsilon_decay = epsilon_decay
 
         # Fixed network (random, frozen)
-        self.fixed_network = RNDNetwork(obs_dim, embed_dim).to(device)
+        self.fixed_network = RNDNetwork(obs_dim, embed_dim, active_mask=active_mask).to(device)
         for param in self.fixed_network.parameters():
             param.requires_grad = False
 
         # Predictor network (trained to match fixed)
-        self.predictor_network = RNDNetwork(obs_dim, embed_dim).to(device)
+        self.predictor_network = RNDNetwork(obs_dim, embed_dim, active_mask=active_mask).to(device)
 
         # Optimizer for predictor
         self.optimizer = torch.optim.Adam(self.predictor_network.parameters(), lr=learning_rate)

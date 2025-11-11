@@ -402,6 +402,7 @@ class DemoRunner:
             epsilon_decay=self.hamlet_config.training.epsilon_decay,
             epsilon_min=self.hamlet_config.training.epsilon_min,
             device=device,
+            active_mask=self.env.observation_activity.active_mask,
         )
 
         # Get population parameters from config (all required per PDR-002)
