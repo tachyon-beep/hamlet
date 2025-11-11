@@ -53,12 +53,12 @@ class TestVectorizedHamletEnvInitialization:
     """Test VectorizedHamletEnv.__init__ with various configurations."""
 
     def test_init_requires_substrate_yaml(self, temp_test_dir, compile_universe):
-        """Should raise FileNotFoundError if substrate.yaml is missing."""
+        """Should raise CompilationError if substrate.yaml is missing."""
         config_pack = temp_test_dir / "config_pack"
         shutil.copytree(Path("configs/test"), config_pack)
         (config_pack / "substrate.yaml").unlink()
 
-        with pytest.raises(CompilationError, match="Substrate config not found"):
+        with pytest.raises(CompilationError, match="substrate.yaml.*not found"):
             compile_universe(config_pack)
 
     def test_init_raises_if_config_pack_not_found(self, compile_universe):
