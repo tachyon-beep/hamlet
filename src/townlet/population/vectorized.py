@@ -555,25 +555,58 @@ class VectorizedPopulation(PopulationManager):
                 with torch.no_grad():
                     target_recurrent = cast(RecurrentSpatialQNetwork, self.target_network)
                     target_recurrent.reset_hidden_state(batch_size=batch_size, device=self.device)
-                    q_values_list = []
 
-                    # First, unroll through entire sequence to collect Q-values
-                    for t in range(seq_len):
-                        q_values, _ = target_recurrent(batch["observations"][:, t, :])
-                        q_values_list.append(q_values)
+                    if self.use_double_dqn:
+                        # Double DQN: Use online network for action selection
+                        online_recurrent = cast(RecurrentSpatialQNetwork, self.q_network)
+                        online_recurrent.reset_hidden_state(batch_size=batch_size, device=self.device)
 
-                    # Now compute targets using Q-values from next timestep
-                    q_target_list = []
-                    for t in range(seq_len):
-                        if t < seq_len - 1:
-                            # Use Q-values from t+1 (computed with hidden state from t)
-                            q_next = q_values_list[t + 1].max(1)[0]
-                            q_target = batch["rewards"][:, t] + self.gamma * q_next * (~batch["dones"][:, t]).float()
-                        else:
-                            # Terminal state: no next observation
-                            q_target = batch["rewards"][:, t]
+                        # First pass: Get action selections from online network
+                        next_action_list = []
+                        for t in range(seq_len):
+                            q_values_online, _ = online_recurrent(batch["observations"][:, t, :])
+                            next_actions = q_values_online.argmax(1)
+                            next_action_list.append(next_actions)
 
-                        q_target_list.append(q_target)
+                        # Second pass: Evaluate those actions with target network
+                        q_values_list = []
+                        for t in range(seq_len):
+                            q_values_target, _ = target_recurrent(batch["observations"][:, t, :])
+                            q_values_list.append(q_values_target)
+
+                        # Compute targets using selected actions
+                        q_target_list = []
+                        for t in range(seq_len):
+                            if t < seq_len - 1:
+                                # Use Q-values from t+1, evaluated at actions selected by online network
+                                next_actions = next_action_list[t + 1]
+                                q_next = q_values_list[t + 1].gather(1, next_actions.unsqueeze(1)).squeeze()
+                                q_target = batch["rewards"][:, t] + self.gamma * q_next * (~batch["dones"][:, t]).float()
+                            else:
+                                # Terminal state: no next observation
+                                q_target = batch["rewards"][:, t]
+                            q_target_list.append(q_target)
+                    else:
+                        # Vanilla DQN: Use target network for both selection and evaluation
+                        q_values_list = []
+
+                        # First, unroll through entire sequence to collect Q-values
+                        for t in range(seq_len):
+                            q_values, _ = target_recurrent(batch["observations"][:, t, :])
+                            q_values_list.append(q_values)
+
+                        # Now compute targets using Q-values from next timestep
+                        q_target_list = []
+                        for t in range(seq_len):
+                            if t < seq_len - 1:
+                                # Use Q-values from t+1 (computed with hidden state from t)
+                                q_next = q_values_list[t + 1].max(1)[0]
+                                q_target = batch["rewards"][:, t] + self.gamma * q_next * (~batch["dones"][:, t]).float()
+                            else:
+                                # Terminal state: no next observation
+                                q_target = batch["rewards"][:, t]
+
+                            q_target_list.append(q_target)
 
                 # Compute loss across all timesteps with post-terminal masking (P2.2)
                 q_pred_all = torch.stack(q_pred_list, dim=1)  # [batch, seq_len]

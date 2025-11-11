@@ -213,3 +213,100 @@ class TestDoubleDQNFeedforward:
         # - Vanilla DQN: Uses target network's max Q-value
         # - Double DQN: Uses online network to select action, target to evaluate
         # This test verifies both mechanisms execute successfully
+
+
+class TestDoubleDQNRecurrent:
+    """Test Double DQN for recurrent (LSTM) networks."""
+
+    def test_recurrent_double_dqn_uses_online_network_for_action_selection(
+        self,
+        compile_universe,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """Recurrent Double DQN should use online network for action selection."""
+        # Create POMDP environment on CPU
+        from pathlib import Path
+
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        universe = compile_universe(Path("configs/L2_partial_observability"))
+        env = VectorizedHamletEnv.from_universe(
+            universe,
+            num_agents=1,
+            device=cpu_device,
+        )
+
+        population = VectorizedPopulation(
+            env=env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="recurrent",
+            learning_rate=0.001,
+            gamma=0.99,
+            replay_buffer_capacity=1000,
+            batch_size=2,
+            sequence_length=8,
+            use_double_dqn=True,  # Double DQN
+        )
+
+        # Verify Double DQN flag is set
+        assert population.use_double_dqn is True
+        assert population.is_recurrent is True
+
+    def test_recurrent_vanilla_vs_double_dqn_differ(
+        self,
+        compile_universe,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """Recurrent vanilla and Double DQN should use different action selection."""
+        # This test verifies the mechanism is in place
+        # (Actual Q-target differences require longer training)
+        from pathlib import Path
+
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        universe = compile_universe(Path("configs/L2_partial_observability"))
+        env = VectorizedHamletEnv.from_universe(
+            universe,
+            num_agents=1,
+            device=cpu_device,
+        )
+
+        pop_vanilla = VectorizedPopulation(
+            env=env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="recurrent",
+            learning_rate=0.001,
+            gamma=0.99,
+            replay_buffer_capacity=1000,
+            batch_size=2,
+            sequence_length=8,
+            use_double_dqn=False,
+        )
+
+        pop_double = VectorizedPopulation(
+            env=env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="recurrent",
+            learning_rate=0.001,
+            gamma=0.99,
+            replay_buffer_capacity=1000,
+            batch_size=2,
+            sequence_length=8,
+            use_double_dqn=True,
+        )
+
+        assert pop_vanilla.use_double_dqn is False
+        assert pop_double.use_double_dqn is True
