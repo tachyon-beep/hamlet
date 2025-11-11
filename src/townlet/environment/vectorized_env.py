@@ -170,6 +170,7 @@ class VectorizedHamletEnv:
             self.action_labels = get_labels(preset="gaming", substrate_position_dim=self.substrate.position_dim)
 
         self.metadata = runtime.metadata
+        self.observation_activity = runtime.observation_activity
 
         # Get grid_size from substrate (single source of truth)
         # For grid substrates, read directly from substrate dimensions
