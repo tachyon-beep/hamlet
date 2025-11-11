@@ -276,6 +276,7 @@ class TestEpisodeRecorder:
                 timestamp=1699123456.78,
                 affordance_layout={"Bed": (2, 3)},
                 affordance_visits={"Bed": 5},
+                custom_action_uses={},
             )
 
             recorder.finish_episode(metadata)
@@ -438,6 +439,7 @@ class TestRecordingWriter:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
             marker = EpisodeEndMarker(metadata=metadata)
             test_queue.put(marker)

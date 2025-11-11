@@ -57,8 +57,8 @@ exploration:
   embed_dim: 128  # Smaller embedding (simpler observations)
   initial_intrinsic_weight: 0.1  # Higher for harder problem without REST
   variance_threshold: 100.0  # More forgiving variance (up from 50.0)
-  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
-  survival_window: 100  # Smaller window
+  min_survival_fraction: 0.2  # Don't anneal until mean survival >20% of max episode length (prevents "stable failure")
+  survival_window: 200  # Smaller window
 
 # Training configuration
 training:
@@ -74,7 +74,7 @@ training:
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
-  epsilon_decay: 0.995  # Decay per episode (was 0.9995 - too slow, reaches ε=0.1 at ~460 episodes)
+  epsilon_decay: 0.99  # Decay per episode (was 0.9995 - too slow, reaches ε=0.1 at ~460 episodes)
   epsilon_min: 0.01  # Minimum exploration rate
   enabled_actions:
     # L0.5 unlocks the full custom vocabulary (REST + MEDITATE) to pair with new affordances

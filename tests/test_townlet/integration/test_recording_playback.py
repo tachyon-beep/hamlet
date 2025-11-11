@@ -44,6 +44,7 @@ class TestReplayLoading:
                 timestamp=time.time(),
                 affordance_layout={"Bed": (2, 3), "Job": (5, 6)},
                 affordance_visits={"Bed": 5, "Job": 3},
+                custom_action_uses={},
             )
 
             steps = [
@@ -117,6 +118,7 @@ class TestReplayLoading:
                 timestamp=time.time(),
                 affordance_layout={"Bed": (1, 2)},
                 affordance_visits={"Bed": 2},
+                custom_action_uses={},
             )
 
             steps = [

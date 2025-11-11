@@ -213,6 +213,7 @@ class TestVideoExport:
                 timestamp=time.time(),
                 affordance_layout={"Bed": (2, 3)},
                 affordance_visits={"Bed": 2},
+                custom_action_uses={},
             )
 
             steps = [
