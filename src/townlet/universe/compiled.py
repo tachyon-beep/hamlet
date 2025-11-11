@@ -281,6 +281,9 @@ def _dataclass_to_plain(obj: Any) -> Any:
         return {key: _dataclass_to_plain(value) for key, value in obj.items()}
     if isinstance(obj, list | tuple):
         return [_dataclass_to_plain(value) for value in obj]
+    if isinstance(obj, slice):
+        # Convert slice to tuple for serialization (step is usually None for our slices)
+        return [obj.start, obj.stop]
     return obj
 
 
