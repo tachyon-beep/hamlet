@@ -89,13 +89,17 @@ affordances:
     amount: 0.01
   effect_pipeline:
     per_tick:
-    - meter: satiation
-      amount: 0.1125
+      - meter: satiation
+        amount: 0.1125
+      - meter: energy    # NEW!
+        amount: 0.05     # Small energy boost
     on_completion:
-    - meter: satiation
-      amount: 0.2
-    - meter: health
-      amount: 0.03
+      - meter: satiation
+        amount: 0.2
+      - meter: energy    # NEW!
+        amount: 0.1      # Completion bonus
+      - meter: health
+        amount: 0.03
   operating_hours:
   - 0
   - 24
@@ -162,7 +166,7 @@ affordances:
   interaction_type: dual
   costs:
   - meter: money
-    amount: 0.5
+    amount: 0.05
   capabilities:
   - type: multi_tick
   costs_per_tick:
