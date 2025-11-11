@@ -22,6 +22,7 @@ class TestPopulationConfigValidation:
             gamma=0.99,
             replay_buffer_capacity=10000,
             network_type="simple",
+            mask_unused_obs=False,
         )
         assert config.num_agents == 1
         assert config.learning_rate == 0.00025
@@ -35,6 +36,7 @@ class TestPopulationConfigValidation:
             gamma=0.95,
             replay_buffer_capacity=5000,
             network_type="simple",
+            mask_unused_obs=False,
         )
         assert config.network_type == "simple"
 
@@ -46,6 +48,7 @@ class TestPopulationConfigValidation:
             gamma=0.99,
             replay_buffer_capacity=10000,
             network_type="recurrent",
+            mask_unused_obs=False,
         )
         assert config.network_type == "recurrent"
 
@@ -108,6 +111,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 10000
   network_type: simple
+  mask_unused_obs: false
 """
         )
 
@@ -126,6 +130,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 10000
   network_type: recurrent
+  mask_unused_obs: false
 """
         )
 

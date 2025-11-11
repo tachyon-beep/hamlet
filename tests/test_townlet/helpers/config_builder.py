@@ -39,6 +39,7 @@ BASE_CONFIG = {
         "gamma": 0.99,
         "replay_buffer_capacity": 1000,
         "network_type": "simple",
+        "mask_unused_obs": False,
     },
     "curriculum": {
         "max_steps_per_episode": 50,
