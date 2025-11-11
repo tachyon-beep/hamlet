@@ -257,6 +257,7 @@ class TestAdaptiveAnnealing:
             min_intrinsic_weight=0.1,
             variance_threshold=100.0,
             survival_window=20,  # Small window for fast testing
+            max_episode_length=200,  # Set so that 40% = 80 (matches test survival times)
             decay_rate=0.9,
             device=cpu_device,
         )
@@ -305,6 +306,7 @@ class TestAdaptiveAnnealing:
             initial_intrinsic_weight=1.0,
             variance_threshold=100.0,
             survival_window=20,
+            max_episode_length=200,  # Set so that 40% = 80 (matches test survival times)
             decay_rate=0.9,
             device=cpu_device,
         )
@@ -347,6 +349,7 @@ class TestAdaptiveAnnealing:
             initial_intrinsic_weight=1.0,
             variance_threshold=50.0,  # Lower threshold for stricter test
             survival_window=20,
+            max_episode_length=200,  # Set so that 40% = 80 (matches test survival times)
             decay_rate=0.9,
             device=cpu_device,
         )

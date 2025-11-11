@@ -640,7 +640,15 @@ class VectorizedHamletEnv:
             self.vfs_registry.set(meter_name, self.meters[:, meter_idx], writer="engine")
 
         # Affordance encoding (one-hot of current affordance)
-        affordance_encoding = self._build_affordance_encoding()
+        # In POMDP mode, this is padded with zeros (agent can't see current position)
+        # In full observability, this shows the actual affordance at agent's position
+        # This maintains consistent observation dimensions for transfer learning
+        if self.partial_observability:
+            # POMDP: Pad with zeros (can't see what's directly under the agent)
+            affordance_encoding = torch.zeros(self.num_agents, self.num_affordance_types + 1, device=self.device)
+        else:
+            # Full observability: Show actual affordance at position
+            affordance_encoding = self._build_affordance_encoding()
         self.vfs_registry.set("affordance_at_position", affordance_encoding, writer="engine")
 
         # Temporal features

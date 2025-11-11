@@ -45,6 +45,7 @@ VALID_TRAINING_PARAMS = {
     "epsilon_decay": 0.995,
     "epsilon_min": 0.01,
     "sequence_length": 8,
+    "use_double_dqn": False,
 }
 
 VALID_ENVIRONMENT_PARAMS = {

@@ -117,7 +117,7 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L2_partial_observability": {
-        "expected_dim": 42,
+        "expected_dim": 57,
         "fields": [
             ("obs_local_window", "agent", 25),  # 5×5 POMDP window (vision_range=2)
             ("obs_position", "agent", 2),
@@ -132,7 +132,7 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
             ("obs_social", "agent", 1),
             ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            # NOTE: affordance_at_position excluded in POMDP mode (redundant with local_window)
+            ("obs_affordance_at_position", "agent", 15),  # Included for transfer learning (L0→L1→L2 compatibility)
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
             ("obs_interaction_progress", "agent", 1),
@@ -140,7 +140,7 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L3_temporal_mechanics": {
-        "expected_dim": 42,
+        "expected_dim": 57,
         "fields": [
             ("obs_local_window", "agent", 25),  # 5×5 POMDP window (vision_range=2)
             ("obs_position", "agent", 2),
@@ -155,7 +155,7 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
             ("obs_social", "agent", 1),
             ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            # NOTE: affordance_at_position excluded in POMDP mode (redundant with local_window)
+            ("obs_affordance_at_position", "agent", 15),  # Included for transfer learning (L0→L1→L2→L3 compatibility)
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
             ("obs_interaction_progress", "agent", 1),

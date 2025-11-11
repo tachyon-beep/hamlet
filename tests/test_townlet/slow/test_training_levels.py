@@ -424,7 +424,7 @@ def test_all_configs_valid():
     Duration: <1 second
     """
     required_fields = {
-        "environment": ["grid_size", "partial_observability"],
+        "environment": ["partial_observability"],
         "population": ["num_agents", "learning_rate", "network_type"],
         "curriculum": ["max_steps_per_episode"],
         "exploration": ["embed_dim", "initial_intrinsic_weight"],

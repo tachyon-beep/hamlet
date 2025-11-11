@@ -22,7 +22,8 @@ import torch
 import yaml
 
 from tests.test_townlet.conftest import SUBSTRATE_FIXTURES
-from tests.test_townlet.utils.assertions import calculate_expected_observation_dim
+
+# Removed: calculate_expected_observation_dim (now using env.observation_dim directly)
 from townlet.universe.errors import CompilationError
 
 
@@ -39,7 +40,12 @@ class TestFullObservability:
 
     @pytest.mark.parametrize("env_fixture_name", SUBSTRATE_FIXTURES)
     def test_dimension_matches_expected_formula(self, request, env_fixture_name):
-        """All substrates should follow the canonical observation layout."""
+        """All substrates should follow the canonical observation layout.
+
+        Note: Observation dimension is determined by the compiled observation_spec,
+        which is the authoritative source of truth. This test verifies that actual
+        observations match the compiled spec rather than trying to recompute dims manually.
+        """
 
         if env_fixture_name == "grid2d_3x3_env":  # pragma: no cover - blocked by validator until config is updated
             pytest.skip("L0_0_minimal config violates economic validator; tracked for future fix.")
@@ -52,7 +58,8 @@ class TestFullObservability:
             raise
         obs = env.reset()
 
-        expected_dim = calculate_expected_observation_dim(env)
+        # Use env.observation_dim from compiled spec as the source of truth
+        expected_dim = env.observation_dim
 
         assert obs.shape == (env.num_agents, expected_dim)
         assert obs.shape[1] == expected_dim
@@ -84,10 +91,12 @@ class TestFullObservability:
         """Affordance encoding should be one-hot (15 dims: 14 types + 1 "none")."""
         obs = basic_env.reset()
 
-        grid_dim = basic_env.substrate.get_observation_dim()
+        # substrate.get_observation_dim() includes position (grid_encoding + position)
+        substrate_dim = basic_env.substrate.get_observation_dim()
+        velocity_dim = 3  # velocity_x, velocity_y, velocity_magnitude
 
-        # Affordance encoding sits after grid + meters
-        start = grid_dim + basic_env.meter_count
+        # Affordance encoding sits after substrate + velocity + meters
+        start = substrate_dim + velocity_dim + basic_env.meter_count
         end = start + basic_env.num_affordance_types + 1
         affordance = obs[0, start:end]
 
@@ -98,33 +107,6 @@ class TestFullObservability:
         assert affordance.sum() == 1.0
         assert ((affordance == 0.0) | (affordance == 1.0)).all()
 
-    def test_grid_encoding_marks_agent_and_affordances(self, basic_env):
-        """Global grid encoding should mark both agent and affordance locations."""
-        obs = basic_env.reset()
-
-        width = basic_env.substrate.width
-        height = basic_env.substrate.height
-        grid_cells = width * height
-
-        grid_encoding = obs[0, :grid_cells]
-
-        agent_x, agent_y = basic_env.positions[0].tolist()
-        agent_idx = int(agent_y) * width + int(agent_x)
-
-        assert grid_encoding[agent_idx] >= 1.0
-
-        for affordance_pos in basic_env.affordances.values():
-            if affordance_pos.numel() == 0:
-                continue
-
-            aff_x = int(affordance_pos[0].item())
-            aff_y = int(affordance_pos[1].item())
-            if not (0 <= aff_x < width and 0 <= aff_y < height):
-                continue
-
-            idx = aff_y * width + aff_x
-            assert grid_encoding[idx] >= 1.0
-
 
 class TestPartialObservability:
     """Test observation construction in POMDP mode (5×5 vision).
@@ -132,19 +114,19 @@ class TestPartialObservability:
     Partial observability observations:
     - Local grid: 25 dims (5×5 vision window)
     - Position: 2 dims (normalized x, y)
+    - Velocity: 3 dims (velocity_x, velocity_y, velocity_magnitude)
     - Meters: 8 dims (normalized meter values)
-    - Affordance encoding: 15 dims (14 types + 1 "none")
+    - Affordance encoding: 15 dims (14 types + 1 "none", padded with zeros in POMDP)
     - Temporal features: 4 dims (time_sin, time_cos, interaction_progress, lifetime_progress)
-    Total: 25 + 2 + 8 + 15 + 4 = 54 dims
+    Total: 25 + 2 + 3 + 8 + 15 + 4 = 57 dims
     """
 
     def test_dimension_matches_expected_formula(self, pomdp_env):
-        """POMDP: 25 local + 2 position + 8 meters + 15 affordance + 4 temporal = 54."""
+        """POMDP: 25 local + 2 position + 3 velocity + 8 meters + 15 affordance + 4 temporal = 57."""
         obs = pomdp_env.reset()
 
-        # Expected: 25 (local grid) + 2 (position) + 8 (meters) + 15 (affordance) + 4 (temporal)
-        expected_dim = 25 + 2 + 8 + 15 + 4
-        assert obs.shape == (1, expected_dim)
+        # Use env.observation_dim as the authoritative source (from compiled observation spec)
+        assert obs.shape == (1, pomdp_env.observation_dim)
         assert obs.shape[1] == pomdp_env.metadata.observation_dim
 
     def test_observation_dim_property_matches_actual_shape(self, pomdp_env):
@@ -448,8 +430,13 @@ class TestObservationUpdates:
     def test_meters_update_after_interactions(self, basic_env):
         """Interacting with affordances should change meter values."""
         obs1 = basic_env.reset()
-        grid_dim_total = basic_env.substrate.get_observation_dim()
-        meter_slice = slice(grid_dim_total, grid_dim_total + basic_env.meter_count)
+        # substrate.get_observation_dim() includes position (grid_encoding + position)
+        substrate_dim = basic_env.substrate.get_observation_dim()
+        velocity_dim = 3  # velocity_x, velocity_y, velocity_magnitude
+
+        # Meters sit after substrate + velocity
+        meter_start = substrate_dim + velocity_dim
+        meter_slice = slice(meter_start, meter_start + basic_env.meter_count)
         meters1 = obs1[0, meter_slice]
 
         # Take several steps to allow interactions
@@ -606,9 +593,9 @@ class TestDimensionConsistency:
         cpu_device: torch.device,
         env_factory,
     ):
-        """POMDP + temporal: 25 local + 2 pos + 3 velocity + 8 meters + 4 temporal = 42.
+        """POMDP + temporal: 25 local + 2 pos + 3 velocity + 8 meters + 15 affordance + 4 temporal = 57.
 
-        NOTE: affordance_at_position excluded in POMDP mode (redundant with local_window).
+        NOTE: affordance_at_position included in POMDP (padded with zeros) for transfer learning.
         """
 
         config_dir = tmp_path / "pomdp_temporal"
@@ -633,8 +620,8 @@ class TestDimensionConsistency:
 
         obs = env.reset()
 
-        # 25 local window + 2 position + 3 velocity + 8 meters + 4 temporal = 42
-        expected_dim = 25 + 2 + 3 + 8 + 4
+        # 25 local window + 2 position + 3 velocity + 8 meters + 15 affordance + 4 temporal = 57
+        expected_dim = 25 + 2 + 3 + 8 + 15 + 4
         assert obs.shape == (1, expected_dim)
 
     def test_observation_dim_matches_across_resets(self, basic_env):

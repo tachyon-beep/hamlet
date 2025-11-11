@@ -1980,9 +1980,9 @@ class UniverseCompiler:
 
         # Filter based on POMDP mode (only keep grid_encoding OR local_window, not both)
         if raw_configs.environment.partial_observability:
-            # POMDP mode: use local window instead of full grid, exclude affordance_at_position
+            # POMDP mode: use local window instead of full grid
+            # Keep affordance_at_position for transfer learning (padded with zeros in environment)
             exposures = [obs for obs in exposures if obs.get("source_variable") != "grid_encoding"]
-            exposures = [obs for obs in exposures if obs.get("source_variable") != "affordance_at_position"]
         else:
             # Full observability: use grid encoding instead of local window
             exposures = [obs for obs in exposures if obs.get("source_variable") != "local_window"]

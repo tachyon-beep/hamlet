@@ -84,8 +84,9 @@ def test_training_with_continuous2d_substrate(tmp_path):
         assert (runner.env.positions[:, 1] >= 0.0).all()
         assert (runner.env.positions[:, 1] <= 10.0).all()
 
-        # Verify action dim = 8 for 2D (6 substrate + 2 custom)
-        assert runner.env.action_dim == 8
+        # Verify action dim = 197 for discretized continuous 2D
+        # (1 STOP + 32 dirs × 6 mags + INTERACT + WAIT + REST + MEDITATE)
+        assert runner.env.action_dim == 197
 
         # Verify affordances are randomly placed in continuous space
         for affordance_name, affordance_pos in runner.env.affordances.items():

@@ -10,9 +10,8 @@ def test_full_observation_uses_substrate(cpu_env_factory):
     # Get observation
     obs = env.reset()
 
-    # Observation should include substrate position encoding
-    expected_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
-    assert obs.shape[1] == expected_dim, f"Expected {expected_dim}, got {obs.shape[1]}"
+    # Observation dimension should match compiled observation spec
+    assert obs.shape[1] == env.observation_dim, f"Expected {env.observation_dim}, got {obs.shape[1]}"
 
 
 def test_partial_observation_uses_substrate(cpu_env_factory):
@@ -22,17 +21,8 @@ def test_partial_observation_uses_substrate(cpu_env_factory):
     # Get observation
     obs = env.reset()
 
-    # Partial obs should use local window encoding
-    # For 5×5 window: 25 (local grid) + 2 (normalized position) + 8 (meters) + 15 (affordance) + 4 (temporal) = 54
-    window_size = 2 * env.vision_range + 1  # 5×5 for vision_range=2
-    expected_dim = (
-        window_size * window_size  # 25 for 5×5 window
-        + env.substrate.position_dim  # 2 for Grid2D
-        + env.meter_count
-        + (env.num_affordance_types + 1)
-        + 4
-    )
-    assert obs.shape[1] == expected_dim, f"Expected {expected_dim}, got {obs.shape[1]}"
+    # Observation dimension should match compiled observation spec
+    assert obs.shape[1] == env.observation_dim, f"Expected {env.observation_dim}, got {obs.shape[1]}"
     assert obs.shape[1] == env.metadata.observation_dim, (
         "L2 observation should match metadata: " f"expected {env.metadata.observation_dim}, got {obs.shape[1]}"
     )

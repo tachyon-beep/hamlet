@@ -67,13 +67,17 @@ class TestGreedyActionSelection:
         # Place agents at top-left corner (UP and LEFT masked)
         env.positions = torch.tensor([[0, 0], [0, 0]], device=env.device)
 
+        # Get valid actions at (0,0) - should exclude UP (0) and LEFT (2)
+        masks = env.get_action_masks()
+        valid_actions = [i for i in range(env.action_dim) if masks[0, i]]
+
         # Select actions 100 times - should never see UP (0) or LEFT (2)
         for _ in range(100):
             actions = population.select_greedy_actions(env)
             assert actions.shape == (2,)
 
-            # Should only be DOWN (1), RIGHT (3), INTERACT (4), or WAIT (5)
-            assert all(a in [1, 3, 4, 5] for a in actions.tolist())
+            # Should only select from valid (non-masked) actions
+            assert all(a in valid_actions for a in actions.tolist())
 
     def test_greedy_selects_highest_q_value(self, simple_setup):
         """Greedy selection should choose action with highest Q-value."""
