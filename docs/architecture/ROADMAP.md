@@ -141,8 +141,8 @@ After completing Phase 3 (Intrinsic Exploration), we've adopted a strategic sequ
 
 **Optimization Candidates (from Phase 3 code reviews):**
 
-- **Target Network:** Add to DQN for training stability (especially important with LSTM?)
-- **Double DQN:** Reduce overestimation bias
+- ✅ **Target Network:** Added to DQN for training stability (supports LSTM)
+- ✅ **Double DQN:** Implemented (configurable via `use_double_dqn` in training.yaml)
 - **Dueling Architecture:** Separate value/advantage streams
 - **GPU Optimization:** Fix RND CPU transfers, batch LSTM operations
 - **Gradient Clipping:** Tune for LSTM gradient flow
