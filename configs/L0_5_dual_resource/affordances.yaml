@@ -81,7 +81,7 @@ affordances:
   interaction_type: dual
   costs:
   - meter: money
-    amount: 0.1
+    amount: 0.02
   capabilities:
   - type: multi_tick
   costs_per_tick:
@@ -162,12 +162,12 @@ affordances:
   interaction_type: dual
   costs:
   - meter: money
-    amount: 0.15
+    amount: 0.5
   capabilities:
   - type: multi_tick
   costs_per_tick:
   - meter: money
-    amount: 0.05
+    amount: 0.01
   effect_pipeline:
     per_tick:
     - meter: health
@@ -178,7 +178,7 @@ affordances:
   operating_hours:
   - 0
   - 24
-  duration_ticks: 3
+  duration_ticks: 5
 - id: '7'
   name: Therapist
   category: mood
@@ -277,7 +277,7 @@ affordances:
   effect_pipeline:
     per_tick:
     - meter: money
-      amount: 0.4
+      amount: 0.1
     - meter: energy
       amount: -0.02
     - meter: health

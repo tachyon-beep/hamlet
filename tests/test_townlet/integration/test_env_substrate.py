@@ -1,11 +1,9 @@
 """Test environment substrate integration (core functionality)."""
 
-import shutil
 from pathlib import Path
 
 import pytest
 import torch
-import yaml
 
 from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -178,51 +176,17 @@ def test_env_substrate_distance_metric(cpu_env_factory):
 # =============================================================================
 # BACKWARD COMPATIBILITY TESTS (from TASK-002A)
 # =============================================================================
-
-
-def test_grid_size_overridden_by_substrate(cpu_env_factory, tmp_path):
-    """grid_size parameter should be overridden by substrate dimensions.
-
-    Backward compatibility test: ensures substrate.yaml takes precedence.
-    """
-    import shutil
-
-    config_copy = tmp_path / "l1_override"
-    shutil.copytree(CONFIG_L1, config_copy)
-
-    training_yaml = config_copy / "training.yaml"
-    config = training_yaml.read_text()
-    data = yaml.safe_load(config)
-    data["environment"]["grid_size"] = 999
-    training_yaml.write_text(yaml.safe_dump(data, sort_keys=False))
-
-    env = cpu_env_factory(config_dir=config_copy, num_agents=1)
-
-    # Verify grid_size comes from substrate (8), not parameter (999)
-    assert env.grid_size == 8  # From substrate.yaml, NOT parameter
-    assert env.substrate.width == 8
-    assert env.substrate.height == 8
-
-
-def test_aspatial_preserves_grid_size_parameter(cpu_env_factory, tmp_path):
-    """Aspatial substrate should keep grid_size parameter value.
-
-    Backward compatibility test: aspatial has no width/height, so parameter preserved.
-    """
-    config_copy = tmp_path / "aspatial_override"
-    shutil.copytree(ASPARTIAL_CONFIG, config_copy)
-
-    training_yaml = config_copy / "training.yaml"
-    data = yaml.safe_load(training_yaml.read_text())
-    data["environment"]["grid_size"] = 12
-    training_yaml.write_text(yaml.safe_dump(data, sort_keys=False))
-
-    env = cpu_env_factory(config_dir=config_copy, num_agents=1)
-
-    # Verify grid_size parameter is preserved (not overridden)
-    assert env.grid_size == 12  # From parameter (aspatial has no width/height)
-    assert env.substrate.position_dim == 0  # Aspatial has no position
-    assert not hasattr(env.substrate, "width")
+# REMOVED: test_grid_size_overridden_by_substrate
+# REMOVED: test_aspatial_preserves_grid_size_parameter
+#
+# These backward compatibility tests validated legacy parameter override behavior
+# where grid_size in training.yaml could conflict with substrate.yaml dimensions.
+#
+# Current behavior (Universe Compiler): substrate.yaml is single source of truth.
+# grid_size parameter in training.yaml is strictly forbidden (extra="forbid").
+#
+# Rationale: Pre-release (0 users) = no backwards compatibility needed.
+# =============================================================================
 
 
 # =============================================================================

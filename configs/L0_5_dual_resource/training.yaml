@@ -55,7 +55,7 @@ curriculum:
 # Exploration configuration
 exploration:
   embed_dim: 128  # Smaller embedding (simpler observations)
-  initial_intrinsic_weight: 0.3  # Higher for harder problem without REST
+  initial_intrinsic_weight: 0.1  # Higher for harder problem without REST
   variance_threshold: 100.0  # More forgiving variance (up from 50.0)
   min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 100  # Smaller window
