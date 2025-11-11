@@ -100,7 +100,9 @@ class RNDNetwork(nn.Module):
             [batch, embed_dim] embeddings
         """
         # Apply mask to zero out padding dimensions
-        masked_x = x * self.active_mask
+        # Cast needed because register_buffer doesn't provide proper typing to mypy
+        active_mask = cast(torch.Tensor, self.active_mask)
+        masked_x = x * active_mask
         return cast(torch.Tensor, self.net(masked_x))
 
 
