@@ -20,6 +20,7 @@ Status: Ready for integration with vectorized_env.py
 """
 
 from pathlib import Path
+from typing import Any
 
 import torch
 
@@ -39,7 +40,7 @@ class AffordanceEngine:
 
     def __init__(
         self,
-        affordance_config: AffordanceConfigCollection,
+        affordance_config: AffordanceConfigCollection | tuple[Any, ...],
         num_agents: int,
         device: torch.device,
         meter_name_to_idx: dict[str, int],
@@ -48,14 +49,21 @@ class AffordanceEngine:
         Initialize AffordanceEngine.
 
         Args:
-            affordance_config: Loaded affordance configuration
+            affordance_config: Tuple of affordances from compiled universe or legacy AffordanceConfigCollection
             num_agents: Number of agents in parallel
             device: torch.device for GPU/CPU
             meter_name_to_idx: Mapping of meter names to indices (from bars_config)
         """
         self.num_agents = num_agents
         self.device = device
-        self.affordances = affordance_config.affordances
+
+        # Modern compiler output: tuple of AffordanceConfig objects
+        if isinstance(affordance_config, tuple):
+            self.affordances = affordance_config
+        else:
+            # Legacy loader: AffordanceConfigCollection with .affordances list
+            self.affordances = tuple(affordance_config.affordances)
+
         self.meter_name_to_idx = meter_name_to_idx
 
         # Build lookup maps
@@ -106,10 +114,10 @@ class AffordanceEngine:
         if close_hour > 24:
             close_hour_adjusted = close_hour % 24
             # Open if: time >= open_hour OR time < close_hour_adjusted
-            return time_of_day >= open_hour or time_of_day < close_hour_adjusted
+            return bool(time_of_day >= open_hour or time_of_day < close_hour_adjusted)
         else:
             # Normal hours: time >= open_hour AND time < close_hour
-            return open_hour <= time_of_day < close_hour
+            return bool(open_hour <= time_of_day < close_hour)
 
     def apply_instant_interaction(
         self,
@@ -148,15 +156,36 @@ class AffordanceEngine:
             can_afford = self._check_affordability(meters, affordance.costs)
             agent_mask = agent_mask & can_afford
 
-        # Apply costs
+        # Apply costs (modern dict format)
         for cost in affordance.costs:
-            meter_idx = self.meter_name_to_idx[cost.meter]
-            updated_meters[agent_mask, meter_idx] -= cost.amount
+            meter_idx = self.meter_name_to_idx[cost["meter"]]
+            updated_meters[agent_mask, meter_idx] -= cost["amount"]
 
-        # Apply effects
-        for effect in affordance.effects:
-            meter_idx = self.meter_name_to_idx[effect.meter]
-            updated_meters[agent_mask, meter_idx] += effect.amount
+        # Apply effects from effect_pipeline (modern schema only)
+        if hasattr(affordance, "effect_pipeline") and affordance.effect_pipeline:
+            on_start = getattr(affordance.effect_pipeline, "on_start", [])
+
+            # For dual-mode affordances, if on_start is empty, simulate full multi-tick cycle
+            if not on_start and affordance.interaction_type == "dual":
+                # Get duration and per_tick effects
+                duration = self.get_duration_ticks(affordance_name)
+                per_tick = getattr(affordance.effect_pipeline, "per_tick", [])
+                on_completion = getattr(affordance.effect_pipeline, "on_completion", [])
+
+                # Apply per_tick effects × duration
+                for effect in per_tick:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    updated_meters[agent_mask, meter_idx] += effect.amount * duration
+
+                # Apply completion bonus
+                for effect in on_completion:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    updated_meters[agent_mask, meter_idx] += effect.amount
+            else:
+                # Apply on_start effects (instant-mode affordances)
+                for effect in on_start:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    updated_meters[agent_mask, meter_idx] += effect.amount
 
         # Clamp meters to [0, 1]
         updated_meters = torch.clamp(updated_meters, 0.0, 1.0)
@@ -177,7 +206,7 @@ class AffordanceEngine:
         Args:
             meters: [num_agents, 8] current meter values
             affordance_name: Name of affordance (e.g., "Bed", "Job")
-            current_tick: Current tick number [0, required_ticks-1]
+            current_tick: Current tick number [0, duration_ticks-1]
             agent_mask: [num_agents] bool mask of agents to apply to
             check_affordability: If True, check if agents can afford costs
 
@@ -202,22 +231,25 @@ class AffordanceEngine:
             can_afford = self._check_affordability(meters, affordance.costs_per_tick)
             agent_mask = agent_mask & can_afford
 
-        # Apply per-tick costs
+        # Apply per-tick costs (modern dict format)
         for cost in affordance.costs_per_tick:
-            meter_idx = self.meter_name_to_idx[cost.meter]
-            updated_meters[agent_mask, meter_idx] -= cost.amount
+            meter_idx = self.meter_name_to_idx[cost["meter"]]
+            updated_meters[agent_mask, meter_idx] -= cost["amount"]
 
-        # Apply per-tick effects
-        for effect in affordance.effects_per_tick:
-            meter_idx = self.meter_name_to_idx[effect.meter]
-            updated_meters[agent_mask, meter_idx] += effect.amount
+        # Apply per-tick effects from effect_pipeline (modern schema: AffordanceEffect objects)
+        if hasattr(affordance, "effect_pipeline") and affordance.effect_pipeline:
+            per_tick_effects = getattr(affordance.effect_pipeline, "per_tick", [])
+            for effect in per_tick_effects:
+                meter_idx = self.meter_name_to_idx[effect.meter]
+                updated_meters[agent_mask, meter_idx] += effect.amount
 
-        required_ticks = affordance.required_ticks or 1
+        duration_ticks = affordance.duration_ticks or 1
 
         # Check if this is the final tick - if so, apply completion bonus
-        is_final_tick = current_tick == (required_ticks - 1)
-        if is_final_tick and len(affordance.completion_bonus) > 0:
-            for effect in affordance.completion_bonus:
+        is_final_tick = current_tick == (duration_ticks - 1)
+        if is_final_tick and hasattr(affordance, "effect_pipeline") and affordance.effect_pipeline:
+            on_completion = getattr(affordance.effect_pipeline, "on_completion", [])
+            for effect in on_completion:
                 meter_idx = self.meter_name_to_idx[effect.meter]
                 updated_meters[agent_mask, meter_idx] += effect.amount
 
@@ -232,7 +264,7 @@ class AffordanceEngine:
 
         Args:
             meters: [batch_size, 8] current meter values
-            costs: List of AffordanceCost objects
+            costs: List of cost dicts with 'meter' and 'amount' keys
 
         Returns:
             can_afford: [batch_size] bool tensor
@@ -241,8 +273,8 @@ class AffordanceEngine:
         can_afford = torch.ones(batch_size, dtype=torch.bool, device=self.device)
 
         for cost in costs:
-            meter_idx = self.meter_name_to_idx[cost.meter]
-            can_afford = can_afford & (meters[:, meter_idx] >= cost.amount)
+            meter_idx = self.meter_name_to_idx[cost["meter"]]
+            can_afford = can_afford & (meters[:, meter_idx] >= cost["amount"])
 
         return can_afford
 
@@ -338,30 +370,30 @@ class AffordanceEngine:
         if affordance is None:
             return 0.0
 
-        # Get costs list based on mode
+        # Get costs list based on mode (modern dict format)
         costs = affordance.costs if cost_mode == "instant" else affordance.costs_per_tick
 
         # Find money cost (most affordances only have money cost)
         for cost in costs:
-            if cost.meter == "money":
-                return cost.amount
+            if cost["meter"] == "money":
+                return float(cost["amount"])
 
         return 0.0
 
-    def get_required_ticks(self, affordance_name: str) -> int:
+    def get_duration_ticks(self, affordance_name: str) -> int:
         """
-        Get the required number of ticks for a multi-tick affordance.
+        Get the duration in ticks for a multi-tick affordance.
 
         Args:
             affordance_name: Name of affordance
 
         Returns:
-            Number of required ticks (1 for instant affordances)
+            Number of duration ticks (1 for instant affordances)
         """
         affordance = self.affordance_map.get(affordance_name)
-        if affordance is None or affordance.required_ticks is None:
+        if affordance is None or affordance.duration_ticks is None:
             return 1
-        return affordance.required_ticks
+        return int(affordance.duration_ticks)
 
     def apply_interaction(
         self,
@@ -396,19 +428,48 @@ class AffordanceEngine:
         # Clone meters to avoid in-place modification
         result_meters = meters.clone()
 
-        # Apply effects (all affordances in corrected config are instant)
-        for effect in affordance.effects:
-            meter_idx = self.meter_name_to_idx[effect.meter]
-            result_meters[agent_mask, meter_idx] = torch.clamp(
-                result_meters[agent_mask, meter_idx] + effect.amount,
-                0.0,
-                1.0,
-            )
+        # Apply effects from effect_pipeline (modern schema: AffordanceEffect objects)
+        if hasattr(affordance, "effect_pipeline") and affordance.effect_pipeline:
+            pipeline = affordance.effect_pipeline
 
-        # Apply costs
+            # For dual-mode affordances with no on_start, synthesize instant effects
+            # from per_tick (scaled by duration) + on_completion
+            if affordance.interaction_type == "dual" and not pipeline.on_start and (pipeline.per_tick or pipeline.on_completion):
+                duration = affordance.duration_ticks or 1
+
+                # Apply scaled per_tick effects
+                for effect in pipeline.per_tick:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    total_effect = effect.amount * duration
+                    result_meters[agent_mask, meter_idx] = torch.clamp(
+                        result_meters[agent_mask, meter_idx] + total_effect,
+                        0.0,
+                        1.0,
+                    )
+
+                # Apply completion effects
+                for effect in pipeline.on_completion:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    result_meters[agent_mask, meter_idx] = torch.clamp(
+                        result_meters[agent_mask, meter_idx] + effect.amount,
+                        0.0,
+                        1.0,
+                    )
+            else:
+                # Standard instant mode: use on_start effects
+                on_start = getattr(pipeline, "on_start", [])
+                for effect in on_start:
+                    meter_idx = self.meter_name_to_idx[effect.meter]
+                    result_meters[agent_mask, meter_idx] = torch.clamp(
+                        result_meters[agent_mask, meter_idx] + effect.amount,
+                        0.0,
+                        1.0,
+                    )
+
+        # Apply costs (modern dict format)
         for cost in affordance.costs:
-            meter_idx = self.meter_name_to_idx[cost.meter]
-            result_meters[agent_mask, meter_idx] -= cost.amount
+            meter_idx = self.meter_name_to_idx[cost["meter"]]
+            result_meters[agent_mask, meter_idx] -= cost["amount"]
 
         return result_meters
 

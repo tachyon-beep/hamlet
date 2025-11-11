@@ -1,49 +1,33 @@
-# Level 1.1: Full Observability - Integration Test
-#
-# Lite version for automated testing (200 episodes, ~5 minutes)
-#
-# See docs/TRAINING_LEVELS.md for full Level 1 specification.
-# This config validates that basic training works end-to-end.
-
 run_metadata:
   output_subdir: test_level_1
-
-# Environment configuration
 environment:
   grid_size: 8
-  partial_observability: false  # LEVEL 1: Agent sees full grid
+  partial_observability: false
   vision_range: 8
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
-
-# Population configuration
 population:
   num_agents: 1
   learning_rate: 0.00025
   gamma: 0.99
-  replay_buffer_capacity: 2000  # Reduced for lite version
-  network_type: simple  # Standard MLP Q-Network
-
-# Curriculum configuration
+  replay_buffer_capacity: 2000
+  network_type: simple
 curriculum:
-  max_steps_per_episode: 200  # Reduced from 500
+  max_steps_per_episode: 200
   survival_advance_threshold: 0.7
   survival_retreat_threshold: 0.3
   entropy_gate: 0.5
-  min_steps_at_stage: 50  # Reduced from 1000
-
-# Exploration configuration
+  min_steps_at_stage: 50
 exploration:
   embed_dim: 128
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
-  survival_window: 50  # Reduced from 100
+  survival_window: 50
   epsilon_start: 1.0
-  epsilon_min: 0.1  # Higher min for faster convergence
+  epsilon_min: 0.1
   epsilon_decay: 0.99
-
-# Training configuration
+  min_survival_fraction: 0.5
 training:
   device: cuda
-  max_episodes: 200  # Integration test: ~5 minutes
+  max_episodes: 200

@@ -10,11 +10,11 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 8
   partial_observability: false  # LEVEL 1: Agent sees full grid
   vision_range: 8
   enable_temporal_mechanics: false
   enabled_affordances: null  # All 14 affordances
+  randomize_affordances: true
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
@@ -26,6 +26,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 2000  # Reduced for lite version
   network_type: simple  # Standard MLP Q-Network
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration
 curriculum:
@@ -40,6 +41,7 @@ exploration:
   embed_dim: 128
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 50  # Reduced from 100
 
 # Training configuration
@@ -51,6 +53,10 @@ training:
   batch_size: 64
   sequence_length: 8
   max_grad_norm: 10.0
+  use_double_dqn: false  # Vanilla DQN for test baseline
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
   epsilon_start: 1.0
   epsilon_decay: 0.99
   epsilon_min: 0.1  # Higher min for faster convergence

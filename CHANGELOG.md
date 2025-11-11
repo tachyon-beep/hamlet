@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Phase 5 universe compiler DTOs under `townlet.universe.dto` (observation, action, meter, affordance, and universe metadata) with accompanying unit tests.
 - New `CuesConfig` DTO/loader plus config-pack fixtures ensuring cues schemas are validated alongside other UAC artifacts.
+- `training.enabled_actions` parser plus compiler/runtime plumbing so config packs can mask actions without touching code; `VectorizedHamletEnv` now derives masks from compiled metadata.
 
 ### Changed
 

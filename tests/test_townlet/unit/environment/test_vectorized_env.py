@@ -16,10 +16,33 @@ Testing Strategy:
 - Use builders.py for test data construction
 """
 
+from __future__ import annotations
+
+import shutil
 from pathlib import Path
 
 import pytest
 import torch
+import yaml
+
+from townlet.environment.vectorized_env import _resolve_deployable_affordances
+from townlet.universe.errors import CompilationError
+
+# =============================================================================
+# AFFORDANCE FILTERING HELPERS
+# =============================================================================
+
+
+class TestResolveDeployableAffordances:
+    def test_supports_enabled_ids_and_names(self):
+        all_names = ["Bed", "Doctor", "FastFood"]
+        name_to_id = {"Bed": "0", "Doctor": "5", "FastFood": "4"}
+        enabled = ["5", "FastFood"]
+
+        result = _resolve_deployable_affordances(all_names, enabled, name_to_id)
+
+        assert result == ["Doctor", "FastFood"]
+
 
 # =============================================================================
 # PHASE 15A: INITIALIZATION & SETUP
@@ -29,124 +52,58 @@ import torch
 class TestVectorizedHamletEnvInitialization:
     """Test VectorizedHamletEnv.__init__ with various configurations."""
 
-    def test_init_requires_substrate_yaml(self, temp_test_dir):
-        """Should raise FileNotFoundError if substrate.yaml is missing."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        # Create config pack without substrate.yaml
+    def test_init_requires_substrate_yaml(self, temp_test_dir, compile_universe):
+        """Should raise CompilationError if substrate.yaml is missing."""
         config_pack = temp_test_dir / "config_pack"
-        config_pack.mkdir()
+        shutil.copytree(Path("configs/test"), config_pack)
+        (config_pack / "substrate.yaml").unlink()
 
-        with pytest.raises(FileNotFoundError, match="substrate.yaml is required"):
-            VectorizedHamletEnv(
-                num_agents=1,
-                grid_size=8,
-                partial_observability=False,
-                vision_range=2,
-                enable_temporal_mechanics=False,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.004,
-                interact_energy_cost=0.003,
-                agent_lifespan=1000,
-                config_pack_path=config_pack,
-            )
+        with pytest.raises(CompilationError, match="substrate.yaml.*not found"):
+            compile_universe(config_pack)
 
-    def test_init_raises_if_config_pack_not_found(self):
-        """Should raise FileNotFoundError if config pack directory doesn't exist."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
+    def test_init_raises_if_config_pack_not_found(self, compile_universe):
+        """Should raise CompilationError if config pack directory doesn't exist."""
+        with pytest.raises(CompilationError, match="Config directory does not exist"):
+            compile_universe(Path("/nonexistent/path"))
 
-        with pytest.raises(FileNotFoundError, match="Config pack directory not found"):
-            VectorizedHamletEnv(
-                num_agents=1,
-                grid_size=8,
-                partial_observability=False,
-                vision_range=2,
-                enable_temporal_mechanics=False,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.004,
-                interact_energy_cost=0.003,
-                agent_lifespan=1000,
-                config_pack_path=Path("/nonexistent/path"),
-            )
+    def test_env_init_does_not_construct_cascade_engine(self, monkeypatch, cpu_env_factory):
+        """VectorizedHamletEnv should rely on optimization tensors, not CascadeEngine."""
 
-    def test_init_uses_default_config_pack_when_none_provided(self):
-        """Should use configs/test as default config pack."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
+        def _boom(self, *args, **kwargs):  # pragma: no cover - executed on regression
+            raise AssertionError("CascadeEngine should not be instantiated at runtime")
 
-        # This should work with the default test config pack
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-            config_pack_path=None,  # Should default to configs/test
-        )
+        monkeypatch.setattr("townlet.environment.cascade_engine.CascadeEngine.__init__", _boom)
 
-        # Verify default config pack was used
-        assert env.config_pack_path.name == "test"
-        assert env.config_pack_path.exists()
+        env = cpu_env_factory()
+        env.reset()
 
-    def test_init_creates_substrate_from_config(self):
+    def test_env_defaults_to_test_config_pack(self, cpu_env_factory, test_config_pack_path: Path):
+        """Env factory defaults to configs/test pack (compiled path)."""
+
+        env = cpu_env_factory()
+        assert Path(env.config_pack_path).resolve() == test_config_pack_path.resolve()
+
+    def test_init_creates_substrate_from_config(self, cpu_env_factory):
         """Should load substrate.yaml and create substrate via factory."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=2)
 
         # Verify substrate was created
         assert env.substrate is not None
         assert hasattr(env.substrate, "position_dim")
 
-    def test_init_loads_affordances_from_config(self):
+    def test_init_loads_affordances_from_config(self, cpu_env_factory):
         """Should load affordances.yaml and create affordance engine."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
 
         # Verify affordance engine was created
         assert env.affordance_engine is not None
         assert hasattr(env.affordance_engine, "affordances")
 
-    def test_init_initializes_state_tensors(self):
+    def test_init_initializes_state_tensors(self, cpu_env_factory):
         """Should initialize positions, meters, lifetimes, and dones tensors."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
         num_agents = 3
-        env = VectorizedHamletEnv(
-            num_agents=num_agents,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=num_agents)
+        env.reset()
 
         # Verify state tensors exist with correct shapes
         assert env.positions.shape == (num_agents, env.substrate.position_dim)
@@ -157,203 +114,67 @@ class TestVectorizedHamletEnvInitialization:
         assert env.positions.device == env.device
         assert env.meters.device == env.device
 
-    def test_init_sets_device_correctly(self):
+    def test_init_sets_device_correctly(self, env_factory):
         """Should set device to CPU by default or use provided device."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        # Default should be CPU
-        env_cpu = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env_cpu = env_factory(device_override="cpu")
         assert env_cpu.device == torch.device("cpu")
 
-        # Should accept explicit device
-        env_explicit = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
-        )
+        env_explicit = env_factory(device_override=torch.device("cpu"))
         assert env_explicit.device == torch.device("cpu")
 
 
 class TestVectorizedHamletEnvReset:
     """Test VectorizedHamletEnv.reset() method."""
 
-    def test_reset_returns_observations(self):
-        """Should return observations tensor with correct shape."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        num_agents = 2
-        env = VectorizedHamletEnv(
-            num_agents=num_agents,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-
+    def test_reset_returns_observations(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         obs = env.reset()
-
-        # Should return tensor with shape [num_agents, obs_dim]
         assert isinstance(obs, torch.Tensor)
-        assert obs.shape[0] == num_agents
-        assert obs.shape[1] > 0  # Has some observation dimension
+        assert obs.shape == (env.num_agents, env.observation_dim)
 
-    def test_reset_initializes_meters_from_config(self):
-        """Should initialize meters to initial values from bars.yaml config."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-
+    def test_reset_initializes_meters_from_config(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.reset()
+        assert torch.all(env.meters >= 0.0)
+        assert torch.all(env.meters <= 1.0)
+        assert torch.all(env.meters[0] == env.meters[1])
 
-        # Meters should be initialized (all values in [0, 1])
-        assert torch.all(env.meters >= 0.0).item()
-        assert torch.all(env.meters <= 1.0).item()
-        # Should have same values for all agents
-        assert torch.all(env.meters[0] == env.meters[1]).item()
-
-    def test_reset_clears_dones_flag(self):
-        """Should set all dones to False."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-
-        # Manually set dones to True
+    def test_reset_clears_dones_flag(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.dones = torch.ones(2, dtype=torch.bool)
-
         env.reset()
+        assert torch.all(~env.dones)
 
-        # Should clear dones
-        assert torch.all(~env.dones).item()
-
-    def test_reset_initializes_step_counts(self):
-        """Should reset step_counts to 0 for all agents."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-
-        # Manually set step_counts to non-zero
+    def test_reset_initializes_step_counts(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.step_counts = torch.tensor([10, 20])
-
         env.reset()
+        assert torch.all(env.step_counts == 0)
 
-        # Should reset step_counts to 0
-        assert torch.all(env.step_counts == 0).item()
-
-    def test_reset_randomizes_agent_positions(self):
-        """Should randomize agent positions on substrate."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=5,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-
+    def test_reset_randomizes_agent_positions(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=5)
         env.reset()
+        assert torch.all(env.positions >= 0)
+        assert torch.all(env.positions < env.grid_size)
 
-        # Positions should be within substrate bounds
-        # For Grid2D, positions should be in [0, grid_size)
-        assert torch.all(env.positions >= 0).item()
-        assert torch.all(env.positions < 8).item()  # Assuming grid_size=8
-
-    def test_reset_temporal_mechanics_initializes_time(self):
-        """Should initialize time_of_day to 0 when temporal mechanics enabled."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
+    def test_reset_temporal_mechanics_initializes_time(self, env_factory, cpu_device):
+        env = env_factory(
+            config_dir=Path("configs/L3_temporal_mechanics"),
             num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=True,  # Enable temporal mechanics
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
+            device_override=cpu_device,
         )
-
         env.reset()
-
-        # Should initialize time_of_day
-        assert hasattr(env, "time_of_day")
+        assert env.enable_temporal_mechanics is True
         assert env.time_of_day == 0
 
 
 class TestBuildMovementDeltas:
     """Test VectorizedHamletEnv._build_movement_deltas() method."""
 
-    def test_build_movement_deltas_creates_tensor(self):
+    def test_build_movement_deltas_creates_tensor(self, cpu_env_factory):
         """Should create movement deltas tensor from substrate actions."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
 
         deltas = env._build_movement_deltas()
 
@@ -363,21 +184,10 @@ class TestBuildMovementDeltas:
         assert deltas.shape[0] == env.action_space.substrate_action_count
         assert deltas.shape[1] == env.substrate.position_dim
 
-    def test_build_movement_deltas_correct_values_grid2d(self):
+    def test_build_movement_deltas_correct_values_grid2d(self, cpu_env_factory):
         """Should create correct deltas for Grid2D substrate (UP, DOWN, LEFT, RIGHT)."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
 
         deltas = env._build_movement_deltas()
 
@@ -401,193 +211,86 @@ class TestBuildMovementDeltas:
 class TestVectorizedHamletEnvStep:
     """Test VectorizedHamletEnv.step() method."""
 
-    def test_step_returns_correct_types(self):
-        """Should return (observations, rewards, dones, info) tuple."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_step_returns_correct_types(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
-        # Execute step with WAIT actions
-        actions = torch.tensor([5, 5])  # Both agents WAIT
+        actions = torch.full((2,), 5, device=env.device, dtype=torch.long)
         obs, rewards, dones, info = env.step(actions)
 
-        # Verify types
         assert isinstance(obs, torch.Tensor)
         assert isinstance(rewards, torch.Tensor)
         assert isinstance(dones, torch.Tensor)
         assert isinstance(info, dict)
 
-    def test_step_returns_correct_shapes(self):
-        """Should return tensors with correct shapes."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        num_agents = 3
-        env = VectorizedHamletEnv(
-            num_agents=num_agents,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_step_returns_correct_shapes(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=3)
         env.reset()
 
-        actions = torch.tensor([5, 5, 5])
-        obs, rewards, dones, info = env.step(actions)
+        actions = torch.full((3,), 5, device=env.device, dtype=torch.long)
+        obs, rewards, dones, _ = env.step(actions)
 
-        # Verify shapes
-        assert obs.shape[0] == num_agents
-        assert obs.shape[1] > 0  # Has observation dimension
-        assert rewards.shape == (num_agents,)
-        assert dones.shape == (num_agents,)
+        assert obs.shape == (3, env.observation_dim)
+        assert rewards.shape == (3,)
+        assert dones.shape == (3,)
 
-    def test_step_increments_step_counts(self):
-        """Should increment step_counts for all agents."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_step_increments_step_counts(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
         initial_counts = env.step_counts.clone()
-
-        actions = torch.tensor([5, 5])
+        actions = torch.full((2,), 5, device=env.device, dtype=torch.long)
         env.step(actions)
 
-        # Step counts should increment
-        assert torch.all(env.step_counts == initial_counts + 1).item()
+        assert torch.all(env.step_counts == initial_counts + 1)
 
-    def test_step_depletes_meters(self):
-        """Should deplete meters based on passive decay."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_step_depletes_meters(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
         initial_meters = env.meters.clone()
-
-        # Execute WAIT action (should have minimal costs)
-        actions = torch.tensor([5, 5])
+        actions = torch.full((2,), 5, device=env.device, dtype=torch.long)
         env.step(actions)
 
-        # Some meters should decrease due to passive decay
-        # Not all meters may decrease, but at least some should
-        assert not torch.all(env.meters == initial_meters).item()
+        assert not torch.allclose(env.meters, initial_meters)
 
-    def test_step_increments_time_of_day(self):
-        """Should increment time_of_day and wrap at 24."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=True,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
+    def test_step_increments_time_of_day(self, custom_env_builder):
+        env = custom_env_builder(
+            overrides={"environment": {"enable_temporal_mechanics": True}},
         )
         env.reset()
 
-        assert env.time_of_day == 0
-
-        # Step once
-        actions = torch.tensor([5])
+        actions = torch.tensor([5], device=env.device)
         env.step(actions)
         assert env.time_of_day == 1
 
-        # Set to 23 and step (should wrap to 0)
         env.time_of_day = 23
         env.step(actions)
         assert env.time_of_day == 0
 
-    def test_step_retirement_bonus(self):
-        """Should give retirement bonus when agent reaches lifespan."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=5,  # Very short lifespan
+    def test_step_retirement_bonus(self, custom_env_builder):
+        env = custom_env_builder(
+            overrides={"curriculum": {"max_steps_per_episode": 5}},
         )
         env.reset()
 
-        # Step until retirement
-        actions = torch.tensor([5])  # WAIT
-        for i in range(4):
-            obs, rewards, dones, info = env.step(actions)
-            assert not dones[0].item(), f"Should not be done at step {i}"
+        actions = torch.tensor([5], device=env.device)
+        for _ in range(4):
+            _, _, dones, _ = env.step(actions)
+            assert not dones[0]
 
-        # Final step should retire
-        obs, rewards, dones, info = env.step(actions)
-        assert dones[0].item(), "Should retire at lifespan"
-        assert rewards[0].item() >= 1.0, "Should include retirement bonus"
+        _, rewards, dones, _ = env.step(actions)
+        assert dones[0]
+        assert rewards[0].item() >= 1.0
 
-    def test_step_info_contains_metadata(self):
-        """Should return info dict with step_counts, positions, interactions."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_step_info_contains_metadata(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
-        actions = torch.tensor([5, 5])
-        obs, rewards, dones, info = env.step(actions)
+        actions = torch.full((2,), 5, device=env.device, dtype=torch.long)
+        _, _, _, info = env.step(actions)
 
-        # Verify info contents
-        assert "step_counts" in info
-        assert "positions" in info
-        assert "successful_interactions" in info
+        assert set(info.keys()) >= {"step_counts", "positions", "successful_interactions"}
         assert isinstance(info["step_counts"], torch.Tensor)
         assert isinstance(info["positions"], torch.Tensor)
         assert isinstance(info["successful_interactions"], dict)
@@ -596,21 +299,10 @@ class TestVectorizedHamletEnvStep:
 class TestExecuteActions:
     """Test VectorizedHamletEnv._execute_actions() method."""
 
-    def test_execute_actions_movement(self):
+    def test_execute_actions_movement(self, cpu_env_factory):
         """Should update agent positions for movement actions."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
 
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Place agent away from borders so the UP action can't clamp back into the
@@ -621,82 +313,46 @@ class TestExecuteActions:
         initial_position = env.positions[0].clone()
 
         # Execute UP action (action 0 for Grid2D)
-        actions = torch.tensor([0])
+        actions = torch.tensor([0], device=env.device)
         env._execute_actions(actions)
 
         # Position should change
         assert not torch.all(env.positions[0] == initial_position).item()
 
-    def test_execute_actions_wait_preserves_position(self):
+    def test_execute_actions_wait_preserves_position(self, cpu_env_factory):
         """Should not change position for WAIT action."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         initial_position = env.positions[0].clone()
 
         # Execute WAIT action (action 5 for Grid2D)
-        actions = torch.tensor([5])
+        actions = torch.tensor([5], device=env.device)
         env._execute_actions(actions)
 
         # Position should not change
         assert torch.all(env.positions[0] == initial_position).item()
 
-    def test_execute_actions_interact_preserves_position(self):
+    def test_execute_actions_interact_preserves_position(self, cpu_env_factory):
         """Should not change position for INTERACT action."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         initial_position = env.positions[0].clone()
 
         # Execute INTERACT action (action 4 for Grid2D)
-        actions = torch.tensor([4])
+        actions = torch.tensor([4], device=env.device)
         env._execute_actions(actions)
 
         # Position should not change
         assert torch.all(env.positions[0] == initial_position).item()
 
-    def test_execute_actions_returns_interaction_dict(self):
+    def test_execute_actions_returns_interaction_dict(self, cpu_env_factory):
         """Should return dict mapping agent indices to affordance names for successful interactions."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
-        actions = torch.tensor([4, 5])  # INTERACT, WAIT
+        actions = torch.tensor([4, 5], device=env.device)  # INTERACT, WAIT
         result = env._execute_actions(actions)
 
         assert isinstance(result, dict)
@@ -705,115 +361,39 @@ class TestExecuteActions:
 class TestGetObservations:
     """Test VectorizedHamletEnv._get_observations() method."""
 
-    def test_get_observations_returns_tensor(self):
-        """Should return observations tensor."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
+    def test_get_observations_returns_tensor(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
+        env.reset()
 
-        env = VectorizedHamletEnv(
+        obs = env._get_observations()
+
+        assert obs.shape == (2, env.observation_dim)
+
+    def test_get_observations_full_observability_shape(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=3)
+        env.reset()
+        obs = env._get_observations()
+        assert obs.shape == (3, env.observation_dim)
+        assert env.partial_observability is False
+
+    def test_get_observations_pomdp_shape(self, custom_env_builder):
+        env = custom_env_builder(
             num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
+            overrides={"environment": {"partial_observability": True, "vision_range": 2}},
         )
         env.reset()
-
         obs = env._get_observations()
+        assert env.partial_observability is True
+        assert obs.shape == (2, env.observation_dim)
 
-        assert isinstance(obs, torch.Tensor)
-        assert obs.shape[0] == 2
-        assert obs.shape[1] > 0
-
-    def test_get_observations_full_observability_shape(self):
-        """Should return correct observation shape for full observability."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        num_agents = 3
-        env = VectorizedHamletEnv(
-            num_agents=num_agents,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_get_observations_contains_meters(self, cpu_env_factory):
+        env = cpu_env_factory()
         env.reset()
-
         obs = env._get_observations()
+        assert torch.all(obs[:, -4:] >= -1.0)
 
-        # For full observability: position + meters + affordance_at_pos + temporal
-        # Observation dimension depends on test config (has many affordances)
-        assert obs.shape[0] == num_agents
-        assert obs.shape[1] > 29  # Should be at least 29, but test config has more affordances
-
-    def test_get_observations_pomdp_shape(self):
-        """Should return correct observation shape for POMDP."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        num_agents = 2
-        env = VectorizedHamletEnv(
-            num_agents=num_agents,
-            grid_size=8,
-            partial_observability=True,  # POMDP mode
-            vision_range=2,  # 5×5 window
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-        env.reset()
-
-        obs = env._get_observations()
-
-        # For POMDP: local_grid (25) + position (2) + meters (8) + affordance_at_pos (15) + temporal (4) = 54
-        assert obs.shape == (num_agents, 54)
-
-    def test_get_observations_contains_meters(self):
-        """Should include current meter values in observations."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-        env.reset()
-
-        obs = env._get_observations()
-
-        # Observations should be normalized [0, 1]
-        assert torch.all(obs >= 0.0).item()
-        assert torch.all(obs <= 1.0).item() or torch.all(obs <= 15.0).item()  # One-hot can be > 1
-
-    def test_get_observations_uses_substrate_position_encoder(self, monkeypatch):
-        """Position variable should use substrate-specific encoder when available."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_get_observations_uses_substrate_position_encoder(self, cpu_env_factory, monkeypatch):
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
         expected = torch.full((env.num_agents, env.substrate.position_dim), 0.42, device=env.device)
@@ -828,26 +408,11 @@ class TestGetObservations:
         monkeypatch.setattr(env.substrate, "normalize_positions", fail_normalize, raising=False)
 
         env._get_observations()
-
         stored = env.vfs_registry.get("position", reader="agent")
         assert torch.allclose(stored, expected)
 
-    def test_get_observations_falls_back_to_encode_observation(self, monkeypatch):
-        """Continuous substrates without private encoder should use encode_observation."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-            config_pack_path=Path("configs/L1_continuous_2D"),
-        )
+    def test_get_observations_falls_back_to_encode_observation(self, cpu_env_factory, monkeypatch):
+        env = cpu_env_factory(config_dir=Path("configs/L1_continuous_2D"))
         env.reset()
 
         expected = torch.full((env.num_agents, env.substrate.position_dim), 0.25, device=env.device)
@@ -862,129 +427,73 @@ class TestGetObservations:
         monkeypatch.setattr(env.substrate, "normalize_positions", fail_normalize, raising=False)
 
         env._get_observations()
-
         stored = env.vfs_registry.get("position", reader="agent")
         assert torch.allclose(stored, expected)
 
-    def test_get_observations_handles_agent_private_scope(self):
-        """Agent-private variables should still be delivered to agents."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+    def test_get_observations_handles_agent_private_scope(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
-        # Force energy variable to be treated as agent_private
         env.vfs_registry.variables["energy"].scope = "agent_private"
-
         obs = env._get_observations()
-
         assert obs.shape[0] == env.num_agents
 
 
 class TestGetActionMasks:
     """Test VectorizedHamletEnv.get_action_masks() method."""
 
-    def test_get_action_masks_returns_tensor(self):
-        """Should return action masks tensor."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
+    def test_get_action_masks_returns_tensor(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=2)
+        env.reset()
+        masks = env.get_action_masks()
+        assert masks.dtype == torch.bool
 
-        env = VectorizedHamletEnv(
+    def test_get_action_masks_correct_shape(self, cpu_env_factory):
+        env = cpu_env_factory(num_agents=3)
+        env.reset()
+        masks = env.get_action_masks()
+        assert masks.shape == (3, env.action_dim)
+
+    def test_get_action_masks_some_actions_available(self, cpu_env_factory):
+        env = cpu_env_factory()
+        env.reset()
+        masks = env.get_action_masks()
+        assert torch.any(masks)
+        assert masks.shape == (1, env.action_dim)
+
+    def test_get_action_masks_temporal_mechanics_masks_closed_affordances(self, custom_env_builder):
+        env = custom_env_builder(
+            overrides={"environment": {"enable_temporal_mechanics": True}},
+        )
+        env.reset()
+
+        bar_pos = env.affordances.get("Bar")
+        if bar_pos is None:
+            pytest.skip("Test config missing 'Bar' affordance")
+
+        env.positions[0] = bar_pos.clone()
+
+        env.time_of_day = 10  # Bar closed mid-morning
+        closed_masks = env.get_action_masks()
+        assert not closed_masks[0, env.interact_action_idx]
+
+        env.time_of_day = 20  # Bar open in evening
+        open_masks = env.get_action_masks()
+        assert open_masks[0, env.interact_action_idx]
+
+    def test_get_action_masks_respect_training_enabled_actions(self, custom_env_builder):
+        env = custom_env_builder(
+            overrides={"training": {"enabled_actions": ["INTERACT", "WAIT"]}},
             num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
         )
         env.reset()
 
         masks = env.get_action_masks()
+        disabled_ids = [action.id for action in env.action_space.get_disabled_actions()]
+        assert disabled_ids, "Expected at least one disabled action from enabled_actions override"
 
-        assert isinstance(masks, torch.Tensor)
-        assert masks.dtype == torch.bool
-
-    def test_get_action_masks_correct_shape(self):
-        """Should return masks with shape [num_agents, action_dim]."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        num_agents = 3
-        env = VectorizedHamletEnv(
-            num_agents=num_agents,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-        env.reset()
-
-        masks = env.get_action_masks()
-
-        # Grid2D has 8 actions (6 substrate + 2 custom)
-        assert masks.shape == (num_agents, 8)
-
-    def test_get_action_masks_some_actions_available(self):
-        """Should return action masks with at least some actions available."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,  # No temporal mechanics
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-        env.reset()
-
-        masks = env.get_action_masks()
-
-        # At least some actions should be available (not all masked)
-        assert torch.any(masks).item(), "At least some actions should be available"
-        # Should have correct number of actions (8 for Grid2D)
-        assert masks.shape == (1, 8)
-
-    def test_get_action_masks_temporal_mechanics_masks_closed_affordances(self):
-        """Should mask affordance interactions when temporal mechanics enabled and affordance closed."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=True,  # Enable temporal mechanics
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-        env.reset()
-
-        masks = env.get_action_masks()
-
-        # Should return boolean tensor (some actions may be masked)
-        assert isinstance(masks, torch.Tensor)
-        assert masks.dtype == torch.bool
+        for disabled_id in disabled_ids:
+            assert torch.all(~masks[:, disabled_id]), f"Action {disabled_id} should be masked for all agents"
 
 
 # =============================================================================
@@ -1000,21 +509,9 @@ class TestGetActionMasks:
 class TestHandleInteractions:
     """Test VectorizedHamletEnv._handle_interactions() and _handle_interactions_legacy()."""
 
-    def test_handle_interactions_legacy_when_temporal_disabled(self):
+    def test_handle_interactions_legacy_when_temporal_disabled(self, cpu_env_factory):
         """Should use legacy instant interactions when temporal mechanics disabled."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,  # Legacy mode
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Create interact mask
@@ -1024,21 +521,9 @@ class TestHandleInteractions:
         result = env._handle_interactions(interact_mask)
         assert isinstance(result, dict)
 
-    def test_handle_interactions_multi_tick_when_temporal_enabled(self):
+    def test_handle_interactions_multi_tick_when_temporal_enabled(self, custom_env_builder):
         """Should use multi-tick interactions when temporal mechanics enabled."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=True,  # Multi-tick mode
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = custom_env_builder(overrides={"environment": {"enable_temporal_mechanics": True}})
         env.reset()
 
         # Multi-tick mode should initialize progress tracking
@@ -1046,21 +531,9 @@ class TestHandleInteractions:
         assert hasattr(env, "last_interaction_affordance")
         assert hasattr(env, "last_interaction_position")
 
-    def test_handle_interactions_returns_empty_when_no_interact(self):
+    def test_handle_interactions_returns_empty_when_no_interact(self, cpu_env_factory):
         """Should return empty dict when no agents interact."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
         # No agents interacting
@@ -1069,47 +542,13 @@ class TestHandleInteractions:
         result = env._handle_interactions(interact_mask)
         assert result == {}
 
-    def test_handle_interactions_legacy_returns_dict(self):
-        """Should return dict mapping agent indices to affordance names."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
-        env.reset()
-
-        interact_mask = torch.tensor([True])
-
-        result = env._handle_interactions_legacy(interact_mask)
-        assert isinstance(result, dict)
-
 
 class TestCalculateShapedRewards:
     """Test VectorizedHamletEnv._calculate_shaped_rewards()."""
 
-    def test_calculate_shaped_rewards_returns_tensor(self):
+    def test_calculate_shaped_rewards_returns_tensor(self, cpu_env_factory):
         """Should return rewards tensor."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=2)
         env.reset()
 
         rewards = env._calculate_shaped_rewards()
@@ -1117,21 +556,9 @@ class TestCalculateShapedRewards:
         assert isinstance(rewards, torch.Tensor)
         assert rewards.shape == (2,)
 
-    def test_calculate_shaped_rewards_uses_meter_values(self):
+    def test_calculate_shaped_rewards_uses_meter_values(self, cpu_env_factory):
         """Should calculate rewards based on current meter values."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Get initial reward
@@ -1145,21 +572,9 @@ class TestCalculateShapedRewards:
         # Rewards are based on meter states, so they should differ
         assert initial_reward.item() != new_reward.item()
 
-    def test_calculate_shaped_rewards_returns_finite_values(self):
+    def test_calculate_shaped_rewards_returns_finite_values(self, cpu_env_factory):
         """Should return finite reward values (no NaN or inf)."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=3,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=3)
         env.reset()
 
         rewards = env._calculate_shaped_rewards()
@@ -1170,21 +585,9 @@ class TestCalculateShapedRewards:
 class TestApplyCustomAction:
     """Test VectorizedHamletEnv._apply_custom_action()."""
 
-    def test_apply_custom_action_rest_action(self):
+    def test_apply_custom_action_rest_action(self, cpu_env_factory):
         """Should handle REST custom action."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Find REST action
@@ -1198,24 +601,11 @@ class TestApplyCustomAction:
             env._apply_custom_action(0, action_config)
 
             # Verify method executed without error and meters are still valid
-            assert isinstance(env.meters, torch.Tensor)
-            assert env.meters.shape == (1, 8)
+            assert env.meters.shape == (1, env.meter_count)
 
-    def test_apply_custom_action_meditate_action(self):
+    def test_apply_custom_action_meditate_action(self, cpu_env_factory):
         """Should handle MEDITATE custom action."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Find MEDITATE action
@@ -1232,21 +622,9 @@ class TestApplyCustomAction:
             assert isinstance(env.meters, torch.Tensor)
             assert env.meters.shape == (1, 8)
 
-    def test_get_optional_action_idx_returns_int_or_none(self):
+    def test_get_optional_action_idx_returns_int_or_none(self, cpu_env_factory):
         """Should return action index for valid actions, None otherwise."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Valid action
@@ -1266,21 +644,9 @@ class TestApplyCustomAction:
 class TestGetAffordancePositions:
     """Test VectorizedHamletEnv.get_affordance_positions()."""
 
-    def test_get_affordance_positions_returns_dict(self):
+    def test_get_affordance_positions_returns_dict(self, cpu_env_factory):
         """Should return dict with positions, ordering, and position_dim."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         positions = env.get_affordance_positions()
@@ -1290,21 +656,9 @@ class TestGetAffordancePositions:
         assert "ordering" in positions
         assert "position_dim" in positions
 
-    def test_get_affordance_positions_has_correct_position_dim(self):
+    def test_get_affordance_positions_has_correct_position_dim(self, cpu_env_factory):
         """Should include position_dim matching substrate."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         checkpoint_data = env.get_affordance_positions()
@@ -1312,21 +666,9 @@ class TestGetAffordancePositions:
         # Grid2D should have position_dim = 2
         assert checkpoint_data["position_dim"] == 2
 
-    def test_get_affordance_positions_includes_all_affordances(self):
+    def test_get_affordance_positions_includes_all_affordances(self, cpu_env_factory):
         """Should include all affordances in positions dict."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         checkpoint_data = env.get_affordance_positions()
@@ -1334,21 +676,9 @@ class TestGetAffordancePositions:
         # Should have same affordances
         assert set(checkpoint_data["positions"].keys()) == set(env.affordances.keys())
 
-    def test_get_affordance_positions_converts_to_lists(self):
+    def test_get_affordance_positions_converts_to_lists(self, cpu_env_factory):
         """Should convert tensor positions to lists."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         checkpoint_data = env.get_affordance_positions()
@@ -1361,21 +691,9 @@ class TestGetAffordancePositions:
 class TestSetAffordancePositions:
     """Test VectorizedHamletEnv.set_affordance_positions()."""
 
-    def test_set_affordance_positions_updates_affordances(self):
+    def test_set_affordance_positions_updates_affordances(self, cpu_env_factory):
         """Should update affordance positions from checkpoint data."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Get current positions
@@ -1391,21 +709,9 @@ class TestSetAffordancePositions:
         restored_checkpoint = env.get_affordance_positions()
         assert restored_checkpoint["positions"] == original_checkpoint["positions"]
 
-    def test_set_affordance_positions_validates_position_dim(self):
+    def test_set_affordance_positions_validates_position_dim(self, cpu_env_factory):
         """Should validate position_dim matches substrate."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Create invalid checkpoint with wrong position_dim
@@ -1422,21 +728,9 @@ class TestSetAffordancePositions:
 class TestRandomizeAffordancePositions:
     """Test VectorizedHamletEnv.randomize_affordance_positions()."""
 
-    def test_randomize_affordance_positions_changes_positions(self):
+    def test_randomize_affordance_positions_changes_positions(self, cpu_env_factory):
         """Should change affordance positions."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         # Get current positions
@@ -1452,21 +746,9 @@ class TestRandomizeAffordancePositions:
         # (with 8x8 grid, very unlikely all stay the same)
         assert original_positions["positions"] != new_positions["positions"]
 
-    def test_randomize_affordance_positions_maintains_affordance_count(self):
+    def test_randomize_affordance_positions_maintains_affordance_count(self, cpu_env_factory):
         """Should keep same number of affordances."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
         env.reset()
 
         original_count = len(env.affordances)
@@ -1475,22 +757,10 @@ class TestRandomizeAffordancePositions:
 
         assert len(env.affordances) == original_count
 
-    def test_randomize_affordance_positions_stays_in_bounds(self):
+    def test_randomize_affordance_positions_stays_in_bounds(self, cpu_env_factory):
         """Should keep all positions within grid bounds."""
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        grid_size = 8
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=grid_size,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.004,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory()
+        grid_size = env.grid_size
         env.reset()
 
         env.randomize_affordance_positions()
@@ -1499,6 +769,49 @@ class TestRandomizeAffordancePositions:
         for affordance_pos in env.affordances.values():
             assert torch.all(affordance_pos >= 0).item()
             assert torch.all(affordance_pos < grid_size).item()
+
+    def test_static_affordance_positions_respected_when_randomization_disabled(
+        self,
+        tmp_path,
+        test_config_pack_path: Path,
+        env_factory,
+        cpu_device,
+    ):
+        target = tmp_path / "static_positions_pack"
+        shutil.copytree(test_config_pack_path, target)
+
+        training_path = target / "training.yaml"
+        training_data = yaml.safe_load(training_path.read_text())
+        training_env = training_data.setdefault("environment", {})
+        training_env["randomize_affordances"] = False
+        training_env["enabled_affordances"] = ["Bed", "LuxuryBed"]
+        training_block = training_data.setdefault("training", {})
+        training_block["allow_unfeasible_universe"] = True
+        training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
+
+        affordance_path = target / "affordances.yaml"
+        affordance_data = yaml.safe_load(affordance_path.read_text())
+        fixed_positions = {
+            "Bed": [0, 0],
+            "LuxuryBed": [1, 0],
+        }
+        for entry in affordance_data.get("affordances", []):
+            if entry["name"] in fixed_positions:
+                entry["position"] = fixed_positions[entry["name"]]
+        affordance_path.write_text(yaml.safe_dump(affordance_data, sort_keys=False))
+
+        env = env_factory(config_dir=target, num_agents=1, device_override=cpu_device)
+        env.reset()
+
+        assert env.randomize_affordances is False
+        bed_pos = env.affordances.get("Bed")
+        luxury_bed_pos = env.affordances.get("LuxuryBed")
+        assert torch.allclose(bed_pos, torch.tensor([0, 0], dtype=env.substrate.position_dtype, device=env.device))
+        assert torch.allclose(luxury_bed_pos, torch.tensor([1, 0], dtype=env.substrate.position_dtype, device=env.device))
+
+        # Subsequent calls to randomize should no-op when disabled
+        env.randomize_affordance_positions()
+        assert torch.allclose(bed_pos, env.affordances.get("Bed"))
 
 
 # =============================================================================

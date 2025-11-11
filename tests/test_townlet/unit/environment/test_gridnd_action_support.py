@@ -74,20 +74,17 @@ gridnd:
 
 
 @pytest.fixture
-def gridnd_env(gridnd_4d_config_pack: Path, cpu_device: torch.device) -> VectorizedHamletEnv:
+def gridnd_env(
+    gridnd_4d_config_pack: Path,
+    compile_universe,
+    cpu_device: torch.device,
+) -> VectorizedHamletEnv:
     """Instantiate a 4D GridND environment for action support tests."""
-    return VectorizedHamletEnv(
+    universe = compile_universe(gridnd_4d_config_pack)
+    return VectorizedHamletEnv.from_universe(
+        universe,
         num_agents=1,
-        grid_size=5,  # Ignored by GridND substrates
-        partial_observability=False,
-        vision_range=1,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.003,
-        agent_lifespan=100,
         device=cpu_device,
-        config_pack_path=gridnd_4d_config_pack,
     )
 
 

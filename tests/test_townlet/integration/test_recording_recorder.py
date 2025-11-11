@@ -180,28 +180,16 @@ class TestEpisodeRecorder:
             assert item.time_of_day == 12
             assert item.interaction_progress == 0.33
 
-    def test_record_temporal_mechanics_from_environment(self, cpu_device):
+    def test_record_temporal_mechanics_from_environment(self, cpu_device, cpu_env_factory):
         """record_step should capture temporal state from VectorizedHamletEnv.
 
         Integration test: Verify that temporal mechanics state (time_of_day,
         interaction_progress) from a live environment gets correctly recorded.
         """
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
         from townlet.recording.recorder import EpisodeRecorder
 
         # Create environment with temporal mechanics enabled
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=Path("configs/L3_temporal_mechanics"), num_agents=1)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = {"max_queue_size": 100}
@@ -288,6 +276,7 @@ class TestEpisodeRecorder:
                 timestamp=1699123456.78,
                 affordance_layout={"Bed": (2, 3)},
                 affordance_visits={"Bed": 5},
+                custom_action_uses={},
             )
 
             recorder.finish_episode(metadata)
@@ -450,6 +439,7 @@ class TestRecordingWriter:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
             marker = EpisodeEndMarker(metadata=metadata)
             test_queue.put(marker)

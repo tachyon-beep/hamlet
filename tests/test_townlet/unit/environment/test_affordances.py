@@ -17,7 +17,12 @@ Old files consolidated: test_affordance_engine.py, test_affordance_effects.py,
 test_affordance_equivalence.py, test_affordance_integration.py
 """
 
+import shutil
+from pathlib import Path
+
+import pytest
 import torch
+import yaml
 
 
 class TestAffordanceAvailability:
@@ -103,45 +108,45 @@ class TestAffordanceAvailability:
         assert basic_env.meters[0, 1] <= initial_hygiene, "Hygiene should not increase without money"
         assert abs(basic_env.meters[0, 3] - initial_money) < 1e-6, "Money should not change"
 
-    def test_sufficient_money_allows_interaction(self, basic_env):
+    def test_sufficient_money_allows_interaction(self, instant_env):
         """Sufficient money should allow interaction."""
-        basic_env.reset()
+        instant_env.reset()
 
         # Agent with money at Shower
-        basic_env.positions[0] = basic_env.affordances["Shower"]
-        basic_env.meters[0, 1] = 0.2  # Low hygiene
-        basic_env.meters[0, 3] = 0.50  # Has money
+        instant_env.positions[0] = instant_env.affordances["Shower"]
+        instant_env.meters[0, 1] = 0.2  # Low hygiene
+        instant_env.meters[0, 3] = 0.50  # Has money
 
-        initial_hygiene = basic_env.meters[0, 1].item()
-        initial_money = basic_env.meters[0, 3].item()
+        initial_hygiene = instant_env.meters[0, 1].item()
+        initial_money = instant_env.meters[0, 3].item()
 
         # Interact
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Hygiene should increase, money should decrease
-        assert basic_env.meters[0, 1] > initial_hygiene, "Hygiene should increase with money"
-        assert basic_env.meters[0, 3] < initial_money, "Money should decrease"
+        assert instant_env.meters[0, 1] > initial_hygiene, "Hygiene should increase with money"
+        assert instant_env.meters[0, 3] < initial_money, "Money should decrease"
 
-    def test_park_is_free(self, basic_env):
+    def test_park_is_free(self, instant_env):
         """Park should work even with $0 (free affordance)."""
-        basic_env.reset()
+        instant_env.reset()
 
         # Agent at Park with NO money
-        basic_env.positions[0] = basic_env.affordances["Park"]
-        basic_env.meters[0, 7] = 0.3  # Low fitness
-        basic_env.meters[0, 3] = 0.00  # $0 (Park is FREE!)
+        instant_env.positions[0] = instant_env.affordances["Park"]
+        instant_env.meters[0, 7] = 0.3  # Low fitness
+        instant_env.meters[0, 3] = 0.00  # $0 (Park is FREE!)
 
-        initial_fitness = basic_env.meters[0, 7].item()
-        initial_money = basic_env.meters[0, 3].item()
+        initial_fitness = instant_env.meters[0, 7].item()
+        initial_money = instant_env.meters[0, 3].item()
 
         # Interact
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Fitness should increase, money unchanged
-        assert basic_env.meters[0, 7] > initial_fitness, "Park should work for free"
-        assert abs(basic_env.meters[0, 3] - initial_money) < 1e-6, "Money should not change (Park is free)"
+        assert instant_env.meters[0, 7] > initial_fitness, "Park should work for free"
+        assert abs(instant_env.meters[0, 3] - initial_money) < 1e-6, "Money should not change (Park is free)"
 
 
 class TestInstantAffordanceEffects:
@@ -149,433 +154,433 @@ class TestInstantAffordanceEffects:
 
     # Health Restoration Affordances
 
-    def test_doctor_restores_health(self, basic_env):
+    def test_doctor_restores_health(self, instant_env):
         """Doctor should restore +25% health for $8."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Doctor"]
-        basic_env.meters[0, 6] = 0.30  # Health 30%
-        basic_env.meters[0, 3] = 0.50  # Money $50
+        instant_env.positions[0] = instant_env.affordances["Doctor"]
+        instant_env.meters[0, 6] = 0.30  # Health 30%
+        instant_env.meters[0, 3] = 0.50  # Money $50
 
-        initial_health = basic_env.meters[0, 6].item()
-        initial_money = basic_env.meters[0, 3].item()
+        initial_health = instant_env.meters[0, 6].item()
+        initial_money = instant_env.meters[0, 3].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Should restore health and cost money
-        assert basic_env.meters[0, 6] > initial_health
-        assert abs(basic_env.meters[0, 6] - (initial_health + 0.25)) < 0.01
-        assert basic_env.meters[0, 3] < initial_money
-        assert abs(initial_money - basic_env.meters[0, 3] - 0.08) < 0.01
+        assert instant_env.meters[0, 6] > initial_health
+        assert abs(instant_env.meters[0, 6] - (initial_health + 0.25)) < 0.01
+        assert instant_env.meters[0, 3] < initial_money
+        assert abs(initial_money - instant_env.meters[0, 3] - 0.08) < 0.01
 
-    def test_hospital_restores_more_health(self, basic_env):
+    def test_hospital_restores_more_health(self, instant_env):
         """Hospital should restore +40% health for $15 (intensive care)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Hospital"]
-        basic_env.meters[0, 6] = 0.15  # Critical health
-        basic_env.meters[0, 3] = 0.80  # Money
+        instant_env.positions[0] = instant_env.affordances["Hospital"]
+        instant_env.meters[0, 6] = 0.15  # Critical health
+        instant_env.meters[0, 3] = 0.80  # Money
 
-        initial_health = basic_env.meters[0, 6].item()
-        initial_money = basic_env.meters[0, 3].item()
+        initial_health = instant_env.meters[0, 6].item()
+        initial_money = instant_env.meters[0, 3].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Should restore more health for higher cost
-        assert basic_env.meters[0, 6] > initial_health
-        assert abs(basic_env.meters[0, 6] - (initial_health + 0.40)) < 0.01
-        assert abs(initial_money - basic_env.meters[0, 3] - 0.15) < 0.01
+        assert instant_env.meters[0, 6] > initial_health
+        assert abs(instant_env.meters[0, 6] - (initial_health + 0.40)) < 0.01
+        assert abs(initial_money - instant_env.meters[0, 3] - 0.15) < 0.01
 
-    def test_health_clamped_at_100_percent(self, basic_env):
+    def test_health_clamped_at_100_percent(self, instant_env):
         """Health restoration should not exceed 100%."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Doctor"]
-        basic_env.meters[0, 6] = 0.90  # Already high
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["Doctor"]
+        instant_env.meters[0, 6] = 0.90  # Already high
+        instant_env.meters[0, 3] = 0.50
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Should clamp at 1.0
-        assert basic_env.meters[0, 6] <= 1.0
-        assert abs(basic_env.meters[0, 6] - 1.0) < 0.01
+        assert instant_env.meters[0, 6] <= 1.0
+        assert abs(instant_env.meters[0, 6] - 1.0) < 0.01
 
     # Mood Restoration
 
-    def test_therapist_restores_mood(self, basic_env):
+    def test_therapist_restores_mood(self, instant_env):
         """Therapist should restore +40% mood for $15."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Therapist"]
-        basic_env.meters[0, 4] = 0.20  # Low mood
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["Therapist"]
+        instant_env.meters[0, 4] = 0.20  # Low mood
+        instant_env.meters[0, 3] = 0.50
 
-        initial_mood = basic_env.meters[0, 4].item()
-        initial_money = basic_env.meters[0, 3].item()
+        initial_mood = instant_env.meters[0, 4].item()
+        initial_money = instant_env.meters[0, 3].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 4] > initial_mood
-        assert abs(basic_env.meters[0, 4] - (initial_mood + 0.40)) < 0.01
-        assert abs(initial_money - basic_env.meters[0, 3] - 0.15) < 0.01
+        assert instant_env.meters[0, 4] > initial_mood
+        assert abs(instant_env.meters[0, 4] - (initial_mood + 0.40)) < 0.01
+        assert abs(initial_money - instant_env.meters[0, 3] - 0.15) < 0.01
 
     # Park - Free Multi-Effect
 
-    def test_park_builds_fitness(self, basic_env):
+    def test_park_builds_fitness(self, instant_env):
         """Park should restore +20% fitness."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Park"]
-        basic_env.meters[0, 7] = 0.30
+        instant_env.positions[0] = instant_env.affordances["Park"]
+        instant_env.meters[0, 7] = 0.30
 
-        initial_fitness = basic_env.meters[0, 7].item()
+        initial_fitness = instant_env.meters[0, 7].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 7] > initial_fitness
-        assert abs(basic_env.meters[0, 7] - (initial_fitness + 0.20)) < 0.01
+        assert instant_env.meters[0, 7] > initial_fitness
+        assert abs(instant_env.meters[0, 7] - (initial_fitness + 0.20)) < 0.01
 
-    def test_park_builds_social(self, basic_env):
+    def test_park_builds_social(self, instant_env):
         """Park should restore +15% social."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Park"]
-        basic_env.meters[0, 5] = 0.40
+        instant_env.positions[0] = instant_env.affordances["Park"]
+        instant_env.meters[0, 5] = 0.40
 
-        initial_social = basic_env.meters[0, 5].item()
+        initial_social = instant_env.meters[0, 5].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 5] > initial_social
-        assert abs(basic_env.meters[0, 5] - (initial_social + 0.15)) < 0.01
+        assert instant_env.meters[0, 5] > initial_social
+        assert abs(instant_env.meters[0, 5] - (initial_social + 0.15)) < 0.01
 
-    def test_park_improves_mood(self, basic_env):
+    def test_park_improves_mood(self, instant_env):
         """Park should restore +15% mood."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Park"]
-        basic_env.meters[0, 4] = 0.25
+        instant_env.positions[0] = instant_env.affordances["Park"]
+        instant_env.meters[0, 4] = 0.25
 
-        initial_mood = basic_env.meters[0, 4].item()
+        initial_mood = instant_env.meters[0, 4].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 4] > initial_mood
-        assert abs(basic_env.meters[0, 4] - (initial_mood + 0.15)) < 0.01
+        assert instant_env.meters[0, 4] > initial_mood
+        assert abs(instant_env.meters[0, 4] - (initial_mood + 0.15)) < 0.01
 
-    def test_park_costs_energy(self, basic_env):
+    def test_park_costs_energy(self, instant_env):
         """Park should cost 15% energy (time/effort)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Park"]
-        basic_env.meters[0, 0] = 0.80
+        instant_env.positions[0] = instant_env.affordances["Park"]
+        instant_env.meters[0, 0] = 0.80
 
-        initial_energy = basic_env.meters[0, 0].item()
+        initial_energy = instant_env.meters[0, 0].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Energy decreases from Park cost + passive depletion
-        assert basic_env.meters[0, 0] < initial_energy
+        assert instant_env.meters[0, 0] < initial_energy
         # Park: -15%, passive depletion adds more
         expected_min_decrease = 0.15
-        assert (initial_energy - basic_env.meters[0, 0]) >= expected_min_decrease - 0.01
+        assert (initial_energy - instant_env.meters[0, 0]) >= expected_min_decrease - 0.01
 
     # Bar - Social Hub with Penalties
 
-    def test_bar_best_for_social(self, basic_env):
+    def test_bar_best_for_social(self, instant_env):
         """Bar should restore +50% social (BEST in game)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Bar"]
-        basic_env.meters[0, 5] = 0.20
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["Bar"]
+        instant_env.meters[0, 5] = 0.20
+        instant_env.meters[0, 3] = 0.50
 
-        initial_social = basic_env.meters[0, 5].item()
+        initial_social = instant_env.meters[0, 5].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 5] > initial_social
-        assert abs(basic_env.meters[0, 5] - (initial_social + 0.50)) < 0.01
+        assert instant_env.meters[0, 5] > initial_social
+        assert abs(instant_env.meters[0, 5] - (initial_social + 0.50)) < 0.01
 
-    def test_bar_improves_mood(self, basic_env):
+    def test_bar_improves_mood(self, instant_env):
         """Bar should restore +25% mood."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Bar"]
-        basic_env.meters[0, 4] = 0.30
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["Bar"]
+        instant_env.meters[0, 4] = 0.30
+        instant_env.meters[0, 3] = 0.50
 
-        initial_mood = basic_env.meters[0, 4].item()
+        initial_mood = instant_env.meters[0, 4].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 4] > initial_mood
-        assert abs(basic_env.meters[0, 4] - (initial_mood + 0.25)) < 0.01
+        assert instant_env.meters[0, 4] > initial_mood
+        assert abs(instant_env.meters[0, 4] - (initial_mood + 0.25)) < 0.01
 
-    def test_bar_has_health_penalty(self, basic_env):
+    def test_bar_has_health_penalty(self, instant_env):
         """Bar should cost 5% health (late nights, drinking)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Bar"]
-        basic_env.meters[0, 6] = 0.80
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["Bar"]
+        instant_env.meters[0, 6] = 0.80
+        instant_env.meters[0, 3] = 0.50
 
-        initial_health = basic_env.meters[0, 6].item()
+        initial_health = instant_env.meters[0, 6].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Health penalty from Bar
-        assert basic_env.meters[0, 6] < initial_health
-        assert abs(initial_health - basic_env.meters[0, 6] - 0.05) < 0.01
+        assert instant_env.meters[0, 6] < initial_health
+        assert abs(initial_health - instant_env.meters[0, 6] - 0.05) < 0.01
 
-    def test_bar_costs_money(self, basic_env):
+    def test_bar_costs_money(self, instant_env):
         """Bar should cost $15."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Bar"]
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["Bar"]
+        instant_env.meters[0, 3] = 0.50
 
-        initial_money = basic_env.meters[0, 3].item()
+        initial_money = instant_env.meters[0, 3].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert abs(initial_money - basic_env.meters[0, 3] - 0.15) < 0.01
+        assert abs(initial_money - instant_env.meters[0, 3] - 0.15) < 0.01
 
     # FastFood - Quick Satiation with Penalties
 
-    def test_fastfood_restores_satiation(self, basic_env):
+    def test_fastfood_restores_satiation(self, instant_env):
         """FastFood should restore +45% satiation."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["FastFood"]
-        basic_env.meters[0, 2] = 0.30
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["FastFood"]
+        instant_env.meters[0, 2] = 0.30
+        instant_env.meters[0, 3] = 0.50
 
-        initial_satiation = basic_env.meters[0, 2].item()
+        initial_satiation = instant_env.meters[0, 2].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 2] > initial_satiation
-        assert abs(basic_env.meters[0, 2] - (initial_satiation + 0.45)) < 0.01
+        assert instant_env.meters[0, 2] > initial_satiation
+        assert abs(instant_env.meters[0, 2] - (initial_satiation + 0.45)) < 0.01
 
-    def test_fastfood_gives_energy_boost(self, basic_env):
+    def test_fastfood_gives_energy_boost(self, instant_env):
         """FastFood should restore +15% energy."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["FastFood"]
-        basic_env.meters[0, 0] = 0.40
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["FastFood"]
+        instant_env.meters[0, 0] = 0.40
+        instant_env.meters[0, 3] = 0.50
 
-        initial_energy = basic_env.meters[0, 0].item()
+        initial_energy = instant_env.meters[0, 0].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Energy boost from FastFood (sugar rush)
         # Note: passive depletion also occurs, but boost is larger
-        assert basic_env.meters[0, 0] > initial_energy
+        assert instant_env.meters[0, 0] > initial_energy
 
-    def test_fastfood_has_fitness_penalty(self, basic_env):
+    def test_fastfood_has_fitness_penalty(self, instant_env):
         """FastFood should cost 3% fitness (unhealthy food)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["FastFood"]
-        basic_env.meters[0, 7] = 0.80
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["FastFood"]
+        instant_env.meters[0, 7] = 0.80
+        instant_env.meters[0, 3] = 0.50
 
-        initial_fitness = basic_env.meters[0, 7].item()
+        initial_fitness = instant_env.meters[0, 7].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Fitness penalty
-        assert basic_env.meters[0, 7] < initial_fitness
-        assert abs(initial_fitness - basic_env.meters[0, 7] - 0.03) < 0.01
+        assert instant_env.meters[0, 7] < initial_fitness
+        assert abs(initial_fitness - instant_env.meters[0, 7] - 0.03) < 0.01
 
-    def test_fastfood_has_health_penalty(self, basic_env):
+    def test_fastfood_has_health_penalty(self, instant_env):
         """FastFood should cost 2% health (junk food)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["FastFood"]
-        basic_env.meters[0, 6] = 0.80
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["FastFood"]
+        instant_env.meters[0, 6] = 0.80
+        instant_env.meters[0, 3] = 0.50
 
-        initial_health = basic_env.meters[0, 6].item()
+        initial_health = instant_env.meters[0, 6].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Health penalty
-        assert basic_env.meters[0, 6] < initial_health
-        assert abs(initial_health - basic_env.meters[0, 6] - 0.02) < 0.01
+        assert instant_env.meters[0, 6] < initial_health
+        assert abs(initial_health - instant_env.meters[0, 6] - 0.02) < 0.01
 
     # Job - Income Generation
 
-    def test_job_generates_income(self, basic_env):
-        """Job should generate $22.50."""
-        basic_env.reset()
+    def test_job_generates_income(self, instant_env):
+        """Job should generate $28.13 in instant mode (per_tick + completion)."""
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Job"]
-        basic_env.meters[0, 3] = 0.20
+        instant_env.positions[0] = instant_env.affordances["Job"]
+        instant_env.meters[0, 3] = 0.20
 
-        initial_money = basic_env.meters[0, 3].item()
+        initial_money = instant_env.meters[0, 3].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        # Money should increase
-        assert basic_env.meters[0, 3] > initial_money
-        assert abs(basic_env.meters[0, 3] - (initial_money + 0.225)) < 0.01
+        # Money should increase by per_tick (0.05625 * 4) + completion (0.05625) = 0.28125
+        assert instant_env.meters[0, 3] > initial_money
+        assert abs(instant_env.meters[0, 3] - (initial_money + 0.28125)) < 0.01
 
-    def test_job_costs_energy(self, basic_env):
+    def test_job_costs_energy(self, instant_env):
         """Job should cost 15% energy (office work)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Job"]
-        basic_env.meters[0, 0] = 0.80
+        instant_env.positions[0] = instant_env.affordances["Job"]
+        instant_env.meters[0, 0] = 0.80
 
-        initial_energy = basic_env.meters[0, 0].item()
+        initial_energy = instant_env.meters[0, 0].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Energy cost + passive depletion
-        assert basic_env.meters[0, 0] < initial_energy
+        assert instant_env.meters[0, 0] < initial_energy
         expected_decrease = 0.15
-        assert (initial_energy - basic_env.meters[0, 0]) >= expected_decrease - 0.01
+        assert (initial_energy - instant_env.meters[0, 0]) >= expected_decrease - 0.01
 
     # Labor - High-Pay Physical Work
 
-    def test_labor_generates_income(self, basic_env):
+    def test_labor_generates_income(self, instant_env):
         """Labor should generate income (different trade-off from Job)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Labor"]
-        basic_env.meters[0, 3] = 0.20
+        instant_env.positions[0] = instant_env.affordances["Labor"]
+        instant_env.meters[0, 3] = 0.20
 
-        initial_money = basic_env.meters[0, 3].item()
+        initial_money = instant_env.meters[0, 3].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Labor generates income (may be different from Job based on config)
-        money_gained = basic_env.meters[0, 3] - initial_money
+        money_gained = instant_env.meters[0, 3] - initial_money
         assert money_gained > 0  # Should increase money
 
-    def test_labor_costs_more_energy(self, basic_env):
+    def test_labor_costs_more_energy(self, instant_env):
         """Labor should cost more energy than Job (exhausting)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Labor"]
-        basic_env.meters[0, 0] = 0.80
+        instant_env.positions[0] = instant_env.affordances["Labor"]
+        instant_env.meters[0, 0] = 0.80
 
-        initial_energy = basic_env.meters[0, 0].item()
+        initial_energy = instant_env.meters[0, 0].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # More exhausting than Job (20% vs 15%)
-        energy_lost = initial_energy - basic_env.meters[0, 0]
+        energy_lost = initial_energy - instant_env.meters[0, 0]
         assert energy_lost >= 0.20 - 0.01
 
-    def test_labor_has_fitness_penalty(self, basic_env):
+    def test_labor_has_fitness_penalty(self, instant_env):
         """Labor should cost 5% fitness (physical wear)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Labor"]
-        basic_env.meters[0, 7] = 0.80
+        instant_env.positions[0] = instant_env.affordances["Labor"]
+        instant_env.meters[0, 7] = 0.80
 
-        initial_fitness = basic_env.meters[0, 7].item()
+        initial_fitness = instant_env.meters[0, 7].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 7] < initial_fitness
-        assert abs(initial_fitness - basic_env.meters[0, 7] - 0.05) < 0.01
+        assert instant_env.meters[0, 7] < initial_fitness
+        assert abs(initial_fitness - instant_env.meters[0, 7] - 0.05) < 0.01
 
-    def test_labor_has_health_penalty(self, basic_env):
+    def test_labor_has_health_penalty(self, instant_env):
         """Labor should cost 5% health (injury risk)."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Labor"]
-        basic_env.meters[0, 6] = 0.80
+        instant_env.positions[0] = instant_env.affordances["Labor"]
+        instant_env.meters[0, 6] = 0.80
 
-        initial_health = basic_env.meters[0, 6].item()
+        initial_health = instant_env.meters[0, 6].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
-        assert basic_env.meters[0, 6] < initial_health
-        assert abs(initial_health - basic_env.meters[0, 6] - 0.05) < 0.01
+        assert instant_env.meters[0, 6] < initial_health
+        assert abs(initial_health - instant_env.meters[0, 6] - 0.05) < 0.01
 
     # Basic Affordances
 
-    def test_shower_restores_hygiene(self, basic_env):
+    def test_shower_restores_hygiene(self, instant_env):
         """Shower should restore hygiene and cost money."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Shower"]
-        basic_env.meters[0, 1] = 0.2  # Low hygiene
-        basic_env.meters[0, 3] = 0.50  # Money
+        instant_env.positions[0] = instant_env.affordances["Shower"]
+        instant_env.meters[0, 1] = 0.2  # Low hygiene
+        instant_env.meters[0, 3] = 0.50  # Money
 
-        initial_hygiene = basic_env.meters[0, 1].item()
-        initial_money = basic_env.meters[0, 3].item()
+        initial_hygiene = instant_env.meters[0, 1].item()
+        initial_money = instant_env.meters[0, 3].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Hygiene increases, money decreases
-        assert basic_env.meters[0, 1] > initial_hygiene
-        assert basic_env.meters[0, 3] < initial_money
+        assert instant_env.meters[0, 1] > initial_hygiene
+        assert instant_env.meters[0, 3] < initial_money
 
-    def test_home_meal_restores_satiation_and_health(self, basic_env):
+    def test_home_meal_restores_satiation_and_health(self, instant_env):
         """HomeMeal should restore satiation and health."""
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["HomeMeal"]
-        basic_env.meters[0, 2] = 0.2  # Low satiation
-        basic_env.meters[0, 6] = 0.6  # Moderate health
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["HomeMeal"]
+        instant_env.meters[0, 2] = 0.2  # Low satiation
+        instant_env.meters[0, 6] = 0.6  # Moderate health
+        instant_env.meters[0, 3] = 0.50
 
-        initial_satiation = basic_env.meters[0, 2].item()
-        initial_health = basic_env.meters[0, 6].item()
+        initial_satiation = instant_env.meters[0, 2].item()
+        initial_health = instant_env.meters[0, 6].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Both should increase
-        assert basic_env.meters[0, 2] > initial_satiation
-        assert basic_env.meters[0, 6] > initial_health
+        assert instant_env.meters[0, 2] > initial_satiation
+        assert instant_env.meters[0, 6] > initial_health
 
-    def test_bed_instant_mode_restores_energy(self, basic_env):
+    def test_bed_instant_mode_restores_energy(self, instant_env):
         """Bed in instant mode should restore energy."""
         # Note: This tests instant mode (not temporal mechanics)
-        basic_env.reset()
+        instant_env.reset()
 
-        basic_env.positions[0] = basic_env.affordances["Bed"]
-        basic_env.meters[0, 0] = 0.3  # Low energy
-        basic_env.meters[0, 3] = 0.50
+        instant_env.positions[0] = instant_env.affordances["Bed"]
+        instant_env.meters[0, 0] = 0.3  # Low energy
+        instant_env.meters[0, 3] = 0.50
 
-        initial_energy = basic_env.meters[0, 0].item()
+        initial_energy = instant_env.meters[0, 0].item()
 
-        actions = torch.tensor([4], device=basic_env.device)
-        basic_env.step(actions)
+        actions = torch.tensor([4], device=instant_env.device)
+        instant_env.step(actions)
 
         # Energy should increase significantly
-        assert basic_env.meters[0, 0] > initial_energy
+        assert instant_env.meters[0, 0] > initial_energy
 
 
 class TestMultiTickInteractions:
@@ -744,47 +749,43 @@ class TestAffordanceBatching:
         assert abs(multi_agent_env.meters[1, 0] - initial_energy[1]) < 0.1, "Agent 1 should not get Bed's effects"
 
 
+@pytest.fixture
+def bed_equivalence_envs(
+    tmp_path: Path,
+    test_config_pack_path: Path,
+    env_factory,
+    cpu_device: torch.device,
+):
+    """Provide instant + temporal mechanics envs sharing the same config pack."""
+
+    def _build_env(enable_temporal: bool):
+        target = tmp_path / ("temporal" if enable_temporal else "instant")
+        shutil.copytree(test_config_pack_path, target)
+
+        training_path = target / "training.yaml"
+        with training_path.open() as fh:
+            training_config = yaml.safe_load(fh)
+
+        training_config["environment"]["enable_temporal_mechanics"] = enable_temporal
+
+        with training_path.open("w") as fh:
+            yaml.safe_dump(training_config, fh, sort_keys=False)
+
+        return env_factory(
+            config_dir=target,
+            num_agents=1,
+            device_override=cpu_device,
+        )
+
+    return _build_env(False), _build_env(True)
+
+
 class TestAffordanceEquivalence:
     """Test equivalence between instant and multi-tick modes (75%/25% split validation)."""
 
-    def test_bed_instant_vs_multitick_total_equals(self, cpu_device):
+    def test_bed_instant_vs_multitick_total_equals(self, bed_equivalence_envs, cpu_device):
         """Bed instant mode should equal multi-tick total (75% linear + 25% bonus)."""
-        # This validates the 75%/25% split for multi-tick interactions
-        from pathlib import Path
-
-        from townlet.environment.vectorized_env import VectorizedHamletEnv
-
-        config_path = Path(__file__).parent.parent.parent.parent.parent / "configs" / "test"
-
-        # Instant mode environment
-        instant_env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            enable_temporal_mechanics=False,
-            config_pack_path=config_path,
-            device=cpu_device,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
-
-        # Multi-tick mode environment
-        temporal_env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            enable_temporal_mechanics=True,
-            config_pack_path=config_path,
-            device=cpu_device,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        instant_env, temporal_env = bed_equivalence_envs
 
         # Test Bed interaction equivalence
         instant_env.reset()

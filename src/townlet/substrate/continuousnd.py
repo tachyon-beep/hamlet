@@ -81,7 +81,7 @@ class ContinuousNDSubstrate(SpatialSubstrate):
         # Warn at N≥10 (action space grows large)
         if num_dims >= 10:
             warnings.warn(
-                f"ContinuousND with {num_dims} dimensions has {2*num_dims+2} actions. "
+                f"ContinuousND with {num_dims} dimensions has {2 * num_dims + 2} actions. "
                 f"Large action spaces may be challenging to train. "
                 f"Verify this is intentional for your research.",
                 UserWarning,
@@ -387,7 +387,7 @@ class ContinuousNDSubstrate(SpatialSubstrate):
         # Generate movement actions for each dimension
         for dim_idx in range(n_dims):
             # Negative direction
-            delta = [0] * n_dims
+            delta: list[int | float] = [0] * n_dims
             delta[dim_idx] = -1  # Scaled by movement_delta in apply_movement()
             actions.append(
                 ActionConfig(

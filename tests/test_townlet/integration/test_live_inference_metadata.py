@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from townlet.demo.live_inference import LiveInferenceServer
 from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.continuous import Continuous2DSubstrate
@@ -31,6 +33,7 @@ def test_metadata_includes_grid2d_topology():
         step_delay=0.2,
         total_episodes=1,
         training_config_path=None,
+        config_dir=TEST_CONFIG_DIR,
     )
     server.env = MockEnv(substrate)
 
@@ -61,6 +64,7 @@ def test_metadata_includes_grid3d_topology():
         step_delay=0.2,
         total_episodes=1,
         training_config_path=None,
+        config_dir=TEST_CONFIG_DIR,
     )
     server.env = MockEnv(substrate)
 
@@ -88,6 +92,7 @@ def test_metadata_includes_gridnd_topology():
         step_delay=0.2,
         total_episodes=1,
         training_config_path=None,
+        config_dir=TEST_CONFIG_DIR,
     )
     server.env = MockEnv(substrate)
 
@@ -119,6 +124,7 @@ def test_metadata_omits_topology_for_continuous():
         step_delay=0.2,
         total_episodes=1,
         training_config_path=None,
+        config_dir=TEST_CONFIG_DIR,
     )
     server.env = MockEnv(substrate)
 
@@ -139,6 +145,7 @@ def test_metadata_omits_topology_for_aspatial():
         step_delay=0.2,
         total_episodes=1,
         training_config_path=None,
+        config_dir=TEST_CONFIG_DIR,
     )
     server.env = MockEnv(substrate)
 
@@ -167,6 +174,7 @@ def test_metadata_topology_respects_substrate_attribute():
         step_delay=0.2,
         total_episodes=1,
         training_config_path=None,
+        config_dir=TEST_CONFIG_DIR,
     )
     server.env = MockEnv(substrate)
 
@@ -174,3 +182,6 @@ def test_metadata_topology_respects_substrate_attribute():
 
     # Should read from substrate.topology, not hardcode "square"
     assert metadata["topology"] == substrate.topology
+
+
+TEST_CONFIG_DIR = Path("configs/test")

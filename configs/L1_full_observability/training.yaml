@@ -20,11 +20,11 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 8  # 8×8 grid world
   partial_observability: false  # LEVEL 1: Agent sees full grid
   vision_range: 8  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # LEVEL 1: No time-of-day complexity
   enabled_affordances: null  # null = all 14 affordances enabled
+  randomize_affordances: true
   energy_move_depletion: 0.005  # Energy cost per movement action
   energy_wait_depletion: 0.001  # Energy cost per WAIT action
   energy_interact_depletion: 0.0  # Energy cost per INTERACT action
@@ -34,8 +34,9 @@ population:
   num_agents: 1  # Single agent for now
   learning_rate: 0.00025  # Standard Atari DQN learning rate
   gamma: 0.99
-  replay_buffer_capacity: 10000
+  replay_buffer_capacity: 50000  # 50k capacity for better experience diversity (166-500 episodes)
   network_type: simple  # Standard MLP Q-Network
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration (adversarial difficulty adjustment)
 curriculum:
@@ -50,6 +51,7 @@ exploration:
   embed_dim: 128
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0  # Fixed: increased from 10.0 to prevent premature annealing
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 100  # Track last 100 episodes for annealing
 
 # Training configuration
@@ -63,6 +65,10 @@ training:
   batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
   sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
   max_grad_norm: 10.0  # Gradient clipping threshold
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate

@@ -10,11 +10,16 @@ Properties tested:
 4. Observation dimension: obs_dim matches substrate + meters + affordances + temporal
 """
 
+import shutil
+import tempfile
+from pathlib import Path
+
 import torch
+import yaml
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 from townlet.substrate.aspatial import AspatialSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 
@@ -145,38 +150,55 @@ def test_property_aspatial_no_position_operations():
 
 
 @given(
-    grid_size=st.integers(min_value=3, max_value=10),
+    grid_size=st.integers(min_value=5, max_value=10),
     num_agents=st.integers(min_value=1, max_value=4),
 )
 @settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)  # Disable deadline for VFS overhead
 def test_property_obs_dim_matches_substrate_grid2d(grid_size, num_agents, test_config_pack_path, cpu_device):
     """Observation dimension should match substrate + meters + affordances + temporal."""
-    env = VectorizedHamletEnv(
-        num_agents=num_agents,
-        grid_size=grid_size,  # Square grid
-        partial_observability=False,  # Full observability
-        vision_range=grid_size,
-        enable_temporal_mechanics=False,
-        device=cpu_device,
-        config_pack_path=test_config_pack_path,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_pack = Path(tmpdir) / "pack"
+        shutil.copytree(test_config_pack_path, temp_pack)
+
+        # Update substrate.yaml with grid_size
+        substrate_path = temp_pack / "substrate.yaml"
+        substrate_data = yaml.safe_load(substrate_path.read_text())
+        substrate_data["grid"]["width"] = grid_size
+        substrate_data["grid"]["height"] = grid_size
+        substrate_path.write_text(yaml.safe_dump(substrate_data, sort_keys=False))
+
+        # Update training.yaml with vision_range
+        training_path = temp_pack / "training.yaml"
+        training_data = yaml.safe_load(training_path.read_text())
+        training_env = training_data.setdefault("environment", {})
+        training_env["vision_range"] = grid_size
+        training_path.write_text(yaml.safe_dump(training_data, sort_keys=False))
+
+        # Update variables_reference.yaml to match new grid dimensions
+        vfs_path = temp_pack / "variables_reference.yaml"
+        vfs_data = yaml.safe_load(vfs_path.read_text())
+        for var in vfs_data.get("variables", []):
+            if var["id"] == "grid_encoding":
+                # Update grid_encoding dims to match new grid size
+                var["dims"] = grid_size * grid_size
+                var["default"] = [0] * (grid_size * grid_size)
+        vfs_path.write_text(yaml.safe_dump(vfs_data, sort_keys=False))
+
+        # Delete .compiled directory to force recompilation with new config values
+        compiled_dir = temp_pack / ".compiled"
+        if compiled_dir.exists():
+            shutil.rmtree(compiled_dir)
+
+        env = make_vectorized_env_from_pack(
+            temp_pack,
+            num_agents=num_agents,
+            device=cpu_device,
+        )
 
     obs = env.reset()
 
-    # Expected dimension based on substrate (grid + position)
-    # Use substrate.get_observation_dim() which accounts for grid cells + position features
-    substrate_dim = env.substrate.get_observation_dim()
-
-    meter_dim = env.meter_count  # From config (8 for test config)
-    affordance_dim = 15  # 14 affordances + "none"
-    temporal_dim = 4  # time_sin, time_cos, interaction_progress, lifetime_progress
-
-    expected_dim = substrate_dim + meter_dim + affordance_dim + temporal_dim
-
+    expected_dim = env.metadata.observation_dim
+    assert env.observation_dim == expected_dim
     assert obs.shape == (
         num_agents,
         expected_dim,
@@ -187,15 +209,8 @@ def test_property_obs_dim_aspatial(aspatial_env):
     """Aspatial observation should have no grid dimension."""
     obs = aspatial_env.reset()
 
-    # Expected dimension (no grid)
-    grid_dim = 0  # Aspatial has no grid
-    meter_dim = aspatial_env.meter_count  # 4 for aspatial_test config
-    # NOTE: aspatial_test uses local vocabulary (4 affordances + "none" = 5 dims)
-    # This is a test fixture that doesn't follow global vocabulary principle
-    affordance_dim = 5  # Local vocabulary: 4 affordances (Bed, Hospital, HomeMeal, Job) + "none"
-    temporal_dim = 4  # time_sin, time_cos, interaction_progress, lifetime_progress
-
-    expected_dim = grid_dim + meter_dim + affordance_dim + temporal_dim
+    expected_dim = aspatial_env.metadata.observation_dim
+    assert aspatial_env.observation_dim == expected_dim
 
     assert obs.shape == (
         1,

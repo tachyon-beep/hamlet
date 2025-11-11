@@ -1,0 +1,83 @@
+graph LR
+    subgraph "Entry Points"
+        RunDemo[scripts/run_demo.py<br/>CLI Entry]
+        CompilerCLI[townlet/compiler/__main__.py<br/>Compiler CLI]
+        RecordingCLI[townlet/recording/__main__.py<br/>Recording CLI]
+    end
+
+    subgraph "Configuration Layer (Cold Path)"
+        HamletConfig[config/hamlet.py<br/>HamletConfig]
+        TrainingConfig[config/training.py<br/>TrainingConfig]
+        BarConfig[config/bar.py<br/>BarConfig]
+        AffordanceConfig[config/affordance.py<br/>AffordanceConfig]
+        SubstrateConfig[substrate/config.py<br/>SubstrateConfig]
+        VFSSchema[vfs/schema.py<br/>VariableDef]
+    end
+
+    subgraph "Compilation Pipeline"
+        Compiler[universe/compiler.py<br/>UniverseCompiler]
+        SymbolTable[universe/symbol_table.py<br/>UniverseSymbolTable]
+        CompiledUniverse[universe/compiled.py<br/>CompiledUniverse]
+        ObsSpec[universe/dto/observation_spec.py<br/>ObservationSpec]
+    end
+
+    subgraph "Runtime Execution (Hot Path)"
+        Runner[demo/runner.py<br/>DemoRunner]
+        VecPopulation[population/vectorized.py<br/>VectorizedPopulation]
+        VecEnv[environment/vectorized_env.py<br/>VectorizedHamletEnv]
+        QNetwork[agent/networks.py<br/>SimpleQNetwork]
+        ReplayBuffer[training/replay_buffer.py<br/>ReplayBuffer]
+        Substrate[substrate/grid2d.py<br/>Grid2DSubstrate]
+    end
+
+    subgraph "Persistence & Telemetry"
+        Database[demo/database.py<br/>DemoDatabase]
+        Checkpoints[training/checkpoint_utils.py<br/>save_checkpoint]
+        TBLogger[training/tensorboard_logger.py<br/>TensorBoardLogger]
+        Inference[demo/live_inference.py<br/>LiveInferenceServer]
+    end
+
+    RunDemo -->|Parses args| HamletConfig
+    CompilerCLI -->|Invokes| Compiler
+
+    HamletConfig -->|Aggregates| TrainingConfig
+    HamletConfig -->|Aggregates| BarConfig
+    HamletConfig -->|Aggregates| AffordanceConfig
+    HamletConfig -->|Aggregates| SubstrateConfig
+    HamletConfig -->|Aggregates| VFSSchema
+
+    Compiler -->|Uses| HamletConfig
+    Compiler -->|Builds| SymbolTable
+    Compiler -->|Produces| CompiledUniverse
+    CompiledUniverse -->|Contains| ObsSpec
+
+    Runner -->|Loads| CompiledUniverse
+    Runner -->|Instantiates| VecPopulation
+    Runner -->|Creates| VecEnv
+    Runner -->|Logs to| Database
+    Runner -->|Saves to| Checkpoints
+    Runner -->|Writes to| TBLogger
+    Runner -->|Spawns| Inference
+
+    VecPopulation -->|Trains| QNetwork
+    VecPopulation -->|Calls| VecEnv
+    VecPopulation -->|Stores in| ReplayBuffer
+
+    VecEnv -->|Uses| Substrate
+
+    Inference -->|Loads from| Checkpoints
+    Inference -->|Queries| Database
+
+    RecordingCLI -->|Queries| Database
+
+    style RunDemo fill:#52c41a,stroke:#389e0d,stroke-width:2px
+    style CompilerCLI fill:#52c41a,stroke:#389e0d,stroke-width:2px
+    style RecordingCLI fill:#52c41a,stroke:#389e0d,stroke-width:2px
+
+    style Compiler fill:#8b5cf6,stroke:#6d28d9,stroke-width:3px,color:#fff
+    style CompiledUniverse fill:#a78bfa,stroke:#7c3aed,stroke-width:3px,color:#fff
+
+    style Runner fill:#f59e0b,stroke:#d97706,stroke-width:3px
+    style VecPopulation fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff
+    style VecEnv fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
+    style QNetwork fill:#ec4899,stroke:#db2777,stroke-width:2px,color:#fff

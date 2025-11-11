@@ -1,42 +1,29 @@
 # TASK-004A: Universe Compiler Implementation
 
-**Status**: Blocked (Prerequisites Required - See Below)
+**Status**: Ready (Prerequisites completed – see summary below)
 **Priority**: HIGH (Foundational for UAC system integrity)
 **Estimated Effort**: 52-72 hours (6.5-9 days)
-  - **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
-  - **Additions**: CuesCompiler (+3-4h), Capability Validation (+6-8h), ObservationSpec (+2h), Rich Metadata (+4h)
-  - **Total additions**: +15-18h (+40-33% increase)
+
+- **UPDATED** from 37-54h (original) to align with COMPILER_ARCHITECTURE.md
+- **Additions**: CuesCompiler (+3-4h), Capability Validation (+6-8h), ObservationSpec (+2h), Rich Metadata (+4h)
+- **Total additions**: +15-18h (+40-33% increase)
 **Dependencies**: TASK-003 (UAC Core DTOs - COMPLETE) + **TASK-004A-PREREQUISITES (REQUIRED)**
 **Enables**: All future UAC work + TASK-005 (BAC - requires ObservationSpec)
 **Authoritative Reference**: `docs/architecture/COMPILER_ARCHITECTURE.md`
 
 ---
 
-## ⚠️ CRITICAL: PREREQUISITES REQUIRED
+## Prerequisites (Completed 2025-11-09)
 
-**🛑 STOP: Do NOT proceed with implementation until prerequisites are complete.**
+The five blockers called out during peer review are now addressed in main:
 
-This task has **5 critical blockers** where the implementation plan assumptions don't match repository reality. These must be resolved first.
+1. **Config schema alignment** – `load_variables_reference_config` lives in `townlet.vfs.schema` and `load_global_actions_config`/`ActionSpaceConfig` live in `townlet.environment.action_config`, each with regression tests.
+2. **DTO consolidation** – `BarsConfig`, `CascadesConfig`, and `AffordanceConfigCollection` are re-exported from `townlet.config.*`, so compiler stages can import them without touching the environment modules.
+3. **ObservationSpec adapter** – `townlet.universe.adapters.vfs_adapter.vfs_to_observation_spec` converts VFS fields into the compiler DTO, closing the UAC→BAC data contract gap.
+4. **HamletConfig integration** – documented in `docs/architecture/COMPILER_HAMLETCONFIG_INTEGRATION.md`, clarifying how Stage 1 reuses `HamletConfig.load` plus the new loaders (no duplicate validation).
+5. **Spec alignment** – this document now references the real helpers/modules so implementation instructions match the repository.
 
-**You MUST complete:** **[TASK-004A-PREREQUISITES.md](./TASK-004A-PREREQUISITES.md)**
-
-**Prerequisites Overview** (8-12 hours):
-1. **Config Schema Alignment** (3-4h): Create `load_variables_reference_config()` and `load_global_actions_config()`
-2. **DTO Consolidation** (2-3h): Add type aliases for BarsConfig, create ActionSpaceConfig wrapper
-3. **ObservationSpec Adapter** (2-3h): Build VFS-to-Universe DTO adapter
-4. **HamletConfig Integration** (1-2h): Document compiler builds on HamletConfig
-5. **Update TASK-004A Spec** (1-2h): Correct imports, update effort estimates
-
-**Why Prerequisites Are Critical**:
-- Plan expects `variables.yaml`, repo has `variables_reference.yaml`
-- Plan expects `BarsConfig` in `townlet.config.bar`, actually in `townlet.environment.cascade_config`
-- Plan expects `load_variables_config()` that doesn't exist
-- VFS ObservationField incompatible with Universe ObservationSpec (needs adapter)
-- Unclear how compiler relates to existing HamletConfig
-
-**DO NOT SKIP THIS STEP.** Implementing without prerequisites will result in import errors, missing functions, and incompatible data contracts.
-
-Once prerequisites are complete, return here and continue with Phase 0 verification.
+With those in place, the compiler implementation can proceed directly.
 
 ---
 
@@ -302,7 +289,7 @@ def _stage_1_parse_individual_files(self, config_dir: Path) -> RawConfigs:
         # ADDITIONAL LOADERS: VFS variables and global actions
         # (per TASK-004A-PREREQUISITES Part 1)
         from townlet.vfs.schema import load_variables_reference_config
-        from townlet.environment.action_space_builder import load_global_actions_config
+        from townlet.environment.action_config import load_global_actions_config
 
         variables_reference = load_variables_reference_config(config_dir)  # From variables_reference.yaml
         global_actions = load_global_actions_config()  # From configs/global_actions.yaml (shared)
@@ -376,55 +363,35 @@ class UniverseSymbolTable:
         self.cues: dict[str, CueConfig] = {}  # Theory of Mind cues
         self.actions: dict[str, ActionConfig] = {}  # Global action vocabulary
 
-    def register_meter(self, name: str, config: BarConfig):
+    def register_meter(self, config: BarConfig):
         """Register meter for later reference resolution."""
-        if name in self.meters:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate meter name: '{name}'"],
-                hints=["Each meter must have unique name"]
-            )
-        self.meters[name] = config
+        if config.name in self.meters:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate meter '{config.name}' detected."])
+        self.meters[config.name] = config
 
-    def register_affordance(self, id: str, config: AffordanceConfig):
+    def register_affordance(self, config: AffordanceConfig):
         """Register affordance for later reference resolution."""
-        if id in self.affordances:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate affordance ID: '{id}'"],
-                hints=["Each affordance must have unique ID"]
-            )
-        self.affordances[id] = config
+        if config.id in self.affordances:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate affordance '{config.id}' detected."])
+        self.affordances[config.id] = config
 
-    def register_cue(self, meter_name: str, config: CueConfig):
+    def register_cue(self, cue: SimpleCueConfig | CompoundCueConfig):
         """Register cue for later validation."""
-        if meter_name in self.cues:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate cue for meter: '{meter_name}'"],
-                hints=["Each meter can have at most one cue definition"]
-            )
-        self.cues[meter_name] = config
+        if cue.cue_id in self.cues:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate cue '{cue.cue_id}' detected."])
+        self.cues[cue.cue_id] = cue
 
-    def register_variable(self, var_id: str, config: VariableDef):
+    def register_variable(self, config: VariableDef):
         """Register VFS variable for later reference resolution."""
-        if var_id in self.variables:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate variable ID: '{var_id}'"],
-                hints=["Each variable must have unique ID"]
-            )
-        self.variables[var_id] = config
+        if config.id in self.variables:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate variable '{config.id}' detected."])
+        self.variables[config.id] = config
 
-    def register_action(self, action_id: int, config: ActionConfig):
+    def register_action(self, config: ActionConfig):
         """Register action for later reference resolution."""
-        if action_id in self.actions:
-            raise CompilationError(
-                stage="Stage 2: Symbol Registration",
-                errors=[f"Duplicate action ID: {action_id}"],
-                hints=["Each action must have unique ID"]
-            )
-        self.actions[action_id] = config
+        if config.id in self.actions:
+            raise CompilationError("Stage 2: Symbol Table", [f"Duplicate action id '{config.id}' detected."])
+        self.actions[config.id] = config
 
     def resolve_meter_reference(self, name: str, location: str) -> BarConfig:
         """
@@ -474,24 +441,23 @@ def _stage_2_build_symbol_tables(self, raw_configs: RawConfigs) -> UniverseSymbo
 
     # Register VFS variables (CORRECTED: variables_reference instead of variables.variables)
     for var in raw_configs.variables_reference:
-        symbol_table.register_variable(var.id, var)
+        symbol_table.register_variable(var)
 
-    # Register meters (subset of variables)
-    # CORRECTED: raw_configs.bars uses BarsConfig type alias (per TASK-004A-PREREQUISITES Part 2)
-    for bar in raw_configs.bars.bars:
-        symbol_table.register_meter(bar.name, bar)
+    # Register meters (raw_configs exposes tuples already)
+    for bar in raw_configs.bars:
+        symbol_table.register_meter(bar)
 
     # Register affordances
-    for aff in raw_configs.affordances.affordances:
-        symbol_table.register_affordance(aff.id, aff)
+    for aff in raw_configs.affordances:
+        symbol_table.register_affordance(aff)
 
-    # Register cues
-    for meter_name, cue in raw_configs.cues.items():
-        symbol_table.register_cue(meter_name, cue)
+    # Register cues (flattened tuple of simple + compound cues)
+    for cue in raw_configs.cues:
+        symbol_table.register_cue(cue)
 
     # Register actions (CORRECTED: global_actions instead of actions)
     for action in raw_configs.global_actions.actions:
-        symbol_table.register_action(action.id, action)
+        symbol_table.register_action(action)
 
     return symbol_table
 ```
@@ -511,7 +477,7 @@ def _stage_3_resolve_references(
     Validates:
     - Cascade meter references exist in bars.yaml
     - Affordance meter references exist in bars.yaml
-    - Training enabled_affordances exist in affordances.yaml
+    - Environment enabled_affordances exist in affordances.yaml
     """
     # Resolve cascade meter references
     for cascade in raw_configs.cascades.cascades:
@@ -553,23 +519,25 @@ def _stage_3_resolve_references(
             except ReferenceError as e:
                 errors.add_error(str(e))
 
-    # Resolve training enabled_affordances
-    for aff_id in raw_configs.training.enabled_affordances:
-        if aff_id not in symbol_table.affordances:
-            errors.add_error(
-                f"training.yaml:enabled_affordances: "
-                f"References non-existent affordance '{aff_id}'. "
-                f"Valid affordances: {symbol_table.affordance_ids}"
-            )
+    # Resolve environment enabled_affordances (names, not IDs)
+    enabled_affordances = raw_configs.environment.enabled_affordances
+    if enabled_affordances:
+        for aff_name in enabled_affordances:
+            if aff_name not in symbol_table.affordances_by_name:
+                errors.add_error(
+                    f"training.yaml:environment.enabled_affordances: "
+                    f"References non-existent affordance '{aff_name}'. "
+                    f"Valid affordances: {symbol_table.affordance_names}"
+                )
 
     # Resolve action cost meter references (NEW - from research Gap 2)
-    # CORRECTED: global_actions instead of actions
+    # CORRECTED: global_actions instead of actions.yaml
     for action in raw_configs.global_actions.actions:
         for cost in action.costs:
             try:
                 symbol_table.resolve_meter_reference(
                     cost.meter,
-                    location=f"actions.yaml:{action.name}:cost"
+                    location=f"global_actions.yaml:{action.name}:cost"
                 )
             except ReferenceError as e:
                 errors.add_error(str(e))
@@ -736,7 +704,7 @@ def _stage_4_cross_validate(
     # 1. Spatial feasibility
     grid_size = raw_configs.training.grid_size
     grid_cells = grid_size * grid_size
-    enabled_affordances = raw_configs.training.enabled_affordances
+    enabled_affordances = raw_configs.environment.enabled_affordances
     required_cells = len(enabled_affordances) + 1  # +1 for agent
 
     if required_cells > grid_cells:
@@ -797,29 +765,18 @@ def _stage_4_cross_validate(
                         )
 
     # 5. Cues validation (NEW - Per COMPILER_ARCHITECTURE.md §5.3)
-    for meter_name, cue_config in raw_configs.cues.items():
-        # Validate cues reference valid meters
-        if meter_name not in symbol_table.meters:
-            errors.add_error(
-                f"cues.yaml:{meter_name}: References non-existent meter. "
-                f"Available meters: {list(symbol_table.meters.keys())}"
-            )
-            continue
+    for cue in raw_configs.cues:
+        if isinstance(cue, SimpleCueConfig):
+            referenced_meters = [cue.condition.meter]
+        else:  # Compound cue
+            referenced_meters = [condition.meter for condition in cue.conditions]
 
-        # Validate ranges cover full [0.0, 1.0] domain
-        ranges = [(cue.min_value, cue.max_value) for cue in cue_config.visual_cues]
-        if not self._ranges_cover_domain(ranges, 0.0, 1.0):
-            errors.add_error(
-                f"cues.yaml:{meter_name}: Cue ranges don't cover full [0.0, 1.0] domain. "
-                f"Every meter value must map to exactly one cue."
-            )
-
-        # Check for overlapping ranges
-        if self._ranges_overlap(ranges):
-            errors.add_error(
-                f"cues.yaml:{meter_name}: Cue ranges overlap. "
-                f"Each meter value must map to exactly ONE cue."
-            )
+        for meter_name in referenced_meters:
+            if meter_name not in symbol_table.meters:
+                errors.add_error(
+                    f"cues.yaml:{cue.cue_id}: References non-existent meter '{meter_name}'. "
+                    f"Available meters: {list(symbol_table.meters.keys())}"
+                )
 
     # 6. Capability conflicts (NEW - from research Finding 1)
     for aff in raw_configs.affordances.affordances:
@@ -1328,9 +1285,9 @@ def _stage_5_build_rich_metadata(
             id=action.id,
             name=action.name,
             type=action.type,  # "movement", "interaction", "passive", "custom"
-            enabled=True,  # Could be extended with training.enabled_actions
-            source="substrate" if action.source == "substrate" else "custom",
-            costs={cost.meter: cost.amount for cost in action.costs},
+            enabled=action.enabled,  # Derived from training.enabled_actions during Stage 1 compose step
+            source=action.source,
+            costs=dict(action.costs),
             description=action.description or f"{action.name} action"
         )
         action_metadatas.append(action_metadata)
@@ -1339,6 +1296,9 @@ def _stage_5_build_rich_metadata(
         actions=action_metadatas,
         action_dim=len(action_metadatas)
     )
+
+    # Stage 1 now threads `training.enabled_actions` through RawConfigs.global_actions, so
+    # ActionMetadata.enabled is authoritative and the runtime no longer recomputes masks.
 
     # 2. MeterMetadata
     meter_infos = []
@@ -1915,6 +1875,7 @@ class CompiledUniverse:
 **Per COMPILER_ARCHITECTURE.md §4.2**: Use SHA-256 hash of config file contents for robust cache invalidation.
 
 **Why hash-based over mtime-based:**
+
 - **Robust across filesystems**: mtime can be unreliable (git checkout, CI runners, network filesystems)
 - **Content-aware**: Only invalidates when config *actually* changes, not just timestamps
 - **Portable**: Works across different machines and deployment environments
@@ -2096,7 +2057,13 @@ env = VectorizedHamletEnv(
 )
 ```
 
-#### 8.3: Checkpoint Compatibility Validation (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
+#### 8.3: Runtime DTO + I/O Guarantees
+
+- `UniverseCompiler` now serializes VFS observation fields and optional `action_labels.yaml` data into the compiled artifact so runtime systems never reopen pack YAML files.
+- `RuntimeUniverse` exposes read-only views of `HamletConfig`/`ActionSpaceConfig` (mutations raise) and clone helpers for callers that need mutable DTOs.
+- `VectorizedHamletEnv` consumes the runtime DTO exclusively—variables, exposures, meter metadata, action labels, and affordance vocabularies are sourced from the compiled universe, and regression tests guard against reopening `bars.yaml`, `variables_reference.yaml`, or `action_labels.yaml` during initialization.
+
+#### 8.4: Checkpoint Compatibility Validation (NEW - Per COMPILER_ARCHITECTURE.md §6.2)
 
 **Critical**: Use `universe.metadata.config_hash` to validate checkpoint compatibility during transfer learning.
 
@@ -2285,7 +2252,7 @@ All future UAC work depends on robust compilation:
 - [ ] Stage 1 catches file not found, malformed YAML, invalid schema
 - [ ] Stage 2 registers all meters and affordances
 - [ ] Stage 3 detects dangling references with clear error messages
-- [ ] Stage 4 validates spatial feasibility, economic balance, cascade circularity
+- [x] Stage 4 validates spatial feasibility, economic balance, cascade circularity (implemented in `_stage_4_cross_validate` with economic 2.0 + capacity checks)
 - [ ] Stage 5 computes correct observation_dim (scales with meter_count)
 - [ ] Stage 6 pre-computes optimization data (tensors, lookup tables)
 - [ ] Stage 7 emits immutable CompiledUniverse
@@ -2319,6 +2286,8 @@ All future UAC work depends on robust compilation:
 - [ ] Performance tests (compilation < 100ms without cache)
 
 ---
+
+## Auxiliary Tasks
 
 ### Phase 3 Enhancement: Error Codes & Source Maps (3-4 hours)
 
@@ -2464,10 +2433,11 @@ for cascade in raw_configs.cascades.cascades:
 ```
 
 **Success Criteria**:
-- [ ] All CompilationError instances have error codes
-- [ ] File:line shown in error messages when available
-- [ ] Error codes documented and searchable
-- [ ] Source map tracks YAML key locations
+
+- [x] All CompilationError instances have error codes (see `townlet.universe.errors.CompilationMessage`)
+- [x] File:line shown in error messages when available (populated from SourceMap during Stage 1/4 diagnostics)
+- [x] Error codes documented and searchable (UAC-VAL/UAC-ACT catalog now referenced in docs)
+- [x] Source map tracks YAML key locations
 
 ---
 
@@ -2494,6 +2464,7 @@ class BarConfig(BaseModel):
 ```
 
 Apply to:
+
 - `src/townlet/config/bar.py`: `BarConfig`
 - `src/townlet/config/training.py`: `TrainingConfig`
 - `src/townlet/config/population.py`: `PopulationConfig`
@@ -2561,10 +2532,11 @@ def _stage_4_cross_validate(
 ```
 
 **Success Criteria**:
-- [ ] All Pydantic models use `extra="forbid"`
-- [ ] Unknown fields in YAML raise clear errors
-- [ ] Safety limits enforced (meters, affordances, cascades)
-- [ ] Error messages indicate security concern
+
+- [x] All Pydantic models use `extra="forbid"`
+- [x] Unknown fields in YAML raise clear errors
+- [x] Safety limits enforced (meters, affordances, cascades)
+- [x] Error messages indicate security concern
 
 ---
 
@@ -2705,11 +2677,12 @@ def _find_critical_path_affordances(self, raw_configs: RawConfigs) -> list[str]:
 ```
 
 **Success Criteria**:
-- [ ] Operating hours feasibility checked
-- [ ] Depletion sustainability validated
-- [ ] Capacity constraints checked for multi-agent
-- [ ] Clear error messages for infeasible configs
-- [ ] Warnings for stressed but possible configs
+
+- [x] Operating hours feasibility checked
+- [x] Depletion sustainability validated
+- [x] Capacity constraints checked for multi-agent
+- [x] Clear error messages for infeasible configs
+- [x] Warnings for stressed but possible configs
 
 ---
 
@@ -2843,6 +2816,7 @@ def _stage_5_compute_metadata(
 ```
 
 **Success Criteria**:
+
 - [ ] Provenance ID computed from all semantic inputs
 - [ ] Git SHA captured (or "unknown" if not in repo)
 - [ ] Library versions captured
@@ -2977,11 +2951,12 @@ def check_checkpoint_compatibility(
 ```
 
 **Success Criteria**:
-- [ ] ObservationField has uuid field
-- [ ] UUIDs generated from semantics (not indices)
-- [ ] UUIDs stable across field reordering
-- [ ] Checkpoints store field UUIDs
-- [ ] Checkpoint validation checks UUID compatibility
+
+- [x] ObservationField has uuid field
+- [x] UUIDs generated from semantics (not indices)
+- [x] UUIDs stable across field reordering
+- [x] Checkpoints store field UUIDs
+- [x] Checkpoint validation checks UUID compatibility
 
 ---
 
@@ -3120,6 +3095,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 ```
 
 **Success Criteria**:
+
 - [ ] YAML normalized before hashing
 - [ ] Cosmetic changes (whitespace, comments, key order) don't change hash
 - [ ] Cache key includes compiler version
@@ -3191,18 +3167,21 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 **Breakdown by Source**:
 
 **Original Core** (37-54h):
+
 - Basic compiler pipeline (7 stages)
 - Error collection
 - Basic validation
 - Caching
 
 **COMPILER_ARCHITECTURE.md Additions** (+15-18h):
+
 - CuesCompiler integration: +3-4h
 - ObservationSpec UAC→BAC contract: +2h
 - Rich Metadata structures: +4h
 - Capability system validation: +6-8h
 
 **External Review Additions** (+14-21h):
+
 - Error codes & source maps: +3-4h
 - Security hardening: +1-2h
 - Economic feasibility checks: +4-6h
@@ -3211,6 +3190,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 - YAML normalization: +2-3h
 
 **TASK-004A-PREREQUISITES** (+8-12h):
+
 - Config schema alignment
 - DTO consolidation
 - ObservationSpec adapter
@@ -3222,6 +3202,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 **Total Increase from Original**: +37-51h (+100-134% from 37-54h baseline)
 
 **Why Worth It**:
+
 - Transforms compiler from **research-grade → audit-grade**
 - Prevents irreproducible runs (provenance)
 - Prevents silent failures (security hardening)
@@ -3231,6 +3212,7 @@ def compile(self, config_dir: Path, use_cache: bool = True) -> CompiledUniverse:
 - Dramatically improves debugging (error codes, source maps)
 
 **UPDATED per**:
+
 - COMPILER_ARCHITECTURE.md (authoritative reference)
 - TASK-004A-PREREQUISITES (integration blockers)
 - External Review 2025-11-08 (production hardening)

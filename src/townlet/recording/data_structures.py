@@ -95,6 +95,7 @@ class EpisodeMetadata:
     # Affordance context
     affordance_layout: dict[str, tuple[int, ...]]  # name → (x, y) or (x, y, z) or ()
     affordance_visits: dict[str, int]  # name → count
+    custom_action_uses: dict[str, int]  # name → count (REST, MEDITATE, etc.)
 
 
 @dataclass

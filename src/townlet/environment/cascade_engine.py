@@ -236,6 +236,8 @@ class CascadeEngine:
         """
         Check terminal conditions (death).
 
+        Preserves monotonic property: once done, stays done until reset.
+
         Args:
             meters: [num_agents, meter_count] current meter values
             dones: [num_agents] current done flags
@@ -268,7 +270,8 @@ class CascadeEngine:
             # OR with existing terminal mask (death if ANY condition met)
             terminal_mask = terminal_mask | condition
 
-        return terminal_mask
+        # Preserve previous done states (monotonic property)
+        return terminal_mask | dones
 
     def apply_full_cascade(self, meters: torch.Tensor) -> torch.Tensor:
         """

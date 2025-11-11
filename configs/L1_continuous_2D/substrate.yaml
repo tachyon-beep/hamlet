@@ -26,6 +26,14 @@ continuous:
   # Distance metric
   distance_metric: "euclidean"
 
+  # Action discretization (Option A: Discretized Continuous Actions)
+  # Enables fine-grained directional movement with variable speed
+  # If not specified, uses legacy 4-way directional actions
+  action_discretization:
+    num_directions: 32  # 11.25° angular resolution (360° / 32)
+    num_magnitudes: 7   # 7 speed levels: 0%, 16.7%, 33.3%, 50%, 66.7%, 83.3%, 100%
+  # Total actions: 1 STOP + (32 dirs × 6 non-zero mags) + INTERACT + WAIT = 195 actions
+
 # Use cases:
 # - Robotics simulation (smooth movement)
 # - Continuous control problems

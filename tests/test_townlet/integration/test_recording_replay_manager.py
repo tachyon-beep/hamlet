@@ -64,6 +64,7 @@ class TestReplayManager:
                 timestamp=time.time(),
                 affordance_layout={"Bed": (2, 3)},
                 affordance_visits={"Bed": 1},
+                custom_action_uses={},
             )
 
             steps = [
@@ -163,6 +164,7 @@ class TestReplayManager:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
 
             steps = [
@@ -249,6 +251,7 @@ class TestReplayManager:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
 
             steps = [
@@ -328,6 +331,7 @@ class TestReplayManager:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
 
             steps = [
@@ -414,6 +418,7 @@ class TestReplayManager:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
 
             steps = [
@@ -492,6 +497,7 @@ class TestReplayManager:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
 
             steps = [

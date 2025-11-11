@@ -10,15 +10,19 @@ Test Organization:
 - TestLSTMForwardPass: Forward pass with POMDP (1 test)
 """
 
+from pathlib import Path
+
+import pytest
 import torch
 import torch.nn.functional as functional
 
 from townlet.agent.networks import RecurrentSpatialQNetwork
 from townlet.curriculum.static import StaticCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
+
+pytestmark = pytest.mark.slow
 
 # =============================================================================
 # TEST CLASS 1: LSTM Hidden State Persistence
@@ -28,30 +32,31 @@ from townlet.training.sequential_replay_buffer import SequentialReplayBuffer
 class TestLSTMHiddenStatePersistence:
     """Test LSTM hidden state lifecycle during episode execution."""
 
-    def test_hidden_state_persists_across_10_steps_within_episode(self, test_config_pack_path, cpu_device):
+    def test_hidden_state_persists_across_10_steps_within_episode(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state evolves during episode rollout.
 
         Hidden state should change across steps as the agent accumulates
         experience, demonstrating that memory is being built up.
         """
-        # Create small POMDP environment for fast testing
-        # Use VERY low energy costs to ensure agent survives 10 steps
-        # (cascade effects from satiation/mood could kill agent otherwise)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,  # 5×5 window
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.0001,  # Reduced from 0.005 to prevent death
-            wait_energy_cost=0.00001,  # Reduced from 0.001 to prevent death
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-            enabled_affordances=[],  # Disable affordances to avoid random lethal interactions
-            device=cpu_device,
-        )
+
+        def _modifier(cfg):
+            env_cfg = cfg["environment"]
+            env_cfg.update(
+                {
+                    "grid_size": 5,
+                    "partial_observability": True,
+                    "vision_range": 2,
+                    "enable_temporal_mechanics": False,
+                    "energy_move_depletion": 0.0,
+                    "energy_wait_depletion": 0.0,
+                    "energy_interact_depletion": 0.0,
+                }
+            )
+            cfg["curriculum"].update({"max_steps_per_episode": 1000})
+
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_survival")
+        env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         # Create recurrent population
         curriculum = StaticCurriculum()
@@ -110,7 +115,7 @@ class TestLSTMHiddenStatePersistence:
             assert not torch.allclose(h_curr, h_next, atol=1e-6), f"Hidden state should change between steps {i} and {i + 1}"
             assert not torch.allclose(c_curr, c_next, atol=1e-6), f"Cell state should change between steps {i} and {i + 1}"
 
-    def test_hidden_state_resets_on_death(self, test_config_pack_path, cpu_device):
+    def test_hidden_state_resets_on_death(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state resets when agent dies.
 
@@ -120,25 +125,20 @@ class TestLSTMHiddenStatePersistence:
         # Seed RNG for deterministic behavior in full suite
         torch.manual_seed(42)
 
-        # Create environment with NO affordances (agents die quickly)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-            enabled_affordances=[],  # Deterministic survival for max-steps flush test
-            device=cpu_device,
-        )
+        def _modifier(cfg):
+            env_cfg = cfg["environment"]
+            env_cfg.update(
+                {
+                    "grid_size": 5,
+                    "partial_observability": True,
+                    "vision_range": 2,
+                    "enable_temporal_mechanics": False,
+                }
+            )
+            cfg["curriculum"].update({"max_steps_per_episode": 1000})
 
-        # Disable all affordances in environment (force death)
-        env.enabled_affordances = []
-        env.deployed_affordances = {}
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_reset")
+        env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(
@@ -179,26 +179,28 @@ class TestLSTMHiddenStatePersistence:
         assert torch.allclose(h, torch.zeros_like(h)), "Hidden state should be zeros after death"
         assert torch.allclose(c, torch.zeros_like(c)), "Cell state should be zeros after death"
 
-    def test_hidden_state_resets_after_flush_on_max_steps(self, test_config_pack_path, cpu_device):
+    def test_hidden_state_resets_after_flush_on_max_steps(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state resets after flush_episode() on max_steps survival.
 
         When agent survives max_steps, flush_episode() should reset hidden state
         to prevent memory leakage into next episode.
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-        )
+
+        def _modifier(cfg):
+            env_cfg = cfg["environment"]
+            env_cfg.update(
+                {
+                    "grid_size": 5,
+                    "partial_observability": True,
+                    "vision_range": 2,
+                    "enable_temporal_mechanics": False,
+                }
+            )
+            cfg["curriculum"].update({"max_steps_per_episode": 1000})
+
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_flush")
+        env = cpu_env_factory(config_dir=config_dir, num_agents=1)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(
@@ -238,28 +240,32 @@ class TestLSTMHiddenStatePersistence:
         assert torch.allclose(h, torch.zeros_like(h)), "Hidden state should be zeros after flush"
         assert torch.allclose(c, torch.zeros_like(c)), "Cell state should be zeros after flush"
 
-    def test_hidden_state_shape_correct_during_episode(self, test_config_pack_path, cpu_device):
+    def test_hidden_state_shape_correct_during_episode(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state shape during multi-agent rollout.
 
         Hidden state shape should be [1, num_agents, 256] throughout episode.
         """
+
         # Create environment with 2 agents
         # Use VERY low energy costs to ensure agents survive 10 steps
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.0001,  # Reduced from 0.005 to prevent death
-            wait_energy_cost=0.00001,  # Reduced from 0.001 to prevent death
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-            enabled_affordances=[],  # Remove stochastic affordance effects for shape test
-            device=cpu_device,
-        )
+        def _modifier(cfg):
+            env_cfg = cfg["environment"]
+            env_cfg.update(
+                {
+                    "grid_size": 5,
+                    "partial_observability": True,
+                    "vision_range": 2,
+                    "enable_temporal_mechanics": False,
+                    "energy_move_depletion": 0.0001,
+                    "energy_wait_depletion": 0.00001,
+                    "energy_interact_depletion": 0.0,
+                }
+            )
+            cfg["curriculum"].update({"max_steps_per_episode": 1000})
+
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_hidden_state_shape")
+        env = cpu_env_factory(config_dir=config_dir, num_agents=2)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(
@@ -307,7 +313,7 @@ class TestLSTMHiddenStatePersistence:
 class TestLSTMBatchTraining:
     """Test LSTM batch training with sequence sampling."""
 
-    def test_hidden_state_batch_size_correct_during_training(self, test_config_pack_path, cpu_device):
+    def test_hidden_state_batch_size_correct_during_training(self, cpu_device, cpu_env_factory, config_pack_factory):
         """
         Verify hidden state shape changes from num_agents to batch_size during training.
 
@@ -315,19 +321,21 @@ class TestLSTMBatchTraining:
         During training: [1, batch_size, 256]
         After training: [1, num_agents, 256]
         """
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-        )
+
+        def _modifier(cfg):
+            env_cfg = cfg["environment"]
+            env_cfg.update(
+                {
+                    "grid_size": 5,
+                    "partial_observability": True,
+                    "vision_range": 2,
+                    "enable_temporal_mechanics": False,
+                }
+            )
+            cfg["curriculum"].update({"max_steps_per_episode": 1000})
+
+        config_dir = config_pack_factory(modifier=_modifier, name="lstm_batch_size")
+        env = cpu_env_factory(config_dir=config_dir, num_agents=2)
 
         curriculum = StaticCurriculum()
         exploration = EpsilonGreedyExploration(
@@ -585,27 +593,14 @@ class TestLSTMBatchTraining:
 class TestLSTMForwardPass:
     """Test LSTM forward pass with POMDP observations."""
 
-    def test_partial_observability_5x5_window_to_lstm(self, test_config_pack_path, cpu_device):
+    def test_partial_observability_5x5_window_to_lstm(self, cpu_device, cpu_env_factory):
         """
         Verify POMDP environment → LSTM data flow.
 
         POMDP env (vision_range=2) produces 5×5 window.
         LSTM forward pass should work correctly and produce Q-values.
         """
-        # Create POMDP environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=True,
-            vision_range=2,  # 5×5 window
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-        )
+        env = cpu_env_factory(config_dir=Path("configs/L2_partial_observability"), num_agents=1)
 
         # Create recurrent network
         network = RecurrentSpatialQNetwork(
@@ -622,8 +617,7 @@ class TestLSTMForwardPass:
         obs = env.reset()
 
         # Verify observation shape (POMDP)
-        # 5×5 grid (25) + position (2) + meters (8) + affordance (15) + temporal (4) = 54
-        expected_obs_dim = 25 + 2 + 8 + 15 + 4
+        expected_obs_dim = env.metadata.observation_dim
         assert obs.shape == (1, expected_obs_dim), f"Expected obs shape (1, {expected_obs_dim}), got {obs.shape}"
 
         # Reset hidden state

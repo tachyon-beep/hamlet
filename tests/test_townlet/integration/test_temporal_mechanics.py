@@ -83,12 +83,13 @@ instead of hardcoded positions (which don't match randomized placements).
 Tests will then run normally and report failures if implementation doesn't match spec.
 """
 
+from pathlib import Path
+
 import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-
 # All temporal mechanics features are implemented - all 17 tests passing
+pytestmark = pytest.mark.slow
 
 
 # =============================================================================
@@ -134,7 +135,7 @@ class TestTimeProgression:
         # Should wrap back to 0
         assert env.time_of_day == 0
 
-    def test_observation_dimensions_with_temporal(self, cpu_device):
+    def test_observation_dimensions_with_temporal(self, cpu_device, cpu_env_factory):
         """Verify observation includes temporal features (sin/cos time + progress + lifetime).
 
         Migrated from: test_temporal_integration.py::test_observation_dimensions_with_temporal
@@ -143,25 +144,12 @@ class TestTimeProgression:
         NOTE: Updated to expect 4 temporal features (was 3) to match actual implementation.
         The 4th feature (lifetime_progress) was added for forward compatibility.
         """
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=Path("configs/L3_temporal_mechanics"), num_agents=2)
 
         obs = env.reset()
 
-        # Full observability: substrate.get_observation_dim() + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
-        # For Grid2D with "relative" encoding: 2 (coords) + 8 (meters) + (num_affordance_types + 1) + 4 (temporal)
-        # Temporal features: sin(time), cos(time), normalized interaction progress, lifetime
-        expected_dim = env.substrate.get_observation_dim() + 8 + (env.num_affordance_types + 1) + 4
+        # Observation size now flows from compiled metadata
+        expected_dim = env.metadata.observation_dim
         assert obs.shape == (2, expected_dim)
 
         time_sin = obs[0, -4]
@@ -548,23 +536,12 @@ class TestEarlyExitMechanics:
 class TestMultiAgentTemporal:
     """Multi-agent temporal mechanics with independent states."""
 
-    def test_multi_agent_temporal_interactions(self, cpu_device):
+    def test_multi_agent_temporal_interactions(self, cpu_device, cpu_env_factory):
         """Verify 3 agents with independent temporal states.
 
         New test: Validates that each agent has independent interaction progress.
         """
-        env = VectorizedHamletEnv(
-            num_agents=3,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=Path("configs/L3_temporal_mechanics"), num_agents=3)
 
         env.reset()
 
@@ -631,24 +608,12 @@ class TestMultiAgentTemporal:
 class TestTemporalIntegrations:
     """Cross-system temporal mechanics integration."""
 
-    def test_temporal_mechanics_disabled_fallback(self, cpu_device):
+    def test_temporal_mechanics_disabled_fallback(self, cpu_device, cpu_env_factory, test_config_pack_path):
         """Verify environment works without temporal mechanics (legacy mode).
 
         Migrated from: test_temporal_integration.py::test_temporal_mechanics_disabled_fallback
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=False,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            # Legacy mode
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         obs = env.reset()
 
@@ -674,28 +639,17 @@ class TestTemporalIntegrations:
         # Even with depletion, should see significant increase
         assert (final_energy - initial_energy) > 0.4  # At least 40% gain
 
-    def test_temporal_mechanics_with_curriculum(self, cpu_device):
+    def test_temporal_mechanics_with_curriculum(self, cpu_device, cpu_env_factory):
         """Verify temporal mechanics works with adversarial curriculum.
 
         New test: Validates that curriculum receives correct survival signal.
         """
         from townlet.curriculum.adversarial import AdversarialCurriculum
 
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            device=cpu_device,
-            enable_temporal_mechanics=True,
-            vision_range=8,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=Path("configs/L3_temporal_mechanics"), num_agents=1)
 
         curriculum = AdversarialCurriculum(
-            max_steps_per_episode=200,
+            max_steps_per_episode=50,
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
             entropy_gate=0.5,

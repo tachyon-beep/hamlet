@@ -117,3 +117,5 @@ test_migration_checkpoints/*
 *.orig
 *.rej
 *.broken
+
+*.msgpack

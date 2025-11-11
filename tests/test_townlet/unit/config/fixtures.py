@@ -41,18 +41,20 @@ VALID_TRAINING_PARAMS = {
     "target_update_frequency": 100,
     "batch_size": 64,
     "max_grad_norm": 10.0,
+    "reward_strategy": "multiplicative",
     "epsilon_start": 1.0,
     "epsilon_decay": 0.995,
     "epsilon_min": 0.01,
     "sequence_length": 8,
+    "use_double_dqn": False,
 }
 
 VALID_ENVIRONMENT_PARAMS = {
-    "grid_size": 8,
     "partial_observability": False,
     "vision_range": 8,
     "enable_temporal_mechanics": False,
     "enabled_affordances": None,  # None = all affordances
+    "randomize_affordances": True,
     "energy_move_depletion": 0.005,
     "energy_wait_depletion": 0.001,
     "energy_interact_depletion": 0.0,
@@ -64,6 +66,7 @@ VALID_POPULATION_PARAMS = {
     "gamma": 0.99,
     "replay_buffer_capacity": 10000,
     "network_type": "simple",
+    "mask_unused_obs": False,
 }
 
 VALID_CURRICULUM_PARAMS = {
@@ -79,6 +82,7 @@ VALID_EXPLORATION_PARAMS = {
     "initial_intrinsic_weight": 1.0,
     "variance_threshold": 100.0,
     "survival_window": 100,
+    "min_survival_fraction": 0.5,
 }
 
 VALID_BAR_PARAMS = {

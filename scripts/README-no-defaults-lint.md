@@ -119,7 +119,7 @@ src/townlet/environment/config.py:42:DEF001
 
 **DO whitelist**:
 
-- Truly optional features (e.g., `cues: CuesConfig | None = None`)
+- Truly optional features (rare; only use when behavior is unaffected)
 - Metadata only (e.g., `description: str | None = None`)
 - Computed values (e.g., `observation_dim: int` calculated at compile time)
 
@@ -172,7 +172,7 @@ class HamletConfig(BaseModel):
     bars: BarsConfig
     cascades: CascadeConfig
     training: TrainingConfig
-    cues: CuesConfig | None = None    # ✅ Whitelisted - optional for headless training
+    description: str | None = None    # ✅ Metadata only
 ```
 
 Whitelist entry:

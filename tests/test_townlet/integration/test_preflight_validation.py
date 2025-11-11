@@ -9,7 +9,7 @@ from townlet.demo.runner import DemoRunner
 
 
 def test_preflight_detects_old_checkpoints(tmp_path):
-    """DemoRunner should detect and reject old checkpoints on startup."""
+    """DemoRunner should strictly reject old checkpoints on startup (pre-release, 0 users)."""
     # Create mock old checkpoint (missing substrate_metadata)
     checkpoint_dir = tmp_path / "checkpoints"
     checkpoint_dir.mkdir()
@@ -25,8 +25,8 @@ def test_preflight_detects_old_checkpoints(tmp_path):
         old_checkpoint,
     )
 
-    # Attempting to create DemoRunner should detect old checkpoint
-    with pytest.raises(ValueError, match="Old checkpoints detected"):
+    # Attempting to create DemoRunner should detect and reject old checkpoint
+    with pytest.raises(ValueError) as exc_info:
         DemoRunner(
             config_dir=Path("configs/L1_full_observability"),
             db_path=tmp_path / "test.db",
@@ -34,6 +34,11 @@ def test_preflight_detects_old_checkpoints(tmp_path):
             max_episodes=10,
             training_config_path=Path("configs/L1_full_observability/training.yaml"),
         )
+
+    # Verify error message provides clear guidance
+    error_msg = str(exc_info.value)
+    assert "substrate_metadata" in error_msg
+    assert "unsupported" in error_msg.lower() or "retrain" in error_msg.lower()
 
 
 def test_preflight_allows_new_checkpoints(tmp_path):

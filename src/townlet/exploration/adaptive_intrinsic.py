@@ -27,12 +27,15 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         initial_intrinsic_weight: float = 1.0,
         min_intrinsic_weight: float = 0.0,
         variance_threshold: float = 100.0,  # Increased from 10.0 to prevent premature annealing
+        min_survival_fraction: float = 0.4,  # Fraction of max_episode_length (e.g., 0.4 = 40%)
+        max_episode_length: int = 500,  # From curriculum config - used to compute absolute threshold
         survival_window: int = 100,
         decay_rate: float = 0.99,
         epsilon_start: float = 1.0,
         epsilon_min: float = 0.01,
         epsilon_decay: float = 0.995,
         device: torch.device = torch.device("cpu"),
+        active_mask: tuple[bool, ...] | None = None,
     ):
         """Initialize adaptive intrinsic exploration.
 
@@ -44,12 +47,15 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             initial_intrinsic_weight: Starting intrinsic weight
             min_intrinsic_weight: Minimum intrinsic weight (floor)
             variance_threshold: Variance threshold for annealing trigger
+            min_survival_fraction: Fraction of max_episode_length before allowing annealing (prevents "stable failure")
+            max_episode_length: Maximum steps per episode (from curriculum config)
             survival_window: Number of episodes to track for variance
             decay_rate: Exponential decay rate (weight *= decay_rate)
             epsilon_start: Initial epsilon for epsilon-greedy
             epsilon_min: Minimum epsilon
             epsilon_decay: Epsilon decay rate
             device: Device for tensors
+            active_mask: Optional mask for active observation dimensions (padding dimensions will be zeroed)
         """
         # RND instance (composition)
         self.rnd = RNDExploration(
@@ -61,12 +67,16 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             epsilon_min=epsilon_min,
             epsilon_decay=epsilon_decay,
             device=device,
+            active_mask=active_mask,
         )
 
         # Annealing parameters
         self.current_intrinsic_weight = initial_intrinsic_weight
         self.min_intrinsic_weight = min_intrinsic_weight
         self.variance_threshold = variance_threshold
+        self.min_survival_fraction = min_survival_fraction
+        self.max_episode_length = max_episode_length
+        self.min_survival_for_annealing = int(min_survival_fraction * max_episode_length)  # Compute absolute threshold
         self.survival_window = survival_window
         self.decay_rate = decay_rate
         self.device = device
@@ -95,20 +105,23 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
     def compute_intrinsic_rewards(
         self,
         observations: torch.Tensor,
+        update_stats: bool = False,
     ) -> torch.Tensor:
-        """Compute weighted intrinsic rewards.
+        """Compute intrinsic rewards (normalized RND novelty).
+
+        Note: Weight is applied in replay buffer sampling, NOT here.
+        This prevents double-weighting bug.
 
         Args:
             observations: [batch, obs_dim] state observations
+            update_stats: If True, update running mean/std statistics (use during training rollouts)
 
         Returns:
-            [batch] intrinsic rewards scaled by current weight
+            [batch] normalized intrinsic rewards (unweighted)
         """
-        # Get RND novelty
-        rnd_novelty = self.rnd.compute_intrinsic_rewards(observations)
-
-        # Scale by current weight
-        return rnd_novelty * self.current_intrinsic_weight
+        # Get RND novelty (already normalized)
+        # Weight will be applied once in replay buffer sampling
+        return self.rnd.compute_intrinsic_rewards(observations, update_stats=update_stats)
 
     def update(self, batch: dict[str, torch.Tensor]) -> None:
         """Update RND predictor network from experience batch.
@@ -141,12 +154,21 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
 
         Returns:
             True if agent performance is consistent enough to reduce exploration
-        """
-        if len(self.survival_history) < self.survival_window:
-            return False  # Not enough data
 
+        Note:
+            Uses incremental window checking (min 10 episodes) to avoid abrupt
+            behavior changes when hitting full window size. This provides smoother
+            annealing onset and earlier feedback on performance consistency.
+        """
+        # Need minimum data for reliable variance calculation
+        if len(self.survival_history) < 10:
+            return False
+
+        # Use whatever recent data we have (up to window size)
+        # This allows incremental checking instead of waiting for full window
+        window_size = min(self.survival_window, len(self.survival_history))
         recent_survivals = torch.tensor(
-            self.survival_history[-self.survival_window :],
+            self.survival_history[-window_size:],
             dtype=torch.float32,
         )
         variance = torch.var(recent_survivals).item()
@@ -155,9 +177,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         # DEFENSIVE: Only anneal if BOTH low variance AND good performance
         # Low variance + low survival = "consistently failing" (NOT ready to anneal)
         # Low variance + high survival = "consistently succeeding" (ready to anneal)
-        min_survival_for_annealing = 50.0  # Don't anneal until surviving at least 50 steps
-
-        return variance < self.variance_threshold and mean_survival > min_survival_for_annealing
+        return variance < self.variance_threshold and mean_survival > self.min_survival_for_annealing
 
     def anneal_weight(self) -> None:
         """Reduce intrinsic weight via exponential decay."""
@@ -183,6 +203,8 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
             "current_intrinsic_weight": self.current_intrinsic_weight,
             "min_intrinsic_weight": self.min_intrinsic_weight,
             "variance_threshold": self.variance_threshold,
+            "min_survival_fraction": self.min_survival_fraction,
+            "max_episode_length": self.max_episode_length,
             "survival_window": self.survival_window,
             "decay_rate": self.decay_rate,
             "survival_history": self.survival_history,
@@ -200,9 +222,7 @@ class AdaptiveIntrinsicExploration(ExplorationStrategy):
         self.variance_threshold = state["variance_threshold"]
         self.survival_window = state["survival_window"]
         self.decay_rate = state["decay_rate"]
-
-        # Gracefully handle missing survival_history (backwards compatibility)
-        if "survival_history" in state:
-            self.survival_history = state["survival_history"]
-        else:
-            self.survival_history = []
+        self.min_survival_fraction = state["min_survival_fraction"]
+        self.max_episode_length = state["max_episode_length"]
+        self.min_survival_for_annealing = int(self.min_survival_fraction * self.max_episode_length)
+        self.survival_history = state["survival_history"]

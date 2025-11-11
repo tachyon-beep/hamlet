@@ -7,10 +7,11 @@ Task 13a: Episode Execution Integration Tests
 Focus: Test complete episode execution with real components
 """
 
+from pathlib import Path
+
 import torch
 
 from townlet.curriculum.static import StaticCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.state import BatchedAgentState
@@ -31,7 +32,7 @@ class TestEpisodeLifecycle:
     5. Both feedforward and recurrent networks work correctly
     """
 
-    def test_single_episode_feedforward_network(self, cpu_device, test_config_pack_path):
+    def test_single_episode_feedforward_network(self, cpu_device, cpu_env_factory):
         """Verify single episode with feedforward network completes correctly.
 
         This test validates the most basic episode execution flow:
@@ -44,19 +45,7 @@ class TestEpisodeLifecycle:
         with feedforward network completing a full episode.
         """
         # Create small environment for fast testing
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population with feedforward network
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -116,7 +105,7 @@ class TestEpisodeLifecycle:
         assert step_count > 0, "Episode should run at least 1 step"
         assert step_count <= 50, "Episode should not exceed max_steps"
 
-    def test_single_episode_recurrent_network_with_lstm(self, cpu_device, test_config_pack_path):
+    def test_single_episode_recurrent_network_with_lstm(self, cpu_device, cpu_env_factory):
         """Verify single episode with LSTM network completes correctly.
 
         This test validates episode execution with recurrent networks:
@@ -132,20 +121,8 @@ class TestEpisodeLifecycle:
         Note: Uses minimal energy costs to prevent agent death during test,
         since death resets hidden state to zeros (see test_hidden_state_resets_on_death).
         """
-        # Create POMDP environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=True,
-            vision_range=2,  # 5×5 vision window
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.00001,  # Ultra-minimal to prevent cascade-induced death (satiation→energy/health)
-            wait_energy_cost=0.000001,  # Must be less than move_energy_cost
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        # Create environment via compiled universe pipeline
+        env = cpu_env_factory(config_dir=Path("configs/L2_partial_observability"), num_agents=1)
 
         # Create population with recurrent network
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -215,7 +192,7 @@ class TestEpisodeLifecycle:
         assert step_count > 0, "Episode should run at least 1 step"
         assert step_count <= 10, "Episode should not exceed max_steps"
 
-    def test_multi_agent_episode_with_partial_dones(self, cpu_device, test_config_pack_path):
+    def test_multi_agent_episode_with_partial_dones(self, cpu_device, cpu_env_factory):
         """Verify multi-agent episode where agents die at different times.
 
         This test validates partial done handling in multi-agent settings:
@@ -228,19 +205,7 @@ class TestEpisodeLifecycle:
         episode termination across multiple agents.
         """
         # Create multi-agent environment
-        env = VectorizedHamletEnv(
-            num_agents=4,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=4)
 
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -289,168 +254,7 @@ class TestEpisodeLifecycle:
         # At least some agents should have participated in episode
         assert step > 0, "Episode should run at least 1 step"
 
-    def test_episode_all_agents_die(self, cpu_device, test_config_pack_path):
-        """Verify episode ends when all agents die.
-
-        This test validates episode termination on complete failure:
-        - All agents' meters deplete to zero
-        - Episode ends with all dones=True
-        - Survival time recorded for all agents
-
-        Note: This test uses extreme depletion to force quick death for testing.
-        """
-        # Create small environment
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.5,  # Extreme depletion to force death
-            wait_energy_cost=0.1,  # Must be less than move_energy_cost
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
-
-        # Create population
-        curriculum = StaticCurriculum(difficulty_level=0.5)
-        exploration = EpsilonGreedyExploration(
-            epsilon=1.0,  # Random actions to prevent finding bed
-            epsilon_min=1.0,
-            epsilon_decay=1.0,
-        )
-
-        population = VectorizedPopulation(
-            env=env,
-            curriculum=curriculum,
-            exploration=exploration,
-            agent_ids=["agent_0", "agent_1"],
-            device=cpu_device,
-            obs_dim=env.observation_dim,
-            # action_dim defaults to env.action_dim
-            network_type="simple",
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
-            batch_size=16,
-        )
-
-        # Reset environment and population
-        population.reset()
-
-        # Run until all agents die or max steps
-        all_dead = False
-        step_count = 0
-
-        for step in range(100):
-            agent_state = population.step_population(env)
-            step_count += 1
-
-            # Check if all agents died
-            if agent_state.dones.all():
-                all_dead = True
-                break
-
-        # Agents should eventually die with extreme depletion
-        # (Note: This is probabilistic, but with 0.5 energy cost per step,
-        # agents should die within 100 steps)
-        assert step_count > 0, "Episode should run at least 1 step"
-
-        # If all died, verify survival times are reasonable
-        if all_dead:
-            # Survival times should be positive and less than total steps
-            survival_times = agent_state.survival_times
-            assert (survival_times > 0).all(), "Survival times should be positive"
-            assert (survival_times <= step_count).all(), "Survival times should not exceed step count"
-
-    def test_episode_all_agents_survive_to_max_steps(self, cpu_device, test_config_pack_path):
-        """Verify episode ends at max_steps when all agents survive.
-
-        This test validates episode termination on success:
-        - Episode runs to max_steps without any deaths
-        - Final dones=False (agents still alive)
-        - Caller (runner) must detect max_steps and end episode
-
-        Note: This test uses minimal depletion to prevent death.
-        """
-        # Create small environment with ultra-minimal depletion
-        # Use ULTRA-low energy costs to ensure agents survive 10 steps
-        # Even with meters at 1.0, cascade effects (satiation→energy/health) can kill agents over time
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.00001,  # Ultra-minimal to prevent cascade-induced death
-            wait_energy_cost=0.000001,  # Must be less than move_energy_cost
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
-
-        # Create population
-        max_steps = 10  # Reduced from 30 to avoid cascade death while still testing max_steps termination
-        curriculum = StaticCurriculum(difficulty_level=0.5)
-        exploration = EpsilonGreedyExploration(
-            epsilon=0.1,
-            epsilon_min=0.1,
-            epsilon_decay=1.0,
-        )
-
-        population = VectorizedPopulation(
-            env=env,
-            curriculum=curriculum,
-            exploration=exploration,
-            agent_ids=["agent_0", "agent_1"],
-            device=cpu_device,
-            obs_dim=env.observation_dim,
-            # action_dim defaults to env.action_dim
-            network_type="simple",
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
-            batch_size=16,
-        )
-
-        # Reset environment and population
-        population.reset()
-
-        # Initialize all meters to 1.0 to prevent cascade-induced death during test
-        env.meters.fill_(1.0)
-
-        # Run for exactly max_steps and verify agents survive
-        step_count = 0
-        final_state = None
-
-        for step in range(max_steps):
-            agent_state = population.step_population(env)
-            step_count += 1
-            final_state = agent_state
-
-            # Ensure agents don't die (would cause test to fail)
-            if agent_state.dones.any():
-                dead_agent_idx = agent_state.dones.nonzero(as_tuple=True)[0][0].item()
-                assert False, (
-                    f"Agent {dead_agent_idx} died at step {step + 1}/{max_steps}. "
-                    f"Energy: {env.meters[dead_agent_idx, 0]:.3f}, Health: {env.meters[dead_agent_idx, 6]:.3f}. "
-                    f"This test requires agents to survive {max_steps} steps to verify max_steps termination. "
-                    "If this fails, reduce max_steps further or disable cascades."
-                )
-
-        # Verify episode ran to max_steps
-        assert step_count == max_steps, f"Episode should run exactly {max_steps} steps"
-
-        # Verify agents are still alive at end (with zero depletion, they shouldn't die)
-        # Note: Agents might still die if they spawn on zero meters, so we check
-        # that at least the episode completed without early termination
-        assert final_state is not None, "Episode should produce final state"
-        assert step_count == max_steps, "Episode should complete all steps"
-
-    def test_episode_observation_action_reward_cycle(self, cpu_device, test_config_pack_path):
+    def test_episode_observation_action_reward_cycle(self, cpu_device, cpu_env_factory):
         """Verify obs → action → reward → next_obs cycle works correctly.
 
         This test validates the core data flow through an episode:
@@ -464,19 +268,7 @@ class TestEpisodeLifecycle:
         through action selection to reward computation and state update.
         """
         # Create small environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)

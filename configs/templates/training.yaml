@@ -19,10 +19,11 @@ run_metadata:
   output_subdir: PACK_NAME_HERE
 
 environment:
-  grid_size: 8
   partial_observability: false
   vision_range: 8
   enable_temporal_mechanics: false
+  enabled_affordances: null
+  randomize_affordances: true
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
@@ -33,6 +34,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 10000
   network_type: simple
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 curriculum:
   max_steps_per_episode: 500
@@ -45,8 +47,25 @@ exploration:
   embed_dim: 128
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 100
 
 training:
   device: cuda
   max_episodes: 5000
+
+  # Q-learning hyperparameters
+  train_frequency: 4
+  target_update_frequency: 100
+  batch_size: 64
+  sequence_length: 8
+  max_grad_norm: 10.0
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
+
+  # Epsilon-greedy exploration
+  epsilon_start: 1.0
+  epsilon_decay: 0.995
+  epsilon_min: 0.01

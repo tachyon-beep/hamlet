@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 
-from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
+from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork, StructuredQNetwork
 from townlet.curriculum.base import CurriculumManager
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
@@ -59,6 +59,7 @@ class VectorizedPopulation(PopulationManager):
         batch_size: int | None = None,
         sequence_length: int = 8,
         max_grad_norm: float = 10.0,
+        use_double_dqn: bool = False,
     ):
         """
         Initialize vectorized population.
@@ -82,6 +83,7 @@ class VectorizedPopulation(PopulationManager):
             batch_size: Batch size for experience replay (default: 64 for feedforward, 16 for recurrent)
             sequence_length: Length of sequences for LSTM training (default: 8, recurrent only)
             max_grad_norm: Gradient clipping threshold (default: 10.0)
+            use_double_dqn: Use Double DQN algorithm (default: False for vanilla DQN)
         """
         self.env = env
         self.curriculum = curriculum
@@ -92,6 +94,7 @@ class VectorizedPopulation(PopulationManager):
         self.gamma = gamma
         self.network_type = network_type
         self.is_recurrent = network_type == "recurrent"
+        self.use_double_dqn = use_double_dqn
         self.tb_logger = tb_logger
 
         # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
@@ -122,6 +125,14 @@ class VectorizedPopulation(PopulationManager):
                 enable_temporal_features=env.enable_temporal_mechanics,
                 hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
             ).to(device)
+        elif network_type == "structured":
+            self.q_network = StructuredQNetwork(
+                obs_dim=obs_dim,
+                action_dim=action_dim,
+                observation_activity=env.observation_activity,
+                group_embed_dim=32,  # TODO(BRAIN_AS_CODE): Should come from config
+                q_head_hidden_dim=128,  # TODO(BRAIN_AS_CODE): Should come from config
+            ).to(device)
         else:
             self.q_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(device)  # TODO(BRAIN_AS_CODE): Should come from config
 
@@ -136,6 +147,14 @@ class VectorizedPopulation(PopulationManager):
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
                 hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
+            ).to(device)
+        elif network_type == "structured":
+            self.target_network = StructuredQNetwork(
+                obs_dim=obs_dim,
+                action_dim=action_dim,
+                observation_activity=env.observation_activity,
+                group_embed_dim=32,  # TODO(BRAIN_AS_CODE): Should come from config
+                q_head_hidden_dim=128,  # TODO(BRAIN_AS_CODE): Should come from config
             ).to(device)
         else:
             self.target_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(
@@ -480,7 +499,7 @@ class VectorizedPopulation(PopulationManager):
         # 7. Compute intrinsic rewards (if RND-based exploration)
         intrinsic_rewards = torch.zeros_like(rewards)
         if isinstance(self.exploration, RNDExploration | AdaptiveIntrinsicExploration):
-            intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs)
+            intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs, update_stats=True)
 
         # 7. Store transition in replay buffer
         if self.is_recurrent:
@@ -517,8 +536,8 @@ class VectorizedPopulation(PopulationManager):
         # 9. Train Q-network from replay buffer (every train_frequency steps)
         self.total_steps += 1
         # For recurrent: need enough episodes (16+) for sequence sampling
-        # For feedforward: need enough transitions (64+) for batch sampling
-        min_buffer_size = 16 if self.is_recurrent else 64
+        # For feedforward: need enough transitions (>= batch_size) for batch sampling
+        min_buffer_size = 16 if self.is_recurrent else self.batch_size
         if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:
             intrinsic_weight = (
                 self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0
@@ -552,25 +571,58 @@ class VectorizedPopulation(PopulationManager):
                 with torch.no_grad():
                     target_recurrent = cast(RecurrentSpatialQNetwork, self.target_network)
                     target_recurrent.reset_hidden_state(batch_size=batch_size, device=self.device)
-                    q_values_list = []
 
-                    # First, unroll through entire sequence to collect Q-values
-                    for t in range(seq_len):
-                        q_values, _ = target_recurrent(batch["observations"][:, t, :])
-                        q_values_list.append(q_values)
+                    if self.use_double_dqn:
+                        # Double DQN: Use online network for action selection
+                        online_recurrent = cast(RecurrentSpatialQNetwork, self.q_network)
+                        online_recurrent.reset_hidden_state(batch_size=batch_size, device=self.device)
 
-                    # Now compute targets using Q-values from next timestep
-                    q_target_list = []
-                    for t in range(seq_len):
-                        if t < seq_len - 1:
-                            # Use Q-values from t+1 (computed with hidden state from t)
-                            q_next = q_values_list[t + 1].max(1)[0]
-                            q_target = batch["rewards"][:, t] + self.gamma * q_next * (~batch["dones"][:, t]).float()
-                        else:
-                            # Terminal state: no next observation
-                            q_target = batch["rewards"][:, t]
+                        # First pass: Get action selections from online network
+                        next_action_list = []
+                        for t in range(seq_len):
+                            q_values_online, _ = online_recurrent(batch["observations"][:, t, :])
+                            next_actions = q_values_online.argmax(1)
+                            next_action_list.append(next_actions)
 
-                        q_target_list.append(q_target)
+                        # Second pass: Evaluate those actions with target network
+                        q_values_list = []
+                        for t in range(seq_len):
+                            q_values_target, _ = target_recurrent(batch["observations"][:, t, :])
+                            q_values_list.append(q_values_target)
+
+                        # Compute targets using selected actions
+                        q_target_list = []
+                        for t in range(seq_len):
+                            if t < seq_len - 1:
+                                # Use Q-values from t+1, evaluated at actions selected by online network
+                                next_actions = next_action_list[t + 1]
+                                q_next = q_values_list[t + 1].gather(1, next_actions.unsqueeze(1)).squeeze()
+                                q_target = batch["rewards"][:, t] + self.gamma * q_next * (~batch["dones"][:, t]).float()
+                            else:
+                                # Terminal state: no next observation
+                                q_target = batch["rewards"][:, t]
+                            q_target_list.append(q_target)
+                    else:
+                        # Vanilla DQN: Use target network for both selection and evaluation
+                        q_values_list = []
+
+                        # First, unroll through entire sequence to collect Q-values
+                        for t in range(seq_len):
+                            q_values, _ = target_recurrent(batch["observations"][:, t, :])
+                            q_values_list.append(q_values)
+
+                        # Now compute targets using Q-values from next timestep
+                        q_target_list = []
+                        for t in range(seq_len):
+                            if t < seq_len - 1:
+                                # Use Q-values from t+1 (computed with hidden state from t)
+                                q_next = q_values_list[t + 1].max(1)[0]
+                                q_target = batch["rewards"][:, t] + self.gamma * q_next * (~batch["dones"][:, t]).float()
+                            else:
+                                # Terminal state: no next observation
+                                q_target = batch["rewards"][:, t]
+
+                            q_target_list.append(q_target)
 
                 # Compute loss across all timesteps with post-terminal masking (P2.2)
                 q_pred_all = torch.stack(q_pred_list, dim=1)  # [batch, seq_len]
@@ -615,14 +667,23 @@ class VectorizedPopulation(PopulationManager):
                 recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
                 recurrent_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
             else:
-                # Standard feedforward DQN training (unchanged)
+                # Standard feedforward DQN training
                 standard_buffer = cast(ReplayBuffer, self.replay_buffer)
                 batch = standard_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
 
+                # Compute Q-predictions from online network
                 q_pred = self.q_network(batch["observations"]).gather(1, batch["actions"].unsqueeze(1)).squeeze()
 
+                # Compute Q-targets (vanilla DQN vs Double DQN)
                 with torch.no_grad():
-                    q_next = self.target_network(batch["next_observations"]).max(1)[0]
+                    if self.use_double_dqn:
+                        # Double DQN: Use online network for action selection, target network for evaluation
+                        next_actions = self.q_network(batch["next_observations"]).argmax(1)
+                        q_next = self.target_network(batch["next_observations"]).gather(1, next_actions.unsqueeze(1)).squeeze()
+                    else:
+                        # Vanilla DQN: Use target network for both selection and evaluation
+                        q_next = self.target_network(batch["next_observations"]).max(1)[0]
+
                     q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
 
                 loss = F.mse_loss(q_pred, q_target)
@@ -667,9 +728,19 @@ class VectorizedPopulation(PopulationManager):
                 self._finalize_episode(idx, survival_time)
 
         # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
-        total_rewards = rewards + intrinsic_rewards * (
-            self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0
-        )
+        # Use per-agent intrinsic weights from AdaptiveRewardStrategy if available,
+        # otherwise fall back to global weight from AdaptiveIntrinsicExploration
+        if hasattr(envs, "intrinsic_weights") and envs.intrinsic_weights is not None:
+            # Per-agent weights from AdaptiveRewardStrategy (crisis suppression)
+            intrinsic_weight_tensor = envs.intrinsic_weights
+        elif isinstance(self.exploration, AdaptiveIntrinsicExploration):
+            # Global weight from AdaptiveIntrinsicExploration (performance-based annealing)
+            intrinsic_weight_tensor = torch.full_like(rewards, self.exploration.get_intrinsic_weight())
+        else:
+            # Default: full exploration weight
+            intrinsic_weight_tensor = torch.ones_like(rewards)
+
+        total_rewards = rewards + intrinsic_rewards * intrinsic_weight_tensor
 
         # 10. Construct and return batched agent state
         # Add Q-values to info for recording (clone to CPU to avoid GPU memory issues)
@@ -772,7 +843,7 @@ class VectorizedPopulation(PopulationManager):
 
         # Universe metadata for compatibility validation (TASK-001)
         # This allows detecting meter count mismatches when loading checkpoints
-        bars_config = self.env.meter_dynamics.cascade_engine.config.bars
+        bars_config = self.env.bars_config
         checkpoint["universe_metadata"] = {
             "meter_count": bars_config.meter_count,
             "meter_names": bars_config.meter_names,
@@ -804,43 +875,37 @@ class VectorizedPopulation(PopulationManager):
         Raises:
             ValueError: If checkpoint universe metadata doesn't match current environment
         """
-        # Validate universe compatibility (TASK-001)
-        if "universe_metadata" in checkpoint:
-            metadata = checkpoint["universe_metadata"]
-            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
-            current_meter_count = bars_config.meter_count
+        # Validate universe compatibility
+        if "universe_metadata" not in checkpoint:
+            raise ValueError(
+                "Checkpoint missing 'universe_metadata' field.\n"
+                "This checkpoint format is no longer supported.\n"
+                "Please retrain from scratch."
+            )
 
-            # Validate meter count matches
-            checkpoint_meter_count = metadata.get("meter_count")
-            if checkpoint_meter_count != current_meter_count:
-                raise ValueError(
-                    f"Checkpoint meter count mismatch: checkpoint has {checkpoint_meter_count} meters, "
-                    f"but current environment has {current_meter_count} meters. "
-                    f"Cannot load checkpoint trained on different universe configuration."
-                )
+        metadata = checkpoint["universe_metadata"]
+        bars_config = self.env.bars_config
+        current_meter_count = bars_config.meter_count
 
-            # Validate obs_dim matches (secondary check)
-            checkpoint_obs_dim = metadata.get("obs_dim")
-            current_obs_dim = self.env.observation_dim
-            if checkpoint_obs_dim != current_obs_dim:
-                import warnings
+        # Validate meter count matches
+        checkpoint_meter_count = metadata.get("meter_count")
+        if checkpoint_meter_count != current_meter_count:
+            raise ValueError(
+                f"Checkpoint meter count mismatch: checkpoint has {checkpoint_meter_count} meters, "
+                f"but current environment has {current_meter_count} meters. "
+                f"Cannot load checkpoint trained on different universe configuration."
+            )
 
-                warnings.warn(
-                    f"Checkpoint obs_dim mismatch: checkpoint has {checkpoint_obs_dim}, "
-                    f"current env has {current_obs_dim}. This may indicate grid size or "
-                    f"observability mode differences. Proceeding with caution.",
-                    UserWarning,
-                )
-        else:
-            # Legacy checkpoint (no universe_metadata) - assume 8-meter default
+        # Validate obs_dim matches (secondary check)
+        checkpoint_obs_dim = metadata.get("obs_dim")
+        current_obs_dim = self.env.observation_dim
+        if checkpoint_obs_dim != current_obs_dim:
             import warnings
 
-            bars_config = self.env.meter_dynamics.cascade_engine.config.bars
-            current_meter_count = bars_config.meter_count
             warnings.warn(
-                f"Loading legacy checkpoint without universe_metadata. "
-                f"Assuming 8-meter configuration. Current environment has {current_meter_count} meters. "
-                f"If this doesn't match, loading will likely fail.",
+                f"Checkpoint obs_dim mismatch: checkpoint has {checkpoint_obs_dim}, "
+                f"current env has {current_obs_dim}. This may indicate grid size or "
+                f"observability mode differences. Proceeding with caution.",
                 UserWarning,
             )
 

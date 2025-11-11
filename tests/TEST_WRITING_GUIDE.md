@@ -40,7 +40,7 @@ def test_something():
 
 ### ✅ New Way (Use Builders)
 ```python
-from tests.test_townlet.builders import make_test_bars_config
+from tests.test_townlet.utils.builders import make_test_bars_config
 
 def test_something():
     bars_config = make_test_bars_config(num_meters=1)
@@ -72,7 +72,7 @@ def test_something():
 ### Canonical Dimensions
 
 ```python
-from tests.test_townlet.builders import TestDimensions
+from tests.test_townlet.utils.builders import TestDimensions
 
 # Use these instead of magic numbers!
 obs_dim = TestDimensions.GRID2D_OBS_DIM  # 29
@@ -87,7 +87,7 @@ grid_size = TestDimensions.GRID_SIZE  # 8
 ### Pattern 1: Creating Test Config
 
 ```python
-from tests.test_townlet.builders import make_test_bars_config
+from tests.test_townlet.utils.builders import make_test_bars_config
 
 # Minimal config (1 meter)
 bars = make_test_bars_config(num_meters=1)
@@ -102,7 +102,7 @@ bars = make_test_bars_config(num_meters=4, include_terminal=False)
 ### Pattern 2: Creating Test Affordance
 
 ```python
-from tests.test_townlet.builders import make_test_affordance
+from tests.test_townlet.utils.builders import make_test_affordance
 
 # Default bed affordance
 bed = make_test_affordance()
@@ -125,7 +125,7 @@ sleep = make_test_affordance(
 ### Pattern 3: Creating Episode Data
 
 ```python
-from tests.test_townlet.builders import make_test_episode_metadata, make_test_recorded_step
+from tests.test_townlet.utils.builders import make_test_episode_metadata, make_test_recorded_step
 
 # Default episode
 metadata = make_test_episode_metadata()
@@ -180,7 +180,7 @@ Look for:
 ### Step 2: Add Imports
 
 ```python
-from tests.test_townlet.builders import (
+from tests.test_townlet.utils.builders import (
     TestDimensions,          # For canonical dimensions
     make_test_meters,         # For meter tuples
     make_test_bars_config,    # For BarsConfig
@@ -312,7 +312,7 @@ def test_observation_size():
 
 **After** (documented):
 ```python
-from tests.test_townlet.builders import TestDimensions
+from tests.test_townlet.utils.builders import TestDimensions
 
 def test_observation_size():
     obs = env.reset()
@@ -411,7 +411,7 @@ metadata = make_test_episode_metadata(episode_id=55)
 **A**: Check the builder docstring or `builders.py` source:
 
 ```python
-from tests.test_townlet.builders import make_test_bar
+from tests.test_townlet.utils.builders import make_test_bar
 help(make_test_bar)  # Shows all parameters and defaults
 ```
 

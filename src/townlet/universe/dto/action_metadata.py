@@ -16,7 +16,7 @@ class ActionMetadata:
 
     id: int
     name: str
-    type: Literal["movement", "interaction", "passive", "custom"]
+    type: Literal["movement", "interaction", "passive", "transaction"]
     enabled: bool
     source: Literal["substrate", "custom", "affordance"]
     costs: Mapping[str, float] = field(default_factory=dict)

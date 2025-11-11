@@ -40,51 +40,51 @@ from townlet.environment.cascade_config import BarConfig, BarsConfig, TerminalCo
 class TestAffordanceConfigValidation:
     """Test AffordanceConfig Pydantic validators."""
 
-    def test_multi_tick_requires_required_ticks(self):
-        """Should raise ValidationError when multi_tick lacks required_ticks (line 86-87)."""
-        with pytest.raises(ValidationError, match="multi_tick type requires 'required_ticks' field"):
+    def test_multi_tick_requires_duration_ticks(self):
+        """Should raise ValidationError when multi_tick lacks duration_ticks (line 86-87)."""
+        with pytest.raises(ValidationError, match="multi_tick type requires 'duration_ticks' field"):
             AffordanceConfig(
                 id="Bed",
                 name="Bed",
                 category="energy_restoration",
                 interaction_type="multi_tick",
-                # Missing required_ticks
+                # Missing duration_ticks
                 operating_hours=[0, 24],
             )
 
-    def test_dual_requires_required_ticks(self):
-        """Should raise ValidationError when dual lacks required_ticks (line 89-90)."""
-        with pytest.raises(ValidationError, match="dual type requires 'required_ticks' field"):
+    def test_dual_requires_duration_ticks(self):
+        """Should raise ValidationError when dual lacks duration_ticks (line 89-90)."""
+        with pytest.raises(ValidationError, match="dual type requires 'duration_ticks' field"):
             AffordanceConfig(
                 id="Job",
                 name="Job",
                 category="income",
                 interaction_type="dual",
-                # Missing required_ticks
+                # Missing duration_ticks
                 operating_hours=[9, 17],
             )
 
-    def test_instant_cannot_have_required_ticks(self):
-        """Should raise ValidationError when instant has required_ticks (line 92-93)."""
-        with pytest.raises(ValidationError, match="'required_ticks' only valid for multi_tick or dual types"):
+    def test_instant_cannot_have_duration_ticks(self):
+        """Should raise ValidationError when instant has duration_ticks (line 92-93)."""
+        with pytest.raises(ValidationError, match="'duration_ticks' only valid for multi_tick or dual types"):
             AffordanceConfig(
                 id="Bed",
                 name="Bed",
                 category="energy_restoration",
                 interaction_type="instant",
-                required_ticks=5,  # Invalid for instant
+                duration_ticks=5,  # Invalid for instant
                 operating_hours=[0, 24],
             )
 
-    def test_continuous_cannot_have_required_ticks(self):
-        """Should raise ValidationError when continuous has required_ticks (line 92-93)."""
-        with pytest.raises(ValidationError, match="'required_ticks' only valid for multi_tick or dual types"):
+    def test_continuous_cannot_have_duration_ticks(self):
+        """Should raise ValidationError when continuous has duration_ticks (line 92-93)."""
+        with pytest.raises(ValidationError, match="'duration_ticks' only valid for multi_tick or dual types"):
             AffordanceConfig(
                 id="Shower",
                 name="Shower",
                 category="hygiene",
                 interaction_type="continuous",
-                required_ticks=3,  # Invalid for continuous
+                duration_ticks=3,  # Invalid for continuous
                 operating_hours=[0, 24],
             )
 
@@ -140,19 +140,19 @@ class TestAffordanceConfigValidation:
             )
 
     def test_valid_multi_tick_affordance(self):
-        """Should successfully create multi_tick affordance with required_ticks."""
+        """Should successfully create multi_tick affordance with duration_ticks."""
         config = AffordanceConfig(
             id="Bed",
             name="Bed",
             category="energy_restoration",
             interaction_type="multi_tick",
-            required_ticks=5,
+            duration_ticks=5,
             operating_hours=[0, 24],
         )
 
         assert config.id == "Bed"
         assert config.interaction_type == "multi_tick"
-        assert config.required_ticks == 5
+        assert config.duration_ticks == 5
 
     def test_valid_operating_hours_normal_range(self):
         """Should successfully create affordance with normal operating hours."""
@@ -341,7 +341,7 @@ class TestAffordanceConfigCollectionQueries:
                     name="Job",
                     category="income",
                     interaction_type="multi_tick",
-                    required_ticks=8,
+                    duration_ticks=8,
                     operating_hours=[9, 17],
                 ),
                 AffordanceConfig(
@@ -349,7 +349,7 @@ class TestAffordanceConfigCollectionQueries:
                     name="Gym",
                     category="fitness",
                     interaction_type="multi_tick",
-                    required_ticks=6,
+                    duration_ticks=6,
                     operating_hours=[6, 22],
                 ),
             ],
@@ -618,7 +618,7 @@ class TestLoadAffordanceConfig:
                         "name": "Job",
                         "category": "income",
                         "interaction_type": "multi_tick",
-                        "required_ticks": 8,
+                        "duration_ticks": 8,
                         "effects_per_tick": [{"meter": "energy", "amount": -0.01}],
                         "completion_bonus": [{"meter": "invalid", "amount": 100.0}],  # Invalid in bonus
                         "operating_hours": [9, 17],
@@ -670,7 +670,7 @@ class TestLoadAffordanceConfig:
                         "name": "Gym",
                         "category": "fitness",
                         "interaction_type": "multi_tick",
-                        "required_ticks": 5,
+                        "duration_ticks": 5,
                         "costs_per_tick": [{"meter": "invalid_cost", "amount": 0.01}],  # Invalid
                         "operating_hours": [6, 22],
                     }

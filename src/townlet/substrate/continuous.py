@@ -1,5 +1,6 @@
 """Continuous space substrates with float-based positioning."""
 
+import math
 from typing import Literal
 
 import torch
@@ -42,6 +43,7 @@ class ContinuousSubstrate(SpatialSubstrate):
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
+        action_discretization: dict[str, int] | None = None,
     ):
         """Initialize continuous substrate.
 
@@ -53,6 +55,7 @@ class ContinuousSubstrate(SpatialSubstrate):
             interaction_radius: Distance threshold for affordance interaction
             distance_metric: Distance calculation method (euclidean, manhattan, chebyshev)
             observation_encoding: Position encoding strategy ("relative", "scaled", "absolute")
+            action_discretization: Optional discretized action config {'num_directions': 8-32, 'num_magnitudes': 3-7}
         """
         if dimensions not in (1, 2, 3):
             raise ValueError(f"Continuous substrates support 1-3 dimensions, got {dimensions}")
@@ -104,11 +107,32 @@ class ContinuousSubstrate(SpatialSubstrate):
         self.interaction_radius = interaction_radius
         self.distance_metric = distance_metric
         self.observation_encoding = observation_encoding
+        self.action_discretization = action_discretization
+        self._cached_actions: list[ActionConfig] | None = None  # Cache for get_default_actions()
 
     @property
     def position_dim(self) -> int:
         """Number of dimensions."""
         return self.dimensions
+
+    @property
+    def action_space_size(self) -> int:
+        """Return number of discrete actions supported by this substrate.
+
+        Dynamically calculates the size by calling get_default_actions() (cached).
+        This ensures the size matches the actual actions generated.
+
+        Note: Substrates always generate all possible actions (INTERACT, WAIT, etc.).
+        The training.enabled_actions config controls which are active at runtime
+        (filtering happens at compile time, not substrate level).
+
+        Returns:
+            Integer count of discrete actions
+        """
+        # Use cached actions to avoid regenerating on every call
+        if self._cached_actions is None:
+            self._cached_actions = self.get_default_actions()
+        return len(self._cached_actions)
 
     @property
     def coordinate_semantics(self) -> dict:
@@ -282,7 +306,7 @@ class ContinuousSubstrate(SpatialSubstrate):
         elif self.observation_encoding == "absolute":
             return self._encode_absolute(positions, affordances)
         else:
-            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. " f"Must be 'relative', 'scaled', or 'absolute'.")
+            raise ValueError(f"Invalid observation_encoding: {self.observation_encoding}. Must be 'relative', 'scaled', or 'absolute'.")
 
     def get_observation_dim(self) -> int:
         """Return dimensionality of position encoding.
@@ -378,6 +402,7 @@ class Continuous1DSubstrate(ContinuousSubstrate):
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
+        action_discretization: dict[str, int] | None = None,
     ):
         super().__init__(
             dimensions=1,
@@ -387,6 +412,7 @@ class Continuous1DSubstrate(ContinuousSubstrate):
             interaction_radius=interaction_radius,
             distance_metric=distance_metric,
             observation_encoding=observation_encoding,
+            action_discretization=action_discretization,
         )
         self.min_x = min_x
         self.max_x = max_x
@@ -471,6 +497,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
+        action_discretization: dict[str, int] | None = None,
     ):
         super().__init__(
             dimensions=2,
@@ -480,6 +507,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
             interaction_radius=interaction_radius,
             distance_metric=distance_metric,
             observation_encoding=observation_encoding,
+            action_discretization=action_discretization,
         )
         self.min_x = min_x
         self.max_x = max_x
@@ -487,16 +515,32 @@ class Continuous2DSubstrate(ContinuousSubstrate):
         self.max_y = max_y
 
     def get_default_actions(self) -> list[ActionConfig]:
-        """Return Continuous2D's 6 default actions (same names as Grid2D).
+        """Return Continuous2D's default actions (cached).
 
-        Note: Deltas are integers that get scaled by movement_delta in apply_movement().
+        If action_discretization is configured, returns discretized directional actions
+        (e.g., 32 directions × 7 magnitudes = 195 actions).
+
+        Otherwise, returns legacy 4-directional actions for backward compatibility.
+
+        Note: Deltas are floats (actual movement deltas, not scaled).
+        Actions are cached after first generation for performance.
         """
+        # Use cache to avoid regenerating actions on every call
+        if self._cached_actions is None:
+            if self.action_discretization is not None:
+                self._cached_actions = self._generate_discretized_actions()
+            else:
+                self._cached_actions = self._generate_legacy_actions()
+        return self._cached_actions
+
+    def _generate_legacy_actions(self) -> list[ActionConfig]:
+        """Generate legacy 4-directional + INTERACT + WAIT actions (backward compatible)."""
         return [
             ActionConfig(
                 id=0,
                 name="UP",
                 type="movement",
-                delta=[0, -1],  # Scaled by movement_delta in apply_movement()
+                delta=[0.0, -self.movement_delta],
                 teleport_to=None,
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
                 effects={},
@@ -510,7 +554,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
                 id=1,
                 name="DOWN",
                 type="movement",
-                delta=[0, 1],  # Scaled by movement_delta in apply_movement()
+                delta=[0.0, self.movement_delta],
                 teleport_to=None,
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
                 effects={},
@@ -524,7 +568,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
                 id=2,
                 name="LEFT",
                 type="movement",
-                delta=[-1, 0],  # Scaled by movement_delta in apply_movement()
+                delta=[-self.movement_delta, 0.0],
                 teleport_to=None,
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
                 effects={},
@@ -538,7 +582,7 @@ class Continuous2DSubstrate(ContinuousSubstrate):
                 id=3,
                 name="RIGHT",
                 type="movement",
-                delta=[1, 0],  # Scaled by movement_delta in apply_movement()
+                delta=[self.movement_delta, 0.0],
                 teleport_to=None,
                 costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
                 effects={},
@@ -578,6 +622,143 @@ class Continuous2DSubstrate(ContinuousSubstrate):
             ),
         ]
 
+    def _generate_discretized_actions(self) -> list[ActionConfig]:
+        """Generate discretized directional actions (Option A implementation).
+
+        Generates actions with:
+        - N directions (0°, 360°/N, ..., 360°*(N-1)/N)
+        - M magnitudes (0.0, 1/(M-1), 2/(M-1), ..., 1.0)
+
+        Example: 32 directions × 7 magnitudes = 224 directional actions
+                 + STOP (magnitude=0) = 1 action
+                 + INTERACT + WAIT = 2 actions
+                 Total: 227 actions (but STOP replaces first magnitude=0 for all directions)
+                 Actual: 1 STOP + (32 dirs × 6 non-zero mags) + INTERACT + WAIT = 195 actions
+
+        Returns:
+            List of ActionConfig objects
+        """
+        discretization = self.action_discretization or {}
+        num_directions = discretization.get("num_directions", 8)
+        num_magnitudes = discretization.get("num_magnitudes", 3)
+
+        actions = []
+        action_id = 0
+
+        # Base energy cost (full movement)
+        base_energy_cost = 0.005
+        base_hygiene_cost = 0.003
+        base_satiation_cost = 0.004
+
+        # Magnitude bins: [0.0, 1/(M-1), 2/(M-1), ..., 1.0]
+        magnitudes = [i / (num_magnitudes - 1) for i in range(num_magnitudes)]
+
+        # STOP action (magnitude=0, no movement)
+        actions.append(
+            ActionConfig(
+                id=action_id,
+                name="STOP",
+                type="passive",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.004},  # Same as WAIT (idle metabolic cost)
+                effects={},
+                description="Stop moving (no delta, idle metabolic cost)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            )
+        )
+        action_id += 1
+
+        # Directional movement actions
+        for dir_idx in range(num_directions):
+            # Angle in radians: 0° = East (1, 0), 90° = North (0, 1)
+            angle_rad = 2 * math.pi * dir_idx / num_directions
+
+            # Unit direction vector
+            dx_unit = math.cos(angle_rad)
+            dy_unit = math.sin(angle_rad)
+
+            # Generate actions for each magnitude (skip magnitude=0, already have STOP)
+            for mag_idx in range(1, num_magnitudes):
+                magnitude = magnitudes[mag_idx]
+
+                # Calculate actual movement delta (scaled by magnitude and movement_delta)
+                delta_x = dx_unit * magnitude * self.movement_delta
+                delta_y = dy_unit * magnitude * self.movement_delta
+
+                # Scale costs by magnitude (more movement = more energy)
+                energy_cost = base_energy_cost * magnitude
+                hygiene_cost = base_hygiene_cost * magnitude
+                satiation_cost = base_satiation_cost * magnitude
+
+                # Action name: MOVE_<direction>_<magnitude>
+                # Direction 0 = 0° (East), Direction 8 = 90° (North), etc.
+                angle_deg = int(dir_idx * 360 / num_directions)
+
+                actions.append(
+                    ActionConfig(
+                        id=action_id,
+                        name=f"MOVE_{dir_idx}_{mag_idx}",
+                        type="movement",
+                        delta=[delta_x, delta_y],
+                        teleport_to=None,
+                        costs={
+                            "energy": energy_cost,
+                            "hygiene": hygiene_cost,
+                            "satiation": satiation_cost,
+                        },
+                        effects={},
+                        description=f"Move {angle_deg}° at {magnitude:.1%} speed",
+                        icon=None,
+                        source="substrate",
+                        source_affordance=None,
+                        enabled=True,
+                    )
+                )
+                action_id += 1
+
+        # INTERACT action
+        actions.append(
+            ActionConfig(
+                id=action_id,
+                name="INTERACT",
+                type="interaction",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.003},
+                effects={},
+                description="Interact with affordance at current position",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            )
+        )
+        action_id += 1
+
+        # WAIT action
+        actions.append(
+            ActionConfig(
+                id=action_id,
+                name="WAIT",
+                type="passive",
+                delta=None,
+                teleport_to=None,
+                costs={"energy": 0.004},
+                effects={},
+                description="Wait in place (idle metabolic cost)",
+                icon=None,
+                source="substrate",
+                source_affordance=None,
+                enabled=True,
+            )
+        )
+
+        return actions
+
 
 class Continuous3DSubstrate(ContinuousSubstrate):
     """3D continuous space."""
@@ -595,6 +776,7 @@ class Continuous3DSubstrate(ContinuousSubstrate):
         interaction_radius: float,
         distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
         observation_encoding: Literal["relative", "scaled", "absolute"] = "relative",
+        action_discretization: dict[str, int] | None = None,
     ):
         super().__init__(
             dimensions=3,
@@ -604,6 +786,7 @@ class Continuous3DSubstrate(ContinuousSubstrate):
             interaction_radius=interaction_radius,
             distance_metric=distance_metric,
             observation_encoding=observation_encoding,
+            action_discretization=action_discretization,
         )
         self.min_x = min_x
         self.max_x = max_x

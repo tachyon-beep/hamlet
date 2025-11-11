@@ -931,7 +931,7 @@ def stage_4_cross_validate(
 
     # 1. Spatial feasibility
     grid_cells = raw_configs.substrate.dimensions[0] * raw_configs.substrate.dimensions[1]
-    enabled_affordances = raw_configs.training.enabled_affordances
+    enabled_affordances = raw_configs.environment.enabled_affordances
     required_cells = len(enabled_affordances) + 1  # +1 for agent
 
     if required_cells > grid_cells:

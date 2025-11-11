@@ -26,6 +26,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Validate configs first (fail-fast before pytest)
+        run: |
+          echo "Running universe compiler validation before pytest to catch invalid configs early"
+          uv run python scripts/validate_compiler_cli.py
+
       - name: Run fast test suite
         env:
           PYTEST_ADDOPTS: ""

@@ -54,7 +54,7 @@ class HamletConfig(BaseModel):
     cascades: tuple[CascadeConfig, ...] = Field(description="Cascade relationships loaded from cascades.yaml")
     affordances: tuple[AffordanceConfig, ...] = Field(description="Affordance definitions loaded from affordances.yaml")
     substrate: SubstrateConfig = Field(description="Spatial substrate configuration (grid, continuous, aspatial)")
-    cues: CuesConfig | None = Field(default=None, description="Optional public cues configuration (cues.yaml)")
+    cues: CuesConfig = Field(description="Cues configuration (cues.yaml) – required for Stage 5 cues pipeline")
 
     @model_validator(mode="after")
     def validate_batch_size_vs_buffer(self) -> "HamletConfig":
@@ -109,8 +109,34 @@ class HamletConfig(BaseModel):
 
         NOTE: This is a HINT for operator convenience, not strict enforcement.
         Operators may intentionally create crowded grids for challenge.
+
+        NOTE: Grid dimensions are now read from substrate.yaml (single source of truth).
+        For non-grid substrates (aspatial, continuous), this validation is skipped.
         """
-        grid_cells = self.environment.grid_size**2
+        # Calculate grid cells from substrate (not environment config)
+        grid_cells: int | None = None
+        dimensions_str = ""
+
+        if self.substrate.type == "grid" and self.substrate.grid is not None:
+            if self.substrate.grid.topology == "square":
+                grid_cells = self.substrate.grid.width * self.substrate.grid.height
+                dimensions_str = f"{self.substrate.grid.width}×{self.substrate.grid.height}"
+            elif self.substrate.grid.topology == "cubic":
+                if self.substrate.grid.depth is not None:
+                    grid_cells = self.substrate.grid.width * self.substrate.grid.height * self.substrate.grid.depth
+                    dimensions_str = f"{self.substrate.grid.width}×{self.substrate.grid.height}×{self.substrate.grid.depth}"
+        elif self.substrate.type == "gridnd" and self.substrate.gridnd is not None:
+            grid_cells = 1
+            for dim_size in self.substrate.gridnd.dimension_sizes:
+                grid_cells *= dim_size
+            dimensions_str = "×".join(str(d) for d in self.substrate.gridnd.dimension_sizes)
+        else:
+            # Continuous, aspatial - skip spatial capacity check
+            return self
+
+        if grid_cells is None:
+            return self
+
         num_agents = self.population.num_agents
 
         # Estimate affordance count
@@ -123,7 +149,7 @@ class HamletConfig(BaseModel):
 
         if total_entities > grid_cells:
             logger.warning(
-                f"Grid capacity warning: {self.environment.grid_size}×{self.environment.grid_size} grid "
+                f"Grid capacity warning: {dimensions_str} grid "
                 f"({grid_cells} cells) may not fit {num_agents} agents + "
                 f"{num_affordances} affordances ({total_entities} entities total). "
                 f"Entities may overlap or fail to place. "
@@ -131,8 +157,8 @@ class HamletConfig(BaseModel):
             )
         elif total_entities > grid_cells * 0.8:
             logger.warning(
-                f"Grid capacity warning: {self.environment.grid_size}×{self.environment.grid_size} grid "
-                f"is {total_entities}/{grid_cells} ({total_entities/grid_cells*100:.0f}%) full. "
+                f"Grid capacity warning: {dimensions_str} grid "
+                f"is {total_entities}/{grid_cells} ({total_entities / grid_cells * 100:.0f}%) full. "
                 f"High density may reduce agent mobility. "
                 f"This may be intentional for your experiment."
             )
@@ -161,7 +187,7 @@ class HamletConfig(BaseModel):
 
         Example:
             >>> config = HamletConfig.load(Path("configs/L0_0_minimal"))
-            >>> print(f"Grid: {config.environment.grid_size}×{config.environment.grid_size}")
+            >>> print(f"Grid: {config.substrate.grid.width}×{config.substrate.grid.height}")
             Grid: 3×3
         """
         training = load_training_config(config_dir, training_config_path=training_config_path)
@@ -174,11 +200,6 @@ class HamletConfig(BaseModel):
         affordances = tuple(load_affordances_config(config_dir))
         substrate = load_substrate_config(config_dir / "substrate.yaml")
 
-        cues = None
-        cues_path = config_dir / "cues.yaml"
-        if cues_path.exists():
-            cues = load_cues_config(cues_path)
-
         return cls(
             training=training,
             environment=environment,
@@ -189,5 +210,5 @@ class HamletConfig(BaseModel):
             cascades=cascades,
             affordances=affordances,
             substrate=substrate,
-            cues=cues,
+            cues=load_cues_config(config_dir / "cues.yaml"),
         )

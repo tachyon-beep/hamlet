@@ -7,9 +7,9 @@ This is migration-specific behavior that can be removed once all configs have su
 from pathlib import Path
 
 import pytest
-import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from townlet.universe.compiler import UniverseCompiler
+from townlet.universe.errors import CompilationError
 
 
 def test_missing_substrate_yaml_raises_helpful_error(tmp_path):
@@ -18,34 +18,17 @@ def test_missing_substrate_yaml_raises_helpful_error(tmp_path):
 
     # Create config pack directory without substrate.yaml
     config_pack = tmp_path / "test_config"
-    config_pack.mkdir()
-
-    # Copy complete config files from test config (but NO substrate.yaml)
     test_config = Path("configs/test")
-    shutil.copy(test_config / "bars.yaml", config_pack / "bars.yaml")
-    shutil.copy(test_config / "affordances.yaml", config_pack / "affordances.yaml")
-    shutil.copy(test_config / "cascades.yaml", config_pack / "cascades.yaml")
-    shutil.copy(test_config / "variables_reference.yaml", config_pack / "variables_reference.yaml")
+    shutil.copytree(test_config, config_pack)
+    (config_pack / "substrate.yaml").unlink()
 
-    # Attempt to create environment without substrate.yaml
-    with pytest.raises(FileNotFoundError) as exc_info:
-        VectorizedHamletEnv(
-            config_pack_path=config_pack,
-            num_agents=1,
-            grid_size=8,
-            partial_observability=False,
-            vision_range=2,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.5,
-            wait_energy_cost=0.1,
-            interact_energy_cost=0.3,
-            agent_lifespan=1000,
-            device=torch.device("cpu"),
-        )
+    compiler = UniverseCompiler()
+
+    # Attempt to compile without substrate.yaml
+    with pytest.raises(CompilationError) as exc_info:
+        compiler.compile(config_pack)
 
     # Verify error message contains migration instructions
     error_msg = str(exc_info.value)
-    assert "substrate.yaml is required" in error_msg
-    assert "Quick fix:" in error_msg
-    assert "configs/templates/substrate.yaml" in error_msg
-    assert "TASK-002A" in error_msg
+    assert "substrate" in error_msg.lower()
+    assert "substrate.yaml" in error_msg

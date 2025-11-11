@@ -59,6 +59,7 @@ def test_topology_propagates_from_config_to_websocket_metadata_grid2d():
             step_delay=0.2,
             total_episodes=1,
             training_config_path=None,
+            config_dir=TEST_CONFIG_DIR,
         )
         server.env = MockEnv(substrate)
 
@@ -106,6 +107,7 @@ def test_topology_propagates_from_config_to_websocket_metadata_gridnd():
             step_delay=0.2,
             total_episodes=1,
             training_config_path=None,
+            config_dir=TEST_CONFIG_DIR,
         )
         server.env = MockEnv(substrate)
 
@@ -155,6 +157,7 @@ def test_continuous_substrate_has_no_topology_in_metadata():
             step_delay=0.2,
             total_episodes=1,
             training_config_path=None,
+            config_dir=TEST_CONFIG_DIR,
         )
         server.env = MockEnv(substrate)
 
@@ -297,3 +300,6 @@ def test_4d_gridnd_custom_action_labels():
         assert labels.get_label(3) == "ROT_ROLL_NEG"
         assert labels.get_label(7) == "ROT_ROLL_POS"
         assert labels.get_label(8) == "INTERACT"
+
+
+TEST_CONFIG_DIR = Path("configs/test")

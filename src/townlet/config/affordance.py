@@ -3,9 +3,10 @@
 Philosophy: All behavioral parameters must be explicitly specified.
 No implicit defaults. Operator accountability.
 
-Design: Validates affordance structure from affordances.yaml (BASIC version).
-Advanced features (capabilities, effect pipelines, temporal mechanics) deferred to TASK-004B.
-Cross-file validation (meter references) deferred to TASK-004A.
+Design: Validates affordance structure from affordances.yaml.
+Cross-file validation (meter references) is still handled in the compiler (TASK-004A), but
+the DTO now exposes advanced fields (capabilities, effect pipelines, availability) required
+for later compiler stages.
 """
 
 from pathlib import Path
@@ -13,59 +14,90 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from townlet.config.affordance_masking import BarConstraint, ModeConfig
 from townlet.config.base import format_validation_error, load_yaml_section
+from townlet.config.capability_config import CapabilityConfig
+from townlet.config.effect_pipeline import EffectPipeline
+from townlet.environment.affordance_config import (
+    AffordanceConfigCollection as _AffordanceConfigCollection,
+)
+
+__all__ = [
+    "AffordanceConfig",
+    "load_affordances_config",
+    "AffordanceConfigCollection",
+]
 
 
 class AffordanceConfig(BaseModel):
-    """Affordance configuration - BASIC structural validation only.
+    """Rich affordance configuration DTO used throughout the compiler pipeline."""
 
-    ALL REQUIRED FIELDS must be specified (no defaults) - operator accountability.
+    model_config = ConfigDict(extra="forbid")
 
-    This is the BASIC version for TASK-003. Advanced features deferred to TASK-004B:
-    - Capabilities (visibility, requirements, unlock conditions)
-    - Effect pipelines (complex multi-step effects)
-    - Availability masking (temporal, spatial, state-based)
-    - Multi-tick interaction mechanics
-
-    Example:
-        >>> affordance = AffordanceConfig(
-        ...     id="0",
-        ...     name="Bed",
-        ...     category="energy_restoration",
-        ...     costs=[{"meter": "money", "amount": 0.05}],
-        ...     effects=[{"meter": "energy", "amount": 0.50}],
-        ... )
-    """
-
-    # Allow extra fields (for temporal mechanics, operating_hours, etc.)
-    model_config = ConfigDict(extra="allow")
-
-    # Affordance identity (REQUIRED)
+    # Identity / metadata
     id: str = Field(min_length=1, description="Unique affordance ID")
     name: str = Field(min_length=1, description="Display name")
-
-    # Costs and effects (REQUIRED)
-    costs: list[dict[str, Any]] = Field(description="Meter costs (can be empty for free affordances)")
-    effects: list[dict[str, Any]] = Field(
-        min_length=1,
-        description="Meter effects (must have at least one effect)",
-    )
-
-    # Optional metadata
     category: str | None = None
     interaction_type: str | None = None
     description: str | None = None
+    teaching_note: str | None = None
+    design_intent: str | None = None
 
-    @field_validator("effects")
+    # Costs
+    costs: list[dict[str, Any]] = Field(default_factory=list, description="Instant costs applied when interaction starts")
+    costs_per_tick: list[dict[str, Any]] = Field(default_factory=list, description="Costs applied every tick")
+
+    # Temporal metadata
+    duration_ticks: int | None = None
+    operating_hours: list[int] | None = Field(default=None, description="Operating hours [open, close] or None for always open")
+    modes: dict[str, ModeConfig] = Field(default_factory=dict, description="Optional operating modes (coffee vs bar, etc.)")
+    availability: list[BarConstraint] = Field(default_factory=list, description="Meter-based availability constraints")
+
+    # Advanced behaviors
+    capabilities: list[CapabilityConfig] = Field(default_factory=list)
+    effect_pipeline: EffectPipeline | None = None
+
+    # Spatial metadata
+    position: list[int] | dict[str, int] | int | None = None
+
+    @field_validator("operating_hours")
     @classmethod
-    def validate_effects_not_empty(cls, v: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Ensure effects list has at least one element."""
-        if len(v) == 0:
-            raise ValueError(
-                "effects cannot be empty. Every affordance must have at least one effect. "
-                "Use costs=[] for free affordances, but effects must define what happens."
-            )
-        return v
+    def validate_operating_hours(cls, value: list[int] | None) -> list[int] | None:
+        if value is None:
+            return None
+        if len(value) != 2:
+            raise ValueError("operating_hours must contain [open_hour, close_hour]")
+        open_hour, close_hour = value
+        if not (0 <= open_hour <= 23):
+            raise ValueError(f"open_hour must be 0-23, got {open_hour}")
+        if not (1 <= close_hour <= 28):
+            raise ValueError(f"close_hour must be 1-28, got {close_hour}")
+        return value
+
+    @field_validator("position")
+    @classmethod
+    def validate_position_format(cls, value):
+        """Ensure position can be interpreted on various substrates."""
+
+        if value is None:
+            return value
+        if isinstance(value, list):
+            if not value or not all(isinstance(coord, int) for coord in value):
+                raise ValueError("List position must contain integer coordinates")
+            if len(value) not in (2, 3):
+                raise ValueError(f"List position must be 2D or 3D, got {len(value)}D")
+            return value
+        if isinstance(value, dict):
+            if set(value.keys()) != {"q", "r"}:
+                raise ValueError("Dict position must contain 'q' and 'r' keys for axial coordinates")
+            if not all(isinstance(coord, int) for coord in value.values()):
+                raise ValueError("Dict position values must be integers")
+            return value
+        if isinstance(value, int):
+            if value < 0:
+                raise ValueError("Integer position (graph node id) must be >= 0")
+            return value
+        raise ValueError(f"Invalid position format ({type(value)}). Expected list[int], dict[str, int], int, or None.")
 
 
 def load_affordances_config(config_dir: Path) -> list[AffordanceConfig]:
@@ -91,3 +123,6 @@ def load_affordances_config(config_dir: Path) -> list[AffordanceConfig]:
         return [AffordanceConfig(**affordance_data) for affordance_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "affordances.yaml")) from e
+
+
+AffordanceConfigCollection = _AffordanceConfigCollection

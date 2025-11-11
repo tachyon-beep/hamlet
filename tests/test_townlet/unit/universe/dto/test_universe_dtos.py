@@ -22,6 +22,7 @@ class TestObservationSpec:
     def test_lookup_and_semantic_filter(self):
         fields = [
             ObservationField(
+                uuid=None,
                 name="energy",
                 type="scalar",
                 dims=1,
@@ -32,6 +33,7 @@ class TestObservationSpec:
                 semantic_type="meter",
             ),
             ObservationField(
+                uuid=None,
                 name="position",
                 type="vector",
                 dims=2,
@@ -46,9 +48,36 @@ class TestObservationSpec:
 
         assert spec.get_field_by_name("energy").name == "energy"
         assert spec.get_fields_by_semantic_type("meter")[0].name == "energy"
+        assert spec.fields[0].uuid is not None
+        assert spec.fields[0].uuid != spec.fields[1].uuid
 
         with pytest.raises(KeyError):
             spec.get_field_by_name("missing")
+
+    def test_duplicate_uuid_rejected(self):
+        field_a = ObservationField(
+            uuid="deadbeefdeadbeef",
+            name="energy",
+            type="scalar",
+            dims=1,
+            start_index=0,
+            end_index=1,
+            scope="agent",
+            description="Energy",
+        )
+        field_b = ObservationField(
+            uuid="deadbeefdeadbeef",
+            name="energy_clone",
+            type="scalar",
+            dims=1,
+            start_index=1,
+            end_index=2,
+            scope="agent",
+            description="Energy",
+        )
+
+        with pytest.raises(ValueError, match="duplicate observation field UUIDs"):
+            ObservationSpec.from_fields([field_a, field_b])
 
 
 class TestActionSpaceMetadata:
@@ -81,7 +110,18 @@ class TestAffordanceMetadata:
     """Affordance metadata helpers."""
 
     def test_lookup(self):
-        metadata = AffordanceMetadata(affordances=(AffordanceInfo(id="bed", name="Bed", enabled=True, effects={"energy": 0.5}, cost=5.0),))
+        metadata = AffordanceMetadata(
+            affordances=(
+                AffordanceInfo(
+                    id="bed",
+                    name="Bed",
+                    enabled=True,
+                    effects={"energy": 0.5},
+                    cost=5.0,
+                    category="rest",
+                ),
+            )
+        )
         assert metadata.get_affordance_by_name("Bed").enabled
         with pytest.raises(KeyError):
             metadata.get_affordance_by_name("Shower")
@@ -92,12 +132,30 @@ def test_universe_metadata_instantiation():
     metadata = UniverseMetadata(
         universe_name="L0_0_minimal",
         schema_version="1.0",
+        substrate_type="grid",
+        position_dim=2,
+        meter_count=2,
+        meter_names=("energy", "mood"),
+        meter_name_to_index={"energy": 0, "mood": 1},
+        affordance_count=1,
+        affordance_ids=("Bed",),
+        affordance_id_to_index={"Bed": 0},
+        action_count=5,
+        observation_dim=42,
+        grid_size=3,
+        grid_cells=9,
+        max_sustainable_income=10.0,
+        total_affordance_costs=5.0,
+        economic_balance=2.0,
+        ticks_per_day=24,
+        config_version="1.0",
+        compiler_version="0.1.0",
         compiled_at="2025-11-07T12:00:00Z",
         config_hash="abc123",
-        obs_dim=42,
-        action_dim=5,
-        num_meters=8,
-        num_affordances=14,
-        position_dim=2,
+        provenance_id="prov",
+        compiler_git_sha="deadbeef",
+        python_version="3.11.0",
+        torch_version="2.1.0",
+        pydantic_version="2.6.0",
     )
-    assert metadata.obs_dim == 42
+    assert metadata.observation_dim == 42

@@ -12,6 +12,9 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
+from townlet.environment.cascade_config import BarsConfig as _BarsConfig
+
+__all__ = ["BarConfig", "load_bars_config", "BarsConfig"]
 
 
 class BarConfig(BaseModel):
@@ -30,8 +33,7 @@ class BarConfig(BaseModel):
         ... )
     """
 
-    # Allow extra fields (for metadata like key_insight, cascade_pattern, etc.)
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     # Meter identity (REQUIRED)
     name: str = Field(min_length=1, description="Meter name (e.g., 'energy')")
@@ -51,13 +53,16 @@ class BarConfig(BaseModel):
 
     # Metadata (OPTIONAL)
     description: str | None = None
+    special: str | None = None
+    key_insight: str | None = None
+    cascade_pattern: str | None = None
 
     @field_validator("range")
     @classmethod
     def validate_range_order(cls, v: list[float]) -> list[float]:
         """Ensure range[0] < range[1]."""
         if len(v) == 2 and v[0] >= v[1]:
-            raise ValueError(f"range min ({v[0]}) must be < max ({v[1]}). " f"Got reversed or equal bounds: {v}")
+            raise ValueError(f"range min ({v[0]}) must be < max ({v[1]}). Got reversed or equal bounds: {v}")
         return v
 
     @model_validator(mode="after")
@@ -95,3 +100,7 @@ def load_bars_config(config_dir: Path) -> list[BarConfig]:
         return [BarConfig(**bar_data) for bar_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "bars.yaml")) from e
+
+
+# Type alias for compiler convenience (exposes richer collection DTO)
+BarsConfig = _BarsConfig

@@ -23,11 +23,12 @@ TEST_CONFIG_SRC = CONFIGS_DIR / "test"
 
 BASE_CONFIG = {
     "environment": {
-        "grid_size": 8,
+        # grid_size moved to substrate.yaml
         "partial_observability": False,
         "vision_range": 8,
         "enable_temporal_mechanics": False,
         "enabled_affordances": None,
+        "randomize_affordances": True,
         "energy_move_depletion": 0.005,
         "energy_wait_depletion": 0.001,
         "energy_interact_depletion": 0.0,
@@ -38,6 +39,7 @@ BASE_CONFIG = {
         "gamma": 0.99,
         "replay_buffer_capacity": 1000,
         "network_type": "simple",
+        "mask_unused_obs": False,
     },
     "curriculum": {
         "max_steps_per_episode": 50,
@@ -51,6 +53,7 @@ BASE_CONFIG = {
         "initial_intrinsic_weight": 1.0,
         "variance_threshold": 100.0,
         "survival_window": 100,
+        "min_survival_fraction": 0.5,
     },
     "training": {
         "device": "cpu",
@@ -60,9 +63,12 @@ BASE_CONFIG = {
         "batch_size": 32,
         "sequence_length": 8,
         "max_grad_norm": 10.0,
+        "use_double_dqn": False,
+        "reward_strategy": "multiplicative",  # Required field for reward calculation strategy
         "epsilon_start": 1.0,
         "epsilon_decay": 0.99,
         "epsilon_min": 0.01,
+        "allow_unfeasible_universe": True,
     },
 }
 

@@ -5,8 +5,6 @@ from pathlib import Path
 import pytest
 import torch
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
-
 
 @pytest.fixture
 def cpu_device():
@@ -21,21 +19,9 @@ def test_config_pack_path() -> Path:
     return Path(__file__).parent.parent.parent.parent / "configs" / "L1_full_observability"
 
 
-def test_rest_action_restores_energy_and_mood(cpu_device, test_config_pack_path):
+def test_rest_action_restores_energy_and_mood(cpu_device, test_config_pack_path, cpu_env_factory):
     """REST action should restore energy and mood (negative costs)."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=5,  # Smaller grid for fast testing
-        partial_observability=False,
-        vision_range=5,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        config_pack_path=test_config_pack_path,
-        device=cpu_device,
-        agent_lifespan=1000,
-    )
+    env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
     env.reset()
 
@@ -70,21 +56,9 @@ def test_rest_action_restores_energy_and_mood(cpu_device, test_config_pack_path)
     assert mood_change > 0, f"Mood should increase: {initial_mood} -> {final_mood}"
 
 
-def test_meditate_action_restores_mood(cpu_device, test_config_pack_path):
+def test_meditate_action_restores_mood(cpu_device, test_config_pack_path, cpu_env_factory):
     """MEDITATE action should restore mood (via effects)."""
-    env = VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=5,
-        partial_observability=False,
-        vision_range=5,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        config_pack_path=test_config_pack_path,
-        device=cpu_device,
-        agent_lifespan=1000,
-    )
+    env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
     env.reset()
 

@@ -2,13 +2,13 @@
 # Minimal config for testing aspatial substrate (no spatial positioning)
 
 environment:
-  grid_size: 1  # Not used for aspatial (required by runner, will be ignored)
   partial_observability: false
   vision_range: 1  # Not used for aspatial substrates
   enable_temporal_mechanics: false
   enabled_affordances: ["Bed", "Hospital", "HomeMeal", "Job"]
-  energy_move_depletion: 0.0  # No movement in aspatial
-  energy_wait_depletion: 0.001
+  randomize_affordances: true
+  energy_move_depletion: 0.001  # No spatial movement, but keep move > wait for runtime invariants
+  energy_wait_depletion: 0.0
   energy_interact_depletion: 0.0
 
 population:
@@ -17,6 +17,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 1000
   network_type: simple  # MLP for aspatial (no LSTM needed)
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 curriculum:
   max_steps_per_episode: 200
@@ -29,6 +30,7 @@ exploration:
   embed_dim: 128
   initial_intrinsic_weight: 1.0
   variance_threshold: 100.0
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 50
 
 training:
@@ -39,6 +41,11 @@ training:
   batch_size: 32
   sequence_length: 8
   max_grad_norm: 10.0
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
+  allow_unfeasible_universe: true  # Test config - bypass Stage 4 feasibility validation

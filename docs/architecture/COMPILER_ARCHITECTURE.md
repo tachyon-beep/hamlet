@@ -293,6 +293,8 @@ The UniverseCompiler executes a **seven-stage pipeline** that progressively vali
 - Load cascades.yaml → validate CascadesConfig schema
 - Load cues.yaml → validate CuesConfig schema
 - Load affordances.yaml → validate AffordanceConfigs schema
+- Run all DTOs with `ConfigDict(extra="forbid")` so stray keys fail fast
+- Capture `training.enabled_actions` from HamletConfig for downstream action masking
 
 **Errors Caught**:
 - File not found
@@ -341,19 +343,44 @@ The UniverseCompiler executes a **seven-stage pipeline** that progressively vali
 **Goal**: Validate cross-file constraints and semantic correctness.
 
 **Operations**:
+- Validate spatial feasibility (N affordances + agents must fit on the configured grid)
+- Validate economic balance 2.0 (total income ≥ total costs, jobs available enough hours per day)
+- Enforce safety ceilings (`MAX_METERS`, `MAX_AFFORDANCES`, `MAX_CASCADES`, `MAX_ACTIONS`, `MAX_VARIABLES`) to guard against config injection
 - Check for circular cascade dependencies (A drains B, B drains A)
-- Validate economic balance (total income ≥ total costs)
-- Validate spatial feasibility (N affordances fit on M×M grid)
-- Validate cue range coverage (cues cover full [0.0, 1.0] meter range)
-- Validate cue-action consistency (movement speed modifiers don't contradict action definitions)
+- Validate cue range coverage (visual cues span [0.0, 1.0] without gaps/overlaps)
+- Validate cue-action consistency (movement/capability declarations align with action metadata)
+- Validate operating hours and income windows (jobs must be open when agents can work)
+- Validate depletion sustainability (critical meters need restoring affordances with sufficient throughput)
+- Validate multi-agent capacity (critical path affordances must handle the configured population)
+- Emit structured diagnostics with `UAC-VAL-*` codes, downgrading to warnings when `training.allow_unfeasible_universe` is true
 
 **Errors Caught**:
 - Circular dependencies
-- Economic imbalance (agent can't survive)
+- Economic imbalance or zero income availability despite costs
 - Spatial impossibility (too many affordances for grid size)
-- Incomplete cue ranges (gap in coverage)
+- Cue definition gaps/overlaps
+- Security limit violations (excessive meters/affordances/cascades/actions/variables)
+- Critical meter depletion with no viable restoration
+- Income-hour gaps (jobs never open) and capacity bottlenecks in multi-agent scenarios
 
 **Output**: `CompilationErrorCollector` (errors raised if any found)
+
+**Stage 4 Diagnostic Codes**
+
+| Code        | Condition Detected                                                                    | Default Response |
+|-------------|----------------------------------------------------------------------------------------|------------------|
+| `UAC-VAL-001` | Grid too small for the configured affordances/agents                                  | Error            |
+| `UAC-VAL-002` | Economic imbalance (no income, insufficient income hours, or total costs > income)   | Error or warning when imbalance is non-fatal |
+| `UAC-VAL-003` | Cascade circularity                                                                  | Error            |
+| `UAC-VAL-004` | Cue coverage gaps/overlaps                                                           | Error            |
+| `UAC-VAL-005` | Critical meter sustainability or cue meter typos                                     | Error            |
+| `UAC-VAL-006` | Security guard rails exceeded (meters/affordances/cascades/actions/variables)        | Error            |
+| `UAC-VAL-007` | Invalid operating-hour declarations or availability bounds                           | Error            |
+| `UAC-VAL-008` | Capability/effect mismatches (e.g., instant affordance declaring multi-tick effects) | Error            |
+| `UAC-VAL-009` | Visual cue definitions missing range coverage                                        | Error            |
+| `UAC-VAL-010` | Affordance positions outside substrate bounds                                        | Error            |
+
+All diagnostics flow through `CompilationMessage`, so SourceMap locations are attached automatically and the CLI can filter/search by code. Operators can downgrade hard failures to warnings for intentional experiments by setting `training.allow_unfeasible_universe=true`; the compiler still emits the same codes so CI dashboards stay searchable.
 
 ### **Stage 5: Compute Metadata**
 
@@ -365,6 +392,7 @@ The UniverseCompiler executes a **seven-stage pipeline** that progressively vali
 - Build observation specification from VFS + substrate + cues
 - Compute observation dimension (sum of all observation fields)
 - Compute action dimension (total actions including disabled)
+- Apply `training.enabled_actions` masks so disabled actions stay in vocabulary but surface as `enabled=False`
 - Compute meter count, affordance count
 - Generate universe config hash (hash of all YAML file contents)
 
@@ -399,7 +427,27 @@ The UniverseCompiler executes a **seven-stage pipeline** that progressively vali
 
 **Output**: `CompiledUniverse` (final artifact)
 
-## 2.4 Implementation Structure
+### 2.5 Symbol Table Contract (Implementation Note)
+
+Before coding Stage 2, standardise the symbol table surface so each downstream stage knows what to expect. The `UniverseSymbolTable` must expose at least:
+
+- `register_meter(BarConfig)` / `get_meter(name)` → provides meter metadata + index
+- `register_variable(VariableDef)` / `get_variable(id)`
+- `register_action(ActionConfig)` / `get_action(name)`
+- iteration helpers (`meters`, `variables`, `actions`) for validation passes
+
+All register calls should be idempotent and raise `CompilationError` on duplicates, keeping error reporting consistent with the Stage‑2 plan.
+
+### 2.6 Diagnostics & Source Maps
+
+Every diagnostic now flows through `townlet.universe.errors.CompilationMessage`, which captures the error code, human-readable text, and SourceMap location in one object. `CompilationErrorCollector` simply aggregates these messages until a stage completes, then raises a `CompilationError` whose string form lists stage → `[CODE] file:line - message` entries plus any hints/warnings.
+
+- **Codes**: All compiler-generated issues use the `UAC-VAL-*`, `UAC-SEC-*`, or `UAC-ACT-*` namespaces. Search tooling and CI dashboards can filter by code, enabling fast triage.
+- **Locations**: Stage 1 builds a `SourceMap` covering every YAML file/section. Later stages request location handles (e.g., `facilities.yaml:Bed`) so user-facing diagnostics always include clickable pointers.
+- **Hints vs Warnings vs Errors**: `_record_feasibility_issue()` downgrades certain feasibility failures to warnings when `training.allow_unfeasible_universe` is set, but the codes remain identical.
+- **Extensibility**: New stages only need to call `errors.add(formatter("UAC-VAL-XXX", ...))` to inherit code/location rendering.
+
+### 2.7 Implementation Structure
 
 ```python
 class UniverseCompiler:

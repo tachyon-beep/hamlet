@@ -6,7 +6,7 @@ independently of the environment.
 Coverage focus:
 - Edge cases (affordance not found, invalid inputs)
 - Action masking (operating hours, affordability, flag combinations)
-- Cost queries (get_affordance_cost, get_required_ticks)
+- Cost queries (get_affordance_cost, get_duration_ticks)
 - Affordability checking (_check_affordability logic)
 - Type validation (instant vs multi_tick interaction errors)
 - Factory function (create_affordance_engine)
@@ -18,19 +18,28 @@ the environment integration layer.
 import pytest
 import torch
 
-from townlet.environment.affordance_config import load_affordance_config
 from townlet.environment.affordance_engine import (
     AffordanceEngine,
     create_affordance_engine,
 )
-from townlet.environment.cascade_config import load_bars_config
+from townlet.universe.compiler import UniverseCompiler
 
 
 @pytest.fixture
 def affordance_engine_components(cpu_device, test_config_pack_path):
-    """Load bars_config and affordance_config for tests (TASK-001 fix)."""
-    bars_config = load_bars_config(test_config_pack_path / "bars.yaml")
-    affordance_config = load_affordance_config(test_config_pack_path / "affordances.yaml", bars_config)
+    """Compile universe and extract affordance metadata for tests."""
+    compiler = UniverseCompiler()
+    compiled = compiler.compile(test_config_pack_path)
+
+    # Create a simple bars_config-like object with meter_name_to_index
+    class BarsConfigCompat:
+        def __init__(self, meter_name_to_index):
+            self.meter_name_to_index = meter_name_to_index
+
+    # AffordanceEngine expects AffordanceConfigCollection from hamlet_config
+    bars_config = BarsConfigCompat(compiled.metadata.meter_name_to_index)
+    affordance_config = compiled.hamlet_config.affordances
+
     return bars_config, affordance_config
 
 
@@ -228,38 +237,38 @@ class TestCostQueries:
         cost = engine.get_affordance_cost("InvalidAffordance", cost_mode="instant")
         assert cost == 0.0
 
-    def test_get_required_ticks_instant(self, cpu_device, affordance_engine_components):
+    def test_get_duration_ticks_instant(self, cpu_device, affordance_engine_components):
         """Get required ticks for dual-mode affordances returns actual tick count."""
         bars_config, affordance_config = affordance_engine_components
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device, meter_name_to_idx=bars_config.meter_name_to_index)
 
         # Shower is dual-mode, requires 3 ticks
-        ticks = engine.get_required_ticks("Shower")
+        ticks = engine.get_duration_ticks("Shower")
         assert ticks == 3
 
         # FastFood is dual-mode, requires 2 ticks
-        ticks = engine.get_required_ticks("FastFood")
+        ticks = engine.get_duration_ticks("FastFood")
         assert ticks == 2
 
-    def test_get_required_ticks_multi_tick(self, cpu_device, affordance_engine_components):
+    def test_get_duration_ticks_multi_tick(self, cpu_device, affordance_engine_components):
         """Get required ticks for multi-tick affordance should return correct value."""
         bars_config, affordance_config = affordance_engine_components
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device, meter_name_to_idx=bars_config.meter_name_to_index)
 
         # Bed requires 5 ticks
-        ticks = engine.get_required_ticks("Bed")
+        ticks = engine.get_duration_ticks("Bed")
         assert ticks == 5
 
         # Job requires 4 ticks
-        ticks = engine.get_required_ticks("Job")
+        ticks = engine.get_duration_ticks("Job")
         assert ticks == 4
 
-    def test_get_required_ticks_invalid_affordance(self, cpu_device, affordance_engine_components):
+    def test_get_duration_ticks_invalid_affordance(self, cpu_device, affordance_engine_components):
         """Get required ticks for invalid affordance should return 1."""
         bars_config, affordance_config = affordance_engine_components
         engine = AffordanceEngine(affordance_config, num_agents=1, device=cpu_device, meter_name_to_idx=bars_config.meter_name_to_index)
 
-        ticks = engine.get_required_ticks("InvalidAffordance")
+        ticks = engine.get_duration_ticks("InvalidAffordance")
         assert ticks == 1
 
 

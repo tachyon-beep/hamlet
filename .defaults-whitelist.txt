@@ -110,7 +110,24 @@ src/townlet/universe/dto/action_metadata.py:*
 src/townlet/universe/dto/affordance_metadata.py:*
 src/townlet/universe/dto/meter_metadata.py:*
 src/townlet/universe/dto/observation_spec.py:*
- src/townlet/config/training.py:*
+src/townlet/config/training.py:*
+src/townlet/compiler/__main__.py:*
+src/townlet/config/affordance.py:*
+src/townlet/config/effect_pipeline.py:*
+src/townlet/environment/action_config.py:*
+src/townlet/environment/substrate_action_validator.py:*
+src/townlet/training/checkpoint_utils.py:*
+src/townlet/universe/adapters/vfs_adapter.py:*
+src/townlet/universe/compiled.py:*
+src/townlet/universe/compiler.py:*
+src/townlet/universe/dto/universe_metadata.py:*
+src/townlet/universe/errors.py:*
+src/townlet/universe/optimization.py:*
+src/townlet/universe/source_map.py:*
+src/townlet/universe/symbol_table.py:*
+src/townlet/vfs/schema.py:*
+src/townlet/universe/compiler_inputs.py:*
+src/townlet/config/capability_config.py:*
 
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS

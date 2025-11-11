@@ -52,10 +52,9 @@ def assert_valid_observation(env: VectorizedHamletEnv, obs: torch.Tensor) -> Non
         f"  observation_dim: {env.observation_dim}"
     )
 
-    assert obs.dtype == torch.float32, (
-        f"Invalid observation dtype: expected torch.float32, got {obs.dtype}\n"
-        f"Observations must be float32 for neural network compatibility"
-    )
+    assert (
+        obs.dtype == torch.float32
+    ), f"Invalid observation dtype: expected torch.float32, got {obs.dtype}\nObservations must be float32 for neural network compatibility"
 
     # Check for NaN/Inf
     if torch.isnan(obs).any():
@@ -65,6 +64,30 @@ def assert_valid_observation(env: VectorizedHamletEnv, obs: torch.Tensor) -> Non
     if torch.isinf(obs).any():
         inf_count = torch.isinf(obs).sum().item()
         raise AssertionError(f"Observation contains {inf_count} Inf values")
+
+
+def calculate_expected_observation_dim(env: VectorizedHamletEnv) -> int:
+    """Return the expected flattened observation dimensionality for an environment.
+
+    Observation layout currently follows the pattern:
+        substrate features + meters + affordance vocabulary (+"none") + temporal features
+
+    Args:
+        env: Environment whose observation structure should be analyzed.
+
+    Returns:
+        Total dimensionality the observation tensor is expected to have per agent.
+    """
+
+    substrate_dim = env.substrate.get_observation_dim()
+    meter_dim = env.meter_count
+    affordance_dim = env.num_affordance_types + 1  # +1 for "none" affordance slot
+
+    # Temporal encoding always reserves 4 channels:
+    #   sin(time), cos(time), interaction_progress, lifetime_progress
+    temporal_dim = 4
+
+    return substrate_dim + meter_dim + affordance_dim + temporal_dim
 
 
 # =============================================================================
@@ -96,9 +119,9 @@ def assert_valid_action_mask(env: VectorizedHamletEnv, mask: torch.Tensor) -> No
         f"  action_dim: {env.action_dim}"
     )
 
-    assert mask.dtype == torch.bool, (
-        f"Invalid action mask dtype: expected torch.bool, got {mask.dtype}\n" f"Action masks must be boolean tensors"
-    )
+    assert (
+        mask.dtype == torch.bool
+    ), f"Invalid action mask dtype: expected torch.bool, got {mask.dtype}\nAction masks must be boolean tensors"
 
     # Check that at least one action is valid per agent
     valid_actions_per_agent = mask.sum(dim=1)
@@ -135,11 +158,11 @@ def assert_meters_in_range(env: VectorizedHamletEnv) -> None:
     # Check for NaN/Inf first
     if torch.isnan(meters).any():
         nan_agents = torch.isnan(meters).any(dim=1).nonzero(as_tuple=True)[0]
-        raise AssertionError(f"Meters contain NaN values for {len(nan_agents)} agents:\n" f"  Agent IDs: {nan_agents.tolist()}")
+        raise AssertionError(f"Meters contain NaN values for {len(nan_agents)} agents:\n  Agent IDs: {nan_agents.tolist()}")
 
     if torch.isinf(meters).any():
         inf_agents = torch.isinf(meters).any(dim=1).nonzero(as_tuple=True)[0]
-        raise AssertionError(f"Meters contain Inf values for {len(inf_agents)} agents:\n" f"  Agent IDs: {inf_agents.tolist()}")
+        raise AssertionError(f"Meters contain Inf values for {len(inf_agents)} agents:\n  Agent IDs: {inf_agents.tolist()}")
 
     # Check range [0, 1]
     below_zero = meters < 0.0
@@ -203,9 +226,7 @@ def assert_positions_in_bounds(
     if (x < 0).any() or (x >= width).any():
         out_of_bounds = ((x < 0) | (x >= width)).nonzero(as_tuple=True)[0]
         raise AssertionError(
-            f"X positions out of bounds [0, {width}):\n"
-            f"  Agent IDs: {out_of_bounds.tolist()}\n"
-            f"  X values: {x[out_of_bounds].tolist()}"
+            f"X positions out of bounds [0, {width}):\n  Agent IDs: {out_of_bounds.tolist()}\n  X values: {x[out_of_bounds].tolist()}"
         )
 
     # Validate Y (row)
@@ -213,9 +234,7 @@ def assert_positions_in_bounds(
     if (y < 0).any() or (y >= height).any():
         out_of_bounds = ((y < 0) | (y >= height)).nonzero(as_tuple=True)[0]
         raise AssertionError(
-            f"Y positions out of bounds [0, {height}):\n"
-            f"  Agent IDs: {out_of_bounds.tolist()}\n"
-            f"  Y values: {y[out_of_bounds].tolist()}"
+            f"Y positions out of bounds [0, {height}):\n  Agent IDs: {out_of_bounds.tolist()}\n  Y values: {y[out_of_bounds].tolist()}"
         )
 
     # Validate Z (depth) if 3D
@@ -224,9 +243,7 @@ def assert_positions_in_bounds(
         if (z < 0).any() or (z >= depth).any():
             out_of_bounds = ((z < 0) | (z >= depth)).nonzero(as_tuple=True)[0]
             raise AssertionError(
-                f"Z positions out of bounds [0, {depth}):\n"
-                f"  Agent IDs: {out_of_bounds.tolist()}\n"
-                f"  Z values: {z[out_of_bounds].tolist()}"
+                f"Z positions out of bounds [0, {depth}):\n  Agent IDs: {out_of_bounds.tolist()}\n  Z values: {z[out_of_bounds].tolist()}"
             )
 
 
@@ -251,13 +268,13 @@ def assert_valid_rewards(rewards: torch.Tensor, num_agents: int) -> None:
     """
     expected_shape = (num_agents,)
 
-    assert rewards.shape == expected_shape, (
-        f"Invalid reward shape: expected {expected_shape}, got {rewards.shape}\n" f"  num_agents: {num_agents}"
-    )
+    assert (
+        rewards.shape == expected_shape
+    ), f"Invalid reward shape: expected {expected_shape}, got {rewards.shape}\n  num_agents: {num_agents}"
 
-    assert rewards.dtype == torch.float32, (
-        f"Invalid reward dtype: expected torch.float32, got {rewards.dtype}\n" f"Rewards must be float32 for training"
-    )
+    assert (
+        rewards.dtype == torch.float32
+    ), f"Invalid reward dtype: expected torch.float32, got {rewards.dtype}\nRewards must be float32 for training"
 
     # Check for NaN/Inf
     if torch.isnan(rewards).any():
@@ -290,8 +307,6 @@ def assert_valid_dones(dones: torch.Tensor, num_agents: int) -> None:
     """
     expected_shape = (num_agents,)
 
-    assert dones.shape == expected_shape, (
-        f"Invalid done shape: expected {expected_shape}, got {dones.shape}\n" f"  num_agents: {num_agents}"
-    )
+    assert dones.shape == expected_shape, f"Invalid done shape: expected {expected_shape}, got {dones.shape}\n  num_agents: {num_agents}"
 
-    assert dones.dtype == torch.bool, f"Invalid done dtype: expected torch.bool, got {dones.dtype}\n" f" Done flags must be boolean tensors"
+    assert dones.dtype == torch.bool, f"Invalid done dtype: expected torch.bool, got {dones.dtype}\n Done flags must be boolean tensors"

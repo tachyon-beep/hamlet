@@ -49,6 +49,7 @@ class TestDatabaseRecording:
                 timestamp=time.time(),
                 affordance_layout={"Bed": (2, 3)},
                 affordance_visits={"Bed": 15},
+                custom_action_uses={},
             )
 
             db.insert_recording(
@@ -97,6 +98,7 @@ class TestDatabaseRecording:
                 timestamp=time.time(),
                 affordance_layout={},
                 affordance_visits={},
+                custom_action_uses={},
             )
 
             db.insert_recording(
@@ -154,6 +156,7 @@ class TestDatabaseRecording:
                     timestamp=time.time(),
                     affordance_layout={},
                     affordance_visits={},
+                    custom_action_uses={},
                 )
                 db.insert_recording(
                     episode_id=i * 100,
@@ -199,6 +202,7 @@ class TestDatabaseRecording:
                         timestamp=time.time(),
                         affordance_layout={},
                         affordance_visits={},
+                        custom_action_uses={},
                     )
                     db.insert_recording(
                         episode_id=episode_id,
@@ -241,6 +245,7 @@ class TestDatabaseRecording:
                     timestamp=time.time(),
                     affordance_layout={},
                     affordance_visits={},
+                    custom_action_uses={},
                 )
                 db.insert_recording(
                     episode_id=i * 100,
@@ -283,6 +288,7 @@ class TestDatabaseRecording:
                     timestamp=time.time(),
                     affordance_layout={},
                     affordance_visits={},
+                    custom_action_uses={},
                 )
                 db.insert_recording(
                     episode_id=i,
@@ -327,6 +333,7 @@ class TestDatabaseRecording:
                     timestamp=time.time(),
                     affordance_layout={},
                     affordance_visits={},
+                    custom_action_uses={},
                 )
                 db.insert_recording(
                     episode_id=i,

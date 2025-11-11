@@ -8,117 +8,125 @@ class TestAffordanceConfigValidation:
     """Test AffordanceConfig schema validation."""
 
     def test_all_required_fields_present(self):
-        """All core fields must be specified."""
         from townlet.config.affordance import AffordanceConfig
+        from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
 
-        # Valid config with all required fields
         config = AffordanceConfig(
             id="0",
             name="Bed",
             category="energy_restoration",
             costs=[{"meter": "money", "amount": 0.05}],
-            effects=[{"meter": "energy", "amount": 0.50}],
+            effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="energy", amount=0.50)]),
         )
         assert config.id == "0"
-        assert config.name == "Bed"
-        assert len(config.effects) == 1
+        assert config.effect_pipeline is not None
 
     def test_missing_required_field(self):
-        """Missing required field raises error."""
         from townlet.config.affordance import AffordanceConfig
 
         with pytest.raises(ValidationError):
-            AffordanceConfig(
-                id="0",
-                # Missing name, costs, effects
-            )
+            AffordanceConfig(id="0")
 
-    def test_id_must_be_nonempty(self):
-        """ID cannot be empty string."""
+    def test_empty_effect_pipeline_is_valid(self):
+        """Empty EffectPipeline is valid - effects are optional."""
         from townlet.config.affordance import AffordanceConfig
+        from townlet.config.effect_pipeline import EffectPipeline
 
-        with pytest.raises(ValidationError):
-            AffordanceConfig(
-                id="",  # Empty
-                name="Bed",
-                costs=[],
-                effects=[{"meter": "energy", "amount": 0.50}],
-            )
+        # This should not raise - empty effects are valid
+        config = AffordanceConfig(id="0", name="Bed", effect_pipeline=EffectPipeline())
+        assert config.effect_pipeline is not None
+        assert not config.effect_pipeline.has_effects()
 
-    def test_name_must_be_nonempty(self):
-        """Name cannot be empty string."""
+    def test_effect_pipeline_stages(self):
         from townlet.config.affordance import AffordanceConfig
-
-        with pytest.raises(ValidationError):
-            AffordanceConfig(
-                id="0",
-                name="",  # Empty
-                costs=[],
-                effects=[{"meter": "energy", "amount": 0.50}],
-            )
-
-    def test_effects_must_have_at_least_one(self):
-        """Effects cannot be empty list."""
-        from townlet.config.affordance import AffordanceConfig
-
-        with pytest.raises(ValidationError) as exc_info:
-            AffordanceConfig(
-                id="0",
-                name="Bed",
-                costs=[],
-                effects=[],  # Empty!
-            )
-        assert "effects" in str(exc_info.value).lower()
-
-    def test_optional_category_field(self):
-        """Category field is optional."""
-        from townlet.config.affordance import AffordanceConfig
-
-        # Without category
-        config1 = AffordanceConfig(
-            id="0",
-            name="Bed",
-            costs=[],
-            effects=[{"meter": "energy", "amount": 0.50}],
-        )
-        assert config1.category is None
-
-        # With category
-        config2 = AffordanceConfig(
-            id="0",
-            name="Bed",
-            category="energy_restoration",
-            costs=[],
-            effects=[{"meter": "energy", "amount": 0.50}],
-        )
-        assert config2.category == "energy_restoration"
-
-    def test_costs_can_be_empty(self):
-        """Costs can be empty list (free affordances)."""
-        from townlet.config.affordance import AffordanceConfig
+        from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
 
         config = AffordanceConfig(
-            id="10",
+            id="staged",
+            name="StagedEffects",
+            effect_pipeline=EffectPipeline(
+                on_completion=[AffordanceEffect(meter="energy", amount=0.2)],
+                per_tick=[AffordanceEffect(meter="money", amount=0.1)],
+            ),
+        )
+        assert config.effect_pipeline is not None
+        assert len(config.effect_pipeline.on_completion) == 1
+        assert config.effect_pipeline.per_tick[0].meter == "money"
+
+    def test_operating_hours_validation(self):
+        from townlet.config.affordance import AffordanceConfig
+        from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
+
+        config = AffordanceConfig(
+            id="1",
+            name="Shop",
+            operating_hours=[9, 17],
+            effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="money", amount=1.0)]),
+        )
+        assert config.operating_hours == [9, 17]
+
+        with pytest.raises(ValidationError):
+            AffordanceConfig(
+                id="2",
+                name="NightClub",
+                operating_hours=[-1, 30],
+                effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="mood", amount=0.1)]),
+            )
+
+    def test_capabilities_parsed(self):
+        from townlet.config.affordance import AffordanceConfig
+        from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
+
+        config = AffordanceConfig(
+            id="job",
             name="Job",
-            costs=[],  # FREE!
-            effects=[{"meter": "money", "amount": 0.225}],
+            duration_ticks=5,
+            capabilities=[
+                {"type": "multi_tick"},
+                {"type": "meter_gated", "meter": "energy", "min": 0.3},
+            ],
+            effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="money", amount=1.0)]),
         )
-        assert config.costs == []
+        assert len(config.capabilities) == 2
+        assert config.capabilities[0].type == "multi_tick"
 
-    def test_negative_effects_allowed(self):
-        """Negative effects (penalties) are allowed."""
+    def test_availability_constraints_require_bounds(self):
+        from townlet.config.affordance import AffordanceConfig
+        from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
+
+        with pytest.raises(ValidationError):
+            AffordanceConfig(
+                id="gym",
+                name="Gym",
+                availability=[{"meter": "energy"}],
+                effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="fitness", amount=0.1)]),
+            )
+
+    def test_id_and_name_cannot_be_empty(self):
         from townlet.config.affordance import AffordanceConfig
 
+        with pytest.raises(ValidationError):
+            AffordanceConfig(id="", name="Bed")
+
+        with pytest.raises(ValidationError):
+            AffordanceConfig(id="123", name="")
+
+    def test_negative_effects_and_costs_supported(self):
+        from townlet.config.affordance import AffordanceConfig
+        from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
+
         config = AffordanceConfig(
-            id="4",
+            id="fastfood",
             name="FastFood",
-            costs=[{"meter": "money", "amount": 0.10}],
-            effects=[
-                {"meter": "satiation", "amount": 0.45},  # Positive
-                {"meter": "health", "amount": -0.02},  # Negative (penalty)
-            ],
+            costs=[{"meter": "money", "amount": 0.1}],
+            effect_pipeline=EffectPipeline(
+                on_completion=[
+                    AffordanceEffect(meter="satiation", amount=0.45),
+                    AffordanceEffect(meter="health", amount=-0.02),
+                ]
+            ),
         )
-        assert config.effects[1]["amount"] == -0.02
+        assert config.effect_pipeline.on_completion[1].amount == -0.02
 
 
 class TestAffordanceConfigLoading:
@@ -139,17 +147,19 @@ affordances:
     category: "energy_restoration"
     costs:
       - { meter: "money", amount: 0.05 }
-    effects:
-      - { meter: "energy", amount: 0.50 }
-      - { meter: "health", amount: 0.02 }
+    effect_pipeline:
+      on_completion:
+        - { meter: "energy", amount: 0.50 }
+        - { meter: "health", amount: 0.02 }
 
   - id: "10"
     name: "Job"
     category: "income"
     costs: []
-    effects:
-      - { meter: "money", amount: 0.225 }
-      - { meter: "energy", amount: -0.15 }
+    effect_pipeline:
+      on_completion:
+        - { meter: "money", amount: 0.225 }
+        - { meter: "energy", amount: -0.15 }
 """
         )
 
@@ -157,7 +167,7 @@ affordances:
         assert len(affordances) == 2
         assert affordances[0].name == "Bed"
         assert affordances[1].id == "10"
-        assert len(affordances[0].effects) == 2
+        assert len(affordances[0].effect_pipeline.on_completion) == 2
 
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""

@@ -153,6 +153,13 @@ class ContinuousConfig(BaseModel):
         description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + ranges), absolute (raw coordinates)",
     )
 
+    # NEW: Discretized continuous action space
+    action_discretization: dict[str, int] | None = Field(
+        default=None,
+        description="Discretize continuous action space: {'num_directions': 8-32, 'num_magnitudes': 3-7}. "
+        "If None, uses legacy 8-way discrete actions. For maximum freedom, use {'num_directions': 32, 'num_magnitudes': 7}.",
+    )
+
     @model_validator(mode="after")
     def validate_bounds_match_dimensions(self) -> "ContinuousConfig":
         """Validate bounds and interaction parameters."""

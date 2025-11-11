@@ -10,7 +10,6 @@ discarded without being tracked or logged.
 import torch
 
 from townlet.curriculum.static import StaticCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 
@@ -18,7 +17,7 @@ from townlet.population.vectorized import VectorizedPopulation
 class TestRNDLossTracking:
     """Test RND loss is tracked during training with AdaptiveIntrinsicExploration."""
 
-    def test_rnd_loss_tracked_during_training(self, cpu_device, test_config_pack_path):
+    def test_rnd_loss_tracked_during_training(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify RND predictor loss is tracked when using AdaptiveIntrinsicExploration.
 
         This test validates the critical contract:
@@ -30,20 +29,7 @@ class TestRNDLossTracking:
         Integration point: VectorizedPopulation.step_population() trains RND
         predictor and should track the loss for monitoring.
         """
-        # Create small environment for fast training
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create population with AdaptiveIntrinsicExploration (includes RND)
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -96,26 +82,13 @@ class TestRNDLossTracking:
         # Verify RND loss is reasonable (should be > 0 since predictor is training)
         assert population.last_rnd_loss >= 0.0, f"RND loss should be non-negative, got {population.last_rnd_loss}"
 
-    def test_rnd_loss_tracks_latest_value(self, cpu_device, test_config_pack_path):
+    def test_rnd_loss_tracks_latest_value(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Verify RND loss updates with latest training value.
 
         This test validates that last_rnd_loss is updated each time RND
         predictor trains, not just set once.
         """
-        # Create environment
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            config_pack_path=test_config_pack_path,
-            device=cpu_device,
-            agent_lifespan=1000,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
         # Create population with RND
         curriculum = StaticCurriculum(difficulty_level=0.5)

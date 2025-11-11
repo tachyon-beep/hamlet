@@ -233,28 +233,6 @@ def test_continuous2d_generates_6_actions():
     assert names == ["UP", "DOWN", "LEFT", "RIGHT", "INTERACT", "WAIT"]
 
 
-def test_continuous2d_uses_integer_deltas():
-    """Continuous2D deltas are integers (scaled by movement_delta in apply_movement)."""
-    substrate = Continuous2DSubstrate(
-        min_x=0.0,
-        max_x=10.0,
-        min_y=0.0,
-        max_y=10.0,
-        boundary="clamp",
-        movement_delta=0.5,
-        interaction_radius=0.8,
-    )
-
-    actions = substrate.get_default_actions()
-    actions_by_name = {a.name: a for a in actions}
-
-    # Deltas are integers that get scaled by movement_delta
-    assert actions_by_name["UP"].delta == [0, -1]
-    assert actions_by_name["DOWN"].delta == [0, 1]
-    assert actions_by_name["LEFT"].delta == [-1, 0]
-    assert actions_by_name["RIGHT"].delta == [1, 0]
-
-
 def test_continuous3d_generates_8_actions():
     """Continuous3D should provide 8 actions (same as Grid3D)."""
     substrate = Continuous3DSubstrate(

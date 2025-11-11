@@ -379,7 +379,8 @@ uv run mypy src/
 ### Phase 5: Informed Optimization
 
 - Profile complete system, optimize real bottlenecks
-- Implement Double DQN, Dueling Architecture
+- ✅ Double DQN implemented (configurable via `use_double_dqn` in training.yaml)
+- Dueling Architecture
 - GPU optimization for RND (eliminate CPU transfers)
 
 ### Phase 6: Multi-Agent Competition

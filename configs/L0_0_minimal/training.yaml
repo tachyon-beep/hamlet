@@ -25,11 +25,11 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 3  # 3×3 grid world (9 cells)
   partial_observability: false  # Agent sees full grid
   vision_range: 3  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
   enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
+  randomize_affordances: true
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.003
   energy_interact_depletion: 0.0029
@@ -39,8 +39,9 @@ population:
   num_agents: 1  # Single agent
   learning_rate: 0.001  # Higher learning rate for faster learning
   gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
-  replay_buffer_capacity: 5000  # Smaller buffer for minimal world
+  replay_buffer_capacity: 50000  # 50k capacity for better experience diversity (166-500 episodes)
   network_type: simple  # Standard MLP Q-Network
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration (simpler than Level 1)
 curriculum:
@@ -55,6 +56,7 @@ exploration:
   embed_dim: 64  # Smaller embedding (simpler observations)
   initial_intrinsic_weight: 0.1  # Lower intrinsic weight (extrinsic is clearer)
   variance_threshold: 50.0  # Lower threshold for faster annealing
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 50  # Smaller window
 
 # Training configuration
@@ -68,8 +70,22 @@ training:
   batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
   sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
   max_grad_norm: 10.0  # Gradient clipping threshold
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
   epsilon_decay: 0.99  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
   epsilon_min: 0.01  # Minimum exploration rate
+  allow_unfeasible_universe: true  # Minimal world intentionally violates feasibility checks
+  enabled_actions:
+    # Progressively expand this list in higher curriculum levels (L0 keeps custom actions limited to REST)
+    - "UP"
+    - "DOWN"
+    - "LEFT"
+    - "RIGHT"
+    - "INTERACT"
+    - "WAIT"
+    - "REST"

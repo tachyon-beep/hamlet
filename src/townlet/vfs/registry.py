@@ -197,7 +197,7 @@ class VariableRegistry:
 
         # Check read permission
         if reader not in var_def.readable_by:
-            raise PermissionError(f"'{reader}' is not allowed to read variable '{variable_id}'. " f"Readable by: {var_def.readable_by}")
+            raise PermissionError(f"'{reader}' is not allowed to read variable '{variable_id}'. Readable by: {var_def.readable_by}")
 
         value = self._storage[variable_id]
 
@@ -236,7 +236,7 @@ class VariableRegistry:
 
         # Check write permission
         if writer not in var_def.writable_by:
-            raise PermissionError(f"'{writer}' is not allowed to write variable '{variable_id}'. " f"Writable by: {var_def.writable_by}")
+            raise PermissionError(f"'{writer}' is not allowed to write variable '{variable_id}'. Writable by: {var_def.writable_by}")
 
         expected_shape = self._expected_shapes[variable_id]
         expected_dtype = self._expected_dtypes[variable_id]

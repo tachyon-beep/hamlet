@@ -23,6 +23,10 @@ from townlet.substrate.continuous import ContinuousSubstrate
 from townlet.substrate.grid2d import Grid2DSubstrate
 from townlet.substrate.grid3d import Grid3DSubstrate
 from townlet.substrate.gridnd import GridNDSubstrate
+from townlet.training.checkpoint_utils import safe_torch_load, verify_checkpoint_digest
+from townlet.universe.compiled import CompiledUniverse
+from townlet.universe.compiler import UniverseCompiler
+from townlet.universe.runtime import RuntimeUniverse
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +81,13 @@ class LiveInferenceServer:
         self.step_delay = step_delay
         self.total_episodes = total_episodes
         logger.info(f"LiveInferenceServer initialized with total_episodes={total_episodes}")
-        self.config_dir = Path(config_dir) if config_dir else None
-        if training_config_path:
-            self.config_path: Path | None = Path(training_config_path)
-        elif self.config_dir is not None:
-            self.config_path = self.config_dir / "training.yaml"
-        else:
-            self.config_path = None
-        self.config = None
+        if config_dir is None:
+            raise ValueError("LiveInferenceServer requires config_dir to compile the universe.")
+        self.config_dir = Path(config_dir)
+        self.training_config_path: Path | None = Path(training_config_path) if training_config_path else None
+        self.compiler = UniverseCompiler()
+        self.compiled_universe: CompiledUniverse | None = None
+        self.runtime_universe: RuntimeUniverse | None = None
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.clients: set[WebSocket] = set()
@@ -219,13 +222,8 @@ class LiveInferenceServer:
         """Initialize environment and start checkpoint monitoring."""
         logger.info("Starting live inference server")
 
-        # Load config if provided
-        if self.config_path and self.config_path.exists():
-            import yaml
-
-            with open(self.config_path) as f:
-                self.config = yaml.safe_load(f)
-            logger.info(f"Loaded training config: {self.config_path}")
+        if self.training_config_path:
+            logger.info(f"Training config override provided: {self.training_config_path}")
 
         # Initialize environment and components
         self._initialize_components()
@@ -267,94 +265,69 @@ class LiveInferenceServer:
 
     def _initialize_components(self):
         """Initialize environment and agent components."""
-        # Get environment config (use config if available, otherwise defaults)
-        num_agents = 1
-        grid_size = 8
-        partial_observability = False
-        vision_range = 2
-        enable_temporal_mechanics = False
-        enabled_affordances = None  # None = all affordances
-        network_type = "simple"
-        vision_window_size = 5
-        move_energy_cost = 0.005
-        wait_energy_cost = 0.001
-        interact_energy_cost = 0.0
-        agent_lifespan = 1000  # Default lifespan for inference mode
+        logger.info("Compiling universe for live inference from %s", self.config_dir)
+        self.compiled_universe = self.compiler.compile(self.config_dir)
+        self.runtime_universe = self.compiled_universe.to_runtime()
+        hamlet_config = self.compiled_universe.hamlet_config
+        env_cfg = hamlet_config.environment
+        population_cfg = hamlet_config.population
+        curriculum_cfg = hamlet_config.curriculum
+        exploration_cfg = hamlet_config.exploration
+        training_cfg = hamlet_config.training
 
-        if self.config:
-            env_cfg = self.config.get("environment", {})
-            pop_cfg = self.config.get("population", {})
+        num_agents = population_cfg.num_agents
+        network_type = population_cfg.network_type
+        vision_range = env_cfg.vision_range
+        partial_observability = env_cfg.partial_observability
+        enable_temporal_mechanics = env_cfg.enable_temporal_mechanics
+        vision_window_size = 2 * vision_range + 1
 
-            grid_size = env_cfg.get("grid_size", 8)
-            partial_observability = env_cfg.get("partial_observability", False)
-            vision_range = env_cfg.get("vision_range", 2)
-            enable_temporal_mechanics = env_cfg.get("enable_temporal_mechanics", False)
-            enabled_affordances = env_cfg.get("enabled_affordances", None)  # Override default
-            network_type = pop_cfg.get("network_type", "simple")
-            vision_window_size = 2 * vision_range + 1
-            move_energy_cost = env_cfg.get(
-                "energy_move_depletion",
-                env_cfg.get("move_energy_cost", move_energy_cost),
-            )
-            wait_energy_cost = env_cfg.get(
-                "energy_wait_depletion",
-                env_cfg.get("wait_energy_cost", wait_energy_cost),
-            )
-            interact_energy_cost = env_cfg.get(
-                "energy_interact_depletion",
-                env_cfg.get("interact_energy_cost", interact_energy_cost),
-            )
-            agent_lifespan = env_cfg.get("agent_lifespan", agent_lifespan)
+        logger.info(
+            "Environment config: grid=%s, POMDP=%s, vision=%s, temporal=%s, affordances=%s",
+            self.runtime_universe.metadata.grid_size,  # Read from substrate.yaml via metadata
+            partial_observability,
+            vision_range,
+            enable_temporal_mechanics,
+            env_cfg.enabled_affordances if env_cfg.enabled_affordances else "all",
+        )
+        logger.info("Network type: %s (num_agents=%s)", network_type, num_agents)
 
-            logger.info(
-                f"Environment config: grid={grid_size}, "
-                f"POMDP={partial_observability}, "
-                f"vision={vision_range}, "
-                f"temporal={enable_temporal_mechanics}, "
-                f"affordances={enabled_affordances if enabled_affordances else 'all'}"
-            )
-            logger.info(f"Network type: {network_type}")
-
-        # Create environment with config settings
-        self.env = VectorizedHamletEnv(
+        self.env = VectorizedHamletEnv.from_universe(
+            self.compiled_universe,
             num_agents=num_agents,
-            grid_size=grid_size,
             device=self.device,
-            partial_observability=partial_observability,
-            vision_range=vision_range,
-            enable_temporal_mechanics=enable_temporal_mechanics,
-            enabled_affordances=enabled_affordances,
-            move_energy_cost=move_energy_cost,
-            wait_energy_cost=wait_energy_cost,
-            interact_energy_cost=interact_energy_cost,
-            agent_lifespan=agent_lifespan,
-            config_pack_path=self.config_dir,
         )
 
-        # Auto-detect observation dimension from environment
-        obs_dim = self.env.observation_dim
+        obs_dim = self.runtime_universe.metadata.observation_dim
 
         # Create curriculum
         self.curriculum = AdversarialCurriculum(
-            max_steps_per_episode=500,
-            survival_advance_threshold=0.7,
-            survival_retreat_threshold=0.3,
-            entropy_gate=0.5,
-            min_steps_at_stage=1000,
+            max_steps_per_episode=curriculum_cfg.max_steps_per_episode,
+            survival_advance_threshold=curriculum_cfg.survival_advance_threshold,
+            survival_retreat_threshold=curriculum_cfg.survival_retreat_threshold,
+            entropy_gate=curriculum_cfg.entropy_gate,
+            min_steps_at_stage=curriculum_cfg.min_steps_at_stage,
             device=self.device,
         )
 
         # Create exploration (for inference, we want greedy)
+        # Conditionally pass active_mask based on mask_unused_obs config
+        active_mask = self.env.observation_activity.active_mask if population_cfg.mask_unused_obs else None
         self.exploration = AdaptiveIntrinsicExploration(
-            obs_dim=obs_dim,  # Auto-detected from environment
-            embed_dim=128,
-            initial_intrinsic_weight=0.0,  # Pure exploitation for inference
-            variance_threshold=10.0,
-            survival_window=100,
+            obs_dim=obs_dim,
+            embed_dim=exploration_cfg.embed_dim,
+            rnd_training_batch_size=training_cfg.batch_size,  # Use main batch_size from config
+            initial_intrinsic_weight=exploration_cfg.initial_intrinsic_weight,
+            variance_threshold=exploration_cfg.variance_threshold,
+            survival_window=exploration_cfg.survival_window,
+            epsilon_start=training_cfg.epsilon_start,
+            epsilon_decay=training_cfg.epsilon_decay,
+            epsilon_min=training_cfg.epsilon_min,
             device=self.device,
+            active_mask=active_mask,
         )
 
-        # Create population (use auto-detected dimensions and network type from config)
+        # Create population (use compiled configuration for all hyperparameters)
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
         self.population = VectorizedPopulation(
             env=self.env,
@@ -364,9 +337,16 @@ class LiveInferenceServer:
             device=self.device,
             obs_dim=obs_dim,
             action_dim=self.env.action_dim,
-            replay_buffer_capacity=10000,
+            learning_rate=population_cfg.learning_rate,
+            gamma=population_cfg.gamma,
+            replay_buffer_capacity=population_cfg.replay_buffer_capacity,
             network_type=network_type,
             vision_window_size=vision_window_size,
+            train_frequency=training_cfg.train_frequency,
+            target_update_frequency=training_cfg.target_update_frequency,
+            batch_size=training_cfg.batch_size,
+            sequence_length=training_cfg.sequence_length,
+            max_grad_norm=training_cfg.max_grad_norm,
         )
 
         self.curriculum.initialize_population(num_agents)
@@ -402,7 +382,8 @@ class LiveInferenceServer:
         # Load checkpoint
         logger.info(f"Loading checkpoint: {latest_checkpoint.name} (episode {episode_num})")
 
-        checkpoint = torch.load(latest_checkpoint, weights_only=False)
+        verify_checkpoint_digest(latest_checkpoint, required=False)
+        checkpoint = safe_torch_load(latest_checkpoint, weights_only=False)
 
         # Load Q-network weights
         if "population_state" in checkpoint:
@@ -796,10 +777,10 @@ class LiveInferenceServer:
             q_values_list.extend([float("nan")] * (6 - len(q_values_list)))
 
         # Log Q-values and chosen action to file for debugging
-        action_names = ["Up", "Down", "Left", "Right", "Interact", "Wait"]
+        action_names_dict = self.env.get_action_label_names()
         padded_for_log = q_values_list[:6]
         log_line = (
-            f"Step {self.current_step}: Action={action_names[last_action]}, "
+            f"Step {self.current_step}: Action={action_names_dict.get(last_action, 'UNKNOWN')}, "
             f"Q-values: Up={padded_for_log[0]:.2f}, Down={padded_for_log[1]:.2f}, "
             f"Left={padded_for_log[2]:.2f}, Right={padded_for_log[3]:.2f}, "
             f"Interact={padded_for_log[4]:.2f}, Wait={padded_for_log[5]:.2f}\n"
@@ -851,7 +832,7 @@ class LiveInferenceServer:
             ):
                 affordance_name = self.env.last_interaction_affordance[0]
                 # Get required ticks from affordance engine
-                required_ticks = self.env.affordance_engine.get_required_ticks(affordance_name)
+                required_ticks = self.env.affordance_engine.get_duration_ticks(affordance_name)
                 if required_ticks > 0:
                     interaction_progress_normalized = interaction_progress_raw / required_ticks
 
@@ -1150,7 +1131,7 @@ def run_server(
         port: WebSocket port
         step_delay: Delay between steps in seconds
         total_episodes: Expected total training episodes
-        config_dir: Optional config directory
+        config_dir: Config directory (compiled universe source)
         training_config_path: Optional training config YAML
         db_path: Optional database path for replay mode
         recordings_dir: Optional recordings directory for replay mode
@@ -1158,6 +1139,9 @@ def run_server(
     import uvicorn
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
+
+    if config_dir is None:
+        raise ValueError("config_dir is required for live inference. Provide the path to the config pack directory.")
 
     server = LiveInferenceServer(
         checkpoint_dir,

@@ -21,11 +21,11 @@ run_metadata:
 
 # Environment configuration
 environment:
-  grid_size: 8  # 8×8 grid world
   partial_observability: true  # LEVEL 2: Agent sees only 5×5 local window
   vision_range: 2  # 5×5 window (2*2+1)
   enable_temporal_mechanics: false  # LEVEL 2: No time-of-day (added in L3)
   enabled_affordances: null  # null = all 14 affordances enabled
+  randomize_affordances: true
   energy_move_depletion: 0.005
   energy_wait_depletion: 0.001
   energy_interact_depletion: 0.0
@@ -37,6 +37,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 10000
   network_type: recurrent  # NEW: RecurrentSpatialQNetwork with LSTM
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration (adversarial difficulty adjustment)
 curriculum:
@@ -51,6 +52,7 @@ exploration:
   embed_dim: 128
   initial_intrinsic_weight: 0.1  # Much lower - let extrinsic milestones drive learning
   variance_threshold: 100.0  # Fixed: increased from 10.0 to prevent premature annealing
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
   survival_window: 100  # Track last 100 episodes for annealing
   epsilon_start: 1.0
   epsilon_min: 0.01
@@ -67,6 +69,10 @@ training:
   batch_size: 16  # Smaller batch for LSTM (recurrent: 16, feedforward: 64)
   sequence_length: 8  # Length of sequences for LSTM training
   max_grad_norm: 10.0  # Gradient clipping threshold
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
 
   # Epsilon-greedy exploration (slower decay for POMDP)
   epsilon_start: 1.0  # Initial exploration rate

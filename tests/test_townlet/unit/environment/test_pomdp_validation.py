@@ -9,8 +9,9 @@ from pathlib import Path
 
 import pytest
 import torch
+import yaml
 
-from townlet.environment.vectorized_env import VectorizedHamletEnv
+from tests.test_townlet.utils.builders import make_vectorized_env_from_pack
 
 
 class TestGridNDPOMDPValidation:
@@ -42,23 +43,21 @@ gridnd:
 """
         )
 
-        return str(dest_config)
+        return dest_config
 
     def test_gridnd_4d_pomdp_rejected(self, gridnd_4d_config_pack):
         """4D GridND should reject partial_observability=True."""
+        training_path = gridnd_4d_config_pack / "training.yaml"
+        training_cfg = yaml.safe_load(training_path.read_text())
+        training_cfg["environment"]["partial_observability"] = True
+        training_cfg["environment"]["vision_range"] = 2
+        training_path.write_text(yaml.safe_dump(training_cfg, sort_keys=False))
+
         with pytest.raises(ValueError, match=r"Partial observability.*is not supported for 4D substrates"):
-            VectorizedHamletEnv(
+            make_vectorized_env_from_pack(
+                gridnd_4d_config_pack,
                 num_agents=1,
-                grid_size=5,  # Ignored for GridND
-                partial_observability=True,  # Should be rejected
-                vision_range=2,
-                enable_temporal_mechanics=False,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.001,
-                interact_energy_cost=0.003,
-                agent_lifespan=1000,
                 device=torch.device("cpu"),
-                config_pack_path=gridnd_4d_config_pack,
             )
 
 
@@ -75,23 +74,20 @@ class TestGrid3DPOMDPValidation:
         # Copy the entire config directory
         shutil.copytree(source_config, dest_config)
 
-        return str(dest_config)
+        return dest_config
 
     def test_grid3d_pomdp_accepts_vision_range_2(self, grid3d_config_pack):
         """Grid3D POMDP should accept vision_range=2 (5×5×5 = 125 cells)."""
-        # This should NOT raise an error
-        env = VectorizedHamletEnv(
+        training_path = grid3d_config_pack / "training.yaml"
+        training_cfg = yaml.safe_load(training_path.read_text())
+        training_cfg["environment"]["partial_observability"] = True
+        training_cfg["environment"]["vision_range"] = 2
+        training_path.write_text(yaml.safe_dump(training_cfg, sort_keys=False))
+
+        env = make_vectorized_env_from_pack(
+            grid3d_config_pack,
             num_agents=1,
-            grid_size=8,  # Ignored for Grid3D
-            partial_observability=True,
-            vision_range=2,  # Maximum allowed
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.003,
-            agent_lifespan=1000,
             device=torch.device("cpu"),
-            config_pack_path=grid3d_config_pack,
         )
         assert env.partial_observability is True
         assert env.vision_range == 2
@@ -99,34 +95,30 @@ class TestGrid3DPOMDPValidation:
 
     def test_grid3d_pomdp_rejects_vision_range_3(self, grid3d_config_pack):
         """Grid3D POMDP should reject vision_range=3 (7×7×7 = 343 cells, too large)."""
+        training_path = grid3d_config_pack / "training.yaml"
+        training_cfg = yaml.safe_load(training_path.read_text())
+        training_cfg["environment"]["partial_observability"] = True
+        training_cfg["environment"]["vision_range"] = 3
+        training_path.write_text(yaml.safe_dump(training_cfg, sort_keys=False))
+
         with pytest.raises(ValueError, match="Grid3D POMDP with vision_range=3 requires 343 cells"):
-            VectorizedHamletEnv(
+            make_vectorized_env_from_pack(
+                grid3d_config_pack,
                 num_agents=1,
-                grid_size=8,
-                partial_observability=True,
-                vision_range=3,  # Too large
-                enable_temporal_mechanics=False,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.001,
-                interact_energy_cost=0.003,
-                agent_lifespan=1000,
                 device=torch.device("cpu"),
-                config_pack_path=grid3d_config_pack,
             )
 
     def test_grid3d_pomdp_rejects_vision_range_4(self, grid3d_config_pack):
         """Grid3D POMDP should reject vision_range=4 (9×9×9 = 729 cells, way too large)."""
+        training_path = grid3d_config_pack / "training.yaml"
+        training_cfg = yaml.safe_load(training_path.read_text())
+        training_cfg["environment"]["partial_observability"] = True
+        training_cfg["environment"]["vision_range"] = 4
+        training_path.write_text(yaml.safe_dump(training_cfg, sort_keys=False))
+
         with pytest.raises(ValueError, match="Grid3D POMDP with vision_range=4 requires 729 cells"):
-            VectorizedHamletEnv(
+            make_vectorized_env_from_pack(
+                grid3d_config_pack,
                 num_agents=1,
-                grid_size=8,
-                partial_observability=True,
-                vision_range=4,  # Way too large
-                enable_temporal_mechanics=False,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.001,
-                interact_energy_cost=0.003,
-                agent_lifespan=1000,
                 device=torch.device("cpu"),
-                config_pack_path=grid3d_config_pack,
             )

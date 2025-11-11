@@ -18,35 +18,36 @@
 # - Agent should bounce between Bed and Hospital as needed
 # - Eventually runs out of money and dies (sustainable cycles not possible without income)
 #
-# Expected convergence: ~200-300 episodes (2x longer than L0 due to exploration)
+# Expected convergence: 200-400 episodes (max_episodes=500 provides buffer) (2x longer than L0 due to exploration)
 
 run_metadata:
   output_subdir: L0_5_dual_resource
 
 # Environment configuration
 environment:
-  grid_size: 7  # 7×7 grid - room for 4 affordances with navigation space
   partial_observability: false  # Agent sees full grid
-  vision_range: 7  # Full vision (not used when partial_observability=false)
-  enable_temporal_mechanics: false  # No time-of-day complexity
+  vision_range: 5  # Full vision (not used when partial_observability=false)
+  enable_temporal_mechanics: false  # ENABLED: Multi-tick affordances (Bed=5 ticks, Job=4 ticks)
 
   # Bed, Hospital, HomeMeal, and Job (agent can earn money!)
   enabled_affordances: ["Bed", "Hospital","HomeMeal","Job"]
+  randomize_affordances: true
   energy_move_depletion: 0.005
-  energy_wait_depletion: 0.0049
-  energy_interact_depletion: 0.0029
+  energy_wait_depletion: 0.005
+  energy_interact_depletion: 0.005
 
 # Population configuration
 population:
   num_agents: 1  # Single agent
-  learning_rate: 0.001  # Higher learning rate for faster learning
+  learning_rate: 0.0003  # Higher learning rate for faster learning
   gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
-  replay_buffer_capacity: 5000  # Smaller buffer for minimal world
+  replay_buffer_capacity: 50000  # 50k capacity for better experience diversity (166-500 episodes)
   network_type: simple  # Standard MLP Q-Network
+  mask_unused_obs: true  # Apply active_mask to RND (zeros out padding dimensions)
 
 # Curriculum configuration (simpler than Level 1)
 curriculum:
-  max_steps_per_episode: 500  # Shorter episodes for faster iteration (was 1000)
+  max_steps_per_episode: 2000  # Shorter episodes for faster iteration (was 1000)
   survival_advance_threshold: 0.5  # Advance if 50% survival (was 0.8 - too high for L0.5)
   survival_retreat_threshold: 0.2  # Retreat if <20% survival
   entropy_gate: 0.5  # More forgiving entropy gate for early stages (was 0.3)
@@ -54,27 +55,42 @@ curriculum:
 
 # Exploration configuration
 exploration:
-  embed_dim: 64  # Smaller embedding (simpler observations)
-  initial_intrinsic_weight: 0.1  # Lower intrinsic weight (extrinsic is clearer)
-  variance_threshold: 50.0  # Lower threshold for faster annealing
-  survival_window: 50  # Smaller window
+  embed_dim: 128  # Smaller embedding (simpler observations)
+  initial_intrinsic_weight: 0.1  # Higher for harder problem without REST
+  variance_threshold: 100.0  # More forgiving variance (up from 50.0)
+  min_survival_fraction: 0.5  # Don't anneal until mean survival >15% of max episode length (prevents "stable failure")
+  survival_window: 200  # Smaller window
 
 # Training configuration
 training:
   device: cuda  # Use GPU if available
-  max_episodes: 500  # Should converge in 200-300 episodes with fixed hyperparameters
+  max_episodes: 1000  # Should converge in 200-300 episodes with fixed hyperparameters
 
   # Q-learning hyperparameters
   train_frequency: 4  # Train Q-network every N steps
-  target_update_frequency: 100  # Update target network every N training steps
+  target_update_frequency: 200  # Update target network every N training steps
   batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
   sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
   max_grad_norm: 10.0  # Gradient clipping threshold
+  use_double_dqn: true  # Use Double DQN algorithm (reduces Q-value overestimation)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
   epsilon_decay: 0.995  # Decay per episode (was 0.9995 - too slow, reaches ε=0.1 at ~460 episodes)
   epsilon_min: 0.01  # Minimum exploration rate
+  enabled_actions:
+    # L0.5 unlocks the full custom vocabulary (REST + MEDITATE) to pair with new affordances
+    - "UP"
+    - "DOWN"
+    - "LEFT"
+    - "RIGHT"
+    - "INTERACT"
+    - "WAIT"
+    #- "REST"
+    #- "MEDITATE"
 
 # Recording configuration
 recording:

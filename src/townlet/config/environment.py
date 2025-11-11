@@ -17,7 +17,7 @@ No implicit defaults. Operator accountability.
 import logging
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
 
@@ -25,19 +25,19 @@ logger = logging.getLogger(__name__)
 
 
 class TrainingEnvironmentConfig(BaseModel):
-    """Environment configuration for training (grid, observability, affordances).
+    """Environment configuration for training (observability, affordances, energy costs).
 
     ALL FIELDS REQUIRED (no defaults) - enforces operator accountability.
     Operator must explicitly specify all parameters that affect the environment.
 
     Philosophy: If it affects the universe, it's in the config. No exceptions.
 
-    NOTE: This is for training hyperparameters (grid_size, vision_range).
+    NOTE: This is for training hyperparameters (vision_range, energy costs).
+    For spatial config (grid dimensions), use substrate.yaml.
     For game mechanics (bars, cascades), use cascade_config.EnvironmentConfig.
 
     Example:
         >>> config = TrainingEnvironmentConfig(
-        ...     grid_size=8,
         ...     partial_observability=False,
         ...     vision_range=8,
         ...     enable_temporal_mechanics=False,
@@ -48,8 +48,7 @@ class TrainingEnvironmentConfig(BaseModel):
         ... )
     """
 
-    # Grid parameters (REQUIRED)
-    grid_size: int = Field(gt=0, description="Grid dimensions (N×N square grid)")
+    model_config = ConfigDict(extra="forbid")
 
     # Observability (REQUIRED)
     partial_observability: bool = Field(description="true = POMDP (local window), false = full grid visibility")
@@ -60,6 +59,9 @@ class TrainingEnvironmentConfig(BaseModel):
 
     # Enabled affordances (REQUIRED - null or list)
     enabled_affordances: list[str] | None = Field(description="null = all affordances enabled, or list of affordance names for curriculum")
+
+    # Placement control (REQUIRED)
+    randomize_affordances: bool = Field(description="true = shuffle affordance positions each episode, false = use config positions")
 
     # Action energy costs (ALL REQUIRED)
     energy_move_depletion: float = Field(ge=0.0, description="Energy cost per movement action (as fraction of energy meter)")
@@ -86,16 +88,12 @@ class TrainingEnvironmentConfig(BaseModel):
         set unusual vision ranges for their experiment.
 
         Follows permissive semantics: allow unusual values but warn the operator.
+
+        NOTE: We no longer validate vision_range > grid_size here because grid
+        dimensions are in substrate.yaml. The compiler handles cross-config validation.
         """
         if self.partial_observability:
-            if self.vision_range > self.grid_size:
-                logger.warning(
-                    f"POMDP vision_range ({self.vision_range}) > grid_size ({self.grid_size}). "
-                    f"Agent sees beyond grid boundaries (window larger than world). "
-                    f"Typical POMDP: vision_range=2 (5×5 window) on grid_size=8. "
-                    f"This may be intentional for your experiment."
-                )
-            elif self.vision_range == 0:
+            if self.vision_range == 0:
                 logger.warning(
                     "POMDP vision_range=0 means agent sees only current cell (1×1 window). "
                     "This is extremely limited observability. "
@@ -121,8 +119,8 @@ def load_environment_config(config_dir: Path) -> TrainingEnvironmentConfig:
 
     Example:
         >>> config = load_environment_config(Path("configs/L0_0_minimal"))
-        >>> print(f"Grid: {config.grid_size}×{config.grid_size}, POMDP: {config.partial_observability}")
-        Grid: 3×3, POMDP: False
+        >>> print(f"POMDP: {config.partial_observability}, Vision: {config.vision_range}")
+        POMDP: False, Vision: 3
     """
     try:
         data = load_yaml_section(config_dir, "training.yaml", "environment")

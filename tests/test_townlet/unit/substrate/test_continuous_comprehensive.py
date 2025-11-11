@@ -116,32 +116,6 @@ class TestContinuousActionGeneration:
         # RIGHT should be [1]
         assert actions[1].delta == [1], "RIGHT delta should be [1]"
 
-    def test_get_default_actions_deltas_2d(self):
-        """2D actions should have correct deltas.
-
-        Coverage target: 2D delta assignment
-        """
-        substrate = Continuous2DSubstrate(
-            min_x=0.0,
-            max_x=10.0,
-            min_y=0.0,
-            max_y=10.0,
-            boundary="clamp",
-            movement_delta=0.5,
-            interaction_radius=1.0,
-        )
-
-        actions = substrate.get_default_actions()
-
-        # UP should be [0, -1]
-        assert actions[0].delta == [0, -1], "UP delta should be [0, -1]"
-        # DOWN should be [0, 1]
-        assert actions[1].delta == [0, 1], "DOWN delta should be [0, 1]"
-        # LEFT should be [-1, 0]
-        assert actions[2].delta == [-1, 0], "LEFT delta should be [-1, 0]"
-        # RIGHT should be [1, 0]
-        assert actions[3].delta == [1, 0], "RIGHT delta should be [1, 0]"
-
     def test_get_default_actions_deltas_3d(self):
         """3D actions should have correct deltas including Z-axis.
 

@@ -19,19 +19,46 @@ Total: 38 tests → 15 comprehensive integration tests
 
 import sqlite3
 import tempfile
-import warnings
 from pathlib import Path
 
 import pytest
 import torch
 
-from tests.test_townlet.helpers.config_builder import prepare_config_dir
 from townlet.curriculum.adversarial import AdversarialCurriculum
+from townlet.curriculum.static import StaticCurriculum
 from townlet.demo.runner import DemoRunner
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
 from townlet.population.vectorized import VectorizedPopulation
+
+
+@pytest.fixture
+def env_builder(env_factory, cpu_device):
+    """Helper to build CPU-bound environments for integration tests."""
+
+    def _build(*, config_dir: Path, num_agents: int = 1):
+        env = env_factory(
+            config_dir=config_dir,
+            num_agents=num_agents,
+            device_override=cpu_device,
+        )
+        env.reset()
+        return env
+
+    return _build
+
+
+def _init_curriculum(curriculum, num_agents: int) -> None:
+    if hasattr(curriculum, "initialize_population"):
+        curriculum.initialize_population(num_agents)
+
+
+def _select_active_meters(env, limit: int = 6) -> list[str]:
+    """Return a capped list of active meters to satisfy CurriculumDecision constraints."""
+
+    meter_names = list(env.meter_name_to_index.keys())
+    return meter_names[:limit]
+
 
 # =============================================================================
 # TEST CLASS 1: Environment Checkpointing (3 tests)
@@ -45,27 +72,12 @@ class TestEnvironmentCheckpointing:
     is preserved across save/load cycles.
     """
 
-    def test_environment_checkpoint_preserves_affordance_layout(self, cpu_device, test_config_pack_path):
+    def test_environment_checkpoint_preserves_affordance_layout(self, env_builder, test_config_pack_path):
         """Environment should preserve affordance positions across checkpoint cycle.
 
         This is critical for generalization tests that require consistent layouts.
         """
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
-
-        # Reset to initialize affordance positions
-        env.reset()
+        env = env_builder(config_dir=test_config_pack_path, num_agents=1)
 
         # Capture affordance positions using the environment's API
         original_positions = {name: pos.clone() for name, pos in env.affordances.items()}
@@ -78,19 +90,7 @@ class TestEnvironmentCheckpointing:
         assert "ordering" in checkpoint_data, "Checkpoint should contain ordering"
 
         # Create new environment and load
-        env2 = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env2 = env_builder(config_dir=test_config_pack_path, num_agents=1)
         env2.set_affordance_positions(checkpoint_data)
 
         # Verify positions match
@@ -98,89 +98,44 @@ class TestEnvironmentCheckpointing:
             assert name in env2.affordances, f"Affordance {name} should exist after load"
             assert torch.equal(env2.affordances[name], original_pos), f"Affordance {name} position should be preserved"
 
-    def test_environment_checkpoint_preserves_agent_state(self, cpu_device, test_config_pack_path):
+    def test_environment_checkpoint_preserves_agent_state(self, env_builder, test_config_pack_path, cpu_device):
         """Environment should preserve agent state via manual save/restore (no built-in checkpointing).
 
         Note: VectorizedHamletEnv doesn't have built-in save_checkpoint/load_checkpoint methods.
         Agent state checkpointing is handled by the runner layer, not the environment.
         This test verifies that state tensors can be manually saved and restored.
         """
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = env_builder(config_dir=test_config_pack_path, num_agents=2)
 
-        # Reset and take some steps
-        env.reset()
         for _ in range(10):
             actions = torch.randint(0, 6, (2,), device=cpu_device)
             env.step(actions)
 
-        # Capture agent state manually (environment doesn't have save_checkpoint)
         original_positions = env.positions.clone()
         original_meters = env.meters.clone()
         original_step_counts = env.step_counts.clone()
 
-        # Create manual checkpoint dict (simulating runner-level checkpointing)
         checkpoint = {
             "positions": original_positions,
             "meters": original_meters,
             "step_counts": original_step_counts,
         }
 
-        # Create new environment
-        env2 = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
-        env2.reset()
+        env2 = env_builder(config_dir=test_config_pack_path, num_agents=2)
 
-        # Manually restore state (environment doesn't have load_checkpoint)
         env2.positions = checkpoint["positions"].clone()
         env2.meters = checkpoint["meters"].clone()
         env2.step_counts = checkpoint["step_counts"].clone()
 
-        # Verify agent state matches
         assert torch.equal(env2.positions, original_positions), "Agent positions should match"
         assert torch.allclose(env2.meters, original_meters, atol=1e-5), "Meters should match"
         assert torch.equal(env2.step_counts, original_step_counts), "Step counts should match"
 
-    def test_environment_checkpoint_roundtrip_consistency(self, cpu_device, test_config_pack_path):
+    def test_environment_checkpoint_roundtrip_consistency(self, env_builder, test_config_pack_path, cpu_device):
         """Environment affordance positions should survive multiple save/load cycles identically."""
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = env_builder(config_dir=test_config_pack_path, num_agents=1)
 
         # Reset and take steps
-        env.reset()
         for _ in range(20):
             actions = torch.randint(0, 6, (1,), device=cpu_device)
             env.step(actions)
@@ -217,7 +172,7 @@ class TestPopulationCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = AdaptiveIntrinsicExploration(
             obs_dim=basic_env.observation_dim,
@@ -256,29 +211,17 @@ class TestPopulationCheckpointing:
         # Verify version
         assert checkpoint["version"] >= 2, "Checkpoint version should be >= 2"
 
-    def test_population_checkpoint_preserves_network_weights(self, cpu_device, test_config_pack_path):
+    def test_population_checkpoint_preserves_network_weights(self, cpu_device, test_config_pack_path, env_builder):
         """Q-network weights should be exactly preserved across checkpoint cycle."""
         # Create environment with CPU device (avoiding basic_env fixture which may use CUDA)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = env_builder(config_dir=test_config_pack_path, num_agents=1)
 
         curriculum = AdversarialCurriculum(
             max_steps_per_episode=100,
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=0.5,
@@ -336,29 +279,17 @@ class TestPopulationCheckpointing:
                 original_weights[key], restored_weights[key], atol=1e-6
             ), f"Q-network weights for {key} should match exactly"
 
-    def test_population_checkpoint_preserves_replay_buffer(self, cpu_device, test_config_pack_path):
+    def test_population_checkpoint_preserves_replay_buffer(self, cpu_device, test_config_pack_path, env_builder):
         """Replay buffer should be preserved with exact contents across checkpoint cycle."""
         # Create environment with CPU device (avoiding basic_env fixture which may use CUDA)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = env_builder(config_dir=test_config_pack_path, num_agents=1)
 
         curriculum = AdversarialCurriculum(
             max_steps_per_episode=100,
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration()
 
@@ -431,7 +362,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum1.initialize_population(3)
+        _init_curriculum(curriculum1, 3)
 
         # Advance agents to different stages
         curriculum1.tracker.agent_stages[0] = 2
@@ -453,7 +384,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum2.initialize_population(3)
+        _init_curriculum(curriculum2, 3)
 
         # Verify fresh curriculum starts at stage 1
         assert torch.all(curriculum2.tracker.agent_stages == 1), "Fresh curriculum should start all agents at stage 1"
@@ -472,7 +403,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum1.initialize_population(2)
+        _init_curriculum(curriculum1, 2)
 
         # Simulate episode completions to build history
         for _ in range(10):
@@ -489,7 +420,7 @@ class TestCurriculumCheckpointing:
             survival_advance_threshold=0.7,
             survival_retreat_threshold=0.3,
         )
-        curriculum2.initialize_population(2)
+        _init_curriculum(curriculum2, 2)
 
         # Load saved state
         curriculum2.load_state_dict(state)
@@ -605,14 +536,14 @@ class TestRunnerCheckpointing:
     (environment, population, curriculum, exploration) correctly.
     """
 
-    def test_runner_checkpoint_includes_all_components(self, cpu_device):
+    def test_runner_checkpoint_includes_all_components(self, cpu_device, env_builder, config_pack_factory):
         """Runner checkpoint should include state from all components."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}))
+            config_dir = config_pack_factory(modifier=lambda data: data["training"].update({"max_episodes": 1}))
 
             # Create runner with context manager
             with DemoRunner(
@@ -622,25 +553,14 @@ class TestRunnerCheckpointing:
                 max_episodes=1,
             ) as runner:
                 # Manually initialize components
-                runner.env = VectorizedHamletEnv(
-                    num_agents=1,
-                    grid_size=8,
-                    device=cpu_device,
-                    partial_observability=False,
-                    vision_range=8,
-                    enable_temporal_mechanics=False,
-                    move_energy_cost=0.005,
-                    wait_energy_cost=0.001,
-                    interact_energy_cost=0.0,
-                    agent_lifespan=1000,
-                )
+                runner.env = env_builder(config_dir=config_dir, num_agents=1)
 
                 runner.curriculum = AdversarialCurriculum(
                     max_steps_per_episode=100,
                     survival_advance_threshold=0.7,
                     survival_retreat_threshold=0.3,
                 )
-                runner.curriculum.initialize_population(1)
+                _init_curriculum(runner.curriculum, 1)
 
                 runner.exploration = AdaptiveIntrinsicExploration(
                     obs_dim=runner.env.observation_dim,
@@ -678,14 +598,14 @@ class TestRunnerCheckpointing:
                 # Verify checkpoint has curriculum state
                 assert "curriculum_state" in checkpoint, "Should have curriculum_state"
 
-    def test_runner_checkpoint_preserves_episode_number(self, cpu_device):
+    def test_runner_checkpoint_preserves_episode_number(self, cpu_device, env_builder, config_pack_factory):
         """Runner should preserve episode counter across checkpoint cycle."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}))
+            config_dir = config_pack_factory(modifier=lambda data: data["training"].update({"max_episodes": 1}))
 
             with DemoRunner(
                 config_dir=config_dir,
@@ -693,21 +613,9 @@ class TestRunnerCheckpointing:
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
             ) as runner1:
-                runner1.env = VectorizedHamletEnv(
-                    num_agents=1,
-                    grid_size=8,
-                    device=cpu_device,
-                    partial_observability=False,
-                    vision_range=8,
-                    enable_temporal_mechanics=False,
-                    move_energy_cost=0.005,
-                    wait_energy_cost=0.001,
-                    interact_energy_cost=0.0,
-                    agent_lifespan=1000,
-                    config_pack_path=config_dir,
-                )
+                runner1.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner1.curriculum.initialize_population(1)
+                _init_curriculum(runner1.curriculum, 1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
                 runner1.population = VectorizedPopulation(
                     env=runner1.env,
@@ -727,21 +635,9 @@ class TestRunnerCheckpointing:
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
             ) as runner2:
-                runner2.env = VectorizedHamletEnv(
-                    num_agents=1,
-                    grid_size=8,
-                    device=cpu_device,
-                    partial_observability=False,
-                    vision_range=8,
-                    enable_temporal_mechanics=False,
-                    move_energy_cost=0.005,
-                    wait_energy_cost=0.001,
-                    interact_energy_cost=0.0,
-                    agent_lifespan=1000,
-                    config_pack_path=config_dir,
-                )
+                runner2.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner2.curriculum.initialize_population(1)
+                _init_curriculum(runner2.curriculum, 1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
                 runner2.population = VectorizedPopulation(
                     env=runner2.env,
@@ -755,14 +651,14 @@ class TestRunnerCheckpointing:
                 runner2.load_checkpoint()
                 assert runner2.current_episode == 42, "Episode number should be preserved after load"
 
-    def test_runner_checkpoint_round_trip_preserves_training_state(self, cpu_device):
+    def test_runner_checkpoint_round_trip_preserves_training_state(self, cpu_device, env_builder, config_pack_factory):
         """Runner checkpoint round-trip should preserve complete training state."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             checkpoint_dir = tmp_path / "checkpoints"
             checkpoint_dir.mkdir()
 
-            config_dir = prepare_config_dir(tmp_path, lambda data: data["training"].update({"max_episodes": 1}), name="runner_config")
+            config_dir = config_pack_factory(modifier=lambda data: data["training"].update({"max_episodes": 1}), name="runner_config")
 
             with DemoRunner(
                 config_dir=config_dir,
@@ -770,21 +666,9 @@ class TestRunnerCheckpointing:
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
             ) as runner1:
-                runner1.env = VectorizedHamletEnv(
-                    num_agents=1,
-                    grid_size=8,
-                    device=cpu_device,
-                    partial_observability=False,
-                    vision_range=8,
-                    enable_temporal_mechanics=False,
-                    move_energy_cost=0.005,
-                    wait_energy_cost=0.001,
-                    interact_energy_cost=0.0,
-                    agent_lifespan=1000,
-                    config_pack_path=config_dir,
-                )
+                runner1.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner1.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner1.curriculum.initialize_population(1)
+                _init_curriculum(runner1.curriculum, 1)
                 runner1.exploration = AdaptiveIntrinsicExploration(obs_dim=runner1.env.observation_dim, device=cpu_device)
                 runner1.population = VectorizedPopulation(
                     env=runner1.env,
@@ -814,21 +698,9 @@ class TestRunnerCheckpointing:
                 checkpoint_dir=checkpoint_dir,
                 max_episodes=1,
             ) as runner2:
-                runner2.env = VectorizedHamletEnv(
-                    num_agents=1,
-                    grid_size=8,
-                    device=cpu_device,
-                    partial_observability=False,
-                    vision_range=8,
-                    enable_temporal_mechanics=False,
-                    move_energy_cost=0.005,
-                    wait_energy_cost=0.001,
-                    interact_energy_cost=0.0,
-                    agent_lifespan=1000,
-                    config_pack_path=config_dir,
-                )
+                runner2.env = env_builder(config_dir=config_dir, num_agents=1)
                 runner2.curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-                runner2.curriculum.initialize_population(1)
+                _init_curriculum(runner2.curriculum, 1)
                 runner2.exploration = AdaptiveIntrinsicExploration(obs_dim=runner2.env.observation_dim, device=cpu_device)
                 runner2.population = VectorizedPopulation(
                     env=runner2.env,
@@ -868,25 +740,16 @@ class TestCheckpointRoundTrip:
     with no state degradation or loss.
     """
 
-    def test_checkpoint_roundtrip_training_resumption(self, cpu_device, test_config_pack_path):
+    def test_checkpoint_roundtrip_training_resumption(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """Training should produce identical results when resumed from checkpoint."""
         # Create environment and components
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
 
-        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=_select_active_meters(env),
+        )
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=0.5,
@@ -961,25 +824,13 @@ class TestCheckpointRoundTrip:
 
         assert weights_changed, "Network weights should have changed after resumed training"
 
-    def test_checkpoint_roundtrip_multi_component_consistency(self, cpu_device, test_config_pack_path):
+    def test_checkpoint_roundtrip_multi_component_consistency(self, cpu_device, test_config_pack_path, cpu_env_factory):
         """All components should maintain consistency across checkpoint round-trip."""
         # Setup
-        env = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=2)
 
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(2)
+        _init_curriculum(curriculum, 2)
 
         exploration = AdaptiveIntrinsicExploration(
             obs_dim=env.observation_dim,
@@ -1017,23 +868,11 @@ class TestCheckpointRoundTrip:
         exploration_state = exploration.checkpoint_state()
 
         # Create fresh components
-        env2 = VectorizedHamletEnv(
-            num_agents=2,
-            grid_size=8,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=8,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env2 = cpu_env_factory(config_dir=test_config_pack_path, num_agents=2)
         env2.reset()  # Initialize environment
 
         curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(2)
+        _init_curriculum(curriculum2, 2)
 
         exploration2 = AdaptiveIntrinsicExploration(
             obs_dim=env2.observation_dim,
@@ -1089,12 +928,11 @@ class TestVariableMeterCheckpoints:
 
     def test_checkpoint_includes_meter_metadata(self, cpu_device, task001_env_4meter):
         """Saved checkpoint should include meter count and names in metadata."""
-        curriculum = AdversarialCurriculum(
-            max_steps_per_episode=100,
-            survival_advance_threshold=0.7,
-            survival_retreat_threshold=0.3,
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
         )
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
 
         exploration = EpsilonGreedyExploration(
             epsilon=0.5,
@@ -1137,8 +975,11 @@ class TestVariableMeterCheckpoints:
     def test_loading_checkpoint_validates_meter_count(self, cpu_device, task001_env_4meter, basic_env, tmp_path):
         """Loading checkpoint should fail if meter counts don't match."""
         # Create 4-meter population and save checkpoint (no training needed)
-        curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        curriculum = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        _init_curriculum(curriculum, 1)
         exploration = EpsilonGreedyExploration()
 
         pop_4meter = VectorizedPopulation(
@@ -1159,8 +1000,11 @@ class TestVariableMeterCheckpoints:
         assert checkpoint_4meter["universe_metadata"]["meter_count"] == 4
 
         # Try to load into 8-meter environment (should fail)
-        curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(1)
+        curriculum2 = StaticCurriculum(
+            difficulty_level=0.5,
+            active_meters=list(task001_env_4meter.meter_name_to_index.keys()),
+        )
+        _init_curriculum(curriculum2, 1)
         exploration2 = EpsilonGreedyExploration()
 
         pop_8meter = VectorizedPopulation(
@@ -1181,7 +1025,7 @@ class TestVariableMeterCheckpoints:
     def test_loading_checkpoint_with_matching_meters_succeeds(self, cpu_device, task001_env_4meter):
         """Loading checkpoint should succeed if meter counts match."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
         exploration = EpsilonGreedyExploration()
 
         pop1 = VectorizedPopulation(
@@ -1203,7 +1047,7 @@ class TestVariableMeterCheckpoints:
 
         # Create new population with same meter count
         curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(1)
+        _init_curriculum(curriculum2, 1)
         exploration2 = EpsilonGreedyExploration()
 
         pop2 = VectorizedPopulation(
@@ -1223,11 +1067,11 @@ class TestVariableMeterCheckpoints:
         # Verify metadata matched
         assert checkpoint["universe_metadata"]["meter_count"] == 4
 
-    def test_legacy_checkpoint_loads_with_default_assumption(self, cpu_device, basic_env):
-        """Legacy checkpoints (no metadata) should load with warning."""
+    def test_checkpoint_rejects_missing_universe_metadata(self, cpu_device, basic_env):
+        """Checkpoints without universe_metadata should be strictly rejected (pre-release, 0 users)."""
         # Create a real checkpoint first to get proper network state
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum.initialize_population(1)
+        _init_curriculum(curriculum, 1)
         exploration = EpsilonGreedyExploration()
 
         population = VectorizedPopulation(
@@ -1250,7 +1094,7 @@ class TestVariableMeterCheckpoints:
 
         # Create new population
         curriculum2 = AdversarialCurriculum(max_steps_per_episode=100)
-        curriculum2.initialize_population(1)
+        _init_curriculum(curriculum2, 1)
         exploration2 = EpsilonGreedyExploration()
 
         population2 = VectorizedPopulation(
@@ -1264,15 +1108,15 @@ class TestVariableMeterCheckpoints:
             network_type="simple",
         )
 
-        # Loading legacy checkpoint should warn but succeed
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        # Loading checkpoint without universe_metadata should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
             population2.load_checkpoint_state(legacy_checkpoint)
 
-            # Verify warning was issued
-            assert len(w) == 1
-            assert "legacy checkpoint" in str(w[0].message).lower()
-            assert "universe_metadata" in str(w[0].message)
+        # Verify error message provides clear guidance
+        error_msg = str(exc_info.value)
+        assert "universe_metadata" in error_msg
+        assert "no longer supported" in error_msg.lower()
+        assert "retrain" in error_msg.lower()
 
 
 # =============================================================================
@@ -1283,11 +1127,11 @@ class TestVariableMeterCheckpoints:
 class TestDemoRunnerResourceManagement:
     """Test DemoRunner context manager and resource cleanup (QUICK-002)."""
 
-    def test_runner_closes_database_on_context_exit(self, tmp_path, cpu_device):
+    def test_runner_closes_database_on_context_exit(self, tmp_path, cpu_device, config_pack_factory):
         """DemoRunner should close database when exiting context manager."""
         checkpoint_dir = tmp_path / "checkpoints"
         checkpoint_dir.mkdir()
-        config_dir = prepare_config_dir(tmp_path, name="demo_runner_config")
+        config_dir = config_pack_factory(name="demo_runner_config")
 
         # Create runner in context manager
         with DemoRunner(
@@ -1307,11 +1151,11 @@ class TestDemoRunnerResourceManagement:
         with pytest.raises(sqlite3.ProgrammingError, match="closed"):
             conn.execute("SELECT 1")
 
-    def test_runner_cleanup_is_idempotent(self, tmp_path, cpu_device):
+    def test_runner_cleanup_is_idempotent(self, tmp_path, cpu_device, config_pack_factory):
         """Calling _cleanup() multiple times should be safe."""
         checkpoint_dir = tmp_path / "checkpoints"
         checkpoint_dir.mkdir()
-        config_dir = prepare_config_dir(tmp_path, name="demo_runner_cleanup")
+        config_dir = config_pack_factory(name="demo_runner_cleanup")
 
         runner = DemoRunner(
             config_dir=config_dir,
@@ -1325,11 +1169,11 @@ class TestDemoRunnerResourceManagement:
         runner._cleanup()  # Second call should be safe
         runner._cleanup()  # Third call should be safe
 
-    def test_runner_context_manager_propagates_exceptions(self, tmp_path, cpu_device):
+    def test_runner_context_manager_propagates_exceptions(self, tmp_path, cpu_device, config_pack_factory):
         """Context manager should propagate exceptions, not suppress them."""
         checkpoint_dir = tmp_path / "checkpoints"
         checkpoint_dir.mkdir()
-        config_dir = prepare_config_dir(tmp_path, name="demo_runner_exception")
+        config_dir = config_pack_factory(name="demo_runner_exception")
 
         # Exception inside with block should propagate
         with pytest.raises(ValueError, match="test exception"):

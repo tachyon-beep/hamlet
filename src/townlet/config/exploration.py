@@ -39,6 +39,14 @@ class ExplorationConfig(BaseModel):
         ge=0.0, description="Initial weight for intrinsic rewards (vs extrinsic). 1.0 = exploration priority"
     )
     variance_threshold: float = Field(gt=0.0, description="Survival variance threshold for annealing (higher = slower annealing)")
+    min_survival_fraction: float = Field(
+        gt=0.0,
+        lt=1.0,
+        description=(
+            "Minimum mean survival as fraction of max_episode_length before allowing annealing "
+            "(e.g., 0.4 = 40%). Prevents 'stable failure' from triggering annealing"
+        ),
+    )
     survival_window: int = Field(gt=0, description="Window size for tracking survival consistency (episodes)")
 
 

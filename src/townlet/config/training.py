@@ -12,7 +12,7 @@ import math
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from townlet.config.base import format_validation_error, load_yaml_section
 
@@ -35,12 +35,15 @@ class TrainingConfig(BaseModel):
         ...     target_update_frequency=100,
         ...     batch_size=64,
         ...     max_grad_norm=10.0,
+        ...     use_double_dqn=True,
         ...     epsilon_start=1.0,
         ...     epsilon_decay=0.995,
         ...     epsilon_min=0.01,
         ...     sequence_length=8,
         ... )
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # Compute device (REQUIRED)
     device: Literal["cpu", "cuda", "mps"] = Field(description="Compute device: 'cuda' (GPU), 'cpu' (CPU-only), 'mps' (Apple Silicon)")
@@ -54,6 +57,16 @@ class TrainingConfig(BaseModel):
     batch_size: int = Field(gt=0, description="Experience replay batch size")
     max_grad_norm: float = Field(gt=0, description="Gradient clipping threshold (prevents exploding gradients)")
 
+    # Q-learning algorithm variant (REQUIRED)
+    use_double_dqn: bool = Field(
+        description=(
+            "Use Double DQN algorithm (van Hasselt et al. 2016) instead of vanilla DQN. "
+            "Double DQN reduces Q-value overestimation by using online network for action selection. "
+            "True: Q_target = r + γ * Q_target(s', argmax_a Q_online(s', a)) [Double DQN] "
+            "False: Q_target = r + γ * max_a Q_target(s', a) [Vanilla DQN]"
+        )
+    )
+
     # Epsilon-greedy exploration (ALL REQUIRED)
     epsilon_start: float = Field(ge=0.0, le=1.0, description="Initial exploration rate (1.0 = 100% random)")
     epsilon_decay: float = Field(gt=0.0, lt=1.0, description="Decay per episode (< 1.0)")
@@ -61,6 +74,65 @@ class TrainingConfig(BaseModel):
 
     # Recurrent-specific (REQUIRED for all configs, used when network_type=recurrent)
     sequence_length: int = Field(gt=0, description="Length of sequences for LSTM training (recurrent networks only)")
+
+    # Reward strategy selection (REQUIRED)
+    reward_strategy: Literal["multiplicative", "adaptive"] = Field(
+        description=(
+            "Reward calculation strategy. "
+            "'multiplicative': Original health × energy formula (demonstrates Low Energy Delirium bug). "
+            "'adaptive': Additive with crisis suppression (fixes bug, see docs/teachable_moments/low_energy_delerium.md)."
+        )
+    )
+
+    # Adaptive reward strategy parameters (optional, used only when reward_strategy='adaptive')
+    base_reward: float = Field(
+        default=1.0,
+        gt=0.0,
+        description="Base survival reward for adaptive strategy (constant term, default: 1.0)",
+    )
+    bonus_scale: float = Field(
+        default=0.5,
+        gt=0.0,
+        description="Multiplier for health/energy bonuses in adaptive strategy (default: 0.5)",
+    )
+
+    allow_unfeasible_universe: bool = Field(
+        default=False,
+        description=(
+            "Set true to downgrade compiler feasibility guards (economic, sustainability) from errors to warnings. "
+            "Use only when intentionally building stress-test or instructional worlds."
+        ),
+    )
+
+    enabled_actions: list[str] | None = Field(
+        default=None,
+        description=(
+            "Optional list of action names from the global vocabulary that should remain enabled for this config. "
+            "Set to null to enable all actions, or [] to intentionally disable the entire action space when running diagnostics."
+        ),
+    )
+
+    @field_validator("enabled_actions")
+    @classmethod
+    def _validate_enabled_actions(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        stripped = []
+        seen: set[str] = set()
+        duplicates: list[str] = []
+        for raw_name in value:
+            name = raw_name.strip()
+            if not name:
+                raise ValueError("enabled_actions entries must be non-empty strings.")
+            stripped.append(name)
+            if name in seen:
+                duplicates.append(name)
+            else:
+                seen.add(name)
+        if duplicates:
+            dup_list = ", ".join(sorted(set(duplicates)))
+            raise ValueError(f"enabled_actions must not contain duplicate names: {dup_list}.")
+        return stripped
 
     @model_validator(mode="after")
     def validate_epsilon_order(self) -> "TrainingConfig":
@@ -87,7 +159,7 @@ class TrainingConfig(BaseModel):
             episodes_to_01 = math.log(0.1) / math.log(self.epsilon_decay)
         except (ZeroDivisionError, ValueError) as exc:
             logger.warning(
-                "epsilon_decay=%s produced invalid episodes_to_01 calculation (%s). " "Skipping exact episode estimate.",
+                "epsilon_decay=%s produced invalid episodes_to_01 calculation (%s). Skipping exact episode estimate.",
                 self.epsilon_decay,
                 exc,
             )

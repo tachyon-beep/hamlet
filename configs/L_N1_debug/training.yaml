@@ -1,0 +1,91 @@
+# Level 0: Minimal Training Environment
+#
+# Ultra-simplified environment for debugging and proof-of-concept.
+#
+# Key features:
+# - Tiny 3×3 grid (9 cells total)
+# - Only ONE affordance: Bed ($5 cost)
+# - Agent learns temporal credit assignment: spacing Bed uses > spamming
+# - Full observability (agent sees entire grid)
+# - Should learn in ~100 episodes
+#
+# Learning objective:
+# - Spam strategy: Use Bed 5x immediately → survives 205 steps, reward 105
+# - Optimal strategy: Space Bed uses at 50% energy → survives 705 steps, reward 478
+# - 244% survival advantage teaches spacing > spamming
+#
+# Purpose:
+# - Validate training pipeline works
+# - Teach temporal credit assignment (delayed gratification)
+# - Fast iteration for testing changes
+# - Pedagogical: "simplest RL problem with temporal structure"
+
+run_metadata:
+  output_subdir: L0_0_minimal
+
+# Environment configuration
+environment:
+  partial_observability: false  # Agent sees full grid
+  vision_range: 5  # Full vision (not used when partial_observability=false)
+  enable_temporal_mechanics: false  # No time-of-day complexity
+  enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
+  randomize_affordances: true
+  energy_move_depletion: 0.005
+  energy_wait_depletion: 0.003
+  energy_interact_depletion: 0.0029
+
+# Population configuration
+population:
+  num_agents: 1  # Single agent
+  learning_rate: 0.001  # Higher learning rate for faster learning
+  gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
+  replay_buffer_capacity: 50000  # Smaller buffer for minimal world
+  network_type: simple  # Standard MLP Q-Network
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
+
+# Curriculum configuration (simpler than Level 1)
+curriculum:
+  max_steps_per_episode: 1000  # Shorter episodes (5x5 world)
+  survival_advance_threshold: 0.8  # Advance if 80% survival
+  survival_retreat_threshold: 0.2  # Retreat if <20% survival
+  entropy_gate: 0.3  # Lower entropy gate (simpler problem)
+  min_steps_at_stage: 100  # Fewer steps before stage change
+
+# Exploration configuration
+exploration:
+  embed_dim: 64  # Smaller embedding (simpler observations)
+  initial_intrinsic_weight: 0.1  # Lower intrinsic weight (extrinsic is clearer)
+  variance_threshold: 50.0  # Lower threshold for faster annealing
+  min_survival_fraction: 0.4  # Don't anneal until mean survival >40% of max episode length (prevents "stable failure")
+  survival_window: 50  # Smaller window
+
+# Training configuration
+training:
+  device: cuda  # Use GPU if available
+  max_episodes: 500  # Should learn by ~100, allow 5x buffer for experimentation
+
+  # Q-learning hyperparameters
+  train_frequency: 4  # Train Q-network every N steps
+  target_update_frequency: 100  # Update target network every N training steps
+  batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
+  sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
+  max_grad_norm: 10.0  # Gradient clipping threshold
+  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
+
+  # Reward strategy
+  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
+
+  # Epsilon-greedy exploration
+  epsilon_start: 1.0  # Initial exploration rate
+  epsilon_decay: 0.99  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
+  epsilon_min: 0.01  # Minimum exploration rate
+  allow_unfeasible_universe: true  # Minimal world intentionally violates feasibility checks
+  enabled_actions:
+    # Progressively expand this list in higher curriculum levels (L0 keeps custom actions limited to REST)
+    - "UP"
+    - "DOWN"
+    - "LEFT"
+    - "RIGHT"
+    - "INTERACT"
+    - "WAIT"
+    #- "REST"

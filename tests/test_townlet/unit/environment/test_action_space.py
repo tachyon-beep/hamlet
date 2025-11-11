@@ -1,5 +1,7 @@
 """Tests for dynamic action space sizing in VectorizedHamletEnv."""
 
+from pathlib import Path
+
 import pytest
 
 from townlet.substrate.aspatial import AspatialSubstrate
@@ -23,7 +25,7 @@ class TestActionSpaceDynamicSizing:
         substrate = Grid2DSubstrate(8, 8, "clamp", "manhattan")
 
         # Create environment (would need full config in real test)
-        # env = VectorizedHamletEnv(substrate, minimal_config, ...)
+        # env = <vectorized environment instantiated via fixtures>
 
         # Verify action dimension matches substrate
         # assert env.action_dim == substrate.action_space_size
@@ -75,3 +77,30 @@ class TestActionSpaceDynamicSizing:
         """Environment action_dim matches Aspatial substrate."""
         substrate = AspatialSubstrate()
         assert substrate.action_space_size == 2
+
+
+class TestEnvironmentActionSpace:
+    """Ensure compiled universes expose substrate-driven action dimensions."""
+
+    @pytest.mark.parametrize(
+        "config_dir",
+        [
+            Path("configs/test"),
+            Path("configs/aspatial_test"),
+            Path("configs/L1_continuous_1D"),
+        ],
+        ids=["grid2d", "aspatial", "continuous1d"],
+    )
+    def test_env_action_dim_matches_compiled_metadata(self, env_factory, cpu_device, config_dir):
+        """VectorizedHamletEnv should honor compiled metadata for action sizing."""
+
+        env = env_factory(config_dir=config_dir, num_agents=1, device_override=cpu_device)
+
+        expected_action_dim = env.metadata.action_count
+        assert env.action_dim == expected_action_dim, f"env.action_dim should match compiled metadata for {config_dir}"
+        assert env.action_space.action_dim == expected_action_dim, f"Composed action_space must match compiled metadata for {config_dir}"
+
+        # Substrate portion of the action space should align with substrate definition.
+        assert (
+            env.action_space.substrate_action_count == env.substrate.action_space_size
+        ), "Substrate action slice must reflect substrate.action_space_size"

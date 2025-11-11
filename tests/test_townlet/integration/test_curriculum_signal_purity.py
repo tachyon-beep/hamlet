@@ -16,27 +16,14 @@ import pytest
 import torch
 
 from townlet.curriculum.adversarial import AdversarialCurriculum
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.population.vectorized import VectorizedPopulation
 
 
 @pytest.fixture
-def env(cpu_device, test_config_pack_path):
+def env(cpu_env_factory):
     """Simple environment for testing."""
-    return VectorizedHamletEnv(
-        num_agents=1,
-        grid_size=5,
-        device=cpu_device,
-        partial_observability=False,
-        vision_range=5,
-        enable_temporal_mechanics=False,
-        move_energy_cost=0.005,
-        wait_energy_cost=0.001,
-        interact_energy_cost=0.0,
-        agent_lifespan=1000,
-        config_pack_path=test_config_pack_path,
-    )
+    return cpu_env_factory(num_agents=1)
 
 
 @pytest.fixture
@@ -245,7 +232,7 @@ class TestCurriculumSignalInterpretability:
         # Or if it's just the last value, 150 > 50
         assert reward_150 > reward_50
 
-    def test_signal_purity_across_multiple_episodes_with_active_rnd(self, cpu_device, test_config_pack_path):
+    def test_signal_purity_across_multiple_episodes_with_active_rnd(self, cpu_device, cpu_env_factory):
         """Verify curriculum receives pure survival time over 10 episodes with active RND.
 
         Critical integration test: Run multiple episodes with active RND exploration
@@ -256,19 +243,7 @@ class TestCurriculumSignalInterpretability:
         on survival performance, not exploration novelty.
         """
         # Setup: Population with RND exploration (high intrinsic weight)
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
         curriculum.initialize_population(num_agents=1)
@@ -333,7 +308,7 @@ class TestCurriculumSignalInterpretability:
         for i, curr_r in enumerate(curriculum_rewards_log):
             assert curr_r > 0, f"Episode {i}: Curriculum should see survival time > 0"
 
-    def test_curriculum_stage_advancement_uses_survival_rate_not_rewards(self, cpu_device, test_config_pack_path):
+    def test_curriculum_stage_advancement_uses_survival_rate_not_rewards(self, cpu_device, cpu_env_factory):
         """Verify stage transitions based on survival rate, not reward magnitude.
 
         Critical integration test: Run episodes with varying survival times
@@ -345,19 +320,7 @@ class TestCurriculumSignalInterpretability:
         rather than when agent is "surviving" (high survival rate).
         """
         # Setup: Population with adversarial curriculum and RND
-        env = VectorizedHamletEnv(
-            num_agents=1,
-            grid_size=5,
-            device=cpu_device,
-            partial_observability=False,
-            vision_range=5,
-            enable_temporal_mechanics=False,
-            move_energy_cost=0.005,
-            wait_energy_cost=0.001,
-            interact_energy_cost=0.0,
-            agent_lifespan=1000,
-            config_pack_path=test_config_pack_path,
-        )
+        env = cpu_env_factory(num_agents=1)
 
         curriculum = AdversarialCurriculum(
             max_steps_per_episode=100,

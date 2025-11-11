@@ -8,15 +8,18 @@ Phase 1: Basic types and validation
 Phase 2: Derivation graphs, complex types, expression parsing
 """
 
+from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 __all__ = [
     "NormalizationSpec",
     "WriteSpec",
     "ObservationField",
     "VariableDef",
+    "load_variables_reference_config",
 ]
 
 
@@ -37,6 +40,8 @@ class NormalizationSpec(BaseModel):
         # Scalar z-score
         NormalizationSpec(kind="zscore", mean=0.5, std=0.2)
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     kind: Literal["minmax", "zscore"] = Field(description="Normalization method: minmax or zscore")
 
@@ -92,6 +97,8 @@ class WriteSpec(BaseModel):
         WriteSpec(variable_id="money", expression="money + 10.0")
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     variable_id: str = Field(
         min_length=1,
         description="ID of the variable to write to",
@@ -128,6 +135,8 @@ class ObservationField(BaseModel):
         )
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     id: str = Field(
         min_length=1,
         description="Unique identifier for this observation field",
@@ -152,6 +161,25 @@ class ObservationField(BaseModel):
         description="Optional normalization to apply before exposing",
     )
 
+    # NEW FIELDS for QUICK-05: Structured Observation Masking
+    semantic_type: Literal["bars", "spatial", "affordance", "temporal", "custom"] = Field(
+        default="custom",
+        description=(
+            "Semantic grouping for structured encoders. "
+            "bars: meter values, spatial: position/grid, affordance: affordance state, "
+            "temporal: time/progress, custom: user-defined variables"
+        ),
+    )
+
+    curriculum_active: bool = Field(
+        default=True,
+        description=(
+            "Whether this field is active in current curriculum level. "
+            "False indicates padding dimensions that should be masked out during training. "
+            "Used by structured encoders and RND to ignore inactive affordances/meters."
+        ),
+    )
+
 
 class VariableDef(BaseModel):
     """Variable definition for VFS.
@@ -174,7 +202,9 @@ class VariableDef(BaseModel):
     Examples:
         # Scalar variable
         VariableDef(
-            id="energy",
+    model_config = ConfigDict(extra="forbid")
+
+    id="energy",
             scope="agent",
             type="scalar",
             lifetime="episode",
@@ -249,3 +279,28 @@ class VariableDef(BaseModel):
                 raise ValueError(f"Variable '{self.id}' with type '{self.type}' should not have 'dims' field")
         # vec2i, vec3i have implicit dims (2, 3) - no dims field needed
         return self
+
+
+def load_variables_reference_config(config_dir: Path) -> list[VariableDef]:
+    """Load and validate variables_reference.yaml."""
+
+    config_dir = Path(config_dir)
+    yaml_path = config_dir / "variables_reference.yaml"
+
+    if not yaml_path.exists():
+        raise FileNotFoundError(f"variables_reference.yaml is required but not found in {config_dir}.")
+
+    try:
+        with yaml_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Failed to parse {yaml_path}: {exc}") from exc
+
+    variables_block = data.get("variables")
+    if variables_block is None:
+        raise ValueError(f"{yaml_path} must include a top-level 'variables' list.")
+
+    try:
+        return [VariableDef(**raw_var) for raw_var in variables_block]
+    except ValidationError as exc:
+        raise ValueError(f"Invalid variables_reference.yaml: {exc}") from exc

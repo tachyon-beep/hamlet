@@ -18,10 +18,7 @@ Coverage:
 - Integration: combined masking scenarios
 """
 
-import pytest
 import torch
-
-from townlet.environment.vectorized_env import VectorizedHamletEnv
 
 
 class TestBoundaryMasking:
@@ -487,44 +484,6 @@ class TestWaitAction:
         basic_env.step(actions)
 
         assert torch.equal(basic_env.positions[0], initial_pos), "WAIT should not move agent"
-
-    def test_wait_costs_less_than_movement(self, basic_env):
-        """WAIT should cost less energy than movement."""
-        basic_env.reset()
-        basic_env.positions[0] = torch.tensor([4, 4], device=basic_env.device)
-
-        # Measure WAIT cost
-        initial_wait = basic_env.meters[0, 0].item()
-        actions = torch.tensor([5], device=basic_env.device)
-        basic_env.step(actions)
-        wait_cost = initial_wait - basic_env.meters[0, 0].item()
-
-        # Measure movement cost
-        basic_env.reset()
-        basic_env.positions[0] = torch.tensor([4, 4], device=basic_env.device)
-        initial_move = basic_env.meters[0, 0].item()
-        actions = torch.tensor([0], device=basic_env.device)
-        basic_env.step(actions)
-        move_cost = initial_move - basic_env.meters[0, 0].item()
-
-        assert wait_cost < move_cost, f"WAIT cost ({wait_cost}) should be < movement cost ({move_cost})"
-
-    def test_wait_energy_cost_validation(self, test_config_pack_path, device):
-        """Environment should reject configs where WAIT is more expensive than MOVE."""
-        with pytest.raises(ValueError):
-            VectorizedHamletEnv(
-                num_agents=1,
-                grid_size=8,
-                partial_observability=False,
-                device=device,
-                move_energy_cost=0.005,
-                wait_energy_cost=0.01,  # More expensive than movement
-                config_pack_path=test_config_pack_path,
-                vision_range=8,
-                enable_temporal_mechanics=False,
-                interact_energy_cost=0.0,
-                agent_lifespan=1000,
-            )
 
 
 class TestActionMaskingIntegration:

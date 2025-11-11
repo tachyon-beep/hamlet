@@ -1,0 +1,306 @@
+"""Shared helper for collecting compiler input DTOs."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TypeVar
+
+import torch
+import yaml
+from pydantic import ValidationError
+
+from townlet.config import HamletConfig
+from townlet.config.affordance import AffordanceConfig
+from townlet.config.bar import BarConfig
+from townlet.config.cascade import CascadeConfig
+from townlet.config.cues import CompoundCueConfig, CuesConfig, SimpleCueConfig
+from townlet.config.curriculum import CurriculumConfig
+from townlet.config.environment import TrainingEnvironmentConfig
+from townlet.config.exploration import ExplorationConfig
+from townlet.config.population import PopulationConfig
+from townlet.config.training import TrainingConfig
+from townlet.environment.action_config import ActionConfig, ActionSpaceConfig, load_global_actions_config
+from townlet.environment.cascade_config import EnvironmentConfig
+from townlet.environment.cascade_config import load_environment_config as load_cascade_environment_config
+from townlet.substrate.config import ActionLabelConfig, SubstrateConfig
+from townlet.substrate.factory import SubstrateFactory
+from townlet.universe.errors import CompilationErrorCollector
+from townlet.universe.source_map import SourceMap
+from townlet.vfs.schema import VariableDef, load_variables_reference_config
+
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class RawConfigs:
+    """Container of all config DTOs the compiler needs for Stage 1."""
+
+    hamlet_config: HamletConfig
+    variables_reference: list[VariableDef]  # Custom computed variables (can be empty list)
+    global_actions: ActionSpaceConfig
+    action_labels: ActionLabelConfig | None
+    environment_config: EnvironmentConfig
+    source_map: SourceMap
+    config_dir: Path
+
+    # --- Convenience accessors -------------------------------------------------
+
+    @property
+    def training(self) -> TrainingConfig:
+        return self.hamlet_config.training
+
+    @property
+    def environment(self) -> TrainingEnvironmentConfig:
+        return self.hamlet_config.environment
+
+    @property
+    def population(self) -> PopulationConfig:
+        return self.hamlet_config.population
+
+    @property
+    def curriculum(self) -> CurriculumConfig:
+        return self.hamlet_config.curriculum
+
+    @property
+    def exploration(self) -> ExplorationConfig:
+        return self.hamlet_config.exploration
+
+    @property
+    def bars(self) -> tuple[BarConfig, ...]:
+        return self.hamlet_config.bars
+
+    @property
+    def cascades(self) -> tuple[CascadeConfig, ...]:
+        return self.hamlet_config.cascades
+
+    @property
+    def affordances(self) -> tuple[AffordanceConfig, ...]:
+        return self.hamlet_config.affordances
+
+    @property
+    def cues(self) -> tuple[SimpleCueConfig | CompoundCueConfig, ...]:
+        cues_config: CuesConfig = self.hamlet_config.cues
+        combined: list[SimpleCueConfig | CompoundCueConfig] = list(cues_config.simple_cues)
+        combined.extend(cues_config.compound_cues)
+        return tuple(combined)
+
+    @property
+    def substrate(self) -> SubstrateConfig:
+        return self.hamlet_config.substrate
+
+    # --- Factory ---------------------------------------------------------------
+
+    @classmethod
+    def from_config_dir(cls, config_dir: Path) -> RawConfigs:
+        """Load config DTOs from a pack directory."""
+        errors = CompilationErrorCollector(stage="Stage 1: Parse")
+
+        def _load_config(
+            description: str,
+            loader: Callable[[], _T],
+            *,
+            missing_hint: str | None = None,
+            optional: bool = False,
+        ) -> _T | None:
+            try:
+                return loader()
+            except FileNotFoundError as exc:
+                if optional:
+                    return None
+                errors.add(f"{description}: {exc}")
+                if missing_hint and missing_hint not in errors.hints:
+                    errors.add_hint(missing_hint)
+            except yaml.YAMLError as exc:
+                errors.add(f"{description}: YAML syntax error - {exc}")
+            except ValidationError as exc:
+                errors.add(f"{description}: validation error - {exc}")
+            except ValueError as exc:
+                errors.add(f"{description}: {exc}")
+            return None
+
+        hamlet_config = _load_config(
+            "hamlet_config",
+            lambda: HamletConfig.load(config_dir),
+            missing_hint=(
+                "Ensure the pack includes training.yaml, environment.yaml, population.yaml, curriculum.yaml, "
+                "exploration.yaml, bars.yaml, cascades.yaml, affordances.yaml, substrate.yaml, and cues.yaml."
+            ),
+        )
+
+        # VFS custom variables (file required, but variables list can be empty)
+        # Standard system variables (grid, position, meters, affordances, temporal)
+        # are auto-generated by the compiler - only custom computed variables go here
+        variables_reference = _load_config(
+            "variables_reference.yaml",
+            lambda: load_variables_reference_config(config_dir),
+            missing_hint=f"Add variables_reference.yaml to {config_dir} (can be empty: variables: []).",
+        )
+
+        global_actions_path = Path("configs") / "global_actions.yaml"
+        global_actions = _load_config(
+            "global_actions.yaml",
+            lambda: load_global_actions_config(global_actions_path),
+            missing_hint="Ensure configs/global_actions.yaml exists (global action vocabulary).",
+        )
+
+        composed_actions: ActionSpaceConfig | None = None
+        if hamlet_config is not None and global_actions is not None:
+            composed_actions = cls._compose_action_space(
+                hamlet_config=hamlet_config,
+                custom_actions=global_actions,
+                errors=errors,
+            )
+
+        action_labels = _load_config(
+            "action_labels.yaml",
+            lambda: cls._load_action_labels_config(config_dir),
+            optional=True,
+        )
+
+        environment_config = _load_config(
+            "bars/cascades environment_config",
+            lambda: load_cascade_environment_config(config_dir),
+        )
+
+        errors.check_and_raise()
+
+        if hamlet_config is None or variables_reference is None or composed_actions is None or environment_config is None:
+            # Defensive: reaching here would indicate check_and_raise failed to trigger.
+            raise RuntimeError("Stage 1: Parse succeeded without fully loaded configs.")
+
+        source_map = SourceMap()
+        source_map.track_cascades(config_dir / "cascades.yaml")
+        source_map.track_affordances(config_dir / "affordances.yaml")
+        source_map.track_actions(global_actions_path)
+        source_map.track_training_environment_key(
+            config_dir / "training.yaml",
+            "environment.enabled_affordances",
+        )
+
+        return cls(
+            hamlet_config=hamlet_config,
+            variables_reference=variables_reference,
+            global_actions=composed_actions,
+            action_labels=action_labels,
+            environment_config=environment_config,
+            source_map=source_map,
+            config_dir=config_dir,
+        )
+
+    @staticmethod
+    def _compose_action_space(
+        *,
+        hamlet_config: HamletConfig,
+        custom_actions: ActionSpaceConfig,
+        errors: CompilationErrorCollector,
+    ) -> ActionSpaceConfig | None:
+        """Combine substrate default actions with global custom actions for validation."""
+
+        try:
+            substrate = SubstrateFactory.build(hamlet_config.substrate, torch.device("cpu"))
+        except Exception as exc:  # pragma: no cover - defensive
+            errors.add(f"substrate.yaml: failed to build substrate actions - {exc}")
+            return None
+
+        try:
+            substrate_actions = substrate.get_default_actions()
+        except Exception as exc:  # pragma: no cover - defensive
+            errors.add(f"substrate.yaml: failed to derive default actions - {exc}")
+            return None
+
+        combined: list[ActionConfig] = []
+        available_names: set[str] = set()
+        next_id = 0
+
+        enabled_lookup: set[str] | None
+        training_enabled = hamlet_config.training.enabled_actions
+        if training_enabled is None:
+            enabled_lookup = None
+        else:
+            enabled_lookup = set(training_enabled)
+
+        meter_names = {bar.name for bar in hamlet_config.bars}
+        meter_trim_hint_added = False
+
+        def _trim_meter_payload(payload: dict[str, float]) -> dict[str, float]:
+            nonlocal meter_trim_hint_added
+            if not payload:
+                return payload
+            missing = [meter for meter in payload if meter not in meter_names]
+            if missing:
+                if not meter_trim_hint_added:
+                    errors.add_hint(
+                        "Action costs/effects referencing meters absent from bars.yaml were ignored for this config. "
+                        "Ensure variable-meter configs define compatible action costs."
+                    )
+                    meter_trim_hint_added = True
+                payload = {meter: amount for meter, amount in payload.items() if meter in meter_names}
+            return payload
+
+        def _is_enabled(action_name: str, base_enabled: bool) -> bool:
+            if not base_enabled:
+                return False
+            if enabled_lookup is None:
+                return True
+            return action_name in enabled_lookup
+
+        def _clone(action: ActionConfig) -> ActionConfig:
+            nonlocal next_id
+            base_enabled = getattr(action, "enabled", True)
+            cloned = action.model_copy(
+                update={
+                    "id": next_id,
+                    "costs": _trim_meter_payload(dict(action.costs)),
+                    "effects": _trim_meter_payload(dict(action.effects)),
+                    "enabled": _is_enabled(action.name, base_enabled),
+                }
+            )
+            next_id += 1
+            return cloned
+
+        for action in substrate_actions:
+            cloned = _clone(action)
+            combined.append(cloned)
+            available_names.add(cloned.name)
+
+        for action in custom_actions.actions:
+            cloned = _clone(action)
+            combined.append(cloned)
+            available_names.add(cloned.name)
+
+        if enabled_lookup is not None:
+            missing = sorted(name for name in enabled_lookup if name not in available_names)
+            if missing:
+                missing_list = ", ".join(missing)
+                errors.add(
+                    "training.enabled_actions references unknown actions: "
+                    f"{missing_list}. Ensure names match substrate defaults or configs/global_actions.yaml.",
+                    code="UAC-ACT-001",
+                    location="training.yaml:enabled_actions",
+                )
+                hint = (
+                    "Review docs/config-schemas/enabled_actions.md for canonical action names "
+                    "and confirm the training config lists only those identifiers."
+                )
+                if hint not in errors.hints:
+                    errors.add_hint(hint)
+                return None
+
+        return ActionSpaceConfig(actions=combined)
+
+    @staticmethod
+    def _load_action_labels_config(config_dir: Path) -> ActionLabelConfig:
+        yaml_path = config_dir / "action_labels.yaml"
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"action_labels.yaml not found in {config_dir}")
+
+        with yaml_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
+
+        payload = data.get("action_labels", data)
+        if not isinstance(payload, dict):
+            raise ValueError(f"action_labels.yaml must define a mapping, got {type(payload).__name__}")
+
+        return ActionLabelConfig(**payload)

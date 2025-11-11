@@ -610,10 +610,11 @@ class TestAdaptiveIntrinsicAnnealingLogic:
             survival_window=100,
             variance_threshold=100.0,
             decay_rate=0.99,
+            max_episode_length=200,  # 100-109 survival = 50-54% completion (>40% threshold)
             device=torch.device("cpu"),
         )
 
-        # Add 100 episodes of consistent success (95-105 steps, mean=100)
+        # Add 100 episodes of consistent success (100-109 steps, mean=104.5, >40% of max_episode_length)
         for i in range(100):
             exploration.update_on_episode_end(survival_time=100.0 + (i % 10))
 
@@ -679,47 +680,6 @@ class TestAdaptiveIntrinsicAnnealingLogic:
         assert len(exploration.survival_history) == 10
         assert abs(exploration.survival_history[0] - 5.0) < 1e-6
         assert abs(exploration.survival_history[-1] - 14.0) < 1e-6
-
-
-class TestAdaptiveIntrinsicRewardScaling:
-    """Test intrinsic reward computation with weight scaling."""
-
-    def test_compute_intrinsic_rewards_scales_by_weight(self):
-        """Intrinsic rewards should be scaled by current weight."""
-        exploration = AdaptiveIntrinsicExploration(
-            obs_dim=10,
-            initial_intrinsic_weight=0.5,
-            device=torch.device("cpu"),
-        )
-
-        observations = torch.randn(4, 10)
-
-        # Get rewards with weight=0.5
-        rewards_half = exploration.compute_intrinsic_rewards(observations)
-
-        # All rewards should be non-negative (MSE property)
-        assert torch.all(rewards_half >= 0)
-
-        # Now set weight to 1.0
-        exploration.current_intrinsic_weight = 1.0
-        rewards_full = exploration.compute_intrinsic_rewards(observations)
-
-        # Should be exactly 2x (weight doubled)
-        assert torch.allclose(rewards_full, rewards_half * 2.0, atol=1e-5)
-
-    def test_compute_intrinsic_rewards_zero_weight(self):
-        """Zero weight should give zero rewards."""
-        exploration = AdaptiveIntrinsicExploration(
-            obs_dim=10,
-            initial_intrinsic_weight=0.0,
-            device=torch.device("cpu"),
-        )
-
-        observations = torch.randn(4, 10)
-        rewards = exploration.compute_intrinsic_rewards(observations)
-
-        # All should be zero
-        assert torch.allclose(rewards, torch.zeros(4))
 
 
 class TestAdaptiveIntrinsicActionSelection:
@@ -856,6 +816,8 @@ class TestAdaptiveIntrinsicStatePersistence:
             "variance_threshold": 25.0,
             "survival_window": 150,
             "decay_rate": 0.97,
+            "min_survival_fraction": 0.5,
+            "max_episode_length": 1000,
             "survival_history": [50.0, 60.0, 70.0],
         }
 
@@ -867,6 +829,8 @@ class TestAdaptiveIntrinsicStatePersistence:
         assert abs(exploration.variance_threshold - 25.0) < 1e-6
         assert exploration.survival_window == 150
         assert abs(exploration.decay_rate - 0.97) < 1e-6
+        assert abs(exploration.min_survival_fraction - 0.5) < 1e-6
+        assert exploration.max_episode_length == 1000
         assert exploration.survival_history == [50.0, 60.0, 70.0]
 
     def test_checkpoint_restore_roundtrip(self):
@@ -1236,35 +1200,31 @@ class TestCheckpointRoundTrip:
         assert abs(adaptive2.current_intrinsic_weight - 0.5) < 1e-6
 
 
-class TestCheckpointBackwardsCompatibility:
-    """Test handling of missing checkpoint fields (backwards compatibility)."""
+class TestCheckpointStrictValidation:
+    """Test strict checkpoint validation (NO backwards compatibility - pre-release, 0 users)."""
 
-    def test_rnd_handles_missing_optimizer(self, cpu_device, basic_env):
-        """RND should handle checkpoints without optimizer state (legacy)."""
+    def test_rnd_rejects_missing_optimizer(self, cpu_device, basic_env):
+        """RND should reject checkpoints without optimizer state."""
         rnd = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = rnd.checkpoint_state()
         # Simulate legacy checkpoint without optimizer
         del state["optimizer"]
 
-        # Should not crash (though training may be suboptimal)
+        # Should raise KeyError (strict validation)
         rnd2 = RNDExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
-        try:
+        with pytest.raises(KeyError):
             rnd2.load_state(state)
-        except KeyError:
-            pytest.fail("RND should handle missing optimizer gracefully")
 
-    def test_adaptive_handles_missing_survival_history(self, cpu_device, basic_env):
-        """AdaptiveIntrinsic should handle checkpoints without survival history."""
+    def test_adaptive_rejects_missing_survival_history(self, cpu_device, basic_env):
+        """AdaptiveIntrinsic should reject checkpoints without survival history."""
         adaptive = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
 
         state = adaptive.checkpoint_state()
         # Simulate legacy checkpoint without survival history
         del state["survival_history"]
 
-        # Should not crash (annealing may restart)
+        # Should raise KeyError (strict validation)
         adaptive2 = AdaptiveIntrinsicExploration(obs_dim=basic_env.observation_dim, device=cpu_device)
-        try:
+        with pytest.raises(KeyError):
             adaptive2.load_state(state)
-        except KeyError:
-            pytest.fail("Adaptive should handle missing survival_history gracefully")

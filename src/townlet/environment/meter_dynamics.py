@@ -1,164 +1,187 @@
-"""
-Meter Dynamics Module
+"""Tensor-driven meter dynamics used by the runtime environment."""
 
-Encapsulates meter depletion and cascade effects for the Hamlet environment.
-Implements the coupled cascade architecture where meters affect each other.
+from __future__ import annotations
 
-All cascade logic is config-driven via CascadeEngine and YAML files.
-"""
-
-from pathlib import Path
+from collections.abc import Mapping, Sequence
+from typing import Any, TypedDict, cast
 
 import torch
 
-from townlet.environment.cascade_config import (
-    load_default_config,
-    load_environment_config,
-)
-from townlet.environment.cascade_engine import CascadeEngine
+
+class _CascadeEntry(TypedDict):
+    source_idx: int
+    target_idx: int
+    threshold: float
+    strength: float
+
+
+class _ModulationEntry(TypedDict):
+    source_idx: int
+    target_idx: int
+    base_multiplier: float
+    range: float
+    baseline_depletion: float
+
+
+class _TerminalCondition(TypedDict):
+    meter_idx: int
+    operator: str
+    value: float
 
 
 class MeterDynamics:
-    """
-    Manages meter depletion and cascade effects using config-driven CascadeEngine.
-
-    Architecture:
-    - PRIMARY (Death Conditions): Health, Energy
-    - SECONDARY (Aggressive → Primary): Satiation, Fitness, Mood
-    - TERTIARY (Quality of Life): Hygiene, Social
-    - RESOURCE: Money
-
-    Key Insight: Satiation is THE foundational need - affects BOTH primaries.
-
-    All cascade physics are defined in the config pack's bars.yaml and cascades.yaml files.
-    Students can experiment with different cascade strengths by editing YAML files.
-    """
+    """Apply depletion, modulations, cascades, and terminal checks from tensors."""
 
     def __init__(
         self,
-        num_agents: int,
+        *,
+        base_depletions: torch.Tensor,
+        cascade_data: Mapping[str, Sequence[Mapping[str, Any]]],
+        modulation_data: Sequence[Mapping[str, Any]],
+        terminal_conditions: Sequence[Mapping[str, Any]],
+        meter_name_to_index: Mapping[str, int],
         device: torch.device,
-        cascade_config_dir: Path | None = None,
-    ):
-        """
-        Initialize meter dynamics with config-driven cascade system.
+    ) -> None:
+        """Initialize meter dynamics with compiler-provided tensors."""
 
-        Args:
-            num_agents: Number of agents in the environment
-            device: torch device for tensor operations
-            cascade_config_dir: Directory containing bars.yaml and cascades.yaml
-                              (defaults to project configs/ directory)
-        """
-        self.num_agents = num_agents
         self.device = device
+        self.base_depletions = base_depletions.to(device=device, dtype=torch.float32).clone()
+        self.meter_name_to_index = dict(meter_name_to_index)
 
-        # Load cascade configuration
-        if cascade_config_dir is None:
-            # Load from project configs/ directory
-            env_config = load_default_config()
-        else:
-            env_config = load_environment_config(cascade_config_dir)
+        self._cascade_tables: dict[str, list[_CascadeEntry]] = {}
+        for category, entries in cascade_data.items():
+            normalized_entries: list[_CascadeEntry] = []
+            for entry in entries:
+                normalized_entries.append(
+                    cast(
+                        _CascadeEntry,
+                        {
+                            "source_idx": int(entry["source_idx"]),
+                            "target_idx": int(entry["target_idx"]),
+                            "threshold": float(entry["threshold"]),
+                            "strength": float(entry["strength"]),
+                        },
+                    )
+                )
+            self._cascade_tables[category] = normalized_entries
 
-        # Initialize config-driven CascadeEngine
-        self.cascade_engine = CascadeEngine(env_config, device)
+        self._modulations: list[_ModulationEntry] = []
+        for entry in modulation_data:
+            self._modulations.append(
+                cast(
+                    _ModulationEntry,
+                    {
+                        "source_idx": int(entry["source_idx"]),
+                        "target_idx": int(entry["target_idx"]),
+                        "base_multiplier": float(entry["base_multiplier"]),
+                        "range": float(entry["range"]),
+                        "baseline_depletion": float(entry["baseline_depletion"]),
+                    },
+                )
+            )
+
+        self._terminal_conditions: list[_TerminalCondition] = []
+        for entry in terminal_conditions:
+            self._terminal_conditions.append(
+                cast(
+                    _TerminalCondition,
+                    {
+                        "meter_idx": int(entry["meter_idx"]),
+                        "operator": entry["operator"],
+                        "value": float(entry["value"]),
+                    },
+                )
+            )
 
     def deplete_meters(self, meters: torch.Tensor, depletion_multiplier: float = 1.0) -> torch.Tensor:
-        """
-        Apply base depletion rates and modulations to all meters.
+        """Apply base depletion and modulations using precomputed tensors."""
 
-        Args:
-            meters: [num_agents, 8] current meter values
-            depletion_multiplier: Curriculum difficulty multiplier (0.2 = 20% difficulty)
+        scaled_depletions = self.base_depletions * depletion_multiplier
+        meters = torch.clamp(meters - scaled_depletions, 0.0, 1.0)
 
-        Returns:
-            meters: [num_agents, 8] meters after depletion and modulations
-        """
-        meters = self.cascade_engine.apply_base_depletions(meters, depletion_multiplier)
-        meters = self.cascade_engine.apply_modulations(meters)
+        for modulation in self._modulations:
+            source_values = meters[:, modulation["source_idx"]]
+            target_idx = modulation["target_idx"]
+            penalty_strength = 1.0 - source_values
+            multiplier = modulation["base_multiplier"] + (modulation["range"] * penalty_strength)
+            depletion = modulation["baseline_depletion"] * multiplier
+            meters[:, target_idx] = torch.clamp(meters[:, target_idx] - depletion, 0.0, 1.0)
+
         return meters
 
     def apply_secondary_to_primary_effects(self, meters: torch.Tensor) -> torch.Tensor:
-        """
-        SECONDARY → PRIMARY (Aggressive effects).
+        """Apply primary_to_pivotal cascades (secondary → primary)."""
 
-        **Satiation is FUNDAMENTAL** (affects BOTH primaries):
-        - Low Satiation → Health decline ↑↑↑ (starving → sick → death)
-        - Low Satiation → Energy decline ↑↑↑ (hungry → exhausted → death)
-
-        **Specialized secondaries** (each affects one primary):
-        - Low Fitness → Health decline ↑↑↑ (unfit → sick → death)
-        - Low Mood → Energy decline ↑↑↑ (depressed → exhausted → death)
-
-        This creates asymmetry: FOOD FIRST, then everything else.
-
-        Args:
-            meters: [num_agents, 8] current meter values
-
-        Returns:
-            meters: [num_agents, 8] meters after cascade effects
-        """
-        return self.cascade_engine.apply_threshold_cascades(meters, ["primary_to_pivotal"])
+        return self._apply_cascades(meters, ["primary_to_pivotal"])
 
     def apply_tertiary_to_secondary_effects(self, meters: torch.Tensor) -> torch.Tensor:
-        """
-        TERTIARY → SECONDARY (Aggressive effects).
+        """Apply secondary_to_primary cascades (tertiary → secondary)."""
 
-        - Low Hygiene → Satiation/Fitness/Mood decline ↑↑
-        - Low Social → Mood decline ↑↑
-
-        Args:
-            meters: [num_agents, 8] current meter values
-
-        Returns:
-            meters: [num_agents, 8] meters after cascade effects
-        """
-        return self.cascade_engine.apply_threshold_cascades(meters, ["secondary_to_primary"])
+        return self._apply_cascades(meters, ["secondary_to_primary"])
 
     def apply_tertiary_to_primary_effects(self, meters: torch.Tensor) -> torch.Tensor:
-        """
-        TERTIARY → PRIMARY (Weak direct effects).
+        """Apply secondary_to_pivotal_weak cascades (tertiary → primary)."""
 
-        - Low Hygiene → Health/Energy decline ↑ (weak)
-        - Low Social → Energy decline ↑ (weak)
-
-        Args:
-            meters: [num_agents, 8] current meter values
-
-        Returns:
-            meters: [num_agents, 8] meters after cascade effects
-        """
-        return self.cascade_engine.apply_threshold_cascades(meters, ["secondary_to_pivotal_weak"])
+        return self._apply_cascades(meters, ["secondary_to_pivotal_weak"])
 
     def check_terminal_conditions(self, meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+        """Evaluate terminal conditions using compiler-provided thresholds.
+
+        Preserves monotonic property: once done, stays done until reset.
         """
-        Check terminal conditions.
 
-        Coupled cascade architecture:
+        terminal_mask = torch.zeros_like(dones, dtype=torch.bool)
 
-        **PRIMARY (Death Conditions):**
-        - Health: Are you alive?
-        - Energy: Can you move?
+        for condition in self._terminal_conditions:
+            meter_values = meters[:, condition["meter_idx"]]
+            threshold = condition["value"]
+            operator = condition["operator"]
 
-        **SECONDARY (Aggressive → Primary):**
-        - Satiation ──strong──> Health AND Energy (FUNDAMENTAL - affects both!)
-        - Fitness ──strong──> Health (unfit → sick → death)
-        - Mood ──strong──> Energy (depressed → exhausted → death)
+            if operator == "<=":
+                current = meter_values <= threshold
+            elif operator == ">=":
+                current = meter_values >= threshold
+            elif operator == "<":
+                current = meter_values < threshold
+            elif operator == ">":
+                current = meter_values > threshold
+            elif operator == "==":
+                current = torch.isclose(meter_values, torch.tensor(threshold, device=meter_values.device))
+            else:  # pragma: no cover - defensive
+                raise ValueError(f"Unknown terminal condition operator: {operator}")
 
-        **TERTIARY (Quality of Life):**
-        - Hygiene ──strong──> Secondary + weak──> Primary
-        - Social ──strong──> Secondary + weak──> Primary
+            terminal_mask |= current
 
-        **RESOURCE:**
-        - Money (Enables affordances)
+        # Preserve previous done states (monotonic property)
+        return terminal_mask | dones
 
-        **Key Insight:** Satiation is THE foundational need - hungry makes you
-        BOTH sick AND exhausted. Food must be prioritized above all else.
+    def get_base_depletion(self, meter_name: str) -> float:
+        """Expose base depletion for configuration tests."""
 
-        Args:
-            meters: [num_agents, 8] current meter values
-            dones: [num_agents] current done flags (unused, kept for compatibility)
+        idx = self.meter_name_to_index.get(meter_name)
+        if idx is None:
+            raise KeyError(f"Meter '{meter_name}' not found in lookup.")
+        return float(self.base_depletions[idx].item())
 
-        Returns:
-            dones: [num_agents] updated done flags
-        """
-        return self.cascade_engine.check_terminal_conditions(meters, dones)
+    def _apply_cascades(self, meters: torch.Tensor, categories: Sequence[str]) -> torch.Tensor:
+        for category in categories:
+            cascades = self._cascade_tables.get(category)
+            if not cascades:
+                continue
+
+            for cascade in cascades:
+                source_values = meters[:, cascade["source_idx"]]
+                low_mask = source_values < cascade["threshold"]
+                if not low_mask.any():
+                    continue
+
+                deficit = (cascade["threshold"] - source_values[low_mask]) / cascade["threshold"]
+                penalty = cascade["strength"] * deficit
+                target_idx = cascade["target_idx"]
+                meters[low_mask, target_idx] = torch.clamp(
+                    meters[low_mask, target_idx] - penalty,
+                    0.0,
+                    1.0,
+                )
+
+        return meters
