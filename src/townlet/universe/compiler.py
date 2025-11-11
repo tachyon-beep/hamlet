@@ -1129,6 +1129,11 @@ class UniverseCompiler:
         errors: CompilationErrorCollector,
         formatter,
     ) -> None:
+        # Build affordance ID set for prerequisite validation
+        affordance_ids = {aff.id for aff in raw_configs.affordances}
+        # Build meter name set for skill_scaling validation
+        meter_names = {bar.name for bar in raw_configs.bars}
+
         for affordance in raw_configs.affordances:
             capabilities = getattr(affordance, "capabilities", []) or []
             types = [self._get_attr_value(cap, "type") for cap in capabilities]
@@ -1194,6 +1199,65 @@ class UniverseCompiler:
                         f"affordances.yaml:{affordance.id}:capabilities",
                     )
                 )
+
+            # Validate capability-specific references (combined loop for efficiency)
+            for idx, capability in enumerate(capabilities):
+                cap_type = self._get_attr_value(capability, "type")
+
+                # UAC-VAL-010: Validate prerequisite affordance references
+                if cap_type == "prerequisite":
+                    required = self._get_attr_value(capability, "required_affordances") or []
+                    for req_id in required:
+                        if req_id not in affordance_ids:
+                            errors.add(
+                                formatter(
+                                    "UAC-VAL-010",
+                                    f"Prerequisite affordance '{req_id}' does not exist in affordances.yaml",
+                                    f"affordances.yaml:{affordance.id}:capabilities[{idx}]",
+                                )
+                            )
+
+                # UAC-VAL-012: Validate skill_scaling meter references
+                elif cap_type == "skill_scaling":
+                    skill_meter = self._get_attr_value(capability, "skill")
+                    if skill_meter and skill_meter not in meter_names:
+                        errors.add(
+                            formatter(
+                                "UAC-VAL-012",
+                                f"Skill scaling capability references non-existent meter '{skill_meter}'. "
+                                f"Valid meters: {sorted(meter_names)}",
+                                f"affordances.yaml:{affordance.id}:capabilities[{idx}]",
+                            )
+                        )
+
+            # UAC-VAL-011: Validate probabilistic effect pipeline completeness
+            has_probabilistic = any(self._get_attr_value(cap, "type") == "probabilistic" for cap in capabilities)
+
+            if has_probabilistic:
+                if pipeline is None:
+                    errors.add(
+                        formatter(
+                            "UAC-VAL-011",
+                            f"Probabilistic affordance '{affordance.id}' must define effect_pipeline with on_completion and on_failure",
+                            f"affordances.yaml:{affordance.id}",
+                        )
+                    )
+                else:
+                    missing_stages = []
+                    if not pipeline.on_completion:
+                        missing_stages.append("on_completion (success path)")
+                    if not pipeline.on_failure:
+                        missing_stages.append("on_failure (failure path)")
+
+                    if missing_stages:
+                        errors.add(
+                            formatter(
+                                "UAC-VAL-011",
+                                f"Probabilistic affordance '{affordance.id}' should define both success and failure effects. "
+                                f"Missing: {', '.join(missing_stages)}",
+                                f"affordances.yaml:{affordance.id}:effect_pipeline",
+                            )
+                        )
 
     def _validate_affordance_positions(
         self,
