@@ -185,6 +185,30 @@ See `docs/config-schemas/enabled_actions.md` for details.
 
 **Intrinsic Rewards**: RND (novelty-seeking) + adaptive annealing based on performance consistency.
 
+### Q-Learning Algorithm Variants
+
+**Configurable via** `training.yaml: use_double_dqn`
+
+**Vanilla DQN** (Mnih et al. 2015):
+- Q-target: `r + γ * max_a Q_target(s', a)`
+- Uses target network for both action selection and evaluation
+- Susceptible to Q-value overestimation (max operator bias)
+
+**Double DQN** (van Hasselt et al. 2016):
+- Q-target: `r + γ * Q_target(s', argmax_a Q_online(s', a))`
+- Decouples action selection (online network) from evaluation (target network)
+- Reduces overestimation, typically converges faster
+
+**Implementation Notes**:
+- Feedforward: Minimal overhead (<1%)
+- Recurrent: 3 forward passes required (online prediction, online selection, target evaluation) vs 2 for vanilla
+- All curriculum levels support both algorithms
+- Checkpoints persist `use_double_dqn` flag for reproducibility
+
+**Usage Recommendation**: Run baseline with `use_double_dqn: false`, then compare against `use_double_dqn: true` to quantify improvement.
+
+**Documentation**: See `docs/config-schemas/training.md` for detailed configuration guide.
+
 ## Configuration System
 
 Training controlled via YAML configs in `configs/`. Each config pack is a directory containing:
