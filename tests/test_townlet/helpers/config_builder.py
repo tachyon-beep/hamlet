@@ -64,6 +64,7 @@ BASE_CONFIG = {
         "sequence_length": 8,
         "max_grad_norm": 10.0,
         "use_double_dqn": False,
+        "reward_strategy": "multiplicative",  # Required field for reward calculation strategy
         "epsilon_start": 1.0,
         "epsilon_decay": 0.99,
         "epsilon_min": 0.01,
