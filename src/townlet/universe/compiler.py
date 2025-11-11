@@ -1200,10 +1200,11 @@ class UniverseCompiler:
                     )
                 )
 
-            # Validate prerequisite affordance references
+            # Validate capability-specific references (combined loop for efficiency)
             for idx, capability in enumerate(capabilities):
                 cap_type = self._get_attr_value(capability, "type")
 
+                # UAC-VAL-010: Validate prerequisite affordance references
                 if cap_type == "prerequisite":
                     required = self._get_attr_value(capability, "required_affordances") or []
                     for req_id in required:
@@ -1216,7 +1217,20 @@ class UniverseCompiler:
                                 )
                             )
 
-            # Validate probabilistic effect pipeline completeness
+                # UAC-VAL-012: Validate skill_scaling meter references
+                elif cap_type == "skill_scaling":
+                    skill_meter = self._get_attr_value(capability, "skill")
+                    if skill_meter and skill_meter not in meter_names:
+                        errors.add(
+                            formatter(
+                                "UAC-VAL-012",
+                                f"Skill scaling capability references non-existent meter '{skill_meter}'. "
+                                f"Valid meters: {sorted(meter_names)}",
+                                f"affordances.yaml:{affordance.id}:capabilities[{idx}]",
+                            )
+                        )
+
+            # UAC-VAL-011: Validate probabilistic effect pipeline completeness
             has_probabilistic = any(self._get_attr_value(cap, "type") == "probabilistic" for cap in capabilities)
 
             if has_probabilistic:
@@ -1242,22 +1256,6 @@ class UniverseCompiler:
                                 f"Probabilistic affordance '{affordance.id}' should define both success and failure effects. "
                                 f"Missing: {', '.join(missing_stages)}",
                                 f"affordances.yaml:{affordance.id}:effect_pipeline",
-                            )
-                        )
-
-            # Validate skill_scaling meter references
-            for idx, capability in enumerate(capabilities):
-                cap_type = self._get_attr_value(capability, "type")
-
-                if cap_type == "skill_scaling":
-                    skill_meter = self._get_attr_value(capability, "skill")
-                    if skill_meter and skill_meter not in meter_names:
-                        errors.add(
-                            formatter(
-                                "UAC-VAL-012",
-                                f"Skill scaling capability references non-existent meter '{skill_meter}'. "
-                                f"Valid meters: {sorted(meter_names)}",
-                                f"affordances.yaml:{affordance.id}:capabilities[{idx}]",
                             )
                         )
 
