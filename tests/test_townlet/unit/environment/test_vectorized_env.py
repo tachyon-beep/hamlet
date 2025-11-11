@@ -542,16 +542,6 @@ class TestHandleInteractions:
         result = env._handle_interactions(interact_mask)
         assert result == {}
 
-    def test_handle_interactions_legacy_returns_dict(self, cpu_env_factory):
-        """Should return dict mapping agent indices to affordance names."""
-        env = cpu_env_factory()
-        env.reset()
-
-        interact_mask = torch.tensor([True])
-
-        result = env._handle_interactions_legacy(interact_mask)
-        assert isinstance(result, dict)
-
 
 class TestCalculateShapedRewards:
     """Test VectorizedHamletEnv._calculate_shaped_rewards()."""
