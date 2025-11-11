@@ -41,6 +41,7 @@ population:
   gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
   replay_buffer_capacity: 50000  # Smaller buffer for minimal world
   network_type: simple  # Standard MLP Q-Network
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration (simpler than Level 1)
 curriculum:

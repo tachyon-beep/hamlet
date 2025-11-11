@@ -311,6 +311,8 @@ class LiveInferenceServer:
         )
 
         # Create exploration (for inference, we want greedy)
+        # Conditionally pass active_mask based on mask_unused_obs config
+        active_mask = self.env.observation_activity.active_mask if population_cfg.mask_unused_obs else None
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
             embed_dim=exploration_cfg.embed_dim,
@@ -322,7 +324,7 @@ class LiveInferenceServer:
             epsilon_decay=training_cfg.epsilon_decay,
             epsilon_min=training_cfg.epsilon_min,
             device=self.device,
-            active_mask=self.env.observation_activity.active_mask,
+            active_mask=active_mask,
         )
 
         # Create population (use compiled configuration for all hyperparameters)

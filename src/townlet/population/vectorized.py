@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 
-from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
+from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork, StructuredQNetwork
 from townlet.curriculum.base import CurriculumManager
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
@@ -125,6 +125,14 @@ class VectorizedPopulation(PopulationManager):
                 enable_temporal_features=env.enable_temporal_mechanics,
                 hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
             ).to(device)
+        elif network_type == "structured":
+            self.q_network = StructuredQNetwork(
+                obs_dim=obs_dim,
+                action_dim=action_dim,
+                observation_activity=env.observation_activity,
+                group_embed_dim=32,  # TODO(BRAIN_AS_CODE): Should come from config
+                q_head_hidden_dim=128,  # TODO(BRAIN_AS_CODE): Should come from config
+            ).to(device)
         else:
             self.q_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(device)  # TODO(BRAIN_AS_CODE): Should come from config
 
@@ -139,6 +147,14 @@ class VectorizedPopulation(PopulationManager):
                 num_affordance_types=env.num_affordance_types,
                 enable_temporal_features=env.enable_temporal_mechanics,
                 hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
+            ).to(device)
+        elif network_type == "structured":
+            self.target_network = StructuredQNetwork(
+                obs_dim=obs_dim,
+                action_dim=action_dim,
+                observation_activity=env.observation_activity,
+                group_embed_dim=32,  # TODO(BRAIN_AS_CODE): Should come from config
+                q_head_hidden_dim=128,  # TODO(BRAIN_AS_CODE): Should come from config
             ).to(device)
         else:
             self.target_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(

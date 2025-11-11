@@ -38,7 +38,19 @@ class PopulationConfig(BaseModel):
     replay_buffer_capacity: int = Field(gt=0, description="Experience replay buffer size (number of transitions)")
 
     # Network architecture (REQUIRED)
-    network_type: Literal["simple", "recurrent"] = Field(description="'simple' (MLP for full obs) or 'recurrent' (LSTM for POMDP)")
+    network_type: Literal["simple", "recurrent", "structured"] = Field(
+        description=("'simple' (MLP for full obs), 'recurrent' (LSTM for POMDP), or 'structured' (group encoders for semantic obs)")
+    )
+
+    # Observation masking (REQUIRED)
+    mask_unused_obs: bool = Field(
+        description=(
+            "Apply active_mask to zero out padding dimensions in observations. "
+            "True: Only process curriculum-active dimensions (saves compute, improves sample efficiency). "
+            "False: Process all observation dimensions (standard behavior). "
+            "Currently applies to: RND networks. Future: Q-networks when network_type='structured'."
+        )
+    )
 
 
 def load_population_config(config_dir: Path) -> PopulationConfig:

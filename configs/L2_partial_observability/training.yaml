@@ -37,6 +37,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 10000
   network_type: recurrent  # NEW: RecurrentSpatialQNetwork with LSTM
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration (adversarial difficulty adjustment)
 curriculum:

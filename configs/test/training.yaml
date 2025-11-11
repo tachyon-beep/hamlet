@@ -26,6 +26,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 2000  # Reduced for lite version
   network_type: simple  # Standard MLP Q-Network
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration
 curriculum:

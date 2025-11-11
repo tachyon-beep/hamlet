@@ -17,6 +17,7 @@ population:
   gamma: 0.99
   replay_buffer_capacity: 1000
   network_type: simple  # MLP for aspatial (no LSTM needed)
+  mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 curriculum:
   max_steps_per_episode: 200

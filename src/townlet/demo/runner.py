@@ -389,6 +389,8 @@ class DemoRunner:
         )
 
         # Create exploration (all params required per PDR-002)
+        # Conditionally pass active_mask based on mask_unused_obs config
+        active_mask = self.env.observation_activity.active_mask if self.hamlet_config.population.mask_unused_obs else None
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
             embed_dim=self.hamlet_config.exploration.embed_dim,
@@ -402,7 +404,7 @@ class DemoRunner:
             epsilon_decay=self.hamlet_config.training.epsilon_decay,
             epsilon_min=self.hamlet_config.training.epsilon_min,
             device=device,
-            active_mask=self.env.observation_activity.active_mask,
+            active_mask=active_mask,
         )
 
         # Get population parameters from config (all required per PDR-002)
