@@ -33,13 +33,13 @@ environment:
   enabled_affordances: ["Bed", "Hospital","HomeMeal","Job"]
   randomize_affordances: true
   energy_move_depletion: 0.005
-  energy_wait_depletion: 0.003
-  energy_interact_depletion: 0.003
+  energy_wait_depletion: 0.005
+  energy_interact_depletion: 0.005
 
 # Population configuration
 population:
   num_agents: 1  # Single agent
-  learning_rate: 0.001  # Higher learning rate for faster learning
+  learning_rate: 0.0003  # Higher learning rate for faster learning
   gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
   replay_buffer_capacity: 50000  # 50k capacity for better experience diversity (166-500 episodes)
   network_type: simple  # Standard MLP Q-Network
@@ -57,7 +57,7 @@ exploration:
   embed_dim: 128  # Smaller embedding (simpler observations)
   initial_intrinsic_weight: 0.1  # Higher for harder problem without REST
   variance_threshold: 100.0  # More forgiving variance (up from 50.0)
-  min_survival_fraction: 0.2  # Don't anneal until mean survival >20% of max episode length (prevents "stable failure")
+  min_survival_fraction: 0.15  # Don't anneal until mean survival >15% of max episode length (prevents "stable failure")
   survival_window: 200  # Smaller window
 
 # Training configuration
@@ -67,14 +67,14 @@ training:
 
   # Q-learning hyperparameters
   train_frequency: 4  # Train Q-network every N steps
-  target_update_frequency: 100  # Update target network every N training steps
+  target_update_frequency: 200  # Update target network every N training steps
   batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
   sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
   max_grad_norm: 10.0  # Gradient clipping threshold
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
-  epsilon_decay: 0.99  # Decay per episode (was 0.9995 - too slow, reaches ε=0.1 at ~460 episodes)
+  epsilon_decay: 0.975  # Decay per episode (was 0.9995 - too slow, reaches ε=0.1 at ~460 episodes)
   epsilon_min: 0.01  # Minimum exploration rate
   enabled_actions:
     # L0.5 unlocks the full custom vocabulary (REST + MEDITATE) to pair with new affordances

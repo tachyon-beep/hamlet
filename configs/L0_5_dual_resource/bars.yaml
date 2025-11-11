@@ -20,16 +20,16 @@ bars:
     index: 0
     tier: "pivotal"
     range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.005  # 0.5% per step
+    initial: 0.5
+    base_depletion: 0.001  # 1.0% per step
     description: "Can you move? Death if depleted. Affected by satiation (fundamental) and mood (specialized)."
 
   - name: "health"
     index: 6
     tier: "pivotal"
     range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.0  # No base depletion - entirely handled by fitness modulation (see cascades.yaml)
+    initial: 0.8
+    base_depletion: 0.000  # No base depletion - entirely handled by fitness modulation (see cascades.yaml)
     description: "Are you alive? Death if depleted. Affected by satiation (fundamental) and fitness (modulation)."
 
   # PRIMARY METERS: Strong effects on pivotal meters
@@ -38,8 +38,8 @@ bars:
     index: 2
     tier: "primary"
     range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.004  # 0.4% per step
+    initial: 0.5
+    base_depletion: 0.001  # 0.4% per step
     description: "Hunger level. FUNDAMENTAL need - affects BOTH pivotal meters when low."
     key_insight: "Food first! Low satiation causes both health decline AND energy exhaustion."
 
@@ -48,7 +48,7 @@ bars:
     tier: "primary"
     range: [0.0, 1.0]
     initial: 1.0
-    base_depletion: 0.002  # 0.2% per step
+    base_depletion: 0.001  # 0.2% per step
     description: "Physical fitness. Modulates health depletion rate (0.5x at 100%, 3.0x at 0%)."
     special: "Uses multiplicative modulation, not threshold cascade."
 
@@ -67,7 +67,7 @@ bars:
     tier: "secondary"
     range: [0.0, 1.0]
     initial: 1.0
-    base_depletion: 0.003  # 0.3% per step
+    base_depletion: 0.001  # 0.3% per step
     description: "Cleanliness. Affects appetite (satiation), exercise ability (fitness), and mood."
     cascade_pattern: "Strong → Primary, Weak → Pivotal"
 
@@ -76,7 +76,7 @@ bars:
     tier: "secondary"
     range: [0.0, 1.0]
     initial: 1.0
-    base_depletion: 0.006  # 0.6% per step (decays fastest!)
+    base_depletion: 0.001  # 0.6% per step (decays fastest!)
     description: "Social connection. Strongly affects mood (loneliness → depression)."
     cascade_pattern: "Strong → Mood, Weak → Energy"
 

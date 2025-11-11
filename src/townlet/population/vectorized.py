@@ -517,8 +517,8 @@ class VectorizedPopulation(PopulationManager):
         # 9. Train Q-network from replay buffer (every train_frequency steps)
         self.total_steps += 1
         # For recurrent: need enough episodes (16+) for sequence sampling
-        # For feedforward: need enough transitions (64+) for batch sampling
-        min_buffer_size = 16 if self.is_recurrent else 64
+        # For feedforward: need enough transitions (>= batch_size) for batch sampling
+        min_buffer_size = 16 if self.is_recurrent else self.batch_size
         if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:
             intrinsic_weight = (
                 self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0

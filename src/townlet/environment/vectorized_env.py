@@ -796,8 +796,9 @@ class VectorizedHamletEnv:
             device=self.device,
         )
 
-        # Check boundary constraints (only for spatial substrates)
-        if self.substrate.position_dim >= 2:
+        # Check boundary constraints (only for discrete grid substrates)
+        # Continuous substrates handle boundaries in apply_movement() via boundary modes
+        if self.grid_size is not None and self.substrate.position_dim >= 2:
             # positions[:, 0] = x (column), positions[:, 1] = y (row)
             at_top = self.positions[:, 1] == 0  # y == 0
             at_bottom = self.positions[:, 1] == self.grid_size - 1  # y == max
@@ -810,8 +811,8 @@ class VectorizedHamletEnv:
             action_masks[at_left, 2] = False  # Can't go LEFT at left edge
             action_masks[at_right, 3] = False  # Can't go RIGHT at right edge
 
-        # 3D-specific: mask Z-axis movements at floor/ceiling
-        if self.substrate.position_dim == 3:
+        # 3D-specific: mask Z-axis movements at floor/ceiling (discrete grids only)
+        if self.grid_size is not None and self.substrate.position_dim == 3:
             at_floor = self.positions[:, 2] == 0  # z == 0
             # Assume depth from substrate
             if hasattr(self.substrate, "depth"):
@@ -936,8 +937,8 @@ class VectorizedHamletEnv:
                 # Apply custom action costs/effects/teleportation
                 self._apply_custom_action(agent_idx, action)
 
-        # Store old positions for temporal mechanics progress tracking
-        old_positions = self.positions.clone() if self.enable_temporal_mechanics else None
+        # Store old positions for temporal mechanics progress tracking AND velocity calculation
+        old_positions = self.positions.clone()
 
         # Apply movement using pre-built delta tensor from ActionConfig
         # Only for substrate actions (custom actions already handled above)
@@ -946,8 +947,28 @@ class VectorizedHamletEnv:
             movement_deltas = self._movement_deltas[actions[substrate_mask]]  # [num_substrate_agents, position_dim]
             self.positions[substrate_mask] = self.substrate.apply_movement(self.positions[substrate_mask], movement_deltas)
 
+        # Calculate velocity (movement delta since last step)
+        # Cast to float32 (grid substrates use int positions, continuous use float)
+        velocity = (self.positions - old_positions).float()  # [num_agents, position_dim]
+
+        # Write velocity components to VFS (if velocity variables exist)
+        # Scalar variables require shape (num_agents,) not (num_agents, 1)
+        if "velocity_x" in self.vfs_registry._definitions:
+            self.vfs_registry.set("velocity_x", velocity[:, 0], writer="engine")
+
+        if "velocity_y" in self.vfs_registry._definitions and velocity.shape[1] >= 2:
+            self.vfs_registry.set("velocity_y", velocity[:, 1], writer="engine")
+
+        if "velocity_z" in self.vfs_registry._definitions and velocity.shape[1] >= 3:
+            self.vfs_registry.set("velocity_z", velocity[:, 2], writer="engine")
+
+        # Calculate and write velocity magnitude (speed)
+        if "velocity_magnitude" in self.vfs_registry._definitions:
+            magnitude = torch.norm(velocity, dim=1)  # [num_agents]
+            self.vfs_registry.set("velocity_magnitude", magnitude, writer="engine")
+
         # Reset progress for agents that moved away (temporal mechanics)
-        if self.enable_temporal_mechanics and old_positions is not None:
+        if self.enable_temporal_mechanics:
             for agent_idx in range(self.num_agents):
                 if not torch.equal(old_positions[agent_idx], self.positions[agent_idx]):
                     self.interaction_progress[agent_idx] = 0

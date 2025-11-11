@@ -41,8 +41,11 @@ class ActionConfig(BaseModel):
 
     # Movement-specific
     # NO DEFAULT: Callers must explicitly pass None for non-movement actions
-    delta: list[int] | None = Field(
-        description="Movement delta [dx, dy] or [dx, dy, dz] for standard movement. Pass None for non-movement.",
+    delta: list[int | float] | None = Field(
+        description=(
+            "Movement delta [dx, dy] or [dx, dy, dz] for standard movement. "
+            "Integer for discrete grids, float for continuous substrates. Pass None for non-movement."
+        ),
     )
     teleport_to: list[int] | None = Field(
         description="Teleport destination [x, y] or [x, y, z]. Overrides delta. Pass None if not teleporting.",

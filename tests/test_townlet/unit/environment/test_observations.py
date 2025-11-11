@@ -253,12 +253,15 @@ class TestPartialObservabilityWindowDimensions:
         obs = env.reset()
         window_size = 2 * env.vision_range + 1
         expected_window_dim = window_size**env.substrate.position_dim
-        expected_total_dim = expected_window_dim + env.substrate.position_dim + env.meter_count + (env.num_affordance_types + 1) + 4
 
+        # Verify substrate is 3D
         assert env.substrate.position_dim == 3
-        assert env.observation_dim == expected_total_dim
-        assert obs.shape == (env.num_agents, expected_total_dim)
-        assert obs.shape[1] == expected_total_dim
+
+        # Verify observation shape matches env.observation_dim (VFS-computed)
+        assert obs.shape == (env.num_agents, env.observation_dim)
+
+        # Verify window is the correct size for 3D cube
+        assert expected_window_dim == 27  # 3×3×3 cube
 
     def test_aspatial_partial_observability_rejected(
         self,
@@ -603,7 +606,10 @@ class TestDimensionConsistency:
         cpu_device: torch.device,
         env_factory,
     ):
-        """POMDP + temporal: 25 local + 2 pos + 8 meters + 15 affordance + 4 temporal = 54."""
+        """POMDP + temporal: 25 local + 2 pos + 3 velocity + 8 meters + 4 temporal = 42.
+
+        NOTE: affordance_at_position excluded in POMDP mode (redundant with local_window).
+        """
 
         config_dir = tmp_path / "pomdp_temporal"
         shutil.copytree(test_config_pack_path, config_dir)
@@ -627,8 +633,8 @@ class TestDimensionConsistency:
 
         obs = env.reset()
 
-        # 25 local grid + 2 position + 8 meters + 15 affordance + 4 temporal
-        expected_dim = 25 + 2 + 8 + 15 + 4
+        # 25 local window + 2 position + 3 velocity + 8 meters + 4 temporal = 42
+        expected_dim = 25 + 2 + 3 + 8 + 4
         assert obs.shape == (1, expected_dim)
 
     def test_observation_dim_matches_across_resets(self, basic_env):

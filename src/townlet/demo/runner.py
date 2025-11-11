@@ -392,6 +392,7 @@ class DemoRunner:
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
             embed_dim=self.hamlet_config.exploration.embed_dim,
+            rnd_training_batch_size=self.hamlet_config.training.batch_size,  # Use main batch_size from config
             initial_intrinsic_weight=self.hamlet_config.exploration.initial_intrinsic_weight,
             variance_threshold=self.hamlet_config.exploration.variance_threshold,
             min_survival_fraction=self.hamlet_config.exploration.min_survival_fraction,

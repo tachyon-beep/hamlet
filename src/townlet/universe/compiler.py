@@ -58,7 +58,7 @@ COMPILER_VERSION = "0.1.0"
 MAX_METERS = 100
 MAX_AFFORDANCES = 100
 MAX_CASCADES = 500
-MAX_ACTIONS = 50
+MAX_ACTIONS = 300  # Increased for discretized continuous actions (32×7 = 195+)
 MAX_VARIABLES = 200
 MAX_GRID_CELLS = 10000  # 100×100 maximum (DoS protection)
 MAX_CACHE_FILE_SIZE = 10 * 1024 * 1024  # 10MB (cache bomb protection)
@@ -394,6 +394,137 @@ class UniverseCompiler:
                     writable_by=["actions", "engine"],
                     default=position_default,
                     description=position_desc,
+                )
+            )
+
+            # Velocity tracking (movement delta from previous step)
+            # Enables agents to remember their movement direction and speed
+            variables.extend(
+                [
+                    VariableDef(
+                        id="velocity_x",
+                        scope="agent",
+                        type="scalar",
+                        lifetime="tick",
+                        readable_by=["agent", "engine"],
+                        writable_by=["engine"],
+                        default=0.0,
+                        description="X-component of velocity (movement delta since last step)",
+                    ),
+                    VariableDef(
+                        id="velocity_y",
+                        scope="agent",
+                        type="scalar",
+                        lifetime="tick",
+                        readable_by=["agent", "engine"],
+                        writable_by=["engine"],
+                        default=0.0,
+                        description="Y-component of velocity (movement delta since last step)",
+                    ),
+                ]
+            )
+
+            # 3D velocity component
+            if is_3d:
+                variables.append(
+                    VariableDef(
+                        id="velocity_z",
+                        scope="agent",
+                        type="scalar",
+                        lifetime="tick",
+                        readable_by=["agent", "engine"],
+                        writable_by=["engine"],
+                        default=0.0,
+                        description="Z-component of velocity (movement delta since last step)",
+                    )
+                )
+
+            # Velocity magnitude (speed)
+            variables.append(
+                VariableDef(
+                    id="velocity_magnitude",
+                    scope="agent",
+                    type="scalar",
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=0.0,
+                    description="Speed (magnitude of velocity vector)",
+                )
+            )
+
+        elif substrate.type in ("continuous", "continuousnd"):
+            # Continuous substrates: position + velocity (no grid encoding)
+            position_dims = self._infer_position_dim(substrate)
+
+            variables.append(
+                VariableDef(
+                    id="position",
+                    scope="agent",
+                    type="vecNf",
+                    dims=position_dims,
+                    lifetime="episode",
+                    readable_by=["agent", "engine", "acs"],
+                    writable_by=["actions", "engine"],
+                    default=[0.0] * position_dims,
+                    description=f"Agent position in {position_dims}D continuous space",
+                )
+            )
+
+            # Velocity tracking for continuous substrates
+            if position_dims >= 1:
+                variables.append(
+                    VariableDef(
+                        id="velocity_x",
+                        scope="agent",
+                        type="scalar",
+                        lifetime="tick",
+                        readable_by=["agent", "engine"],
+                        writable_by=["engine"],
+                        default=0.0,
+                        description="X-component of velocity (continuous movement delta)",
+                    )
+                )
+
+            if position_dims >= 2:
+                variables.append(
+                    VariableDef(
+                        id="velocity_y",
+                        scope="agent",
+                        type="scalar",
+                        lifetime="tick",
+                        readable_by=["agent", "engine"],
+                        writable_by=["engine"],
+                        default=0.0,
+                        description="Y-component of velocity (continuous movement delta)",
+                    )
+                )
+
+            if position_dims >= 3:
+                variables.append(
+                    VariableDef(
+                        id="velocity_z",
+                        scope="agent",
+                        type="scalar",
+                        lifetime="tick",
+                        readable_by=["agent", "engine"],
+                        writable_by=["engine"],
+                        default=0.0,
+                        description="Z-component of velocity (continuous movement delta)",
+                    )
+                )
+
+            # Velocity magnitude
+            variables.append(
+                VariableDef(
+                    id="velocity_magnitude",
+                    scope="agent",
+                    type="scalar",
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=0.0,
+                    description="Speed (magnitude of velocity vector)",
                 )
             )
 
@@ -1747,10 +1878,34 @@ class UniverseCompiler:
         return universe
 
     def _derive_grid_dimensions(self, substrate: SubstrateConfig) -> tuple[int | None, int | None]:
+        """Calculate grid dimensions for metadata.
+
+        Returns:
+            (grid_size, grid_cells): For square grids, grid_size=width.
+                                     For non-square or non-grid substrates, returns (None, None).
+        """
         if substrate.type == "grid" and substrate.grid is not None:
             width = substrate.grid.width
             height = substrate.grid.height
-            return width, width * height
+
+            # Handle 3D grids
+            depth = getattr(substrate.grid, "depth", None)
+            if depth is not None:
+                # For 3D, grid_size is ambiguous (use width as representative)
+                grid_cells = width * height * depth
+                return width, grid_cells
+
+            # 2D grid
+            grid_cells = width * height
+
+            # Only return grid_size if square (for backward compatibility)
+            if width == height:
+                return width, grid_cells
+            else:
+                # Non-square grids: grid_size concept doesn't apply
+                return None, grid_cells
+
+        # Continuous, aspatial, gridnd: no grid_size concept
         return None, None
 
     def _label_substrate_type(self, substrate: SubstrateConfig) -> str:
@@ -1825,8 +1980,11 @@ class UniverseCompiler:
 
         # Filter based on POMDP mode (only keep grid_encoding OR local_window, not both)
         if raw_configs.environment.partial_observability:
+            # POMDP mode: use local window instead of full grid, exclude affordance_at_position
             exposures = [obs for obs in exposures if obs.get("source_variable") != "grid_encoding"]
+            exposures = [obs for obs in exposures if obs.get("source_variable") != "affordance_at_position"]
         else:
+            # Full observability: use grid encoding instead of local window
             exposures = [obs for obs in exposures if obs.get("source_variable") != "local_window"]
 
         return exposures

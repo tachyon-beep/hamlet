@@ -48,10 +48,13 @@ def test_stage5_computes_metadata_and_observation_spec(base_config_dir: Path, ba
 
 SNAPSHOT_CASES: dict[str, dict[str, object]] = {
     "L0_0_minimal": {
-        "expected_dim": 38,
+        "expected_dim": 41,
         "fields": [
             ("obs_grid_encoding", "agent", 9),
             ("obs_position", "agent", 2),
+            ("obs_velocity_x", "agent", 1),
+            ("obs_velocity_y", "agent", 1),
+            ("obs_velocity_magnitude", "agent", 1),
             ("obs_energy", "agent", 1),
             ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
@@ -68,10 +71,13 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L0_5_dual_resource": {
-        "expected_dim": 78,
+        "expected_dim": 57,  # Updated from 81: config changed from 7×7 to 5×5
         "fields": [
-            ("obs_grid_encoding", "agent", 49),
+            ("obs_grid_encoding", "agent", 25),  # Updated from 49: 5×5 = 25
             ("obs_position", "agent", 2),
+            ("obs_velocity_x", "agent", 1),
+            ("obs_velocity_y", "agent", 1),
+            ("obs_velocity_magnitude", "agent", 1),
             ("obs_energy", "agent", 1),
             ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
@@ -88,10 +94,13 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L1_full_observability": {
-        "expected_dim": 93,
+        "expected_dim": 96,
         "fields": [
             ("obs_grid_encoding", "agent", 64),
             ("obs_position", "agent", 2),
+            ("obs_velocity_x", "agent", 1),
+            ("obs_velocity_y", "agent", 1),
+            ("obs_velocity_magnitude", "agent", 1),
             ("obs_energy", "agent", 1),
             ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
@@ -108,10 +117,13 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L2_partial_observability": {
-        "expected_dim": 33,
+        "expected_dim": 42,
         "fields": [
-            ("obs_local_window", "agent", 4),
+            ("obs_local_window", "agent", 25),  # 5×5 POMDP window (vision_range=2)
             ("obs_position", "agent", 2),
+            ("obs_velocity_x", "agent", 1),  # NEW: velocity observations
+            ("obs_velocity_y", "agent", 1),
+            ("obs_velocity_magnitude", "agent", 1),
             ("obs_energy", "agent", 1),
             ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
@@ -120,7 +132,7 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
             ("obs_social", "agent", 1),
             ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            ("obs_affordance_at_position", "agent", 15),
+            # NOTE: affordance_at_position excluded in POMDP mode (redundant with local_window)
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
             ("obs_interaction_progress", "agent", 1),
@@ -128,10 +140,13 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L3_temporal_mechanics": {
-        "expected_dim": 33,
+        "expected_dim": 42,
         "fields": [
-            ("obs_local_window", "agent", 4),
+            ("obs_local_window", "agent", 25),  # 5×5 POMDP window (vision_range=2)
             ("obs_position", "agent", 2),
+            ("obs_velocity_x", "agent", 1),  # NEW: velocity observations
+            ("obs_velocity_y", "agent", 1),
+            ("obs_velocity_magnitude", "agent", 1),
             ("obs_energy", "agent", 1),
             ("obs_hygiene", "agent", 1),
             ("obs_satiation", "agent", 1),
@@ -140,7 +155,7 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
             ("obs_social", "agent", 1),
             ("obs_health", "agent", 1),
             ("obs_fitness", "agent", 1),
-            ("obs_affordance_at_position", "agent", 15),
+            # NOTE: affordance_at_position excluded in POMDP mode (redundant with local_window)
             ("obs_time_sin", "global", 1),
             ("obs_time_cos", "global", 1),
             ("obs_interaction_progress", "agent", 1),

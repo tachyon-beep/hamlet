@@ -107,14 +107,19 @@ def test_env_observation_dim_unchanged(cpu_env_factory, config_name):
     env = cpu_env_factory(config_dir=config_path, num_agents=1)
 
     # Calculate expected observation dimension based on observability mode
+    # Note: VFS adds velocity variables (velocity_x, velocity_y, velocity_magnitude)
+    velocity_dims = 3  # Grid2D velocity components
+
     if env.partial_observability:
-        # POMDP: local_window + position + meters + affordances + temporal
+        # POMDP: local_window + position + velocity + meters + affordances + temporal
         window_size = 2 * env.vision_range + 1
         local_window_dim = window_size**env.substrate.position_dim
-        expected_obs_dim = local_window_dim + env.substrate.position_dim + env.meter_count + (env.num_affordance_types + 1) + 4
+        expected_obs_dim = (
+            local_window_dim + env.substrate.position_dim + velocity_dims + env.meter_count + (env.num_affordance_types + 1) + 4
+        )
     else:
-        # Full observability: grid_encoding + position + meters + affordances + temporal
-        expected_obs_dim = env.substrate.get_observation_dim() + env.meter_count + (env.num_affordance_types + 1) + 4
+        # Full observability: grid_encoding + position + velocity + meters + affordances + temporal
+        expected_obs_dim = env.substrate.get_observation_dim() + velocity_dims + env.meter_count + (env.num_affordance_types + 1) + 4
 
     # Observation dimension should match expected breakdown
     assert env.observation_dim == expected_obs_dim
@@ -128,7 +133,7 @@ def test_env_observation_dim_unchanged(cpu_env_factory, config_name):
     "config_name,expected_grid_size",
     [
         ("L0_0_minimal", 3),
-        ("L0_5_dual_resource", 7),
+        ("L0_5_dual_resource", 5),  # Updated from 7: config changed to 5×5
         ("L1_full_observability", 8),
         ("L2_partial_observability", 8),
         ("L3_temporal_mechanics", 8),

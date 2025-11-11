@@ -83,6 +83,7 @@ class SubstrateFactory:
                     interaction_radius=config.continuous.interaction_radius,
                     distance_metric=config.continuous.distance_metric,
                     observation_encoding=config.continuous.observation_encoding,  # NEW: Phase 5C
+                    action_discretization=config.continuous.action_discretization,  # NEW: Discretized actions
                 )
 
             elif config.continuous.dimensions == 2:
@@ -97,6 +98,7 @@ class SubstrateFactory:
                     interaction_radius=config.continuous.interaction_radius,
                     distance_metric=config.continuous.distance_metric,
                     observation_encoding=config.continuous.observation_encoding,  # NEW: Phase 5C
+                    action_discretization=config.continuous.action_discretization,  # NEW: Discretized actions
                 )
 
             elif config.continuous.dimensions == 3:
@@ -113,6 +115,7 @@ class SubstrateFactory:
                     interaction_radius=config.continuous.interaction_radius,
                     distance_metric=config.continuous.distance_metric,
                     observation_encoding=config.continuous.observation_encoding,  # NEW: Phase 5C
+                    action_discretization=config.continuous.action_discretization,  # NEW: Discretized actions
                 )
             else:
                 raise ValueError(f"Unsupported continuous dimensions: {config.continuous.dimensions}")

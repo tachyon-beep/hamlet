@@ -263,7 +263,7 @@ def test_gridnd_config_validates_yaml_with_topology():
     "config_name,expected_width,expected_height,expected_obs_grid_dim",
     [
         ("L0_0_minimal", 3, 3, 9),  # 3×3 = 9
-        ("L0_5_dual_resource", 7, 7, 49),  # 7×7 = 49
+        ("L0_5_dual_resource", 5, 5, 25),  # 5×5 = 25 (updated to match substrate.yaml)
         ("L1_full_observability", 8, 8, 64),  # 8×8 = 64
         ("L2_partial_observability", 8, 8, 64),  # 8×8 = 64
         ("L3_temporal_mechanics", 8, 8, 64),  # 8×8 = 64

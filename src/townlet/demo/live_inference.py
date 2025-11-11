@@ -314,6 +314,7 @@ class LiveInferenceServer:
         self.exploration = AdaptiveIntrinsicExploration(
             obs_dim=obs_dim,
             embed_dim=exploration_cfg.embed_dim,
+            rnd_training_batch_size=training_cfg.batch_size,  # Use main batch_size from config
             initial_intrinsic_weight=exploration_cfg.initial_intrinsic_weight,
             variance_threshold=exploration_cfg.variance_threshold,
             survival_window=exploration_cfg.survival_window,
