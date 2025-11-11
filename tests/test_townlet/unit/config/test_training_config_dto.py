@@ -28,6 +28,7 @@ class TestTrainingConfigValidation:
             target_update_frequency=100,
             batch_size=64,
             max_grad_norm=10.0,
+            use_double_dqn=False,
             epsilon_start=1.0,
             epsilon_decay=0.995,
             epsilon_min=0.01,
@@ -48,6 +49,7 @@ class TestTrainingConfigValidation:
                 target_update_frequency=100,
                 batch_size=64,
                 max_grad_norm=10.0,
+                use_double_dqn=False,
                 epsilon_start=1.0,
                 epsilon_decay=0.995,
                 epsilon_min=0.01,
@@ -64,6 +66,7 @@ class TestTrainingConfigValidation:
                 target_update_frequency=100,
                 batch_size=64,
                 max_grad_norm=10.0,
+                use_double_dqn=False,
                 epsilon_start=1.0,
                 epsilon_decay=0.995,
                 epsilon_min=0.01,
@@ -80,6 +83,7 @@ class TestTrainingConfigValidation:
                 target_update_frequency=100,
                 batch_size=64,
                 max_grad_norm=10.0,
+                use_double_dqn=False,
                 epsilon_start=1.0,
                 epsilon_decay=0.995,
                 epsilon_min=0.01,
@@ -96,6 +100,7 @@ class TestTrainingConfigValidation:
                 target_update_frequency=100,
                 batch_size=64,
                 max_grad_norm=10.0,
+                use_double_dqn=False,
                 epsilon_start=1.5,  # Out of range
                 epsilon_decay=0.995,
                 epsilon_min=0.01,
@@ -112,6 +117,7 @@ class TestTrainingConfigValidation:
                 target_update_frequency=100,
                 batch_size=64,
                 max_grad_norm=10.0,
+                use_double_dqn=False,
                 epsilon_start=1.0,
                 epsilon_decay=1.0,  # Must be lt=1.0
                 epsilon_min=0.01,
@@ -128,6 +134,7 @@ class TestTrainingConfigValidation:
                 target_update_frequency=100,
                 batch_size=64,
                 max_grad_norm=10.0,
+                use_double_dqn=False,
                 epsilon_start=0.01,  # Less than min
                 epsilon_decay=0.995,
                 epsilon_min=0.1,  # Greater than start
@@ -138,6 +145,81 @@ class TestTrainingConfigValidation:
         assert "epsilon_start" in error
         assert "epsilon_min" in error
 
+
+class TestDoubleDQNConfiguration:
+    """Test Double DQN configuration field."""
+
+    def test_use_double_dqn_field_required(self):
+        """use_double_dqn must be explicitly specified (no defaults)."""
+        with pytest.raises(ValidationError) as exc_info:
+            TrainingConfig(
+                device="cuda",
+                max_episodes=5000,
+                train_frequency=4,
+                target_update_frequency=100,
+                batch_size=64,
+                max_grad_norm=10.0,
+                epsilon_start=1.0,
+                epsilon_decay=0.995,
+                epsilon_min=0.01,
+                sequence_length=8,
+                # Missing: use_double_dqn
+            )
+
+        error = str(exc_info.value)
+        assert "use_double_dqn" in error.lower()
+
+    def test_use_double_dqn_accepts_true(self):
+        """use_double_dqn=True enables Double DQN."""
+        config = TrainingConfig(
+            device="cuda",
+            max_episodes=5000,
+            train_frequency=4,
+            target_update_frequency=100,
+            batch_size=64,
+            max_grad_norm=10.0,
+            epsilon_start=1.0,
+            epsilon_decay=0.995,
+            epsilon_min=0.01,
+            sequence_length=8,
+            use_double_dqn=True,
+        )
+        assert config.use_double_dqn is True
+
+    def test_use_double_dqn_accepts_false(self):
+        """use_double_dqn=False uses vanilla DQN."""
+        config = TrainingConfig(
+            device="cuda",
+            max_episodes=5000,
+            train_frequency=4,
+            target_update_frequency=100,
+            batch_size=64,
+            max_grad_norm=10.0,
+            epsilon_start=1.0,
+            epsilon_decay=0.995,
+            epsilon_min=0.01,
+            sequence_length=8,
+            use_double_dqn=False,
+        )
+        assert config.use_double_dqn is False
+
+    def test_use_double_dqn_rejects_non_bool(self):
+        """use_double_dqn must be bool, not invalid string."""
+        with pytest.raises(ValidationError):
+            TrainingConfig(
+                device="cuda",
+                max_episodes=5000,
+                train_frequency=4,
+                target_update_frequency=100,
+                batch_size=64,
+                max_grad_norm=10.0,
+                epsilon_start=1.0,
+                epsilon_decay=0.995,
+                epsilon_min=0.01,
+                sequence_length=8,
+                use_double_dqn="invalid",  # Invalid string that can't be coerced
+            )
+
     def test_enabled_actions_must_be_unique(self):
         base_kwargs = dict(
             device="cuda",
@@ -146,6 +228,7 @@ class TestTrainingConfigValidation:
             target_update_frequency=32,
             batch_size=16,
             max_grad_norm=10.0,
+            use_double_dqn=False,
             epsilon_start=1.0,
             epsilon_decay=0.995,
             epsilon_min=0.1,
@@ -165,6 +248,7 @@ class TestTrainingConfigValidation:
             target_update_frequency=32,
             batch_size=16,
             max_grad_norm=10.0,
+            use_double_dqn=False,
             epsilon_start=1.0,
             epsilon_decay=0.995,
             epsilon_min=0.1,
@@ -193,6 +277,7 @@ class TestTrainingConfigWarnings:
             target_update_frequency=100,
             batch_size=64,
             max_grad_norm=10.0,
+            use_double_dqn=False,
             epsilon_start=1.0,
             epsilon_decay=0.9995,  # Very slow
             epsilon_min=0.01,
@@ -219,6 +304,7 @@ class TestTrainingConfigWarnings:
             target_update_frequency=100,
             batch_size=64,
             max_grad_norm=10.0,
+            use_double_dqn=False,
             epsilon_start=1.0,
             epsilon_decay=0.9,  # Very fast
             epsilon_min=0.01,
@@ -248,6 +334,7 @@ training:
   target_update_frequency: 100
   batch_size: 64
   max_grad_norm: 10.0
+  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
@@ -296,6 +383,7 @@ training:
   target_update_frequency: 100
   batch_size: 64
   max_grad_norm: 10.0
+  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
@@ -321,6 +409,7 @@ training:
   target_update_frequency: 100
   batch_size: 32
   max_grad_norm: 10.0
+  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.99
   epsilon_min: 0.01
@@ -344,6 +433,7 @@ training:
   target_update_frequency: 100
   batch_size: 64
   max_grad_norm: 10.0
+  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01

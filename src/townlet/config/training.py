@@ -35,6 +35,7 @@ class TrainingConfig(BaseModel):
         ...     target_update_frequency=100,
         ...     batch_size=64,
         ...     max_grad_norm=10.0,
+        ...     use_double_dqn=True,
         ...     epsilon_start=1.0,
         ...     epsilon_decay=0.995,
         ...     epsilon_min=0.01,
@@ -55,6 +56,16 @@ class TrainingConfig(BaseModel):
     target_update_frequency: int = Field(gt=0, description="Update target network every N training steps")
     batch_size: int = Field(gt=0, description="Experience replay batch size")
     max_grad_norm: float = Field(gt=0, description="Gradient clipping threshold (prevents exploding gradients)")
+
+    # Q-learning algorithm variant (REQUIRED)
+    use_double_dqn: bool = Field(
+        description=(
+            "Use Double DQN algorithm (van Hasselt et al. 2016) instead of vanilla DQN. "
+            "Double DQN reduces Q-value overestimation by using online network for action selection. "
+            "True: Q_target = r + γ * Q_target(s', argmax_a Q_online(s', a)) [Double DQN] "
+            "False: Q_target = r + γ * max_a Q_target(s', a) [Vanilla DQN]"
+        )
+    )
 
     # Epsilon-greedy exploration (ALL REQUIRED)
     epsilon_start: float = Field(ge=0.0, le=1.0, description="Initial exploration rate (1.0 = 100% random)")
