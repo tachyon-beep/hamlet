@@ -728,9 +728,19 @@ class VectorizedPopulation(PopulationManager):
                 self._finalize_episode(idx, survival_time)
 
         # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
-        total_rewards = rewards + intrinsic_rewards * (
-            self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0
-        )
+        # Use per-agent intrinsic weights from AdaptiveRewardStrategy if available,
+        # otherwise fall back to global weight from AdaptiveIntrinsicExploration
+        if hasattr(envs, "intrinsic_weights") and envs.intrinsic_weights is not None:
+            # Per-agent weights from AdaptiveRewardStrategy (crisis suppression)
+            intrinsic_weight_tensor = envs.intrinsic_weights
+        elif isinstance(self.exploration, AdaptiveIntrinsicExploration):
+            # Global weight from AdaptiveIntrinsicExploration (performance-based annealing)
+            intrinsic_weight_tensor = torch.full_like(rewards, self.exploration.get_intrinsic_weight())
+        else:
+            # Default: full exploration weight
+            intrinsic_weight_tensor = torch.ones_like(rewards)
+
+        total_rewards = rewards + intrinsic_rewards * intrinsic_weight_tensor
 
         # 10. Construct and return batched agent state
         # Add Q-values to info for recording (clone to CPU to avoid GPU memory issues)
