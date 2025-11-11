@@ -161,6 +161,25 @@ class ObservationField(BaseModel):
         description="Optional normalization to apply before exposing",
     )
 
+    # NEW FIELDS for QUICK-05: Structured Observation Masking
+    semantic_type: Literal["bars", "spatial", "affordance", "temporal", "custom"] = Field(
+        default="custom",
+        description=(
+            "Semantic grouping for structured encoders. "
+            "bars: meter values, spatial: position/grid, affordance: affordance state, "
+            "temporal: time/progress, custom: user-defined variables"
+        ),
+    )
+
+    curriculum_active: bool = Field(
+        default=True,
+        description=(
+            "Whether this field is active in current curriculum level. "
+            "False indicates padding dimensions that should be masked out during training. "
+            "Used by structured encoders and RND to ignore inactive affordances/meters."
+        ),
+    )
+
 
 class VariableDef(BaseModel):
     """Variable definition for VFS.
