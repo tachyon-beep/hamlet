@@ -232,7 +232,7 @@ See `docs/config-schemas/enabled_actions.md` for details.
 
 ## Drive As Code (DAC)
 
-**Status**: PRODUCTION (TASK-004C Complete)
+**Status**: ✅ PRODUCTION - Fully Integrated (TASK-004C Complete, Runtime Integration Complete)
 
 **Purpose**: Declarative reward function system for HAMLET environments
 
@@ -250,7 +250,12 @@ configs/<level>/
 └── variables_reference.yaml
 ```
 
-**Architecture**: YAML Config → Pydantic DTOs → Compiler Validation → Runtime Execution
+**Architecture**: All reward logic defined in `drive_as_code.yaml` → compiled by UAC → executed by DACEngine in environment. RewardStrategy classes fully removed.
+
+**Runtime Components**:
+- `drive_as_code.yaml`: Declarative reward configuration (required for all config packs)
+- `DACEngine`: Runtime reward computation engine with GPU-native operations (`src/townlet/environment/dac_engine.py`)
+- `drive_hash`: Checkpoint provenance tracking for reward function reproducibility
 
 **Formula**:
 ```
@@ -294,17 +299,19 @@ where:
 - **L0_5_dual_resource**: Fixes bug (constant_base_with_shaped_bonus)
 - **Comparison**: Students learn importance of reward structure design
 
-### Breaking Change
+### Breaking Changes
 
 **Old System** (DELETED):
 - `training.yaml: reward_strategy` field → REMOVED
-- `src/townlet/environment/reward_strategy.py` → DELETED
+- `src/townlet/environment/reward_strategy.py` → DELETED (583 lines removed)
 - Hardcoded Python reward classes → REPLACED
+- All legacy reward strategy tests → DELETED (349 lines removed)
 
 **New System** (REQUIRED):
 - `drive_as_code.yaml` required for all config packs
 - DACEngine compiles YAML → GPU computation graphs
 - Checkpoint provenance via `drive_hash` (SHA256 of DAC config)
+- All checkpoints must have matching `drive_hash`
 
 **Migration**: See `docs/guides/dac-migration.md`
 
@@ -339,7 +346,9 @@ drive_as_code:
 
 - **Config Reference**: `docs/config-schemas/drive_as_code.md`
 - **Migration Guide**: `docs/guides/dac-migration.md`
-- **Implementation Plan**: `docs/plans/2025-11-12-drive-as-code-implementation.md`
+- **Implementation Plans**:
+  - DAC implementation: `docs/plans/2025-11-12-drive-as-code-implementation.md`
+  - Runtime integration: `docs/plans/2025-11-12-dac-runtime-integration.md`
 
 ### Q-Learning Algorithm Variants
 
