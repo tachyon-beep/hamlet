@@ -274,49 +274,103 @@ class TriggerCondition(BaseModel):
 
 
 class ApproachRewardConfig(BaseModel):
-    """Encourage moving toward goals when needed.
+    """Reward agents for moving closer to target affordance.
 
-    Gives bonus reward for moving closer to target affordance when trigger condition is met.
+    Gives distance-based bonus for proximity to target affordance.
 
     Example:
         >>> approach_bed = ApproachRewardConfig(
         ...     type="approach_reward",
+        ...     weight=0.5,
         ...     target_affordance="Bed",
-        ...     trigger=TriggerCondition(source="bar", name="energy", below=0.3),
-        ...     bonus=1.0,
-        ...     decay_with_distance=True,
+        ...     max_distance=10.0,
         ... )
     """
 
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["approach_reward"]
+    weight: float = Field(gt=0.0, description="Bonus weight/magnitude")
     target_affordance: str = Field(description="Affordance to approach")
-    trigger: TriggerCondition = Field(description="When to apply this bonus")
-    bonus: float = Field(description="Bonus magnitude")
-    decay_with_distance: bool = Field(default=True, description="Reduce bonus with distance")
+    max_distance: float = Field(gt=0.0, description="Maximum distance for bonus (beyond this, bonus=0)")
 
 
 class CompletionBonusConfig(BaseModel):
-    """Reward for completing affordances.
+    """Fixed bonus when agent completes interaction with affordance.
 
-    Gives bonus when agent finishes interacting with affordance.
+    Gives bonus when agent finishes interacting with specific affordance.
 
     Example:
         >>> completion = CompletionBonusConfig(
         ...     type="completion_bonus",
-        ...     affordances="all",
-        ...     bonus=1.0,
-        ...     scale_with_duration=True,
+        ...     weight=1.0,
+        ...     affordance="Bed",
         ... )
     """
 
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["completion_bonus"]
-    affordances: Literal["all"] | list[str] = Field(description="Which affordances to reward")
-    bonus: float = Field(description="Bonus magnitude")
-    scale_with_duration: bool = Field(default=True, description="Scale bonus by interaction duration")
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    affordance: str = Field(description="Affordance to reward completion for")
+
+
+class EfficiencyBonusConfig(BaseModel):
+    """Bonus for maintaining bar above threshold.
+
+    Encourages agents to keep resources in healthy ranges.
+
+    Example:
+        >>> efficiency = EfficiencyBonusConfig(
+        ...     type="efficiency_bonus",
+        ...     weight=0.5,
+        ...     bar="energy",
+        ...     threshold=0.7,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["efficiency_bonus"]
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    bar: str = Field(description="Bar to monitor")
+    threshold: float = Field(ge=0.0, le=1.0, description="Minimum value for bonus")
+
+
+class BarCondition(BaseModel):
+    """Condition on a bar value for state_achievement.
+
+    Example:
+        >>> cond = BarCondition(bar="energy", min_value=0.8)
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    bar: str = Field(description="Bar name")
+    min_value: float = Field(ge=0.0, le=1.0, description="Minimum required value")
+
+
+class StateAchievementConfig(BaseModel):
+    """Bonus when ALL specified bar conditions are met.
+
+    Rewards agents for achieving target state (all bars above thresholds).
+
+    Example:
+        >>> state_goal = StateAchievementConfig(
+        ...     type="state_achievement",
+        ...     weight=2.0,
+        ...     conditions=[
+        ...         BarCondition(bar="energy", min_value=0.8),
+        ...         BarCondition(bar="health", min_value=0.8),
+        ...     ],
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["state_achievement"]
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    conditions: list[BarCondition] = Field(min_length=1, description="All conditions must be met")
 
 
 class VFSVariableBonusConfig(BaseModel):
@@ -340,7 +394,7 @@ class VFSVariableBonusConfig(BaseModel):
 
 
 # Union type for all shaping bonuses (expand as more types are added)
-ShapingBonusConfig = ApproachRewardConfig | CompletionBonusConfig | VFSVariableBonusConfig
+ShapingBonusConfig = ApproachRewardConfig | CompletionBonusConfig | EfficiencyBonusConfig | StateAchievementConfig | VFSVariableBonusConfig
 
 
 class CompositionConfig(BaseModel):

@@ -939,3 +939,62 @@ class TestExtrinsicStrategies:
         # [1.0 + 1.5*0.5 + 0.5*(0.5-0.5), 1.0 + 1.5*0.8 + 0.5*(0.6-0.5), ...]
         expected = torch.tensor([1.75, 2.25, 1.25, 2.75], device=device)
         assert torch.allclose(extrinsic, expected, atol=1e-5)
+
+
+class TestShapingBonuses:
+    """Test shaping bonus compilation and evaluation."""
+
+    def test_approach_reward_bonus(self):
+        """approach_reward bonus rewards moving toward target affordance."""
+        from townlet.config.drive_as_code import ApproachRewardConfig
+
+        device = torch.device("cpu")
+        num_agents = 3
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                ApproachRewardConfig(
+                    type="approach_reward",
+                    weight=0.5,
+                    target_affordance="Bed",
+                    max_distance=10.0,
+                )
+            ],
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: distance=2, Agent 1: distance=5, Agent 2: distance≈19 (far/clamped)
+        agent_positions = torch.tensor([[1.0, 1.0], [8.0, 1.0], [20.0, 20.0]], device=device)
+        affordance_positions = {"Bed": torch.tensor([3.0, 1.0], device=device)}
+
+        # Calculate shaping bonuses
+        bonuses = torch.zeros(num_agents, device=device)
+        for shaping_fn in engine.shaping_fns:
+            bonuses += shaping_fn(agent_positions=agent_positions, affordance_positions=affordance_positions)
+
+        # Agent 0: distance=2 → bonus = 0.5 * (1 - 2/10) = 0.4
+        # Agent 1: distance=5 → bonus = 0.5 * (1 - 5/10) = 0.25
+        # Agent 2: distance≈24 → bonus = 0.0 (clamped)
+        assert torch.isclose(bonuses[0], torch.tensor(0.4, device=device), atol=1e-5)
+        assert torch.isclose(bonuses[1], torch.tensor(0.25, device=device), atol=1e-5)
+        assert bonuses[2] == 0.0

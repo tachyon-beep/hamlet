@@ -383,8 +383,46 @@ class DACEngine:
         Returns:
             List of shaping bonus functions
         """
-        # TODO: Implement in later sub-phase
-        return []
+        shaping_fns = []
+
+        for bonus_config in self.dac_config.shaping:
+            if bonus_config.type == "approach_reward":
+                # Use closure factory to capture config correctly
+                def create_approach_reward_fn(config):
+                    weight = config.weight
+                    target_affordance = config.target_affordance
+                    max_distance = config.max_distance
+
+                    def compute_approach_reward(**kwargs) -> torch.Tensor:
+                        """Compute approach reward bonus for all agents."""
+                        # Extract kwargs
+                        agent_positions = kwargs.get("agent_positions")
+                        affordance_positions = kwargs.get("affordance_positions", {})
+
+                        # Initialize bonus to zeros
+                        bonus = torch.zeros(self.num_agents, device=self.device)
+
+                        # Check if target affordance exists
+                        if target_affordance not in affordance_positions:
+                            return bonus
+
+                        # Get target position
+                        target_pos = affordance_positions[target_affordance]
+
+                        # Calculate distances using Euclidean norm
+                        distances = torch.norm(agent_positions - target_pos, dim=1)
+
+                        # Compute bonus: weight * (1.0 - distance / max_distance), clamped to [0, weight]
+                        bonus = weight * (1.0 - distances / max_distance)
+                        bonus = torch.clamp(bonus, min=0.0, max=weight)
+
+                        return bonus
+
+                    return compute_approach_reward
+
+                shaping_fns.append(create_approach_reward_fn(bonus_config))
+
+        return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:
         """Get meter index for a bar ID.
