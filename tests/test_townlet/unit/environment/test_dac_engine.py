@@ -614,3 +614,124 @@ class TestExtrinsicStrategies:
             device=device,
         )
         assert torch.allclose(extrinsic, expected, atol=1e-4)
+
+    def test_all_strategies_handle_dead_agents(self):
+        """All extrinsic strategies return 0.0 for dead agents."""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Test multiplicative strategy
+        dac_multiplicative = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=2.0,
+                bars=["energy"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+        engine = DACEngine(dac_multiplicative, vfs_registry, device, num_agents)
+
+        # Agents 0,1 alive with high energy, agents 2,3 dead with high energy
+        meters = torch.tensor([[1.0], [0.8], [1.0], [0.9]], device=device)
+        dones = torch.tensor([False, False, True, True], device=device)
+        rewards = engine.extrinsic_fn(meters, dones)
+
+        # Alive agents get rewards, dead agents get 0.0
+        assert rewards[0] > 0.0  # Alive agent with energy=1.0
+        assert rewards[1] > 0.0  # Alive agent with energy=0.8
+        assert rewards[2] == 0.0  # Dead agent (should be 0.0 despite energy=1.0)
+        assert rewards[3] == 0.0  # Dead agent (should be 0.0 despite energy=0.9)
+
+        # Test constant_base_with_shaped_bonus strategy
+        dac_constant = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="constant_base_with_shaped_bonus",
+                base_reward=1.0,
+                bar_bonuses=[BarBonusConfig(bar="energy", center=0.5, scale=0.5)],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+        engine = DACEngine(dac_constant, vfs_registry, device, num_agents)
+        rewards = engine.extrinsic_fn(meters, dones)
+
+        assert rewards[0] > 0.0
+        assert rewards[1] > 0.0
+        assert rewards[2] == 0.0
+        assert rewards[3] == 0.0
+
+        # Test additive_unweighted strategy
+        dac_additive = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="additive_unweighted",
+                base=0.5,
+                bars=["energy"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+        engine = DACEngine(dac_additive, vfs_registry, device, num_agents)
+        rewards = engine.extrinsic_fn(meters, dones)
+
+        assert rewards[0] > 0.0
+        assert rewards[1] > 0.0
+        assert rewards[2] == 0.0
+        assert rewards[3] == 0.0
+
+        # Test weighted_sum strategy
+        dac_weighted = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="weighted_sum",
+                base=0.0,
+                bar_bonuses=[BarBonusConfig(bar="energy", center=0.0, scale=2.0)],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+        engine = DACEngine(dac_weighted, vfs_registry, device, num_agents)
+        rewards = engine.extrinsic_fn(meters, dones)
+
+        assert rewards[0] > 0.0
+        assert rewards[1] > 0.0
+        assert rewards[2] == 0.0
+        assert rewards[3] == 0.0
+
+        # Test polynomial strategy
+        dac_polynomial = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="polynomial",
+                base=0.0,
+                bar_bonuses=[BarBonusConfig(bar="energy", center=0.5, scale=2.0)],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+        engine = DACEngine(dac_polynomial, vfs_registry, device, num_agents)
+        rewards = engine.extrinsic_fn(meters, dones)
+
+        assert rewards[0] > 0.0
+        assert rewards[1] > 0.0
+        assert rewards[2] == 0.0
+        assert rewards[3] == 0.0
