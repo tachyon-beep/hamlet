@@ -249,3 +249,97 @@ class TestModifierCompilation:
 
         assert "social_boost" in engine.modifiers
         assert callable(engine.modifiers["social_boost"])
+
+
+class TestExtrinsicStrategies:
+    """Test extrinsic reward strategy compilation."""
+
+    def test_multiplicative_strategy(self):
+        """Multiplicative strategy: reward = base * bar1 * bar2 * ..."""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=2.0,
+                bars=["energy"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Create meter values: [0.5, 0.8, 1.0, 0.0]
+        meters = torch.tensor([[0.5], [0.8], [1.0], [0.0]], device=device)
+        dones = torch.tensor([False, False, False, True], device=device)
+
+        # Calculate extrinsic rewards
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: base * energy (2.0 * [0.5, 0.8, 1.0, 0.0])
+        # Dead agents get 0.0
+        expected = torch.tensor([1.0, 1.6, 2.0, 0.0], device=device)
+        assert torch.allclose(extrinsic, expected)
+
+    def test_multiplicative_multiple_bars(self):
+        """Multiplicative with multiple bars: reward = base * energy * health"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy", "health"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # meters: [energy, health]
+        meters = torch.tensor([[0.5, 0.8], [1.0, 1.0], [0.2, 0.5], [0.0, 1.0]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: 1.0 * energy * health
+        expected = torch.tensor([0.4, 1.0, 0.1, 0.0], device=device)
+        assert torch.allclose(extrinsic, expected, atol=1e-6)

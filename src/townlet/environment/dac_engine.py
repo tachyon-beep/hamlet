@@ -136,10 +136,33 @@ class DACEngine:
         """Compile extrinsic strategy into computation function.
 
         Returns:
-            Function that computes extrinsic rewards
+            Function that computes extrinsic rewards [num_agents]
         """
+        strategy = self.dac_config.extrinsic
 
-        # TODO: Implement in next sub-phase
+        if strategy.type == "multiplicative":
+            # reward = base * bar1 * bar2 * ...
+            base = strategy.base if strategy.base is not None else 1.0
+            bar_ids = strategy.bars
+
+            def compute_multiplicative(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Multiplicative: reward = base * product(bars)"""
+                # Start with base
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                # Multiply by each bar
+                for bar_id in bar_ids:
+                    bar_idx = self._get_bar_index(bar_id)
+                    reward = reward * meters[:, bar_idx]
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_multiplicative
+
+        # Fallback for unimplemented strategies
         def placeholder(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
             return torch.zeros(self.num_agents, device=self.device)
 
