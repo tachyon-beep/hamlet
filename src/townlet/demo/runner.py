@@ -119,6 +119,10 @@ class DemoRunner:
         self.exploration = None
         self.recorder = None  # Episode recorder (initialized if recording enabled)
 
+        # TASK-005 Phase 1: Brain As Code configuration (loaded in run() if brain.yaml exists)
+        self.brain_config: BrainConfig | None = None
+        self.brain_hash: str | None = None
+
         # Shutdown flag
         self.should_shutdown = False
         # Signal handlers only work in main thread
