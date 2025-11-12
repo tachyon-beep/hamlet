@@ -27,6 +27,7 @@ from townlet.vfs.registry import VariableRegistry
 
 if TYPE_CHECKING:
     from townlet.environment.action_config import ActionConfig, ActionSpaceConfig
+    from townlet.exploration.base import ExplorationStrategy
     from townlet.population.runtime_registry import AgentRuntimeRegistry
     from townlet.universe.compiled import CompiledUniverse
 
@@ -405,6 +406,9 @@ class VectorizedHamletEnv:
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
         self.intrinsic_weights = torch.ones(self.num_agents, dtype=torch.float32, device=self.device)  # Default: 1.0 (full exploration)
 
+        # Exploration module (optional, set by population or external code)
+        self.exploration_module: ExplorationStrategy | None = None
+
         # Temporal mechanics state
         self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
         self.last_interaction_affordance: list[str | None] = [None] * self.num_agents
@@ -428,6 +432,18 @@ class VectorizedHamletEnv:
     def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
         """Attach runtime registry for telemetry tracking."""
         self.runtime_registry = registry
+
+    def set_exploration_module(self, exploration: ExplorationStrategy) -> None:
+        """Set exploration module for intrinsic reward computation.
+
+        Args:
+            exploration: Exploration strategy (RND, ICM, epsilon-greedy, etc.)
+
+        Note:
+            This is typically called by VectorizedPopulation during initialization,
+            but can also be set manually for testing or custom training loops.
+        """
+        self.exploration_module = exploration
 
     def _get_optional_action_idx(self, action_name: str) -> int | None:
         """Return action index if available in composed action space."""
@@ -1199,8 +1215,14 @@ class VectorizedHamletEnv:
         Returns:
             rewards: [num_agents] final rewards
         """
-        # Gather intrinsic raw values (default to zeros if exploration not yet integrated)
-        intrinsic_raw = torch.zeros(self.num_agents, device=self.device)
+        # Gather intrinsic raw values from exploration module (if available)
+        if self.exploration_module is not None:
+            # Get current observations for intrinsic reward computation
+            observations = self._get_observations()
+            intrinsic_raw = self.exploration_module.compute_intrinsic_rewards(observations, update_stats=False)
+        else:
+            # Fallback to zeros if no exploration module is set
+            intrinsic_raw = torch.zeros(self.num_agents, device=self.device)
 
         # Gather additional context for shaping bonuses
         kwargs = {

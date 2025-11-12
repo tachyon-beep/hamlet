@@ -106,6 +106,9 @@ class VectorizedPopulation(PopulationManager):
         self.runtime_registry = AgentRuntimeRegistry(agent_ids=agent_ids, device=device)
         self.env.attach_runtime_registry(self.runtime_registry)
 
+        # Wire exploration module to environment for intrinsic reward computation
+        self.env.set_exploration_module(exploration)
+
         # Training metrics (for TensorBoard logging)
         self.last_td_error = 0.0
         self.last_loss = 0.0
