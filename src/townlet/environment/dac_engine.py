@@ -637,6 +637,40 @@ class DACEngine:
 
                 shaping_fns.append(create_timing_bonus_fn(bonus_config))
 
+            elif bonus_config.type == "economic_efficiency":
+                # Use closure factory to capture config correctly
+                def create_economic_efficiency_fn(config):
+                    weight = config.weight
+                    money_bar_id = config.money_bar
+                    min_balance = config.min_balance
+
+                    def compute_economic_efficiency(**kwargs) -> torch.Tensor:
+                        """Compute economic efficiency bonus for all agents."""
+                        # Extract kwargs
+                        meters = kwargs.get("meters")
+
+                        # Null check for missing kwarg
+                        if meters is None:
+                            return torch.zeros(self.num_agents, device=self.device)
+
+                        # Get money bar index
+                        # NOTE: This uses the flawed _get_bar_index() from Phase 3B
+                        # It will be fixed in Phase 3D when bar_index_map is added
+                        bar_idx = self._get_bar_index(money_bar_id)
+
+                        # Get money bar values
+                        money_values = meters[:, bar_idx]
+
+                        # Bonus if money >= min_balance
+                        above_threshold = money_values >= min_balance
+                        bonus = torch.where(above_threshold, weight, 0.0)
+
+                        return bonus
+
+                    return compute_economic_efficiency
+
+                shaping_fns.append(create_economic_efficiency_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:

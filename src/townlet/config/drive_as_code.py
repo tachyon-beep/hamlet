@@ -479,6 +479,28 @@ class TimingBonusConfig(BaseModel):
     time_ranges: list[TimeRange] = Field(min_length=1, description="Time windows with multipliers")
 
 
+class EconomicEfficiencyConfig(BaseModel):
+    """Bonus for maintaining money above threshold.
+
+    Rewards agents for financial responsibility and resource management.
+
+    Example:
+        >>> economic_bonus = EconomicEfficiencyConfig(
+        ...     type="economic_efficiency",
+        ...     weight=2.0,
+        ...     money_bar="money",
+        ...     min_balance=0.6,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["economic_efficiency"]
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    money_bar: str = Field(description="Money bar name")
+    min_balance: float = Field(ge=0.0, le=1.0, description="Minimum balance for bonus")
+
+
 # Union type for all shaping bonuses (expand as more types are added)
 ShapingBonusConfig = (
     ApproachRewardConfig
@@ -489,6 +511,7 @@ ShapingBonusConfig = (
     | StreakBonusConfig
     | DiversityBonusConfig
     | TimingBonusConfig
+    | EconomicEfficiencyConfig
 )
 
 

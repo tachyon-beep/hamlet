@@ -1335,6 +1335,64 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
+    def test_economic_efficiency(self):
+        """economic_efficiency rewards maintaining money above threshold."""
+        from townlet.config.drive_as_code import EconomicEfficiencyConfig
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy", "money"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                EconomicEfficiencyConfig(
+                    type="economic_efficiency",
+                    weight=3.0,
+                    money_bar="money",
+                    min_balance=0.5,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: money=0.8 (above), Agent 1: money=0.5 (at threshold),
+        # Agent 2: money=0.3 (below), Agent 3: money=0.0 (below)
+        meters = torch.tensor(
+            [
+                [1.0, 0.8],  # [energy, money]
+                [1.0, 0.5],
+                [1.0, 0.3],
+                [1.0, 0.0],
+            ],
+            device=device,
+        )
+
+        bonuses = engine.shaping_fns[0](meters=meters)
+
+        # Agent 0,1: money >= 0.5 → bonus = 3.0
+        # Agent 2,3: money < 0.5 → bonus = 0.0
+        assert bonuses[0] == 3.0
+        assert bonuses[1] == 3.0
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == 0.0
+
 
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
@@ -1706,4 +1764,48 @@ class TestShapingBonusEdgeCases:
         # Call with only last_action_affordance (missing current_hour)
         last_action_affordance = ["Bed", "Bed", "Bed"]
         bonuses = engine.shaping_fns[0](last_action_affordance=last_action_affordance)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_economic_efficiency_missing_kwarg(self):
+        """economic_efficiency returns zeros when meters missing."""
+        from townlet.config.drive_as_code import EconomicEfficiencyConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy", "money"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                EconomicEfficiencyConfig(
+                    type="economic_efficiency",
+                    weight=5.0,
+                    money_bar="money",
+                    min_balance=0.7,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing meters kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
