@@ -14,7 +14,10 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 
 from townlet.agent.brain_config import BrainConfig
+from townlet.agent.loss_factory import LossFactory
+from townlet.agent.network_factory import NetworkFactory
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork, StructuredQNetwork
+from townlet.agent.optimizer_factory import OptimizerFactory
 from townlet.curriculum.base import CurriculumManager
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
@@ -101,6 +104,15 @@ class VectorizedPopulation(PopulationManager):
         self.tb_logger = tb_logger
         self.brain_config = brain_config
 
+        # TASK-005 Phase 1: Validate brain_config constraints
+        if brain_config is not None:
+            if network_type != "simple":
+                raise ValueError(
+                    f"brain_config requires network_type='simple' in Phase 1. "
+                    f"Got network_type='{network_type}'. "
+                    f"Recurrent networks will be supported in Phase 2."
+                )
+
         # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
         if action_dim is None:
             action_dim = env.action_dim
@@ -122,7 +134,15 @@ class VectorizedPopulation(PopulationManager):
 
         # Q-network (shared across all agents for now)
         self.q_network: nn.Module
-        if network_type == "recurrent":
+        if brain_config is not None:
+            # TASK-005 Phase 1: Build network from brain_config using NetworkFactory
+            assert brain_config.architecture.type == "feedforward", "Phase 1 only supports feedforward"
+            self.q_network = NetworkFactory.build_feedforward(
+                config=brain_config.architecture.feedforward,
+                obs_dim=obs_dim,
+                action_dim=action_dim,
+            ).to(device)
+        elif network_type == "recurrent":
             self.q_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
@@ -145,7 +165,15 @@ class VectorizedPopulation(PopulationManager):
 
         # Target network (stabilises training for both feed-forward and recurrent agents)
         self.target_network: nn.Module
-        if self.is_recurrent:
+        if brain_config is not None:
+            # TASK-005 Phase 1: Build target network from brain_config using NetworkFactory
+            assert brain_config.architecture.type == "feedforward", "Phase 1 only supports feedforward"
+            self.target_network = NetworkFactory.build_feedforward(
+                config=brain_config.architecture.feedforward,
+                obs_dim=obs_dim,
+                action_dim=action_dim,
+            ).to(device)
+        elif self.is_recurrent:
             self.target_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
@@ -174,7 +202,23 @@ class VectorizedPopulation(PopulationManager):
         self.target_update_frequency = target_update_frequency
         self.training_step_counter = 0
 
-        self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
+        # Optimizer (from config or hardcoded)
+        if brain_config is not None:
+            # TASK-005 Phase 1: Build optimizer from brain_config using OptimizerFactory
+            self.optimizer = OptimizerFactory.build(
+                config=brain_config.optimizer,
+                parameters=self.q_network.parameters(),
+            )
+        else:
+            self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
+
+        # Loss function (from config or hardcoded)
+        # Note: Currently not used in train_batch() but stored for future use
+        if brain_config is not None:
+            # TASK-005 Phase 1: Build loss function from brain_config using LossFactory
+            self.loss_fn = LossFactory.build(config=brain_config.loss)
+        else:
+            self.loss_fn = nn.MSELoss()  # Default to MSE (matches current hardcoded behavior)
 
         # Replay buffer (dual system: sequential for recurrent, standard for feedforward)
         self.replay_buffer: ReplayBuffer | SequentialReplayBuffer

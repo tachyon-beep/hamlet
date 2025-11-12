@@ -163,3 +163,78 @@ class TestBrainConfigIntegration:
         )
 
         assert population.brain_config is simple_brain_config
+
+    def test_population_builds_network_from_brain_config(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+        simple_brain_config,
+    ):
+        """VectorizedPopulation should build Q-network from brain_config."""
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="simple",
+            brain_config=simple_brain_config,
+        )
+
+        # Network should be built from config (not hardcoded)
+        # Verify network architecture matches brain_config.architecture.feedforward
+        import torch.nn as nn
+
+        assert isinstance(population.q_network, nn.Sequential)
+        # Config has hidden_layers=[128, 64], so we expect:
+        # Linear(obs_dim -> 128), ReLU, Linear(128 -> 64), ReLU, Linear(64 -> action_dim)
+        # Total: 5 layers (2 linear + 2 activation + 1 output linear)
+        assert len(population.q_network) == 5
+
+    def test_population_builds_optimizer_from_brain_config(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+        simple_brain_config,
+    ):
+        """VectorizedPopulation should build optimizer from brain_config."""
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="simple",
+            brain_config=simple_brain_config,
+        )
+
+        # Optimizer should be Adam with config parameters
+        import torch.optim as optim
+
+        assert isinstance(population.optimizer, optim.Adam)
+        # Verify learning rate matches config
+        assert population.optimizer.param_groups[0]["lr"] == 0.001
+
+    def test_brain_config_requires_simple_network_type(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+        simple_brain_config,
+    ):
+        """brain_config requires network_type='simple' in Phase 1."""
+        with pytest.raises(ValueError, match="brain_config.*network_type.*simple"):
+            VectorizedPopulation(
+                env=basic_env,
+                curriculum=adversarial_curriculum,
+                exploration=epsilon_greedy_exploration,
+                agent_ids=["agent_0"],
+                device=cpu_device,
+                network_type="recurrent",  # Should fail!
+                brain_config=simple_brain_config,
+            )
