@@ -141,14 +141,27 @@ class VectorizedPopulation(PopulationManager):
         # Q-network (shared across all agents for now)
         self.q_network: nn.Module
         if brain_config is not None:
-            # TASK-005 Phase 1: Build network from brain_config using NetworkFactory
-            assert brain_config.architecture.type == "feedforward", "Phase 1 only supports feedforward"
-            assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
-            self.q_network = NetworkFactory.build_feedforward(
-                config=brain_config.architecture.feedforward,
-                obs_dim=obs_dim,
-                action_dim=action_dim,
-            ).to(device)
+            # TASK-005 Phase 2: Build network from brain_config (feedforward or recurrent)
+            if brain_config.architecture.type == "feedforward":
+                assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
+                self.q_network = NetworkFactory.build_feedforward(
+                    config=brain_config.architecture.feedforward,
+                    obs_dim=obs_dim,
+                    action_dim=action_dim,
+                ).to(device)
+            elif brain_config.architecture.type == "recurrent":
+                assert brain_config.architecture.recurrent is not None, "recurrent config must be present"
+                self.q_network = NetworkFactory.build_recurrent(
+                    config=brain_config.architecture.recurrent,
+                    action_dim=action_dim,
+                    window_size=vision_window_size,
+                    position_dim=env.substrate.position_dim,
+                    num_meters=env.meter_count,
+                    num_affordance_types=env.num_affordance_types,
+                ).to(device)
+                self.is_recurrent = True  # Enable recurrent mode
+            else:
+                raise ValueError(f"Unsupported architecture type: {brain_config.architecture.type}. " f"Supported: feedforward, recurrent")
         elif network_type == "recurrent":
             self.q_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
@@ -173,14 +186,26 @@ class VectorizedPopulation(PopulationManager):
         # Target network (stabilises training for both feed-forward and recurrent agents)
         self.target_network: nn.Module
         if brain_config is not None:
-            # TASK-005 Phase 1: Build target network from brain_config using NetworkFactory
-            assert brain_config.architecture.type == "feedforward", "Phase 1 only supports feedforward"
-            assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
-            self.target_network = NetworkFactory.build_feedforward(
-                config=brain_config.architecture.feedforward,
-                obs_dim=obs_dim,
-                action_dim=action_dim,
-            ).to(device)
+            # TASK-005 Phase 2: Build target network from brain_config (feedforward or recurrent)
+            if brain_config.architecture.type == "feedforward":
+                assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
+                self.target_network = NetworkFactory.build_feedforward(
+                    config=brain_config.architecture.feedforward,
+                    obs_dim=obs_dim,
+                    action_dim=action_dim,
+                ).to(device)
+            elif brain_config.architecture.type == "recurrent":
+                assert brain_config.architecture.recurrent is not None, "recurrent config must be present"
+                self.target_network = NetworkFactory.build_recurrent(
+                    config=brain_config.architecture.recurrent,
+                    action_dim=action_dim,
+                    window_size=vision_window_size,
+                    position_dim=env.substrate.position_dim,
+                    num_meters=env.meter_count,
+                    num_affordance_types=env.num_affordance_types,
+                ).to(device)
+            else:
+                raise ValueError(f"Unsupported architecture type: {brain_config.architecture.type}. " f"Supported: feedforward, recurrent")
         elif self.is_recurrent:
             self.target_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
@@ -210,15 +235,16 @@ class VectorizedPopulation(PopulationManager):
         self.target_update_frequency = target_update_frequency
         self.training_step_counter = 0
 
-        # Optimizer (from config or hardcoded)
+        # Optimizer and scheduler (from config or hardcoded)
         if brain_config is not None:
-            # TASK-005 Phase 1: Build optimizer from brain_config using OptimizerFactory
-            self.optimizer = OptimizerFactory.build(
+            # TASK-005 Phase 2: Build optimizer and scheduler from brain_config using OptimizerFactory
+            self.optimizer, self.scheduler = OptimizerFactory.build(
                 config=brain_config.optimizer,
                 parameters=self.q_network.parameters(),
             )
         else:
             self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
+            self.scheduler = None  # No scheduler when brain_config not used
 
         # Loss function (from config or hardcoded)
         # Note: Currently not used in train_batch() but stored for future use
@@ -727,6 +753,10 @@ class VectorizedPopulation(PopulationManager):
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
 
+                # Step scheduler if present (TASK-005 Phase 2)
+                if self.scheduler is not None:
+                    self.scheduler.step()
+
                 # Log network statistics to TensorBoard (every 100 training steps)
                 if self.tb_logger is not None and self.total_steps % 100 == 0:
                     for name, param in self.q_network.named_parameters():
@@ -776,6 +806,10 @@ class VectorizedPopulation(PopulationManager):
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
+
+                # Step scheduler if present (TASK-005 Phase 2)
+                if self.scheduler is not None:
+                    self.scheduler.step()
 
                 # Periodically sync target network for stability
                 self.training_step_counter += 1

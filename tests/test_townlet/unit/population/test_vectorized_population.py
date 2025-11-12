@@ -351,3 +351,334 @@ class TestBrainConfigIntegration:
         # Verify loss function is HuberLoss with correct delta
         assert isinstance(population.loss_fn, nn.HuberLoss)
         assert population.loss_fn.delta == 2.0
+
+
+class TestRecurrentNetworkSupport:
+    """Test recurrent network integration (Phase 2)."""
+
+    def test_population_builds_recurrent_network_from_brain_config(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """VectorizedPopulation should build RecurrentSpatialQNetwork from recurrent config."""
+        from townlet.agent.brain_config import (
+            CNNEncoderConfig,
+            LSTMConfig,
+            MLPEncoderConfig,
+            RecurrentConfig,
+        )
+        from townlet.agent.networks import RecurrentSpatialQNetwork
+
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test recurrent config",
+            architecture=ArchitectureConfig(
+                type="recurrent",
+                recurrent=RecurrentConfig(
+                    vision_encoder=CNNEncoderConfig(
+                        channels=[16, 32],
+                        kernel_sizes=[3, 3],
+                        strides=[1, 1],
+                        padding=[1, 1],
+                        activation="relu",
+                    ),
+                    position_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    meter_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    affordance_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    lstm=LSTMConfig(
+                        hidden_size=256,
+                        num_layers=1,
+                        dropout=0.0,
+                    ),
+                    q_head=MLPEncoderConfig(
+                        hidden_sizes=[128],
+                        activation="relu",
+                    ),
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.0001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
+            ),
+            loss=LossConfig(type="huber"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=True,
+            ),
+        )
+
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="simple",  # Should be ignored when brain_config present
+            brain_config=brain_config,
+        )
+
+        # Should build RecurrentSpatialQNetwork
+        assert isinstance(population.q_network, RecurrentSpatialQNetwork)
+        assert isinstance(population.target_network, RecurrentSpatialQNetwork)
+        assert population.is_recurrent is True
+
+    def test_recurrent_network_has_correct_dimensions(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """Recurrent network should have dimensions from config."""
+        from townlet.agent.brain_config import (
+            CNNEncoderConfig,
+            LSTMConfig,
+            MLPEncoderConfig,
+            RecurrentConfig,
+        )
+
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test recurrent dimensions",
+            architecture=ArchitectureConfig(
+                type="recurrent",
+                recurrent=RecurrentConfig(
+                    vision_encoder=CNNEncoderConfig(
+                        channels=[16, 32],
+                        kernel_sizes=[3, 3],
+                        strides=[1, 1],
+                        padding=[1, 1],
+                        activation="relu",
+                    ),
+                    position_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    meter_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    affordance_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    lstm=LSTMConfig(
+                        hidden_size=128,  # Different from hardcoded 256
+                        num_layers=1,
+                        dropout=0.0,
+                    ),
+                    q_head=MLPEncoderConfig(
+                        hidden_sizes=[128],
+                        activation="relu",
+                    ),
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.0001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
+            ),
+            loss=LossConfig(type="huber"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=True,
+            ),
+        )
+
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            brain_config=brain_config,
+        )
+
+        # LSTM hidden size should come from config (128), not hardcoded (256)
+        assert population.q_network.lstm.hidden_size == 128
+
+
+class TestSchedulerIntegration:
+    """Test learning rate scheduler integration (Phase 2)."""
+
+    def test_population_unpacks_scheduler_from_optimizer_factory(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """VectorizedPopulation should unpack (optimizer, scheduler) tuple."""
+        from torch.optim.lr_scheduler import StepLR
+
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test step decay schedule",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(
+                    type="step_decay",
+                    step_size=100,
+                    gamma=0.1,
+                ),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,
+            ),
+        )
+
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            brain_config=brain_config,
+        )
+
+        # Should unpack scheduler from OptimizerFactory.build()
+        assert hasattr(population, "scheduler")
+        assert isinstance(population.scheduler, StepLR)
+
+    def test_population_has_no_scheduler_for_constant_schedule(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """VectorizedPopulation should have scheduler=None for constant schedule."""
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test constant schedule",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,
+            ),
+        )
+
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            brain_config=brain_config,
+        )
+
+        # Constant schedule should result in scheduler=None
+        assert hasattr(population, "scheduler")
+        assert population.scheduler is None
+
+    def test_exponential_scheduler_support(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """VectorizedPopulation should support ExponentialLR scheduler."""
+        from torch.optim.lr_scheduler import ExponentialLR
+
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test exponential schedule",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(
+                    type="exponential",
+                    gamma=0.9999,
+                ),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,
+            ),
+        )
+
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            brain_config=brain_config,
+        )
+
+        assert isinstance(population.scheduler, ExponentialLR)
