@@ -735,3 +735,207 @@ class TestExtrinsicStrategies:
         assert rewards[1] > 0.0
         assert rewards[2] == 0.0
         assert rewards[3] == 0.0
+
+    def test_threshold_based_strategy(self):
+        """Threshold-based: bonus when bar crosses threshold"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Threshold at 0.5: give bonus=1.0 if energy >= 0.5, else bonus=0.0
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="threshold_based",
+                base=0.5,
+                bar_bonuses=[
+                    BarBonusConfig(bar="energy", center=0.5, scale=1.0),  # threshold=0.5, bonus=1.0
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Energy values: [0.2, 0.5, 0.8, 1.0]
+        meters = torch.tensor([[0.2], [0.5], [0.8], [1.0]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: base + (1.0 if energy >= 0.5 else 0.0)
+        # [0.5 + 0.0, 0.5 + 1.0, 0.5 + 1.0, 0.5 + 1.0]
+        expected = torch.tensor([0.5, 1.5, 1.5, 1.5], device=device)
+        assert torch.allclose(extrinsic, expected)
+
+    def test_aggregation_min_strategy(self):
+        """Aggregation (min): reward = base + min(bars)"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # For this simplified version, assume aggregation always uses min()
+        # A more complete implementation would have an 'operation' field
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="aggregation",
+                base=0.5,
+                bars=["energy", "health"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # meters: [energy, health]
+        meters = torch.tensor([[0.3, 0.8], [0.5, 0.4], [0.9, 0.7], [0.2, 0.1]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: base + min(energy, health)
+        # [0.5 + min(0.3, 0.8), 0.5 + min(0.5, 0.4), 0.5 + min(0.9, 0.7), 0.5 + min(0.2, 0.1)]
+        # = [0.5 + 0.3, 0.5 + 0.4, 0.5 + 0.7, 0.5 + 0.1]
+        expected = torch.tensor([0.8, 0.9, 1.2, 0.6], device=device)
+        assert torch.allclose(extrinsic, expected)
+
+    def test_vfs_variable_strategy(self):
+        """VFS variable: reward = vfs[variable] * weight (escape hatch)"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                ),
+                VariableDef(
+                    id="custom_reward",
+                    scope="agent",
+                    type="scalar",
+                    default=0.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                ),
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Set custom reward values in VFS
+        vfs_registry.set("custom_reward", torch.tensor([0.5, 1.0, 1.5, 2.0], device=device), writer="engine")
+
+        # Use variable_bonuses for weight and variable
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="vfs_variable",
+                base=0.0,
+                variable_bonuses=[
+                    VariableBonusConfig(variable="custom_reward", weight=2.0),
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Meters not used for vfs_variable strategy
+        meters = torch.tensor([[1.0], [1.0], [1.0], [1.0]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: weight * custom_reward = 2.0 * [0.5, 1.0, 1.5, 2.0]
+        expected = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device)
+        assert torch.allclose(extrinsic, expected)
+
+    def test_hybrid_strategy(self):
+        """Hybrid: combine multiple approaches (simplified as weighted bars)"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Simplified hybrid: combines multiple weighted bars
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="hybrid",
+                base=1.0,
+                bar_bonuses=[
+                    BarBonusConfig(bar="energy", center=0.0, scale=1.5),  # Linear term
+                    BarBonusConfig(bar="health", center=0.5, scale=0.5),  # Shaped term
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # meters: [energy, health]
+        meters = torch.tensor([[0.5, 0.5], [0.8, 0.6], [0.2, 0.4], [1.0, 1.0]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: base + 1.5*energy + 0.5*(health-0.5)
+        # [1.0 + 1.5*0.5 + 0.5*(0.5-0.5), 1.0 + 1.5*0.8 + 0.5*(0.6-0.5), ...]
+        expected = torch.tensor([1.75, 2.25, 1.25, 2.75], device=device)
+        assert torch.allclose(extrinsic, expected, atol=1e-5)

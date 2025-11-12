@@ -264,6 +264,113 @@ class DACEngine:
 
             return compute_polynomial
 
+        elif strategy.type == "threshold_based":
+            # reward = base + sum(bonuses if bar >= threshold)
+            base = strategy.base if strategy.base is not None else 0.0
+            bar_bonuses = strategy.bar_bonuses if strategy.bar_bonuses is not None else []
+
+            def compute_threshold(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Threshold-based: bonus when bar crosses threshold"""
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                # Add threshold bonuses (center=threshold, scale=bonus)
+                for bonus_config in bar_bonuses:
+                    bar_idx = self._get_bar_index(bonus_config.bar)
+                    bar_value = meters[:, bar_idx]
+                    threshold = bonus_config.center
+                    bonus = bonus_config.scale
+
+                    # Apply bonus where bar >= threshold
+                    above_threshold = bar_value >= threshold
+                    reward = reward + torch.where(above_threshold, bonus, 0.0)
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_threshold
+
+        elif strategy.type == "aggregation":
+            # reward = base + min(bars)  (simplified - always uses min)
+            # Full implementation would have operation field (min/max/mean/product)
+            base = strategy.base if strategy.base is not None else 0.0
+            bar_ids = strategy.bars
+
+            def compute_aggregation(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Aggregation: reward = base + min(bars)"""
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                if bar_ids:
+                    # Stack bars for aggregation: [num_agents, num_bars]
+                    bar_values = torch.stack([meters[:, self._get_bar_index(bar_id)] for bar_id in bar_ids], dim=1)
+
+                    # Apply min aggregation (could be extended to max/mean/product)
+                    aggregated = torch.min(bar_values, dim=1).values
+                    reward = reward + aggregated
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_aggregation
+
+        elif strategy.type == "vfs_variable":
+            # reward = sum(weight_i * vfs[variable_i])
+            base = strategy.base if strategy.base is not None else 0.0
+            variable_bonuses = strategy.variable_bonuses if strategy.variable_bonuses is not None else []
+
+            def compute_vfs_variable(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """VFS variable: reward from VFS-computed values (escape hatch)"""
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                # Add weighted VFS variables
+                for bonus_config in variable_bonuses:
+                    var_value = self.vfs_registry.get(bonus_config.variable, reader=self.vfs_reader)
+                    weighted_value = bonus_config.weight * var_value
+                    reward = reward + weighted_value
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_vfs_variable
+
+        elif strategy.type == "hybrid":
+            # Simplified hybrid: base + weighted bars with optional centering
+            # Full implementation would compose multiple sub-strategies
+            base = strategy.base if strategy.base is not None else 0.0
+            bar_bonuses = strategy.bar_bonuses if strategy.bar_bonuses is not None else []
+
+            def compute_hybrid(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Hybrid: combine multiple approaches (simplified version)"""
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                # For each bar bonus, apply weighted calculation
+                # If center is 0.0, treat as linear weight
+                # If center is non-zero, treat as shaped bonus (value - center)
+                for bonus_config in bar_bonuses:
+                    bar_idx = self._get_bar_index(bonus_config.bar)
+                    bar_value = meters[:, bar_idx]
+
+                    if abs(bonus_config.center) < 1e-6:
+                        # Linear weight (center ≈ 0)
+                        term = bonus_config.scale * bar_value
+                    else:
+                        # Shaped bonus (value - center)
+                        term = bonus_config.scale * (bar_value - bonus_config.center)
+
+                    reward = reward + term
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_hybrid
+
         # Fallback for unimplemented strategies
         def placeholder(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
             return torch.zeros(self.num_agents, device=self.device)
