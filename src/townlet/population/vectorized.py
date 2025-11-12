@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 
+from townlet.agent.brain_config import BrainConfig
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork, StructuredQNetwork
 from townlet.curriculum.base import CurriculumManager
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
@@ -60,6 +61,7 @@ class VectorizedPopulation(PopulationManager):
         sequence_length: int = 8,
         max_grad_norm: float = 10.0,
         use_double_dqn: bool = False,
+        brain_config: BrainConfig | None = None,
     ):
         """
         Initialize vectorized population.
@@ -84,6 +86,7 @@ class VectorizedPopulation(PopulationManager):
             sequence_length: Length of sequences for LSTM training (default: 8, recurrent only)
             max_grad_norm: Gradient clipping threshold (default: 10.0)
             use_double_dqn: Use Double DQN algorithm (default: False for vanilla DQN)
+            brain_config: Optional BrainConfig for architecture, optimizer, loss (TASK-005 Phase 1)
         """
         self.env = env
         self.curriculum = curriculum
@@ -96,6 +99,7 @@ class VectorizedPopulation(PopulationManager):
         self.is_recurrent = network_type == "recurrent"
         self.use_double_dqn = use_double_dqn
         self.tb_logger = tb_logger
+        self.brain_config = brain_config
 
         # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
         if action_dim is None:
