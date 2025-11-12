@@ -2181,3 +2181,308 @@ class TestShapingBonusEdgeCases:
         # Should raise KeyError when trying to read missing variable
         with pytest.raises(KeyError, match="nonexistent_var"):
             engine.shaping_fns[0]()
+
+
+class TestCalculateRewards:
+    """Test full calculate_rewards() composition logic."""
+
+    def test_calculate_rewards_composition(self, bar_index_map_single):
+        """calculate_rewards composes extrinsic + intrinsic + shaping."""
+        from townlet.config.drive_as_code import EfficiencyBonusConfig
+
+        # Setup DAC with:
+        # - Extrinsic: multiplicative (energy only) → base=1.0 * energy
+        # - Intrinsic: provided externally
+        # - Modifier: "low_energy" suppresses intrinsic when energy < 0.5
+        # - Shaping: efficiency_bonus (energy >= 0.7 → +2.0)
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={
+                "low_energy": ModifierConfig(
+                    bar="energy",
+                    ranges=[
+                        RangeConfig(name="low", min=0.0, max=0.5, multiplier=0.5),
+                        RangeConfig(name="normal", min=0.5, max=1.0, multiplier=1.0),
+                    ],
+                ),
+            },
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                EfficiencyBonusConfig(
+                    type="efficiency_bonus",
+                    weight=2.0,
+                    bar="energy",
+                    threshold=0.7,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
+
+        # Test scenarios:
+        # Agent 0: energy=0.8 → extrinsic=0.8, intrinsic=1.0×1.0=1.0, shaping=2.0 → total=3.8
+        # Agent 1: energy=0.6 → extrinsic=0.6, intrinsic=1.0×1.0=1.0, shaping=0.0 → total=1.6
+        # Agent 2: energy=0.3 → extrinsic=0.3, intrinsic=1.0×0.5=0.5, shaping=0.0 → total=0.8
+        # Agent 3: DEAD (energy=0.0) → extrinsic=0.0, intrinsic=1.0×0.5=0.5, shaping=0.0 → total=0.5
+        # Note: Intrinsic rewards are not zeroed for dead agents - only extrinsic is
+
+        meters = torch.tensor([[0.8], [0.6], [0.3], [0.0]], device=device)
+        dones = torch.tensor([False, False, False, True], device=device)
+        intrinsic_raw = torch.tensor([1.0, 1.0, 1.0, 1.0], device=device)
+        step_counts = torch.tensor([10, 10, 10, 10], device=device)
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+        )
+
+        # Verify extrinsic (dead agents get 0.0)
+        assert torch.allclose(components["extrinsic"], torch.tensor([0.8, 0.6, 0.3, 0.0], device=device))
+
+        # Verify intrinsic (with modifiers applied, NOT zeroed for dead agents)
+        assert torch.allclose(components["intrinsic"], torch.tensor([1.0, 1.0, 0.5, 0.5], device=device))
+
+        # Verify shaping (dead agents get 0.0)
+        assert torch.allclose(components["shaping"], torch.tensor([2.0, 0.0, 0.0, 0.0], device=device))
+
+        # Verify total
+        expected_total = torch.tensor([3.8, 1.6, 0.8, 0.5], device=device)
+        assert torch.allclose(total_rewards, expected_total)
+
+        # Verify intrinsic weights
+        expected_weights = torch.tensor([1.0, 1.0, 0.5, 0.5], device=device)
+        assert torch.allclose(intrinsic_weights, expected_weights)
+
+    def test_calculate_rewards_all_components(self, bar_index_map_dual):
+        """calculate_rewards integrates all DAC components."""
+        from townlet.config.drive_as_code import CompletionBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={
+                "health_crisis": ModifierConfig(
+                    bar="health",
+                    ranges=[
+                        RangeConfig(name="crisis", min=0.0, max=0.3, multiplier=0.0),
+                        RangeConfig(name="normal", min=0.3, max=1.0, multiplier=1.0),
+                    ],
+                ),
+            },
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy", "health"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                CompletionBonusConfig(
+                    type="completion_bonus",
+                    weight=5.0,
+                    affordance="Bed",
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+                VariableDef(
+                    id="health",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
+
+        meters = torch.tensor([[1.0, 1.0], [0.5, 0.5], [0.8, 0.2]], device=device)
+        dones = torch.tensor([False, False, False], device=device)
+        intrinsic_raw = torch.tensor([2.0, 2.0, 2.0], device=device)
+        step_counts = torch.tensor([5, 5, 5], device=device)
+
+        # Agent 0 just used Bed, agent 1 just used Fridge, agent 2 did nothing
+        last_action_affordance = ["Bed", "Fridge", None]
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+            last_action_affordance=last_action_affordance,
+        )
+
+        # Agent 0: extrinsic=1.0*1.0=1.0, intrinsic=2.0*1.0=2.0, shaping=5.0 → total=8.0
+        # Agent 1: extrinsic=0.5*0.5=0.25, intrinsic=2.0*1.0=2.0, shaping=0.0 → total=2.25
+        # Agent 2: extrinsic=0.8*0.2=0.16, intrinsic=2.0*0.0=0.0 (health crisis), shaping=0.0 → total=0.16
+
+        assert torch.allclose(total_rewards[0], torch.tensor(8.0, device=device))
+        assert torch.allclose(total_rewards[1], torch.tensor(2.25, device=device))
+        assert torch.allclose(total_rewards[2], torch.tensor(0.16, device=device))
+
+    def test_calculate_rewards_no_intrinsic(self, bar_index_map_single):
+        """calculate_rewards works when intrinsic_raw is zeros."""
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=2.0,
+                bars=["energy"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        device = torch.device("cpu")
+        num_agents = 2
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
+
+        meters = torch.tensor([[1.0], [0.5]], device=device)
+        dones = torch.tensor([False, False], device=device)
+        intrinsic_raw = torch.tensor([0.0, 0.0], device=device)
+        step_counts = torch.tensor([1, 1], device=device)
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+        )
+
+        # Should have only extrinsic rewards
+        assert torch.allclose(total_rewards, torch.tensor([2.0, 1.0], device=device))
+        assert torch.allclose(components["intrinsic"], torch.tensor([0.0, 0.0], device=device))
+
+    def test_calculate_rewards_kwargs_propagation(self, bar_index_map_dual):
+        """calculate_rewards passes kwargs to shaping bonuses."""
+        from townlet.config.drive_as_code import ApproachRewardConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy", "health"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                ApproachRewardConfig(
+                    type="approach_reward",
+                    weight=1.0,
+                    target_affordance="Bed",
+                    max_distance=5.0,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 2
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+                VariableDef(
+                    id="health",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
+
+        meters = torch.tensor([[1.0, 1.0], [1.0, 1.0]], device=device)
+        dones = torch.tensor([False, False], device=device)
+        intrinsic_raw = torch.tensor([0.0, 0.0], device=device)
+        step_counts = torch.tensor([1, 1], device=device)
+
+        # Agent 0 at distance 2.0 from Bed, Agent 1 at distance 4.0
+        agent_positions = torch.tensor([[0.0, 0.0], [3.0, 0.0]], device=device)
+        affordance_positions = {"Bed": torch.tensor([0.0, 2.0], device=device)}
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+            agent_positions=agent_positions,
+            affordance_positions=affordance_positions,
+        )
+
+        # Shaping bonus should be computed based on Euclidean distance
+        # Agent 0: distance=sqrt((0-0)^2 + (0-2)^2) = 2.0, bonus = 1.0 * (1 - 2.0/5.0) = 0.6
+        # Agent 1: distance=sqrt((3-0)^2 + (0-2)^2) = sqrt(13) ≈ 3.606, bonus = 1.0 * (1 - 3.606/5.0) ≈ 0.2789
+        assert torch.allclose(components["shaping"][0], torch.tensor(0.6, device=device))
+        assert torch.allclose(components["shaping"][1], torch.tensor(1.0 * (1.0 - 3.606 / 5.0), device=device), atol=1e-3)

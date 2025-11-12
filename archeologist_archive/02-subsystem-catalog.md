@@ -201,3 +201,58 @@
 **Confidence:** High - All 16 files read (2054 total lines), no-defaults principle verified across all DTOs, validation patterns consistent (field validators, model validators, extra="forbid"), dependencies traced via imports and grep (17 inbound consumers including Universe Compiler, Environment, Demo System), loader functions follow consistent pattern, HamletConfig master composition verified, supporting DTOs (capabilities, effect pipeline, affordance masking) examined
 
 ---
+
+## Universe Compiler
+
+**Location:** `/home/john/hamlet/src/townlet/universe/`
+
+**Responsibility:** Compiles YAML configuration packs into validated, optimized CompiledUniverse artifacts through a seven-stage pipeline (parse, symbol table, resolve, validate, metadata, optimize, emit) with MessagePack caching, ensuring reproducibility via config hashing and mtime tracking.
+
+**Key Components:**
+- `compiler.py` - UniverseCompiler orchestrating 7-stage pipeline with cache management, YAML syntax validation, auto-generated standard variables, and DoS protection limits (2385 lines)
+- `compiled.py` - CompiledUniverse immutable artifact with MessagePack serialization, checkpoint compatibility validation, runtime environment creation, and to_runtime() conversion (310 lines)
+- `compiler_inputs.py` - RawConfigs container aggregating all parsed DTOs with convenience accessors and action space composition logic (306 lines)
+- `symbol_table.py` - UniverseSymbolTable registry for meters, variables, actions, cascades, affordances, cues with duplicate detection and cross-reference resolution (102 lines)
+- `runtime.py` - RuntimeUniverse read-only view with frozen model proxies, clone helpers for runtime systems, and meter/affordance lookup (138 lines)
+- `errors.py` - CompilationError exception, CompilationMessage structured diagnostic, CompilationErrorCollector batch error accumulator with hints and warnings (107 lines)
+- `optimization.py` - OptimizationData dataclass for pre-computed runtime tensors (base_depletions, cascade_data, action_mask_table, affordance_position_map) (23 lines)
+- `source_map.py` - SourceMap YAML line number tracking via custom PyYAML loader for precise error reporting with file:line locations (101 lines)
+- `cues_compiler.py` - CuesCompiler sub-compiler for cues.yaml validation with meter reference checks and visual cue range coverage validation (143 lines)
+- `adapters/vfs_adapter.py` - VFSAdapter converting VFS observation fields to compiler ObservationSpec DTOs with UUID generation and ObservationActivity masking (175 lines)
+- `dto/__init__.py` - DTO module interface exposing ActionMetadata, ObservationSpec, UniverseMetadata, MeterMetadata, AffordanceMetadata (29 lines)
+- `dto/universe_metadata.py` - UniverseMetadata frozen dataclass with substrate, meter, affordance, action, observation dimensions, economic balance, provenance tracking (72 lines)
+- `dto/observation_spec.py` - ObservationSpec and ObservationField frozen dataclasses with UUID generation, semantic type grouping, field lookup by name/type (99 lines)
+- `dto/observation_activity.py` - ObservationActivity frozen dataclass for curriculum masking with active_mask, group_slices, active_field_uuids (45 lines)
+- `dto/action_metadata.py` - ActionMetadata and ActionSpaceMetadata frozen dataclasses for action vocabulary with enabled flags, costs, effects (56 lines)
+- `dto/affordance_metadata.py` - AffordanceInfo and AffordanceMetadata frozen dataclasses for affordance catalog with costs, effects, duration, operating hours (43 lines)
+- `dto/meter_metadata.py` - MeterInfo and MeterMetadata frozen dataclasses for meter catalog with range, tier, base_depletion (34 lines)
+
+**Dependencies:**
+- Inbound: Config DTOs (HamletConfig, all section configs), VFS (VariableDef, VFSObservationSpecBuilder), Substrate (SubstrateFactory, SubstrateConfig), Environment (EnvironmentConfig, ActionSpaceConfig), Demo System (runner.py, live_inference.py), Training (checkpoint_utils.py), Agent Networks (networks.py)
+- Outbound: Config DTOs (all loaders), VFS (observation_builder.py, registry.py, schema.py), Substrate (factory.py), Environment (cascade_config.py, action_config.py), MessagePack (msgpack serialization), PyYAML (yaml.safe_load), PyTorch (tensors for optimization data)
+
+**Patterns Observed:**
+- Seven-stage compiler pipeline (Phase 0: YAML syntax → Stage 1: Parse → Stage 2: Symbol table → Stage 3: Resolve references → Stage 4: Cross-validate → Stage 5: Metadata → Stage 6: Optimize → Stage 7: Emit)
+- Two-tier caching strategy (mtime check for fast path, config hash for content equality verification)
+- Auto-generation pattern (standard variables for grid, position, meters, affordances, temporal state auto-generated from substrate/bars/affordances configs)
+- DoS protection via MAX_* constants (MAX_METERS=100, MAX_AFFORDANCES=100, MAX_CASCADES=500, MAX_ACTIONS=300, MAX_VARIABLES=200, MAX_GRID_CELLS=10000, MAX_CACHE_FILE_SIZE=10MB)
+- Structured error collection with CompilationErrorCollector batch accumulator, error codes, hints, warnings, source map line number tracking
+- Immutable artifact pattern (CompiledUniverse frozen dataclass with MessagePack serialization, RuntimeUniverse read-only view with frozen model proxies)
+- Cache fingerprinting (SHA256 hash of all YAML content + modification time tracking for cache invalidation)
+- Symbol table pattern (central registry for meters, variables, actions, cascades, affordances, cues with duplicate detection)
+- VFS adapter pattern (converting VFS observation fields to compiler DTOs with UUID generation for checkpoint compatibility)
+- Sub-compiler delegation (CuesCompiler encapsulates cues.yaml validation logic)
+- DTO-driven metadata enrichment (Stage 5 builds ActionSpaceMetadata, MeterMetadata, AffordanceMetadata, UniverseMetadata, ObservationSpec)
+- Observation field UUID deterministic generation (SHA256 hash of scope|name|description|dims|semantic_type for checkpoint compatibility)
+- Runtime vs compile-time separation (CompiledUniverse for storage/caching, RuntimeUniverse for training systems with read-only views)
+
+**Concerns:**
+- Auto-generated variables override user-defined variables silently (user variables registered after auto-generated, but no warning if user redefines standard variable)
+- Cache bomb protection uses MAX_CACHE_FILE_SIZE=10MB limit but no incremental reading (entire cache loaded into memory before size check on deserialization)
+- Source map line number tracking requires custom PyYAML loader which may drift from yaml.safe_load behavior
+- DAC config currently optional (Phase 5 comment indicates will become required but no timeline/migration plan)
+- Action space composition in compiler_inputs.py silently trims meter references absent from bars.yaml (hint added but no error on invalid meter references in global_actions.yaml)
+
+**Confidence:** High - Complete 7-stage pipeline traced (compiler.py 2385 lines), all 17 component files read (4173 total lines), symbol table resolution verified, cache invalidation logic (mtime + hash) confirmed, DTO serialization (MessagePack) examined, VFS adapter integration traced, inbound/outbound dependencies verified via grep (12 consumers), DoS protection limits documented, error collection pattern validated, no-defaults principle enforced via Pydantic required fields
+
+---

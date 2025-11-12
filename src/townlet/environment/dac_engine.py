@@ -795,26 +795,55 @@ class DACEngine:
     ) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         """Calculate total rewards with DAC.
 
+        Composes: extrinsic + (intrinsic × modifiers) + shaping
+
         Args:
             step_counts: [num_agents] current step count
             dones: [num_agents] agent death flags
             meters: [num_agents, meter_count] normalized meter values
             intrinsic_raw: [num_agents] raw intrinsic curiosity values
             **kwargs: Additional context (positions, affordance states, etc.)
+                - agent_positions: torch.Tensor (num_agents, ndims)
+                - affordance_positions: dict[str, torch.Tensor]
+                - last_action_affordance: list[str | None]
+                - affordance_streak: dict[str, torch.Tensor]
+                - unique_affordances_used: torch.Tensor
+                - current_hour: torch.Tensor
 
         Returns:
             total_rewards: [num_agents] final rewards
-            intrinsic_weights: [num_agents] effective intrinsic weights
-            components: dict of reward components
+            intrinsic_weights: [num_agents] effective intrinsic weights after modifiers
+            components: dict of reward components (extrinsic, intrinsic, shaping)
         """
-        # TODO: Implement full calculation in next tasks
-        # For now, return zeros
-        total_rewards = torch.zeros(self.num_agents, device=self.device)
-        intrinsic_weights = torch.ones(self.num_agents, device=self.device)
+        # 1. Compute extrinsic reward
+        extrinsic = self.extrinsic_fn(meters=meters, dones=dones)
+
+        # 2. Compute intrinsic reward with modifiers
+        intrinsic = intrinsic_raw.clone()
+
+        # Apply all modifiers (multiplicative chain)
+        intrinsic_weight = torch.ones(self.num_agents, device=self.device)
+        for modifier_fn in self.modifiers.values():
+            multiplier = modifier_fn(meters)
+            intrinsic_weight = intrinsic_weight * multiplier
+
+        # Apply modifiers to intrinsic rewards
+        intrinsic = intrinsic * intrinsic_weight
+
+        # 3. Compute shaping bonuses
+        shaping_total = torch.zeros(self.num_agents, device=self.device)
+        for shaping_fn in self.shaping_fns:
+            bonus = shaping_fn(meters=meters, dones=dones, **kwargs)
+            shaping_total += bonus
+
+        # 4. Compose total reward
+        total_reward = extrinsic + intrinsic + shaping_total
+
+        # 5. Build components dict for logging
         components = {
-            "extrinsic": torch.zeros(self.num_agents, device=self.device),
-            "intrinsic": torch.zeros(self.num_agents, device=self.device),
-            "shaping": torch.zeros(self.num_agents, device=self.device),
+            "extrinsic": extrinsic,
+            "intrinsic": intrinsic,
+            "shaping": shaping_total,
         }
 
-        return total_rewards, intrinsic_weights, components
+        return total_reward, intrinsic_weight, components
