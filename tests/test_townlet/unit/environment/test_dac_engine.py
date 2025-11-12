@@ -461,3 +461,156 @@ class TestExtrinsicStrategies:
         # For agent 3: 2.0 + 0.5*(1.0-0.5) + 0.3*(1.0-0.5) + 2.0*0.4 = 2.0 + 0.25 + 0.15 + 0.8 = 3.2
         expected = torch.tensor([2.2, 2.58, 2.42, 3.2], device=device)
         assert torch.allclose(extrinsic, expected, atol=1e-6)
+
+    def test_additive_unweighted_strategy(self):
+        """Additive unweighted: reward = base + sum(bars)"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="additive_unweighted",
+                base=0.5,
+                bars=["energy", "health"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # meters: [energy, health]
+        meters = torch.tensor([[0.2, 0.3], [0.5, 0.5], [0.8, 0.9], [0.0, 0.0]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: base + energy + health
+        # [0.5 + 0.2 + 0.3, 0.5 + 0.5 + 0.5, 0.5 + 0.8 + 0.9, 0.5 + 0.0 + 0.0]
+        expected = torch.tensor([1.0, 1.5, 2.2, 0.5], device=device)
+        assert torch.allclose(extrinsic, expected, atol=1e-6)
+
+    def test_weighted_sum_strategy(self):
+        """Weighted sum: reward = sum(weight_i * source_i)"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # For this test, assume weighted_sum uses bar_bonuses with weights
+        # (simplified version without sources field for now)
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="weighted_sum",
+                base=0.0,
+                bar_bonuses=[
+                    BarBonusConfig(bar="energy", center=0.0, scale=2.0),  # weight=2.0
+                    BarBonusConfig(bar="health", center=0.0, scale=1.5),  # weight=1.5
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # meters: [energy, health]
+        meters = torch.tensor([[0.5, 0.4], [1.0, 1.0], [0.2, 0.8], [0.0, 0.5]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: 2.0 * energy + 1.5 * health
+        # [2.0*0.5 + 1.5*0.4, 2.0*1.0 + 1.5*1.0, 2.0*0.2 + 1.5*0.8, 2.0*0.0 + 1.5*0.5]
+        expected = torch.tensor([1.6, 3.5, 1.6, 0.75], device=device)
+        assert torch.allclose(extrinsic, expected, atol=1e-6)
+
+    def test_polynomial_strategy(self):
+        """Polynomial: reward = sum(weight_i * bar_i^exponent_i)"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Using bar_bonuses: scale=weight, center=exponent
+        # Note: center must be in [0.0, 1.0] due to BarBonusConfig constraints
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="polynomial",
+                base=0.0,
+                bar_bonuses=[
+                    BarBonusConfig(bar="energy", center=0.5, scale=2.0),  # 2.0 * energy^0.5
+                    BarBonusConfig(bar="health", center=1.0, scale=1.5),  # 1.5 * health^1.0
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # meters: [energy, health]
+        meters = torch.tensor([[0.25, 0.4], [1.0, 1.0], [0.64, 0.9], [0.0, 0.5]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: 2.0 * energy^0.5 + 1.5 * health^1.0
+        # [2.0*0.5 + 1.5*0.4, 2.0*1.0 + 1.5*1.0, 2.0*0.8 + 1.5*0.9, 2.0*0.0 + 1.5*0.5]
+        expected = torch.tensor(
+            [
+                2.0 * 0.25**0.5 + 1.5 * 0.4**1.0,
+                2.0 * 1.0**0.5 + 1.5 * 1.0**1.0,
+                2.0 * 0.64**0.5 + 1.5 * 0.9**1.0,
+                2.0 * 0.0**0.5 + 1.5 * 0.5**1.0,
+            ],
+            device=device,
+        )
+        assert torch.allclose(extrinsic, expected, atol=1e-4)

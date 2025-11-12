@@ -193,6 +193,77 @@ class DACEngine:
 
             return compute_constant_base
 
+        elif strategy.type == "additive_unweighted":
+            # reward = base + sum(bars)
+            base = strategy.base if strategy.base is not None else 0.0
+            bar_ids = strategy.bars
+
+            def compute_additive(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Additive unweighted: reward = base + sum(bars)"""
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                # Sum all bars
+                for bar_id in bar_ids:
+                    bar_idx = self._get_bar_index(bar_id)
+                    reward = reward + meters[:, bar_idx]
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_additive
+
+        elif strategy.type == "weighted_sum":
+            # reward = sum(weight_i * bar_i) using bar_bonuses for weights
+            # (center is ignored, scale is the weight)
+            base = strategy.base if strategy.base is not None else 0.0
+            bar_bonuses = strategy.bar_bonuses if strategy.bar_bonuses is not None else []
+
+            def compute_weighted_sum(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Weighted sum: reward = sum(weight_i * bar_i)"""
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                # Add weighted bars (using scale as weight, ignoring center)
+                for bonus_config in bar_bonuses:
+                    bar_idx = self._get_bar_index(bonus_config.bar)
+                    bar_value = meters[:, bar_idx]
+                    weighted_value = bonus_config.scale * bar_value
+                    reward = reward + weighted_value
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_weighted_sum
+
+        elif strategy.type == "polynomial":
+            # reward = sum(weight_i * bar_i^exponent_i)
+            # Using bar_bonuses: scale=weight, center=exponent
+            base = strategy.base if strategy.base is not None else 0.0
+            bar_bonuses = strategy.bar_bonuses if strategy.bar_bonuses is not None else []
+
+            def compute_polynomial(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Polynomial: reward = sum(weight_i * bar_i^exponent_i)"""
+                reward = torch.full((self.num_agents,), base, device=self.device, dtype=torch.float32)
+
+                # Add polynomial terms (scale=weight, center=exponent)
+                for bonus_config in bar_bonuses:
+                    bar_idx = self._get_bar_index(bonus_config.bar)
+                    bar_value = meters[:, bar_idx]
+                    exponent = bonus_config.center
+                    weight = bonus_config.scale
+                    term = weight * torch.pow(bar_value, exponent)
+                    reward = reward + term
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_polynomial
+
         # Fallback for unimplemented strategies
         def placeholder(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
             return torch.zeros(self.num_agents, device=self.device)
@@ -222,7 +293,12 @@ class DACEngine:
         """
         # NOTE: This assumes bars are in the order defined in bars.yaml
         # The compiler should have validated that bar_id exists
+
+        # Build bar list from config (either bars field or bar_bonuses)
         bar_ids = self.dac_config.extrinsic.bars
+        if not bar_ids and self.dac_config.extrinsic.bar_bonuses:
+            # For strategies using bar_bonuses, extract bar IDs
+            bar_ids = [bonus.bar for bonus in self.dac_config.extrinsic.bar_bonuses]
 
         # For now, use a simple lookup (will be optimized in later task)
         # In production, we'd get this from universe metadata
