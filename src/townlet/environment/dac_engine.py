@@ -436,6 +436,10 @@ class DACEngine:
                         # Initialize bonus to zeros
                         bonus = torch.zeros(self.num_agents, device=self.device)
 
+                        # Null check for missing kwarg
+                        if last_action_affordance is None:
+                            return bonus
+
                         # Vectorize the comparison using list comprehension + tensor creation
                         # Note: Can't fully vectorize string comparison, but keep it minimal
                         matches = torch.tensor(
@@ -461,6 +465,10 @@ class DACEngine:
                         """Compute efficiency bonus for all agents."""
                         # Extract kwargs
                         meters = kwargs.get("meters")
+
+                        # Null check for missing kwarg
+                        if meters is None:
+                            return torch.zeros(self.num_agents, device=self.device)
 
                         # Get bar index
                         # NOTE: This uses the flawed _get_bar_index() from Phase 3B
@@ -490,6 +498,10 @@ class DACEngine:
                         """Compute state achievement bonus for all agents."""
                         # Extract kwargs
                         meters = kwargs.get("meters")
+
+                        # Null check for missing kwarg
+                        if meters is None:
+                            return torch.zeros(self.num_agents, device=self.device)
 
                         # Start with all agents meeting all conditions
                         all_conditions_met = torch.ones(self.num_agents, device=self.device, dtype=torch.bool)

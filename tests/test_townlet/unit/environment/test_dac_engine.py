@@ -1175,3 +1175,190 @@ class TestShapingBonuses:
         assert bonuses[1] == 0.0
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
+
+
+class TestShapingBonusEdgeCases:
+    """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
+
+    def test_approach_reward_missing_affordance(self):
+        """approach_reward returns zeros when target affordance not in positions."""
+        from townlet.config.drive_as_code import ApproachRewardConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                ApproachRewardConfig(
+                    type="approach_reward",
+                    weight=0.5,
+                    target_affordance="Bed",
+                    max_distance=10.0,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent positions provided, but affordance_positions does NOT include "Bed"
+        agent_positions = torch.tensor([[1.0, 1.0], [3.0, 3.0], [5.0, 5.0]], device=device)
+        affordance_positions = {"Fridge": torch.tensor([10.0, 10.0], device=device)}  # No "Bed"
+
+        # Call the compiled shaping function directly
+        bonuses = engine.shaping_fns[0](
+            agent_positions=agent_positions,
+            affordance_positions=affordance_positions,
+        )
+
+        # Should return zeros for all agents (affordance not found)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_completion_bonus_missing_kwarg(self):
+        """completion_bonus returns zeros when last_action_affordance missing."""
+        from townlet.config.drive_as_code import CompletionBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                CompletionBonusConfig(
+                    type="completion_bonus",
+                    weight=5.0,
+                    affordance="Bed",
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing last_action_affordance kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_efficiency_bonus_missing_kwarg(self):
+        """efficiency_bonus returns zeros when meters missing."""
+        from townlet.config.drive_as_code import EfficiencyBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                EfficiencyBonusConfig(
+                    type="efficiency_bonus",
+                    weight=2.0,
+                    bar="energy",
+                    threshold=0.7,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing meters kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_state_achievement_missing_kwarg(self):
+        """state_achievement returns zeros when meters missing."""
+        from townlet.config.drive_as_code import BarCondition, StateAchievementConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                StateAchievementConfig(
+                    type="state_achievement",
+                    weight=10.0,
+                    conditions=[
+                        BarCondition(bar="energy", min_value=0.8),
+                    ],
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing meters kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
