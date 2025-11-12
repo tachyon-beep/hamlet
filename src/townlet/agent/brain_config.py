@@ -33,6 +33,104 @@ class FeedforwardConfig(BaseModel):
     layer_norm: bool = Field(description="Apply LayerNorm after each hidden layer")
 
 
+class CNNEncoderConfig(BaseModel):
+    """CNN encoder configuration for vision processing.
+
+    Example:
+        >>> vision = CNNEncoderConfig(
+        ...     channels=[16, 32],
+        ...     kernel_sizes=[3, 3],
+        ...     strides=[1, 1],
+        ...     padding=[1, 1],
+        ...     activation="relu",
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    channels: list[int] = Field(min_length=1, description="Channel progression for CNN layers (e.g., [16, 32])")
+    kernel_sizes: list[int] = Field(min_length=1, description="Kernel size for each CNN layer")
+    strides: list[int] = Field(min_length=1, description="Stride for each CNN layer")
+    padding: list[int] = Field(min_length=1, description="Padding for each CNN layer")
+    activation: Literal["relu", "gelu", "swish"] = Field(description="Activation function for CNN")
+
+    @model_validator(mode="after")
+    def validate_layer_consistency(self) -> "CNNEncoderConfig":
+        """Ensure all layer lists have same length."""
+        lengths = {
+            "channels": len(self.channels),
+            "kernel_sizes": len(self.kernel_sizes),
+            "strides": len(self.strides),
+            "padding": len(self.padding),
+        }
+        unique_lengths = set(lengths.values())
+        if len(unique_lengths) > 1:
+            raise ValueError(f"All CNN layer lists must have same length. Got: {lengths}")
+        return self
+
+
+class MLPEncoderConfig(BaseModel):
+    """MLP encoder configuration.
+
+    Used for position, meter, affordance encoders, and Q-head.
+
+    Example:
+        >>> position = MLPEncoderConfig(
+        ...     hidden_sizes=[32],
+        ...     activation="relu",
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    hidden_sizes: list[int] = Field(min_length=1, description="Hidden layer sizes (e.g., [32] for single layer)")
+    activation: Literal["relu", "gelu", "swish"] = Field(description="Activation function")
+
+
+class LSTMConfig(BaseModel):
+    """LSTM configuration for recurrent networks.
+
+    Example:
+        >>> lstm = LSTMConfig(
+        ...     hidden_size=256,
+        ...     num_layers=1,
+        ...     dropout=0.0,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    hidden_size: int = Field(gt=0, description="LSTM hidden state dimension")
+    num_layers: int = Field(ge=1, le=4, description="Number of stacked LSTM layers (1-4)")
+    dropout: float = Field(ge=0.0, lt=1.0, description="Dropout between LSTM layers (0.0 = no dropout)")
+
+
+class RecurrentConfig(BaseModel):
+    """Recurrent architecture configuration for POMDP.
+
+    Architecture: CNN vision → Position MLP → Meter MLP → Affordance MLP → LSTM → Q-head
+
+    Example:
+        >>> config = RecurrentConfig(
+        ...     vision_encoder=CNNEncoderConfig(...),
+        ...     position_encoder=MLPEncoderConfig(...),
+        ...     meter_encoder=MLPEncoderConfig(...),
+        ...     affordance_encoder=MLPEncoderConfig(...),
+        ...     lstm=LSTMConfig(...),
+        ...     q_head=MLPEncoderConfig(...),
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    vision_encoder: CNNEncoderConfig = Field(description="CNN encoder for local vision window")
+    position_encoder: MLPEncoderConfig = Field(description="MLP encoder for position (x, y, z)")
+    meter_encoder: MLPEncoderConfig = Field(description="MLP encoder for meter values")
+    affordance_encoder: MLPEncoderConfig = Field(description="MLP encoder for affordance types")
+    lstm: LSTMConfig = Field(description="LSTM for temporal memory")
+    q_head: MLPEncoderConfig = Field(description="MLP Q-value head")
+
+
 class OptimizerConfig(BaseModel):
     """Optimizer configuration.
 
@@ -123,21 +221,25 @@ class LossConfig(BaseModel):
 class ArchitectureConfig(BaseModel):
     """Neural network architecture configuration.
 
-    Future: Will support recurrent, dueling, rainbow architectures.
+    Phase 2: Supports feedforward and recurrent (LSTM) architectures.
+    Future: Will support dueling, rainbow architectures.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["feedforward"] = Field(description="Architecture type (Phase 1: feedforward only)")
+    type: Literal["feedforward", "recurrent"] = Field(description="Architecture type")
 
     # Architecture-specific configs (exactly one required based on type)
     feedforward: FeedforwardConfig | None = Field(default=None, description="Feedforward MLP config (required when type=feedforward)")
+    recurrent: RecurrentConfig | None = Field(default=None, description="Recurrent LSTM config (required when type=recurrent)")
 
     @model_validator(mode="after")
     def validate_architecture_match(self) -> "ArchitectureConfig":
         """Ensure architecture config matches type."""
         if self.type == "feedforward" and self.feedforward is None:
             raise ValueError("type='feedforward' requires feedforward config")
+        if self.type == "recurrent" and self.recurrent is None:
+            raise ValueError("type='recurrent' requires recurrent config")
         return self
 
 

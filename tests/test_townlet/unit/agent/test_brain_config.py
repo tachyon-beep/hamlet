@@ -418,3 +418,115 @@ def test_optimizer_config_rmsprop_requires_rmsprop_params():
         )
     error_str = str(exc_info.value)
     assert "rmsprop_alpha" in error_str or "rmsprop parameters required" in error_str.lower()
+
+
+# TASK-005 Phase 2: Recurrent network configuration tests
+
+
+def test_cnn_encoder_config_valid():
+    """CNNEncoderConfig accepts valid CNN parameters."""
+    from townlet.agent.brain_config import CNNEncoderConfig
+
+    config = CNNEncoderConfig(
+        channels=[16, 32],
+        kernel_sizes=[3, 3],
+        strides=[1, 1],
+        padding=[1, 1],
+        activation="relu",
+    )
+    assert config.channels == [16, 32]
+    assert config.kernel_sizes == [3, 3]
+
+
+def test_cnn_encoder_config_rejects_mismatched_lengths():
+    """CNNEncoderConfig requires all lists to have same length."""
+    from townlet.agent.brain_config import CNNEncoderConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        CNNEncoderConfig(
+            channels=[16, 32],
+            kernel_sizes=[3],  # Wrong length!
+            strides=[1, 1],
+            padding=[1, 1],
+            activation="relu",
+        )
+    assert "same length" in str(exc_info.value).lower()
+
+
+def test_mlp_encoder_config_valid():
+    """MLPEncoderConfig accepts valid MLP parameters."""
+    from townlet.agent.brain_config import MLPEncoderConfig
+
+    config = MLPEncoderConfig(
+        hidden_sizes=[32],
+        activation="relu",
+    )
+    assert config.hidden_sizes == [32]
+
+
+def test_lstm_config_valid():
+    """LSTMConfig accepts valid LSTM parameters."""
+    from townlet.agent.brain_config import LSTMConfig
+
+    config = LSTMConfig(
+        hidden_size=256,
+        num_layers=1,
+        dropout=0.0,
+    )
+    assert config.hidden_size == 256
+    assert config.num_layers == 1
+
+
+def test_lstm_config_rejects_zero_hidden_size():
+    """LSTMConfig rejects hidden_size=0."""
+    from townlet.agent.brain_config import LSTMConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        LSTMConfig(
+            hidden_size=0,
+            num_layers=1,
+            dropout=0.0,
+        )
+    assert "hidden_size" in str(exc_info.value)
+
+
+def test_recurrent_config_valid():
+    """RecurrentConfig accepts complete recurrent architecture."""
+    from townlet.agent.brain_config import (
+        CNNEncoderConfig,
+        LSTMConfig,
+        MLPEncoderConfig,
+        RecurrentConfig,
+    )
+
+    config = RecurrentConfig(
+        vision_encoder=CNNEncoderConfig(
+            channels=[16, 32],
+            kernel_sizes=[3, 3],
+            strides=[1, 1],
+            padding=[1, 1],
+            activation="relu",
+        ),
+        position_encoder=MLPEncoderConfig(
+            hidden_sizes=[32],
+            activation="relu",
+        ),
+        meter_encoder=MLPEncoderConfig(
+            hidden_sizes=[32],
+            activation="relu",
+        ),
+        affordance_encoder=MLPEncoderConfig(
+            hidden_sizes=[32],
+            activation="relu",
+        ),
+        lstm=LSTMConfig(
+            hidden_size=256,
+            num_layers=1,
+            dropout=0.0,
+        ),
+        q_head=MLPEncoderConfig(
+            hidden_sizes=[128],
+            activation="relu",
+        ),
+    )
+    assert config.lstm.hidden_size == 256
