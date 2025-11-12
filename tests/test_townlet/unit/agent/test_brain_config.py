@@ -10,6 +10,7 @@ from townlet.agent.brain_config import (
     LossConfig,
     OptimizerConfig,
     QLearningConfig,
+    compute_brain_hash,
     load_brain_config,
 )
 
@@ -274,3 +275,107 @@ q_learning:
     with pytest.raises(ValueError) as exc_info:
         load_brain_config(tmp_path)
     assert "invalid" in str(exc_info.value).lower()
+
+
+def test_compute_brain_hash():
+    """compute_brain_hash returns deterministic SHA256 hash."""
+    config = BrainConfig(
+        version="1.0",
+        description="Test config",
+        architecture=ArchitectureConfig(
+            type="feedforward",
+            feedforward=FeedforwardConfig(
+                hidden_layers=[128, 64],
+                activation="relu",
+                dropout=0.0,
+                layer_norm=True,
+            ),
+        ),
+        optimizer=OptimizerConfig(
+            type="adam",
+            learning_rate=0.001,
+            adam_beta1=0.9,
+            adam_beta2=0.999,
+            adam_eps=1e-8,
+            weight_decay=0.0,
+        ),
+        loss=LossConfig(type="mse"),
+        q_learning=QLearningConfig(
+            gamma=0.99,
+            target_update_frequency=100,
+            use_double_dqn=False,
+        ),
+    )
+
+    hash1 = compute_brain_hash(config)
+    hash2 = compute_brain_hash(config)
+
+    # Hash should be deterministic
+    assert hash1 == hash2
+    # Hash should be 64-character hex string (SHA256)
+    assert len(hash1) == 64
+    assert all(c in "0123456789abcdef" for c in hash1)
+
+
+def test_compute_brain_hash_differs_for_different_configs():
+    """compute_brain_hash produces different hashes for different configs."""
+    config1 = BrainConfig(
+        version="1.0",
+        description="Config 1",
+        architecture=ArchitectureConfig(
+            type="feedforward",
+            feedforward=FeedforwardConfig(
+                hidden_layers=[128],
+                activation="relu",
+                dropout=0.0,
+                layer_norm=True,
+            ),
+        ),
+        optimizer=OptimizerConfig(
+            type="adam",
+            learning_rate=0.001,
+            adam_beta1=0.9,
+            adam_beta2=0.999,
+            adam_eps=1e-8,
+            weight_decay=0.0,
+        ),
+        loss=LossConfig(type="mse"),
+        q_learning=QLearningConfig(
+            gamma=0.99,
+            target_update_frequency=100,
+            use_double_dqn=False,
+        ),
+    )
+
+    config2 = BrainConfig(
+        version="1.0",
+        description="Config 2",
+        architecture=ArchitectureConfig(
+            type="feedforward",
+            feedforward=FeedforwardConfig(
+                hidden_layers=[256],  # Different!
+                activation="relu",
+                dropout=0.0,
+                layer_norm=True,
+            ),
+        ),
+        optimizer=OptimizerConfig(
+            type="adam",
+            learning_rate=0.001,
+            adam_beta1=0.9,
+            adam_beta2=0.999,
+            adam_eps=1e-8,
+            weight_decay=0.0,
+        ),
+        loss=LossConfig(type="mse"),
+        q_learning=QLearningConfig(
+            gamma=0.99,
+            target_update_frequency=100,
+            use_double_dqn=False,
+        ),
+    )
+
+    hash1 = compute_brain_hash(config1)
+    hash2 = compute_brain_hash(config2)
+
+    assert hash1 != hash2

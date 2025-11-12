@@ -4,6 +4,8 @@ Follows no-defaults principle: all behavioral parameters must be explicit.
 Forward-compatible with future SDA (Software Defined Agent) architecture.
 """
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Literal
 
@@ -180,3 +182,31 @@ def load_brain_config(config_dir: Path) -> BrainConfig:
         raise ValueError(
             f"Invalid brain.yaml in {config_dir}:\n{formatted_errors}\n\n" f"See docs/config-schemas/brain.md for valid schema."
         ) from e
+
+
+def compute_brain_hash(config: BrainConfig) -> str:
+    """Compute SHA256 hash of brain configuration for checkpoint provenance.
+
+    Args:
+        config: Brain configuration to hash
+
+    Returns:
+        64-character hex string (SHA256 hash)
+
+    Example:
+        >>> config = BrainConfig(...)
+        >>> brain_hash = compute_brain_hash(config)
+        >>> len(brain_hash)
+        64
+
+    Note:
+        Hash is computed from JSON-serialized config with sorted keys
+        to ensure deterministic output. Similar to drive_hash for DAC configs.
+    """
+    # Serialize config to JSON with sorted keys for deterministic hashing
+    config_dict = config.model_dump()
+    config_json = json.dumps(config_dict, sort_keys=True, indent=None)
+
+    # Compute SHA256 hash
+    hash_bytes = hashlib.sha256(config_json.encode("utf-8")).digest()
+    return hash_bytes.hex()
