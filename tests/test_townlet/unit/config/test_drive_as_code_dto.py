@@ -2,6 +2,7 @@
 Tests for Drive As Code (DAC) DTO layer.
 
 Task 1.4: IntrinsicStrategyConfig DTO tests.
+Task 1.5: Shaping Bonus DTOs tests.
 """
 
 import pytest
@@ -9,7 +10,13 @@ from pydantic import ValidationError
 
 # Note: Import will fail until we create drive_as_code.py
 # This is expected TDD behavior - tests first, implementation second
-from townlet.config.drive_as_code import IntrinsicStrategyConfig
+from townlet.config.drive_as_code import (
+    ApproachRewardConfig,
+    CompletionBonusConfig,
+    IntrinsicStrategyConfig,
+    TriggerCondition,
+    VFSVariableBonusConfig,
+)
 
 
 class TestIntrinsicStrategyConfigDTO:
@@ -160,3 +167,94 @@ class TestIntrinsicStrategyConfigDTO:
             "temporal_decay",
             "health_crisis",
         ]
+
+
+class TestTriggerCondition:
+    """Test TriggerCondition validation."""
+
+    def test_trigger_with_above(self):
+        """Trigger when value is above threshold."""
+        trigger = TriggerCondition(
+            source="bar",
+            name="energy",
+            above=0.3,
+        )
+        assert trigger.source == "bar"
+        assert trigger.name == "energy"
+        assert trigger.above == 0.3
+        assert trigger.below is None
+
+    def test_trigger_with_below(self):
+        """Trigger when value is below threshold."""
+        trigger = TriggerCondition(
+            source="variable",
+            name="energy_urgency",
+            below=0.7,
+        )
+        assert trigger.source == "variable"
+        assert trigger.below == 0.7
+
+    def test_must_specify_above_or_below(self):
+        """Must specify at least one threshold."""
+        with pytest.raises(ValidationError, match="Must specify 'above' or 'below'"):
+            TriggerCondition(
+                source="bar",
+                name="energy",
+            )
+
+
+class TestApproachRewardConfig:
+    """Test ApproachRewardConfig validation."""
+
+    def test_valid_approach_reward(self):
+        """Valid approach reward configuration."""
+        config = ApproachRewardConfig(
+            type="approach_reward",
+            target_affordance="Bed",
+            trigger=TriggerCondition(source="bar", name="energy", below=0.3),
+            bonus=1.0,
+            decay_with_distance=True,
+        )
+        assert config.type == "approach_reward"
+        assert config.target_affordance == "Bed"
+        assert config.bonus == 1.0
+        assert config.decay_with_distance is True
+
+
+class TestCompletionBonusConfig:
+    """Test CompletionBonusConfig validation."""
+
+    def test_completion_bonus_all_affordances(self):
+        """Completion bonus for all affordances."""
+        config = CompletionBonusConfig(
+            type="completion_bonus",
+            affordances="all",
+            bonus=1.0,
+            scale_with_duration=True,
+        )
+        assert config.affordances == "all"
+
+    def test_completion_bonus_specific_affordances(self):
+        """Completion bonus for specific affordances."""
+        config = CompletionBonusConfig(
+            type="completion_bonus",
+            affordances=["Bed", "Hospital", "Job"],
+            bonus=1.0,
+            scale_with_duration=False,
+        )
+        assert config.affordances == ["Bed", "Hospital", "Job"]
+
+
+class TestVFSVariableBonusConfig:
+    """Test VFSVariableBonusConfig (shaping bonus) validation."""
+
+    def test_valid_vfs_variable_bonus(self):
+        """Valid VFS variable bonus configuration."""
+        config = VFSVariableBonusConfig(
+            type="vfs_variable",
+            variable="custom_shaping_signal",
+            weight=1.0,
+        )
+        assert config.type == "vfs_variable"
+        assert config.variable == "custom_shaping_signal"
+        assert config.weight == 1.0
