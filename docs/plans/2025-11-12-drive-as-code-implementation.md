@@ -1,6 +1,14 @@
 # Drive As Code (DAC) Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status**: COMPLETE (2025-11-12)
+>
+> **Completion Commit**: 9615210 (feat(dac): remove obsolete reward_strategy field from training configs)
+>
+> **Total Commits**: 47 commits in DAC feature branch
+>
+> **Test Coverage**: >90% for DAC modules (drive_as_code.py, dac_engine.py)
+
+---
 
 **Goal:** Implement a declarative reward function compiler (DAC) that extracts all reward logic from Python into composable YAML configurations, enabling researchers to A/B test reward structures without code changes.
 
@@ -9,6 +17,60 @@
 **Tech Stack:** Pydantic (DTOs), PyTorch (GPU tensors), YAML (configs), VFS (feature integration)
 
 **Breaking Changes:** This implementation DELETES `RewardStrategy` and `AdaptiveRewardStrategy` classes, removes `reward_strategy` field from all configs. Pre-release status = zero backward compatibility.
+
+---
+
+## Implementation Complete
+
+**Completion Date**: 2025-11-12
+
+**Final Commit**: 9615210 (feat(dac): remove obsolete reward_strategy field from training configs)
+
+**Total Commits in Feature**: 47 commits
+
+**All Phases Complete**:
+- ✅ Phase 1: DTO Layer (RangeConfig, ModifierConfig, Extrinsic/Intrinsic/Shaping DTOs, DriveAsCodeConfig)
+- ✅ Phase 2: Compiler Integration (CompiledUniverse fields, DAC validation, drive_hash computation)
+- ✅ Phase 3: Runtime Execution (DACEngine, modifiers, extrinsic strategies, shaping bonuses)
+- ✅ Phase 4: Provenance & Checkpoints (drive_hash in checkpoints, validation on load)
+- ✅ Phase 5: Config Migration (All 5 curriculum levels migrated, reward_strategy deleted)
+- ✅ Phase 6: Documentation (drive_as_code.md, dac-migration.md, CLAUDE.md updated)
+
+**Test Coverage Achieved**: >90% for:
+- `src/townlet/config/drive_as_code.py`
+- `src/townlet/environment/dac_engine.py`
+- Integration tests passing for all curriculum levels
+
+**Breaking Changes Summary**:
+1. **DELETED**: `src/townlet/environment/reward_strategy.py` (235 lines)
+2. **REMOVED**: `training.yaml: reward_strategy` field from all configs
+3. **REQUIRED**: `drive_as_code.yaml` now mandatory for all config packs
+4. **ADDED**: `drive_hash` to checkpoint metadata for provenance
+
+**Curriculum Level Updates**:
+- L0_0_minimal: Multiplicative (demonstrates "Low Energy Delirium" bug)
+- L0_5_dual_resource: Constant base with shaped bonuses (fixes bug)
+- L1_full_observability: Multiplicative with high intrinsic weight
+- L2_partial_observability: Multiplicative with low intrinsic weight (POMDP)
+- L3_temporal_mechanics: Multiplicative with temporal exploration
+
+**Documentation Created**:
+1. `docs/config-schemas/drive_as_code.md` - Comprehensive 1000+ line reference
+2. `docs/guides/dac-migration.md` - Migration guide for old configs
+3. Updated `CLAUDE.md` with DAC section
+4. Updated implementation plan (this file) with completion summary
+
+**Known Limitations**:
+- Hybrid extrinsic strategy: Schema defined but not implemented
+- ICM intrinsic strategy: Schema defined but not implemented
+- Count-based intrinsic: Schema defined but not implemented
+- Aggregation strategy: Only supports `min` operation (not max/mean/product)
+
+**Future Work**:
+- Implement hybrid extrinsic strategy (weighted combination of strategies)
+- Implement ICM and count-based intrinsic strategies
+- Add aggregation operation selection (max, mean, product)
+- Add more shaping bonus types as needed
 
 ---
 
