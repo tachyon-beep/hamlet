@@ -589,6 +589,54 @@ class DACEngine:
 
                 shaping_fns.append(create_diversity_bonus_fn(bonus_config))
 
+            elif bonus_config.type == "timing_bonus":
+                # Use closure factory to capture config correctly
+                def create_timing_bonus_fn(config):
+                    weight = config.weight
+                    time_ranges = config.time_ranges
+
+                    def compute_timing_bonus(**kwargs) -> torch.Tensor:
+                        """Compute timing bonus for all agents."""
+                        # Extract kwargs
+                        current_hour = kwargs.get("current_hour")
+                        last_action_affordance = kwargs.get("last_action_affordance")
+
+                        # Null checks - require BOTH kwargs
+                        if current_hour is None or last_action_affordance is None:
+                            return torch.zeros(self.num_agents, device=self.device)
+
+                        # Initialize bonus to zeros
+                        bonus = torch.zeros(self.num_agents, device=self.device)
+
+                        # Check each time range
+                        for time_range in time_ranges:
+                            # Check if current_hour is in range
+                            # Handle wrap-around (e.g., 22-6 means 22,23,0,1,2,3,4,5,6)
+                            if time_range.start_hour <= time_range.end_hour:
+                                # Normal range (e.g., 12-13)
+                                in_time_window = (current_hour >= time_range.start_hour) & (current_hour <= time_range.end_hour)
+                            else:
+                                # Wrap-around range (e.g., 22-6)
+                                in_time_window = (current_hour >= time_range.start_hour) | (current_hour <= time_range.end_hour)
+
+                            # Check if last action matches affordance (string comparison, can't fully vectorize)
+                            affordance_matches = torch.tensor(
+                                [1.0 if aff == time_range.affordance else 0.0 for aff in last_action_affordance],
+                                device=self.device,
+                            )
+
+                            # Both conditions must be met
+                            matches = in_time_window.float() * affordance_matches
+
+                            # Add bonus for this time range
+                            bonus = bonus + (matches * weight * time_range.multiplier)
+
+                        return bonus
+
+                    return compute_timing_bonus
+
+                shaping_fns.append(create_timing_bonus_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:

@@ -1278,6 +1278,63 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
+    def test_timing_bonus(self):
+        """timing_bonus rewards using affordance during specific time windows."""
+        from townlet.config.drive_as_code import TimeRange, TimingBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                TimingBonusConfig(
+                    type="timing_bonus",
+                    weight=1.0,
+                    time_ranges=[
+                        TimeRange(start_hour=22, end_hour=6, affordance="Bed", multiplier=2.0),
+                        TimeRange(start_hour=12, end_hour=13, affordance="Fridge", multiplier=1.5),
+                    ],
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: hour=23, last_action=Bed (in range 22-6, matches) → bonus = 1.0 * 2.0
+        # Agent 1: hour=12, last_action=Fridge (in range 12-13, matches) → bonus = 1.0 * 1.5
+        # Agent 2: hour=10, last_action=Bed (not in range 22-6) → bonus = 0.0
+        # Agent 3: hour=12, last_action=Bed (in range 12-13, wrong affordance) → bonus = 0.0
+        current_hour = torch.tensor([23, 12, 10, 12], device=device)
+        last_action_affordance = ["Bed", "Fridge", "Bed", "Bed"]
+
+        bonuses = engine.shaping_fns[0](current_hour=current_hour, last_action_affordance=last_action_affordance)
+
+        # Agent 0: timing match → 1.0 * 2.0 = 2.0
+        # Agent 1: timing match → 1.0 * 1.5 = 1.5
+        # Agent 2: no match → 0.0
+        # Agent 3: no match → 0.0
+        assert bonuses[0] == 2.0
+        assert bonuses[1] == 1.5
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == 0.0
+
 
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
@@ -1596,4 +1653,57 @@ class TestShapingBonusEdgeCases:
         bonuses = engine.shaping_fns[0]()
 
         # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_timing_bonus_missing_kwargs(self):
+        """timing_bonus returns zeros when current_hour or last_action_affordance missing."""
+        from townlet.config.drive_as_code import TimeRange, TimingBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                TimingBonusConfig(
+                    type="timing_bonus",
+                    weight=5.0,
+                    time_ranges=[
+                        TimeRange(start_hour=22, end_hour=6, affordance="Bed", multiplier=2.0),
+                    ],
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing any kwargs
+        bonuses = engine.shaping_fns[0]()
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+        # Call with only current_hour (missing last_action_affordance)
+        current_hour = torch.tensor([23, 12, 10], device=device)
+        bonuses = engine.shaping_fns[0](current_hour=current_hour)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+        # Call with only last_action_affordance (missing current_hour)
+        last_action_affordance = ["Bed", "Bed", "Bed"]
+        bonuses = engine.shaping_fns[0](last_action_affordance=last_action_affordance)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))

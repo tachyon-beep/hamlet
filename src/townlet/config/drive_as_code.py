@@ -435,6 +435,50 @@ class DiversityBonusConfig(BaseModel):
     min_unique_affordances: int = Field(ge=1, description="Minimum unique affordances for bonus")
 
 
+class TimeRange(BaseModel):
+    """Time range for timing bonus.
+
+    Defines a time window when using a specific affordance grants a bonus.
+
+    Example:
+        >>> nighttime_sleep = TimeRange(
+        ...     start_hour=22,
+        ...     end_hour=6,
+        ...     affordance="Bed",
+        ...     multiplier=2.0,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    start_hour: int = Field(ge=0, le=23, description="Start hour (inclusive)")
+    end_hour: int = Field(ge=0, le=23, description="End hour (inclusive)")
+    affordance: str = Field(description="Affordance to reward during this window")
+    multiplier: float = Field(gt=0.0, description="Bonus multiplier for this window")
+
+
+class TimingBonusConfig(BaseModel):
+    """Bonus for using affordance during specific time windows.
+
+    Rewards agents for contextually appropriate timing (e.g., sleeping at night).
+
+    Example:
+        >>> timing_bonus = TimingBonusConfig(
+        ...     type="timing_bonus",
+        ...     weight=1.0,
+        ...     time_ranges=[
+        ...         TimeRange(start_hour=22, end_hour=6, affordance="Bed", multiplier=2.0),
+        ...     ],
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["timing_bonus"]
+    weight: float = Field(gt=0.0, description="Base bonus weight")
+    time_ranges: list[TimeRange] = Field(min_length=1, description="Time windows with multipliers")
+
+
 # Union type for all shaping bonuses (expand as more types are added)
 ShapingBonusConfig = (
     ApproachRewardConfig
@@ -444,6 +488,7 @@ ShapingBonusConfig = (
     | VFSVariableBonusConfig
     | StreakBonusConfig
     | DiversityBonusConfig
+    | TimingBonusConfig
 )
 
 
