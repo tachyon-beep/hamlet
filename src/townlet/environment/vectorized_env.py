@@ -19,8 +19,8 @@ import torch
 from townlet.environment.action_builder import ComposedActionSpace
 from townlet.environment.affordance_config import AffordanceConfig, AffordanceConfigCollection
 from townlet.environment.affordance_engine import AffordanceEngine
+from townlet.environment.dac_engine import DACEngine
 from townlet.environment.meter_dynamics import MeterDynamics
-from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
 from townlet.universe.dto import MeterMetadata
 from townlet.vfs.registry import VariableRegistry
@@ -315,14 +315,16 @@ class VectorizedHamletEnv:
         self.satiation_idx = meter_name_to_index.get("satiation", None)  # Optional meter
         self.money_idx = meter_name_to_index.get("money", None)  # Optional meter
 
-        # Instantiate reward strategy (legacy bridge until DAC integration complete)
-        # TODO(DAC): Replace with DACEngine once runtime integration complete
-        self.reward_strategy = RewardStrategy(
+        # Build bar index map from universe metadata
+        bar_index_map = _build_bar_index_map(self.universe.meter_metadata)
+
+        # Instantiate DACEngine
+        self.dac_engine = DACEngine(
+            dac_config=self.universe.dac_config,
+            vfs_registry=self.vfs_registry,
             device=self.device,
-            num_agents=num_agents,
-            meter_count=meter_count,
-            energy_idx=self.energy_idx,
-            health_idx=self.health_idx,
+            num_agents=self.num_agents,
+            bar_index_map=bar_index_map,
         )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
 
