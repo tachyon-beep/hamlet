@@ -85,6 +85,7 @@ class TestCheckpointCompatibility:
             "observation_dim": compiled_universe.metadata.observation_dim,
             "action_dim": compiled_universe.metadata.action_count,
             "observation_field_uuids": [field.uuid for field in compiled_universe.observation_spec.fields],
+            "drive_hash": compiled_universe.drive_hash,  # Now required
         }
         compatible, msg = compiled_universe.check_checkpoint_compatibility(checkpoint)
         assert compatible is True
@@ -120,6 +121,7 @@ class TestCheckpointCompatibility:
             "config_hash": compiled_universe.metadata.config_hash,
             # observation_dim missing - should not fail on this alone
             "observation_field_uuids": [field.uuid for field in compiled_universe.observation_spec.fields],
+            "drive_hash": compiled_universe.drive_hash,  # Now required
         }
         compatible, msg = compiled_universe.check_checkpoint_compatibility(checkpoint)
         assert compatible is True
@@ -140,6 +142,7 @@ class TestCheckpointCompatibility:
             "config_hash": compiled_universe.metadata.config_hash,
             # action_dim missing - should not fail on this alone
             "observation_field_uuids": [field.uuid for field in compiled_universe.observation_spec.fields],
+            "drive_hash": compiled_universe.drive_hash,  # Now required
         }
         compatible, msg = compiled_universe.check_checkpoint_compatibility(checkpoint)
         assert compatible is True

@@ -143,21 +143,25 @@ class UniverseCompiler:
         symbol_table = self._stage_2_build_symbol_tables(raw_configs)
         self._symbol_table = symbol_table
 
-        # Load DAC configuration (OPTIONAL for now - Phase 5 will make it REQUIRED)
-        dac_config: DriveAsCodeConfig | None = None
+        # Load DAC configuration (REQUIRED)
         try:
             dac_config = load_drive_as_code_config(config_dir)
             logger.info("Loaded drive_as_code.yaml")
-        except FileNotFoundError:
-            logger.info("drive_as_code.yaml not found - skipping DAC validation (optional)")
-            # Phase 5 will make this required
+        except FileNotFoundError as e:
+            raise CompilationError(
+                stage="Load DAC Configuration",
+                errors=[
+                    f"drive_as_code.yaml is required but not found in {config_dir}",
+                    "All config packs must include a drive_as_code.yaml file",
+                ],
+                hints=["See docs/config-schemas/drive_as_code.md for creating DAC configs"],
+            ) from e
 
         errors = CompilationErrorCollector(stage="Stage 3: Resolve References")
         self._stage_3_resolve_references(raw_configs, symbol_table, errors)
 
-        # Stage 3: Validate DAC references (if DAC config present)
-        if dac_config is not None:
-            self._validate_dac_references(dac_config, symbol_table, errors)
+        # Stage 3: Validate DAC references
+        self._validate_dac_references(dac_config, symbol_table, errors)
 
         errors.check_and_raise("Stage 3: Resolve References")
 
@@ -2010,8 +2014,8 @@ class UniverseCompiler:
             field_uuids=field_uuids,
         )
 
-        # Compute drive_hash if DAC present (Task 2.3)
-        drive_hash = self._compute_dac_hash(dac_config) if dac_config is not None else None
+        # Compute drive_hash (Task 2.3)
+        drive_hash = self._compute_dac_hash(dac_config)
 
         universe = CompiledUniverse(
             hamlet_config=raw_configs.hamlet_config,

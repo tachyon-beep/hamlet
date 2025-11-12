@@ -51,9 +51,9 @@ class CompiledUniverse:
     affordance_metadata: AffordanceMetadata
     optimization_data: OptimizationData
     environment_config: EnvironmentConfig
+    dac_config: DriveAsCodeConfig  # REQUIRED (no default)
+    drive_hash: str  # REQUIRED (no default)
     action_labels_config: ActionLabelConfig | None = None
-    dac_config: DriveAsCodeConfig | None = None
-    drive_hash: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "variables_reference", tuple(self.variables_reference))
@@ -158,26 +158,19 @@ class CompiledUniverse:
                 "Observation field UUID mismatch between checkpoint and compiled universe.",
             )
 
-        # Check drive_hash (reward function provenance)
+        # Check drive_hash (reward function provenance) - now always required
         checkpoint_drive_hash = checkpoint.get("drive_hash")
-        if checkpoint_drive_hash is not None and self.drive_hash is not None:
-            if checkpoint_drive_hash != self.drive_hash:
-                return (
-                    False,
-                    "Drive hash mismatch: reward function has changed since checkpoint was created. "
-                    "This checkpoint was trained with a different DAC configuration and cannot be used. "
-                    "Please retrain with the current drive_as_code.yaml.",
-                )
-        elif checkpoint_drive_hash is None and self.drive_hash is not None:
+        if checkpoint_drive_hash is None:
             return (
                 False,
-                "Checkpoint missing drive_hash but universe has DAC config. "
-                "This checkpoint predates DAC and cannot be used. Please retrain.",
+                "Checkpoint missing drive_hash. This checkpoint predates DAC and cannot be used. Please retrain.",
             )
-        elif checkpoint_drive_hash is not None and self.drive_hash is None:
+        if checkpoint_drive_hash != self.drive_hash:
             return (
                 False,
-                "Checkpoint has drive_hash but universe is missing DAC config. " "Ensure drive_as_code.yaml is present in config pack.",
+                "Drive hash mismatch: reward function has changed since checkpoint was created. "
+                "This checkpoint was trained with a different DAC configuration and cannot be used. "
+                "Please retrain with the current drive_as_code.yaml.",
             )
 
         return True, "Checkpoint compatible."
@@ -232,6 +225,8 @@ class CompiledUniverse:
             },
             "action_labels_config": (self.action_labels_config.model_dump() if self.action_labels_config is not None else None),
             "environment_config": self.environment_config.model_dump(),
+            "dac_config": self.dac_config.model_dump(),
+            "drive_hash": self.drive_hash,
         }
 
         packed = msgpack.packb(data, use_bin_type=True)
@@ -296,6 +291,8 @@ class CompiledUniverse:
                 ActionLabelConfig(**payload["action_labels_config"]) if payload.get("action_labels_config") is not None else None
             ),
             environment_config=EnvironmentConfig(**payload["environment_config"]),
+            dac_config=DriveAsCodeConfig.model_validate(payload["dac_config"]),
+            drive_hash=payload["drive_hash"],
         )
 
 

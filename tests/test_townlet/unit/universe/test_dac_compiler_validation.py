@@ -66,19 +66,21 @@ class TestDACReferenceValidation:
             compiler.compile(dest, use_cache=False)
 
     def test_dac_optional_when_file_missing(self, tmp_path):
-        """Compilation succeeds when drive_as_code.yaml is missing (optional for now)."""
-        # Copy L0_0_minimal (which doesn't have drive_as_code.yaml)
+        """Compilation fails when drive_as_code.yaml is missing (now required)."""
+        # Copy L0_0_minimal but remove drive_as_code.yaml
         source = Path("configs/L0_0_minimal")
         dest = tmp_path / "test_config"
         shutil.copytree(source, dest)
 
-        # Should compile successfully without DAC
-        compiler = UniverseCompiler()
-        compiled = compiler.compile(dest, use_cache=False)
+        # Remove drive_as_code.yaml if it exists
+        dac_file = dest / "drive_as_code.yaml"
+        if dac_file.exists():
+            dac_file.unlink()
 
-        # DAC fields should be None
-        assert compiled.dac_config is None
-        assert compiled.drive_hash is None
+        # Should fail compilation without DAC
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError, match="drive_as_code.yaml is required"):
+            compiler.compile(dest, use_cache=False)
 
     def test_dac_valid_config_compiles(self, tmp_path):
         """Valid DAC configuration compiles successfully."""
@@ -154,19 +156,21 @@ class TestDriveHashComputation:
         assert len(compiled.drive_hash) == 64  # SHA256 hex digest
 
     def test_drive_hash_none_when_dac_missing(self, tmp_path):
-        """Compiled universe has drive_hash=None when DAC not present."""
-        # Copy L0_0_minimal (no drive_as_code.yaml)
+        """Compilation fails when DAC not present (now required)."""
+        # Copy L0_0_minimal and remove drive_as_code.yaml
         source = Path("configs/L0_0_minimal")
         dest = tmp_path / "test_config"
         shutil.copytree(source, dest)
 
-        # Compile without DAC
-        compiler = UniverseCompiler()
-        compiled = compiler.compile(dest, use_cache=False)
+        # Remove drive_as_code.yaml if it exists
+        dac_file = dest / "drive_as_code.yaml"
+        if dac_file.exists():
+            dac_file.unlink()
 
-        # drive_hash should be None
-        assert compiled.dac_config is None
-        assert compiled.drive_hash is None
+        # Compilation should fail without DAC
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError, match="drive_as_code.yaml is required"):
+            compiler.compile(dest, use_cache=False)
 
     def test_different_dac_configs_have_different_hashes(self, tmp_path):
         """Different DAC configurations produce different drive_hash values."""

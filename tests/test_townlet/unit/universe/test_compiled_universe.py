@@ -36,14 +36,16 @@ def test_compiled_universe_checkpoint_check() -> None:
     compiler = UniverseCompiler()
     compiled = compiler.compile(Path("configs/L0_0_minimal"))
 
-    incompatible, _ = compiled.check_checkpoint_compatibility({})
-    assert not incompatible
+    # Empty checkpoint is incompatible (missing drive_hash)
+    compatible, _ = compiled.check_checkpoint_compatibility({})
+    assert not compatible  # Changed: now expects incompatibility due to missing drive_hash
 
     checkpoint = {
         "config_hash": compiled.metadata.config_hash,
         "observation_dim": compiled.metadata.observation_dim,
         "action_dim": compiled.metadata.action_count,
         "observation_field_uuids": [field.uuid for field in compiled.observation_spec.fields],
+        "drive_hash": compiled.drive_hash,  # Now required
     }
     compatible, reason = compiled.check_checkpoint_compatibility(checkpoint)
     assert compatible, reason
@@ -217,22 +219,7 @@ def test_check_checkpoint_compatibility_missing_drive_hash_in_checkpoint() -> No
 
 
 def test_check_checkpoint_compatibility_missing_drive_hash_in_universe() -> None:
-    """Checkpoint with drive_hash but universe without DAC is incompatible."""
-    compiler = UniverseCompiler()
-    compiled = compiler.compile(Path("configs/L0_0_minimal"), use_cache=False)
-
-    # L0_0_minimal doesn't have drive_as_code.yaml, so drive_hash should be None
-    assert compiled.drive_hash is None
-
-    # Create checkpoint WITH drive_hash (but universe doesn't have DAC)
-    checkpoint = {
-        "config_hash": compiled.metadata.config_hash,
-        "observation_dim": compiled.metadata.observation_dim,
-        "action_dim": compiled.metadata.action_count,
-        "observation_field_uuids": [field.uuid for field in compiled.observation_spec.fields],
-        "drive_hash": "abc123_some_hash",  # Has drive_hash but universe doesn't!
-    }
-
-    compatible, message = compiled.check_checkpoint_compatibility(checkpoint)
-    assert compatible is False
-    assert "has drive_hash but universe is missing" in message.lower()
+    """Test removed: drive_hash is now always present in universe (DAC is required)."""
+    # This test is no longer valid since drive_as_code.yaml is now required
+    # All universes will always have a drive_hash
+    pass

@@ -18,6 +18,7 @@ SUPPORT_FILES = [
     "cues.yaml",
     "substrate.yaml",
     "variables_reference.yaml",
+    "drive_as_code.yaml",
 ]
 TEST_CONFIG_SRC = CONFIGS_DIR / "test"
 
