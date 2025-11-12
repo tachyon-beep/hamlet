@@ -1,0 +1,48 @@
+# Brain Configuration for L0_5_dual_resource
+#
+# Feedforward architecture for dual resource management (Bed + Hospital).
+# Matches hardcoded SimpleQNetwork(obs_dim=29, action_dim=8, hidden_dim=128).
+#
+# Learning objectives:
+# - Single hidden layer MLP (29→128→8)
+# - Spatial navigation + resource prioritization
+# - Double DQN to reduce Q-value overestimation
+# - Lower learning rate for more stable convergence
+#
+# Performance baseline:
+# - Should converge in 200-400 episodes
+# - Agent learns to alternate Bed/Hospital based on needs
+# - Eventually runs out of money (no sustainable cycles without Job)
+
+version: "1.0"
+
+description: >
+  Feedforward Q-network for L0_5_dual_resource (Bed + Hospital).
+  Single hidden layer (128 units) for 6×6 grid with dual resource management.
+  Uses Double DQN to reduce overestimation bias.
+  Matches original hardcoded architecture for reproducibility.
+
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [128]
+    activation: relu
+    dropout: 0.0
+    layer_norm: false
+
+optimizer:
+  type: adam
+  learning_rate: 0.0003  # Lower than L0_0 for more stable convergence
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+
+loss:
+  type: mse
+  huber_delta: 1.0  # Not used for MSE, but required field
+
+q_learning:
+  gamma: 0.95  # Lower discount factor for shorter time horizon
+  target_update_frequency: 200  # 2x longer than L0_0 for stability
+  use_double_dqn: true  # Use Double DQN (reduces overestimation)
