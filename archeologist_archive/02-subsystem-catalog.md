@@ -426,3 +426,122 @@
 **Confidence:** High - All 4 files read completely (812 total lines), YAML config flow traced (variables_reference.yaml → load_variables_reference_config → VariableDef list → compiler symbol table → VFSAdapter → ObservationSpec DTOs), runtime integration verified (VariableRegistry used by vectorized_env.py and dac_engine.py), access control enforcement examined (readable_by/writable_by checked in get/set), scope semantics confirmed (global/agent/agent_private shape computation), dependencies bidirectional (inbound from Universe Compiler and Environment, outbound to Pydantic/PyYAML/PyTorch), sample config examined (aspatial_test/variables_reference.yaml with 4 meters + 5 affordances + 4 temporal = 13 dims)
 
 ---
+
+## Demo System
+
+**Location:** `/home/john/hamlet/src/townlet/demo/`
+
+**Responsibility:** Orchestrates multi-episode training sessions with checkpointing, live inference visualization via WebSocket server, and unified server coordination of training/inference/frontend processes for end-to-end demonstration workflows.
+
+**Key Components:**
+- `runner.py` - DemoRunner context manager orchestrating training loop with Population/Environment/Curriculum/Exploration coordination, checkpoint save/load with version validation, TensorBoard logging, SQLite metrics storage, episode recording integration, and graceful shutdown via signal handling (935 lines)
+- `live_inference.py` - LiveInferenceServer providing FastAPI WebSocket server for step-by-step episode visualization with checkpoint auto-loading, substrate-agnostic rendering (Grid2D, Aspatial, future Grid3D/GridND), replay mode integration, Q-value logging, and telemetry broadcasting (1191 lines)
+- `database.py` - DemoDatabase SQLite wrapper with WAL mode for concurrent access, schema management for episodes/affordance_visits/position_heatmap/system_state/episode_recordings tables, recording metadata queries with multi-criteria filtering (408 lines)
+- `unified_server.py` - UnifiedServer orchestrating training thread, inference thread, and optional frontend subprocess with coordinated graceful shutdown, auto-generated checkpoint directories, config snapshot persistence, and file logging setup (543 lines)
+- `__init__.py` - Module initialization (2 lines)
+
+**Dependencies:**
+- Inbound: Recording (recorder.py for EpisodeRecorder integration, replay.py for ReplayManager), scripts (run_demo.py CLI entry point)
+- Outbound: Universe Compiler (UniverseCompiler, CompiledUniverse, RuntimeUniverse), Environment (VectorizedHamletEnv), Population (VectorizedPopulation), Curriculum (AdversarialCurriculum), Exploration (AdaptiveIntrinsicExploration), Training (checkpoint_utils, TensorBoardLogger, BatchedAgentState), Recording (DemoDatabase for metrics storage), Config DTOs (HamletConfig), Substrate (all substrate types for metadata), FastAPI (WebSocket server), uvicorn (ASGI server), PyTorch (tensor operations), SQLite3 (database)
+
+**Patterns Observed:**
+- Context manager pattern in DemoRunner for automatic resource cleanup (database, TensorBoard, recorder shutdown in __exit__)
+- Background training coordination (DemoRunner.run() executes full episode loop with step_population() integration)
+- Checkpoint versioning with breaking change validation (Version 3 with substrate_metadata required, raises on Version 2 checkpoints)
+- Two-phase checkpoint operation (flush all agents → save population/curriculum/affordance_layout/agent_ids → persist digest)
+- Heartbeat/summary/checkpoint intervals (10/50/100 episodes) for progressive logging detail
+- Signal-based graceful shutdown (SIGTERM/SIGINT handlers set should_shutdown flag, training completes current episode)
+- WebSocket broadcast pattern (LiveInferenceServer maintains clients set, broadcasts state_update/episode_start/episode_end/model_loaded messages)
+- Dual mode server (inference mode with checkpoint auto-loading, replay mode with ReplayManager integration)
+- FastAPI application with CORS middleware for cross-origin frontend access
+- Substrate-agnostic state broadcasting (substrate metadata in every WebSocket message for renderer dispatching)
+- Thread-based orchestration in UnifiedServer (training in non-daemon thread, inference in daemon thread, coordinated shutdown)
+- Auto-generated run directories (runs/LX_name/timestamp/checkpoints structure with config snapshot and training.log)
+- Database WAL mode for concurrent read access (single writer training, multiple readers inference/replay)
+- Q-value logging to file (qvalues_inference.log) for debugging action selection
+
+**Concerns:**
+- DemoRunner.run() method is large (600+ lines) with complex episode loop, affordance tracking, reward decomposition, and logging logic
+- Checkpoint validation raises ValueError on old format but no migration tool provided (breaking change requires manual deletion and retraining)
+- LiveInferenceServer stores epsilon from checkpoint but estimates if missing (linear decay assumption may not match actual training epsilon schedule)
+- UnifiedServer frontend subprocess integration commented out (frontend must be manually started, detection logic incomplete)
+- Database close() called in multiple places (__exit__, finally block, _cleanup) without checking closed state (fixed in database.py with _closed flag but redundant calls remain)
+
+**Confidence:** High - All 5 files read completely (3074 total lines), DemoRunner training loop traced (reset → step → record → log → checkpoint), checkpoint versioning verified (Version 3 format with substrate_metadata), LiveInferenceServer WebSocket protocol examined (state_update with substrate/grid/meters/q_values/telemetry), UnifiedServer thread coordination confirmed (training thread joins, inference daemon dies with main), database schema examined (5 tables with indexes), dependencies verified via grep (7 inbound references from Recording/scripts, 15 outbound imports), context manager pattern validated (__enter__/__exit__ with cleanup)
+
+---
+## Compiler Adapters
+
+**Location:** `/home/john/hamlet/src/townlet/universe/adapters/`
+
+**Responsibility:** Bridges VFS observation field specifications with Universe Compiler DTOs by transforming VFSObservationField instances into CompilerObservationField instances with deterministic UUID generation, semantic type inference, and ObservationActivity masking for curriculum control.
+
+**Key Components:**
+- `vfs_adapter.py` - VFSAdapter class and vfs_to_observation_spec function providing VFS-to-compiler DTO transformations with field type inference, dimension flattening, scope inference, semantic name heuristics, and ObservationActivity mask generation (175 lines)
+
+**Dependencies:**
+- Inbound: Universe Compiler (compiler.py invokes vfs_to_observation_spec at Stage 5 metadata enrichment, VFSAdapter.build_observation_activity for curriculum masking)
+- Outbound: Universe Compiler DTOs (ObservationSpec, ObservationField, ObservationActivity, compute_observation_field_uuid from dto/observation_spec.py and dto/observation_activity.py), VFS (VFSObservationField from vfs/schema.py)
+
+**Patterns Observed:**
+- Adapter pattern converting between VFS schema layer and compiler DTO layer with impedance matching
+- Heuristic-based semantic type inference from field names (position, meter, affordance, temporal keywords)
+- Deterministic UUID generation via compute_observation_field_uuid for checkpoint compatibility across config changes
+- Dimension flattening for multi-dimensional observation fields (shape=[5,5] → dims=25)
+- Scope inference with fallback chain (variable_scope → exposed_to list → default to "agent")
+- Curriculum masking via ObservationActivity with per-dimension boolean mask, semantic group slices, and active UUID tracking
+- Stateless transformation functions (no instance state, pure functional conversion)
+- Field type inference from shape (scalar for [], vector for [N], spatial_grid for [N,M])
+
+**Concerns:**
+- None observed
+
+**Confidence:** High - Single file read completely (175 lines), transformation flow traced from VFS ObservationField to compiler ObservationSpec, integration points verified (compiler.py lines 1741 and 2008 invoke adapter functions), semantic type inference heuristics examined, UUID generation determinism confirmed, ObservationActivity masking logic traced with group boundary tracking, test coverage observed (213 lines across 2 test files), dependencies bidirectional (inbound from Universe Compiler Stage 5, outbound to VFS schema and compiler DTOs)
+
+---
+
+## Training
+
+**Location:** `/home/john/hamlet/src/townlet/training/`
+
+**Responsibility:** Provides training state management, replay buffer implementations for experience storage and sampling, checkpoint utilities for model persistence and integrity verification, and TensorBoard logging infrastructure for metrics visualization during Q-learning training.
+
+**Key Components:**
+- `state.py` - Training state DTOs including CurriculumDecision (cold path Pydantic model for environment difficulty), ExplorationConfig (exploration strategy parameters), PopulationCheckpoint (serializable population state), and BatchedAgentState (hot path GPU tensor container with __slots__ optimization) (159 lines)
+- `replay_buffer.py` - ReplayBuffer circular buffer for feedforward networks storing individual transitions with dual rewards (extrinsic/intrinsic), random mini-batch sampling, combined reward weighting, and serialize/deserialize for checkpointing (216 lines)
+- `sequential_replay_buffer.py` - SequentialReplayBuffer for LSTM training storing complete episodes, sampling consecutive sequences with post-terminal masking (P2.2 pattern), episode length validation with detailed error messages, and dual reward composition (249 lines)
+- `checkpoint_utils.py` - Checkpoint utilities including attach_universe_metadata() for config hash/dimension embedding, assert_checkpoint_dimensions() for transfer learning validation, SHA256 digest computation/verification for integrity, and safe_torch_load() with weights_only safety guard and numpy type allowlisting for PyTorch 2.6+ (164 lines)
+- `tensorboard_logger.py` - TensorBoardLogger wrapping torch.utils.tensorboard.SummaryWriter with structured metrics logging (episode survival/rewards, training TD error/loss, exploration epsilon/intrinsic weight, curriculum stages, meter dynamics, network weights/gradients, affordance usage, custom actions, hyperparameters), auto-flush every N episodes, and context manager support (340 lines)
+- `__init__.py` - Module initialization (2 lines)
+
+**Dependencies:**
+- Inbound: Population (vectorized.py uses ReplayBuffer/SequentialReplayBuffer for experience storage, BatchedAgentState for training loop state, checkpoint_utils for save/load), Demo System (runner.py uses TensorBoardLogger for metrics, checkpoint_utils for persistence), Exploration (adaptive_intrinsic.py, rnd.py, epsilon_greedy.py import BatchedAgentState for reward computation), Curriculum (adversarial.py, static.py import BatchedAgentState, CurriculumDecision for difficulty management), Universe Compiler (compiler.py uses checkpoint_utils for validation)
+- Outbound: PyTorch (torch.Tensor for GPU storage, torch.utils.tensorboard.SummaryWriter for logging), Universe Compiler (CompiledUniverse for checkpoint metadata validation), Pydantic (BaseModel for cold path DTOs)
+
+**Patterns Observed:**
+- Hot/cold path separation (BatchedAgentState with __slots__ for training loop, Pydantic DTOs for configuration/checkpointing)
+- Dual replay buffer strategy (ReplayBuffer for feedforward individual transitions, SequentialReplayBuffer for recurrent episode sequences)
+- Circular buffer with FIFO eviction (ReplayBuffer position wrapping via modulo)
+- Lazy initialization pattern (replay buffers allocate storage on first push after observing dimensions)
+- Post-terminal masking (SequentialReplayBuffer creates validity masks preventing gradients from garbage timesteps after terminal state)
+- Dual reward composition (extrinsic + intrinsic * weight applied during sampling, not storage)
+- Checkpoint integrity verification (SHA256 digest stored alongside .pt files, verified on load)
+- Config hash fingerprinting (checkpoint metadata includes universe config hash for transfer learning validation)
+- Observation field UUID validation (checkpoint includes field UUIDs, assert_checkpoint_dimensions() verifies match)
+- Safe deserialization (safe_torch_load with weights_only=True, numpy type allowlisting for PyTorch 2.6+)
+- TensorBoard structured namespace (agent_id prefix, category grouping like Episode/, Training/, Curriculum/, Exploration/, Meters/)
+- Auto-flush pattern (TensorBoardLogger flushes every flush_every episodes, configurable)
+- Context manager protocol (TensorBoardLogger implements __enter__/__exit__ for resource cleanup)
+- Device-agnostic tensors (device parameter threaded through all tensor operations)
+
+**Concerns:**
+- ReplayBuffer uses Python loop for batch insertion (line 79-90) instead of vectorized slice assignment (performance overhead for large batches)
+- SequentialReplayBuffer episode eviction uses while loop with repeated pop(0) (O(n) per eviction, could use collections.deque for O(1))
+- Checkpoint digest verification is optional by default (verify_checkpoint_digest required=False, should be True for production)
+- TensorBoardLogger log_meters uses episode*1000+step as global_step (line 214) which breaks if episodes have >1000 steps
+- BatchedAgentState.info field is dict with no type hints (could contain arbitrary data, hard to validate)
+- ExplorationConfig and PopulationCheckpoint DTOs in state.py are not used by training subsystem itself (belong in exploration/population subsystems)
+
+**Confidence:** High - All 6 files read completely (1130 total lines), dual replay buffer strategy verified (standard vs sequential for feedforward vs recurrent), checkpoint utilities examined (metadata attachment, dimension validation, SHA256 integrity, safe loading), TensorBoard integration traced (structured metrics, auto-flush, context manager), dependencies bidirectional (inbound from Population/Demo/Exploration/Curriculum, outbound to PyTorch/Universe Compiler), test coverage observed (1493 lines across 5 test files), hot/cold path separation pattern confirmed (GPU tensors vs Pydantic DTOs)
+
+---

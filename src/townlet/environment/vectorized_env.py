@@ -20,7 +20,7 @@ from townlet.environment.action_builder import ComposedActionSpace
 from townlet.environment.affordance_config import AffordanceConfig, AffordanceConfigCollection
 from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
-from townlet.environment.reward_strategy import AdaptiveRewardStrategy, RewardStrategy
+from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
 from townlet.vfs.registry import VariableRegistry
 
@@ -302,27 +302,15 @@ class VectorizedHamletEnv:
         self.satiation_idx = meter_name_to_index.get("satiation", None)  # Optional meter
         self.money_idx = meter_name_to_index.get("money", None)  # Optional meter
 
-        # Instantiate reward strategy based on config
-        training_config = universe.training
-        self.reward_strategy: RewardStrategy | AdaptiveRewardStrategy
-        if training_config.reward_strategy == "adaptive":
-            self.reward_strategy = AdaptiveRewardStrategy(
-                device=self.device,
-                num_agents=num_agents,
-                meter_count=meter_count,
-                energy_idx=self.energy_idx,
-                health_idx=self.health_idx,
-                base_reward=training_config.base_reward,
-                bonus_scale=training_config.bonus_scale,
-            )
-        else:  # multiplicative
-            self.reward_strategy = RewardStrategy(
-                device=self.device,
-                num_agents=num_agents,
-                meter_count=meter_count,
-                energy_idx=self.energy_idx,
-                health_idx=self.health_idx,
-            )
+        # Instantiate reward strategy (legacy bridge until DAC integration complete)
+        # TODO(DAC): Replace with DACEngine once runtime integration complete
+        self.reward_strategy = RewardStrategy(
+            device=self.device,
+            num_agents=num_agents,
+            meter_count=meter_count,
+            energy_idx=self.energy_idx,
+            health_idx=self.health_idx,
+        )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
 
         # Precompute meter initialization tensor from bars config
@@ -1192,27 +1180,18 @@ class VectorizedHamletEnv:
         """
         Calculate interoception-aware rewards.
 
-        Delegates to RewardStrategy for calculation.
-
-        For AdaptiveRewardStrategy, also stores intrinsic_weights for population to access.
+        Delegates to RewardStrategy for calculation (legacy bridge).
+        TODO(DAC): Replace with DACEngine once runtime integration complete.
 
         Returns:
             rewards: [num_agents]
         """
-        result = self.reward_strategy.calculate_rewards(
+        # TODO(DAC): Replace with DACEngine.calculate_rewards once runtime integration complete
+        return self.reward_strategy.calculate_rewards(
             step_counts=self.step_counts,
             dones=self.dones,
             meters=self.meters,  # Pass meters for interoception-aware rewards
         )
-
-        # Handle different return types
-        if isinstance(self.reward_strategy, AdaptiveRewardStrategy):
-            rewards, intrinsic_weights = result
-            self.intrinsic_weights = intrinsic_weights  # Store for population to access
-            return rewards
-        else:
-            # Type narrowing: If not AdaptiveRewardStrategy, result is Tensor (not tuple)
-            return cast(torch.Tensor, result)
 
     def get_affordance_positions(self) -> dict:
         """Get current affordance positions (substrate-agnostic checkpointing).

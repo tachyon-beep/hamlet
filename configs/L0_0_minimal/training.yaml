@@ -72,9 +72,6 @@ training:
   max_grad_norm: 10.0  # Gradient clipping threshold
   use_double_dqn: false  # Vanilla DQN (for baseline comparison)
 
-  # Reward strategy
-  reward_strategy: multiplicative  # 'multiplicative' (original) or 'adaptive' (fixes Low Energy Delirium bug)
-
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
   epsilon_decay: 0.99  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
