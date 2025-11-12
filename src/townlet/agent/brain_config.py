@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 
 class FeedforwardConfig(BaseModel):
@@ -54,6 +54,22 @@ class CNNEncoderConfig(BaseModel):
     padding: list[int] = Field(min_length=1, description="Padding for each CNN layer")
     activation: Literal["relu", "gelu", "swish"] = Field(description="Activation function for CNN")
 
+    @field_validator("channels", "kernel_sizes", "strides")
+    @classmethod
+    def validate_positive_values(cls, v: list[int], info) -> list[int]:
+        """Ensure channels, kernel_sizes, and strides contain only positive integers."""
+        if any(x <= 0 for x in v):
+            raise ValueError(f"{info.field_name} must contain only positive integers (> 0)")
+        return v
+
+    @field_validator("padding")
+    @classmethod
+    def validate_non_negative_padding(cls, v: list[int]) -> list[int]:
+        """Ensure padding contains only non-negative integers."""
+        if any(x < 0 for x in v):
+            raise ValueError("padding must contain only non-negative integers (>= 0)")
+        return v
+
     @model_validator(mode="after")
     def validate_layer_consistency(self) -> "CNNEncoderConfig":
         """Ensure all layer lists have same length."""
@@ -85,6 +101,14 @@ class MLPEncoderConfig(BaseModel):
 
     hidden_sizes: list[int] = Field(min_length=1, description="Hidden layer sizes (e.g., [32] for single layer)")
     activation: Literal["relu", "gelu", "swish"] = Field(description="Activation function")
+
+    @field_validator("hidden_sizes")
+    @classmethod
+    def validate_positive_hidden_sizes(cls, v: list[int]) -> list[int]:
+        """Ensure hidden_sizes contains only positive integers."""
+        if any(x <= 0 for x in v):
+            raise ValueError("hidden_sizes must contain only positive integers (> 0)")
+        return v
 
 
 class LSTMConfig(BaseModel):

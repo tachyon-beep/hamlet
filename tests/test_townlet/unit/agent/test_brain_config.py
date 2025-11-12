@@ -79,6 +79,8 @@ def test_feedforward_config_rejects_dropout_gte_1():
 
 def test_optimizer_config_adam():
     """OptimizerConfig accepts Adam configuration."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     config = OptimizerConfig(
         type="adam",
         learning_rate=0.00025,
@@ -86,6 +88,7 @@ def test_optimizer_config_adam():
         adam_beta2=0.999,
         adam_eps=1e-8,
         weight_decay=0.0,
+        schedule=ScheduleConfig(type="constant"),
     )
     assert config.type == "adam"
     assert config.learning_rate == 0.00025
@@ -93,12 +96,15 @@ def test_optimizer_config_adam():
 
 def test_optimizer_config_sgd():
     """OptimizerConfig accepts SGD configuration."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     config = OptimizerConfig(
         type="sgd",
         learning_rate=0.01,
         sgd_momentum=0.9,
         sgd_nesterov=True,
         weight_decay=0.0,
+        schedule=ScheduleConfig(type="constant"),
     )
     assert config.type == "sgd"
     assert config.sgd_momentum == 0.9
@@ -106,6 +112,8 @@ def test_optimizer_config_sgd():
 
 def test_optimizer_config_rejects_negative_lr():
     """OptimizerConfig rejects negative learning rate."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     with pytest.raises(ValidationError) as exc_info:
         OptimizerConfig(
             type="adam",
@@ -114,6 +122,7 @@ def test_optimizer_config_rejects_negative_lr():
             adam_beta2=0.999,
             adam_eps=1e-8,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
         )
     assert "learning_rate" in str(exc_info.value)
 
@@ -140,6 +149,8 @@ def test_loss_config_rejects_negative_huber_delta():
 
 def test_brain_config_feedforward():
     """BrainConfig accepts feedforward architecture."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     config = BrainConfig(
         version="1.0",
         description="Simple feedforward Q-network",
@@ -159,6 +170,7 @@ def test_brain_config_feedforward():
             adam_beta2=0.999,
             adam_eps=1e-8,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
         ),
         loss=LossConfig(type="mse"),
         q_learning=QLearningConfig(
@@ -173,6 +185,8 @@ def test_brain_config_feedforward():
 
 def test_brain_config_requires_feedforward_when_type_feedforward():
     """BrainConfig requires feedforward field when type=feedforward."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     with pytest.raises(ValidationError) as exc_info:
         BrainConfig(
             version="1.0",
@@ -188,6 +202,7 @@ def test_brain_config_requires_feedforward_when_type_feedforward():
                 adam_beta2=0.999,
                 adam_eps=1e-8,
                 weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
             ),
             loss=LossConfig(type="mse"),
             q_learning=QLearningConfig(
@@ -222,6 +237,8 @@ optimizer:
   adam_beta2: 0.999
   adam_eps: 1.0e-8
   weight_decay: 0.0
+  schedule:
+    type: constant
 
 loss:
   type: mse
@@ -263,6 +280,8 @@ optimizer:
   adam_beta2: 0.999
   adam_eps: 1.0e-8
   weight_decay: 0.0
+  schedule:
+    type: constant
 loss:
   type: mse
 q_learning:
@@ -279,6 +298,8 @@ q_learning:
 
 def test_compute_brain_hash():
     """compute_brain_hash returns deterministic SHA256 hash."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     config = BrainConfig(
         version="1.0",
         description="Test config",
@@ -298,6 +319,7 @@ def test_compute_brain_hash():
             adam_beta2=0.999,
             adam_eps=1e-8,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
         ),
         loss=LossConfig(type="mse"),
         q_learning=QLearningConfig(
@@ -319,6 +341,8 @@ def test_compute_brain_hash():
 
 def test_compute_brain_hash_differs_for_different_configs():
     """compute_brain_hash produces different hashes for different configs."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     config1 = BrainConfig(
         version="1.0",
         description="Config 1",
@@ -338,6 +362,7 @@ def test_compute_brain_hash_differs_for_different_configs():
             adam_beta2=0.999,
             adam_eps=1e-8,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
         ),
         loss=LossConfig(type="mse"),
         q_learning=QLearningConfig(
@@ -366,6 +391,7 @@ def test_compute_brain_hash_differs_for_different_configs():
             adam_beta2=0.999,
             adam_eps=1e-8,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
         ),
         loss=LossConfig(type="mse"),
         q_learning=QLearningConfig(
@@ -383,11 +409,14 @@ def test_compute_brain_hash_differs_for_different_configs():
 
 def test_optimizer_config_adam_requires_adam_params():
     """OptimizerConfig type=adam requires adam_beta1, adam_beta2, adam_eps."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     with pytest.raises(ValidationError) as exc_info:
         OptimizerConfig(
             type="adam",
             learning_rate=0.001,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
             # Missing adam_beta1, adam_beta2, adam_eps!
         )
     error_str = str(exc_info.value)
@@ -396,11 +425,14 @@ def test_optimizer_config_adam_requires_adam_params():
 
 def test_optimizer_config_sgd_requires_sgd_params():
     """OptimizerConfig type=sgd requires sgd_momentum and sgd_nesterov."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     with pytest.raises(ValidationError) as exc_info:
         OptimizerConfig(
             type="sgd",
             learning_rate=0.01,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
             # Missing sgd_momentum and sgd_nesterov!
         )
     error_str = str(exc_info.value)
@@ -409,11 +441,14 @@ def test_optimizer_config_sgd_requires_sgd_params():
 
 def test_optimizer_config_rmsprop_requires_rmsprop_params():
     """OptimizerConfig type=rmsprop requires rmsprop_alpha and rmsprop_eps."""
+    from townlet.agent.brain_config import ScheduleConfig
+
     with pytest.raises(ValidationError) as exc_info:
         OptimizerConfig(
             type="rmsprop",
             learning_rate=0.001,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
             # Missing rmsprop_alpha and rmsprop_eps!
         )
     error_str = str(exc_info.value)
@@ -593,3 +628,79 @@ def test_schedule_config_requires_params_for_step_decay():
         gamma=0.1,
     )
     assert config.step_size is not None
+
+
+def test_schedule_config_rejects_step_decay_without_params():
+    """ScheduleConfig rejects step_decay without required parameters."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        ScheduleConfig(type="step_decay")
+    assert "step_size" in str(exc_info.value) or "gamma" in str(exc_info.value)
+
+
+def test_schedule_config_rejects_cosine_without_params():
+    """ScheduleConfig rejects cosine without required parameters."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        ScheduleConfig(type="cosine")
+    assert "t_max" in str(exc_info.value) or "eta_min" in str(exc_info.value)
+
+
+def test_schedule_config_rejects_exponential_without_params():
+    """ScheduleConfig rejects exponential without required parameters."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        ScheduleConfig(type="exponential")
+    assert "gamma" in str(exc_info.value)
+
+
+def test_architecture_config_rejects_recurrent_without_recurrent_config():
+    """ArchitectureConfig rejects type=recurrent without recurrent field."""
+    with pytest.raises(ValidationError) as exc_info:
+        ArchitectureConfig(type="recurrent")
+    assert "recurrent" in str(exc_info.value).lower()
+
+
+def test_cnn_encoder_config_rejects_empty_channels():
+    """CNNEncoderConfig rejects empty channels list."""
+    from townlet.agent.brain_config import CNNEncoderConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        CNNEncoderConfig(
+            channels=[],
+            kernel_sizes=[],
+            strides=[],
+            padding=[],
+            activation="relu",
+        )
+    assert "channels" in str(exc_info.value)
+
+
+def test_cnn_encoder_config_rejects_negative_channels():
+    """CNNEncoderConfig rejects negative or zero channel values."""
+    from townlet.agent.brain_config import CNNEncoderConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        CNNEncoderConfig(
+            channels=[16, -32],
+            kernel_sizes=[3, 3],
+            strides=[1, 1],
+            padding=[1, 1],
+            activation="relu",
+        )
+    assert "channels" in str(exc_info.value) and "positive" in str(exc_info.value)
+
+
+def test_mlp_encoder_config_rejects_negative_hidden_sizes():
+    """MLPEncoderConfig rejects negative or zero hidden sizes."""
+    from townlet.agent.brain_config import MLPEncoderConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        MLPEncoderConfig(
+            hidden_sizes=[32, 0, -16],
+            activation="relu",
+        )
+    assert "hidden_sizes" in str(exc_info.value) and "positive" in str(exc_info.value)
