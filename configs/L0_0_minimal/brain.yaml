@@ -1,47 +1,49 @@
 # Brain Configuration for L0_0_minimal
 #
-# Minimal feedforward architecture for temporal credit assignment learning.
-# Matches hardcoded SimpleQNetwork(obs_dim=29, action_dim=8, hidden_dim=128).
+# Standard feedforward architecture for temporal credit assignment learning.
+# Two hidden layers (256, 128) with constant learning rate schedule.
 #
-# Learning objective:
-# - Single hidden layer MLP (29→128→8)
-# - Fast convergence for 3×3 grid world
-# - Higher learning rate for rapid learning
-# - Vanilla DQN (no Double DQN)
+# Learning objectives:
+# - Standard architecture: [256, 128] hidden layers
+# - Temporal credit assignment in 3×3 grid
+# - Constant learning rate (no decay)
+# - Double DQN for better value estimates
 #
 # Performance baseline:
-# - Should learn optimal strategy by ~100 episodes
-# - Optimal: 478 reward, 705 steps (spacing Bed uses)
-# - Spam: 105 reward, 205 steps (immediate Bed spam)
+# - Should learn optimal strategy by ~100-200 episodes
+# - Optimal: Space out Bed uses for maximum reward
+# - Demonstrates importance of credit assignment over immediate rewards
 
 version: "1.0"
 
 description: >
-  Minimal feedforward Q-network for L0_0_minimal.
-  Single hidden layer (128 units) for 3×3 grid temporal credit assignment.
-  Matches original hardcoded architecture for reproducibility.
+  Standard feedforward Q-network for L0_0_minimal.
+  Two hidden layers [256, 128] for temporal credit assignment.
+  Constant learning rate schedule with Double DQN.
 
 architecture:
   type: feedforward
   feedforward:
-    hidden_layers: [128]
+    hidden_layers: [256, 128]
     activation: relu
     dropout: 0.0
-    layer_norm: false
+    layer_norm: true
 
 optimizer:
   type: adam
-  learning_rate: 0.001  # Higher for faster learning in minimal world
+  learning_rate: 0.00025  # Atari DQN standard
   adam_beta1: 0.9
   adam_beta2: 0.999
   adam_eps: 1.0e-8
   weight_decay: 0.0
+  schedule:
+    type: constant
 
 loss:
   type: mse
-  huber_delta: 1.0  # Not used for MSE, but required field
+  huber_delta: 1.0
 
 q_learning:
-  gamma: 0.95  # Lower discount factor for shorter time horizon
+  gamma: 0.99
   target_update_frequency: 100
-  use_double_dqn: false  # Vanilla DQN for baseline
+  use_double_dqn: true
