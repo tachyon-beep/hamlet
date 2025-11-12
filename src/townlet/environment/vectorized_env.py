@@ -1192,21 +1192,102 @@ class VectorizedHamletEnv:
         return successful_interactions
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:
-        """
-        Calculate interoception-aware rewards.
+        """Calculate total rewards using DACEngine.
 
-        Delegates to RewardStrategy for calculation (legacy bridge).
-        TODO(DAC): Replace with DACEngine once runtime integration complete.
+        Computes: extrinsic + (intrinsic × modifiers) + shaping bonuses
 
         Returns:
-            rewards: [num_agents]
+            rewards: [num_agents] final rewards
         """
-        # TODO(DAC): Replace with DACEngine.calculate_rewards once runtime integration complete
-        return self.reward_strategy.calculate_rewards(
+        # Gather intrinsic raw values (default to zeros if exploration not yet integrated)
+        intrinsic_raw = torch.zeros(self.num_agents, device=self.device)
+
+        # Gather additional context for shaping bonuses
+        kwargs = {
+            "agent_positions": self.positions,
+            "affordance_positions": self._get_affordance_positions(),
+            "last_action_affordance": self._get_last_action_affordances(),
+            "affordance_streak": self._get_affordance_streaks(),
+            "unique_affordances_used": self._get_unique_affordances_used(),
+        }
+
+        # Add temporal context if available
+        if hasattr(self, "current_hour"):
+            kwargs["current_hour"] = self.current_hour
+
+        # Calculate rewards using DACEngine
+        total_rewards, intrinsic_weights, components = self.dac_engine.calculate_rewards(
             step_counts=self.step_counts,
             dones=self.dones,
-            meters=self.meters,  # Pass meters for interoception-aware rewards
+            meters=self.meters,
+            intrinsic_raw=intrinsic_raw,
+            **kwargs,
         )
+
+        # Store intrinsic weights for population-level annealing
+        self.intrinsic_weights = intrinsic_weights
+
+        # Store components for logging (optional)
+        self._last_reward_components = components
+
+        return total_rewards
+
+    def _get_affordance_positions(self) -> dict[str, torch.Tensor]:
+        """Get current affordance positions as dict.
+
+        Returns:
+            Dictionary mapping affordance_id -> position tensor
+
+        Note:
+            Returns empty dict for Aspatial substrate.
+            For spatial substrates, returns positions from substrate.
+        """
+        # For spatial substrates, return affordance positions
+        if hasattr(self, "affordances") and self.affordances:
+            return self.affordances
+        return {}
+
+    def _get_last_action_affordances(self) -> list[str | None]:
+        """Get last affordance used by each agent.
+
+        Returns:
+            List of affordance IDs or None for each agent
+
+        Note:
+            Default implementation returns None for all agents.
+            Future enhancement: Track affordance interactions.
+        """
+        if hasattr(self, "_last_affordances"):
+            return self._last_affordances
+        return [None] * self.num_agents
+
+    def _get_affordance_streaks(self) -> dict[str, torch.Tensor]:
+        """Get affordance streak counts per agent.
+
+        Returns:
+            Dictionary mapping affordance_id -> streak count tensor[num_agents]
+
+        Note:
+            Default implementation returns empty dict.
+            Future enhancement: Track consecutive affordance uses.
+        """
+        if hasattr(self, "_affordance_streaks"):
+            return self._affordance_streaks
+        return {}
+
+    def _get_unique_affordances_used(self) -> torch.Tensor:
+        """Get count of unique affordances used by each agent.
+
+        Returns:
+            Tensor[num_agents] of unique affordance counts
+
+        Note:
+            Default implementation returns zeros.
+            Future enhancement: Track affordance usage diversity.
+        """
+        if hasattr(self, "_unique_affordances_count"):
+            return self._unique_affordances_count
+        return torch.zeros(self.num_agents, device=self.device)
 
     def get_affordance_positions(self) -> dict:
         """Get current affordance positions (substrate-agnostic checkpointing).
