@@ -940,12 +940,12 @@ class UniverseCompiler:
                 )
 
         # Validate extrinsic variable_bonuses (if present)
-        for idx, bonus in enumerate(dac_config.extrinsic.variable_bonuses):
-            if bonus.variable not in symbol_table.vfs_variables:
+        for idx, var_bonus in enumerate(dac_config.extrinsic.variable_bonuses):
+            if var_bonus.variable not in symbol_table.vfs_variables:
                 errors.add(
                     CompilationMessage(
                         code="DAC-REF-005",
-                        message=f"Extrinsic variable bonus references undefined VFS variable: {bonus.variable}",
+                        message=f"Extrinsic variable bonus references undefined VFS variable: {var_bonus.variable}",
                         location=f"drive_as_code.yaml:extrinsic.variable_bonuses[{idx}]",
                     )
                 )
@@ -2034,7 +2034,7 @@ class UniverseCompiler:
         affordance_metadata: AffordanceMetadata,
         optimization_data: OptimizationData,
         environment_config: EnvironmentConfig,
-        dac_config: DriveAsCodeConfig | None,
+        dac_config: DriveAsCodeConfig,
     ) -> CompiledUniverse:
         """Stage 7 – produce immutable CompiledUniverse artifact."""
 

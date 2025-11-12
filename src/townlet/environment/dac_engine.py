@@ -191,9 +191,9 @@ class DACEngine:
                     reward = reward + bonus
 
                 # Add variable bonuses (from VFS): bonus = weight * var_value
-                for bonus_config in variable_bonuses:
-                    var_value = self.vfs_registry.get(bonus_config.variable, reader=self.vfs_reader)
-                    bonus = bonus_config.weight * var_value
+                for var_bonus_config in variable_bonuses:
+                    var_value = self.vfs_registry.get(var_bonus_config.variable, reader=self.vfs_reader)
+                    bonus = var_bonus_config.weight * var_value
                     reward = reward + bonus
 
                 # Apply modifiers
@@ -508,13 +508,14 @@ class DACEngine:
 
                         # Vectorize the comparison using list comprehension + tensor creation
                         # Note: Can't fully vectorize string comparison, but keep it minimal
-                        matches = torch.tensor(
+                        matches: torch.Tensor = torch.tensor(
                             [1.0 if aff == target_affordance else 0.0 for aff in last_action_affordance],
                             device=self.device,
+                            dtype=torch.float32,
                         )
                         bonus = weight * matches
 
-                        return bonus
+                        return torch.as_tensor(bonus)
 
                     return compute_completion_bonus
 
@@ -685,6 +686,7 @@ class DACEngine:
                             affordance_matches = torch.tensor(
                                 [1.0 if aff == time_range.affordance else 0.0 for aff in last_action_affordance],
                                 device=self.device,
+                                dtype=torch.float32,
                             )
 
                             # Both conditions must be met
@@ -812,7 +814,7 @@ class DACEngine:
 
                         # Bonus: weight * variable_value
                         # Supports negative bonuses (weight or variable can be negative)
-                        bonus = weight * variable_value
+                        bonus: torch.Tensor = weight * variable_value
 
                         return bonus
 
