@@ -415,6 +415,26 @@ class StreakBonusConfig(BaseModel):
     min_streak: int = Field(ge=1, description="Minimum streak length for bonus")
 
 
+class DiversityBonusConfig(BaseModel):
+    """Bonus for using many different affordances.
+
+    Rewards agents for exploring diverse interactions.
+
+    Example:
+        >>> diversity_bonus = DiversityBonusConfig(
+        ...     type="diversity_bonus",
+        ...     weight=3.0,
+        ...     min_unique_affordances=4,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["diversity_bonus"]
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    min_unique_affordances: int = Field(ge=1, description="Minimum unique affordances for bonus")
+
+
 # Union type for all shaping bonuses (expand as more types are added)
 ShapingBonusConfig = (
     ApproachRewardConfig
@@ -423,6 +443,7 @@ ShapingBonusConfig = (
     | StateAchievementConfig
     | VFSVariableBonusConfig
     | StreakBonusConfig
+    | DiversityBonusConfig
 )
 
 

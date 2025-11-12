@@ -1229,6 +1229,55 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
+    def test_diversity_bonus(self):
+        """diversity_bonus rewards using many different affordances."""
+        from townlet.config.drive_as_code import DiversityBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                DiversityBonusConfig(
+                    type="diversity_bonus",
+                    weight=2.5,
+                    min_unique_affordances=3,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: 5 unique (exceeds), Agent 1: 3 unique (meets),
+        # Agent 2: 2 unique (below), Agent 3: 0 unique (none)
+        unique_affordances_used = torch.tensor([5, 3, 2, 0], device=device)
+
+        bonuses = engine.shaping_fns[0](unique_affordances_used=unique_affordances_used)
+
+        # Agent 0,1: unique >= 3 → bonus = 2.5
+        # Agent 2,3: unique < 3 → bonus = 0.0
+        assert bonuses[0] == 2.5
+        assert bonuses[1] == 2.5
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == 0.0
+
 
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
@@ -1504,4 +1553,47 @@ class TestShapingBonusEdgeCases:
         bonuses = engine.shaping_fns[0](affordance_streak=affordance_streak)
 
         # Should return zeros (affordance not in dict)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_diversity_bonus_missing_kwarg(self):
+        """diversity_bonus returns zeros when unique_affordances_used missing."""
+        from townlet.config.drive_as_code import DiversityBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                DiversityBonusConfig(
+                    type="diversity_bonus",
+                    weight=5.0,
+                    min_unique_affordances=2,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing unique_affordances_used kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))

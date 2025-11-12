@@ -564,6 +564,31 @@ class DACEngine:
 
                 shaping_fns.append(create_streak_bonus_fn(bonus_config))
 
+            elif bonus_config.type == "diversity_bonus":
+                # Use closure factory to capture config correctly
+                def create_diversity_bonus_fn(config):
+                    weight = config.weight
+                    min_unique = config.min_unique_affordances
+
+                    def compute_diversity_bonus(**kwargs) -> torch.Tensor:
+                        """Compute diversity bonus for all agents."""
+                        # Extract kwargs
+                        unique_affordances_used = kwargs.get("unique_affordances_used")
+
+                        # Null check for missing kwarg
+                        if unique_affordances_used is None:
+                            return torch.zeros(self.num_agents, device=self.device)
+
+                        # Bonus if unique_affordances_used >= min_unique
+                        meets_threshold = unique_affordances_used >= min_unique
+                        bonus = torch.where(meets_threshold, weight, 0.0)
+
+                        return bonus
+
+                    return compute_diversity_bonus
+
+                shaping_fns.append(create_diversity_bonus_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:
