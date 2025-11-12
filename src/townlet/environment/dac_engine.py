@@ -389,11 +389,20 @@ class DACEngine:
     def _get_bar_index(self, bar_id: str) -> int:
         """Get meter index for a bar ID.
 
+        TODO(CRITICAL - Phase 3D): This implementation has a critical flaw identified
+        in code review. It returns index within extrinsic.bars list, NOT index into
+        the full meters tensor from universe metadata. This will cause silent data
+        corruption when extrinsic config doesn't reference all bars or references
+        them in different order than bars.yaml.
+
+        Fix required: Add bar_index_map: dict[str, int] to DACEngine constructor,
+        populated from universe metadata in Phase 3D integration.
+
         Args:
             bar_id: Bar identifier (e.g., "energy", "health")
 
         Returns:
-            Index into meters tensor
+            Index into meters tensor (CURRENTLY WRONG - returns config index)
 
         Raises:
             ValueError: If bar_id not found
