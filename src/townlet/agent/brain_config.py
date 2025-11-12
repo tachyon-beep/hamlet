@@ -4,9 +4,11 @@ Follows no-defaults principle: all behavioral parameters must be explicit.
 Forward-compatible with future SDA (Software Defined Agent) architecture.
 """
 
+from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
 class FeedforwardConfig(BaseModel):
@@ -138,3 +140,43 @@ class BrainConfig(BaseModel):
     optimizer: OptimizerConfig = Field(description="Optimizer configuration")
     loss: LossConfig = Field(description="Loss function configuration")
     q_learning: QLearningConfig = Field(description="Q-learning algorithm parameters")
+
+
+def load_brain_config(config_dir: Path) -> BrainConfig:
+    """Load and validate brain configuration from brain.yaml.
+
+    Args:
+        config_dir: Directory containing brain.yaml
+
+    Returns:
+        Validated BrainConfig
+
+    Raises:
+        FileNotFoundError: If brain.yaml not found
+        ValueError: If validation fails
+
+    Example:
+        >>> config = load_brain_config(Path("configs/L0_0_minimal"))
+        >>> print(config.architecture.type)
+        feedforward
+    """
+    config_path = Path(config_dir) / "brain.yaml"
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"brain.yaml not found in {config_dir}. " f"Brain configuration is required for all config packs.")
+
+    try:
+        with open(config_path) as f:
+            data = yaml.safe_load(f)
+        return BrainConfig(**data)
+    except ValidationError as e:
+        # Format validation error for user-friendly output
+        error_msgs = []
+        for error in e.errors():
+            field_path = " -> ".join(str(loc) for loc in error["loc"])
+            error_msgs.append(f"  - {field_path}: {error['msg']}")
+
+        formatted_errors = "\n".join(error_msgs)
+        raise ValueError(
+            f"Invalid brain.yaml in {config_dir}:\n{formatted_errors}\n\n" f"See docs/config-schemas/brain.md for valid schema."
+        ) from e

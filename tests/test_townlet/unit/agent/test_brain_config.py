@@ -10,6 +10,7 @@ from townlet.agent.brain_config import (
     LossConfig,
     OptimizerConfig,
     QLearningConfig,
+    load_brain_config,
 )
 
 
@@ -195,3 +196,81 @@ def test_brain_config_requires_feedforward_when_type_feedforward():
             ),
         )
     assert "feedforward" in str(exc_info.value).lower()
+
+
+def test_load_brain_config_valid(tmp_path):
+    """load_brain_config loads valid brain.yaml."""
+    brain_yaml = tmp_path / "brain.yaml"
+    brain_yaml.write_text(
+        """
+version: "1.0"
+description: "Test feedforward network"
+
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [128, 64]
+    activation: relu
+    dropout: 0.0
+    layer_norm: true
+
+optimizer:
+  type: adam
+  learning_rate: 0.001
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+
+loss:
+  type: mse
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: false
+"""
+    )
+
+    config = load_brain_config(tmp_path)
+    assert config.version == "1.0"
+    assert config.architecture.feedforward.hidden_layers == [128, 64]
+    assert config.optimizer.learning_rate == 0.001
+
+
+def test_load_brain_config_missing_file(tmp_path):
+    """load_brain_config raises FileNotFoundError for missing file."""
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_brain_config(tmp_path)
+    assert "brain.yaml" in str(exc_info.value)
+
+
+def test_load_brain_config_invalid_yaml(tmp_path):
+    """load_brain_config raises ValueError for invalid YAML."""
+    brain_yaml = tmp_path / "brain.yaml"
+    brain_yaml.write_text(
+        """
+version: "1.0"
+architecture:
+  type: feedforward
+  # Missing feedforward config!
+optimizer:
+  type: adam
+  learning_rate: 0.001
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: false
+"""
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        load_brain_config(tmp_path)
+    assert "invalid" in str(exc_info.value).lower()
