@@ -1,0 +1,35 @@
+# drive_as_code.yaml - Drive As Code (DAC) Reward Configuration
+# L2_partial_observability: POMDP with LSTM
+#
+# Reward Strategy: Multiplicative (energy × health)
+# - Extrinsic: r_ext = 1.0 * energy * health
+# - Intrinsic: RND novelty-seeking (base_weight = 0.1)
+# - Composition: r_total = r_ext + (intrinsic_weight * r_int)
+#
+# Pedagogical Goal: POMDP learning with partial observability (5×5 vision window)
+# Teaching Moment: "Low Energy Delirium" bug present (no crisis suppression)
+# Note: Lower intrinsic weight (0.1) - let extrinsic milestones drive learning
+#       in partial observability setting where exploration is harder
+
+drive_as_code:
+  version: "1.0"
+
+  modifiers: {}
+
+  extrinsic:
+    type: multiplicative
+    base: 1.0
+    bars: [energy, health]
+
+  intrinsic:
+    strategy: rnd
+    base_weight: 0.1  # Matches training.yaml: initial_intrinsic_weight
+    apply_modifiers: []
+
+  shaping: []
+
+  composition:
+    normalize: false
+    clip: null
+    log_components: true
+    log_modifiers: true

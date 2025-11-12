@@ -19,15 +19,29 @@ import torch
 from townlet.environment.action_builder import ComposedActionSpace
 from townlet.environment.affordance_config import AffordanceConfig, AffordanceConfigCollection
 from townlet.environment.affordance_engine import AffordanceEngine
+from townlet.environment.dac_engine import DACEngine
 from townlet.environment.meter_dynamics import MeterDynamics
-from townlet.environment.reward_strategy import AdaptiveRewardStrategy, RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
+from townlet.universe.dto import MeterMetadata
 from townlet.vfs.registry import VariableRegistry
 
 if TYPE_CHECKING:
     from townlet.environment.action_config import ActionConfig, ActionSpaceConfig
+    from townlet.exploration.base import ExplorationStrategy
     from townlet.population.runtime_registry import AgentRuntimeRegistry
     from townlet.universe.compiled import CompiledUniverse
+
+
+def _build_bar_index_map(meter_metadata: MeterMetadata) -> dict[str, int]:
+    """Build mapping from bar IDs to meter tensor indices.
+
+    Args:
+        meter_metadata: Universe meter metadata
+
+    Returns:
+        Dictionary mapping bar_id -> tensor_index
+    """
+    return {meter.name: meter.index for meter in meter_metadata.meters}
 
 
 def _build_affordance_collection(raw_affordances: tuple[Any, ...]) -> AffordanceConfigCollection:
@@ -302,27 +316,17 @@ class VectorizedHamletEnv:
         self.satiation_idx = meter_name_to_index.get("satiation", None)  # Optional meter
         self.money_idx = meter_name_to_index.get("money", None)  # Optional meter
 
-        # Instantiate reward strategy based on config
-        training_config = universe.training
-        self.reward_strategy: RewardStrategy | AdaptiveRewardStrategy
-        if training_config.reward_strategy == "adaptive":
-            self.reward_strategy = AdaptiveRewardStrategy(
-                device=self.device,
-                num_agents=num_agents,
-                meter_count=meter_count,
-                energy_idx=self.energy_idx,
-                health_idx=self.health_idx,
-                base_reward=training_config.base_reward,
-                bonus_scale=training_config.bonus_scale,
-            )
-        else:  # multiplicative
-            self.reward_strategy = RewardStrategy(
-                device=self.device,
-                num_agents=num_agents,
-                meter_count=meter_count,
-                energy_idx=self.energy_idx,
-                health_idx=self.health_idx,
-            )
+        # Build bar index map from universe metadata
+        bar_index_map = _build_bar_index_map(self.universe.meter_metadata)
+
+        # Instantiate DACEngine
+        self.dac_engine = DACEngine(
+            dac_config=self.universe.dac_config,
+            vfs_registry=self.vfs_registry,
+            device=self.device,
+            num_agents=self.num_agents,
+            bar_index_map=bar_index_map,
+        )
         self.runtime_registry: AgentRuntimeRegistry | None = None  # Injected by population/inference controllers
 
         # Precompute meter initialization tensor from bars config
@@ -402,6 +406,9 @@ class VectorizedHamletEnv:
         self.step_counts = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
         self.intrinsic_weights = torch.ones(self.num_agents, dtype=torch.float32, device=self.device)  # Default: 1.0 (full exploration)
 
+        # Exploration module (optional, set by population or external code)
+        self.exploration_module: ExplorationStrategy | None = None
+
         # Temporal mechanics state
         self.interaction_progress = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
         self.last_interaction_affordance: list[str | None] = [None] * self.num_agents
@@ -416,6 +423,16 @@ class VectorizedHamletEnv:
             # When temporal mechanics are disabled, interaction progress is unused but kept for typing consistency.
             self.interaction_progress.zero_()
 
+        # Affordance history tracking (for DAC shaping bonuses)
+        # Track last affordance interacted with per agent
+        self._last_affordances: list[str | None] = [None] * self.num_agents
+        # Track consecutive interactions with each affordance (per-affordance, per-agent)
+        self._affordance_streaks: dict[str, torch.Tensor] = {}
+        # Track count of unique affordances used per agent
+        self._unique_affordances_count = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+        # Track set of unique affordances seen per agent
+        self._affordances_seen: list[set[str]] = [set() for _ in range(self.num_agents)]
+
         # Initialize affordance positions per configuration
         if self.randomize_affordances:
             self.randomize_affordance_positions()
@@ -425,6 +442,18 @@ class VectorizedHamletEnv:
     def attach_runtime_registry(self, registry: AgentRuntimeRegistry) -> None:
         """Attach runtime registry for telemetry tracking."""
         self.runtime_registry = registry
+
+    def set_exploration_module(self, exploration: ExplorationStrategy) -> None:
+        """Set exploration module for intrinsic reward computation.
+
+        Args:
+            exploration: Exploration strategy (RND, ICM, epsilon-greedy, etc.)
+
+        Note:
+            This is typically called by VectorizedPopulation during initialization,
+            but can also be set manually for testing or custom training loops.
+        """
+        self.exploration_module = exploration
 
     def _get_optional_action_idx(self, action_name: str) -> int | None:
         """Return action index if available in composed action space."""
@@ -598,6 +627,12 @@ class VectorizedHamletEnv:
             self.interaction_progress.fill_(0)
             self.last_interaction_affordance = [None] * self.num_agents
             self.last_interaction_position.fill_(0)
+
+        # Reset affordance history tracking
+        self._last_affordances = [None] * self.num_agents
+        self._affordance_streaks = {}
+        self._unique_affordances_count.zero_()
+        self._affordances_seen = [set() for _ in range(self.num_agents)]
 
         return self._get_observations()
 
@@ -1133,6 +1168,9 @@ class VectorizedHamletEnv:
 
                 successful_interactions[agent_idx_int] = affordance_name
 
+        # Update affordance tracking after all interactions
+        self._update_affordance_tracking(successful_interactions)
+
         return successful_interactions
 
     def _handle_instant_interactions(self, interact_mask: torch.Tensor) -> dict:
@@ -1186,33 +1224,147 @@ class VectorizedHamletEnv:
                 agent_mask=at_affordance,
             )
 
+        # Update affordance tracking after all interactions
+        self._update_affordance_tracking(successful_interactions)
+
         return successful_interactions
 
     def _calculate_shaped_rewards(self) -> torch.Tensor:
-        """
-        Calculate interoception-aware rewards.
+        """Calculate total rewards using DACEngine.
 
-        Delegates to RewardStrategy for calculation.
-
-        For AdaptiveRewardStrategy, also stores intrinsic_weights for population to access.
+        Computes: extrinsic + (intrinsic × modifiers) + shaping bonuses
 
         Returns:
-            rewards: [num_agents]
+            rewards: [num_agents] final rewards
         """
-        result = self.reward_strategy.calculate_rewards(
+        # Gather intrinsic raw values from exploration module (if available)
+        if self.exploration_module is not None:
+            # Get current observations for intrinsic reward computation
+            observations = self._get_observations()
+            intrinsic_raw = self.exploration_module.compute_intrinsic_rewards(observations, update_stats=False)
+        else:
+            # Fallback to zeros if no exploration module is set
+            intrinsic_raw = torch.zeros(self.num_agents, device=self.device)
+
+        # Gather additional context for shaping bonuses
+        kwargs = {
+            "agent_positions": self.positions,
+            "affordance_positions": self._get_affordance_positions(),
+            "last_action_affordance": self._get_last_action_affordances(),
+            "affordance_streak": self._get_affordance_streaks(),
+            "unique_affordances_used": self._get_unique_affordances_used(),
+        }
+
+        # Add temporal context if temporal mechanics enabled
+        if self.enable_temporal_mechanics:
+            kwargs["current_hour"] = self.time_of_day
+
+        # Calculate rewards using DACEngine
+        total_rewards, intrinsic_weights, components = self.dac_engine.calculate_rewards(
             step_counts=self.step_counts,
             dones=self.dones,
-            meters=self.meters,  # Pass meters for interoception-aware rewards
+            meters=self.meters,
+            intrinsic_raw=intrinsic_raw,
+            **kwargs,
         )
 
-        # Handle different return types
-        if isinstance(self.reward_strategy, AdaptiveRewardStrategy):
-            rewards, intrinsic_weights = result
-            self.intrinsic_weights = intrinsic_weights  # Store for population to access
-            return rewards
-        else:
-            # Type narrowing: If not AdaptiveRewardStrategy, result is Tensor (not tuple)
-            return cast(torch.Tensor, result)
+        # Store intrinsic weights for population-level annealing
+        self.intrinsic_weights = intrinsic_weights
+
+        # Store components for logging (optional)
+        self._last_reward_components = components
+
+        return total_rewards
+
+    def _get_affordance_positions(self) -> dict[str, torch.Tensor]:
+        """Get current affordance positions as dict.
+
+        Returns:
+            Dictionary mapping affordance_id -> position tensor
+
+        Note:
+            Returns empty dict for Aspatial substrate.
+            For spatial substrates, returns positions from substrate.
+        """
+        # For spatial substrates, return affordance positions
+        if hasattr(self, "affordances") and self.affordances:
+            return self.affordances
+        return {}
+
+    def _update_affordance_tracking(self, successful_interactions: dict[int, str]) -> None:
+        """Update affordance tracking based on successful interactions.
+
+        Args:
+            successful_interactions: Dictionary mapping agent_idx -> affordance_name
+
+        Updates:
+            - _last_affordances: Last affordance per agent
+            - _affordance_streaks: Consecutive interactions per affordance
+            - _unique_affordances_count: Count of unique affordances per agent
+            - _affordances_seen: Set of unique affordances per agent
+        """
+        # Initialize streak tensors for all affordances if not present
+        for affordance_name in self.affordances.keys():
+            if affordance_name not in self._affordance_streaks:
+                self._affordance_streaks[affordance_name] = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+
+        # Update tracking for each agent
+        for agent_idx in range(self.num_agents):
+            if agent_idx in successful_interactions:
+                # Agent interacted with an affordance
+                affordance_name = successful_interactions[agent_idx]
+
+                # Update last affordance
+                last_affordance = self._last_affordances[agent_idx]
+                self._last_affordances[agent_idx] = affordance_name
+
+                # Update streaks
+                if last_affordance == affordance_name:
+                    # Consecutive interaction with same affordance - increment streak
+                    self._affordance_streaks[affordance_name][agent_idx] += 1
+                else:
+                    # Different affordance or first interaction - reset all streaks and start new one
+                    for aff_name in self._affordance_streaks:
+                        self._affordance_streaks[aff_name][agent_idx] = 0
+                    self._affordance_streaks[affordance_name][agent_idx] = 1
+
+                # Update unique affordance count
+                if affordance_name not in self._affordances_seen[agent_idx]:
+                    self._affordances_seen[agent_idx].add(affordance_name)
+                    self._unique_affordances_count[agent_idx] += 1
+            else:
+                # Agent did not interact - reset last affordance but keep streaks and unique counts
+                self._last_affordances[agent_idx] = None
+
+    def _get_last_action_affordances(self) -> list[str | None]:
+        """Get last affordance used by each agent.
+
+        Returns:
+            List of affordance IDs or None for each agent
+        """
+        if hasattr(self, "_last_affordances"):
+            return self._last_affordances
+        return [None] * self.num_agents
+
+    def _get_affordance_streaks(self) -> dict[str, torch.Tensor]:
+        """Get affordance streak counts per agent.
+
+        Returns:
+            Dictionary mapping affordance_id -> streak count tensor[num_agents]
+        """
+        if hasattr(self, "_affordance_streaks"):
+            return self._affordance_streaks
+        return {}
+
+    def _get_unique_affordances_used(self) -> torch.Tensor:
+        """Get count of unique affordances used by each agent.
+
+        Returns:
+            Tensor[num_agents] of unique affordance counts
+        """
+        if hasattr(self, "_unique_affordances_count"):
+            return self._unique_affordances_count
+        return torch.zeros(self.num_agents, device=self.device)
 
     def get_affordance_positions(self) -> dict:
         """Get current affordance positions (substrate-agnostic checkpointing).

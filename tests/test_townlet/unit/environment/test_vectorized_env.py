@@ -25,12 +25,34 @@ import pytest
 import torch
 import yaml
 
-from townlet.environment.vectorized_env import _resolve_deployable_affordances
+from townlet.environment.vectorized_env import (
+    _build_bar_index_map,
+    _resolve_deployable_affordances,
+)
+from townlet.universe.dto import MeterInfo, MeterMetadata
 from townlet.universe.errors import CompilationError
 
 # =============================================================================
 # AFFORDANCE FILTERING HELPERS
 # =============================================================================
+
+
+def test_build_bar_index_map():
+    """Test bar index map construction from universe metadata."""
+    # Create mock metadata with 3 bars
+    # MeterInfo.name is the bar ID (lowercase)
+    meter_metadata = MeterMetadata(
+        meters=(
+            MeterInfo(name="energy", index=0, critical=True, initial_value=1.0, observable=True),
+            MeterInfo(name="health", index=1, critical=True, initial_value=1.0, observable=True),
+            MeterInfo(name="satiation", index=2, critical=False, initial_value=0.8, observable=True),
+        )
+    )
+
+    bar_map = _build_bar_index_map(meter_metadata)
+
+    assert bar_map == {"energy": 0, "health": 1, "satiation": 2}
+    assert len(bar_map) == 3
 
 
 class TestResolveDeployableAffordances:

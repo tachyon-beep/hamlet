@@ -106,6 +106,9 @@ class VectorizedPopulation(PopulationManager):
         self.runtime_registry = AgentRuntimeRegistry(agent_ids=agent_ids, device=device)
         self.env.attach_runtime_registry(self.runtime_registry)
 
+        # Wire exploration module to environment for intrinsic reward computation
+        self.env.set_exploration_module(exploration)
+
         # Training metrics (for TensorBoard logging)
         self.last_td_error = 0.0
         self.last_loss = 0.0
@@ -494,21 +497,26 @@ class VectorizedPopulation(PopulationManager):
             depletion_multiplier = self.current_curriculum_decisions[0].depletion_multiplier
 
         # 7. Step environment with curriculum difficulty
+        # Note: rewards from environment already contain full DAC composition:
+        #   rewards = extrinsic + (intrinsic * base_weight * modifiers) + shaping
         next_obs, rewards, dones, info = envs.step(actions, depletion_multiplier)
 
-        # 7. Compute intrinsic rewards (if RND-based exploration)
+        # 7. Compute intrinsic rewards for logging/tracking only (not added to rewards)
+        # DAC engine already includes intrinsic in the rewards tensor above
         intrinsic_rewards = torch.zeros_like(rewards)
         if isinstance(self.exploration, RNDExploration | AdaptiveIntrinsicExploration):
             intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs, update_stats=True)
 
         # 7. Store transition in replay buffer
+        # Note: Since DAC already composed rewards, we store total rewards and zero intrinsic
+        # to avoid double-counting during replay buffer sampling
         if self.is_recurrent:
             # For recurrent networks: accumulate episodes
             for i in range(self.num_agents):
                 self.current_episodes[i]["observations"].append(self.current_obs[i].cpu())
                 self.current_episodes[i]["actions"].append(actions[i].cpu())
-                self.current_episodes[i]["rewards_extrinsic"].append(rewards[i].cpu())
-                self.current_episodes[i]["rewards_intrinsic"].append(intrinsic_rewards[i].cpu())
+                self.current_episodes[i]["rewards_extrinsic"].append(rewards[i].cpu())  # Actually total from DAC
+                self.current_episodes[i]["rewards_intrinsic"].append(torch.zeros_like(rewards[i]).cpu())  # Zero to avoid double-counting
                 self.current_episodes[i]["dones"].append(dones[i].cpu())
         else:
             # For feedforward networks: store individual transitions
@@ -516,8 +524,8 @@ class VectorizedPopulation(PopulationManager):
             standard_buffer.push(
                 observations=self.current_obs,
                 actions=actions,
-                rewards_extrinsic=rewards,
-                rewards_intrinsic=intrinsic_rewards,
+                rewards_extrinsic=rewards,  # Actually total rewards from DAC
+                rewards_intrinsic=torch.zeros_like(rewards),  # Zero to avoid double-counting
                 next_observations=next_obs,
                 dones=dones,
             )
@@ -539,9 +547,9 @@ class VectorizedPopulation(PopulationManager):
         # For feedforward: need enough transitions (>= batch_size) for batch sampling
         min_buffer_size = 16 if self.is_recurrent else self.batch_size
         if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:
-            intrinsic_weight = (
-                self.exploration.get_intrinsic_weight() if isinstance(self.exploration, AdaptiveIntrinsicExploration) else 1.0
-            )
+            # Note: intrinsic_weight is 1.0 because DAC already composed rewards.
+            # The replay buffer stores total rewards (not separate extrinsic/intrinsic).
+            intrinsic_weight = 1.0
 
             if self.is_recurrent:
                 # Sequential LSTM training with target network for temporal dependencies
@@ -727,20 +735,11 @@ class VectorizedPopulation(PopulationManager):
                     self._store_episode_and_reset(idx)
                 self._finalize_episode(idx, survival_time)
 
-        # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
-        # Use per-agent intrinsic weights from AdaptiveRewardStrategy if available,
-        # otherwise fall back to global weight from AdaptiveIntrinsicExploration
-        if hasattr(envs, "intrinsic_weights") and envs.intrinsic_weights is not None:
-            # Per-agent weights from AdaptiveRewardStrategy (crisis suppression)
-            intrinsic_weight_tensor = envs.intrinsic_weights
-        elif isinstance(self.exploration, AdaptiveIntrinsicExploration):
-            # Global weight from AdaptiveIntrinsicExploration (performance-based annealing)
-            intrinsic_weight_tensor = torch.full_like(rewards, self.exploration.get_intrinsic_weight())
-        else:
-            # Default: full exploration weight
-            intrinsic_weight_tensor = torch.ones_like(rewards)
-
-        total_rewards = rewards + intrinsic_rewards * intrinsic_weight_tensor
+        # 12. Construct BatchedAgentState
+        # Note: rewards from environment already contain full DAC composition including intrinsic.
+        # We do NOT add intrinsic_rewards again to avoid double-counting.
+        # intrinsic_rewards is kept for logging/tracking purposes only.
+        total_rewards = rewards  # Already contains: extrinsic + intrinsic + shaping from DAC
 
         # 10. Construct and return batched agent state
         # Add Q-values to info for recording (clone to CPU to avoid GPU memory issues)

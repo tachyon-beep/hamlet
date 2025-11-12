@@ -66,6 +66,7 @@ class EpsilonGreedyExploration(ExplorationStrategy):
     def compute_intrinsic_rewards(
         self,
         observations: torch.Tensor,  # [batch, obs_dim]
+        update_stats: bool = False,
     ) -> torch.Tensor:
         """
         Compute intrinsic rewards (none for epsilon-greedy).

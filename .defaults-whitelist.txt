@@ -129,6 +129,18 @@ src/townlet/vfs/schema.py:*
 src/townlet/universe/compiler_inputs.py:*
 src/townlet/config/capability_config.py:*
 
+# Drive As Code (DAC) - TASK-004C
+# ExtrinsicStrategyConfig: Optional fields (base, bars, bar_bonuses, variable_bonuses, etc.)
+#   - Strategy-specific fields default to None (each strategy uses different subset)
+#   - Operator must specify fields relevant to chosen strategy type
+# IntrinsicStrategyConfig: apply_modifiers defaults to [] (no modifiers applied)
+# DriveAsCodeConfig: shaping defaults to [] (no shaping bonuses)
+# DACEngine: Runtime defaults for optional strategy fields (base, bar_bonuses, etc.)
+#   - Ternary expressions provide sensible defaults when YAML omits optional fields
+#   - dict.get() for kwargs (shaping bonuses receive context as needed)
+src/townlet/config/drive_as_code.py:*
+src/townlet/environment/dac_engine.py:*
+
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS
 # ============================================================================

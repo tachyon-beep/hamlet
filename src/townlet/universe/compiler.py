@@ -20,6 +20,7 @@ import yaml
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.bar import BarConfig
 from townlet.config.cascade import CascadeConfig
+from townlet.config.drive_as_code import DriveAsCodeConfig, load_drive_as_code_config
 from townlet.config.effect_pipeline import EffectPipeline
 from townlet.environment.cascade_config import EnvironmentConfig
 from townlet.environment.cascade_config import (
@@ -142,8 +143,26 @@ class UniverseCompiler:
         symbol_table = self._stage_2_build_symbol_tables(raw_configs)
         self._symbol_table = symbol_table
 
+        # Load DAC configuration (REQUIRED)
+        try:
+            dac_config = load_drive_as_code_config(config_dir)
+            logger.info("Loaded drive_as_code.yaml")
+        except FileNotFoundError as e:
+            raise CompilationError(
+                stage="Load DAC Configuration",
+                errors=[
+                    f"drive_as_code.yaml is required but not found in {config_dir}",
+                    "All config packs must include a drive_as_code.yaml file",
+                ],
+                hints=["See docs/config-schemas/drive_as_code.md for creating DAC configs"],
+            ) from e
+
         errors = CompilationErrorCollector(stage="Stage 3: Resolve References")
         self._stage_3_resolve_references(raw_configs, symbol_table, errors)
+
+        # Stage 3: Validate DAC references
+        self._validate_dac_references(dac_config, symbol_table, errors)
+
         errors.check_and_raise("Stage 3: Resolve References")
 
         stage4_errors = CompilationErrorCollector(stage="Stage 4: Cross-Validation")
@@ -178,6 +197,7 @@ class UniverseCompiler:
             affordance_metadata=affordance_metadata,
             optimization_data=optimization_data,
             environment_config=raw_configs.environment_config,
+            dac_config=dac_config,
         )
 
         if use_cache:
@@ -859,6 +879,209 @@ class UniverseCompiler:
                     hint_key="invalid_meter",
                     hint_text="Meter references must match names defined in bars.yaml (case-sensitive).",
                 )
+
+    def _validate_dac_references(
+        self,
+        dac_config: DriveAsCodeConfig,
+        symbol_table: UniverseSymbolTable,
+        errors: CompilationErrorCollector,
+    ) -> None:
+        """Validate DAC references to bars, variables, and affordances.
+
+        Stage 3 validation: Ensures DAC configurations reference valid entities.
+
+        Checks:
+        - Modifiers reference valid bars or VFS variables
+        - Extrinsic strategies reference valid bars/variables
+        - Shaping bonuses reference valid affordances
+        """
+        # Validate modifier sources
+        for mod_name, mod_config in dac_config.modifiers.items():
+            if mod_config.bar:
+                if mod_config.bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-001",
+                            message=f"Modifier '{mod_name}' references undefined bar: {mod_config.bar}",
+                            location=f"drive_as_code.yaml:modifiers.{mod_name}",
+                        )
+                    )
+            elif mod_config.variable:
+                if mod_config.variable not in symbol_table.vfs_variables:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-002",
+                            message=f"Modifier '{mod_name}' references undefined VFS variable: {mod_config.variable}",
+                            location=f"drive_as_code.yaml:modifiers.{mod_name}",
+                        )
+                    )
+
+        # Validate extrinsic strategy bar references
+        if dac_config.extrinsic.bars:
+            for bar in dac_config.extrinsic.bars:
+                if bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-003",
+                            message=f"Extrinsic strategy references undefined bar: {bar}",
+                            location="drive_as_code.yaml:extrinsic.bars",
+                        )
+                    )
+
+        # Validate extrinsic bar_bonuses (if present)
+        for idx, bonus in enumerate(dac_config.extrinsic.bar_bonuses):
+            if bonus.bar not in symbol_table.meters:
+                errors.add(
+                    CompilationMessage(
+                        code="DAC-REF-004",
+                        message=f"Extrinsic bar bonus references undefined bar: {bonus.bar}",
+                        location=f"drive_as_code.yaml:extrinsic.bar_bonuses[{idx}]",
+                    )
+                )
+
+        # Validate extrinsic variable_bonuses (if present)
+        for idx, var_bonus in enumerate(dac_config.extrinsic.variable_bonuses):
+            if var_bonus.variable not in symbol_table.vfs_variables:
+                errors.add(
+                    CompilationMessage(
+                        code="DAC-REF-005",
+                        message=f"Extrinsic variable bonus references undefined VFS variable: {var_bonus.variable}",
+                        location=f"drive_as_code.yaml:extrinsic.variable_bonuses[{idx}]",
+                    )
+                )
+
+        # Validate shaping bonus bar/affordance/variable references
+        for idx, shaping in enumerate(dac_config.shaping):
+            # Validate affordance references
+            if shaping.type == "approach_reward":
+                if shaping.target_affordance not in symbol_table.affordances:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-006",
+                            message=f"Shaping bonus references undefined affordance: {shaping.target_affordance}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "completion_bonus":
+                if shaping.affordance not in symbol_table.affordances:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-007",
+                            message=f"Shaping bonus (completion_bonus) references undefined affordance: {shaping.affordance}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "streak_bonus":
+                if shaping.affordance not in symbol_table.affordances:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-008",
+                            message=f"Shaping bonus (streak_bonus) references undefined affordance: {shaping.affordance}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "timing_bonus":
+                for time_range_idx, time_range in enumerate(shaping.time_ranges):
+                    if time_range.affordance not in symbol_table.affordances:
+                        errors.add(
+                            CompilationMessage(
+                                code="DAC-REF-009",
+                                message=f"Shaping bonus (timing_bonus) references undefined affordance: {time_range.affordance}",
+                                location=f"drive_as_code.yaml:shaping[{idx}].time_ranges[{time_range_idx}]",
+                            )
+                        )
+
+            # Validate bar references
+            elif shaping.type == "efficiency_bonus":
+                if shaping.bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-010",
+                            message=f"Shaping bonus (efficiency_bonus) references undefined bar: {shaping.bar}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "crisis_avoidance":
+                if shaping.bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-011",
+                            message=f"Shaping bonus (crisis_avoidance) references undefined bar: {shaping.bar}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "economic_efficiency":
+                if shaping.money_bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-012",
+                            message=f"Shaping bonus (economic_efficiency) references undefined bar: {shaping.money_bar}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "balance_bonus":
+                for bar in shaping.bars:
+                    if bar not in symbol_table.meters:
+                        errors.add(
+                            CompilationMessage(
+                                code="DAC-REF-013",
+                                message=f"Shaping bonus (balance_bonus) references undefined bar: {bar}",
+                                location=f"drive_as_code.yaml:shaping[{idx}]",
+                            )
+                        )
+            elif shaping.type == "state_achievement":
+                for condition_idx, condition in enumerate(shaping.conditions):
+                    if condition.bar not in symbol_table.meters:
+                        errors.add(
+                            CompilationMessage(
+                                code="DAC-REF-014",
+                                message=f"Shaping bonus (state_achievement) references undefined bar: {condition.bar}",
+                                location=f"drive_as_code.yaml:shaping[{idx}].conditions[{condition_idx}]",
+                            )
+                        )
+
+            # Validate VFS variable references
+            elif shaping.type == "vfs_variable":
+                if shaping.variable not in symbol_table.vfs_variables:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-015",
+                            message=f"Shaping bonus (vfs_variable) references undefined VFS variable: {shaping.variable}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+
+    def _compute_dac_hash(self, dac_config: DriveAsCodeConfig) -> str:
+        """Compute SHA256 content hash of DAC configuration for provenance.
+
+        Args:
+            dac_config: DAC configuration to hash
+
+        Returns:
+            SHA256 hex digest (64 character string)
+
+        Purpose:
+            - Checkpoint validation (detect DAC changes)
+            - Provenance tracking (which drive functions were used)
+            - Reproducibility (verify exact reward configuration)
+
+        Example:
+            >>> dac = DriveAsCodeConfig(...)
+            >>> hash_val = self._compute_dac_hash(dac)
+            >>> len(hash_val)
+            64
+        """
+        import hashlib
+        import json
+
+        # Convert to dict for stable JSON serialization
+        dac_dict = dac_config.model_dump(mode="json")
+
+        # Compute SHA256 hash with sorted keys for determinism
+        json_str = json.dumps(dac_dict, sort_keys=True)
+        hash_digest = hashlib.sha256(json_str.encode()).hexdigest()
+
+        return hash_digest
 
     def _stage_4_cross_validate(
         self,
@@ -1900,6 +2123,7 @@ class UniverseCompiler:
         affordance_metadata: AffordanceMetadata,
         optimization_data: OptimizationData,
         environment_config: EnvironmentConfig,
+        dac_config: DriveAsCodeConfig,
     ) -> CompiledUniverse:
         """Stage 7 – produce immutable CompiledUniverse artifact."""
 
@@ -1943,6 +2167,9 @@ class UniverseCompiler:
             field_uuids=field_uuids,
         )
 
+        # Compute drive_hash (Task 2.3)
+        drive_hash = self._compute_dac_hash(dac_config)
+
         universe = CompiledUniverse(
             hamlet_config=raw_configs.hamlet_config,
             variables_reference=all_variables,
@@ -1958,6 +2185,8 @@ class UniverseCompiler:
             optimization_data=optimization_data,
             action_labels_config=raw_configs.action_labels,
             environment_config=environment_config,
+            dac_config=dac_config,
+            drive_hash=drive_hash,
         )
 
         if not dataclasses.is_dataclass(universe):

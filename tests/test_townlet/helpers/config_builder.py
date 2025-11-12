@@ -18,6 +18,7 @@ SUPPORT_FILES = [
     "cues.yaml",
     "substrate.yaml",
     "variables_reference.yaml",
+    "drive_as_code.yaml",
 ]
 TEST_CONFIG_SRC = CONFIGS_DIR / "test"
 
@@ -64,7 +65,6 @@ BASE_CONFIG = {
         "sequence_length": 8,
         "max_grad_norm": 10.0,
         "use_double_dqn": False,
-        "reward_strategy": "multiplicative",  # Required field for reward calculation strategy
         "epsilon_start": 1.0,
         "epsilon_decay": 0.99,
         "epsilon_min": 0.01,

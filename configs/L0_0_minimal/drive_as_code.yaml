@@ -1,0 +1,33 @@
+# drive_as_code.yaml - Drive As Code (DAC) Reward Configuration
+# L0_0_minimal: Temporal Credit Assignment
+#
+# Reward Strategy: Multiplicative (energy only)
+# - Extrinsic: r_ext = 1.0 * energy
+# - Intrinsic: RND novelty-seeking (base_weight = 0.1)
+# - Composition: r_total = r_ext + (intrinsic_weight * r_int)
+#
+# Pedagogical Goal: Teach temporal credit assignment with single resource
+# Teaching Moment: "Low Energy Delirium" bug present (no crisis suppression)
+
+drive_as_code:
+  version: "1.0"
+
+  modifiers: {}
+
+  extrinsic:
+    type: multiplicative
+    base: 1.0
+    bars: [energy]
+
+  intrinsic:
+    strategy: rnd
+    base_weight: 0.1  # Matches training.yaml: initial_intrinsic_weight
+    apply_modifiers: []
+
+  shaping: []
+
+  composition:
+    normalize: false
+    clip: null
+    log_components: true
+    log_modifiers: true

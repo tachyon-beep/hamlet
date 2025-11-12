@@ -230,18 +230,125 @@ See `tests/test_townlet/unit/environment/test_pomdp_validation.py` for validatio
 
 See `docs/config-schemas/enabled_actions.md` for details.
 
-### Reward Structure
+## Drive As Code (DAC)
 
-**Framework Capability**: Operators define custom reward functions via UAC configuration.
+**Status**: ✅ PRODUCTION - Fully Integrated (TASK-004C Complete, Runtime Integration Complete)
 
-**Reference Implementation (Townlet Town)**:
+**Purpose**: Declarative reward function system for HAMLET environments
 
-- Per-step reward: `r_t = bars[energy] * bars[health]` (multiplicative)
-- Dead agents: 0.0 reward (episode ends when any bar reaches 0)
-- NO proximity shaping - agents must explore and interact
-- Sparse reward design forces long-horizon credit assignment
+Drive As Code (DAC) is a declarative reward function compiler that extracts all reward logic from Python into composable YAML configurations. Operators can A/B test reward structures without code changes. DAC compiles YAML specs into GPU-native computation graphs with provenance tracking.
 
-**Intrinsic Rewards**: RND (novelty-seeking) + adaptive annealing based on performance consistency.
+### Key Components
+
+**Files**: Each config pack requires `drive_as_code.yaml`:
+```
+configs/<level>/
+├── substrate.yaml
+├── bars.yaml
+├── drive_as_code.yaml    # DAC reward specification (REQUIRED)
+├── training.yaml
+└── variables_reference.yaml
+```
+
+**Architecture**: All reward logic defined in `drive_as_code.yaml` → compiled by UAC → executed by DACEngine in environment. RewardStrategy classes fully removed.
+
+**Runtime Components**:
+- `drive_as_code.yaml`: Declarative reward configuration (required for all config packs)
+- `DACEngine`: Runtime reward computation engine with GPU-native operations (`src/townlet/environment/dac_engine.py`)
+- `drive_hash`: Checkpoint provenance tracking for reward function reproducibility
+
+**Formula**:
+```
+total_reward = extrinsic + (intrinsic × effective_intrinsic_weight) + shaping
+
+where:
+    effective_intrinsic_weight = base_weight × modifier₁ × modifier₂ × ...
+```
+
+### Components
+
+**Modifiers** (Context-Sensitive Adjustment):
+- Range-based multipliers for bars or VFS variables
+- Use case: Crisis suppression (disable intrinsic when resources low)
+- Example: `energy_crisis` modifier suppresses intrinsic when energy < 0.2
+
+**Extrinsic Strategies** (Base Rewards - 9 types):
+- `multiplicative`: reward = base × bar₁ × bar₂ (compound survival)
+- `constant_base_with_shaped_bonus`: reward = base + Σ(bonuses) (fixes "Low Energy Delirium")
+- `additive_unweighted`: reward = base + Σ(bars)
+- `weighted_sum`, `polynomial`, `threshold_based`, `aggregation`, `vfs_variable`, `hybrid`
+
+**Intrinsic Strategies** (Exploration Drives - 5 types):
+- `rnd`: Random Network Distillation (novelty-seeking)
+- `icm`: Intrinsic Curiosity Module
+- `count_based`: Pseudo-count bonuses
+- `adaptive_rnd`: RND with performance-based annealing
+- `none`: Pure extrinsic (ablation studies)
+
+**Shaping Bonuses** (Behavioral Incentives - 11 types):
+- `approach_reward`, `completion_bonus`, `efficiency_bonus`, `state_achievement`
+- `streak_bonus`, `diversity_bonus`, `timing_bonus`, `economic_efficiency`
+- `balance_bonus`, `crisis_avoidance`, `vfs_variable`
+
+### Pedagogical Pattern: "Low Energy Delirium" Bug
+
+**Bug**: Multiplicative reward (energy × health) + high intrinsic weight → agents exploit low bars for exploration
+
+**Curriculum**:
+- **L0_0_minimal**: Demonstrates bug (multiplicative, no suppression)
+- **L0_5_dual_resource**: Fixes bug (constant_base_with_shaped_bonus)
+- **Comparison**: Students learn importance of reward structure design
+
+### Breaking Changes
+
+**Old System** (DELETED):
+- `training.yaml: reward_strategy` field → REMOVED
+- `src/townlet/environment/reward_strategy.py` → DELETED (583 lines removed)
+- Hardcoded Python reward classes → REPLACED
+- All legacy reward strategy tests → DELETED (349 lines removed)
+
+**New System** (REQUIRED):
+- `drive_as_code.yaml` required for all config packs
+- DACEngine compiles YAML → GPU computation graphs
+- Checkpoint provenance via `drive_hash` (SHA256 of DAC config)
+- All checkpoints must have matching `drive_hash`
+
+**Migration**: See `docs/guides/dac-migration.md`
+
+### Example: L0_0_minimal
+
+```yaml
+drive_as_code:
+  version: "1.0"
+
+  modifiers: {}
+
+  extrinsic:
+    type: multiplicative
+    base: 1.0
+    bars: [energy]
+
+  intrinsic:
+    strategy: rnd
+    base_weight: 0.1
+    apply_modifiers: []
+
+  shaping: []
+
+  composition:
+    normalize: false
+    clip: null
+    log_components: true
+    log_modifiers: true
+```
+
+### Documentation
+
+- **Config Reference**: `docs/config-schemas/drive_as_code.md`
+- **Migration Guide**: `docs/guides/dac-migration.md`
+- **Implementation Plans**:
+  - DAC implementation: `docs/plans/2025-11-12-drive-as-code-implementation.md`
+  - Runtime integration: `docs/plans/2025-11-12-dac-runtime-integration.md`
 
 ### Q-Learning Algorithm Variants
 

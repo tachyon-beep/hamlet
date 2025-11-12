@@ -90,6 +90,11 @@ class UniverseSymbolTable:
     def affordance_names(self) -> list[str]:
         return sorted(self.affordances_by_name.keys())
 
+    @property
+    def vfs_variables(self) -> dict[str, VariableDef]:
+        """Alias for variables (for DAC validation clarity)."""
+        return self.variables
+
     def get_affordance(self, affordance_id: str) -> AffordanceConfig:
         return self.affordances[affordance_id]
 

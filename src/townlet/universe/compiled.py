@@ -12,6 +12,7 @@ import msgpack  # type: ignore[import]
 import torch
 
 from townlet.config import HamletConfig
+from townlet.config.drive_as_code import DriveAsCodeConfig
 from townlet.environment.action_config import ActionSpaceConfig
 from townlet.environment.cascade_config import EnvironmentConfig
 from townlet.substrate.config import ActionLabelConfig
@@ -50,6 +51,8 @@ class CompiledUniverse:
     affordance_metadata: AffordanceMetadata
     optimization_data: OptimizationData
     environment_config: EnvironmentConfig
+    dac_config: DriveAsCodeConfig  # REQUIRED (no default)
+    drive_hash: str  # REQUIRED (no default)
     action_labels_config: ActionLabelConfig | None = None
 
     def __post_init__(self) -> None:
@@ -155,6 +158,21 @@ class CompiledUniverse:
                 "Observation field UUID mismatch between checkpoint and compiled universe.",
             )
 
+        # Check drive_hash (reward function provenance) - now always required
+        checkpoint_drive_hash = checkpoint.get("drive_hash")
+        if checkpoint_drive_hash is None:
+            return (
+                False,
+                "Checkpoint missing drive_hash. This checkpoint predates DAC and cannot be used. Please retrain.",
+            )
+        if checkpoint_drive_hash != self.drive_hash:
+            return (
+                False,
+                "Drive hash mismatch: reward function has changed since checkpoint was created. "
+                "This checkpoint was trained with a different DAC configuration and cannot be used. "
+                "Please retrain with the current drive_as_code.yaml.",
+            )
+
         return True, "Checkpoint compatible."
 
     def to_runtime(self) -> RuntimeUniverse:
@@ -207,6 +225,8 @@ class CompiledUniverse:
             },
             "action_labels_config": (self.action_labels_config.model_dump() if self.action_labels_config is not None else None),
             "environment_config": self.environment_config.model_dump(),
+            "dac_config": self.dac_config.model_dump(),
+            "drive_hash": self.drive_hash,
         }
 
         packed = msgpack.packb(data, use_bin_type=True)
@@ -271,6 +291,8 @@ class CompiledUniverse:
                 ActionLabelConfig(**payload["action_labels_config"]) if payload.get("action_labels_config") is not None else None
             ),
             environment_config=EnvironmentConfig(**payload["environment_config"]),
+            dac_config=DriveAsCodeConfig.model_validate(payload["dac_config"]),
+            drive_hash=payload["drive_hash"],
         )
 
 

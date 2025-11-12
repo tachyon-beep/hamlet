@@ -1,12 +1,10 @@
-"""Targeted unit tests for MeterDynamics and RewardStrategy."""
+"""Targeted unit tests for MeterDynamics."""
 
 from __future__ import annotations
 
-import pytest
 import torch
 
 from townlet.environment.meter_dynamics import MeterDynamics
-from townlet.environment.reward_strategy import RewardStrategy
 
 
 def make_meter_dynamics(device: torch.device = torch.device("cpu")) -> MeterDynamics:
@@ -74,20 +72,3 @@ class TestMeterDynamics:
 
         mask = md.check_terminal_conditions(meters, dones)
         assert torch.equal(mask, torch.tensor([True, False]))
-
-
-class TestRewardStrategy:
-    def test_calculate_rewards_clamps_and_masks(self):
-        strategy = RewardStrategy(device=torch.device("cpu"), num_agents=2, meter_count=3, energy_idx=0, health_idx=1)
-        step_counts = torch.tensor([10, 20])
-        dones = torch.tensor([False, True])
-        meters = torch.tensor([[1.2, 0.5, 0.0], [0.4, 0.4, 0.0]])  # first energy>1 to test clamp
-
-        rewards = strategy.calculate_rewards(step_counts, dones, meters)
-
-        assert torch.allclose(rewards, torch.tensor([0.5, 0.0]))
-
-    def test_calculate_rewards_validates_shapes(self):
-        strategy = RewardStrategy(device=torch.device("cpu"), num_agents=1, meter_count=2)
-        with pytest.raises(ValueError):  # type: ignore[name-defined]
-            strategy.calculate_rewards(torch.tensor([1, 2]), torch.tensor([False]), torch.ones(1, 2))
