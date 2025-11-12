@@ -22,12 +22,25 @@ from townlet.environment.affordance_engine import AffordanceEngine
 from townlet.environment.meter_dynamics import MeterDynamics
 from townlet.environment.reward_strategy import RewardStrategy
 from townlet.substrate.continuous import ContinuousSubstrate
+from townlet.universe.dto import MeterMetadata
 from townlet.vfs.registry import VariableRegistry
 
 if TYPE_CHECKING:
     from townlet.environment.action_config import ActionConfig, ActionSpaceConfig
     from townlet.population.runtime_registry import AgentRuntimeRegistry
     from townlet.universe.compiled import CompiledUniverse
+
+
+def _build_bar_index_map(meter_metadata: MeterMetadata) -> dict[str, int]:
+    """Build mapping from bar IDs to meter tensor indices.
+
+    Args:
+        meter_metadata: Universe meter metadata
+
+    Returns:
+        Dictionary mapping bar_id -> tensor_index
+    """
+    return {meter.name: meter.index for meter in meter_metadata.meters}
 
 
 def _build_affordance_collection(raw_affordances: tuple[Any, ...]) -> AffordanceConfigCollection:
