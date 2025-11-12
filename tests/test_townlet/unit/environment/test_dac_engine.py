@@ -1453,6 +1453,60 @@ class TestShapingBonuses:
         assert bonuses[2] == 5.0
         assert bonuses[3] == 0.0
 
+    def test_crisis_avoidance(self):
+        """crisis_avoidance rewards staying above crisis threshold."""
+        from townlet.config.drive_as_code import CrisisAvoidanceConfig
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                CrisisAvoidanceConfig(
+                    type="crisis_avoidance",
+                    weight=3.0,
+                    bar="energy",
+                    crisis_threshold=0.3,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 5
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: energy=0.8 (well above crisis) → bonus
+        # Agent 1: energy=0.4 (above crisis) → bonus
+        # Agent 2: energy=0.31 (just above crisis) → bonus
+        # Agent 3: energy=0.3 (at crisis, NOT above) → no bonus
+        # Agent 4: energy=0.1 (in crisis) → no bonus
+        meters = torch.tensor([[0.8], [0.4], [0.31], [0.3], [0.1]], device=device)
+
+        bonuses = engine.shaping_fns[0](meters=meters)
+
+        # Agents 0,1,2: energy > 0.3 → bonus = 3.0
+        # Agents 3,4: energy <= 0.3 → bonus = 0.0
+        assert bonuses[0] == 3.0
+        assert bonuses[1] == 3.0
+        assert bonuses[2] == 3.0
+        assert bonuses[3] == 0.0
+        assert bonuses[4] == 0.0
+
 
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
@@ -1885,6 +1939,50 @@ class TestShapingBonusEdgeCases:
                     weight=5.0,
                     bars=["energy", "health"],
                     max_imbalance=0.2,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing meters kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_crisis_avoidance_missing_kwarg(self):
+        """crisis_avoidance returns zeros when meters missing."""
+        from townlet.config.drive_as_code import CrisisAvoidanceConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                CrisisAvoidanceConfig(
+                    type="crisis_avoidance",
+                    weight=3.0,
+                    bar="energy",
+                    crisis_threshold=0.3,
                 )
             ],
         )

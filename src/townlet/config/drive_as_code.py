@@ -523,6 +523,29 @@ class BalanceBonusConfig(BaseModel):
     max_imbalance: float = Field(gt=0.0, le=1.0, description="Max allowed difference between bars")
 
 
+class CrisisAvoidanceConfig(BaseModel):
+    """Bonus for staying ABOVE crisis threshold (proactive maintenance).
+
+    Encourages agents to keep resources well away from crisis levels.
+    Differs from efficiency_bonus by using > instead of >=.
+
+    Example:
+        >>> crisis_avoid = CrisisAvoidanceConfig(
+        ...     type="crisis_avoidance",
+        ...     weight=3.0,
+        ...     bar="energy",
+        ...     crisis_threshold=0.3,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["crisis_avoidance"]
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    bar: str = Field(description="Bar to monitor")
+    crisis_threshold: float = Field(gt=0.0, le=1.0, description="Crisis threshold (must be ABOVE this)")
+
+
 # Union type for all shaping bonuses (expand as more types are added)
 ShapingBonusConfig = (
     ApproachRewardConfig
@@ -535,6 +558,7 @@ ShapingBonusConfig = (
     | TimingBonusConfig
     | EconomicEfficiencyConfig
     | BalanceBonusConfig
+    | CrisisAvoidanceConfig
 )
 
 
