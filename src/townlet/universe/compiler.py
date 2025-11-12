@@ -20,6 +20,7 @@ import yaml
 from townlet.config.affordance import AffordanceConfig
 from townlet.config.bar import BarConfig
 from townlet.config.cascade import CascadeConfig
+from townlet.config.drive_as_code import DriveAsCodeConfig, load_drive_as_code_config
 from townlet.config.effect_pipeline import EffectPipeline
 from townlet.environment.cascade_config import EnvironmentConfig
 from townlet.environment.cascade_config import (
@@ -142,8 +143,22 @@ class UniverseCompiler:
         symbol_table = self._stage_2_build_symbol_tables(raw_configs)
         self._symbol_table = symbol_table
 
+        # Load DAC configuration (OPTIONAL for now - Phase 5 will make it REQUIRED)
+        dac_config: DriveAsCodeConfig | None = None
+        try:
+            dac_config = load_drive_as_code_config(config_dir)
+            logger.info("Loaded drive_as_code.yaml")
+        except FileNotFoundError:
+            logger.info("drive_as_code.yaml not found - skipping DAC validation (optional)")
+            # Phase 5 will make this required
+
         errors = CompilationErrorCollector(stage="Stage 3: Resolve References")
         self._stage_3_resolve_references(raw_configs, symbol_table, errors)
+
+        # Stage 3: Validate DAC references (if DAC config present)
+        if dac_config is not None:
+            self._validate_dac_references(dac_config, symbol_table, errors)
+
         errors.check_and_raise("Stage 3: Resolve References")
 
         stage4_errors = CompilationErrorCollector(stage="Stage 4: Cross-Validation")
@@ -178,6 +193,7 @@ class UniverseCompiler:
             affordance_metadata=affordance_metadata,
             optimization_data=optimization_data,
             environment_config=raw_configs.environment_config,
+            dac_config=dac_config,
         )
 
         if use_cache:
@@ -859,6 +875,88 @@ class UniverseCompiler:
                     hint_key="invalid_meter",
                     hint_text="Meter references must match names defined in bars.yaml (case-sensitive).",
                 )
+
+    def _validate_dac_references(
+        self,
+        dac_config: DriveAsCodeConfig,
+        symbol_table: UniverseSymbolTable,
+        errors: CompilationErrorCollector,
+    ) -> None:
+        """Validate DAC references to bars, variables, and affordances.
+
+        Stage 3 validation: Ensures DAC configurations reference valid entities.
+
+        Checks:
+        - Modifiers reference valid bars or VFS variables
+        - Extrinsic strategies reference valid bars/variables
+        - Shaping bonuses reference valid affordances
+        """
+        # Validate modifier sources
+        for mod_name, mod_config in dac_config.modifiers.items():
+            if mod_config.bar:
+                if mod_config.bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-001",
+                            message=f"Modifier '{mod_name}' references undefined bar: {mod_config.bar}",
+                            location=f"drive_as_code.yaml:modifiers.{mod_name}",
+                        )
+                    )
+            elif mod_config.variable:
+                if mod_config.variable not in symbol_table.vfs_variables:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-002",
+                            message=f"Modifier '{mod_name}' references undefined VFS variable: {mod_config.variable}",
+                            location=f"drive_as_code.yaml:modifiers.{mod_name}",
+                        )
+                    )
+
+        # Validate extrinsic strategy bar references
+        if dac_config.extrinsic.bars:
+            for bar in dac_config.extrinsic.bars:
+                if bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-003",
+                            message=f"Extrinsic strategy references undefined bar: {bar}",
+                            location="drive_as_code.yaml:extrinsic.bars",
+                        )
+                    )
+
+        # Validate extrinsic bar_bonuses (if present)
+        for idx, bonus in enumerate(dac_config.extrinsic.bar_bonuses):
+            if bonus.bar not in symbol_table.meters:
+                errors.add(
+                    CompilationMessage(
+                        code="DAC-REF-004",
+                        message=f"Extrinsic bar bonus references undefined bar: {bonus.bar}",
+                        location=f"drive_as_code.yaml:extrinsic.bar_bonuses[{idx}]",
+                    )
+                )
+
+        # Validate extrinsic variable_bonuses (if present)
+        for idx, bonus in enumerate(dac_config.extrinsic.variable_bonuses):
+            if bonus.variable not in symbol_table.vfs_variables:
+                errors.add(
+                    CompilationMessage(
+                        code="DAC-REF-005",
+                        message=f"Extrinsic variable bonus references undefined VFS variable: {bonus.variable}",
+                        location=f"drive_as_code.yaml:extrinsic.variable_bonuses[{idx}]",
+                    )
+                )
+
+        # Validate shaping bonus affordance references (if present)
+        for idx, shaping in enumerate(dac_config.shaping):
+            if shaping.type == "approach_reward":
+                if shaping.target_affordance not in symbol_table.affordances:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-006",
+                            message=f"Shaping bonus references undefined affordance: {shaping.target_affordance}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
 
     def _stage_4_cross_validate(
         self,
@@ -1836,6 +1934,7 @@ class UniverseCompiler:
         affordance_metadata: AffordanceMetadata,
         optimization_data: OptimizationData,
         environment_config: EnvironmentConfig,
+        dac_config: DriveAsCodeConfig | None,
     ) -> CompiledUniverse:
         """Stage 7 – produce immutable CompiledUniverse artifact."""
 
@@ -1894,6 +1993,8 @@ class UniverseCompiler:
             optimization_data=optimization_data,
             action_labels_config=raw_configs.action_labels,
             environment_config=environment_config,
+            dac_config=dac_config,
+            drive_hash=None,  # Task 2.3 will implement hash computation
         )
 
         if not dataclasses.is_dataclass(universe):
