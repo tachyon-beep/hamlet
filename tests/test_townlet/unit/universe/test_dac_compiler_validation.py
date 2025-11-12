@@ -235,3 +235,147 @@ class TestDriveHashComputation:
 
         # Hashes should be identical
         assert compiled1.drive_hash == compiled2.drive_hash
+
+
+class TestDACShapingValidation:
+    """Test DAC shaping bonus reference validation (P2 fix verification)."""
+
+    def test_shaping_efficiency_bonus_undefined_bar(self, tmp_path):
+        """Efficiency bonus referencing undefined bar raises CompilationError."""
+        source = Path("configs/L0_0_minimal")
+        dest = tmp_path / "test_config"
+        shutil.copytree(source, dest)
+
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+                "shaping": [
+                    {
+                        "type": "efficiency_bonus",
+                        "weight": 0.5,
+                        "bar": "nonexistent_bar",  # UNDEFINED!
+                        "threshold": 0.8,
+                    }
+                ],
+            }
+        }
+        (dest / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError, match="undefined bar|nonexistent_bar"):
+            compiler.compile(dest, use_cache=False)
+
+    def test_shaping_balance_bonus_undefined_bar(self, tmp_path):
+        """Balance bonus referencing undefined bar raises CompilationError."""
+        source = Path("configs/L0_0_minimal")
+        dest = tmp_path / "test_config"
+        shutil.copytree(source, dest)
+
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+                "shaping": [
+                    {
+                        "type": "balance_bonus",
+                        "weight": 0.5,
+                        "bars": ["energy", "fake_bar"],  # fake_bar UNDEFINED!
+                        "max_imbalance": 0.2,
+                    }
+                ],
+            }
+        }
+        (dest / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError, match="undefined bar|fake_bar"):
+            compiler.compile(dest, use_cache=False)
+
+    def test_shaping_state_achievement_undefined_bar(self, tmp_path):
+        """State achievement referencing undefined bar raises CompilationError."""
+        source = Path("configs/L0_0_minimal")
+        dest = tmp_path / "test_config"
+        shutil.copytree(source, dest)
+
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+                "shaping": [
+                    {
+                        "type": "state_achievement",
+                        "weight": 1.0,
+                        "conditions": [
+                            {"bar": "energy", "min_value": 0.8},
+                            {"bar": "missing_bar", "min_value": 0.5},  # UNDEFINED!
+                        ],
+                    }
+                ],
+            }
+        }
+        (dest / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError, match="undefined bar|missing_bar"):
+            compiler.compile(dest, use_cache=False)
+
+    def test_shaping_vfs_variable_undefined_variable(self, tmp_path):
+        """VFS variable bonus referencing undefined variable raises CompilationError."""
+        source = Path("configs/L0_0_minimal")
+        dest = tmp_path / "test_config"
+        shutil.copytree(source, dest)
+
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+                "shaping": [
+                    {
+                        "type": "vfs_variable",
+                        "weight": 0.5,
+                        "variable": "nonexistent_variable",  # UNDEFINED!
+                    }
+                ],
+            }
+        }
+        (dest / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError, match="undefined VFS variable|nonexistent_variable"):
+            compiler.compile(dest, use_cache=False)
+
+    def test_shaping_completion_bonus_undefined_affordance(self, tmp_path):
+        """Completion bonus referencing undefined affordance raises CompilationError."""
+        source = Path("configs/L0_0_minimal")
+        dest = tmp_path / "test_config"
+        shutil.copytree(source, dest)
+
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+                "shaping": [
+                    {
+                        "type": "completion_bonus",
+                        "weight": 0.5,
+                        "affordance": "fake_affordance",  # UNDEFINED!
+                    }
+                ],
+            }
+        }
+        (dest / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        with pytest.raises(CompilationError, match="undefined affordance|fake_affordance"):
+            compiler.compile(dest, use_cache=False)

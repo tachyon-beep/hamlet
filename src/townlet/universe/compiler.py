@@ -950,14 +950,103 @@ class UniverseCompiler:
                     )
                 )
 
-        # Validate shaping bonus affordance references (if present)
+        # Validate shaping bonus bar/affordance/variable references
         for idx, shaping in enumerate(dac_config.shaping):
+            # Validate affordance references
             if shaping.type == "approach_reward":
                 if shaping.target_affordance not in symbol_table.affordances:
                     errors.add(
                         CompilationMessage(
                             code="DAC-REF-006",
                             message=f"Shaping bonus references undefined affordance: {shaping.target_affordance}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "completion_bonus":
+                if shaping.affordance not in symbol_table.affordances:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-007",
+                            message=f"Shaping bonus (completion_bonus) references undefined affordance: {shaping.affordance}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "streak_bonus":
+                if shaping.affordance not in symbol_table.affordances:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-008",
+                            message=f"Shaping bonus (streak_bonus) references undefined affordance: {shaping.affordance}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "timing_bonus":
+                for time_range_idx, time_range in enumerate(shaping.time_ranges):
+                    if time_range.affordance not in symbol_table.affordances:
+                        errors.add(
+                            CompilationMessage(
+                                code="DAC-REF-009",
+                                message=f"Shaping bonus (timing_bonus) references undefined affordance: {time_range.affordance}",
+                                location=f"drive_as_code.yaml:shaping[{idx}].time_ranges[{time_range_idx}]",
+                            )
+                        )
+
+            # Validate bar references
+            elif shaping.type == "efficiency_bonus":
+                if shaping.bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-010",
+                            message=f"Shaping bonus (efficiency_bonus) references undefined bar: {shaping.bar}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "crisis_avoidance":
+                if shaping.bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-011",
+                            message=f"Shaping bonus (crisis_avoidance) references undefined bar: {shaping.bar}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "economic_efficiency":
+                if shaping.money_bar not in symbol_table.meters:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-012",
+                            message=f"Shaping bonus (economic_efficiency) references undefined bar: {shaping.money_bar}",
+                            location=f"drive_as_code.yaml:shaping[{idx}]",
+                        )
+                    )
+            elif shaping.type == "balance_bonus":
+                for bar in shaping.bars:
+                    if bar not in symbol_table.meters:
+                        errors.add(
+                            CompilationMessage(
+                                code="DAC-REF-013",
+                                message=f"Shaping bonus (balance_bonus) references undefined bar: {bar}",
+                                location=f"drive_as_code.yaml:shaping[{idx}]",
+                            )
+                        )
+            elif shaping.type == "state_achievement":
+                for condition_idx, condition in enumerate(shaping.conditions):
+                    if condition.bar not in symbol_table.meters:
+                        errors.add(
+                            CompilationMessage(
+                                code="DAC-REF-014",
+                                message=f"Shaping bonus (state_achievement) references undefined bar: {condition.bar}",
+                                location=f"drive_as_code.yaml:shaping[{idx}].conditions[{condition_idx}]",
+                            )
+                        )
+
+            # Validate VFS variable references
+            elif shaping.type == "vfs_variable":
+                if shaping.variable not in symbol_table.vfs_variables:
+                    errors.add(
+                        CompilationMessage(
+                            code="DAC-REF-015",
+                            message=f"Shaping bonus (vfs_variable) references undefined VFS variable: {shaping.variable}",
                             location=f"drive_as_code.yaml:shaping[{idx}]",
                         )
                     )

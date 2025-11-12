@@ -1255,9 +1255,9 @@ class VectorizedHamletEnv:
             "unique_affordances_used": self._get_unique_affordances_used(),
         }
 
-        # Add temporal context if available
-        if hasattr(self, "current_hour"):
-            kwargs["current_hour"] = self.current_hour
+        # Add temporal context if temporal mechanics enabled
+        if self.enable_temporal_mechanics:
+            kwargs["current_hour"] = self.time_of_day
 
         # Calculate rewards using DACEngine
         total_rewards, intrinsic_weights, components = self.dac_engine.calculate_rewards(
