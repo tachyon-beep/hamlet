@@ -50,6 +50,7 @@ class DACEngine:
         vfs_registry: VariableRegistry,
         device: torch.device,
         num_agents: int,
+        bar_index_map: dict[str, int],
     ):
         """Initialize DAC engine.
 
@@ -58,11 +59,13 @@ class DACEngine:
             vfs_registry: VFS runtime registry for variable access
             device: PyTorch device (cpu or cuda)
             num_agents: Number of agents in population
+            bar_index_map: Mapping from bar ID to meters tensor index (from universe metadata)
         """
         self.dac_config = dac_config
         self.vfs_registry = vfs_registry
         self.device = device
         self.num_agents = num_agents
+        self.bar_index_map = bar_index_map
         self.vfs_reader = "engine"  # DAC reads as engine, not agent
 
         # Compile modifiers into lookup tables
@@ -767,41 +770,20 @@ class DACEngine:
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:
-        """Get meter index for a bar ID.
-
-        TODO(CRITICAL - Phase 3D): This implementation has a critical flaw identified
-        in code review. It returns index within extrinsic.bars list, NOT index into
-        the full meters tensor from universe metadata. This will cause silent data
-        corruption when extrinsic config doesn't reference all bars or references
-        them in different order than bars.yaml.
-
-        Fix required: Add bar_index_map: dict[str, int] to DACEngine constructor,
-        populated from universe metadata in Phase 3D integration.
+        """Get meter index from universe metadata.
 
         Args:
             bar_id: Bar identifier (e.g., "energy", "health")
 
         Returns:
-            Index into meters tensor (CURRENTLY WRONG - returns config index)
+            Index into the meters tensor
 
         Raises:
-            ValueError: If bar_id not found
+            KeyError: If bar_id not found in metadata
         """
-        # NOTE: This assumes bars are in the order defined in bars.yaml
-        # The compiler should have validated that bar_id exists
-
-        # Build bar list from config (either bars field or bar_bonuses)
-        bar_ids = self.dac_config.extrinsic.bars
-        if not bar_ids and self.dac_config.extrinsic.bar_bonuses:
-            # For strategies using bar_bonuses, extract bar IDs
-            bar_ids = [bonus.bar for bonus in self.dac_config.extrinsic.bar_bonuses]
-
-        # For now, use a simple lookup (will be optimized in later task)
-        # In production, we'd get this from universe metadata
-        try:
-            return bar_ids.index(bar_id)
-        except ValueError:
-            raise ValueError(f"Bar '{bar_id}' not found in extrinsic bars list")
+        if bar_id not in self.bar_index_map:
+            raise KeyError(f"Bar '{bar_id}' not found in universe metadata. " f"Available bars: {list(self.bar_index_map.keys())}")
+        return self.bar_index_map[bar_id]
 
     def calculate_rewards(
         self,

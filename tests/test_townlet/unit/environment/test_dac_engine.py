@@ -1,5 +1,6 @@
 """Tests for DAC Engine."""
 
+import pytest
 import torch
 
 from townlet.config.drive_as_code import (
@@ -16,10 +17,22 @@ from townlet.vfs.registry import VariableRegistry
 from townlet.vfs.schema import VariableDef
 
 
+@pytest.fixture
+def bar_index_map_single():
+    """Standard bar index map for single-bar tests (energy only)."""
+    return {"energy": 0}
+
+
+@pytest.fixture
+def bar_index_map_dual():
+    """Standard bar index map for dual-bar tests (energy and health)."""
+    return {"energy": 0, "health": 1}
+
+
 class TestDACEngineInit:
     """Test DACEngine initialization."""
 
-    def test_dac_engine_initializes(self):
+    def test_dac_engine_initializes(self, bar_index_map_single):
         """DACEngine initializes with minimal config."""
         device = torch.device("cpu")
         num_agents = 4
@@ -62,17 +75,65 @@ class TestDACEngineInit:
             vfs_registry=vfs_registry,
             device=device,
             num_agents=num_agents,
+            bar_index_map=bar_index_map_single,
         )
 
         assert engine is not None
         assert engine.device == device
         assert engine.num_agents == num_agents
 
+    def test_get_bar_index_missing_bar_raises(self):
+        """_get_bar_index raises KeyError for undefined bar."""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Config references "health" bar, but bar_index_map only has "energy"
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy", "health"],  # health not in bar_index_map
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="none",
+                base_weight=0.0,
+            ),
+        )
+
+        bar_index_map = {"energy": 0}  # Only energy defined
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map)
+
+        # Create dummy meters
+        meters = torch.tensor([[1.0], [0.8], [0.5], [0.0]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        # Trying to compute extrinsic with undefined bar should raise
+        with pytest.raises(KeyError, match="Bar 'health' not found in universe metadata"):
+            engine.extrinsic_fn(meters, dones)
+
 
 class TestModifierCompilation:
     """Test modifier compilation and evaluation."""
 
-    def test_compile_bar_modifier(self):
+    def test_compile_bar_modifier(self, bar_index_map_single):
         """Modifier with bar source compiles correctly."""
         device = torch.device("cpu")
         num_agents = 4
@@ -110,13 +171,13 @@ class TestModifierCompilation:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Verify modifier was compiled
         assert "energy_crisis" in engine.modifiers
         assert callable(engine.modifiers["energy_crisis"])
 
-    def test_evaluate_bar_modifier_crisis_range(self):
+    def test_evaluate_bar_modifier_crisis_range(self, bar_index_map_single):
         """Bar modifier returns correct multiplier for crisis range."""
         device = torch.device("cpu")
         num_agents = 4
@@ -152,7 +213,7 @@ class TestModifierCompilation:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Create meter values with 2 agents in crisis (< 0.3), 2 normal (>= 0.3)
         meters = torch.tensor([[0.1], [0.2], [0.5], [0.8]], device=device)  # [4, 1] energy only
@@ -164,7 +225,7 @@ class TestModifierCompilation:
         expected = torch.tensor([0.0, 0.0, 1.0, 1.0], device=device)
         assert torch.allclose(multipliers, expected)
 
-    def test_evaluate_bar_modifier_normal_range(self):
+    def test_evaluate_bar_modifier_normal_range(self, bar_index_map_single):
         """Bar modifier returns correct multiplier for normal range."""
         device = torch.device("cpu")
         num_agents = 4
@@ -200,7 +261,7 @@ class TestModifierCompilation:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # All agents in normal range
         meters = torch.tensor([[0.4], [0.6], [0.8], [1.0]], device=device)
@@ -211,7 +272,7 @@ class TestModifierCompilation:
         expected = torch.ones(num_agents, device=device)
         assert torch.allclose(multipliers, expected)
 
-    def test_compile_vfs_variable_modifier(self):
+    def test_compile_vfs_variable_modifier(self, bar_index_map_dual):
         """Modifier with VFS variable source compiles correctly."""
         device = torch.device("cpu")
         num_agents = 4
@@ -247,7 +308,7 @@ class TestModifierCompilation:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         assert "social_boost" in engine.modifiers
         assert callable(engine.modifiers["social_boost"])
@@ -256,7 +317,7 @@ class TestModifierCompilation:
 class TestExtrinsicStrategies:
     """Test extrinsic reward strategy compilation."""
 
-    def test_multiplicative_strategy(self):
+    def test_multiplicative_strategy(self, bar_index_map_single):
         """Multiplicative strategy: reward = base * bar1 * bar2 * ..."""
         device = torch.device("cpu")
         num_agents = 4
@@ -288,7 +349,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Create meter values: [0.5, 0.8, 1.0, 0.0]
         meters = torch.tensor([[0.5], [0.8], [1.0], [0.0]], device=device)
@@ -302,7 +363,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([1.0, 1.6, 2.0, 0.0], device=device)
         assert torch.allclose(extrinsic, expected)
 
-    def test_multiplicative_multiple_bars(self):
+    def test_multiplicative_multiple_bars(self, bar_index_map_dual):
         """Multiplicative with multiple bars: reward = base * energy * health"""
         device = torch.device("cpu")
         num_agents = 4
@@ -334,7 +395,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # meters: [energy, health]
         meters = torch.tensor([[0.5, 0.8], [1.0, 1.0], [0.2, 0.5], [0.0, 1.0]], device=device)
@@ -346,7 +407,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([0.4, 1.0, 0.1, 0.0], device=device)
         assert torch.allclose(extrinsic, expected, atol=1e-6)
 
-    def test_constant_base_with_shaped_bonus(self):
+    def test_constant_base_with_shaped_bonus(self, bar_index_map_dual):
         """Constant base + shaped bonus: reward = base + sum(bonuses)"""
         device = torch.device("cpu")
         num_agents = 4
@@ -381,7 +442,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Energy values: [0.0, 0.5, 1.0, 0.25]
         meters = torch.tensor([[0.0], [0.5], [1.0], [0.25]], device=device)
@@ -395,7 +456,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([0.75, 1.0, 1.25, 0.875], device=device)
         assert torch.allclose(extrinsic, expected)
 
-    def test_constant_base_multiple_bonuses(self):
+    def test_constant_base_multiple_bonuses(self, bar_index_map_dual):
         """Constant base with multiple bar bonuses and variable bonus"""
         device = torch.device("cpu")
         num_agents = 4
@@ -446,7 +507,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # meters: [energy, health]
         meters = torch.tensor([[0.5, 0.5], [0.8, 0.6], [0.2, 0.4], [1.0, 1.0]], device=device)
@@ -462,7 +523,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([2.2, 2.58, 2.42, 3.2], device=device)
         assert torch.allclose(extrinsic, expected, atol=1e-6)
 
-    def test_additive_unweighted_strategy(self):
+    def test_additive_unweighted_strategy(self, bar_index_map_dual):
         """Additive unweighted: reward = base + sum(bars)"""
         device = torch.device("cpu")
         num_agents = 4
@@ -494,7 +555,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # meters: [energy, health]
         meters = torch.tensor([[0.2, 0.3], [0.5, 0.5], [0.8, 0.9], [0.0, 0.0]], device=device)
@@ -507,7 +568,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([1.0, 1.5, 2.2, 0.5], device=device)
         assert torch.allclose(extrinsic, expected, atol=1e-6)
 
-    def test_weighted_sum_strategy(self):
+    def test_weighted_sum_strategy(self, bar_index_map_dual):
         """Weighted sum: reward = sum(weight_i * source_i)"""
         device = torch.device("cpu")
         num_agents = 4
@@ -544,7 +605,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # meters: [energy, health]
         meters = torch.tensor([[0.5, 0.4], [1.0, 1.0], [0.2, 0.8], [0.0, 0.5]], device=device)
@@ -557,7 +618,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([1.6, 3.5, 1.6, 0.75], device=device)
         assert torch.allclose(extrinsic, expected, atol=1e-6)
 
-    def test_polynomial_strategy(self):
+    def test_polynomial_strategy(self, bar_index_map_dual):
         """Polynomial: reward = sum(weight_i * bar_i^exponent_i)"""
         device = torch.device("cpu")
         num_agents = 4
@@ -594,7 +655,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # meters: [energy, health]
         meters = torch.tensor([[0.25, 0.4], [1.0, 1.0], [0.64, 0.9], [0.0, 0.5]], device=device)
@@ -615,7 +676,7 @@ class TestExtrinsicStrategies:
         )
         assert torch.allclose(extrinsic, expected, atol=1e-4)
 
-    def test_all_strategies_handle_dead_agents(self):
+    def test_all_strategies_handle_dead_agents(self, bar_index_map_single):
         """All extrinsic strategies return 0.0 for dead agents."""
         device = torch.device("cpu")
         num_agents = 4
@@ -647,7 +708,7 @@ class TestExtrinsicStrategies:
             ),
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
-        engine = DACEngine(dac_multiplicative, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_multiplicative, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Agents 0,1 alive with high energy, agents 2,3 dead with high energy
         meters = torch.tensor([[1.0], [0.8], [1.0], [0.9]], device=device)
@@ -671,7 +732,7 @@ class TestExtrinsicStrategies:
             ),
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
-        engine = DACEngine(dac_constant, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_constant, vfs_registry, device, num_agents, bar_index_map_single)
         rewards = engine.extrinsic_fn(meters, dones)
 
         assert rewards[0] > 0.0
@@ -690,7 +751,7 @@ class TestExtrinsicStrategies:
             ),
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
-        engine = DACEngine(dac_additive, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_additive, vfs_registry, device, num_agents, bar_index_map_single)
         rewards = engine.extrinsic_fn(meters, dones)
 
         assert rewards[0] > 0.0
@@ -709,7 +770,7 @@ class TestExtrinsicStrategies:
             ),
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
-        engine = DACEngine(dac_weighted, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_weighted, vfs_registry, device, num_agents, bar_index_map_single)
         rewards = engine.extrinsic_fn(meters, dones)
 
         assert rewards[0] > 0.0
@@ -728,7 +789,7 @@ class TestExtrinsicStrategies:
             ),
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
-        engine = DACEngine(dac_polynomial, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_polynomial, vfs_registry, device, num_agents, bar_index_map_single)
         rewards = engine.extrinsic_fn(meters, dones)
 
         assert rewards[0] > 0.0
@@ -736,7 +797,7 @@ class TestExtrinsicStrategies:
         assert rewards[2] == 0.0
         assert rewards[3] == 0.0
 
-    def test_threshold_based_strategy(self):
+    def test_threshold_based_strategy(self, bar_index_map_dual):
         """Threshold-based: bonus when bar crosses threshold"""
         device = torch.device("cpu")
         num_agents = 4
@@ -771,7 +832,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Energy values: [0.2, 0.5, 0.8, 1.0]
         meters = torch.tensor([[0.2], [0.5], [0.8], [1.0]], device=device)
@@ -784,7 +845,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([0.5, 1.5, 1.5, 1.5], device=device)
         assert torch.allclose(extrinsic, expected)
 
-    def test_aggregation_min_strategy(self):
+    def test_aggregation_min_strategy(self, bar_index_map_dual):
         """Aggregation (min): reward = base + min(bars)"""
         device = torch.device("cpu")
         num_agents = 4
@@ -818,7 +879,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # meters: [energy, health]
         meters = torch.tensor([[0.3, 0.8], [0.5, 0.4], [0.9, 0.7], [0.2, 0.1]], device=device)
@@ -832,7 +893,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([0.8, 0.9, 1.2, 0.6], device=device)
         assert torch.allclose(extrinsic, expected)
 
-    def test_vfs_variable_strategy(self):
+    def test_vfs_variable_strategy(self, bar_index_map_dual):
         """VFS variable: reward = vfs[variable] * weight (escape hatch)"""
         device = torch.device("cpu")
         num_agents = 4
@@ -879,7 +940,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Meters not used for vfs_variable strategy
         meters = torch.tensor([[1.0], [1.0], [1.0], [1.0]], device=device)
@@ -891,7 +952,7 @@ class TestExtrinsicStrategies:
         expected = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device)
         assert torch.allclose(extrinsic, expected)
 
-    def test_hybrid_strategy(self):
+    def test_hybrid_strategy(self, bar_index_map_dual):
         """Hybrid: combine multiple approaches (simplified as weighted bars)"""
         device = torch.device("cpu")
         num_agents = 4
@@ -927,7 +988,7 @@ class TestExtrinsicStrategies:
             intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # meters: [energy, health]
         meters = torch.tensor([[0.5, 0.5], [0.8, 0.6], [0.2, 0.4], [1.0, 1.0]], device=device)
@@ -944,7 +1005,7 @@ class TestExtrinsicStrategies:
 class TestShapingBonuses:
     """Test shaping bonus compilation and evaluation."""
 
-    def test_approach_reward_bonus(self):
+    def test_approach_reward_bonus(self, bar_index_map_single):
         """approach_reward bonus rewards moving toward target affordance."""
         from townlet.config.drive_as_code import ApproachRewardConfig
 
@@ -981,7 +1042,7 @@ class TestShapingBonuses:
             ],
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Agent 0: distance=2, Agent 1: distance=5, Agent 2: distance≈19 (far/clamped)
         agent_positions = torch.tensor([[1.0, 1.0], [8.0, 1.0], [20.0, 20.0]], device=device)
@@ -999,7 +1060,7 @@ class TestShapingBonuses:
         assert torch.isclose(bonuses[1], torch.tensor(0.25, device=device), atol=1e-5)
         assert bonuses[2] == 0.0
 
-    def test_completion_bonus(self):
+    def test_completion_bonus(self, bar_index_map_single):
         """completion_bonus gives fixed bonus when agent completes interaction."""
         from townlet.config.drive_as_code import CompletionBonusConfig
 
@@ -1035,7 +1096,7 @@ class TestShapingBonuses:
             ],
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Agent 0: completed Bed, Agent 1: completed Fridge, Agent 2: no completion, Agent 3: completed Bed
         last_action_affordance = ["Bed", "Fridge", None, "Bed"]
@@ -1054,7 +1115,7 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 1.0
 
-    def test_efficiency_bonus(self):
+    def test_efficiency_bonus(self, bar_index_map_single):
         """efficiency_bonus rewards maintaining bar above threshold."""
         from townlet.config.drive_as_code import EfficiencyBonusConfig
 
@@ -1091,7 +1152,7 @@ class TestShapingBonuses:
             ],
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Agent 0: energy=0.9 (above), Agent 1: energy=0.7 (at threshold), Agent 2: energy=0.5 (below), Agent 3: energy=0.0 (below)
         meters = torch.tensor([[0.9], [0.7], [0.5], [0.0]], device=device)
@@ -1110,7 +1171,7 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
-    def test_state_achievement_bonus(self):
+    def test_state_achievement_bonus(self, bar_index_map_dual):
         """state_achievement rewards when ALL conditions are met."""
         from townlet.config.drive_as_code import BarCondition, StateAchievementConfig
 
@@ -1149,7 +1210,7 @@ class TestShapingBonuses:
             ],
         )
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Agent 0: both above thresholds, Agent 1: energy low, Agent 2: health low, Agent 3: both low
         meters = torch.tensor(
@@ -1176,7 +1237,7 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
-    def test_streak_bonus(self):
+    def test_streak_bonus(self, bar_index_map_dual):
         """streak_bonus rewards consecutive uses of affordance."""
         from townlet.config.drive_as_code import StreakBonusConfig
 
@@ -1211,7 +1272,7 @@ class TestShapingBonuses:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Agent 0: streak=5 (exceeds min), Agent 1: streak=3 (meets min),
         # Agent 2: streak=2 (below min), Agent 3: streak=0 (no streak)
@@ -1229,7 +1290,7 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
-    def test_diversity_bonus(self):
+    def test_diversity_bonus(self, bar_index_map_single):
         """diversity_bonus rewards using many different affordances."""
         from townlet.config.drive_as_code import DiversityBonusConfig
 
@@ -1263,7 +1324,7 @@ class TestShapingBonuses:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Agent 0: 5 unique (exceeds), Agent 1: 3 unique (meets),
         # Agent 2: 2 unique (below), Agent 3: 0 unique (none)
@@ -1278,7 +1339,7 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
-    def test_timing_bonus(self):
+    def test_timing_bonus(self, bar_index_map_single):
         """timing_bonus rewards using affordance during specific time windows."""
         from townlet.config.drive_as_code import TimeRange, TimingBonusConfig
 
@@ -1315,7 +1376,7 @@ class TestShapingBonuses:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Agent 0: hour=23, last_action=Bed (in range 22-6, matches) → bonus = 1.0 * 2.0
         # Agent 1: hour=12, last_action=Fridge (in range 12-13, matches) → bonus = 1.0 * 1.5
@@ -1370,7 +1431,9 @@ class TestShapingBonuses:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        # This test uses energy and money bars
+        bar_index_map = {"energy": 0, "money": 1}
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map)
 
         # Agent 0: money=0.8 (above), Agent 1: money=0.5 (at threshold),
         # Agent 2: money=0.3 (below), Agent 3: money=0.0 (below)
@@ -1393,7 +1456,7 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
-    def test_balance_bonus(self):
+    def test_balance_bonus(self, bar_index_map_dual):
         """balance_bonus rewards keeping multiple bars balanced."""
         from townlet.config.drive_as_code import BalanceBonusConfig
 
@@ -1428,7 +1491,7 @@ class TestShapingBonuses:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Agent 0: perfect balance (0.5, 0.5) → imbalance=0.0
         # Agent 1: slight imbalance (0.6, 0.5) → imbalance=0.1 (within threshold)
@@ -1453,7 +1516,7 @@ class TestShapingBonuses:
         assert bonuses[2] == 5.0
         assert bonuses[3] == 0.0
 
-    def test_crisis_avoidance(self):
+    def test_crisis_avoidance(self, bar_index_map_dual):
         """crisis_avoidance rewards staying above crisis threshold."""
         from townlet.config.drive_as_code import CrisisAvoidanceConfig
 
@@ -1488,7 +1551,7 @@ class TestShapingBonuses:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Agent 0: energy=0.8 (well above crisis) → bonus
         # Agent 1: energy=0.4 (above crisis) → bonus
@@ -1507,7 +1570,7 @@ class TestShapingBonuses:
         assert bonuses[3] == 0.0
         assert bonuses[4] == 0.0
 
-    def test_vfs_variable_bonus(self):
+    def test_vfs_variable_bonus(self, bar_index_map_single):
         """vfs_variable bonus uses VFS variable value as bonus."""
         from townlet.config.drive_as_code import VfsVariableConfig
 
@@ -1554,7 +1617,7 @@ class TestShapingBonuses:
         # Register VFS variable with different values per agent
         vfs_registry.set("custom_bonus", torch.tensor([1.0, 0.5, 0.0, -0.5], device=device), writer="engine")
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Call bonus (no kwargs needed - reads from VFS)
         bonuses = engine.shaping_fns[0]()
@@ -1573,7 +1636,7 @@ class TestShapingBonuses:
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
 
-    def test_approach_reward_missing_affordance(self):
+    def test_approach_reward_missing_affordance(self, bar_index_map_single):
         """approach_reward returns zeros when target affordance not in positions."""
         from townlet.config.drive_as_code import ApproachRewardConfig
 
@@ -1609,7 +1672,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Agent positions provided, but affordance_positions does NOT include "Bed"
         agent_positions = torch.tensor([[1.0, 1.0], [3.0, 3.0], [5.0, 5.0]], device=device)
@@ -1624,7 +1687,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros for all agents (affordance not found)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_completion_bonus_missing_kwarg(self):
+    def test_completion_bonus_missing_kwarg(self, bar_index_map_single):
         """completion_bonus returns zeros when last_action_affordance missing."""
         from townlet.config.drive_as_code import CompletionBonusConfig
 
@@ -1659,7 +1722,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Call without providing last_action_affordance kwarg
         bonuses = engine.shaping_fns[0]()
@@ -1667,7 +1730,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_efficiency_bonus_missing_kwarg(self):
+    def test_efficiency_bonus_missing_kwarg(self, bar_index_map_single):
         """efficiency_bonus returns zeros when meters missing."""
         from townlet.config.drive_as_code import EfficiencyBonusConfig
 
@@ -1703,7 +1766,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Call without providing meters kwarg
         bonuses = engine.shaping_fns[0]()
@@ -1711,7 +1774,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_state_achievement_missing_kwarg(self):
+    def test_state_achievement_missing_kwarg(self, bar_index_map_single):
         """state_achievement returns zeros when meters missing."""
         from townlet.config.drive_as_code import BarCondition, StateAchievementConfig
 
@@ -1748,7 +1811,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Call without providing meters kwarg
         bonuses = engine.shaping_fns[0]()
@@ -1756,7 +1819,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_streak_bonus_missing_kwarg(self):
+    def test_streak_bonus_missing_kwarg(self, bar_index_map_dual):
         """streak_bonus returns zeros when affordance_streak missing."""
         from townlet.config.drive_as_code import StreakBonusConfig
 
@@ -1792,7 +1855,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Call without providing affordance_streak kwarg
         bonuses = engine.shaping_fns[0]()
@@ -1800,7 +1863,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_streak_bonus_affordance_not_found(self):
+    def test_streak_bonus_affordance_not_found(self, bar_index_map_single):
         """streak_bonus returns zeros when target affordance not in streak dict."""
         from townlet.config.drive_as_code import StreakBonusConfig
 
@@ -1836,7 +1899,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Provide affordance_streak dict but without "Bed"
         affordance_streak = {"Fridge": torch.tensor([5, 5, 5], device=device)}
@@ -1846,7 +1909,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (affordance not in dict)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_diversity_bonus_missing_kwarg(self):
+    def test_diversity_bonus_missing_kwarg(self, bar_index_map_dual):
         """diversity_bonus returns zeros when unique_affordances_used missing."""
         from townlet.config.drive_as_code import DiversityBonusConfig
 
@@ -1881,7 +1944,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Call without providing unique_affordances_used kwarg
         bonuses = engine.shaping_fns[0]()
@@ -1889,7 +1952,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_timing_bonus_missing_kwargs(self):
+    def test_timing_bonus_missing_kwargs(self, bar_index_map_dual):
         """timing_bonus returns zeros when current_hour or last_action_affordance missing."""
         from townlet.config.drive_as_code import TimeRange, TimingBonusConfig
 
@@ -1926,7 +1989,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Call without providing any kwargs
         bonuses = engine.shaping_fns[0]()
@@ -1942,7 +2005,7 @@ class TestShapingBonusEdgeCases:
         bonuses = engine.shaping_fns[0](last_action_affordance=last_action_affordance)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_economic_efficiency_missing_kwarg(self):
+    def test_economic_efficiency_missing_kwarg(self, bar_index_map_dual):
         """economic_efficiency returns zeros when meters missing."""
         from townlet.config.drive_as_code import EconomicEfficiencyConfig
 
@@ -1978,7 +2041,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Call without providing meters kwarg
         bonuses = engine.shaping_fns[0]()
@@ -1986,7 +2049,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_balance_bonus_missing_kwarg(self):
+    def test_balance_bonus_missing_kwarg(self, bar_index_map_dual):
         """balance_bonus returns zeros when meters missing."""
         from townlet.config.drive_as_code import BalanceBonusConfig
 
@@ -2022,7 +2085,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Call without providing meters kwarg
         bonuses = engine.shaping_fns[0]()
@@ -2030,7 +2093,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_crisis_avoidance_missing_kwarg(self):
+    def test_crisis_avoidance_missing_kwarg(self, bar_index_map_dual):
         """crisis_avoidance returns zeros when meters missing."""
         from townlet.config.drive_as_code import CrisisAvoidanceConfig
 
@@ -2066,7 +2129,7 @@ class TestShapingBonusEdgeCases:
             num_agents=num_agents,
             device=device,
         )
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
 
         # Call without providing meters kwarg
         bonuses = engine.shaping_fns[0]()
@@ -2074,7 +2137,7 @@ class TestShapingBonusEdgeCases:
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
 
-    def test_vfs_variable_missing_variable(self):
+    def test_vfs_variable_missing_variable(self, bar_index_map_single):
         """vfs_variable raises error when variable not in registry."""
         import pytest
 
@@ -2113,7 +2176,7 @@ class TestShapingBonusEdgeCases:
         )
         # Don't register the variable
 
-        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
         # Should raise KeyError when trying to read missing variable
         with pytest.raises(KeyError, match="nonexistent_var"):
