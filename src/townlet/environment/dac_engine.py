@@ -741,6 +741,29 @@ class DACEngine:
 
                 shaping_fns.append(create_crisis_avoidance_fn(bonus_config))
 
+            elif bonus_config.type == "vfs_variable":
+                # Use closure factory to capture config correctly
+                def create_vfs_variable_fn(config):
+                    weight = config.weight
+                    variable = config.variable
+
+                    def compute_vfs_variable(**kwargs) -> torch.Tensor:
+                        """Compute VFS variable bonus for all agents."""
+                        # Read variable from VFS registry (no kwargs needed)
+                        # NOTE: VFS registry raises KeyError if variable not found
+                        # This is intentional - we don't return zeros like other bonuses
+                        variable_value = self.vfs_registry.get(variable, reader=self.vfs_reader)
+
+                        # Bonus: weight * variable_value
+                        # Supports negative bonuses (weight or variable can be negative)
+                        bonus = weight * variable_value
+
+                        return bonus
+
+                    return compute_vfs_variable
+
+                shaping_fns.append(create_vfs_variable_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:

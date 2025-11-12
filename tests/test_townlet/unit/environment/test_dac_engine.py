@@ -1507,6 +1507,68 @@ class TestShapingBonuses:
         assert bonuses[3] == 0.0
         assert bonuses[4] == 0.0
 
+    def test_vfs_variable_bonus(self):
+        """vfs_variable bonus uses VFS variable value as bonus."""
+        from townlet.config.drive_as_code import VfsVariableConfig
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                VfsVariableConfig(
+                    type="vfs_variable",
+                    weight=2.0,
+                    variable="custom_bonus",
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+                VariableDef(
+                    id="custom_bonus",
+                    scope="agent",
+                    type="scalar",
+                    default=0.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Register VFS variable with different values per agent
+        vfs_registry.set("custom_bonus", torch.tensor([1.0, 0.5, 0.0, -0.5], device=device), writer="engine")
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call bonus (no kwargs needed - reads from VFS)
+        bonuses = engine.shaping_fns[0]()
+
+        # Bonus: weight * variable_value
+        # Agent 0: 2.0 * 1.0 = 2.0
+        # Agent 1: 2.0 * 0.5 = 1.0
+        # Agent 2: 2.0 * 0.0 = 0.0
+        # Agent 3: 2.0 * -0.5 = -1.0 (negative bonus!)
+        assert bonuses[0] == 2.0
+        assert bonuses[1] == 1.0
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == -1.0
+
 
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
@@ -2011,3 +2073,48 @@ class TestShapingBonusEdgeCases:
 
         # Should return zeros (kwarg missing)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_vfs_variable_missing_variable(self):
+        """vfs_variable raises error when variable not in registry."""
+        import pytest
+
+        from townlet.config.drive_as_code import VfsVariableConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                VfsVariableConfig(
+                    type="vfs_variable",
+                    weight=2.0,
+                    variable="nonexistent_var",
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        # Don't register the variable
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Should raise KeyError when trying to read missing variable
+        with pytest.raises(KeyError, match="nonexistent_var"):
+            engine.shaping_fns[0]()

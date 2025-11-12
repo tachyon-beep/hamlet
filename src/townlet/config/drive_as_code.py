@@ -546,6 +546,27 @@ class CrisisAvoidanceConfig(BaseModel):
     crisis_threshold: float = Field(gt=0.0, le=1.0, description="Crisis threshold (must be ABOVE this)")
 
 
+class VfsVariableConfig(BaseModel):
+    """Shaping bonus from VFS variable (enables custom shaping logic).
+
+    Allows arbitrary shaping logic to be computed in VFS and used as bonus.
+    Supports negative bonuses via weight or variable value.
+
+    Example:
+        >>> vfs_bonus = VfsVariableConfig(
+        ...     type="vfs_variable",
+        ...     weight=2.0,
+        ...     variable="custom_shaping_signal",
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["vfs_variable"]
+    weight: float = Field(description="Weight to apply (can be negative)")
+    variable: str = Field(description="VFS variable name")
+
+
 # Union type for all shaping bonuses (expand as more types are added)
 ShapingBonusConfig = (
     ApproachRewardConfig
@@ -559,6 +580,7 @@ ShapingBonusConfig = (
     | EconomicEfficiencyConfig
     | BalanceBonusConfig
     | CrisisAvoidanceConfig
+    | VfsVariableConfig
 )
 
 
