@@ -98,18 +98,11 @@ class VectorizedPopulation(PopulationManager):
         self.num_agents = len(agent_ids)
         self.device = device
         self.network_type = network_type
-        self.is_recurrent = network_type == "recurrent"
         self.tb_logger = tb_logger
         self.brain_config = brain_config
 
-        # TASK-005 Phase 1: Validate brain_config constraints
+        # TASK-005 Phase 2: Set Q-learning parameters from brain_config or constructor
         if brain_config is not None:
-            if network_type != "simple":
-                raise ValueError(
-                    f"brain_config requires network_type='simple' in Phase 1. "
-                    f"Got network_type='{network_type}'. "
-                    f"Recurrent networks will be supported in Phase 2."
-                )
             # Override Q-learning parameters from brain_config
             self.gamma = brain_config.q_learning.gamma
             self.use_double_dqn = brain_config.q_learning.use_double_dqn
@@ -159,7 +152,6 @@ class VectorizedPopulation(PopulationManager):
                     num_meters=env.meter_count,
                     num_affordance_types=env.num_affordance_types,
                 ).to(device)
-                self.is_recurrent = True  # Enable recurrent mode
             else:
                 raise ValueError(f"Unsupported architecture type: {brain_config.architecture.type}. " f"Supported: feedforward, recurrent")
         elif network_type == "recurrent":
@@ -182,6 +174,14 @@ class VectorizedPopulation(PopulationManager):
             ).to(device)
         else:
             self.q_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(device)  # TODO(BRAIN_AS_CODE): Should come from config
+
+        # Set is_recurrent flag based on brain_config or network_type
+        if brain_config is not None:
+            # When brain_config present, use brain_config.architecture.type
+            self.is_recurrent = brain_config.architecture.type == "recurrent"
+        else:
+            # When no brain_config, use network_type parameter
+            self.is_recurrent = network_type == "recurrent"
 
         # Target network (stabilises training for both feed-forward and recurrent agents)
         self.target_network: nn.Module

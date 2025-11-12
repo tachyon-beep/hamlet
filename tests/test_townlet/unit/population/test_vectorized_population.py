@@ -221,26 +221,6 @@ class TestBrainConfigIntegration:
         # Verify learning rate matches config
         assert population.optimizer.param_groups[0]["lr"] == 0.001
 
-    def test_brain_config_requires_simple_network_type(
-        self,
-        basic_env,
-        adversarial_curriculum,
-        epsilon_greedy_exploration,
-        cpu_device,
-        simple_brain_config,
-    ):
-        """brain_config requires network_type='simple' in Phase 1."""
-        with pytest.raises(ValueError, match="brain_config.*network_type.*simple"):
-            VectorizedPopulation(
-                env=basic_env,
-                curriculum=adversarial_curriculum,
-                exploration=epsilon_greedy_exploration,
-                agent_ids=["agent_0"],
-                device=cpu_device,
-                network_type="recurrent",  # Should fail!
-                brain_config=simple_brain_config,
-            )
-
     def test_brain_config_overrides_q_learning_parameters(
         self,
         basic_env,
@@ -439,6 +419,126 @@ class TestRecurrentNetworkSupport:
         assert isinstance(population.q_network, RecurrentSpatialQNetwork)
         assert isinstance(population.target_network, RecurrentSpatialQNetwork)
         assert population.is_recurrent is True
+
+    def test_is_recurrent_flag_comes_from_brain_config_not_network_type(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """CRITICAL: is_recurrent flag must come from brain_config.architecture.type, not network_type parameter."""
+        from townlet.agent.brain_config import (
+            CNNEncoderConfig,
+            LSTMConfig,
+            MLPEncoderConfig,
+            RecurrentConfig,
+        )
+
+        # Create recurrent brain_config
+        recurrent_config = BrainConfig(
+            version="1.0",
+            description="Test is_recurrent flag correctness",
+            architecture=ArchitectureConfig(
+                type="recurrent",
+                recurrent=RecurrentConfig(
+                    vision_encoder=CNNEncoderConfig(
+                        channels=[16, 32],
+                        kernel_sizes=[3, 3],
+                        strides=[1, 1],
+                        padding=[1, 1],
+                        activation="relu",
+                    ),
+                    position_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    meter_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    affordance_encoder=MLPEncoderConfig(
+                        hidden_sizes=[32],
+                        activation="relu",
+                    ),
+                    lstm=LSTMConfig(
+                        hidden_size=256,
+                        num_layers=1,
+                        dropout=0.0,
+                    ),
+                    q_head=MLPEncoderConfig(
+                        hidden_sizes=[128],
+                        activation="relu",
+                    ),
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.0001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
+            ),
+            loss=LossConfig(type="huber"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=True,
+            ),
+        )
+
+        # Pass network_type="simple" but brain_config with recurrent architecture
+        # The is_recurrent flag should come from brain_config, not network_type
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="simple",  # MISLEADING - should be ignored!
+            brain_config=recurrent_config,
+        )
+
+        # CRITICAL: is_recurrent should be True (from brain_config.architecture.type)
+        # NOT False (from network_type="simple")
+        assert population.is_recurrent is True, (
+            "is_recurrent flag must come from brain_config.architecture.type, not network_type parameter. "
+            f"Expected True (from brain_config), got {population.is_recurrent} (from network_type)"
+        )
+
+    def test_is_recurrent_flag_uses_network_type_when_no_brain_config(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """When brain_config is None, is_recurrent should come from network_type parameter."""
+        # Test feedforward network
+        population_feedforward = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="simple",
+            brain_config=None,
+        )
+        assert population_feedforward.is_recurrent is False
+
+        # Test recurrent network
+        population_recurrent = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="recurrent",
+            brain_config=None,
+        )
+        assert population_recurrent.is_recurrent is True
 
     def test_recurrent_network_has_correct_dimensions(
         self,
