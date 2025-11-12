@@ -939,6 +939,7 @@ class VectorizedPopulation(PopulationManager):
             "version": 2,  # Checkpoint format version
             "q_network": self.q_network.state_dict(),
             "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict() if self.scheduler is not None else None,
             "total_steps": self.total_steps,
             "exploration_state": self.exploration.checkpoint_state(),
         }
@@ -1016,6 +1017,11 @@ class VectorizedPopulation(PopulationManager):
 
         # Restore optimizer
         self.optimizer.load_state_dict(checkpoint["optimizer"])
+
+        # Restore scheduler state (if exists)
+        if "scheduler" in checkpoint and checkpoint["scheduler"] is not None:
+            if self.scheduler is not None:
+                self.scheduler.load_state_dict(checkpoint["scheduler"])
 
         # Restore training counters
         self.total_steps = checkpoint.get("total_steps", 0)

@@ -782,3 +782,187 @@ class TestSchedulerIntegration:
         )
 
         assert isinstance(population.scheduler, ExponentialLR)
+
+    def test_scheduler_state_persists_across_checkpoint_save_load(
+        self,
+        compile_universe,
+        test_config_pack_path,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """Scheduler state should be saved and restored in checkpoints."""
+        from townlet.environment.vectorized_env import VectorizedHamletEnv
+
+        # Create CPU-based environment
+        universe = compile_universe(test_config_pack_path)
+        env = VectorizedHamletEnv.from_universe(
+            universe,
+            num_agents=1,
+            device=cpu_device,
+        )
+
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test scheduler state persistence",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(
+                    type="step_decay",
+                    step_size=100,
+                    gamma=0.1,
+                ),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,
+            ),
+        )
+
+        # Create population with scheduler
+        population1 = VectorizedPopulation(
+            env=env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=env.observation_dim,  # Use actual observation dimension
+            brain_config=brain_config,
+        )
+
+        # Initialize curriculum
+        adversarial_curriculum.initialize_population(1)
+
+        # Take training steps to advance scheduler
+        # Add some transitions to replay buffer first
+        population1.reset()
+        for _ in range(10):
+            state = population1.step_population(env)
+            if state.dones.any():
+                break
+
+        # Advance scheduler by triggering training steps
+        # Fill replay buffer with enough transitions
+        for _ in range(100):
+            state = population1.step_population(env)
+            if state.dones.any():
+                env.reset()
+                population1.reset()
+
+        # Get scheduler step count before checkpoint
+        initial_step_count = population1.scheduler.last_epoch
+
+        # Save checkpoint
+        checkpoint = population1.get_checkpoint_state()
+
+        # Verify scheduler state is in checkpoint
+        assert "scheduler" in checkpoint
+        assert checkpoint["scheduler"] is not None
+        assert checkpoint["scheduler"]["last_epoch"] == initial_step_count
+
+        # Create new population
+        population2 = VectorizedPopulation(
+            env=env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            obs_dim=env.observation_dim,  # Use actual observation dimension
+            brain_config=brain_config,
+        )
+
+        # Verify new population starts at step 0
+        assert population2.scheduler.last_epoch == 0
+
+        # Load checkpoint
+        population2.load_checkpoint_state(checkpoint)
+
+        # Verify scheduler state restored
+        assert population2.scheduler.last_epoch == initial_step_count
+
+    def test_checkpoint_without_scheduler_state_is_backward_compatible(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """Loading old checkpoints without scheduler state should not crash."""
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test backward compatibility",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(
+                    type="step_decay",
+                    step_size=100,
+                    gamma=0.1,
+                ),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,
+            ),
+        )
+
+        # Create population
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            brain_config=brain_config,
+        )
+
+        # Create checkpoint without scheduler state (simulating old checkpoint)
+        checkpoint = population.get_checkpoint_state()
+        del checkpoint["scheduler"]  # Remove scheduler state to simulate old checkpoint
+
+        # Create new population
+        population2 = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            brain_config=brain_config,
+        )
+
+        # Load checkpoint should not crash
+        population2.load_checkpoint_state(checkpoint)
+
+        # Scheduler should remain at initial state (step 0)
+        assert population2.scheduler.last_epoch == 0
