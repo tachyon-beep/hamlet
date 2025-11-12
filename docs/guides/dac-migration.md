@@ -431,10 +431,12 @@ initial_intrinsic_weight: 0.1
 ```yaml
 intrinsic:
   strategy: rnd
-  base_weight: 0.1  # Matches old initial_intrinsic_weight
+  base_weight: 0.1  # Matches exploration.initial_intrinsic_weight
 ```
 
-**Note**: `initial_intrinsic_weight` field still exists in training.yaml for backward compatibility with checkpoints, but DAC now controls the actual intrinsic weight.
+**Note**: The `exploration.initial_intrinsic_weight` field in training.yaml controls the **starting** intrinsic weight for AdaptiveIntrinsicExploration's annealing system. The DAC `base_weight` field controls the **baseline** intrinsic weight applied during reward composition. These serve different purposes:
+- `exploration.initial_intrinsic_weight`: Starting weight for performance-based annealing (decreases over time)
+- `intrinsic.base_weight`: Constant multiplier applied to raw intrinsic rewards before modifiers
 
 ---
 
