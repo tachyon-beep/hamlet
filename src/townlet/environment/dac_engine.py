@@ -158,6 +158,13 @@ class DACEngine:
                     bar_idx = self._get_bar_index(bar_id)
                     reward = reward * meters[:, bar_idx]
 
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
+
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
 
@@ -189,6 +196,13 @@ class DACEngine:
                     bonus = bonus_config.weight * var_value
                     reward = reward + bonus
 
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
+
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
 
@@ -209,6 +223,13 @@ class DACEngine:
                 for bar_id in bar_ids:
                     bar_idx = self._get_bar_index(bar_id)
                     reward = reward + meters[:, bar_idx]
+
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
 
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
@@ -233,6 +254,13 @@ class DACEngine:
                     bar_value = meters[:, bar_idx]
                     weighted_value = bonus_config.scale * bar_value
                     reward = reward + weighted_value
+
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
 
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
@@ -259,6 +287,13 @@ class DACEngine:
                     weight = bonus_config.scale
                     term = weight * torch.pow(bar_value, exponent)
                     reward = reward + term
+
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
 
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
@@ -287,6 +322,13 @@ class DACEngine:
                     above_threshold = bar_value >= threshold
                     reward = reward + torch.where(above_threshold, bonus, 0.0)
 
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
+
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
 
@@ -312,6 +354,13 @@ class DACEngine:
                     aggregated = torch.min(bar_values, dim=1).values
                     reward = reward + aggregated
 
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
+
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
 
@@ -333,6 +382,13 @@ class DACEngine:
                     var_value = self.vfs_registry.get(bonus_config.variable, reader=self.vfs_reader)
                     weighted_value = bonus_config.weight * var_value
                     reward = reward + weighted_value
+
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
 
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
@@ -366,6 +422,13 @@ class DACEngine:
                         term = bonus_config.scale * (bar_value - bonus_config.center)
 
                     reward = reward + term
+
+                # Apply modifiers
+                for modifier_name in strategy.apply_modifiers:
+                    if modifier_name in self.modifiers:
+                        modifier_fn = self.modifiers[modifier_name]
+                        multiplier = modifier_fn(meters)
+                        reward = reward * multiplier
 
                 # Dead agents get 0.0
                 reward = torch.where(dones, torch.zeros_like(reward), reward)
@@ -819,22 +882,34 @@ class DACEngine:
         extrinsic = self.extrinsic_fn(meters=meters, dones=dones)
 
         # 2. Compute intrinsic reward with modifiers
-        intrinsic = intrinsic_raw.clone()
+        intrinsic_raw_copy = intrinsic_raw.clone()
 
-        # Apply all modifiers (multiplicative chain)
+        # Apply base_weight first
+        base_weight = self.dac_config.intrinsic.base_weight
+        intrinsic = intrinsic_raw_copy * base_weight
+
+        # Apply modifiers (only those listed in apply_modifiers)
         intrinsic_weight = torch.ones(self.num_agents, device=self.device)
-        for modifier_fn in self.modifiers.values():
-            multiplier = modifier_fn(meters)
-            intrinsic_weight = intrinsic_weight * multiplier
+        for modifier_name in self.dac_config.intrinsic.apply_modifiers:
+            if modifier_name in self.modifiers:
+                modifier_fn = self.modifiers[modifier_name]
+                multiplier = modifier_fn(meters)
+                intrinsic_weight = intrinsic_weight * multiplier
 
         # Apply modifiers to intrinsic rewards
         intrinsic = intrinsic * intrinsic_weight
+
+        # Dead agents get 0.0 intrinsic
+        intrinsic = torch.where(dones, torch.zeros_like(intrinsic), intrinsic)
 
         # 3. Compute shaping bonuses
         shaping_total = torch.zeros(self.num_agents, device=self.device)
         for shaping_fn in self.shaping_fns:
             bonus = shaping_fn(meters=meters, dones=dones, **kwargs)
             shaping_total += bonus
+
+        # Dead agents get 0.0 shaping
+        shaping_total = torch.where(dones, torch.zeros_like(shaping_total), shaping_total)
 
         # 4. Compose total reward
         total_reward = extrinsic + intrinsic + shaping_total

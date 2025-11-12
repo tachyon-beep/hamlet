@@ -1031,7 +1031,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 ApproachRewardConfig(
                     type="approach_reward",
@@ -1244,7 +1244,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 StreakBonusConfig(
                     type="streak_bonus",
@@ -1297,7 +1297,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 DiversityBonusConfig(
                     type="diversity_bonus",
@@ -1346,7 +1346,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 TimingBonusConfig(
                     type="timing_bonus",
@@ -1403,7 +1403,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy", "money"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 EconomicEfficiencyConfig(
                     type="economic_efficiency",
@@ -1463,7 +1463,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy", "health"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 BalanceBonusConfig(
                     type="balance_bonus",
@@ -1523,7 +1523,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 CrisisAvoidanceConfig(
                     type="crisis_avoidance",
@@ -1577,7 +1577,7 @@ class TestShapingBonuses:
         dac_config = DriveAsCodeConfig(
             modifiers={},
             extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=[]),
             shaping=[
                 VfsVariableConfig(
                     type="vfs_variable",
@@ -2212,7 +2212,7 @@ class TestCalculateRewards:
                 base=1.0,
                 bars=["energy"],
             ),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=["low_energy"]),
             shaping=[
                 EfficiencyBonusConfig(
                     type="efficiency_bonus",
@@ -2243,12 +2243,12 @@ class TestCalculateRewards:
 
         engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
 
-        # Test scenarios:
-        # Agent 0: energy=0.8 → extrinsic=0.8, intrinsic=1.0×1.0=1.0, shaping=2.0 → total=3.8
-        # Agent 1: energy=0.6 → extrinsic=0.6, intrinsic=1.0×1.0=1.0, shaping=0.0 → total=1.6
-        # Agent 2: energy=0.3 → extrinsic=0.3, intrinsic=1.0×0.5=0.5, shaping=0.0 → total=0.8
-        # Agent 3: DEAD (energy=0.0) → extrinsic=0.0, intrinsic=1.0×0.5=0.5, shaping=0.0 → total=0.5
-        # Note: Intrinsic rewards are not zeroed for dead agents - only extrinsic is
+        # Test scenarios (after bug fixes):
+        # Agent 0: energy=0.8 → extrinsic=0.8, intrinsic=(1.0*0.1)×1.0=0.1, shaping=2.0 → total=2.9
+        # Agent 1: energy=0.6 → extrinsic=0.6, intrinsic=(1.0*0.1)×1.0=0.1, shaping=0.0 → total=0.7
+        # Agent 2: energy=0.3 → extrinsic=0.3, intrinsic=(1.0*0.1)×0.5=0.05, shaping=0.0 → total=0.35
+        # Agent 3: DEAD (energy=0.0) → extrinsic=0.0, intrinsic=0.0 (masked), shaping=0.0 (masked) → total=0.0
+        # Note: After bug fixes, dead agents now correctly receive 0.0 for intrinsic and shaping
 
         meters = torch.tensor([[0.8], [0.6], [0.3], [0.0]], device=device)
         dones = torch.tensor([False, False, False, True], device=device)
@@ -2265,14 +2265,19 @@ class TestCalculateRewards:
         # Verify extrinsic (dead agents get 0.0)
         assert torch.allclose(components["extrinsic"], torch.tensor([0.8, 0.6, 0.3, 0.0], device=device))
 
-        # Verify intrinsic (with modifiers applied, NOT zeroed for dead agents)
-        assert torch.allclose(components["intrinsic"], torch.tensor([1.0, 1.0, 0.5, 0.5], device=device))
+        # Verify intrinsic (base_weight applied, modifiers applied, dead agents get 0.0)
+        # intrinsic = intrinsic_raw * base_weight * modifier_weight
+        # Agent 0: 1.0 * 0.1 * 1.0 = 0.1
+        # Agent 1: 1.0 * 0.1 * 1.0 = 0.1
+        # Agent 2: 1.0 * 0.1 * 0.5 = 0.05
+        # Agent 3: masked to 0.0 (dead)
+        assert torch.allclose(components["intrinsic"], torch.tensor([0.1, 0.1, 0.05, 0.0], device=device))
 
         # Verify shaping (dead agents get 0.0)
         assert torch.allclose(components["shaping"], torch.tensor([2.0, 0.0, 0.0, 0.0], device=device))
 
         # Verify total
-        expected_total = torch.tensor([3.8, 1.6, 0.8, 0.5], device=device)
+        expected_total = torch.tensor([2.9, 0.7, 0.35, 0.0], device=device)
         assert torch.allclose(total_rewards, expected_total)
 
         # Verify intrinsic weights
@@ -2299,7 +2304,7 @@ class TestCalculateRewards:
                 base=1.0,
                 bars=["energy", "health"],
             ),
-            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1, apply_modifiers=["health_crisis"]),
             shaping=[
                 CompletionBonusConfig(
                     type="completion_bonus",
@@ -2354,12 +2359,13 @@ class TestCalculateRewards:
             last_action_affordance=last_action_affordance,
         )
 
-        # Agent 0: extrinsic=1.0*1.0=1.0, intrinsic=2.0*1.0=2.0, shaping=5.0 → total=8.0
-        # Agent 1: extrinsic=0.5*0.5=0.25, intrinsic=2.0*1.0=2.0, shaping=0.0 → total=2.25
-        # Agent 2: extrinsic=0.8*0.2=0.16, intrinsic=2.0*0.0=0.0 (health crisis), shaping=0.0 → total=0.16
+        # After bug fixes (base_weight now applied):
+        # Agent 0: extrinsic=1.0*1.0=1.0, intrinsic=(2.0*0.1)*1.0=0.2, shaping=5.0 → total=6.2
+        # Agent 1: extrinsic=0.5*0.5=0.25, intrinsic=(2.0*0.1)*1.0=0.2, shaping=0.0 → total=0.45
+        # Agent 2: extrinsic=0.8*0.2=0.16, intrinsic=(2.0*0.1)*0.0=0.0 (health crisis), shaping=0.0 → total=0.16
 
-        assert torch.allclose(total_rewards[0], torch.tensor(8.0, device=device))
-        assert torch.allclose(total_rewards[1], torch.tensor(2.25, device=device))
+        assert torch.allclose(total_rewards[0], torch.tensor(6.2, device=device))
+        assert torch.allclose(total_rewards[1], torch.tensor(0.45, device=device))
         assert torch.allclose(total_rewards[2], torch.tensor(0.16, device=device))
 
     def test_calculate_rewards_no_intrinsic(self, bar_index_map_single):
@@ -2486,3 +2492,364 @@ class TestCalculateRewards:
         # Agent 1: distance=sqrt((3-0)^2 + (0-2)^2) = sqrt(13) ≈ 3.606, bonus = 1.0 * (1 - 3.606/5.0) ≈ 0.2789
         assert torch.allclose(components["shaping"][0], torch.tensor(0.6, device=device))
         assert torch.allclose(components["shaping"][1], torch.tensor(1.0 * (1.0 - 3.606 / 5.0), device=device), atol=1e-3)
+
+
+class TestDACEngineBugFixes:
+    """Tests for critical bug fixes in DAC Engine reward calculation."""
+
+    def test_dead_agents_receive_zero_rewards(self, bar_index_map_dual):
+        """BUG 1: Dead agents must receive 0.0 for intrinsic and shaping rewards."""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        # Create VFS registry
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+                VariableDef(
+                    id="health",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Create DAC config with intrinsic and shaping
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy", "health"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="rnd",
+                base_weight=0.5,
+                apply_modifiers=[],
+            ),
+            shaping=[
+                {
+                    "type": "efficiency_bonus",
+                    "weight": 0.2,
+                    "bar": "energy",
+                    "threshold": 0.5,
+                }
+            ],
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
+
+        # Test scenario: 2 alive agents, 2 dead agents
+        meters = torch.tensor(
+            [
+                [0.8, 0.9],
+                [0.0, 0.5],
+                [0.7, 0.8],
+                [0.6, 0.0],
+            ],  # Agent 0: alive  # Agent 1: dead (energy=0)  # Agent 2: alive  # Agent 3: dead (health=0)
+            device=device,
+        )
+        dones = torch.tensor([False, True, False, True], device=device)
+        intrinsic_raw = torch.tensor([0.1, 0.2, 0.15, 0.25], device=device)
+        step_counts = torch.tensor([10, 10, 10, 10], device=device)
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+        )
+
+        # Dead agents (indices 1, 3) must have 0.0 for intrinsic rewards
+        assert components["intrinsic"][1] == 0.0, f"Dead agent 1 intrinsic: {components['intrinsic'][1]}"
+        assert components["intrinsic"][3] == 0.0, f"Dead agent 3 intrinsic: {components['intrinsic'][3]}"
+
+        # Alive agents (indices 0, 2) should have non-zero intrinsic
+        assert components["intrinsic"][0] > 0.0, "Alive agent 0 should have intrinsic reward"
+        assert components["intrinsic"][2] > 0.0, "Alive agent 2 should have intrinsic reward"
+
+        # Dead agents (indices 1, 3) must have 0.0 for shaping rewards
+        assert components["shaping"][1] == 0.0, f"Dead agent 1 shaping: {components['shaping'][1]}"
+        assert components["shaping"][3] == 0.0, f"Dead agent 3 shaping: {components['shaping'][3]}"
+
+        # Alive agents (indices 0, 2) should have non-zero shaping (both energy > 0.5)
+        assert components["shaping"][0] > 0.0, "Alive agent 0 should have shaping reward"
+        assert components["shaping"][2] > 0.0, "Alive agent 2 should have shaping reward"
+
+        # Extrinsic already correctly masks dead agents (existing behavior)
+        assert components["extrinsic"][1] == 0.0, "Dead agent 1 extrinsic should be 0"
+        assert components["extrinsic"][3] == 0.0, "Dead agent 3 extrinsic should be 0"
+
+    def test_intrinsic_base_weight_applied(self, bar_index_map_single):
+        """BUG 2: intrinsic.base_weight must be applied to intrinsic rewards."""
+        device = torch.device("cpu")
+        num_agents = 2
+
+        # Create VFS registry
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Test with base_weight=0.3 and NO modifiers
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="rnd",
+                base_weight=0.3,  # This should multiply intrinsic_raw
+                apply_modifiers=[],
+            ),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
+
+        meters = torch.tensor([[1.0], [1.0]], device=device)
+        dones = torch.tensor([False, False], device=device)
+        intrinsic_raw = torch.tensor([1.0, 2.0], device=device)
+        step_counts = torch.tensor([1, 1], device=device)
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+        )
+
+        # Expected: intrinsic = intrinsic_raw * base_weight
+        # Agent 0: 1.0 * 0.3 = 0.3
+        # Agent 1: 2.0 * 0.3 = 0.6
+        assert torch.allclose(
+            components["intrinsic"][0], torch.tensor(0.3, device=device)
+        ), f"Agent 0: expected 0.3, got {components['intrinsic'][0]}"
+        assert torch.allclose(
+            components["intrinsic"][1], torch.tensor(0.6, device=device)
+        ), f"Agent 1: expected 0.6, got {components['intrinsic'][1]}"
+
+    def test_intrinsic_apply_modifiers_honored(self, bar_index_map_single):
+        """BUG 3: intrinsic.apply_modifiers list must be honored (not apply all modifiers)."""
+        device = torch.device("cpu")
+        num_agents = 2
+
+        # Create VFS registry
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Create two modifiers: modifier_a (2x) and modifier_b (3x)
+        # But only apply modifier_a to intrinsic
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={
+                "modifier_a": ModifierConfig(
+                    bar="energy",
+                    ranges=[
+                        RangeConfig(name="all", min=0.0, max=1.0, multiplier=2.0),
+                    ],
+                ),
+                "modifier_b": ModifierConfig(
+                    bar="energy",
+                    ranges=[
+                        RangeConfig(name="all", min=0.0, max=1.0, multiplier=3.0),
+                    ],
+                ),
+            },
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="rnd",
+                base_weight=1.0,
+                apply_modifiers=["modifier_a"],  # Only apply modifier_a (NOT modifier_b)
+            ),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_single)
+
+        meters = torch.tensor([[0.5], [0.5]], device=device)
+        dones = torch.tensor([False, False], device=device)
+        intrinsic_raw = torch.tensor([1.0, 1.0], device=device)
+        step_counts = torch.tensor([1, 1], device=device)
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+        )
+
+        # Expected: intrinsic = intrinsic_raw * base_weight * modifier_a
+        # Should be: 1.0 * 1.0 * 2.0 = 2.0
+        # Should NOT be: 1.0 * 1.0 * 2.0 * 3.0 = 6.0 (if all modifiers applied)
+        assert torch.allclose(
+            components["intrinsic"][0], torch.tensor(2.0, device=device)
+        ), f"Agent 0: expected 2.0, got {components['intrinsic'][0]} (if 6.0, all modifiers applied incorrectly)"
+        assert torch.allclose(
+            components["intrinsic"][1], torch.tensor(2.0, device=device)
+        ), f"Agent 1: expected 2.0, got {components['intrinsic'][1]}"
+
+    def test_extrinsic_apply_modifiers_honored(self, bar_index_map_dual):
+        """BUG 4: extrinsic.apply_modifiers list must be honored for all 9 strategies."""
+        device = torch.device("cpu")
+        num_agents = 2
+
+        # Create VFS registry
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+                VariableDef(
+                    id="health",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                ),
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Create a modifier that applies 2x multiplier
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={
+                "double_modifier": ModifierConfig(
+                    bar="energy",
+                    ranges=[
+                        RangeConfig(name="all", min=0.0, max=1.0, multiplier=2.0),
+                    ],
+                ),
+            },
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy", "health"],
+                apply_modifiers=["double_modifier"],  # Apply modifier to extrinsic
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="none",
+                base_weight=0.0,
+            ),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents, bar_index_map_dual)
+
+        meters = torch.tensor([[0.5, 0.4], [0.6, 0.3]], device=device)
+        dones = torch.tensor([False, False], device=device)
+        intrinsic_raw = torch.tensor([0.0, 0.0], device=device)
+        step_counts = torch.tensor([1, 1], device=device)
+
+        total_rewards, intrinsic_weights, components = engine.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+        )
+
+        # Expected: extrinsic = (base * energy * health) * modifier
+        # Agent 0: (1.0 * 0.5 * 0.4) * 2.0 = 0.2 * 2.0 = 0.4
+        # Agent 1: (1.0 * 0.6 * 0.3) * 2.0 = 0.18 * 2.0 = 0.36
+        # Without modifier bug fix, would be: 0.2 and 0.18
+        assert torch.allclose(
+            components["extrinsic"][0], torch.tensor(0.4, device=device)
+        ), f"Agent 0: expected 0.4, got {components['extrinsic'][0]} (if 0.2, modifier not applied)"
+        assert torch.allclose(
+            components["extrinsic"][1], torch.tensor(0.36, device=device)
+        ), f"Agent 1: expected 0.36, got {components['extrinsic'][1]}"
+
+        # Test another strategy: additive_unweighted
+        dac_config_additive = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={
+                "double_modifier": ModifierConfig(
+                    bar="energy",
+                    ranges=[
+                        RangeConfig(name="all", min=0.0, max=1.0, multiplier=2.0),
+                    ],
+                ),
+            },
+            extrinsic=ExtrinsicStrategyConfig(
+                type="additive_unweighted",
+                base=0.0,
+                bars=["energy", "health"],
+                apply_modifiers=["double_modifier"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="none",
+                base_weight=0.0,
+            ),
+        )
+
+        engine_additive = DACEngine(dac_config_additive, vfs_registry, device, num_agents, bar_index_map_dual)
+
+        total_rewards_add, _, components_add = engine_additive.calculate_rewards(
+            step_counts=step_counts,
+            dones=dones,
+            meters=meters,
+            intrinsic_raw=intrinsic_raw,
+        )
+
+        # Expected: extrinsic = (base + energy + health) * modifier
+        # Agent 0: (0.0 + 0.5 + 0.4) * 2.0 = 0.9 * 2.0 = 1.8
+        # Agent 1: (0.0 + 0.6 + 0.3) * 2.0 = 0.9 * 2.0 = 1.8
+        assert torch.allclose(
+            components_add["extrinsic"][0], torch.tensor(1.8, device=device)
+        ), f"Additive Agent 0: expected 1.8, got {components_add['extrinsic'][0]} (if 0.9, modifier not applied)"
+        assert torch.allclose(
+            components_add["extrinsic"][1], torch.tensor(1.8, device=device)
+        ), f"Additive Agent 1: expected 1.8, got {components_add['extrinsic'][1]}"
