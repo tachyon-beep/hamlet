@@ -39,7 +39,7 @@ class NetworkFactory:
             >>> network(torch.randn(4, 29)).shape
             torch.Size([4, 8])
         """
-        layers = []
+        layers: list[nn.Module] = []
         in_features = obs_dim
 
         # Build hidden layers

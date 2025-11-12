@@ -43,6 +43,10 @@ class OptimizerFactory:
             True
         """
         if config.type == "adam":
+            # Type assertions: validator ensures these are not None
+            assert config.adam_beta1 is not None
+            assert config.adam_beta2 is not None
+            assert config.adam_eps is not None
             return optim.Adam(
                 parameters,
                 lr=config.learning_rate,
@@ -52,6 +56,10 @@ class OptimizerFactory:
             )
 
         elif config.type == "adamw":
+            # Type assertions: validator ensures these are not None
+            assert config.adam_beta1 is not None
+            assert config.adam_beta2 is not None
+            assert config.adam_eps is not None
             return optim.AdamW(
                 parameters,
                 lr=config.learning_rate,
@@ -61,6 +69,9 @@ class OptimizerFactory:
             )
 
         elif config.type == "sgd":
+            # Type assertions: validator ensures these are not None
+            assert config.sgd_momentum is not None
+            assert config.sgd_nesterov is not None
             return optim.SGD(
                 parameters,
                 lr=config.learning_rate,
@@ -70,6 +81,9 @@ class OptimizerFactory:
             )
 
         elif config.type == "rmsprop":
+            # Type assertions: validator ensures these are not None
+            assert config.rmsprop_alpha is not None
+            assert config.rmsprop_eps is not None
             return optim.RMSprop(
                 parameters,
                 lr=config.learning_rate,

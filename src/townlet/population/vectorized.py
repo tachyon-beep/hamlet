@@ -143,6 +143,7 @@ class VectorizedPopulation(PopulationManager):
         if brain_config is not None:
             # TASK-005 Phase 1: Build network from brain_config using NetworkFactory
             assert brain_config.architecture.type == "feedforward", "Phase 1 only supports feedforward"
+            assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
             self.q_network = NetworkFactory.build_feedforward(
                 config=brain_config.architecture.feedforward,
                 obs_dim=obs_dim,
@@ -174,6 +175,7 @@ class VectorizedPopulation(PopulationManager):
         if brain_config is not None:
             # TASK-005 Phase 1: Build target network from brain_config using NetworkFactory
             assert brain_config.architecture.type == "feedforward", "Phase 1 only supports feedforward"
+            assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
             self.target_network = NetworkFactory.build_feedforward(
                 config=brain_config.architecture.feedforward,
                 obs_dim=obs_dim,

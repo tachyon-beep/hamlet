@@ -141,6 +141,17 @@ src/townlet/config/capability_config.py:*
 src/townlet/config/drive_as_code.py:*
 src/townlet/environment/dac_engine.py:*
 
+# Brain As Code (BAC) - TASK-005 Phase 1
+# OptimizerConfig: Optimizer-specific fields default to None (each optimizer uses different subset)
+#   - Adam/AdamW: adam_beta1, adam_beta2, adam_eps
+#   - SGD: sgd_momentum, sgd_nesterov
+#   - RMSprop: rmsprop_alpha, rmsprop_eps
+#   - Pydantic validator ensures required fields are present for selected optimizer type
+# ArchitectureConfig: feedforward/recurrent/hybrid fields default to None (only relevant config must be present)
+# FeedforwardConfig: layer_norm defaults to False
+# TODO(TASK-005 Phase 2): Revisit this whitelist when brain.yaml becomes required for all config packs
+src/townlet/agent/brain_config.py:*
+
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS
 # ============================================================================
