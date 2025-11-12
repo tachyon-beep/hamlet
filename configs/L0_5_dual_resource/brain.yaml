@@ -50,3 +50,7 @@ q_learning:
   gamma: 0.99
   target_update_frequency: 100
   use_double_dqn: true
+
+replay:
+  capacity: 5000  # Moderate capacity for 7×7 grid with dual resources
+  prioritized: false

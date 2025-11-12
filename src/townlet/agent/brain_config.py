@@ -354,6 +354,33 @@ class ArchitectureConfig(BaseModel):
         return self
 
 
+class ReplayConfig(BaseModel):
+    """Experience replay configuration.
+
+    Supports both standard and prioritized experience replay (PER).
+
+    Example:
+        >>> standard = ReplayConfig(capacity=10000, prioritized=False)
+        >>> per = ReplayConfig(
+        ...     capacity=50000,
+        ...     prioritized=True,
+        ...     priority_alpha=0.6,
+        ...     priority_beta=0.4,
+        ...     priority_beta_annealing=True,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    capacity: int = Field(gt=0, description="Maximum number of transitions in replay buffer")
+    prioritized: bool = Field(description="Use Prioritized Experience Replay (Schaul et al. 2016)")
+
+    # PER parameters (required when prioritized=True)
+    priority_alpha: float = Field(default=0.6, ge=0.0, le=1.0, description="Prioritization exponent (0=uniform, 1=full prioritization)")
+    priority_beta: float = Field(default=0.4, ge=0.0, le=1.0, description="Importance sampling exponent (anneals to 1.0)")
+    priority_beta_annealing: bool = Field(default=True, description="Anneal beta to 1.0 over training")
+
+
 class QLearningConfig(BaseModel):
     """Q-learning algorithm configuration."""
 
@@ -378,6 +405,7 @@ class BrainConfig(BaseModel):
         ...     optimizer=OptimizerConfig(...),
         ...     loss=LossConfig(...),
         ...     q_learning=QLearningConfig(...),
+        ...     replay=ReplayConfig(...),
         ... )
     """
 
@@ -389,6 +417,7 @@ class BrainConfig(BaseModel):
     optimizer: OptimizerConfig = Field(description="Optimizer configuration")
     loss: LossConfig = Field(description="Loss function configuration")
     q_learning: QLearningConfig = Field(description="Q-learning algorithm parameters")
+    replay: ReplayConfig = Field(description="Replay buffer configuration")
 
 
 def load_brain_config(config_dir: Path) -> BrainConfig:

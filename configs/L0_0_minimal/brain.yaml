@@ -47,3 +47,7 @@ q_learning:
   gamma: 0.99
   target_update_frequency: 100
   use_double_dqn: true
+
+replay:
+  capacity: 1000  # Small capacity for 3×3 grid
+  prioritized: false

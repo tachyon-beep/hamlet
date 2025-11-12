@@ -41,3 +41,7 @@ q_learning:
   gamma: 0.99
   target_update_frequency: 100
   use_double_dqn: true  # Use Double DQN for better value estimates
+
+replay:
+  capacity: 10000  # Standard capacity for 8×8 grid, full observability
+  prioritized: false

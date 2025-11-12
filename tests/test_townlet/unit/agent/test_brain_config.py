@@ -149,7 +149,7 @@ def test_loss_config_rejects_negative_huber_delta():
 
 def test_brain_config_feedforward():
     """BrainConfig accepts feedforward architecture."""
-    from townlet.agent.brain_config import ScheduleConfig
+    from townlet.agent.brain_config import ReplayConfig, ScheduleConfig
 
     config = BrainConfig(
         version="1.0",
@@ -177,6 +177,10 @@ def test_brain_config_feedforward():
             gamma=0.99,
             target_update_frequency=100,
             use_double_dqn=False,
+        ),
+        replay=ReplayConfig(
+            capacity=10000,
+            prioritized=False,
         ),
     )
     assert config.architecture.type == "feedforward"
@@ -248,6 +252,10 @@ q_learning:
   gamma: 0.99
   target_update_frequency: 100
   use_double_dqn: false
+
+replay:
+  capacity: 10000
+  prioritized: false
 """
     )
 
@@ -298,7 +306,7 @@ q_learning:
 
 def test_compute_brain_hash():
     """compute_brain_hash returns deterministic SHA256 hash."""
-    from townlet.agent.brain_config import ScheduleConfig
+    from townlet.agent.brain_config import ReplayConfig, ScheduleConfig
 
     config = BrainConfig(
         version="1.0",
@@ -327,6 +335,10 @@ def test_compute_brain_hash():
             target_update_frequency=100,
             use_double_dqn=False,
         ),
+        replay=ReplayConfig(
+            capacity=10000,
+            prioritized=False,
+        ),
     )
 
     hash1 = compute_brain_hash(config)
@@ -341,7 +353,7 @@ def test_compute_brain_hash():
 
 def test_compute_brain_hash_differs_for_different_configs():
     """compute_brain_hash produces different hashes for different configs."""
-    from townlet.agent.brain_config import ScheduleConfig
+    from townlet.agent.brain_config import ReplayConfig, ScheduleConfig
 
     config1 = BrainConfig(
         version="1.0",
@@ -369,6 +381,10 @@ def test_compute_brain_hash_differs_for_different_configs():
             gamma=0.99,
             target_update_frequency=100,
             use_double_dqn=False,
+        ),
+        replay=ReplayConfig(
+            capacity=10000,
+            prioritized=False,
         ),
     )
 
@@ -398,6 +414,10 @@ def test_compute_brain_hash_differs_for_different_configs():
             gamma=0.99,
             target_update_frequency=100,
             use_double_dqn=False,
+        ),
+        replay=ReplayConfig(
+            capacity=10000,
+            prioritized=False,
         ),
     )
 
@@ -763,3 +783,49 @@ def test_dueling_config_rejects_empty_shared_layers():
             layer_norm=True,
         )
     assert "shared_layers" in str(exc_info.value)
+
+
+# TASK-005 Phase 3: Prioritized Experience Replay configuration tests
+
+
+def test_replay_config_standard():
+    """ReplayConfig accepts standard replay buffer."""
+    from townlet.agent.brain_config import ReplayConfig
+
+    config = ReplayConfig(
+        capacity=10000,
+        prioritized=False,
+    )
+    assert config.capacity == 10000
+    assert config.prioritized is False
+
+
+def test_replay_config_prioritized():
+    """ReplayConfig accepts prioritized replay parameters."""
+    from townlet.agent.brain_config import ReplayConfig
+
+    config = ReplayConfig(
+        capacity=10000,
+        prioritized=True,
+        priority_alpha=0.6,
+        priority_beta=0.4,
+        priority_beta_annealing=True,
+    )
+    assert config.prioritized is True
+    assert config.priority_alpha == 0.6
+    assert config.priority_beta == 0.4
+
+
+def test_replay_config_rejects_invalid_alpha():
+    """ReplayConfig rejects priority_alpha outside [0, 1]."""
+    from townlet.agent.brain_config import ReplayConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        ReplayConfig(
+            capacity=10000,
+            prioritized=True,
+            priority_alpha=1.5,  # Invalid!
+            priority_beta=0.4,
+            priority_beta_annealing=True,
+        )
+    assert "priority_alpha" in str(exc_info.value)

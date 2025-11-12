@@ -64,3 +64,7 @@ q_learning:
   gamma: 0.99
   target_update_frequency: 100
   use_double_dqn: true
+
+replay:
+  capacity: 10000  # Standard capacity for 8×8 grid POMDP
+  prioritized: false  # PER not yet supported for recurrent
