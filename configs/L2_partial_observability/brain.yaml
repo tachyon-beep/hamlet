@@ -1,0 +1,66 @@
+# Brain Configuration for L2_partial_observability
+#
+# Recurrent spatial Q-network with LSTM for POMDP.
+#
+# Architecture: CNN (5×5 vision) + MLP encoders + LSTM(256) + Q-head
+# Optimizer: Adam with lower learning rate (LSTM stability)
+# Loss: Huber (more stable for recurrent networks)
+# Q-learning: Double DQN
+# Schedule: Constant learning rate
+#
+# POMDP requires memory (LSTM) to integrate observations over time.
+# Vision window: 5×5 local grid (partial observability)
+
+version: "1.0"
+
+description: "Recurrent spatial Q-network with LSTM for POMDP"
+
+architecture:
+  type: recurrent
+  recurrent:
+    vision_encoder:
+      channels: [16, 32]
+      kernel_sizes: [3, 3]
+      strides: [1, 1]
+      padding: [1, 1]
+      activation: relu
+
+    position_encoder:
+      hidden_sizes: [32]
+      activation: relu
+
+    meter_encoder:
+      hidden_sizes: [32]
+      activation: relu
+
+    affordance_encoder:
+      hidden_sizes: [32]
+      activation: relu
+
+    lstm:
+      hidden_size: 256
+      num_layers: 1
+      dropout: 0.0
+
+    q_head:
+      hidden_sizes: [128]
+      activation: relu
+
+optimizer:
+  type: adam
+  learning_rate: 0.0001  # Lower LR for LSTM stability
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+  schedule:
+    type: constant
+
+loss:
+  type: huber  # Huber more stable for recurrent
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
