@@ -3,6 +3,7 @@ Tests for Drive As Code (DAC) DTO layer.
 
 Task 1.4: IntrinsicStrategyConfig DTO tests.
 Task 1.5: Shaping Bonus DTOs tests.
+Task 1.6: Top-level DAC config tests.
 """
 
 import pytest
@@ -12,8 +13,14 @@ from pydantic import ValidationError
 # This is expected TDD behavior - tests first, implementation second
 from townlet.config.drive_as_code import (
     ApproachRewardConfig,
+    BarBonusConfig,
     CompletionBonusConfig,
+    CompositionConfig,
+    DriveAsCodeConfig,
+    ExtrinsicStrategyConfig,
     IntrinsicStrategyConfig,
+    ModifierConfig,
+    RangeConfig,
     TriggerCondition,
     VFSVariableBonusConfig,
 )
@@ -258,3 +265,104 @@ class TestVFSVariableBonusConfig:
         assert config.type == "vfs_variable"
         assert config.variable == "custom_shaping_signal"
         assert config.weight == 1.0
+
+
+class TestCompositionConfig:
+    """Test CompositionConfig validation."""
+
+    def test_default_composition(self):
+        """Default composition configuration."""
+        config = CompositionConfig()
+        assert config.normalize is False
+        assert config.clip is None
+        assert config.log_components is True
+        assert config.log_modifiers is True
+
+    def test_with_clipping(self):
+        """Composition with clipping."""
+        config = CompositionConfig(
+            clip={"min": -10.0, "max": 100.0},
+        )
+        assert config.clip == {"min": -10.0, "max": 100.0}
+
+
+class TestDriveAsCodeConfig:
+    """Test DriveAsCodeConfig validation."""
+
+    def test_minimal_valid_config(self):
+        """Minimal valid DAC configuration."""
+        config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="multiplicative",
+                base=1.0,
+                bars=["energy", "health"],
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="rnd",
+                base_weight=0.100,
+            ),
+            shaping=[],
+            composition=CompositionConfig(),
+        )
+        assert config.version == "1.0"
+        assert len(config.modifiers) == 0
+
+    def test_full_config_with_modifiers(self):
+        """Full configuration with modifiers and shaping."""
+        config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={
+                "energy_crisis": ModifierConfig(
+                    bar="energy",
+                    ranges=[
+                        RangeConfig(name="crisis", min=0.0, max=0.3, multiplier=0.0),
+                        RangeConfig(name="normal", min=0.3, max=1.0, multiplier=1.0),
+                    ],
+                ),
+            },
+            extrinsic=ExtrinsicStrategyConfig(
+                type="constant_base_with_shaped_bonus",
+                base_reward=1.0,
+                bar_bonuses=[
+                    BarBonusConfig(bar="energy", center=0.5, scale=0.5),
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(
+                strategy="rnd",
+                base_weight=0.100,
+                apply_modifiers=["energy_crisis"],
+            ),
+            shaping=[
+                ApproachRewardConfig(
+                    type="approach_reward",
+                    target_affordance="Bed",
+                    trigger=TriggerCondition(source="bar", name="energy", below=0.3),
+                    bonus=1.0,
+                    decay_with_distance=True,
+                ),
+            ],
+            composition=CompositionConfig(log_components=True),
+        )
+        assert len(config.modifiers) == 1
+        assert "energy_crisis" in config.modifiers
+        assert len(config.shaping) == 1
+
+    def test_validates_modifier_references(self):
+        """DAC config validates that referenced modifiers exist."""
+        with pytest.raises(ValidationError, match="undefined modifier"):
+            DriveAsCodeConfig(
+                version="1.0",
+                modifiers={},  # No modifiers defined!
+                extrinsic=ExtrinsicStrategyConfig(
+                    type="multiplicative",
+                    base=1.0,
+                    bars=["energy"],
+                ),
+                intrinsic=IntrinsicStrategyConfig(
+                    strategy="rnd",
+                    base_weight=0.100,
+                    apply_modifiers=["nonexistent_modifier"],  # References undefined modifier!
+                ),
+            )
