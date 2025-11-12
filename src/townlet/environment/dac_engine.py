@@ -537,8 +537,6 @@ class DACEngine:
                             return torch.zeros(self.num_agents, device=self.device)
 
                         # Get bar index
-                        # NOTE: This uses the flawed _get_bar_index() from Phase 3B
-                        # It will be fixed in Phase 3D when bar_index_map is added
                         bar_idx = self._get_bar_index(bar_id)
 
                         # Get bar values
@@ -575,8 +573,6 @@ class DACEngine:
                         # Check each condition
                         for condition in conditions:
                             # Get bar index
-                            # NOTE: This uses the flawed _get_bar_index() from Phase 3B
-                            # It will be fixed in Phase 3D when bar_index_map is added
                             bar_idx = self._get_bar_index(condition.bar)
 
                             # Get bar values
@@ -720,8 +716,6 @@ class DACEngine:
                             return torch.zeros(self.num_agents, device=self.device)
 
                         # Get money bar index
-                        # NOTE: This uses the flawed _get_bar_index() from Phase 3B
-                        # It will be fixed in Phase 3D when bar_index_map is added
                         bar_idx = self._get_bar_index(money_bar_id)
 
                         # Get money bar values
@@ -754,8 +748,6 @@ class DACEngine:
                             return torch.zeros(self.num_agents, device=self.device)
 
                         # Get bar indices
-                        # NOTE: This uses the flawed _get_bar_index() from Phase 3B
-                        # It will be fixed in Phase 3D when bar_index_map is added
                         bar_indices = [self._get_bar_index(bar_id) for bar_id in bar_ids]
 
                         # Stack bar values: [num_agents, num_bars]
@@ -790,8 +782,6 @@ class DACEngine:
                             return torch.zeros(self.num_agents, device=self.device)
 
                         # Get bar index
-                        # NOTE: This uses the flawed _get_bar_index() from Phase 3B
-                        # It will be fixed in Phase 3D when bar_index_map is added
                         bar_idx = self._get_bar_index(bar_id)
 
                         # Get bar values

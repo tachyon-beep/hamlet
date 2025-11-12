@@ -731,10 +731,10 @@ class VectorizedPopulation(PopulationManager):
                 self._finalize_episode(idx, survival_time)
 
         # 12. Construct BatchedAgentState (use combined rewards for curriculum tracking)
-        # Use per-agent intrinsic weights from AdaptiveRewardStrategy if available,
-        # otherwise fall back to global weight from AdaptiveIntrinsicExploration
+        # Use per-agent intrinsic weights from DACEngine modifiers if available,
+        # otherwise fall back to global weight from exploration module
         if hasattr(envs, "intrinsic_weights") and envs.intrinsic_weights is not None:
-            # Per-agent weights from AdaptiveRewardStrategy (crisis suppression)
+            # Per-agent weights from DACEngine modifiers (e.g., crisis suppression)
             intrinsic_weight_tensor = envs.intrinsic_weights
         elif isinstance(self.exploration, AdaptiveIntrinsicExploration):
             # Global weight from AdaptiveIntrinsicExploration (performance-based annealing)
