@@ -1,0 +1,34 @@
+# drive_as_code.yaml - Drive As Code (DAC) Reward Configuration
+# L1_full_observability: Full Observability Baseline
+#
+# Reward Strategy: Multiplicative (energy × health)
+# - Extrinsic: r_ext = 1.0 * energy * health
+# - Intrinsic: RND novelty-seeking (base_weight = 1.0)
+# - Composition: r_total = r_ext + (intrinsic_weight * r_int)
+#
+# Pedagogical Goal: Full observability baseline with multiplicative reward
+# Teaching Moment: "Low Energy Delirium" bug present (no crisis suppression)
+# Note: Higher intrinsic weight (1.0) encourages exploration in full observability
+
+drive_as_code:
+  version: "1.0"
+
+  modifiers: {}
+
+  extrinsic:
+    type: multiplicative
+    base: 1.0
+    bars: [energy, health]
+
+  intrinsic:
+    strategy: rnd
+    base_weight: 1.0  # Matches training.yaml: initial_intrinsic_weight
+    apply_modifiers: []
+
+  shaping: []
+
+  composition:
+    normalize: false
+    clip: null
+    log_components: true
+    log_modifiers: true
