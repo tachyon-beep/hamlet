@@ -958,6 +958,38 @@ class UniverseCompiler:
                         )
                     )
 
+    def _compute_dac_hash(self, dac_config: DriveAsCodeConfig) -> str:
+        """Compute SHA256 content hash of DAC configuration for provenance.
+
+        Args:
+            dac_config: DAC configuration to hash
+
+        Returns:
+            SHA256 hex digest (64 character string)
+
+        Purpose:
+            - Checkpoint validation (detect DAC changes)
+            - Provenance tracking (which drive functions were used)
+            - Reproducibility (verify exact reward configuration)
+
+        Example:
+            >>> dac = DriveAsCodeConfig(...)
+            >>> hash_val = self._compute_dac_hash(dac)
+            >>> len(hash_val)
+            64
+        """
+        import hashlib
+        import json
+
+        # Convert to dict for stable JSON serialization
+        dac_dict = dac_config.model_dump(mode="json")
+
+        # Compute SHA256 hash with sorted keys for determinism
+        json_str = json.dumps(dac_dict, sort_keys=True)
+        hash_digest = hashlib.sha256(json_str.encode()).hexdigest()
+
+        return hash_digest
+
     def _stage_4_cross_validate(
         self,
         raw_configs: RawConfigs,
@@ -1978,6 +2010,9 @@ class UniverseCompiler:
             field_uuids=field_uuids,
         )
 
+        # Compute drive_hash if DAC present (Task 2.3)
+        drive_hash = self._compute_dac_hash(dac_config) if dac_config is not None else None
+
         universe = CompiledUniverse(
             hamlet_config=raw_configs.hamlet_config,
             variables_reference=all_variables,
@@ -1994,7 +2029,7 @@ class UniverseCompiler:
             action_labels_config=raw_configs.action_labels,
             environment_config=environment_config,
             dac_config=dac_config,
-            drive_hash=None,  # Task 2.3 will implement hash computation
+            drive_hash=drive_hash,
         )
 
         if not dataclasses.is_dataclass(universe):
