@@ -27,3 +27,56 @@ class FeedforwardConfig(BaseModel):
     activation: Literal["relu", "gelu", "swish", "tanh", "elu"] = Field(description="Activation function")
     dropout: float = Field(ge=0.0, lt=1.0, description="Dropout probability (0.0 = no dropout)")
     layer_norm: bool = Field(description="Apply LayerNorm after each hidden layer")
+
+
+class OptimizerConfig(BaseModel):
+    """Optimizer configuration.
+
+    All optimizer-specific parameters required (no defaults).
+
+    Example:
+        >>> adam = OptimizerConfig(
+        ...     type="adam",
+        ...     learning_rate=0.00025,
+        ...     adam_beta1=0.9,
+        ...     adam_beta2=0.999,
+        ...     adam_eps=1e-8,
+        ...     weight_decay=0.0,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["adam", "adamw", "sgd", "rmsprop"] = Field(description="Optimizer type")
+    learning_rate: float = Field(gt=0.0, description="Learning rate")
+
+    # Adam/AdamW parameters (required for type=adam/adamw)
+    adam_beta1: float | None = Field(default=None, ge=0.0, lt=1.0, description="Adam beta1 parameter (required for adam/adamw)")
+    adam_beta2: float | None = Field(default=None, ge=0.0, lt=1.0, description="Adam beta2 parameter (required for adam/adamw)")
+    adam_eps: float | None = Field(default=None, gt=0.0, description="Adam epsilon parameter (required for adam/adamw)")
+
+    # SGD parameters (required for type=sgd)
+    sgd_momentum: float | None = Field(default=None, ge=0.0, le=1.0, description="SGD momentum (required for sgd)")
+    sgd_nesterov: bool | None = Field(default=None, description="Use Nesterov momentum (required for sgd)")
+
+    # RMSprop parameters (required for type=rmsprop)
+    rmsprop_alpha: float | None = Field(default=None, ge=0.0, lt=1.0, description="RMSprop alpha/decay (required for rmsprop)")
+    rmsprop_eps: float | None = Field(default=None, gt=0.0, description="RMSprop epsilon (required for rmsprop)")
+
+    # Common parameter
+    weight_decay: float = Field(ge=0.0, description="L2 weight decay (all optimizers)")
+
+
+class LossConfig(BaseModel):
+    """Loss function configuration.
+
+    Example:
+        >>> mse = LossConfig(type="mse")
+        >>> huber = LossConfig(type="huber", huber_delta=1.0)
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["mse", "huber", "smooth_l1"] = Field(description="Loss function type")
+
+    huber_delta: float = Field(default=1.0, gt=0.0, description="Delta parameter for Huber loss (ignored for mse/smooth_l1)")
