@@ -393,8 +393,37 @@ class VFSVariableBonusConfig(BaseModel):
     weight: float = Field(description="Weight to apply")
 
 
+class StreakBonusConfig(BaseModel):
+    """Bonus for consecutive uses of affordance.
+
+    Rewards agents for building streaks of using the same affordance.
+
+    Example:
+        >>> streak_bonus = StreakBonusConfig(
+        ...     type="streak_bonus",
+        ...     weight=5.0,
+        ...     affordance="Bed",
+        ...     min_streak=3,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["streak_bonus"]
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    affordance: str = Field(description="Target affordance to track")
+    min_streak: int = Field(ge=1, description="Minimum streak length for bonus")
+
+
 # Union type for all shaping bonuses (expand as more types are added)
-ShapingBonusConfig = ApproachRewardConfig | CompletionBonusConfig | EfficiencyBonusConfig | StateAchievementConfig | VFSVariableBonusConfig
+ShapingBonusConfig = (
+    ApproachRewardConfig
+    | CompletionBonusConfig
+    | EfficiencyBonusConfig
+    | StateAchievementConfig
+    | VFSVariableBonusConfig
+    | StreakBonusConfig
+)
 
 
 class CompositionConfig(BaseModel):

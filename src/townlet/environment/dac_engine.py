@@ -531,6 +531,39 @@ class DACEngine:
 
                 shaping_fns.append(create_state_achievement_fn(bonus_config))
 
+            elif bonus_config.type == "streak_bonus":
+                # Use closure factory to capture config correctly
+                def create_streak_bonus_fn(config):
+                    weight = config.weight
+                    target_affordance = config.affordance
+                    min_streak = config.min_streak
+
+                    def compute_streak_bonus(**kwargs) -> torch.Tensor:
+                        """Compute streak bonus for all agents."""
+                        # Extract kwargs
+                        affordance_streak = kwargs.get("affordance_streak")
+
+                        # Null check for missing kwarg
+                        if affordance_streak is None:
+                            return torch.zeros(self.num_agents, device=self.device)
+
+                        # Check if target affordance exists in streak dict
+                        if target_affordance not in affordance_streak:
+                            return torch.zeros(self.num_agents, device=self.device)
+
+                        # Get streak counts for target affordance
+                        streak_counts = affordance_streak[target_affordance]
+
+                        # Bonus if streak >= min_streak
+                        meets_threshold = streak_counts >= min_streak
+                        bonus = torch.where(meets_threshold, weight, 0.0)
+
+                        return bonus
+
+                    return compute_streak_bonus
+
+                shaping_fns.append(create_streak_bonus_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:

@@ -1176,6 +1176,59 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
+    def test_streak_bonus(self):
+        """streak_bonus rewards consecutive uses of affordance."""
+        from townlet.config.drive_as_code import StreakBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                StreakBonusConfig(
+                    type="streak_bonus",
+                    weight=3.0,
+                    affordance="Bed",
+                    min_streak=3,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: streak=5 (exceeds min), Agent 1: streak=3 (meets min),
+        # Agent 2: streak=2 (below min), Agent 3: streak=0 (no streak)
+        affordance_streak = {
+            "Bed": torch.tensor([5, 3, 2, 0], device=device),
+            "Fridge": torch.tensor([1, 1, 1, 1], device=device),
+        }
+
+        bonuses = engine.shaping_fns[0](affordance_streak=affordance_streak)
+
+        # Agent 0,1: streak >= 3 → bonus = 3.0
+        # Agent 2,3: streak < 3 → bonus = 0.0
+        assert bonuses[0] == 3.0
+        assert bonuses[1] == 3.0
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == 0.0
+
 
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
@@ -1361,4 +1414,94 @@ class TestShapingBonusEdgeCases:
         bonuses = engine.shaping_fns[0]()
 
         # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_streak_bonus_missing_kwarg(self):
+        """streak_bonus returns zeros when affordance_streak missing."""
+        from townlet.config.drive_as_code import StreakBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                StreakBonusConfig(
+                    type="streak_bonus",
+                    weight=5.0,
+                    affordance="Bed",
+                    min_streak=2,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing affordance_streak kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_streak_bonus_affordance_not_found(self):
+        """streak_bonus returns zeros when target affordance not in streak dict."""
+        from townlet.config.drive_as_code import StreakBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                StreakBonusConfig(
+                    type="streak_bonus",
+                    weight=5.0,
+                    affordance="Bed",
+                    min_streak=2,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Provide affordance_streak dict but without "Bed"
+        affordance_streak = {"Fridge": torch.tensor([5, 5, 5], device=device)}
+
+        bonuses = engine.shaping_fns[0](affordance_streak=affordance_streak)
+
+        # Should return zeros (affordance not in dict)
         assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
