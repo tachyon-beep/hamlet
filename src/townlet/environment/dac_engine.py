@@ -162,6 +162,37 @@ class DACEngine:
 
             return compute_multiplicative
 
+        elif strategy.type == "constant_base_with_shaped_bonus":
+            # reward = base + sum(bar_bonuses) + sum(variable_bonuses)
+            base_reward = strategy.base_reward if strategy.base_reward is not None else 1.0
+            bar_bonuses = strategy.bar_bonuses if strategy.bar_bonuses is not None else []
+            variable_bonuses = strategy.variable_bonuses if strategy.variable_bonuses is not None else []
+
+            def compute_constant_base(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+                """Constant base + shaped bonuses"""
+                # Start with base reward
+                reward = torch.full((self.num_agents,), base_reward, device=self.device, dtype=torch.float32)
+
+                # Add bar bonuses: bonus = scale * (bar_value - center)
+                for bonus_config in bar_bonuses:
+                    bar_idx = self._get_bar_index(bonus_config.bar)
+                    bar_value = meters[:, bar_idx]
+                    bonus = bonus_config.scale * (bar_value - bonus_config.center)
+                    reward = reward + bonus
+
+                # Add variable bonuses (from VFS): bonus = weight * var_value
+                for bonus_config in variable_bonuses:
+                    var_value = self.vfs_registry.get(bonus_config.variable, reader=self.vfs_reader)
+                    bonus = bonus_config.weight * var_value
+                    reward = reward + bonus
+
+                # Dead agents get 0.0
+                reward = torch.where(dones, torch.zeros_like(reward), reward)
+
+                return reward
+
+            return compute_constant_base
+
         # Fallback for unimplemented strategies
         def placeholder(meters: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
             return torch.zeros(self.num_agents, device=self.device)

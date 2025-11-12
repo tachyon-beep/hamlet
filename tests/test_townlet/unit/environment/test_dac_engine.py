@@ -3,11 +3,13 @@
 import torch
 
 from townlet.config.drive_as_code import (
+    BarBonusConfig,
     DriveAsCodeConfig,
     ExtrinsicStrategyConfig,
     IntrinsicStrategyConfig,
     ModifierConfig,
     RangeConfig,
+    VariableBonusConfig,
 )
 from townlet.environment.dac_engine import DACEngine
 from townlet.vfs.registry import VariableRegistry
@@ -342,4 +344,120 @@ class TestExtrinsicStrategies:
 
         # Expected: 1.0 * energy * health
         expected = torch.tensor([0.4, 1.0, 0.1, 0.0], device=device)
+        assert torch.allclose(extrinsic, expected, atol=1e-6)
+
+    def test_constant_base_with_shaped_bonus(self):
+        """Constant base + shaped bonus: reward = base + sum(bonuses)"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="constant_base_with_shaped_bonus",
+                base_reward=1.0,
+                bars=["energy"],  # Define meter ordering
+                bar_bonuses=[
+                    BarBonusConfig(bar="energy", center=0.5, scale=0.5),
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Energy values: [0.0, 0.5, 1.0, 0.25]
+        meters = torch.tensor([[0.0], [0.5], [1.0], [0.25]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: base_reward + scale * (energy - center)
+        # [1.0 + 0.5 * (0.0 - 0.5), 1.0 + 0.5 * (0.5 - 0.5), 1.0 + 0.5 * (1.0 - 0.5), 1.0 + 0.5 * (0.25 - 0.5)]
+        # = [0.75, 1.0, 1.25, 0.875]
+        expected = torch.tensor([0.75, 1.0, 1.25, 0.875], device=device)
+        assert torch.allclose(extrinsic, expected)
+
+    def test_constant_base_multiple_bonuses(self):
+        """Constant base with multiple bar bonuses and variable bonus"""
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                ),
+                VariableDef(
+                    id="custom_score",
+                    scope="agent",
+                    type="scalar",
+                    default=0.5,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                ),
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        # Set custom_score values
+        vfs_registry.set("custom_score", torch.tensor([0.1, 0.2, 0.3, 0.4], device=device), writer="engine")
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(
+                type="constant_base_with_shaped_bonus",
+                base_reward=2.0,
+                bars=["energy", "health"],  # Define meter ordering
+                bar_bonuses=[
+                    BarBonusConfig(bar="energy", center=0.5, scale=0.5),
+                    BarBonusConfig(bar="health", center=0.5, scale=0.3),
+                ],
+                variable_bonuses=[
+                    VariableBonusConfig(variable="custom_score", weight=2.0),
+                ],
+            ),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # meters: [energy, health]
+        meters = torch.tensor([[0.5, 0.5], [0.8, 0.6], [0.2, 0.4], [1.0, 1.0]], device=device)
+        dones = torch.tensor([False, False, False, False], device=device)
+
+        extrinsic = engine.extrinsic_fn(meters, dones)
+
+        # Expected: base_reward + energy_bonus + health_bonus + custom_score * 2.0
+        # For agent 0: 2.0 + 0.5*(0.5-0.5) + 0.3*(0.5-0.5) + 2.0*0.1 = 2.0 + 0 + 0 + 0.2 = 2.2
+        # For agent 1: 2.0 + 0.5*(0.8-0.5) + 0.3*(0.6-0.5) + 2.0*0.2 = 2.0 + 0.15 + 0.03 + 0.4 = 2.58
+        # For agent 2: 2.0 + 0.5*(0.2-0.5) + 0.3*(0.4-0.5) + 2.0*0.3 = 2.0 - 0.15 - 0.03 + 0.6 = 2.42
+        # For agent 3: 2.0 + 0.5*(1.0-0.5) + 0.3*(1.0-0.5) + 2.0*0.4 = 2.0 + 0.25 + 0.15 + 0.8 = 3.2
+        expected = torch.tensor([2.2, 2.58, 2.42, 3.2], device=device)
         assert torch.allclose(extrinsic, expected, atol=1e-6)
