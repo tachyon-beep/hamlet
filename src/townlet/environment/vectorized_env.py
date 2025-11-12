@@ -423,6 +423,16 @@ class VectorizedHamletEnv:
             # When temporal mechanics are disabled, interaction progress is unused but kept for typing consistency.
             self.interaction_progress.zero_()
 
+        # Affordance history tracking (for DAC shaping bonuses)
+        # Track last affordance interacted with per agent
+        self._last_affordances: list[str | None] = [None] * self.num_agents
+        # Track consecutive interactions with each affordance (per-affordance, per-agent)
+        self._affordance_streaks: dict[str, torch.Tensor] = {}
+        # Track count of unique affordances used per agent
+        self._unique_affordances_count = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+        # Track set of unique affordances seen per agent
+        self._affordances_seen: list[set[str]] = [set() for _ in range(self.num_agents)]
+
         # Initialize affordance positions per configuration
         if self.randomize_affordances:
             self.randomize_affordance_positions()
@@ -617,6 +627,12 @@ class VectorizedHamletEnv:
             self.interaction_progress.fill_(0)
             self.last_interaction_affordance = [None] * self.num_agents
             self.last_interaction_position.fill_(0)
+
+        # Reset affordance history tracking
+        self._last_affordances = [None] * self.num_agents
+        self._affordance_streaks = {}
+        self._unique_affordances_count.zero_()
+        self._affordances_seen = [set() for _ in range(self.num_agents)]
 
         return self._get_observations()
 
@@ -1152,6 +1168,9 @@ class VectorizedHamletEnv:
 
                 successful_interactions[agent_idx_int] = affordance_name
 
+        # Update affordance tracking after all interactions
+        self._update_affordance_tracking(successful_interactions)
+
         return successful_interactions
 
     def _handle_instant_interactions(self, interact_mask: torch.Tensor) -> dict:
@@ -1204,6 +1223,9 @@ class VectorizedHamletEnv:
                 affordance_name=affordance_name,
                 agent_mask=at_affordance,
             )
+
+        # Update affordance tracking after all interactions
+        self._update_affordance_tracking(successful_interactions)
 
         return successful_interactions
 
@@ -1269,15 +1291,56 @@ class VectorizedHamletEnv:
             return self.affordances
         return {}
 
+    def _update_affordance_tracking(self, successful_interactions: dict[int, str]) -> None:
+        """Update affordance tracking based on successful interactions.
+
+        Args:
+            successful_interactions: Dictionary mapping agent_idx -> affordance_name
+
+        Updates:
+            - _last_affordances: Last affordance per agent
+            - _affordance_streaks: Consecutive interactions per affordance
+            - _unique_affordances_count: Count of unique affordances per agent
+            - _affordances_seen: Set of unique affordances per agent
+        """
+        # Initialize streak tensors for all affordances if not present
+        for affordance_name in self.affordances.keys():
+            if affordance_name not in self._affordance_streaks:
+                self._affordance_streaks[affordance_name] = torch.zeros(self.num_agents, dtype=torch.long, device=self.device)
+
+        # Update tracking for each agent
+        for agent_idx in range(self.num_agents):
+            if agent_idx in successful_interactions:
+                # Agent interacted with an affordance
+                affordance_name = successful_interactions[agent_idx]
+
+                # Update last affordance
+                last_affordance = self._last_affordances[agent_idx]
+                self._last_affordances[agent_idx] = affordance_name
+
+                # Update streaks
+                if last_affordance == affordance_name:
+                    # Consecutive interaction with same affordance - increment streak
+                    self._affordance_streaks[affordance_name][agent_idx] += 1
+                else:
+                    # Different affordance or first interaction - reset all streaks and start new one
+                    for aff_name in self._affordance_streaks:
+                        self._affordance_streaks[aff_name][agent_idx] = 0
+                    self._affordance_streaks[affordance_name][agent_idx] = 1
+
+                # Update unique affordance count
+                if affordance_name not in self._affordances_seen[agent_idx]:
+                    self._affordances_seen[agent_idx].add(affordance_name)
+                    self._unique_affordances_count[agent_idx] += 1
+            else:
+                # Agent did not interact - reset last affordance but keep streaks and unique counts
+                self._last_affordances[agent_idx] = None
+
     def _get_last_action_affordances(self) -> list[str | None]:
         """Get last affordance used by each agent.
 
         Returns:
             List of affordance IDs or None for each agent
-
-        Note:
-            Default implementation returns None for all agents.
-            Future enhancement: Track affordance interactions.
         """
         if hasattr(self, "_last_affordances"):
             return self._last_affordances
@@ -1288,10 +1351,6 @@ class VectorizedHamletEnv:
 
         Returns:
             Dictionary mapping affordance_id -> streak count tensor[num_agents]
-
-        Note:
-            Default implementation returns empty dict.
-            Future enhancement: Track consecutive affordance uses.
         """
         if hasattr(self, "_affordance_streaks"):
             return self._affordance_streaks
@@ -1302,10 +1361,6 @@ class VectorizedHamletEnv:
 
         Returns:
             Tensor[num_agents] of unique affordance counts
-
-        Note:
-            Default implementation returns zeros.
-            Future enhancement: Track affordance usage diversity.
         """
         if hasattr(self, "_unique_affordances_count"):
             return self._unique_affordances_count

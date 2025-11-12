@@ -131,3 +131,172 @@ def test_intrinsic_rewards_integration(compiler, configs_root):
         "CRITICAL BUG: Environment is passing zeros instead of real intrinsic rewards! "
         "Check vectorized_env.py:_calculate_shaped_rewards() line ~1203"
     )
+
+
+def test_affordance_history_tracking_last_action(compiler, configs_root):
+    """Test that _get_last_action_affordances() returns affordance IDs after INTERACT.
+
+    RED: This test should fail because tracking is not implemented yet.
+    """
+    # Use L0_0_minimal which has one affordance (Bed)
+    config_dir = configs_root / "L0_0_minimal"
+    universe = compiler.compile(config_dir)
+
+    device = torch.device("cpu")
+    env = VectorizedHamletEnv.from_universe(universe, num_agents=4, device=device)
+
+    # Reset environment
+    obs = env.reset()
+
+    # Get the INTERACT action index (should be 4 for Grid2D: UP, DOWN, LEFT, RIGHT, INTERACT)
+    interact_action = env.interact_action_idx
+
+    # Find the Bed affordance position
+    bed_pos = env.affordances.get("Bed")
+    assert bed_pos is not None, "L0_0_minimal should have a Bed affordance"
+
+    # Place agents on the bed position
+    env.positions[0] = bed_pos.clone()
+    env.positions[1] = bed_pos.clone()
+
+    # Agents 0 and 1 INTERACT at Bed, agents 2 and 3 WAIT
+    actions = torch.tensor([interact_action, interact_action, 5, 5], dtype=torch.long)  # 5 = WAIT
+    obs, rewards, dones, info = env.step(actions)
+
+    # Get last action affordances
+    last_affordances = env._get_last_action_affordances()
+
+    # Verify tracking
+    assert len(last_affordances) == 4, "Should return list of 4 affordances"
+    assert last_affordances[0] == "Bed", "Agent 0 interacted with Bed"
+    assert last_affordances[1] == "Bed", "Agent 1 interacted with Bed"
+    assert last_affordances[2] is None, "Agent 2 did not interact"
+    assert last_affordances[3] is None, "Agent 3 did not interact"
+
+
+def test_affordance_history_tracking_streaks(compiler, configs_root):
+    """Test that _get_affordance_streaks() increments on consecutive uses.
+
+    RED: This test should fail because tracking is not implemented yet.
+    """
+    config_dir = configs_root / "L0_0_minimal"
+    universe = compiler.compile(config_dir)
+
+    device = torch.device("cpu")
+    env = VectorizedHamletEnv.from_universe(universe, num_agents=2, device=device)
+
+    obs = env.reset()
+
+    interact_action = env.interact_action_idx
+    bed_pos = env.affordances.get("Bed")
+
+    # Place agent 0 on Bed
+    env.positions[0] = bed_pos.clone()
+
+    # Agent 0 interacts with Bed twice in a row
+    actions = torch.tensor([interact_action, 5], dtype=torch.long)  # Agent 0 interact, Agent 1 wait
+
+    # First interaction
+    obs, rewards, dones, info = env.step(actions)
+    streaks = env._get_affordance_streaks()
+    assert "Bed" in streaks, "Bed should appear in streaks"
+    assert streaks["Bed"][0] == 1, "First interaction should have streak of 1"
+    assert streaks["Bed"][1] == 0, "Agent 1 did not interact, streak should be 0"
+
+    # Second consecutive interaction
+    obs, rewards, dones, info = env.step(actions)
+    streaks = env._get_affordance_streaks()
+    assert streaks["Bed"][0] == 2, "Second consecutive interaction should increment streak to 2"
+    assert streaks["Bed"][1] == 0, "Agent 1 still did not interact"
+
+
+def test_affordance_history_tracking_unique_count(compiler, configs_root):
+    """Test that _get_unique_affordances_used() counts unique affordances.
+
+    RED: This test should fail because tracking is not implemented yet.
+    """
+    # Use L0_5_dual_resource which has 4 affordances
+    config_dir = configs_root / "L0_5_dual_resource"
+    universe = compiler.compile(config_dir)
+
+    device = torch.device("cpu")
+    env = VectorizedHamletEnv.from_universe(universe, num_agents=2, device=device)
+
+    obs = env.reset()
+
+    interact_action = env.interact_action_idx
+
+    # Get positions of different affordances
+    affordance_names = list(env.affordances.keys())
+    assert len(affordance_names) >= 2, "L0_5 should have at least 2 affordances"
+
+    first_aff = affordance_names[0]
+    second_aff = affordance_names[1]
+
+    first_pos = env.affordances[first_aff]
+    second_pos = env.affordances[second_aff]
+
+    # Agent 0 interacts with first affordance
+    env.positions[0] = first_pos.clone()
+    actions = torch.tensor([interact_action, 5], dtype=torch.long)
+    obs, rewards, dones, info = env.step(actions)
+
+    unique_counts = env._get_unique_affordances_used()
+    assert unique_counts[0] == 1, "Agent 0 used 1 unique affordance"
+    assert unique_counts[1] == 0, "Agent 1 used 0 unique affordances"
+
+    # Agent 0 interacts with second affordance (different from first)
+    env.positions[0] = second_pos.clone()
+    obs, rewards, dones, info = env.step(actions)
+
+    unique_counts = env._get_unique_affordances_used()
+    assert unique_counts[0] == 2, "Agent 0 used 2 unique affordances"
+    assert unique_counts[1] == 0, "Agent 1 still used 0 unique affordances"
+
+    # Agent 0 interacts with first affordance again (should not increment unique count)
+    env.positions[0] = first_pos.clone()
+    obs, rewards, dones, info = env.step(actions)
+
+    unique_counts = env._get_unique_affordances_used()
+    assert unique_counts[0] == 2, "Agent 0 still used only 2 unique affordances"
+
+
+def test_affordance_history_tracking_reset(compiler, configs_root):
+    """Test that affordance tracking is reset when environment is reset.
+
+    RED: This test should fail because tracking is not implemented yet.
+    """
+    config_dir = configs_root / "L0_0_minimal"
+    universe = compiler.compile(config_dir)
+
+    device = torch.device("cpu")
+    env = VectorizedHamletEnv.from_universe(universe, num_agents=2, device=device)
+
+    obs = env.reset()
+
+    interact_action = env.interact_action_idx
+    bed_pos = env.affordances.get("Bed")
+
+    # Interact with Bed
+    env.positions[0] = bed_pos.clone()
+    actions = torch.tensor([interact_action, 5], dtype=torch.long)
+    obs, rewards, dones, info = env.step(actions)
+
+    # Verify tracking has data
+    last_affordances = env._get_last_action_affordances()
+    assert last_affordances[0] == "Bed", "Should have tracked interaction"
+
+    # Reset environment
+    env.reset()
+
+    # Verify tracking is cleared
+    last_affordances = env._get_last_action_affordances()
+    assert all(aff is None for aff in last_affordances), "All tracking should be cleared after reset"
+
+    unique_counts = env._get_unique_affordances_used()
+    assert torch.all(unique_counts == 0), "Unique counts should be reset to zero"
+
+    streaks = env._get_affordance_streaks()
+    # Streaks dict should be empty or have all zeros
+    for aff_name, streak_tensor in streaks.items():
+        assert torch.all(streak_tensor == 0), f"Streak for {aff_name} should be reset to zero"
