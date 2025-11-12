@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 import yaml
 
+from townlet.agent.brain_config import BrainConfig, load_brain_config
 from townlet.config import HamletConfig
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.database import DemoDatabase
@@ -425,6 +426,16 @@ class DemoRunner:
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
 
+        # TASK-005 Phase 1: Load brain.yaml if present
+        brain_config: BrainConfig | None = None
+        brain_yaml_path = self.config_dir / "brain.yaml"
+        if brain_yaml_path.exists():
+            logger.info(f"Loading brain configuration from {brain_yaml_path}")
+            brain_config = load_brain_config(self.config_dir)
+            logger.info(f"Brain config loaded: {brain_config.description}")
+        else:
+            logger.info("No brain.yaml found, using hardcoded network configuration")
+
         # Create population with correct API
         self.population = VectorizedPopulation(
             env=self.env,
@@ -446,6 +457,7 @@ class DemoRunner:
             sequence_length=sequence_length,
             max_grad_norm=max_grad_norm,
             use_double_dqn=use_double_dqn,
+            brain_config=brain_config,
         )
 
         self.curriculum.initialize_population(num_agents)
