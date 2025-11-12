@@ -155,6 +155,52 @@ class RecurrentConfig(BaseModel):
     q_head: MLPEncoderConfig = Field(description="MLP Q-value head")
 
 
+class DuelingStreamConfig(BaseModel):
+    """Value or advantage stream configuration for Dueling DQN.
+
+    Example:
+        >>> value_stream = DuelingStreamConfig(
+        ...     hidden_layers=[128],
+        ...     activation="relu",
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    hidden_layers: list[int] = Field(min_length=1, description="Hidden layer sizes for value/advantage stream")
+    activation: Literal["relu", "gelu", "swish", "tanh", "elu"] = Field(description="Activation function for stream")
+
+
+class DuelingConfig(BaseModel):
+    """Dueling DQN architecture configuration.
+
+    Architecture (Wang et al. 2016):
+    - Shared layers: Feature extraction
+    - Value stream: V(s) - scalar state value
+    - Advantage stream: A(s,a) - advantage per action
+    - Aggregation: Q(s,a) = V(s) + (A(s,a) - mean(A(s,:)))
+
+    Example:
+        >>> config = DuelingConfig(
+        ...     shared_layers=[256, 128],
+        ...     value_stream=DuelingStreamConfig(hidden_layers=[128], activation="relu"),
+        ...     advantage_stream=DuelingStreamConfig(hidden_layers=[128], activation="relu"),
+        ...     activation="relu",
+        ...     dropout=0.0,
+        ...     layer_norm=True,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    shared_layers: list[int] = Field(min_length=1, description="Shared feature extraction layers")
+    value_stream: DuelingStreamConfig = Field(description="Value stream V(s) configuration")
+    advantage_stream: DuelingStreamConfig = Field(description="Advantage stream A(s,a) configuration")
+    activation: Literal["relu", "gelu", "swish", "tanh", "elu"] = Field(description="Activation function for shared layers")
+    dropout: float = Field(ge=0.0, lt=1.0, description="Dropout probability for shared layers")
+    layer_norm: bool = Field(description="Apply LayerNorm after shared layers")
+
+
 class ScheduleConfig(BaseModel):
     """Learning rate schedule configuration.
 
@@ -284,17 +330,17 @@ class LossConfig(BaseModel):
 class ArchitectureConfig(BaseModel):
     """Neural network architecture configuration.
 
-    Phase 2: Supports feedforward and recurrent (LSTM) architectures.
-    Future: Will support dueling, rainbow architectures.
+    Phase 3: Supports feedforward, recurrent (LSTM), and dueling architectures.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["feedforward", "recurrent"] = Field(description="Architecture type")
+    type: Literal["feedforward", "recurrent", "dueling"] = Field(description="Architecture type")
 
     # Architecture-specific configs (exactly one required based on type)
     feedforward: FeedforwardConfig | None = Field(default=None, description="Feedforward MLP config (required when type=feedforward)")
     recurrent: RecurrentConfig | None = Field(default=None, description="Recurrent LSTM config (required when type=recurrent)")
+    dueling: DuelingConfig | None = Field(default=None, description="Dueling DQN config (required when type=dueling)")
 
     @model_validator(mode="after")
     def validate_architecture_match(self) -> "ArchitectureConfig":
@@ -303,6 +349,8 @@ class ArchitectureConfig(BaseModel):
             raise ValueError("type='feedforward' requires feedforward config")
         if self.type == "recurrent" and self.recurrent is None:
             raise ValueError("type='recurrent' requires recurrent config")
+        if self.type == "dueling" and self.dueling is None:
+            raise ValueError("type='dueling' requires dueling config")
         return self
 
 

@@ -704,3 +704,62 @@ def test_mlp_encoder_config_rejects_negative_hidden_sizes():
             activation="relu",
         )
     assert "hidden_sizes" in str(exc_info.value) and "positive" in str(exc_info.value)
+
+
+# TASK-005 Phase 3: Dueling DQN configuration tests
+
+
+def test_dueling_stream_config_valid():
+    """DuelingStreamConfig accepts valid parameters."""
+    from townlet.agent.brain_config import DuelingStreamConfig
+
+    config = DuelingStreamConfig(
+        hidden_layers=[256, 128],
+        activation="relu",
+    )
+    assert config.hidden_layers == [256, 128]
+
+
+def test_dueling_config_valid():
+    """DuelingConfig accepts complete dueling architecture."""
+    from townlet.agent.brain_config import DuelingConfig, DuelingStreamConfig
+
+    config = DuelingConfig(
+        shared_layers=[256, 128],
+        value_stream=DuelingStreamConfig(
+            hidden_layers=[128],
+            activation="relu",
+        ),
+        advantage_stream=DuelingStreamConfig(
+            hidden_layers=[128],
+            activation="relu",
+        ),
+        activation="relu",
+        dropout=0.0,
+        layer_norm=True,
+    )
+    assert config.shared_layers == [256, 128]
+    assert config.value_stream.hidden_layers == [128]
+    assert config.advantage_stream.hidden_layers == [128]
+
+
+def test_dueling_config_rejects_empty_shared_layers():
+    """DuelingConfig requires at least one shared layer."""
+    from townlet.agent.brain_config import DuelingConfig, DuelingStreamConfig
+
+    with pytest.raises(ValidationError) as exc_info:
+        DuelingConfig(
+            shared_layers=[],  # Empty!
+            value_stream=DuelingStreamConfig(
+                hidden_layers=[128],
+                activation="relu",
+            ),
+            advantage_stream=DuelingStreamConfig(
+                hidden_layers=[128],
+                activation="relu",
+            ),
+            activation="relu",
+            dropout=0.0,
+            layer_norm=True,
+        )
+    assert "shared_layers" in str(exc_info.value)
