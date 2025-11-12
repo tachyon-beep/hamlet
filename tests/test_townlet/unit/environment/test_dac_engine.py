@@ -1109,3 +1109,69 @@ class TestShapingBonuses:
         assert bonuses[1] == 0.5
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
+
+    def test_state_achievement_bonus(self):
+        """state_achievement rewards when ALL conditions are met."""
+        from townlet.config.drive_as_code import BarCondition, StateAchievementConfig
+
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy", "health"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                StateAchievementConfig(
+                    type="state_achievement",
+                    weight=2.0,
+                    conditions=[
+                        BarCondition(bar="energy", min_value=0.8),
+                        BarCondition(bar="health", min_value=0.7),
+                    ],
+                )
+            ],
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: both above thresholds, Agent 1: energy low, Agent 2: health low, Agent 3: both low
+        meters = torch.tensor(
+            [
+                [0.9, 0.8],  # Agent 0: energy=0.9, health=0.8
+                [0.5, 0.9],  # Agent 1: energy=0.5, health=0.9
+                [0.9, 0.5],  # Agent 2: energy=0.9, health=0.5
+                [0.5, 0.5],  # Agent 3: energy=0.5, health=0.5
+            ],
+            device=device,
+        )
+
+        # Calculate shaping bonuses
+        bonuses = torch.zeros(num_agents, device=device)
+        for shaping_fn in engine.shaping_fns:
+            bonuses += shaping_fn(meters=meters)
+
+        # Agent 0: both conditions met → bonus = 2.0
+        # Agent 1: energy < 0.8 → bonus = 0.0
+        # Agent 2: health < 0.7 → bonus = 0.0
+        # Agent 3: both below → bonus = 0.0
+        assert bonuses[0] == 2.0
+        assert bonuses[1] == 0.0
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == 0.0
