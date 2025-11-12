@@ -217,39 +217,39 @@ class TestApproachRewardConfig:
         """Valid approach reward configuration."""
         config = ApproachRewardConfig(
             type="approach_reward",
+            weight=0.5,
             target_affordance="Bed",
-            trigger=TriggerCondition(source="bar", name="energy", below=0.3),
-            bonus=1.0,
-            decay_with_distance=True,
+            max_distance=10.0,
         )
         assert config.type == "approach_reward"
+        assert config.weight == 0.5
         assert config.target_affordance == "Bed"
-        assert config.bonus == 1.0
-        assert config.decay_with_distance is True
+        assert config.max_distance == 10.0
 
 
 class TestCompletionBonusConfig:
     """Test CompletionBonusConfig validation."""
 
-    def test_completion_bonus_all_affordances(self):
-        """Completion bonus for all affordances."""
+    def test_valid_completion_bonus(self):
+        """Valid completion bonus configuration."""
         config = CompletionBonusConfig(
             type="completion_bonus",
-            affordances="all",
-            bonus=1.0,
-            scale_with_duration=True,
+            weight=1.0,
+            affordance="Bed",
         )
-        assert config.affordances == "all"
+        assert config.type == "completion_bonus"
+        assert config.weight == 1.0
+        assert config.affordance == "Bed"
 
-    def test_completion_bonus_specific_affordances(self):
-        """Completion bonus for specific affordances."""
+    def test_completion_bonus_different_affordance(self):
+        """Completion bonus for different affordance."""
         config = CompletionBonusConfig(
             type="completion_bonus",
-            affordances=["Bed", "Hospital", "Job"],
-            bonus=1.0,
-            scale_with_duration=False,
+            weight=2.5,
+            affordance="Hospital",
         )
-        assert config.affordances == ["Bed", "Hospital", "Job"]
+        assert config.weight == 2.5
+        assert config.affordance == "Hospital"
 
 
 class TestVFSVariableBonusConfig:
@@ -337,10 +337,9 @@ class TestDriveAsCodeConfig:
             shaping=[
                 ApproachRewardConfig(
                     type="approach_reward",
+                    weight=1.0,
                     target_affordance="Bed",
-                    trigger=TriggerCondition(source="bar", name="energy", below=0.3),
-                    bonus=1.0,
-                    decay_with_distance=True,
+                    max_distance=10.0,
                 ),
             ],
             composition=CompositionConfig(log_components=True),
