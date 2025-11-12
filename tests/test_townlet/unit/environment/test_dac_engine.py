@@ -1393,6 +1393,66 @@ class TestShapingBonuses:
         assert bonuses[2] == 0.0
         assert bonuses[3] == 0.0
 
+    def test_balance_bonus(self):
+        """balance_bonus rewards keeping multiple bars balanced."""
+        from townlet.config.drive_as_code import BalanceBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy", "health"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="rnd", base_weight=0.1),
+            shaping=[
+                BalanceBonusConfig(
+                    type="balance_bonus",
+                    weight=5.0,
+                    bars=["energy", "health"],
+                    max_imbalance=0.2,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 4
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: perfect balance (0.5, 0.5) → imbalance=0.0
+        # Agent 1: slight imbalance (0.6, 0.5) → imbalance=0.1 (within threshold)
+        # Agent 2: at threshold (0.8, 0.6) → imbalance=0.2 (at threshold, gets bonus)
+        # Agent 3: too much imbalance (1.0, 0.5) → imbalance=0.5 (exceeds threshold)
+        meters = torch.tensor(
+            [
+                [0.5, 0.5],  # Agent 0
+                [0.6, 0.5],  # Agent 1
+                [0.8, 0.6],  # Agent 2
+                [1.0, 0.5],  # Agent 3
+            ],
+            device=device,
+        )
+
+        bonuses = engine.shaping_fns[0](meters=meters)
+
+        # Agents 0,1,2: imbalance <= 0.2 → bonus = 5.0
+        # Agent 3: imbalance > 0.2 → bonus = 0.0
+        assert bonuses[0] == 5.0
+        assert bonuses[1] == 5.0
+        assert bonuses[2] == 5.0
+        assert bonuses[3] == 0.0
+
 
 class TestShapingBonusEdgeCases:
     """Test edge cases for shaping bonuses (missing kwargs, invalid data)."""
@@ -1781,6 +1841,50 @@ class TestShapingBonusEdgeCases:
                     weight=5.0,
                     money_bar="money",
                     min_balance=0.7,
+                )
+            ],
+        )
+
+        device = torch.device("cpu")
+        num_agents = 3
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    lifetime="episode",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Call without providing meters kwarg
+        bonuses = engine.shaping_fns[0]()
+
+        # Should return zeros (kwarg missing)
+        assert torch.allclose(bonuses, torch.zeros(num_agents, device=device))
+
+    def test_balance_bonus_missing_kwarg(self):
+        """balance_bonus returns zeros when meters missing."""
+        from townlet.config.drive_as_code import BalanceBonusConfig
+
+        dac_config = DriveAsCodeConfig(
+            version="1.0",
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy", "health"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                BalanceBonusConfig(
+                    type="balance_bonus",
+                    weight=5.0,
+                    bars=["energy", "health"],
+                    max_imbalance=0.2,
                 )
             ],
         )

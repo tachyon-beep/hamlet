@@ -671,6 +671,42 @@ class DACEngine:
 
                 shaping_fns.append(create_economic_efficiency_fn(bonus_config))
 
+            elif bonus_config.type == "balance_bonus":
+                # Use closure factory to capture config correctly
+                def create_balance_bonus_fn(config):
+                    weight = config.weight
+                    bar_ids = config.bars
+                    max_imbalance = config.max_imbalance
+
+                    def compute_balance_bonus(**kwargs) -> torch.Tensor:
+                        """Compute balance bonus for all agents."""
+                        # Extract kwargs
+                        meters = kwargs.get("meters")
+
+                        # Null check for missing kwarg
+                        if meters is None:
+                            return torch.zeros(self.num_agents, device=self.device)
+
+                        # Get bar indices
+                        # NOTE: This uses the flawed _get_bar_index() from Phase 3B
+                        # It will be fixed in Phase 3D when bar_index_map is added
+                        bar_indices = [self._get_bar_index(bar_id) for bar_id in bar_ids]
+
+                        # Stack bar values: [num_agents, num_bars]
+                        bar_values = torch.stack([meters[:, bar_idx] for bar_idx in bar_indices], dim=1)
+
+                        # Compute imbalance: max - min across bars for each agent
+                        imbalance = bar_values.max(dim=1).values - bar_values.min(dim=1).values
+
+                        # Bonus if imbalance <= max_imbalance
+                        bonus = torch.where(imbalance <= max_imbalance, weight, 0.0)
+
+                        return bonus
+
+                    return compute_balance_bonus
+
+                shaping_fns.append(create_balance_bonus_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:

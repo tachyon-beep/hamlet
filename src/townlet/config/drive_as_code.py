@@ -501,6 +501,28 @@ class EconomicEfficiencyConfig(BaseModel):
     min_balance: float = Field(ge=0.0, le=1.0, description="Minimum balance for bonus")
 
 
+class BalanceBonusConfig(BaseModel):
+    """Bonus for keeping multiple bars balanced (close in value).
+
+    Rewards agents for maintaining equilibrium across multiple resources.
+
+    Example:
+        >>> balance_bonus = BalanceBonusConfig(
+        ...     type="balance_bonus",
+        ...     weight=5.0,
+        ...     bars=["energy", "health"],
+        ...     max_imbalance=0.2,
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["balance_bonus"]
+    weight: float = Field(gt=0.0, description="Bonus magnitude")
+    bars: list[str] = Field(min_length=2, description="Bars to balance (min 2)")
+    max_imbalance: float = Field(gt=0.0, le=1.0, description="Max allowed difference between bars")
+
+
 # Union type for all shaping bonuses (expand as more types are added)
 ShapingBonusConfig = (
     ApproachRewardConfig
@@ -512,6 +534,7 @@ ShapingBonusConfig = (
     | DiversityBonusConfig
     | TimingBonusConfig
     | EconomicEfficiencyConfig
+    | BalanceBonusConfig
 )
 
 
