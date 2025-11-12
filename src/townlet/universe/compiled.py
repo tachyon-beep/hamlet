@@ -12,6 +12,7 @@ import msgpack  # type: ignore[import]
 import torch
 
 from townlet.config import HamletConfig
+from townlet.config.drive_as_code import DriveAsCodeConfig
 from townlet.environment.action_config import ActionSpaceConfig
 from townlet.environment.cascade_config import EnvironmentConfig
 from townlet.substrate.config import ActionLabelConfig
@@ -51,6 +52,8 @@ class CompiledUniverse:
     optimization_data: OptimizationData
     environment_config: EnvironmentConfig
     action_labels_config: ActionLabelConfig | None = None
+    dac_config: DriveAsCodeConfig | None = None
+    drive_hash: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "variables_reference", tuple(self.variables_reference))
