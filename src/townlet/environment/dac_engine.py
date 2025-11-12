@@ -422,6 +422,34 @@ class DACEngine:
 
                 shaping_fns.append(create_approach_reward_fn(bonus_config))
 
+            elif bonus_config.type == "completion_bonus":
+                # Use closure factory to capture config correctly
+                def create_completion_bonus_fn(config):
+                    weight = config.weight
+                    target_affordance = config.affordance
+
+                    def compute_completion_bonus(**kwargs) -> torch.Tensor:
+                        """Compute completion bonus for all agents."""
+                        # Extract kwargs
+                        last_action_affordance = kwargs.get("last_action_affordance")
+
+                        # Initialize bonus to zeros
+                        bonus = torch.zeros(self.num_agents, device=self.device)
+
+                        # Vectorize the comparison using list comprehension + tensor creation
+                        # Note: Can't fully vectorize string comparison, but keep it minimal
+                        matches = torch.tensor(
+                            [1.0 if aff == target_affordance else 0.0 for aff in last_action_affordance],
+                            device=self.device,
+                        )
+                        bonus = weight * matches
+
+                        return bonus
+
+                    return compute_completion_bonus
+
+                shaping_fns.append(create_completion_bonus_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:

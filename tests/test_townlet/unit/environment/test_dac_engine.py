@@ -998,3 +998,58 @@ class TestShapingBonuses:
         assert torch.isclose(bonuses[0], torch.tensor(0.4, device=device), atol=1e-5)
         assert torch.isclose(bonuses[1], torch.tensor(0.25, device=device), atol=1e-5)
         assert bonuses[2] == 0.0
+
+    def test_completion_bonus(self):
+        """completion_bonus gives fixed bonus when agent completes interaction."""
+        from townlet.config.drive_as_code import CompletionBonusConfig
+
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                CompletionBonusConfig(
+                    type="completion_bonus",
+                    weight=1.0,
+                    affordance="Bed",
+                )
+            ],
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: completed Bed, Agent 1: completed Fridge, Agent 2: no completion, Agent 3: completed Bed
+        last_action_affordance = ["Bed", "Fridge", None, "Bed"]
+
+        # Calculate shaping bonuses
+        bonuses = torch.zeros(num_agents, device=device)
+        for shaping_fn in engine.shaping_fns:
+            bonuses += shaping_fn(last_action_affordance=last_action_affordance)
+
+        # Agent 0: completed Bed → bonus = 1.0
+        # Agent 1: completed Fridge (not target) → bonus = 0.0
+        # Agent 2: no completion → bonus = 0.0
+        # Agent 3: completed Bed → bonus = 1.0
+        assert bonuses[0] == 1.0
+        assert bonuses[1] == 0.0
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == 1.0
