@@ -691,7 +691,19 @@ class VectorizedPopulation(PopulationManager):
                 q_target_all = torch.stack(q_target_list, dim=1)  # [batch, seq_len]
 
                 # P2.2: Apply mask to prevent gradients from post-terminal garbage
-                losses = F.mse_loss(q_pred_all, q_target_all, reduction="none")  # [batch, seq_len]
+                # TASK-005 Phase 1: Use configured loss type (element-wise for masking)
+                if self.brain_config is not None and self.brain_config.loss.type == "huber":
+                    losses = F.huber_loss(
+                        q_pred_all,
+                        q_target_all,
+                        reduction="none",
+                        delta=self.brain_config.loss.huber_delta,
+                    )
+                elif self.brain_config is not None and self.brain_config.loss.type == "smooth_l1":
+                    losses = F.smooth_l1_loss(q_pred_all, q_target_all, reduction="none")
+                else:
+                    # MSE or legacy (no brain_config)
+                    losses = F.mse_loss(q_pred_all, q_target_all, reduction="none")
                 mask = batch["mask"].float()  # [batch, seq_len] - True for valid timesteps
                 masked_loss = (losses * mask).sum() / mask.sum().clamp_min(1)
                 loss: torch.Tensor = masked_loss
@@ -748,7 +760,8 @@ class VectorizedPopulation(PopulationManager):
 
                     q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
 
-                loss = F.mse_loss(q_pred, q_target)
+                # TASK-005 Phase 1: Use configured loss function
+                loss = self.loss_fn(q_pred, q_target)
 
                 # Store training metrics
                 with torch.no_grad():

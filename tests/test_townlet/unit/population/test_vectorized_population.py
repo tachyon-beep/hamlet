@@ -294,3 +294,56 @@ class TestBrainConfigIntegration:
         assert population.gamma == 0.90
         assert population.target_update_frequency == 250
         assert population.use_double_dqn is True
+
+    def test_configured_loss_function_is_used(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """Configured loss function should be used in training."""
+        import torch.nn as nn
+
+        # Create brain_config with Huber loss
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test Huber loss usage",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+            ),
+            loss=LossConfig(type="huber", huber_delta=2.0),  # Huber loss with delta=2.0
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,
+            ),
+        )
+
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="simple",
+            brain_config=brain_config,
+        )
+
+        # Verify loss function is HuberLoss with correct delta
+        assert isinstance(population.loss_fn, nn.HuberLoss)
+        assert population.loss_fn.delta == 2.0

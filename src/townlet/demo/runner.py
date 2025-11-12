@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 import yaml
 
-from townlet.agent.brain_config import BrainConfig, load_brain_config
+from townlet.agent.brain_config import BrainConfig, compute_brain_hash, load_brain_config
 from townlet.config import HamletConfig
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.database import DemoDatabase
@@ -276,6 +276,10 @@ class DemoRunner:
         checkpoint["training_config"] = self.config
         checkpoint["config_dir"] = str(self.config_dir)
 
+        # TASK-005 Phase 1: Add brain_hash for checkpoint provenance
+        if self.brain_hash is not None:
+            checkpoint["brain_hash"] = self.brain_hash
+
         if universe is None:
             universe = self.compiled_universe
         if universe is not None:
@@ -428,15 +432,23 @@ class DemoRunner:
 
         # TASK-005 Phase 1: Load brain.yaml if present
         brain_config: BrainConfig | None = None
+        brain_hash: str | None = None
         brain_yaml_path = self.config_dir / "brain.yaml"
         if brain_yaml_path.exists():
             logger.info(f"Loading brain configuration from {brain_yaml_path}")
             brain_config = load_brain_config(self.config_dir)
+            brain_hash = compute_brain_hash(brain_config)
             logger.info(f"Brain config loaded: {brain_config.description}")
+            logger.info(f"Brain hash: {brain_hash[:16]}... (SHA256)")
         else:
             logger.info("No brain.yaml found, using hardcoded network configuration")
 
+        # Store brain_config and brain_hash for checkpoint provenance
+        self.brain_config = brain_config
+        self.brain_hash = brain_hash
+
         # Create population with correct API
+        # TODO(BRAIN_AS_CODE Phase 2): Remove deprecated parameters when brain.yaml becomes required
         self.population = VectorizedPopulation(
             env=self.env,
             curriculum=self.curriculum,
@@ -445,18 +457,18 @@ class DemoRunner:
             device=device,
             obs_dim=obs_dim,
             action_dim=action_dim,
-            learning_rate=learning_rate,
-            gamma=gamma,
+            learning_rate=learning_rate,  # DEPRECATED when brain_config present
+            gamma=gamma,  # DEPRECATED when brain_config present
             replay_buffer_capacity=replay_buffer_capacity,
             network_type=network_type,
             vision_window_size=vision_window_size,
             tb_logger=self.tb_logger,
             train_frequency=train_frequency,
-            target_update_frequency=target_update_frequency,
+            target_update_frequency=target_update_frequency,  # DEPRECATED when brain_config present
             batch_size=batch_size,
             sequence_length=sequence_length,
             max_grad_norm=max_grad_norm,
-            use_double_dqn=use_double_dqn,
+            use_double_dqn=use_double_dqn,  # DEPRECATED when brain_config present
             brain_config=brain_config,
         )
 
