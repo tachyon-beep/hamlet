@@ -9,6 +9,7 @@ from townlet.agent.brain_config import (
     LossConfig,
     OptimizerConfig,
     QLearningConfig,
+    ScheduleConfig,
 )
 from townlet.population.vectorized import VectorizedPopulation
 
@@ -126,6 +127,7 @@ def simple_brain_config():
             adam_beta2=0.999,
             adam_eps=1e-8,
             weight_decay=0.0,
+            schedule=ScheduleConfig(type="constant"),
         ),
         loss=LossConfig(type="mse"),
         q_learning=QLearningConfig(
@@ -267,6 +269,7 @@ class TestBrainConfigIntegration:
                 adam_beta2=0.999,
                 adam_eps=1e-8,
                 weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
             ),
             loss=LossConfig(type="mse"),
             q_learning=QLearningConfig(
@@ -325,6 +328,7 @@ class TestBrainConfigIntegration:
                 adam_beta2=0.999,
                 adam_eps=1e-8,
                 weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
             ),
             loss=LossConfig(type="huber", huber_delta=2.0),  # Huber loss with delta=2.0
             q_learning=QLearningConfig(
