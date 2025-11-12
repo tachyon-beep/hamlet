@@ -3,7 +3,14 @@
 import pytest
 from pydantic import ValidationError
 
-from townlet.agent.brain_config import FeedforwardConfig, LossConfig, OptimizerConfig
+from townlet.agent.brain_config import (
+    ArchitectureConfig,
+    BrainConfig,
+    FeedforwardConfig,
+    LossConfig,
+    OptimizerConfig,
+    QLearningConfig,
+)
 
 
 def test_feedforward_config_valid():
@@ -127,3 +134,64 @@ def test_loss_config_rejects_negative_huber_delta():
     with pytest.raises(ValidationError) as exc_info:
         LossConfig(type="huber", huber_delta=-1.0)
     assert "huber_delta" in str(exc_info.value)
+
+
+def test_brain_config_feedforward():
+    """BrainConfig accepts feedforward architecture."""
+    config = BrainConfig(
+        version="1.0",
+        description="Simple feedforward Q-network",
+        architecture=ArchitectureConfig(
+            type="feedforward",
+            feedforward=FeedforwardConfig(
+                hidden_layers=[256, 128],
+                activation="relu",
+                dropout=0.0,
+                layer_norm=True,
+            ),
+        ),
+        optimizer=OptimizerConfig(
+            type="adam",
+            learning_rate=0.00025,
+            adam_beta1=0.9,
+            adam_beta2=0.999,
+            adam_eps=1e-8,
+            weight_decay=0.0,
+        ),
+        loss=LossConfig(type="mse"),
+        q_learning=QLearningConfig(
+            gamma=0.99,
+            target_update_frequency=100,
+            use_double_dqn=False,
+        ),
+    )
+    assert config.architecture.type == "feedforward"
+    assert config.optimizer.type == "adam"
+
+
+def test_brain_config_requires_feedforward_when_type_feedforward():
+    """BrainConfig requires feedforward field when type=feedforward."""
+    with pytest.raises(ValidationError) as exc_info:
+        BrainConfig(
+            version="1.0",
+            description="Test",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                # Missing feedforward field!
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,
+            ),
+        )
+    assert "feedforward" in str(exc_info.value).lower()

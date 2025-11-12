@@ -6,7 +6,7 @@ Forward-compatible with future SDA (Software Defined Agent) architecture.
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FeedforwardConfig(BaseModel):
@@ -80,3 +80,61 @@ class LossConfig(BaseModel):
     type: Literal["mse", "huber", "smooth_l1"] = Field(description="Loss function type")
 
     huber_delta: float = Field(default=1.0, gt=0.0, description="Delta parameter for Huber loss (ignored for mse/smooth_l1)")
+
+
+class ArchitectureConfig(BaseModel):
+    """Neural network architecture configuration.
+
+    Future: Will support recurrent, dueling, rainbow architectures.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["feedforward"] = Field(description="Architecture type (Phase 1: feedforward only)")
+
+    # Architecture-specific configs (exactly one required based on type)
+    feedforward: FeedforwardConfig | None = Field(default=None, description="Feedforward MLP config (required when type=feedforward)")
+
+    @model_validator(mode="after")
+    def validate_architecture_match(self) -> "ArchitectureConfig":
+        """Ensure architecture config matches type."""
+        if self.type == "feedforward" and self.feedforward is None:
+            raise ValueError("type='feedforward' requires feedforward config")
+        return self
+
+
+class QLearningConfig(BaseModel):
+    """Q-learning algorithm configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gamma: float = Field(ge=0.0, le=1.0, description="Discount factor")
+    target_update_frequency: int = Field(gt=0, description="Update target network every N training steps")
+    use_double_dqn: bool = Field(description="Use Double DQN algorithm (van Hasselt et al. 2016)")
+
+
+class BrainConfig(BaseModel):
+    """Complete brain configuration.
+
+    Top-level configuration for agent architecture, optimizer, and learning.
+    All fields required (no-defaults principle).
+
+    Example:
+        >>> config = BrainConfig(
+        ...     version="1.0",
+        ...     description="Feedforward Q-network for L0",
+        ...     architecture=ArchitectureConfig(...),
+        ...     optimizer=OptimizerConfig(...),
+        ...     loss=LossConfig(...),
+        ...     q_learning=QLearningConfig(...),
+        ... )
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: str = Field(description="Configuration schema version (e.g., '1.0')")
+    description: str = Field(description="Human-readable description of this brain configuration")
+    architecture: ArchitectureConfig = Field(description="Network architecture specification")
+    optimizer: OptimizerConfig = Field(description="Optimizer configuration")
+    loss: LossConfig = Field(description="Loss function configuration")
+    q_learning: QLearningConfig = Field(description="Q-learning algorithm parameters")
