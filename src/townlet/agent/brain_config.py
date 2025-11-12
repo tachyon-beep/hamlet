@@ -131,6 +131,42 @@ class RecurrentConfig(BaseModel):
     q_head: MLPEncoderConfig = Field(description="MLP Q-value head")
 
 
+class ScheduleConfig(BaseModel):
+    """Learning rate schedule configuration.
+
+    Example:
+        >>> constant = ScheduleConfig(type="constant")
+        >>> step = ScheduleConfig(type="step_decay", step_size=1000, gamma=0.1)
+        >>> cosine = ScheduleConfig(type="cosine", t_max=5000, eta_min=0.00001)
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["constant", "step_decay", "cosine", "exponential"] = Field(description="Learning rate schedule type")
+
+    # StepLR parameters
+    step_size: int | None = Field(default=None, gt=0, description="Step size for StepLR (required for type=step_decay)")
+    gamma: float | None = Field(default=None, gt=0.0, lt=1.0, description="Multiplicative factor for StepLR or ExponentialLR")
+
+    # CosineAnnealingLR parameters
+    t_max: int | None = Field(default=None, gt=0, description="Maximum number of iterations for cosine schedule")
+    eta_min: float | None = Field(default=None, ge=0.0, description="Minimum learning rate for cosine schedule")
+
+    @model_validator(mode="after")
+    def validate_schedule_params(self) -> "ScheduleConfig":
+        """Ensure required parameters present for each schedule type."""
+        if self.type == "step_decay":
+            if self.step_size is None or self.gamma is None:
+                raise ValueError("type='step_decay' requires step_size and gamma")
+        elif self.type == "cosine":
+            if self.t_max is None or self.eta_min is None:
+                raise ValueError("type='cosine' requires t_max and eta_min")
+        elif self.type == "exponential":
+            if self.gamma is None:
+                raise ValueError("type='exponential' requires gamma")
+        return self
+
+
 class OptimizerConfig(BaseModel):
     """Optimizer configuration.
 
@@ -165,8 +201,11 @@ class OptimizerConfig(BaseModel):
     rmsprop_alpha: float | None = Field(default=None, ge=0.0, lt=1.0, description="RMSprop alpha/decay (required for rmsprop)")
     rmsprop_eps: float | None = Field(default=None, gt=0.0, description="RMSprop epsilon (required for rmsprop)")
 
-    # Common parameter
+    # Common parameters
     weight_decay: float = Field(ge=0.0, description="L2 weight decay (all optimizers)")
+
+    # Learning rate schedule (TASK-005 Phase 2: REQUIRED)
+    schedule: ScheduleConfig = Field(description="Learning rate schedule")
 
     @model_validator(mode="after")
     def validate_optimizer_params(self) -> "OptimizerConfig":

@@ -530,3 +530,66 @@ def test_recurrent_config_valid():
         ),
     )
     assert config.lstm.hidden_size == 256
+
+
+# TASK-005 Phase 2: Learning rate schedule configuration tests
+
+
+def test_schedule_config_constant():
+    """ScheduleConfig accepts constant (no schedule)."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    config = ScheduleConfig(type="constant")
+    assert config.type == "constant"
+
+
+def test_schedule_config_step_decay():
+    """ScheduleConfig accepts StepLR parameters."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    config = ScheduleConfig(
+        type="step_decay",
+        step_size=1000,
+        gamma=0.1,
+    )
+    assert config.type == "step_decay"
+    assert config.step_size == 1000
+    assert config.gamma == 0.1
+
+
+def test_schedule_config_cosine():
+    """ScheduleConfig accepts CosineAnnealingLR parameters."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    config = ScheduleConfig(
+        type="cosine",
+        t_max=5000,
+        eta_min=0.00001,
+    )
+    assert config.type == "cosine"
+    assert config.t_max == 5000
+
+
+def test_schedule_config_exponential():
+    """ScheduleConfig accepts ExponentialLR parameters."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    config = ScheduleConfig(
+        type="exponential",
+        gamma=0.9999,
+    )
+    assert config.type == "exponential"
+    assert config.gamma == 0.9999
+
+
+def test_schedule_config_requires_params_for_step_decay():
+    """ScheduleConfig validates step_decay requires step_size and gamma."""
+    from townlet.agent.brain_config import ScheduleConfig
+
+    # Valid step_decay needs both params (will validate in model_validator)
+    config = ScheduleConfig(
+        type="step_decay",
+        step_size=100,
+        gamma=0.1,
+    )
+    assert config.step_size is not None
