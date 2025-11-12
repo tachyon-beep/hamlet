@@ -94,3 +94,145 @@ def test_vectorized_env_from_universe_factory(cpu_device: torch.device) -> None:
     assert env.config_pack_path == compiled.config_dir
     assert env.observation_dim == compiled.metadata.observation_dim
     assert env.num_agents == 1
+
+
+def test_check_checkpoint_compatibility_drive_hash_match() -> None:
+    """Checkpoint with matching drive_hash is compatible."""
+    import shutil
+    import tempfile
+
+    import yaml
+
+    # Create temp config with DAC
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir) / "test_config"
+        shutil.copytree(Path("configs/L0_0_minimal"), tmp_path)
+
+        # Add drive_as_code.yaml
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+            }
+        }
+        (tmp_path / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        compiled = compiler.compile(tmp_path, use_cache=False)
+
+        # Create checkpoint with matching drive_hash
+        checkpoint = {
+            "config_hash": compiled.metadata.config_hash,
+            "observation_dim": compiled.metadata.observation_dim,
+            "action_dim": compiled.metadata.action_count,
+            "observation_field_uuids": [field.uuid for field in compiled.observation_spec.fields],
+            "drive_hash": compiled.drive_hash,  # Matching!
+        }
+
+        compatible, message = compiled.check_checkpoint_compatibility(checkpoint)
+        assert compatible is True, f"Expected compatible, got: {message}"
+        assert "compatible" in message.lower()
+
+
+def test_check_checkpoint_compatibility_drive_hash_mismatch() -> None:
+    """Checkpoint with mismatched drive_hash is incompatible."""
+    import shutil
+    import tempfile
+
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir) / "test_config"
+        shutil.copytree(Path("configs/L0_0_minimal"), tmp_path)
+
+        # Add drive_as_code.yaml
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+            }
+        }
+        (tmp_path / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        compiled = compiler.compile(tmp_path, use_cache=False)
+
+        # Create checkpoint with DIFFERENT drive_hash
+        checkpoint = {
+            "config_hash": compiled.metadata.config_hash,
+            "observation_dim": compiled.metadata.observation_dim,
+            "action_dim": compiled.metadata.action_count,
+            "observation_field_uuids": [field.uuid for field in compiled.observation_spec.fields],
+            "drive_hash": "xyz789_different_hash",  # Different!
+        }
+
+        compatible, message = compiled.check_checkpoint_compatibility(checkpoint)
+        assert compatible is False
+        assert "drive hash mismatch" in message.lower()
+        assert "reward function has changed" in message.lower()
+
+
+def test_check_checkpoint_compatibility_missing_drive_hash_in_checkpoint() -> None:
+    """Checkpoint without drive_hash but universe has DAC is incompatible."""
+    import shutil
+    import tempfile
+
+    import yaml
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir) / "test_config"
+        shutil.copytree(Path("configs/L0_0_minimal"), tmp_path)
+
+        # Add drive_as_code.yaml
+        dac_config = {
+            "drive_as_code": {
+                "version": "1.0",
+                "modifiers": {},
+                "extrinsic": {"type": "multiplicative", "base": 1.0, "bars": ["energy"]},
+                "intrinsic": {"strategy": "rnd", "base_weight": 0.1},
+            }
+        }
+        (tmp_path / "drive_as_code.yaml").write_text(yaml.dump(dac_config))
+
+        compiler = UniverseCompiler()
+        compiled = compiler.compile(tmp_path, use_cache=False)
+
+        # Create checkpoint WITHOUT drive_hash (old checkpoint)
+        checkpoint = {
+            "config_hash": compiled.metadata.config_hash,
+            "observation_dim": compiled.metadata.observation_dim,
+            "action_dim": compiled.metadata.action_count,
+            "observation_field_uuids": [field.uuid for field in compiled.observation_spec.fields],
+            # drive_hash missing!
+        }
+
+        compatible, message = compiled.check_checkpoint_compatibility(checkpoint)
+        assert compatible is False
+        assert "missing drive_hash" in message.lower()
+        assert "predates dac" in message.lower()
+
+
+def test_check_checkpoint_compatibility_missing_drive_hash_in_universe() -> None:
+    """Checkpoint with drive_hash but universe without DAC is incompatible."""
+    compiler = UniverseCompiler()
+    compiled = compiler.compile(Path("configs/L0_0_minimal"), use_cache=False)
+
+    # L0_0_minimal doesn't have drive_as_code.yaml, so drive_hash should be None
+    assert compiled.drive_hash is None
+
+    # Create checkpoint WITH drive_hash (but universe doesn't have DAC)
+    checkpoint = {
+        "config_hash": compiled.metadata.config_hash,
+        "observation_dim": compiled.metadata.observation_dim,
+        "action_dim": compiled.metadata.action_count,
+        "observation_field_uuids": [field.uuid for field in compiled.observation_spec.fields],
+        "drive_hash": "abc123_some_hash",  # Has drive_hash but universe doesn't!
+    }
+
+    compatible, message = compiled.check_checkpoint_compatibility(checkpoint)
+    assert compatible is False
+    assert "has drive_hash but universe is missing" in message.lower()

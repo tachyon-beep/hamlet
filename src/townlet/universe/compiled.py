@@ -158,6 +158,28 @@ class CompiledUniverse:
                 "Observation field UUID mismatch between checkpoint and compiled universe.",
             )
 
+        # Check drive_hash (reward function provenance)
+        checkpoint_drive_hash = checkpoint.get("drive_hash")
+        if checkpoint_drive_hash is not None and self.drive_hash is not None:
+            if checkpoint_drive_hash != self.drive_hash:
+                return (
+                    False,
+                    "Drive hash mismatch: reward function has changed since checkpoint was created. "
+                    "This checkpoint was trained with a different DAC configuration and cannot be used. "
+                    "Please retrain with the current drive_as_code.yaml.",
+                )
+        elif checkpoint_drive_hash is None and self.drive_hash is not None:
+            return (
+                False,
+                "Checkpoint missing drive_hash but universe has DAC config. "
+                "This checkpoint predates DAC and cannot be used. Please retrain.",
+            )
+        elif checkpoint_drive_hash is not None and self.drive_hash is None:
+            return (
+                False,
+                "Checkpoint has drive_hash but universe is missing DAC config. " "Ensure drive_as_code.yaml is present in config pack.",
+            )
+
         return True, "Checkpoint compatible."
 
     def to_runtime(self) -> RuntimeUniverse:

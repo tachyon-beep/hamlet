@@ -256,3 +256,173 @@
 **Confidence:** High - Complete 7-stage pipeline traced (compiler.py 2385 lines), all 17 component files read (4173 total lines), symbol table resolution verified, cache invalidation logic (mtime + hash) confirmed, DTO serialization (MessagePack) examined, VFS adapter integration traced, inbound/outbound dependencies verified via grep (12 consumers), DoS protection limits documented, error collection pattern validated, no-defaults principle enforced via Pydantic required fields
 
 ---
+
+## Population
+
+**Location:** `/home/john/hamlet/src/townlet/population/`
+
+**Responsibility:** Manages batched Q-learning training for multiple parallel agents through vectorized population coordination, handling Q-network forward passes, replay buffer sampling, gradient updates, target network synchronization, and runtime telemetry tracking.
+
+**Key Components:**
+- `vectorized.py` - VectorizedPopulation implementation coordinating shared Q-network training across num_agents parallel agents with dual replay buffer system (sequential for LSTM, standard for feedforward), Double DQN support, gradient clipping, periodic target network updates, and episode lifecycle management (933 lines)
+- `base.py` - PopulationManager abstract interface defining step_population() for training coordination and get_checkpoint() for serialization (69 lines)
+- `runtime_registry.py` - AgentRuntimeRegistry maintaining per-agent GPU tensors (survival_time, curriculum_stage, epsilon, intrinsic_weight) with JSON-safe snapshot API for telemetry (134 lines)
+- `__init__.py` - Module initialization (1 line)
+
+**Dependencies:**
+- Inbound: Demo System (runner.py, live_inference.py), Curriculum (adversarial.py for Q-value entropy calculation)
+- Outbound: Agent Networks (SimpleQNetwork, RecurrentSpatialQNetwork, StructuredQNetwork), Exploration (ExplorationStrategy, AdaptiveIntrinsicExploration, RNDExploration), Curriculum (CurriculumManager), Training (ReplayBuffer, SequentialReplayBuffer, BatchedAgentState, PopulationCheckpoint), Environment (VectorizedHamletEnv)
+
+**Patterns Observed:**
+- Abstract base class pattern (PopulationManager interface, VectorizedPopulation concrete implementation)
+- Dual replay buffer strategy (SequentialReplayBuffer for recurrent networks with episode sequences, ReplayBuffer for feedforward networks with individual transitions)
+- Network architecture polymorphism (SimpleQNetwork for feedforward, RecurrentSpatialQNetwork for LSTM, StructuredQNetwork for group-based observations)
+- Target network stabilization (periodic hard updates every target_update_frequency steps, separate eval-mode target network)
+- Double DQN algorithm support (configurable via use_double_dqn flag, online network for action selection, target network for Q-value evaluation)
+- Vanilla DQN fallback (target network for both selection and evaluation when use_double_dqn=False)
+- Gradient clipping (max_norm=10.0 prevents exploding gradients in deep networks)
+- Episode lifecycle management (accumulate transitions → store on done → reset hidden state → update intrinsic annealing)
+- LSTM hidden state lifecycle (reset at episode start, persist during rollout, reset per batch in training, separate hidden states for episode vs training batches)
+- Post-terminal masking for recurrent training (P2.2 pattern prevents gradients from garbage timesteps after terminal state)
+- Runtime registry telemetry (GPU tensors for hot path access, JSON snapshots for cold path serialization)
+- Checkpoint compatibility validation (universe_metadata in checkpoint validates meter_count, obs_dim, action_dim match current environment)
+- Action masking integration (epsilon_greedy_action_selection respects environment action masks to prevent invalid actions)
+- Intrinsic reward composition (RND novelty + adaptive annealing via exploration strategy, weighted in replay buffer sampling)
+- TensorBoard histogram logging (network weights and gradients logged every 100 training steps)
+
+**Concerns:**
+- Network architecture hardcoded (SimpleQNetwork hidden_dim=128, RecurrentSpatialQNetwork hidden_dim=256, StructuredQNetwork embed_dim=32, q_head_dim=128 have TODO(BRAIN_AS_CODE) comments indicating future config-driven architecture)
+- Action dimension defaults to env.action_dim if not specified (TASK-002B Phase 4.1 comment suggests recent change, may have backward compatibility implications)
+- Recurrent training requires 3 forward passes for Double DQN (online prediction, online selection, target evaluation) vs 2 for vanilla DQN (noted in code but no optimization)
+- Checkpoint loading has soft validation for obs_dim mismatch (warnings.warn instead of ValueError, may cause silent failures on grid size changes)
+- Episode flush mechanism (flush_episode) only implemented for recurrent mode (feedforward transitions already in buffer, but asymmetry could confuse future maintainers)
+
+**Confidence:** High - All 4 files read (1137 total lines), training step pipeline traced (Q-values → curriculum → action selection → environment step → intrinsic rewards → replay buffer → gradient update → target sync), Double DQN implementation verified (action selection decoupling for both feedforward and recurrent), LSTM sequence handling confirmed (episode accumulation, post-terminal masking, hidden state lifecycle), checkpoint serialization examined (universe_metadata validation), dependencies verified via grep (4 inbound consumers, 8 outbound dependencies), test coverage observed (1436 lines across 5 test files), runtime registry telemetry integration traced
+
+---
+
+## Agent Networks
+
+**Location:** `/home/john/hamlet/src/townlet/agent/`
+
+**Responsibility:** Provides neural network architectures for Q-value approximation supporting full observability (SimpleQNetwork MLP), partial observability (RecurrentSpatialQNetwork with LSTM and CNN encoders), and structured observation encoding (StructuredQNetwork with semantic group encoders).
+
+**Key Components:**
+- `networks.py` - Three Q-network architectures with PyTorch nn.Module implementations (388 lines)
+- `__init__.py` - Module interface exposing SimpleQNetwork, RecurrentSpatialQNetwork, StructuredQNetwork (1 line)
+
+**Dependencies:**
+- Inbound: Population (vectorized.py creates and trains networks), Exploration (rnd.py architecture reference for RNDEmbeddingNet), Universe Compiler (networks.py import for checkpoint validation)
+- Outbound: PyTorch (nn.Module, nn.Linear, nn.LSTM, nn.Conv2d, LayerNorm), Universe Compiler DTOs (ObservationActivity for StructuredQNetwork group slices)
+
+**Patterns Observed:**
+- Strategy pattern via network_type config selection (simple, recurrent, structured instantiated polymorphically in Population)
+- Encoder composition pattern in RecurrentSpatialQNetwork (vision CNN, position MLP, meter MLP, affordance MLP combined before LSTM)
+- Semantic grouping pattern in StructuredQNetwork (ModuleDict with per-group encoders leveraging ObservationActivity metadata)
+- Conditional architecture in RecurrentSpatialQNetwork (position_encoder=None for Aspatial substrates with position_dim=0)
+- LSTM hidden state lifecycle (reset at episode start, persist during rollout, reset per transition in batch training)
+- Device-agnostic initialization (device parameter passed to methods, not stored at construction)
+- LayerNorm stabilization throughout all architectures (prevents gradient explosion with deep networks)
+- No-defaults principle (PDR-002) enforced via explicit hidden_dim parameters with TODO comments for future BRAIN_AS_CODE config
+- Dual network pattern in Population (online network for action selection, target network for Q-target stability)
+- Dynamic architecture sizing (RecurrentSpatialQNetwork adjusts lstm_input_dim based on position_dim, window_size, num_meters, num_affordance_types)
+- Observation masking support in StructuredQNetwork (skips empty groups from group_slices with size <= 0)
+
+**Concerns:**
+- Network architecture parameters hardcoded in Population (hidden_dim=128 for SimpleQNetwork, hidden_dim=256 for RecurrentSpatialQNetwork) with TODO comments but no BRAIN_AS_CODE implementation timeline
+- RecurrentSpatialQNetwork ignores temporal features after extraction (sin/cos time encoding present in observations but not processed separately, line 213-215 comment acknowledges this)
+- StructuredQNetwork group_embed_dim and q_head_hidden_dim have defaults (32, 128) violating no-defaults principle, though documented as exemption for infrastructure
+- LSTM hidden state managed via mutable instance variable (self.hidden_state) creates potential thread-safety issues if networks shared across threads
+- No explicit parameter count validation against memory constraints (RecurrentSpatialQNetwork ~650K params could cause GPU OOM with large batch sizes)
+
+**Confidence:** High - Both source files read completely (389 total lines), three network architectures examined with architectural details verified, dependencies traced via grep showing Population instantiation and Exploration reference, integration with ObservationActivity DTO confirmed, LSTM lifecycle verified in Population training loop, test coverage observed (1353 lines across unit and integration tests including network selection, recurrent networks, structured networks), parameter counts documented in CLAUDE.md matched to architectures
+
+---
+## Environment
+
+**Location:** `/home/john/hamlet/src/townlet/environment/`
+
+**Responsibility:** Orchestrates GPU-native vectorized environment simulation by composing dynamics engines (affordance interactions, meter cascades, reward computation) with VFS integration, action execution pipeline, and observation construction for parallel agent training.
+
+**Key Components:**
+- `vectorized_env.py` - VectorizedHamletEnv main environment class coordinating substrate, VFS registry, dynamics engines, action execution, observation construction, and step lifecycle (1379 lines)
+- `affordance_engine.py` - AffordanceEngine processing affordance interactions (instant, multi-tick, continuous) with operating hours validation, cost/effect application, and GPU-vectorized execution (506 lines)
+- `cascade_engine.py` - CascadeEngine applying meter dynamics (base depletions, modulations, threshold cascades, terminal conditions) from YAML config with GPU-optimized tensor operations (331 lines)
+- `meter_dynamics.py` - MeterDynamics tensor-driven meter updates (deplete, cascades, terminal checks) using compiler-provided optimization data (187 lines)
+- `dac_engine.py` - DACEngine runtime reward computation from declarative Drive As Code specs with modifier evaluation, VFS integration, intrinsic weight modulation (849 lines)
+- `reward_strategy.py` - RewardStrategy (multiplicative health×energy) and AdaptiveRewardStrategy (additive with crisis suppression) for interoception-aware survival rewards (234 lines)
+- `action_builder.py` - ComposedActionSpace for action vocabulary management (substrate + custom + affordance) with enabled/disabled masking and action lookup (229 lines)
+- `action_config.py` - ActionConfig and ActionSpaceConfig Pydantic DTOs for action definitions with VFS integration (reads/writes), cost/effect specs, movement delta validation (140 lines)
+- `affordance_config.py` - AffordanceConfig and AffordanceConfigCollection DTOs for affordance definitions with multi-tick validation, operating hours, cost/effect schemas (254 lines)
+- `cascade_config.py` - BarsConfig, CascadesConfig, TerminalCondition DTOs for meter dynamics with contiguous index validation, self-cascade prevention (318 lines)
+- `substrate_action_validator.py` - SubstrateActionValidator ensuring action space compatibility with substrate topology (grid square/cubic/hex, aspatial) and movement delta requirements (95 lines)
+- `action_labels.py` - Action label presets (gaming, 6dof, cardinal, math) and custom label support for UI rendering (359 lines)
+- `affordance_layout.py` - Affordance position randomization and layout helpers for grid-based substrates (73 lines)
+
+**Dependencies:**
+- Inbound: Universe Compiler (compiled.py, runtime.py for CompiledUniverse consumption), Population (vectorized.py for training integration), Demo System (runner.py, live_inference.py for environment instantiation), VFS (registry.py for observation construction), Substrates (all substrate types for spatial representation)
+- Outbound: Substrates (base.py SpatialSubstrate interface, factory.py for substrate creation), VFS (registry.py VariableRegistry for state storage, schema.py for WriteSpec), Config DTOs (all environment config DTOs consumed by Universe Compiler), PyTorch (tensors for all state)
+
+**Patterns Observed:**
+- Composition over inheritance (VectorizedHamletEnv composes AffordanceEngine, MeterDynamics, RewardStrategy, VariableRegistry rather than inheriting from base environment)
+- Engine-based architecture (AffordanceEngine, CascadeEngine, MeterDynamics, DACEngine encapsulate domain logic with independent lifecycle)
+- GPU-native vectorization (all state as PyTorch tensors with [num_agents, ...] batch dimension, no Python loops in hot paths)
+- VFS integration pattern (environment writes to VariableRegistry with writer="engine", agents read with reader="agent")
+- Action pipeline pattern (action validation → custom action dispatch → movement application → affordance interaction → meter updates → cascades → terminal checks → reward computation)
+- Observation construction pipeline (VFS registry update → field extraction → concatenation → masking for curriculum)
+- Device-agnostic operations (device parameter threaded through all tensor operations, supports CPU/CUDA/MPS)
+- Fixed vocabulary principle (observation dim constant across curriculum levels for transfer learning via disabled affordance masking)
+- POMDP support (partial observability via local window encoding, full observability via complete grid encoding)
+- Modern affordance pipeline (effect_pipeline with on_start/per_tick/on_completion/on_early_exit/on_failure stages)
+- Temporal mechanics (24-tick day/night cycle, operating hours validation, interaction progress tracking)
+- Retirement mechanics (agent lifespan tracking with retirement bonus reward)
+- DTO-driven configuration (all behavioral parameters from CompiledUniverse, no hardcoded defaults except infrastructure parameters)
+
+**Concerns:**
+- Bidirectional dependency between config DTOs and environment (config imports BarsConfig/CascadesConfig/AffordanceConfigCollection from environment, environment imports config DTOs)
+- VectorizedHamletEnv.__init__ is large (470+ lines including helper methods) with complex initialization sequence (substrate, VFS, engines, dynamics, affordance layout)
+- Custom action dispatch uses Python loop over custom_agent_indices (vectorization possible but requires more complex tensor indexing)
+- Affordance position randomization regenerates every reset when randomize_affordances=true (deterministic seeding not exposed to environment consumers)
+- DAC integration optional but presence checked at initialization (will become required per compiler.py comment)
+
+**Confidence:** High - All 14 files read (4955 total lines), VectorizedHamletEnv step lifecycle traced (action execution → meter updates → cascades → terminal checks → rewards → observations), engine composition verified (AffordanceEngine, MeterDynamics, DACEngine), VFS integration examined (VariableRegistry reads/writes), POMDP vs full observability branches confirmed, dependencies bidirectional (inbound from Universe Compiler/Population/Demo, outbound to Substrates/VFS), GPU vectorization patterns consistent, temporal mechanics understood
+
+---
+## VFS (Variable & Feature System)
+
+**Location:** `/home/john/hamlet/src/townlet/vfs/`
+
+**Responsibility:** Provides declarative state space configuration through YAML-defined variables with scope semantics, access control, and observation field specifications, enabling the Universe Compiler to generate observation specs and the Environment to construct runtime observations from GPU tensor storage.
+
+**Key Components:**
+- `schema.py` - Pydantic schemas for VFS configuration: VariableDef (variable definitions with scope/type/lifetime/access control), ObservationField (observation field specs with normalization), NormalizationSpec (minmax/zscore normalization), WriteSpec (action variable updates), load_variables_reference_config loader (306 lines)
+- `registry.py` - VariableRegistry runtime storage managing GPU tensors for all variables with access control enforcement, scope-based shape computation (global/agent/agent_private), and defensive cloning to prevent aliasing (279 lines)
+- `observation_builder.py` - VFSObservationSpecBuilder compile-time spec generator converting variable definitions to ObservationField specs with shape inference, normalization validation, and exposure configuration (201 lines)
+- `__init__.py` - Module interface exposing VariableDef, ObservationField, NormalizationSpec, WriteSpec, VariableRegistry, VFSObservationSpecBuilder (26 lines)
+
+**Dependencies:**
+- Inbound: Universe Compiler (compiler.py loads variables_reference.yaml via load_variables_reference_config, compiler_inputs.py aggregates VariableDef list, adapters/vfs_adapter.py converts ObservationField to compiler DTOs), Environment (vectorized_env.py uses VariableRegistry for runtime state, dac_engine.py reads variables for DAC reward computation)
+- Outbound: Pydantic (BaseModel for schema validation with extra="forbid"), PyYAML (yaml.safe_load for YAML parsing), PyTorch (torch.Tensor for GPU-native storage, torch.device for device placement)
+
+**Patterns Observed:**
+- Declarative configuration pattern with YAML as single source of truth for state space (variables_reference.yaml required in all config packs)
+- Three-scope model for variable visibility: global (shared single value), agent (per-agent public), agent_private (per-agent hidden from agent observations)
+- Access control via reader/writer lists (agent, engine, acs, bac, actions) enforced at registry get/set with PermissionError on violations
+- Compile-time vs runtime separation (VFSObservationSpecBuilder generates specs during compilation, VariableRegistry manages tensors during training)
+- Type system with vector support: scalar, bool, vec2i, vec3i, vecNi, vecNf (Phase 1 types, Phase 2 planned for derivation graphs and expressions)
+- Shape inference from variable type (scalar → [], vec2i → [2], vecNf with dims=N → [N]) with scope-based batching (global → [dims], agent → [num_agents, dims])
+- Normalization specification with validation ensuring parameter shape matches observation shape (scalar params for scalar obs, list params for vector obs)
+- Defensive copying pattern (get/set operations clone tensors to prevent external mutation of registry state)
+- Auto-generation integration (Universe Compiler auto-generates standard variables for position, meters, affordances, temporal features from other configs)
+- Observation field semantic typing (bars, spatial, affordance, temporal, custom) for structured encoders and curriculum masking
+- Phase 1 vs Phase 2 architecture (Phase 1: basic types + observation specs, Phase 2: derivation graphs + expression evaluation)
+
+**Concerns:**
+- WriteSpec expression field currently stored as string with no parsing or validation (Phase 2 planned for AST parsing and execution)
+- No validation that source_variable in ObservationField exists in VariableDef list until runtime (could fail during environment initialization)
+- Variable scope semantics for agent_private unclear when reader="agent" (registry raises PermissionError but ObservationField exposure to agent not validated at compile-time)
+- Normalization parameter validation allows single-element list for scalar observations (dims=1 and len(values)=1 special case may be confusing)
+
+**Confidence:** High - All 4 files read completely (812 total lines), YAML config flow traced (variables_reference.yaml → load_variables_reference_config → VariableDef list → compiler symbol table → VFSAdapter → ObservationSpec DTOs), runtime integration verified (VariableRegistry used by vectorized_env.py and dac_engine.py), access control enforcement examined (readable_by/writable_by checked in get/set), scope semantics confirmed (global/agent/agent_private shape computation), dependencies bidirectional (inbound from Universe Compiler and Environment, outbound to Pydantic/PyYAML/PyTorch), sample config examined (aspatial_test/variables_reference.yaml with 4 meters + 5 affordances + 4 temporal = 13 dims)
+
+---

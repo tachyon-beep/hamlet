@@ -26,6 +26,7 @@ def attach_universe_metadata(checkpoint: dict[str, Any], universe: CompiledUnive
     checkpoint["action_dim"] = universe.metadata.action_count
     checkpoint["meter_count"] = universe.metadata.meter_count
     checkpoint["observation_field_uuids"] = [field.uuid for field in universe.observation_spec.fields]
+    checkpoint["drive_hash"] = universe.drive_hash
 
 
 def config_hash_warning(checkpoint: Mapping[str, Any], universe: CompiledUniverse) -> str | None:
