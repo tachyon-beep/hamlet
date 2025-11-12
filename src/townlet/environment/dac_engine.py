@@ -450,6 +450,36 @@ class DACEngine:
 
                 shaping_fns.append(create_completion_bonus_fn(bonus_config))
 
+            elif bonus_config.type == "efficiency_bonus":
+                # Use closure factory to capture config correctly
+                def create_efficiency_bonus_fn(config):
+                    weight = config.weight
+                    bar_id = config.bar
+                    threshold = config.threshold
+
+                    def compute_efficiency_bonus(**kwargs) -> torch.Tensor:
+                        """Compute efficiency bonus for all agents."""
+                        # Extract kwargs
+                        meters = kwargs.get("meters")
+
+                        # Get bar index
+                        # NOTE: This uses the flawed _get_bar_index() from Phase 3B
+                        # It will be fixed in Phase 3D when bar_index_map is added
+                        bar_idx = self._get_bar_index(bar_id)
+
+                        # Get bar values
+                        bar_values = meters[:, bar_idx]
+
+                        # Bonus if bar >= threshold
+                        above_threshold = bar_values >= threshold
+                        bonus = torch.where(above_threshold, weight, 0.0)
+
+                        return bonus
+
+                    return compute_efficiency_bonus
+
+                shaping_fns.append(create_efficiency_bonus_fn(bonus_config))
+
         return shaping_fns
 
     def _get_bar_index(self, bar_id: str) -> int:

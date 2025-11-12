@@ -1053,3 +1053,59 @@ class TestShapingBonuses:
         assert bonuses[1] == 0.0
         assert bonuses[2] == 0.0
         assert bonuses[3] == 1.0
+
+    def test_efficiency_bonus(self):
+        """efficiency_bonus rewards maintaining bar above threshold."""
+        from townlet.config.drive_as_code import EfficiencyBonusConfig
+
+        device = torch.device("cpu")
+        num_agents = 4
+
+        vfs_registry = VariableRegistry(
+            variables=[
+                VariableDef(
+                    id="energy",
+                    scope="agent",
+                    type="scalar",
+                    default=1.0,
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    lifetime="episode",
+                )
+            ],
+            num_agents=num_agents,
+            device=device,
+        )
+
+        dac_config = DriveAsCodeConfig(
+            modifiers={},
+            extrinsic=ExtrinsicStrategyConfig(type="multiplicative", bars=["energy"]),
+            intrinsic=IntrinsicStrategyConfig(strategy="none", base_weight=0.0),
+            shaping=[
+                EfficiencyBonusConfig(
+                    type="efficiency_bonus",
+                    weight=0.5,
+                    bar="energy",
+                    threshold=0.7,
+                )
+            ],
+        )
+
+        engine = DACEngine(dac_config, vfs_registry, device, num_agents)
+
+        # Agent 0: energy=0.9 (above), Agent 1: energy=0.7 (at threshold), Agent 2: energy=0.5 (below), Agent 3: energy=0.0 (below)
+        meters = torch.tensor([[0.9], [0.7], [0.5], [0.0]], device=device)
+
+        # Calculate shaping bonuses
+        bonuses = torch.zeros(num_agents, device=device)
+        for shaping_fn in engine.shaping_fns:
+            bonuses += shaping_fn(meters=meters)
+
+        # Agent 0: energy >= 0.7 → bonus = 0.5
+        # Agent 1: energy >= 0.7 → bonus = 0.5
+        # Agent 2: energy < 0.7 → bonus = 0.0
+        # Agent 3: energy < 0.7 → bonus = 0.0
+        assert bonuses[0] == 0.5
+        assert bonuses[1] == 0.5
+        assert bonuses[2] == 0.0
+        assert bonuses[3] == 0.0
