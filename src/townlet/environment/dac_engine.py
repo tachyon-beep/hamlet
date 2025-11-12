@@ -20,7 +20,7 @@ from collections.abc import Callable
 
 import torch
 
-from townlet.config.drive_as_code import DriveAsCodeConfig
+from townlet.config.drive_as_code import DriveAsCodeConfig, ModifierConfig
 from townlet.vfs.registry import VariableRegistry
 
 
@@ -81,11 +81,56 @@ class DACEngine:
     def _compile_modifiers(self) -> dict[str, Callable]:
         """Compile modifiers into efficient lookup functions.
 
+        Uses torch.where for GPU-optimized range evaluation.
+        Modifiers return multipliers that can be chained together.
+
         Returns:
-            Dictionary of modifier functions
+            Dictionary mapping modifier name to evaluation function
         """
-        # TODO: Implement in next task
-        return {}
+        compiled = {}
+
+        for mod_name, mod_config in self.dac_config.modifiers.items():
+            # Closure captures mod_config
+            def create_modifier_fn(config: ModifierConfig) -> Callable:
+                # Pre-compute range boundaries and multipliers as tensors
+                ranges = sorted(config.ranges, key=lambda r: r.min)
+
+                def evaluate_modifier(meters: torch.Tensor) -> torch.Tensor:
+                    """Evaluate modifier for all agents.
+
+                    Args:
+                        meters: [num_agents, meter_count] normalized meter values
+
+                    Returns:
+                        [num_agents] multipliers for this modifier
+                    """
+                    # Get source value
+                    if config.bar:
+                        # Bar source: Index into meters tensor
+                        bar_idx = self._get_bar_index(config.bar)
+                        source_value = meters[:, bar_idx]  # [num_agents]
+                    elif config.variable:
+                        # VFS variable source: Read from registry
+                        source_value = self.vfs_registry.get(config.variable, reader=self.vfs_reader)  # [num_agents]
+                    else:
+                        raise ValueError(f"Modifier has no source: {mod_name}")
+
+                    # Evaluate ranges using torch.where for GPU efficiency
+                    # Start with last range as default (fallback)
+                    multiplier = torch.full_like(source_value, ranges[-1].multiplier, dtype=torch.float32)
+
+                    # Work backwards through ranges using nested torch.where
+                    for r in reversed(ranges[:-1]):
+                        condition = (source_value >= r.min) & (source_value < r.max)
+                        multiplier = torch.where(condition, r.multiplier, multiplier)
+
+                    return multiplier
+
+                return evaluate_modifier
+
+            compiled[mod_name] = create_modifier_fn(mod_config)
+
+        return compiled
 
     def _compile_extrinsic(self) -> Callable:
         """Compile extrinsic strategy into computation function.
@@ -108,6 +153,29 @@ class DACEngine:
         """
         # TODO: Implement in later sub-phase
         return []
+
+    def _get_bar_index(self, bar_id: str) -> int:
+        """Get meter index for a bar ID.
+
+        Args:
+            bar_id: Bar identifier (e.g., "energy", "health")
+
+        Returns:
+            Index into meters tensor
+
+        Raises:
+            ValueError: If bar_id not found
+        """
+        # NOTE: This assumes bars are in the order defined in bars.yaml
+        # The compiler should have validated that bar_id exists
+        bar_ids = self.dac_config.extrinsic.bars
+
+        # For now, use a simple lookup (will be optimized in later task)
+        # In production, we'd get this from universe metadata
+        try:
+            return bar_ids.index(bar_id)
+        except ValueError:
+            raise ValueError(f"Bar '{bar_id}' not found in extrinsic bars list")
 
     def calculate_rewards(
         self,
