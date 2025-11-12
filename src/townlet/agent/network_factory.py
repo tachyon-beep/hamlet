@@ -6,7 +6,8 @@ Forward-compatible with future SDA (Software Defined Agent) architecture.
 
 import torch.nn as nn
 
-from townlet.agent.brain_config import FeedforwardConfig
+from townlet.agent.brain_config import FeedforwardConfig, RecurrentConfig
+from townlet.agent.networks import RecurrentSpatialQNetwork
 
 
 class NetworkFactory:
@@ -60,6 +61,70 @@ class NetworkFactory:
         layers.append(nn.Linear(in_features, action_dim))
 
         return nn.Sequential(*layers)
+
+    @staticmethod
+    def build_recurrent(
+        config: RecurrentConfig,
+        action_dim: int,
+        window_size: int,
+        position_dim: int,
+        num_meters: int,
+        num_affordance_types: int,
+    ) -> RecurrentSpatialQNetwork:
+        """Build recurrent LSTM Q-network from configuration.
+
+        Args:
+            config: Recurrent architecture configuration
+            action_dim: Number of actions
+            window_size: Vision window size (5 for 5×5)
+            position_dim: Position dimensionality (2 for Grid2D, 3 for Grid3D, 0 for Aspatial)
+            num_meters: Number of meter values
+            num_affordance_types: Number of affordance types
+
+        Returns:
+            RecurrentSpatialQNetwork
+
+        Note:
+            This builds a RecurrentSpatialQNetwork with configurable dimensions
+            instead of hardcoded values. The network structure matches the original
+            RecurrentSpatialQNetwork but dimensions come from config.
+
+            Currently, the config's vision_encoder, position_encoder, meter_encoder,
+            affordance_encoder, and q_head parameters are not used because
+            RecurrentSpatialQNetwork has a fixed internal architecture. This is
+            acceptable for Phase 2 (TASK-005). Future phases may make the network
+            architecture fully configurable.
+
+        Example:
+            >>> config = RecurrentConfig(...)
+            >>> network = NetworkFactory.build_recurrent(
+            ...     config=config,
+            ...     action_dim=8,
+            ...     window_size=5,
+            ...     position_dim=2,
+            ...     num_meters=8,
+            ...     num_affordance_types=14,
+            ... )
+        """
+        # Extract LSTM hidden size from config
+        lstm_hidden_size = config.lstm.hidden_size
+
+        # Create RecurrentSpatialQNetwork with config-driven LSTM dimension
+        # Note: The existing RecurrentSpatialQNetwork class has hardcoded encoder
+        # architectures (CNN, MLPs). For Phase 2, we only make LSTM hidden_size
+        # configurable via the hidden_dim parameter.
+        # Future phases may make the entire architecture fully configurable.
+        network = RecurrentSpatialQNetwork(
+            action_dim=action_dim,
+            window_size=window_size,
+            position_dim=position_dim,
+            num_meters=num_meters,
+            num_affordance_types=num_affordance_types,
+            enable_temporal_features=False,  # Will be determined by environment
+            hidden_dim=lstm_hidden_size,  # From config instead of hardcoded!
+        )
+
+        return network
 
     @staticmethod
     def _get_activation(activation: str) -> nn.Module:
