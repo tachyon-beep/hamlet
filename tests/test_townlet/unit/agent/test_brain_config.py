@@ -379,3 +379,42 @@ def test_compute_brain_hash_differs_for_different_configs():
     hash2 = compute_brain_hash(config2)
 
     assert hash1 != hash2
+
+
+def test_optimizer_config_adam_requires_adam_params():
+    """OptimizerConfig type=adam requires adam_beta1, adam_beta2, adam_eps."""
+    with pytest.raises(ValidationError) as exc_info:
+        OptimizerConfig(
+            type="adam",
+            learning_rate=0.001,
+            weight_decay=0.0,
+            # Missing adam_beta1, adam_beta2, adam_eps!
+        )
+    error_str = str(exc_info.value)
+    assert "adam_beta1" in error_str or "adam parameters required" in error_str.lower()
+
+
+def test_optimizer_config_sgd_requires_sgd_params():
+    """OptimizerConfig type=sgd requires sgd_momentum and sgd_nesterov."""
+    with pytest.raises(ValidationError) as exc_info:
+        OptimizerConfig(
+            type="sgd",
+            learning_rate=0.01,
+            weight_decay=0.0,
+            # Missing sgd_momentum and sgd_nesterov!
+        )
+    error_str = str(exc_info.value)
+    assert "sgd_momentum" in error_str or "sgd parameters required" in error_str.lower()
+
+
+def test_optimizer_config_rmsprop_requires_rmsprop_params():
+    """OptimizerConfig type=rmsprop requires rmsprop_alpha and rmsprop_eps."""
+    with pytest.raises(ValidationError) as exc_info:
+        OptimizerConfig(
+            type="rmsprop",
+            learning_rate=0.001,
+            weight_decay=0.0,
+            # Missing rmsprop_alpha and rmsprop_eps!
+        )
+    error_str = str(exc_info.value)
+    assert "rmsprop_alpha" in error_str or "rmsprop parameters required" in error_str.lower()

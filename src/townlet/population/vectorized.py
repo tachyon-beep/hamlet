@@ -97,10 +97,8 @@ class VectorizedPopulation(PopulationManager):
         self.agent_ids = agent_ids
         self.num_agents = len(agent_ids)
         self.device = device
-        self.gamma = gamma
         self.network_type = network_type
         self.is_recurrent = network_type == "recurrent"
-        self.use_double_dqn = use_double_dqn
         self.tb_logger = tb_logger
         self.brain_config = brain_config
 
@@ -112,6 +110,14 @@ class VectorizedPopulation(PopulationManager):
                     f"Got network_type='{network_type}'. "
                     f"Recurrent networks will be supported in Phase 2."
                 )
+            # Override Q-learning parameters from brain_config
+            self.gamma = brain_config.q_learning.gamma
+            self.use_double_dqn = brain_config.q_learning.use_double_dqn
+            target_update_frequency = brain_config.q_learning.target_update_frequency
+        else:
+            # Use constructor parameters when no brain_config
+            self.gamma = gamma
+            self.use_double_dqn = use_double_dqn
 
         # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
         if action_dim is None:

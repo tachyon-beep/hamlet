@@ -70,6 +70,40 @@ class OptimizerConfig(BaseModel):
     # Common parameter
     weight_decay: float = Field(ge=0.0, description="L2 weight decay (all optimizers)")
 
+    @model_validator(mode="after")
+    def validate_optimizer_params(self) -> "OptimizerConfig":
+        """Ensure optimizer-specific parameters are provided for selected optimizer type."""
+        if self.type in ("adam", "adamw"):
+            missing = []
+            if self.adam_beta1 is None:
+                missing.append("adam_beta1")
+            if self.adam_beta2 is None:
+                missing.append("adam_beta2")
+            if self.adam_eps is None:
+                missing.append("adam_eps")
+            if missing:
+                raise ValueError(f"type='{self.type}' requires {', '.join(missing)} to be specified")
+
+        elif self.type == "sgd":
+            missing = []
+            if self.sgd_momentum is None:
+                missing.append("sgd_momentum")
+            if self.sgd_nesterov is None:
+                missing.append("sgd_nesterov")
+            if missing:
+                raise ValueError(f"type='sgd' requires {', '.join(missing)} to be specified")
+
+        elif self.type == "rmsprop":
+            missing = []
+            if self.rmsprop_alpha is None:
+                missing.append("rmsprop_alpha")
+            if self.rmsprop_eps is None:
+                missing.append("rmsprop_eps")
+            if missing:
+                raise ValueError(f"type='rmsprop' requires {', '.join(missing)} to be specified")
+
+        return self
+
 
 class LossConfig(BaseModel):
     """Loss function configuration.

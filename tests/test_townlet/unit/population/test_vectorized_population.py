@@ -238,3 +238,59 @@ class TestBrainConfigIntegration:
                 network_type="recurrent",  # Should fail!
                 brain_config=simple_brain_config,
             )
+
+    def test_brain_config_overrides_q_learning_parameters(
+        self,
+        basic_env,
+        adversarial_curriculum,
+        epsilon_greedy_exploration,
+        cpu_device,
+    ):
+        """brain_config q_learning fields should override constructor parameters."""
+        # Create brain_config with specific q_learning values
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test Q-learning override",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.90,  # Different from constructor
+                target_update_frequency=250,  # Different from constructor
+                use_double_dqn=True,  # Different from constructor
+            ),
+        )
+
+        # Constructor has different values
+        population = VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            network_type="simple",
+            gamma=0.99,  # Constructor says 0.99
+            target_update_frequency=100,  # Constructor says 100
+            use_double_dqn=False,  # Constructor says False
+            brain_config=brain_config,
+        )
+
+        # brain_config should win
+        assert population.gamma == 0.90
+        assert population.target_update_frequency == 250
+        assert population.use_double_dqn is True
