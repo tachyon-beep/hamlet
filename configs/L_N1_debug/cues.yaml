@@ -30,29 +30,25 @@ simple_cues:
 # COMPOUND CUES (Multiple Conditions)
 # ============================================================================
 
-compound_cues:
-  false
+compound_cues: []
+
 # ============================================================================
 # SPECIAL CUES (Derived from Multiple Meters)
 # ============================================================================
 
-derived_cues:
-  false
+derived_cues: []
+
 # ============================================================================
 # BEHAVIORAL CUES (Based on Action Patterns)
 # ============================================================================
 
-behavioral_cues:
-  false
+behavioral_cues: []
+
 # ============================================================================
 # CUE RELIABILITY & DECEPTION
 # ============================================================================
 
-cue_reliability:
-  false
-
-noisy_cues:
-  false
-
-deception_potential:
-  false
+# Note: These are optional metadata fields - can be omitted or set to null/[]
+# cue_reliability: null
+# noisy_cues: []
+# deception_potential: []
