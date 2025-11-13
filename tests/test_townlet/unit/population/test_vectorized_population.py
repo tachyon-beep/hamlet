@@ -9,6 +9,7 @@ from townlet.agent.brain_config import (
     LossConfig,
     OptimizerConfig,
     QLearningConfig,
+    ReplayConfig,
     ScheduleConfig,
 )
 from townlet.population.vectorized import VectorizedPopulation
@@ -135,6 +136,10 @@ def simple_brain_config():
             target_update_frequency=100,
             use_double_dqn=False,
         ),
+        replay=ReplayConfig(
+            capacity=10000,
+            prioritized=False,
+        ),
     )
 
 
@@ -257,6 +262,10 @@ class TestBrainConfigIntegration:
                 target_update_frequency=250,  # Different from constructor
                 use_double_dqn=True,  # Different from constructor
             ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
+            ),
         )
 
         # Constructor has different values
@@ -315,6 +324,10 @@ class TestBrainConfigIntegration:
                 gamma=0.99,
                 target_update_frequency=100,
                 use_double_dqn=False,
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
             ),
         )
 
@@ -403,6 +416,10 @@ class TestRecurrentNetworkSupport:
                 target_update_frequency=100,
                 use_double_dqn=True,
             ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
+            ),
         )
 
         population = VectorizedPopulation(
@@ -486,6 +503,10 @@ class TestRecurrentNetworkSupport:
                 gamma=0.99,
                 target_update_frequency=100,
                 use_double_dqn=True,
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
             ),
         )
 
@@ -606,6 +627,10 @@ class TestRecurrentNetworkSupport:
                 target_update_frequency=100,
                 use_double_dqn=True,
             ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
+            ),
         )
 
         population = VectorizedPopulation(
@@ -665,6 +690,10 @@ class TestSchedulerIntegration:
                 target_update_frequency=100,
                 use_double_dqn=False,
             ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
+            ),
         )
 
         population = VectorizedPopulation(
@@ -714,6 +743,10 @@ class TestSchedulerIntegration:
                 gamma=0.99,
                 target_update_frequency=100,
                 use_double_dqn=False,
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
             ),
         )
 
@@ -769,6 +802,10 @@ class TestSchedulerIntegration:
                 gamma=0.99,
                 target_update_frequency=100,
                 use_double_dqn=False,
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
             ),
         )
 
@@ -832,6 +869,10 @@ class TestSchedulerIntegration:
                 gamma=0.99,
                 target_update_frequency=100,
                 use_double_dqn=False,
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
             ),
         )
 
@@ -934,6 +975,10 @@ class TestSchedulerIntegration:
                 gamma=0.99,
                 target_update_frequency=100,
                 use_double_dqn=False,
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
             ),
         )
 
