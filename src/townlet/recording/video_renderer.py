@@ -211,6 +211,8 @@ class EpisodeVideoRenderer:
     def _render_meters(self, ax, step_data: dict):
         """Render meter bars."""
         meters = step_data["meters"]
+        # TODO: Get meter names from episode metadata to support variable meter counts
+        # For now, assumes 8 standard meters (sufficient for all production configs)
         meter_names = ["energy", "hygiene", "satiation", "money", "health", "fitness", "mood", "social"]
 
         ax.set_xlim(0, 1)

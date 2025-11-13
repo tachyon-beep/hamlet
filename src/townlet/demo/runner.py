@@ -765,16 +765,8 @@ class DemoRunner:
                     )
 
                 # Phase 3 - Meter dynamics and affordance usage
-                meter_names = [
-                    "energy",
-                    "hygiene",
-                    "satiation",
-                    "money",
-                    "mood",
-                    "social",
-                    "health",
-                    "fitness",
-                ]
+                # Get actual meter names from config (supports variable meter counts)
+                meter_names = self.env.bars_config.meter_names
                 for idx, agent_id in enumerate(self.population.agent_ids):
                     meters_tensor = final_meters[idx]
                     if meters_tensor is not None:
@@ -831,7 +823,8 @@ class DemoRunner:
                     # Get final meters for agent 0
                     final_meter_values = {}
                     if final_meters[0] is not None:
-                        meter_names = ["energy", "hygiene", "satiation", "money", "mood", "social", "health", "fitness"]
+                        # Get actual meter names from config (supports variable meter counts)
+                        meter_names = self.env.bars_config.meter_names
                         final_meter_values = {name: final_meters[0][i].item() for i, name in enumerate(meter_names)}
 
                     # Get affordance usage for agent 0 with tick counts and completed interactions

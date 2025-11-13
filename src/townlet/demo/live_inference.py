@@ -1095,7 +1095,8 @@ class LiveInferenceServer:
         }
 
         # Build meter state
-        meter_names = ["energy", "hygiene", "satiation", "money", "health", "fitness", "mood", "social"]
+        # Get actual meter names from config (supports variable meter counts)
+        meter_names = self.env.bars_config.meter_names
         agent_meters = {"agent_0": {"meters": {name: val for name, val in zip(meter_names, meters_tuple)}}}
 
         # Build state update with substrate metadata
