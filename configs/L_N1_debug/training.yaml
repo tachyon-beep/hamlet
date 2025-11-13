@@ -28,11 +28,11 @@ environment:
   partial_observability: false  # Agent sees full grid
   vision_range: 5  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
-  enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
+  enabled_affordances: ["Bed","Job"]  # Only Bed affordance (minimal world)
   randomize_affordances: true
   energy_move_depletion: 0.005
-  energy_wait_depletion: 0.003
-  energy_interact_depletion: 0.001
+  energy_wait_depletion: 0.005
+  energy_interact_depletion: 0.005
 
 # Population configuration
 population:
@@ -69,7 +69,7 @@ training:
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
-  epsilon_decay: 0.99  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
+  epsilon_decay: 0.995  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
   epsilon_min: 0.01  # Minimum exploration rate
   allow_unfeasible_universe: true  # Minimal world intentionally violates feasibility checks
   enabled_actions:

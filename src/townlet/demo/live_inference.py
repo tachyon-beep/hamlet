@@ -691,19 +691,9 @@ class LiveInferenceServer:
             {"name": name, "count": count} for name, count in sorted(self.affordance_interactions.items(), key=lambda x: x[1], reverse=True)
         ]
 
-        # Get final meter states for death certificate
-        meter_indices = {
-            "energy": 0,
-            "hygiene": 1,
-            "satiation": 2,
-            "money": 3,
-            "health": 6,
-            "mood": 4,
-            "social": 5,
-            "fitness": 7,
-        }
+        # Get final meter states for death certificate (dynamic from config)
         final_meters = {}
-        for meter_name, idx in meter_indices.items():
+        for meter_name, idx in self.env.meter_name_to_index.items():
             final_meters[meter_name] = float(self.env.meters[0, idx].item())
 
         # Get agent age and lifetime progress for death certificate
@@ -750,21 +740,10 @@ class LiveInferenceServer:
         if len(action_masks) < 6:
             action_masks.extend([False] * (6 - len(action_masks)))
 
-        # Get meters (all 8: energy, hygiene, satiation, money, health, mood, social, fitness)
-        # Note: Backend order is [energy, hygiene, satiation, money, mood, social, health, fitness]
-        # We reorder for UI display to group the primary/secondary meters together
-        meter_indices = {
-            "energy": 0,
-            "hygiene": 1,
-            "satiation": 2,
-            "money": 3,
-            "health": 6,  # Primary (direct top-up)
-            "mood": 4,  # Primary (direct top-up)
-            "social": 5,  # Secondary (modulates mood)
-            "fitness": 7,  # Secondary (modulates health)
-        }
+        # Get meters dynamically from environment configuration
+        # Use meter_name_to_index to support configs with varying meter sets
         meters = {}
-        for meter_name, idx in meter_indices.items():
+        for meter_name, idx in self.env.meter_name_to_index.items():
             meters[meter_name] = self.env.meters[0, idx].item()
 
         # Get affordances (substrate-agnostic position handling)

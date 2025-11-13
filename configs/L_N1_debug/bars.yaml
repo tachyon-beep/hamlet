@@ -11,8 +11,16 @@ bars:
     tier: "pivotal"
     range: [0.0, 1.0]
     initial: 1.0
-    base_depletion: 0.005  # 0.5% per step
+    base_depletion: 0.01  # 1% per step
     description: "Can you move? Death if depleted. Affected by satiation (fundamental) and mood (specialized)."
+
+  - name: "money"
+    index: 1
+    tier: "resource"
+    range: [0.0, 1.0]  # $0-$100 normalized to [0.0, 1.0]
+    initial: 0.25       # Start with $25 so they run out and learn that money is important.
+    base_depletion: 0.0  # No passive decay
+    description: "Currency for purchasing affordances. No cascade effects."
 
 # Terminal conditions (death)
 terminal_conditions:

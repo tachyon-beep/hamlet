@@ -5,6 +5,12 @@ affordances:
   name: Bed
   category: energy_restoration
   interaction_type: dual
+  costs:
+  - meter: money
+    amount: 0.05
+  costs_per_tick:
+  - meter: money
+    amount: 0.01
   operating_hours:
   - 0
   - 24
@@ -14,7 +20,30 @@ affordances:
   effect_pipeline:
     per_tick:
     - meter: energy
-      amount: 0.1
+      amount: 0.075
     on_completion:
     - meter: energy
-      amount: 0.5
+      amount: 0.125
+- id: '1'
+  name: Job
+  category: income
+  interaction_type: dual
+  costs:
+  - meter: energy
+    amount: 0.05
+  costs_per_tick:
+  - meter: energy
+    amount: 0.01
+  operating_hours:
+  - 0
+  - 24
+  capabilities:
+  - type: multi_tick
+  duration_ticks: 4
+  effect_pipeline:
+    per_tick:
+    - meter: money
+      amount: 0.05625
+    on_completion:
+    - meter: money
+      amount: 0.05625

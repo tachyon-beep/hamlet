@@ -23,7 +23,7 @@ architecture:
 
 optimizer:
   type: adam
-  learning_rate: 0.00025  # Atari DQN standard
+  learning_rate: 0.003
   adam_beta1: 0.9
   adam_beta2: 0.999
   adam_eps: 1.0e-8
