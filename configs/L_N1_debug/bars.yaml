@@ -16,10 +16,10 @@ bars:
 
 # Terminal conditions (death)
 terminal_conditions:
-  - meter: "health"
+  - meter: "energy"
     operator: "<="
     value: 0.0
-    description: "Agent dies if health depletes to zero"
+    description: "Agent dies if energy depletes to zero"
 
 # Metadata
 notes:
