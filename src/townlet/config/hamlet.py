@@ -59,14 +59,10 @@ class HamletConfig(BaseModel):
     # Private attributes (not part of config, used for validation context)
     _config_dir: Path | None = PrivateAttr(default=None)
 
-    @model_validator(mode="after")
-    def validate_batch_size_vs_buffer(self) -> "HamletConfig":
-        """Ensure batch_size <= replay_buffer_capacity.
+    def _validate_batch_size_vs_buffer(self) -> None:
+        """Private method to perform batch_size vs buffer validation.
 
-        Can't sample more transitions than buffer holds.
-
-        Note: replay_buffer_capacity is managed by brain.yaml (not training.yaml).
-        This validator loads brain.yaml to access the capacity value for validation.
+        Extracted from model_validator to allow manual invocation after setting _config_dir.
         """
         # Load brain.yaml to get replay_buffer_capacity (if we have _config_dir context)
         # In normal usage via HamletConfig.load(), _config_dir is set
@@ -74,7 +70,7 @@ class HamletConfig(BaseModel):
         if self._config_dir is None:
             # Direct construction without _config_dir - skip validation
             # (Tests that directly construct HamletConfig won't have brain.yaml context)
-            return self
+            return
 
         from townlet.agent.brain_config import load_brain_config
 
@@ -82,7 +78,7 @@ class HamletConfig(BaseModel):
 
         if not brain_yaml_path.exists():
             # brain.yaml missing - will be caught by PopulationConfig/TrainingConfig validators
-            return self
+            return
 
         brain_config = load_brain_config(self._config_dir)
         replay_capacity = brain_config.replay.capacity
@@ -95,6 +91,17 @@ class HamletConfig(BaseModel):
                 f"that only holds {replay_capacity} transitions.\n\n"
                 f"Fix: Either reduce batch_size in training.yaml or increase replay.capacity in brain.yaml."
             )
+
+    @model_validator(mode="after")
+    def validate_batch_size_vs_buffer(self) -> "HamletConfig":
+        """Ensure batch_size <= replay_buffer_capacity.
+
+        Can't sample more transitions than buffer holds.
+
+        Note: replay_buffer_capacity is managed by brain.yaml (not training.yaml).
+        This validator loads brain.yaml to access the capacity value for validation.
+        """
+        self._validate_batch_size_vs_buffer()
         return self
 
     @model_validator(mode="after")
@@ -240,5 +247,5 @@ class HamletConfig(BaseModel):
         # Set private config_dir for validation context
         config._config_dir = Path(config_dir)
         # Re-run validators now that _config_dir is set
-        config.validate_batch_size_vs_buffer()
+        config._validate_batch_size_vs_buffer()
         return config

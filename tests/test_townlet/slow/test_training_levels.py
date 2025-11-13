@@ -68,6 +68,10 @@ def run_training_pipeline(
     else:
         checkpoint_interval = max(int(checkpoint_interval_value), 0)
 
+    # Load brain.yaml (Brain As Code architecture)
+    brain_config_path = config_path.parent / "brain.yaml"
+    brain_config = load_config(brain_config_path)
+
     # Initialize database
     db = DemoDatabase(db_path)
 
@@ -110,9 +114,9 @@ def run_training_pipeline(
         device=device,
         obs_dim=env.observation_dim,
         action_dim=env.action_dim,
-        learning_rate=config["population"]["learning_rate"],
-        gamma=config["population"]["gamma"],
-        replay_buffer_capacity=config["population"]["replay_buffer_capacity"],
+        learning_rate=brain_config["optimizer"]["learning_rate"],
+        gamma=brain_config["q_learning"]["gamma"],
+        replay_buffer_capacity=brain_config["replay"]["capacity"],
         network_type=config["population"]["network_type"],
     )
 
@@ -425,7 +429,7 @@ def test_all_configs_valid():
     """
     required_fields = {
         "environment": ["partial_observability"],
-        "population": ["num_agents", "learning_rate", "network_type"],
+        "population": ["num_agents", "network_type"],
         "curriculum": ["max_steps_per_episode"],
         "exploration": ["embed_dim", "initial_intrinsic_weight"],
         "training": ["device", "max_episodes"],
