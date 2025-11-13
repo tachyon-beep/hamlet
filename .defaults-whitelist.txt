@@ -129,6 +129,7 @@ src/townlet/universe/symbol_table.py:*
 src/townlet/vfs/schema.py:*
 src/townlet/universe/compiler_inputs.py:*
 src/townlet/config/capability_config.py:*
+ src/townlet/config/population.py:*
 
 # Drive As Code (DAC) - TASK-004C
 # ExtrinsicStrategyConfig: Optional fields (base, bars, bar_bonuses, variable_bonuses, etc.)
