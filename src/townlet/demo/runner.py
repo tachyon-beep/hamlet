@@ -863,11 +863,10 @@ class DemoRunner:
                             f"Loss: {training_metrics['loss']:.4f} | TD Error: {training_metrics['td_error']:.4f}"
                         )
                     if final_meter_values:
-                        logger.info(
-                            f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | "
-                            f"Health: {final_meter_values.get('health', 0):.2f} | "
-                            f"Money: ${final_meter_values.get('money', 0) * 100:.1f}"
-                        )
+                        # Build dynamic meter summary (supports variable meter counts)
+                        meter_parts = [f"{name.capitalize()}: {value:.2f}" for name, value in final_meter_values.items()]
+                        meter_summary = " | ".join(meter_parts)
+                        logger.info(f"Final Meters:   {meter_summary}")
                     logger.info(f"Affordances:    {affordance_summary}")
 
                     # Log custom action usage (REST, MEDITATE, etc.)
