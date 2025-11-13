@@ -83,6 +83,7 @@ src/townlet/population/**:*
 # Training infrastructure - will use DTOs in TASK-003
 src/townlet/training/replay_buffer.py:*
 src/townlet/training/sequential_replay_buffer.py:*
+src/townlet/training/prioritized_replay_buffer.py:*
 
 # State DTOs - some defaults are metadata (acceptable per no-defaults principle)
 src/townlet/training/state.py:*
