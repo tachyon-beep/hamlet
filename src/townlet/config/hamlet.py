@@ -12,7 +12,7 @@ This is the single entry point for loading complete training configurations.
 import logging
 from pathlib import Path
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from townlet.config.affordance import AffordanceConfig, load_affordances_config
 from townlet.config.bar import BarConfig, load_bars_config
@@ -56,20 +56,52 @@ class HamletConfig(BaseModel):
     substrate: SubstrateConfig = Field(description="Spatial substrate configuration (grid, continuous, aspatial)")
     cues: CuesConfig = Field(description="Cues configuration (cues.yaml) – required for Stage 5 cues pipeline")
 
+    # Private attributes (not part of config, used for validation context)
+    _config_dir: Path | None = PrivateAttr(default=None)
+
+    def _validate_batch_size_vs_buffer(self) -> None:
+        """Private method to perform batch_size vs buffer validation.
+
+        Extracted from model_validator to allow manual invocation after setting _config_dir.
+        """
+        # Load brain.yaml to get replay_buffer_capacity (if we have _config_dir context)
+        # In normal usage via HamletConfig.load(), _config_dir is set
+        # In direct construction (tests), _config_dir may not be set
+        if self._config_dir is None:
+            # Direct construction without _config_dir - skip validation
+            # (Tests that directly construct HamletConfig won't have brain.yaml context)
+            return
+
+        from townlet.agent.brain_config import load_brain_config
+
+        brain_yaml_path = self._config_dir / "brain.yaml"
+
+        if not brain_yaml_path.exists():
+            # brain.yaml missing - will be caught by PopulationConfig/TrainingConfig validators
+            return
+
+        brain_config = load_brain_config(self._config_dir)
+        replay_capacity = brain_config.replay.capacity
+
+        if self.training.batch_size > replay_capacity:
+            raise ValueError(
+                f"training.batch_size ({self.training.batch_size}) cannot exceed "
+                f"brain.yaml:replay.capacity ({replay_capacity}). "
+                f"Cannot sample {self.training.batch_size} transitions from buffer "
+                f"that only holds {replay_capacity} transitions.\n\n"
+                f"Fix: Either reduce batch_size in training.yaml or increase replay.capacity in brain.yaml."
+            )
+
     @model_validator(mode="after")
     def validate_batch_size_vs_buffer(self) -> "HamletConfig":
         """Ensure batch_size <= replay_buffer_capacity.
 
         Can't sample more transitions than buffer holds.
+
+        Note: replay_buffer_capacity is managed by brain.yaml (not training.yaml).
+        This validator loads brain.yaml to access the capacity value for validation.
         """
-        if self.training.batch_size > self.population.replay_buffer_capacity:
-            raise ValueError(
-                f"training.batch_size ({self.training.batch_size}) cannot exceed "
-                f"population.replay_buffer_capacity ({self.population.replay_buffer_capacity}). "
-                f"Cannot sample {self.training.batch_size} transitions from buffer "
-                f"that only holds {self.population.replay_buffer_capacity} transitions.\n\n"
-                f"Fix: Either reduce batch_size or increase replay_buffer_capacity."
-            )
+        self._validate_batch_size_vs_buffer()
         return self
 
     @model_validator(mode="after")
@@ -200,7 +232,7 @@ class HamletConfig(BaseModel):
         affordances = tuple(load_affordances_config(config_dir))
         substrate = load_substrate_config(config_dir / "substrate.yaml")
 
-        return cls(
+        config = cls(
             training=training,
             environment=environment,
             population=population,
@@ -212,3 +244,8 @@ class HamletConfig(BaseModel):
             substrate=substrate,
             cues=load_cues_config(config_dir / "cues.yaml"),
         )
+        # Set private config_dir for validation context
+        config._config_dir = Path(config_dir)
+        # Re-run validators now that _config_dir is set
+        config._validate_batch_size_vs_buffer()
+        return config

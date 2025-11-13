@@ -83,6 +83,7 @@ src/townlet/population/**:*
 # Training infrastructure - will use DTOs in TASK-003
 src/townlet/training/replay_buffer.py:*
 src/townlet/training/sequential_replay_buffer.py:*
+src/townlet/training/prioritized_replay_buffer.py:*
 
 # State DTOs - some defaults are metadata (acceptable per no-defaults principle)
 src/townlet/training/state.py:*
@@ -128,6 +129,7 @@ src/townlet/universe/symbol_table.py:*
 src/townlet/vfs/schema.py:*
 src/townlet/universe/compiler_inputs.py:*
 src/townlet/config/capability_config.py:*
+ src/townlet/config/population.py:*
 
 # Drive As Code (DAC) - TASK-004C
 # ExtrinsicStrategyConfig: Optional fields (base, bars, bar_bonuses, variable_bonuses, etc.)
@@ -140,6 +142,17 @@ src/townlet/config/capability_config.py:*
 #   - dict.get() for kwargs (shaping bonuses receive context as needed)
 src/townlet/config/drive_as_code.py:*
 src/townlet/environment/dac_engine.py:*
+
+# Brain As Code (BAC) - TASK-005 Phase 1
+# OptimizerConfig: Optimizer-specific fields default to None (each optimizer uses different subset)
+#   - Adam/AdamW: adam_beta1, adam_beta2, adam_eps
+#   - SGD: sgd_momentum, sgd_nesterov
+#   - RMSprop: rmsprop_alpha, rmsprop_eps
+#   - Pydantic validator ensures required fields are present for selected optimizer type
+# ArchitectureConfig: feedforward/recurrent/hybrid fields default to None (only relevant config must be present)
+# FeedforwardConfig: layer_norm defaults to False
+# TODO(TASK-005 Phase 2): Revisit this whitelist when brain.yaml becomes required for all config packs
+src/townlet/agent/brain_config.py:*
 
 # ============================================================================
 # EXCEPTIONAL LINE-BASED WHITELISTS

@@ -9,11 +9,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 
+from townlet.agent.brain_config import BrainConfig
+from townlet.agent.loss_factory import LossFactory
+from townlet.agent.network_factory import NetworkFactory
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork, StructuredQNetwork
+from townlet.agent.optimizer_factory import OptimizerFactory
 from townlet.curriculum.base import CurriculumManager
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
@@ -60,6 +65,9 @@ class VectorizedPopulation(PopulationManager):
         sequence_length: int = 8,
         max_grad_norm: float = 10.0,
         use_double_dqn: bool = False,
+        brain_config: BrainConfig | None = None,
+        max_episodes: int | None = None,
+        max_steps_per_episode: int | None = None,
     ):
         """
         Initialize vectorized population.
@@ -84,6 +92,9 @@ class VectorizedPopulation(PopulationManager):
             sequence_length: Length of sequences for LSTM training (default: 8, recurrent only)
             max_grad_norm: Gradient clipping threshold (default: 10.0)
             use_double_dqn: Use Double DQN algorithm (default: False for vanilla DQN)
+            brain_config: Optional BrainConfig for architecture, optimizer, loss (TASK-005 Phase 1)
+            max_episodes: Maximum training episodes (for PER beta annealing)
+            max_steps_per_episode: Maximum steps per episode (for PER beta annealing)
         """
         self.env = env
         self.curriculum = curriculum
@@ -91,11 +102,22 @@ class VectorizedPopulation(PopulationManager):
         self.agent_ids = agent_ids
         self.num_agents = len(agent_ids)
         self.device = device
-        self.gamma = gamma
         self.network_type = network_type
-        self.is_recurrent = network_type == "recurrent"
-        self.use_double_dqn = use_double_dqn
         self.tb_logger = tb_logger
+        self.brain_config = brain_config
+        self.max_episodes = max_episodes
+        self.max_steps_per_episode = max_steps_per_episode
+
+        # TASK-005 Phase 2: Set Q-learning parameters from brain_config or constructor
+        if brain_config is not None:
+            # Override Q-learning parameters from brain_config
+            self.gamma = brain_config.q_learning.gamma
+            self.use_double_dqn = brain_config.q_learning.use_double_dqn
+            target_update_frequency = brain_config.q_learning.target_update_frequency
+        else:
+            # Use constructor parameters when no brain_config
+            self.gamma = gamma
+            self.use_double_dqn = use_double_dqn
 
         # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
         if action_dim is None:
@@ -118,7 +140,37 @@ class VectorizedPopulation(PopulationManager):
 
         # Q-network (shared across all agents for now)
         self.q_network: nn.Module
-        if network_type == "recurrent":
+        if brain_config is not None:
+            # TASK-005 Phase 2: Build network from brain_config (feedforward or recurrent)
+            if brain_config.architecture.type == "feedforward":
+                assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
+                self.q_network = NetworkFactory.build_feedforward(
+                    config=brain_config.architecture.feedforward,
+                    obs_dim=obs_dim,
+                    action_dim=action_dim,
+                ).to(device)
+            elif brain_config.architecture.type == "recurrent":
+                assert brain_config.architecture.recurrent is not None, "recurrent config must be present"
+                self.q_network = NetworkFactory.build_recurrent(
+                    config=brain_config.architecture.recurrent,
+                    action_dim=action_dim,
+                    window_size=vision_window_size,
+                    position_dim=env.substrate.position_dim,
+                    num_meters=env.meter_count,
+                    num_affordance_types=env.num_affordance_types,
+                ).to(device)
+            elif brain_config.architecture.type == "dueling":
+                assert brain_config.architecture.dueling is not None, "dueling config must be present"
+                self.q_network = NetworkFactory.build_dueling(
+                    config=brain_config.architecture.dueling,
+                    obs_dim=obs_dim,
+                    action_dim=action_dim,
+                ).to(device)
+            else:
+                raise ValueError(
+                    f"Unsupported architecture type: {brain_config.architecture.type}. Supported: feedforward, recurrent, dueling"
+                )
+        elif network_type == "recurrent":
             self.q_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
@@ -139,9 +191,53 @@ class VectorizedPopulation(PopulationManager):
         else:
             self.q_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(device)  # TODO(BRAIN_AS_CODE): Should come from config
 
+        # Set is_recurrent flag based on brain_config or network_type
+        if brain_config is not None:
+            # When brain_config present, use brain_config.architecture.type
+            self.is_recurrent = brain_config.architecture.type == "recurrent"
+        else:
+            # When no brain_config, use network_type parameter
+            self.is_recurrent = network_type == "recurrent"
+
+        # Set is_dueling flag for later reference (TASK-005 Phase 3)
+        if brain_config is not None:
+            self.is_dueling = brain_config.architecture.type == "dueling"
+        else:
+            self.is_dueling = False
+
         # Target network (stabilises training for both feed-forward and recurrent agents)
         self.target_network: nn.Module
-        if self.is_recurrent:
+        if brain_config is not None:
+            # TASK-005 Phase 2: Build target network from brain_config (feedforward or recurrent)
+            if brain_config.architecture.type == "feedforward":
+                assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
+                self.target_network = NetworkFactory.build_feedforward(
+                    config=brain_config.architecture.feedforward,
+                    obs_dim=obs_dim,
+                    action_dim=action_dim,
+                ).to(device)
+            elif brain_config.architecture.type == "recurrent":
+                assert brain_config.architecture.recurrent is not None, "recurrent config must be present"
+                self.target_network = NetworkFactory.build_recurrent(
+                    config=brain_config.architecture.recurrent,
+                    action_dim=action_dim,
+                    window_size=vision_window_size,
+                    position_dim=env.substrate.position_dim,
+                    num_meters=env.meter_count,
+                    num_affordance_types=env.num_affordance_types,
+                ).to(device)
+            elif brain_config.architecture.type == "dueling":
+                assert brain_config.architecture.dueling is not None, "dueling config must be present"
+                self.target_network = NetworkFactory.build_dueling(
+                    config=brain_config.architecture.dueling,
+                    obs_dim=obs_dim,
+                    action_dim=action_dim,
+                ).to(device)
+            else:
+                raise ValueError(
+                    f"Unsupported architecture type: {brain_config.architecture.type}. Supported: feedforward, recurrent, dueling"
+                )
+        elif self.is_recurrent:
             self.target_network = RecurrentSpatialQNetwork(
                 action_dim=action_dim,
                 window_size=vision_window_size,
@@ -170,17 +266,74 @@ class VectorizedPopulation(PopulationManager):
         self.target_update_frequency = target_update_frequency
         self.training_step_counter = 0
 
-        self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
+        # Optimizer and scheduler (from config or hardcoded)
+        if brain_config is not None:
+            # TASK-005 Phase 2: Build optimizer and scheduler from brain_config using OptimizerFactory
+            self.optimizer, self.scheduler = OptimizerFactory.build(
+                config=brain_config.optimizer,
+                parameters=self.q_network.parameters(),
+            )
+        else:
+            self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
+            self.scheduler = None  # No scheduler when brain_config not used
 
-        # Replay buffer (dual system: sequential for recurrent, standard for feedforward)
-        self.replay_buffer: ReplayBuffer | SequentialReplayBuffer
+        # Loss function (from config or hardcoded)
+        # Note: Currently not used in train_batch() but stored for future use
+        if brain_config is not None:
+            # TASK-005 Phase 1: Build loss function from brain_config using LossFactory
+            self.loss_fn = LossFactory.build(config=brain_config.loss)
+            # Store loss config for PER path (needs functional API with reduction='none')
+            self.loss_type = brain_config.loss.type
+            self.loss_delta = brain_config.loss.huber_delta if brain_config.loss.type == "huber" else 1.0
+        else:
+            self.loss_fn = nn.MSELoss()  # Default to MSE (matches current hardcoded behavior)
+            self.loss_type = "mse"
+            self.loss_delta = 1.0
+
+        # Replay buffer (dual system: sequential for recurrent, standard/PER for feedforward)
+        # TASK-005 Phase 3: Support PrioritizedReplayBuffer
+        from townlet.training.prioritized_replay_buffer import PrioritizedReplayBuffer
+
+        self.replay_buffer: ReplayBuffer | SequentialReplayBuffer | PrioritizedReplayBuffer
         self.current_episodes: list[EpisodeContainer] = []
+
+        # Determine if PER is enabled from brain_config
+        self.use_per = False
+        if brain_config is not None and hasattr(brain_config, "replay"):
+            self.use_per = brain_config.replay.prioritized
+
+        # Determine replay capacity: use brain_config.replay.capacity if available, else legacy parameter
+        effective_replay_capacity = (
+            brain_config.replay.capacity if (brain_config is not None and hasattr(brain_config, "replay")) else replay_buffer_capacity
+        )
+
         if self.is_recurrent:
-            self.replay_buffer = SequentialReplayBuffer(capacity=replay_buffer_capacity, device=device)
+            # Recurrent networks use sequential buffer (PER not yet supported for sequences)
+            self.replay_buffer = SequentialReplayBuffer(capacity=effective_replay_capacity, device=device)
             # Episode tracking for sequential buffer
             self.current_episodes = [self._new_episode_container() for _ in range(self.num_agents)]
+
+            # TASK-005 Phase 3: Raise NotImplementedError for PER + recurrent
+            if self.use_per:
+                raise NotImplementedError(
+                    "Prioritized replay not yet supported for recurrent networks. "
+                    "Use prioritized=false in brain.yaml for recurrent architectures."
+                )
         else:
-            self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity, device=device)
+            # Feedforward networks support both standard and prioritized replay
+            if self.use_per:
+                # TASK-005 Phase 3: Instantiate PrioritizedReplayBuffer
+                # use_per is True only if brain_config is not None (set at line 290-291)
+                assert brain_config is not None, "use_per requires brain_config"
+                self.replay_buffer = PrioritizedReplayBuffer(
+                    capacity=effective_replay_capacity,
+                    alpha=brain_config.replay.priority_alpha,
+                    beta=brain_config.replay.priority_beta,
+                    beta_annealing=brain_config.replay.priority_beta_annealing,
+                    device=device,
+                )
+            else:
+                self.replay_buffer = ReplayBuffer(capacity=effective_replay_capacity, device=device)
 
         # Training hyperparameters (configurable)
         self.total_steps = 0
@@ -520,8 +673,9 @@ class VectorizedPopulation(PopulationManager):
                 self.current_episodes[i]["dones"].append(dones[i].cpu())
         else:
             # For feedforward networks: store individual transitions
-            standard_buffer = cast(ReplayBuffer, self.replay_buffer)
-            standard_buffer.push(
+            # Both ReplayBuffer and PrioritizedReplayBuffer share same push() signature
+            # SequentialReplayBuffer is only used for recurrent (not in this branch)
+            self.replay_buffer.push(  # type: ignore[union-attr]
                 observations=self.current_obs,
                 actions=actions,
                 rewards_extrinsic=rewards,  # Actually total rewards from DAC
@@ -546,7 +700,8 @@ class VectorizedPopulation(PopulationManager):
         # For recurrent: need enough episodes (16+) for sequence sampling
         # For feedforward: need enough transitions (>= batch_size) for batch sampling
         min_buffer_size = 16 if self.is_recurrent else self.batch_size
-        if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:
+        # All buffer types implement __len__, but mypy doesn't infer it for unions
+        if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:  # type: ignore[arg-type]
             # Note: intrinsic_weight is 1.0 because DAC already composed rewards.
             # The replay buffer stores total rewards (not separate extrinsic/intrinsic).
             intrinsic_weight = 1.0
@@ -637,7 +792,19 @@ class VectorizedPopulation(PopulationManager):
                 q_target_all = torch.stack(q_target_list, dim=1)  # [batch, seq_len]
 
                 # P2.2: Apply mask to prevent gradients from post-terminal garbage
-                losses = F.mse_loss(q_pred_all, q_target_all, reduction="none")  # [batch, seq_len]
+                # TASK-005 Phase 1: Use configured loss type (element-wise for masking)
+                if self.brain_config is not None and self.brain_config.loss.type == "huber":
+                    losses = F.huber_loss(
+                        q_pred_all,
+                        q_target_all,
+                        reduction="none",
+                        delta=self.brain_config.loss.huber_delta,
+                    )
+                elif self.brain_config is not None and self.brain_config.loss.type == "smooth_l1":
+                    losses = F.smooth_l1_loss(q_pred_all, q_target_all, reduction="none")
+                else:
+                    # MSE or legacy (no brain_config)
+                    losses = F.mse_loss(q_pred_all, q_target_all, reduction="none")
                 mask = batch["mask"].float()  # [batch, seq_len] - True for valid timesteps
                 masked_loss = (losses * mask).sum() / mask.sum().clamp_min(1)
                 loss: torch.Tensor = masked_loss
@@ -659,6 +826,10 @@ class VectorizedPopulation(PopulationManager):
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
 
+                # Step scheduler if present (TASK-005 Phase 2)
+                if self.scheduler is not None:
+                    self.scheduler.step()
+
                 # Log network statistics to TensorBoard (every 100 training steps)
                 if self.tb_logger is not None and self.total_steps % 100 == 0:
                     for name, param in self.q_network.named_parameters():
@@ -675,9 +846,19 @@ class VectorizedPopulation(PopulationManager):
                 recurrent_network = cast(RecurrentSpatialQNetwork, self.q_network)
                 recurrent_network.reset_hidden_state(batch_size=self.num_agents, device=self.device)
             else:
-                # Standard feedforward DQN training
-                standard_buffer = cast(ReplayBuffer, self.replay_buffer)
-                batch = standard_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
+                # Standard feedforward DQN training (with optional PER)
+                # TASK-005 Phase 3: Support both standard and prioritized replay
+                if self.use_per:
+                    from townlet.training.prioritized_replay_buffer import PrioritizedReplayBuffer
+
+                    per_buffer = cast(PrioritizedReplayBuffer, self.replay_buffer)
+                    batch = per_buffer.sample(batch_size=self.batch_size)
+                    weights = batch["weights"]  # Importance sampling weights
+                    indices = cast(np.ndarray, batch["indices"])  # For priority updates
+                else:
+                    standard_buffer = cast(ReplayBuffer, self.replay_buffer)
+                    batch = standard_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
+                    weights = torch.ones(self.batch_size, device=self.device)  # Uniform weights
 
                 # Compute Q-predictions from online network
                 q_pred = self.q_network(batch["observations"]).gather(1, batch["actions"].unsqueeze(1)).squeeze()
@@ -694,7 +875,25 @@ class VectorizedPopulation(PopulationManager):
 
                     q_target = batch["rewards"] + self.gamma * q_next * (~batch["dones"]).float()
 
-                loss = F.mse_loss(q_pred, q_target)
+                # TASK-005 Phase 3: Compute TD errors for PER priority updates
+                td_errors = (q_pred - q_target).abs()
+
+                # TASK-005 Phase 3: Weighted loss for importance sampling correction
+                if self.use_per:
+                    # PER: Apply importance sampling weights to loss
+                    # Use functional API with reduction='none' to get per-sample losses
+                    if self.loss_type == "mse":
+                        per_sample_loss = F.mse_loss(q_pred, q_target, reduction="none")
+                    elif self.loss_type == "huber":
+                        per_sample_loss = F.huber_loss(q_pred, q_target, reduction="none", delta=self.loss_delta)
+                    elif self.loss_type == "smooth_l1":
+                        per_sample_loss = F.smooth_l1_loss(q_pred, q_target, reduction="none")
+                    else:
+                        raise ValueError(f"Unsupported loss type for PER: {self.loss_type}")
+                    loss = (weights * per_sample_loss).mean()
+                else:
+                    # Standard: Use configured loss function
+                    loss = self.loss_fn(q_pred, q_target)
 
                 # Store training metrics
                 with torch.no_grad():
@@ -707,6 +906,21 @@ class VectorizedPopulation(PopulationManager):
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
+
+                # Step scheduler if present (TASK-005 Phase 2)
+                if self.scheduler is not None:
+                    self.scheduler.step()
+
+                # TASK-005 Phase 3: Update priorities in PER buffer
+                if self.use_per:
+                    per_buffer.update_priorities(indices, td_errors)
+
+                    # Anneal beta toward 1.0 over training
+                    if per_buffer.beta_annealing:
+                        # Estimate total steps from constructor params (if available)
+                        if self.max_episodes is not None and self.max_steps_per_episode is not None:
+                            total_steps = self.max_episodes * self.max_steps_per_episode
+                            per_buffer.anneal_beta(total_steps, self.total_steps)
 
                 # Periodically sync target network for stability
                 self.training_step_counter += 1
@@ -836,6 +1050,7 @@ class VectorizedPopulation(PopulationManager):
             "version": 2,  # Checkpoint format version
             "q_network": self.q_network.state_dict(),
             "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict() if self.scheduler is not None else None,
             "total_steps": self.total_steps,
             "exploration_state": self.exploration.checkpoint_state(),
         }
@@ -860,7 +1075,8 @@ class VectorizedPopulation(PopulationManager):
             checkpoint["training_step_counter"] = 0
 
         # Replay buffer
-        checkpoint["replay_buffer"] = self.replay_buffer.serialize()
+        # All buffer types implement serialize(), but mypy doesn't infer it for unions
+        checkpoint["replay_buffer"] = self.replay_buffer.serialize()  # type: ignore[union-attr]
 
         return checkpoint
 
@@ -914,6 +1130,11 @@ class VectorizedPopulation(PopulationManager):
         # Restore optimizer
         self.optimizer.load_state_dict(checkpoint["optimizer"])
 
+        # Restore scheduler state (if exists)
+        if "scheduler" in checkpoint and checkpoint["scheduler"] is not None:
+            if self.scheduler is not None:
+                self.scheduler.load_state_dict(checkpoint["scheduler"])
+
         # Restore training counters
         self.total_steps = checkpoint.get("total_steps", 0)
 
@@ -925,7 +1146,8 @@ class VectorizedPopulation(PopulationManager):
 
         # Restore replay buffer
         if "replay_buffer" in checkpoint:
-            self.replay_buffer.load_from_serialized(checkpoint["replay_buffer"])
+            # All buffer types implement load_from_serialized(), but mypy doesn't infer it for unions
+            self.replay_buffer.load_from_serialized(checkpoint["replay_buffer"])  # type: ignore[union-attr]
 
         # Restore exploration state
         if "exploration_state" in checkpoint:

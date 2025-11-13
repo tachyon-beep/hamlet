@@ -28,18 +28,15 @@ environment:
   partial_observability: false  # Agent sees full grid
   vision_range: 5  # Full vision (not used when partial_observability=false)
   enable_temporal_mechanics: false  # No time-of-day complexity
-  enabled_affordances: ["Bed"]  # Only Bed affordance (minimal world)
+  enabled_affordances: ["Bed","Job"]  # Only Bed affordance (minimal world)
   randomize_affordances: true
   energy_move_depletion: 0.005
-  energy_wait_depletion: 0.003
-  energy_interact_depletion: 0.0029
+  energy_wait_depletion: 0.005
+  energy_interact_depletion: 0.005
 
 # Population configuration
 population:
   num_agents: 1  # Single agent
-  learning_rate: 0.001  # Higher learning rate for faster learning
-  gamma: 0.95  # Slightly lower discount factor (shorter time horizon)
-  replay_buffer_capacity: 50000  # Smaller buffer for minimal world
   network_type: simple  # Standard MLP Q-Network
   mask_unused_obs: false  # Don't mask observations (standard behavior)
 
@@ -66,16 +63,13 @@ training:
 
   # Q-learning hyperparameters
   train_frequency: 4  # Train Q-network every N steps
-  target_update_frequency: 100  # Update target network every N training steps
   batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
   sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
   max_grad_norm: 10.0  # Gradient clipping threshold
-  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
-
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate
-  epsilon_decay: 0.99  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
+  epsilon_decay: 0.995  # Decay per episode (reaches ε=0.37 at ep 100, ε=0.1 at ep 229)
   epsilon_min: 0.01  # Minimum exploration rate
   allow_unfeasible_universe: true  # Minimal world intentionally violates feasibility checks
   enabled_actions:

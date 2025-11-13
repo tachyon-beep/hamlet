@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 import yaml
 
+from townlet.agent.brain_config import BrainConfig, compute_brain_hash, load_brain_config
 from townlet.config import HamletConfig
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.database import DemoDatabase
@@ -117,6 +118,10 @@ class DemoRunner:
         self.curriculum = None
         self.exploration = None
         self.recorder = None  # Episode recorder (initialized if recording enabled)
+
+        # TASK-005 Phase 1: Brain As Code configuration (loaded in run() if brain.yaml exists)
+        self.brain_config: BrainConfig | None = None
+        self.brain_hash: str | None = None
 
         # Shutdown flag
         self.should_shutdown = False
@@ -275,6 +280,10 @@ class DemoRunner:
         checkpoint["training_config"] = self.config
         checkpoint["config_dir"] = str(self.config_dir)
 
+        # TASK-005 Phase 1: Add brain_hash for checkpoint provenance
+        if self.brain_hash is not None:
+            checkpoint["brain_hash"] = self.brain_hash
+
         if universe is None:
             universe = self.compiled_universe
         if universe is not None:
@@ -425,7 +434,19 @@ class DemoRunner:
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
 
-        # Create population with correct API
+        # Load brain.yaml (REQUIRED for all config packs)
+        brain_yaml_path = self.config_dir / "brain.yaml"
+        logger.info(f"Loading brain configuration from {brain_yaml_path}")
+        brain_config = load_brain_config(self.config_dir)
+        brain_hash = compute_brain_hash(brain_config)
+        logger.info(f"Brain config loaded: {brain_config.description}")
+        logger.info(f"Brain hash: {brain_hash[:16]}... (SHA256)")
+
+        # Store brain_config and brain_hash for checkpoint provenance
+        self.brain_config = brain_config
+        self.brain_hash = brain_hash
+
+        # Create population (brain_config provides network/optimizer/Q-learning parameters)
         self.population = VectorizedPopulation(
             env=self.env,
             curriculum=self.curriculum,
@@ -434,18 +455,21 @@ class DemoRunner:
             device=device,
             obs_dim=obs_dim,
             action_dim=action_dim,
-            learning_rate=learning_rate,
-            gamma=gamma,
-            replay_buffer_capacity=replay_buffer_capacity,
+            learning_rate=learning_rate,  # None (managed by brain.yaml)
+            gamma=gamma,  # None (managed by brain.yaml)
+            replay_buffer_capacity=replay_buffer_capacity,  # None (managed by brain.yaml)
             network_type=network_type,
             vision_window_size=vision_window_size,
             tb_logger=self.tb_logger,
             train_frequency=train_frequency,
-            target_update_frequency=target_update_frequency,
+            target_update_frequency=target_update_frequency,  # None (managed by brain.yaml)
             batch_size=batch_size,
             sequence_length=sequence_length,
             max_grad_norm=max_grad_norm,
-            use_double_dqn=use_double_dqn,
+            use_double_dqn=use_double_dqn,  # None (managed by brain.yaml)
+            brain_config=brain_config,
+            max_episodes=self.max_episodes,  # For PER beta annealing
+            max_steps_per_episode=self.hamlet_config.curriculum.max_steps_per_episode,  # For PER beta annealing
         )
 
         self.curriculum.initialize_population(num_agents)
@@ -741,16 +765,8 @@ class DemoRunner:
                     )
 
                 # Phase 3 - Meter dynamics and affordance usage
-                meter_names = [
-                    "energy",
-                    "hygiene",
-                    "satiation",
-                    "money",
-                    "mood",
-                    "social",
-                    "health",
-                    "fitness",
-                ]
+                # Get actual meter names from config (supports variable meter counts)
+                meter_names = self.env.bars_config.meter_names
                 for idx, agent_id in enumerate(self.population.agent_ids):
                     meters_tensor = final_meters[idx]
                     if meters_tensor is not None:
@@ -807,7 +823,8 @@ class DemoRunner:
                     # Get final meters for agent 0
                     final_meter_values = {}
                     if final_meters[0] is not None:
-                        meter_names = ["energy", "hygiene", "satiation", "money", "mood", "social", "health", "fitness"]
+                        # Get actual meter names from config (supports variable meter counts)
+                        meter_names = self.env.bars_config.meter_names
                         final_meter_values = {name: final_meters[0][i].item() for i, name in enumerate(meter_names)}
 
                     # Get affordance usage for agent 0 with tick counts and completed interactions
@@ -846,11 +863,10 @@ class DemoRunner:
                             f"Loss: {training_metrics['loss']:.4f} | TD Error: {training_metrics['td_error']:.4f}"
                         )
                     if final_meter_values:
-                        logger.info(
-                            f"Final Meters:   Energy: {final_meter_values.get('energy', 0):.2f} | "
-                            f"Health: {final_meter_values.get('health', 0):.2f} | "
-                            f"Money: ${final_meter_values.get('money', 0) * 100:.1f}"
-                        )
+                        # Build dynamic meter summary (supports variable meter counts)
+                        meter_parts = [f"{name.capitalize()}: {value:.2f}" for name, value in final_meter_values.items()]
+                        meter_summary = " | ".join(meter_parts)
+                        logger.info(f"Final Meters:   {meter_summary}")
                     logger.info(f"Affordances:    {affordance_summary}")
 
                     # Log custom action usage (REST, MEDITATE, etc.)

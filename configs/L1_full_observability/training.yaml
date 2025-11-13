@@ -32,9 +32,6 @@ environment:
 # Population configuration
 population:
   num_agents: 1  # Single agent for now
-  learning_rate: 0.00025  # Standard Atari DQN learning rate
-  gamma: 0.99
-  replay_buffer_capacity: 50000  # 50k capacity for better experience diversity (166-500 episodes)
   network_type: simple  # Standard MLP Q-Network
   mask_unused_obs: false  # Don't mask observations (standard behavior)
 
@@ -61,11 +58,9 @@ training:
 
   # Q-learning hyperparameters
   train_frequency: 4  # Train Q-network every N steps
-  target_update_frequency: 100  # Update target network every N training steps
   batch_size: 64  # Batch size for experience replay (feedforward: 64, recurrent: 16)
   sequence_length: 8  # Length of sequences for LSTM training (recurrent only)
   max_grad_norm: 10.0  # Gradient clipping threshold
-  use_double_dqn: false  # Vanilla DQN (for baseline comparison)
 
   # Epsilon-greedy exploration
   epsilon_start: 1.0  # Initial exploration rate

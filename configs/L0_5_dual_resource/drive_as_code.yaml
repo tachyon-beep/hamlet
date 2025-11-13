@@ -34,12 +34,7 @@ drive_as_code:
       - bar: health
         center: 0.5
         scale: 0.5
-      - bar: satiation
-        center: 0.5
-        scale: 0.5
-      - bar: hygiene
-        center: 0.5
-        scale: 0.5
+
     variable_bonuses: []
 
   intrinsic:

@@ -97,6 +97,9 @@ def load_bars_config(config_dir: Path) -> list[BarConfig]:
     """
     try:
         data = load_yaml_section(config_dir, "bars.yaml", "bars")
+        # Handle disabled bars (bars: [] or bars: null)
+        if data is None:
+            return []
         return [BarConfig(**bar_data) for bar_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "bars.yaml")) from e

@@ -102,14 +102,36 @@ class TestPopulationConfigLoading:
 
     def test_load_from_yaml_simple_network(self, tmp_path):
         """Load simple network config."""
+        # Create brain.yaml (required for all config packs)
+        brain_file = tmp_path / "brain.yaml"
+        brain_file.write_text(
+            """
+version: "1.0"
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
+replay:
+  capacity: 10000
+  prioritized: false
+"""
+        )
+
         config_file = tmp_path / "training.yaml"
         config_file.write_text(
             """
 population:
   num_agents: 1
-  learning_rate: 0.00025
-  gamma: 0.99
-  replay_buffer_capacity: 10000
   network_type: simple
   mask_unused_obs: false
 """
@@ -118,17 +140,47 @@ population:
         config = load_population_config(tmp_path)
         assert config.num_agents == 1
         assert config.network_type == "simple"
+        # Brain-managed fields should be None in PopulationConfig
+        assert config.learning_rate is None
+        assert config.gamma is None
+        assert config.replay_buffer_capacity is None
 
     def test_load_from_yaml_recurrent_network(self, tmp_path):
         """Load recurrent network config."""
+        # Create brain.yaml (required for all config packs)
+        brain_file = tmp_path / "brain.yaml"
+        brain_file.write_text(
+            """
+version: "1.0"
+architecture:
+  type: recurrent
+  recurrent:
+    vision_dims: [128]
+    position_dims: [32]
+    meter_dims: [32]
+    lstm_hidden: 256
+    q_head_dims: [128]
+    activation: relu
+optimizer:
+  type: adam
+  learning_rate: 0.0001
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
+replay:
+  capacity: 10000
+  prioritized: false
+"""
+        )
+
         config_file = tmp_path / "training.yaml"
         config_file.write_text(
             """
 population:
   num_agents: 1
-  learning_rate: 0.0001
-  gamma: 0.99
-  replay_buffer_capacity: 10000
   network_type: recurrent
   mask_unused_obs: false
 """
@@ -136,4 +188,7 @@ population:
 
         config = load_population_config(tmp_path)
         assert config.network_type == "recurrent"
-        assert config.learning_rate == 0.0001
+        # Brain-managed fields should be None in PopulationConfig
+        assert config.learning_rate is None
+        assert config.gamma is None
+        assert config.replay_buffer_capacity is None

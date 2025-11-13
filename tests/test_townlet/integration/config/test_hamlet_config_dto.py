@@ -17,7 +17,7 @@ import yaml
 # Add src to path for imports (integration tests may run standalone)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / "src"))
 
-from tests.test_townlet.helpers.config_builder import mutate_training_yaml
+from tests.test_townlet.helpers.config_builder import mutate_brain_yaml, mutate_training_yaml
 from tests.test_townlet.unit.config.fixtures import (
     PRODUCTION_CONFIG_PACKS,
     VALID_CURRICULUM_PARAMS,
@@ -135,11 +135,17 @@ class TestHamletConfigCrossValidation:
         config_dir = config_pack_factory()
         _apply_valid_sections(config_dir)
 
-        def mutator(data: dict) -> None:
+        # Set batch_size in training.yaml
+        def training_mutator(data: dict) -> None:
             data["training"]["batch_size"] = 10000
-            data["population"]["replay_buffer_capacity"] = 1000
 
-        mutate_training_yaml(config_dir, mutator)
+        mutate_training_yaml(config_dir, training_mutator)
+
+        # Set replay_buffer_capacity in brain.yaml (managed by brain.yaml now)
+        def brain_mutator(data: dict) -> None:
+            data["replay"]["capacity"] = 1000
+
+        mutate_brain_yaml(config_dir, brain_mutator)
 
         with pytest.raises(ValueError) as exc_info:
             HamletConfig.load(config_dir)
@@ -150,17 +156,28 @@ class TestHamletConfigCrossValidation:
 
     def test_batch_size_equal_to_buffer_capacity_allowed(self, config_pack_factory):
         """batch_size == replay_buffer_capacity is allowed (edge case)."""
+
+        from townlet.agent.brain_config import load_brain_config
+
         config_dir = config_pack_factory()
         _apply_valid_sections(config_dir)
 
-        def mutator(data: dict) -> None:
+        # Set batch_size in training.yaml
+        def training_mutator(data: dict) -> None:
             data["training"]["batch_size"] = 5000
-            data["population"]["replay_buffer_capacity"] = 5000
 
-        mutate_training_yaml(config_dir, mutator)
+        mutate_training_yaml(config_dir, training_mutator)
+
+        # Set replay_buffer_capacity in brain.yaml (managed by brain.yaml now)
+        def brain_mutator(data: dict) -> None:
+            data["replay"]["capacity"] = 5000
+
+        mutate_brain_yaml(config_dir, brain_mutator)
 
         config = HamletConfig.load(config_dir)
-        assert config.training.batch_size == config.population.replay_buffer_capacity
+        # replay_buffer_capacity is now managed by brain.yaml, not training.yaml
+        brain_config = load_brain_config(config_dir)
+        assert config.training.batch_size == brain_config.replay.capacity
 
 
 class TestHamletConfigProductionPacks:

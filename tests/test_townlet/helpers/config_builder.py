@@ -19,6 +19,7 @@ SUPPORT_FILES = [
     "substrate.yaml",
     "variables_reference.yaml",
     "drive_as_code.yaml",
+    "brain.yaml",  # REQUIRED for all config packs
 ]
 TEST_CONFIG_SRC = CONFIGS_DIR / "test"
 
@@ -36,11 +37,9 @@ BASE_CONFIG = {
     },
     "population": {
         "num_agents": 1,
-        "learning_rate": 0.00025,
-        "gamma": 0.99,
-        "replay_buffer_capacity": 1000,
         "network_type": "simple",
         "mask_unused_obs": False,
+        # learning_rate, gamma, replay_buffer_capacity managed by brain.yaml
     },
     "curriculum": {
         "max_steps_per_episode": 50,
@@ -60,15 +59,14 @@ BASE_CONFIG = {
         "device": "cpu",
         "max_episodes": 5,
         "train_frequency": 4,
-        "target_update_frequency": 100,
         "batch_size": 32,
         "sequence_length": 8,
         "max_grad_norm": 10.0,
-        "use_double_dqn": False,
         "epsilon_start": 1.0,
         "epsilon_decay": 0.99,
         "epsilon_min": 0.01,
         "allow_unfeasible_universe": True,
+        # target_update_frequency, use_double_dqn managed by brain.yaml
     },
 }
 
@@ -112,3 +110,12 @@ def mutate_training_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> N
     data = yaml.safe_load(training_yaml.read_text())
     mutator(data)
     write_training_yaml(config_dir, data)
+
+
+def mutate_brain_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> None:
+    """Load brain.yaml, apply mutator, and write back."""
+    brain_yaml = config_dir / "brain.yaml"
+    data = yaml.safe_load(brain_yaml.read_text())
+    mutator(data)
+    with open(brain_yaml, "w") as handle:
+        yaml.safe_dump(data, handle, sort_keys=False)

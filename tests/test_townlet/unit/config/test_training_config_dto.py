@@ -149,25 +149,28 @@ class TestTrainingConfigValidation:
 class TestDoubleDQNConfiguration:
     """Test Double DQN configuration field."""
 
-    def test_use_double_dqn_field_required(self):
-        """use_double_dqn must be explicitly specified (no defaults)."""
-        with pytest.raises(ValidationError) as exc_info:
-            TrainingConfig(
-                device="cuda",
-                max_episodes=5000,
-                train_frequency=4,
-                target_update_frequency=100,
-                batch_size=64,
-                max_grad_norm=10.0,
-                epsilon_start=1.0,
-                epsilon_decay=0.995,
-                epsilon_min=0.01,
-                sequence_length=8,
-                # Missing: use_double_dqn
-            )
+    def test_use_double_dqn_optional_when_brain_yaml_present(self):
+        """use_double_dqn is optional (None) when brain.yaml manages it."""
+        # When constructing TrainingConfig directly (without load_training_config),
+        # brain-managed fields (target_update_frequency, use_double_dqn) are optional.
+        # The validator only enforces requirements when loading from yaml with _config_dir.
+        config = TrainingConfig(
+            device="cuda",
+            max_episodes=5000,
+            train_frequency=4,
+            target_update_frequency=None,  # Brain-managed
+            batch_size=64,
+            max_grad_norm=10.0,
+            epsilon_start=1.0,
+            epsilon_decay=0.995,
+            epsilon_min=0.01,
+            sequence_length=8,
+            use_double_dqn=None,  # Brain-managed
+        )
 
-        error = str(exc_info.value)
-        assert "use_double_dqn" in error.lower()
+        # Verify fields are None (will be provided by brain_config at runtime)
+        assert config.target_update_frequency is None
+        assert config.use_double_dqn is None
 
     def test_use_double_dqn_accepts_true(self):
         """use_double_dqn=True enables Double DQN."""
@@ -324,6 +327,31 @@ class TestTrainingConfigLoading:
 
     def test_load_from_yaml(self, tmp_path):
         """Load TrainingConfig from YAML file."""
+        # Create brain.yaml (required for all config packs)
+        brain_file = tmp_path / "brain.yaml"
+        brain_file.write_text(
+            """
+version: "1.0"
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: false
+replay:
+  capacity: 10000
+  prioritized: false
+"""
+        )
+
         config_file = tmp_path / "training.yaml"
         config_file.write_text(
             """
@@ -331,10 +359,8 @@ training:
   device: cuda
   max_episodes: 5000
   train_frequency: 4
-  target_update_frequency: 100
   batch_size: 64
   max_grad_norm: 10.0
-  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
@@ -352,9 +378,37 @@ training:
         assert config.epsilon_decay == 0.995
         assert config.batch_size == 64
         assert config.enabled_actions == ["UP", "WAIT"]
+        # Brain-managed fields should be None in TrainingConfig
+        assert config.target_update_frequency is None
+        assert config.use_double_dqn is None
 
     def test_load_missing_field_error(self, tmp_path):
         """Missing required field raises clear error."""
+        # Create brain.yaml (required)
+        brain_file = tmp_path / "brain.yaml"
+        brain_file.write_text(
+            """
+version: "1.0"
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: false
+replay:
+  capacity: 10000
+  prioritized: false
+"""
+        )
+
         config_file = tmp_path / "training.yaml"
         config_file.write_text(
             """
@@ -373,6 +427,31 @@ training:
 
     def test_load_invalid_device_error(self, tmp_path):
         """Invalid device value raises clear error."""
+        # Create brain.yaml (required)
+        brain_file = tmp_path / "brain.yaml"
+        brain_file.write_text(
+            """
+version: "1.0"
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: false
+replay:
+  capacity: 10000
+  prioritized: false
+"""
+        )
+
         config_file = tmp_path / "training.yaml"
         config_file.write_text(
             """
@@ -380,10 +459,8 @@ training:
   device: invalid
   max_episodes: 5000
   train_frequency: 4
-  target_update_frequency: 100
   batch_size: 64
   max_grad_norm: 10.0
-  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01
@@ -399,6 +476,31 @@ training:
 
     def test_load_cpu_device(self, tmp_path):
         """Load config with CPU device."""
+        # Create brain.yaml (required)
+        brain_file = tmp_path / "brain.yaml"
+        brain_file.write_text(
+            """
+version: "1.0"
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: false
+replay:
+  capacity: 10000
+  prioritized: false
+"""
+        )
+
         config_file = tmp_path / "training.yaml"
         config_file.write_text(
             """
@@ -406,10 +508,8 @@ training:
   device: cpu
   max_episodes: 1000
   train_frequency: 4
-  target_update_frequency: 100
   batch_size: 32
   max_grad_norm: 10.0
-  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.99
   epsilon_min: 0.01
@@ -423,6 +523,31 @@ training:
 
     def test_load_mps_device(self, tmp_path):
         """Load config with MPS (Apple Silicon) device."""
+        # Create brain.yaml (required)
+        brain_file = tmp_path / "brain.yaml"
+        brain_file.write_text(
+            """
+version: "1.0"
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+loss:
+  type: mse
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: false
+replay:
+  capacity: 10000
+  prioritized: false
+"""
+        )
+
         config_file = tmp_path / "training.yaml"
         config_file.write_text(
             """
@@ -430,10 +555,8 @@ training:
   device: mps
   max_episodes: 2000
   train_frequency: 4
-  target_update_frequency: 100
   batch_size: 64
   max_grad_norm: 10.0
-  use_double_dqn: false
   epsilon_start: 1.0
   epsilon_decay: 0.995
   epsilon_min: 0.01

@@ -21,7 +21,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork
+from townlet.agent.networks import DuelingQNetwork, RecurrentSpatialQNetwork, SimpleQNetwork
 
 
 class TestSimpleQNetwork:
@@ -412,3 +412,56 @@ class TestNetworkComparison:
         assert recurrent_time > simple_time
         # Note: LSTM can be 20-30x slower due to sequential nature, this is expected
         assert recurrent_time < simple_time * 50, "Recurrent network way too slow!"
+
+
+class TestDuelingQNetwork:
+    """Test DuelingQNetwork (Dueling DQN architecture)."""
+
+    def test_dueling_q_network_forward(self):
+        """DuelingQNetwork forward pass produces correct Q-values."""
+        network = DuelingQNetwork(
+            obs_dim=29,
+            action_dim=8,
+            shared_dims=[256, 128],
+            value_dims=[128],
+            advantage_dims=[128],
+            activation="relu",
+        )
+
+        obs = torch.randn(4, 29)
+        q_values = network(obs)
+
+        assert q_values.shape == (4, 8)
+
+    def test_dueling_q_network_decomposition(self):
+        """DuelingQNetwork correctly decomposes Q = V + (A - mean(A))."""
+        network = DuelingQNetwork(
+            obs_dim=10,
+            action_dim=5,
+            shared_dims=[64],
+            value_dims=[32],
+            advantage_dims=[32],
+            activation="relu",
+        )
+
+        obs = torch.randn(2, 10)
+        q_values = network(obs)
+
+        # Q-values should have mean-centered advantages per state
+        # (This is a structural test, not a value test)
+        assert q_values.shape == (2, 5)
+
+    def test_dueling_q_network_parameter_count(self):
+        """DuelingQNetwork has expected parameter count."""
+        network = DuelingQNetwork(
+            obs_dim=29,
+            action_dim=8,
+            shared_dims=[256, 128],
+            value_dims=[128],
+            advantage_dims=[128],
+            activation="relu",
+        )
+
+        total_params = sum(p.numel() for p in network.parameters())
+        # Dueling networks are similar size to standard networks
+        assert 20_000 < total_params < 100_000

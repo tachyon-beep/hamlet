@@ -1,0 +1,53 @@
+# Brain Configuration for L0_0_minimal
+#
+# Standard feedforward architecture for temporal credit assignment learning.
+# Two hidden layers (256, 128) with constant learning rate schedule.
+#
+# Learning objectives:
+# - Standard architecture: [256, 128] hidden layers
+# - Temporal credit assignment in 3×3 grid
+# - Constant learning rate (no decay)
+# - Double DQN for better value estimates
+#
+# Performance baseline:
+# - Should learn optimal strategy by ~100-200 episodes
+# - Optimal: Space out Bed uses for maximum reward
+# - Demonstrates importance of credit assignment over immediate rewards
+
+version: "1.0"
+
+description: >
+  Standard feedforward Q-network for L0_0_minimal.
+  Two hidden layers [256, 128] for temporal credit assignment.
+  Constant learning rate schedule with Double DQN.
+
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+    dropout: 0.0
+    layer_norm: true
+
+optimizer:
+  type: adam
+  learning_rate: 0.00025  # Atari DQN standard
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+  schedule:
+    type: constant
+
+loss:
+  type: mse
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
+
+replay:
+  capacity: 1000  # Small capacity for 3×3 grid
+  prioritized: false

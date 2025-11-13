@@ -12,7 +12,7 @@
 
 version: "1.0"
 
-description: "3×3 square grid with hard boundaries for Level 0 pedagogical training"
+description: "5×5 square grid with hard boundaries for Level 0 pedagogical training"
 
 type: "grid"
 

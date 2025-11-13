@@ -1,0 +1,54 @@
+# Brain Configuration for L0_5_dual_resource
+#
+# Standard feedforward architecture with step decay schedule for dual resource management.
+# Two hidden layers (256, 128) with learning rate decay every 1000 steps.
+#
+# Learning objectives:
+# - Standard architecture: [256, 128] hidden layers
+# - Spatial navigation + resource prioritization (Bed + Hospital)
+# - Step decay schedule (reduces LR periodically for stable convergence)
+# - Double DQN to reduce Q-value overestimation
+#
+# Performance baseline:
+# - Should converge in 200-400 episodes
+# - Agent learns to alternate Bed/Hospital based on needs
+# - Eventually runs out of money (no sustainable cycles without Job)
+# - LR decay helps stabilize late-stage training
+
+version: "1.0"
+
+description: >
+  Standard feedforward Q-network for L0_5_dual_resource (Bed + Hospital).
+  Two hidden layers [256, 128] with step decay learning rate schedule.
+  Uses Double DQN to reduce overestimation bias.
+
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+    dropout: 0.0
+    layer_norm: true
+
+optimizer:
+  type: adam
+  learning_rate: 0.0003  # Constant LR (matches training.yaml line 42)
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+  schedule:
+    type: constant  # FIX: No decay - agent needs stable learning
+
+loss:
+  type: mse
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
+
+replay:
+  capacity: 50000  # Match training.yaml - needed for multi-step credit assignment (Job→money→Bed)
+  prioritized: false

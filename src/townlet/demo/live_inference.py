@@ -13,6 +13,7 @@ import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from townlet.agent.brain_config import compute_brain_hash, load_brain_config
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -327,7 +328,19 @@ class LiveInferenceServer:
             active_mask=active_mask,
         )
 
-        # Create population (use compiled configuration for all hyperparameters)
+        # Load brain.yaml (REQUIRED for all config packs)
+        brain_yaml_path = self.config_dir / "brain.yaml"
+        logger.info(f"Loading brain configuration from {brain_yaml_path}")
+        brain_config = load_brain_config(self.config_dir)
+        brain_hash = compute_brain_hash(brain_config)
+        logger.info(f"Brain config loaded: {brain_config.description}")
+        logger.info(f"Brain hash: {brain_hash[:16]}... (SHA256)")
+
+        # Store brain_config for checkpoint provenance
+        self.brain_config = brain_config
+        self.brain_hash = brain_hash
+
+        # Create population (brain_config provides network/optimizer/Q-learning parameters)
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
         self.population = VectorizedPopulation(
             env=self.env,
@@ -337,16 +350,20 @@ class LiveInferenceServer:
             device=self.device,
             obs_dim=obs_dim,
             action_dim=self.env.action_dim,
-            learning_rate=population_cfg.learning_rate,
-            gamma=population_cfg.gamma,
-            replay_buffer_capacity=population_cfg.replay_buffer_capacity,
+            learning_rate=population_cfg.learning_rate,  # None (managed by brain.yaml)
+            gamma=population_cfg.gamma,  # None (managed by brain.yaml)
+            replay_buffer_capacity=population_cfg.replay_buffer_capacity,  # None (managed by brain.yaml)
             network_type=network_type,
             vision_window_size=vision_window_size,
             train_frequency=training_cfg.train_frequency,
-            target_update_frequency=training_cfg.target_update_frequency,
+            target_update_frequency=training_cfg.target_update_frequency,  # None (managed by brain.yaml)
             batch_size=training_cfg.batch_size,
             sequence_length=training_cfg.sequence_length,
             max_grad_norm=training_cfg.max_grad_norm,
+            use_double_dqn=training_cfg.use_double_dqn,  # None (managed by brain.yaml)
+            brain_config=brain_config,
+            max_episodes=None,  # Not used by live inference
+            max_steps_per_episode=None,  # Not used by live inference
         )
 
         self.curriculum.initialize_population(num_agents)
@@ -674,19 +691,9 @@ class LiveInferenceServer:
             {"name": name, "count": count} for name, count in sorted(self.affordance_interactions.items(), key=lambda x: x[1], reverse=True)
         ]
 
-        # Get final meter states for death certificate
-        meter_indices = {
-            "energy": 0,
-            "hygiene": 1,
-            "satiation": 2,
-            "money": 3,
-            "health": 6,
-            "mood": 4,
-            "social": 5,
-            "fitness": 7,
-        }
+        # Get final meter states for death certificate (dynamic from config)
         final_meters = {}
-        for meter_name, idx in meter_indices.items():
+        for meter_name, idx in self.env.meter_name_to_index.items():
             final_meters[meter_name] = float(self.env.meters[0, idx].item())
 
         # Get agent age and lifetime progress for death certificate
@@ -733,21 +740,10 @@ class LiveInferenceServer:
         if len(action_masks) < 6:
             action_masks.extend([False] * (6 - len(action_masks)))
 
-        # Get meters (all 8: energy, hygiene, satiation, money, health, mood, social, fitness)
-        # Note: Backend order is [energy, hygiene, satiation, money, mood, social, health, fitness]
-        # We reorder for UI display to group the primary/secondary meters together
-        meter_indices = {
-            "energy": 0,
-            "hygiene": 1,
-            "satiation": 2,
-            "money": 3,
-            "health": 6,  # Primary (direct top-up)
-            "mood": 4,  # Primary (direct top-up)
-            "social": 5,  # Secondary (modulates mood)
-            "fitness": 7,  # Secondary (modulates health)
-        }
+        # Get meters dynamically from environment configuration
+        # Use meter_name_to_index to support configs with varying meter sets
         meters = {}
-        for meter_name, idx in meter_indices.items():
+        for meter_name, idx in self.env.meter_name_to_index.items():
             meters[meter_name] = self.env.meters[0, idx].item()
 
         # Get affordances (substrate-agnostic position handling)
@@ -1078,7 +1074,8 @@ class LiveInferenceServer:
         }
 
         # Build meter state
-        meter_names = ["energy", "hygiene", "satiation", "money", "health", "fitness", "mood", "social"]
+        # Get actual meter names from config (supports variable meter counts)
+        meter_names = self.env.bars_config.meter_names
         agent_meters = {"agent_0": {"meters": {name: val for name, val in zip(meter_names, meters_tuple)}}}
 
         # Build state update with substrate metadata

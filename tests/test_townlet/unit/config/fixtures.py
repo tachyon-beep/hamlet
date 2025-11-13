@@ -38,14 +38,13 @@ VALID_TRAINING_PARAMS = {
     "device": "cuda",
     "max_episodes": 5000,
     "train_frequency": 4,
-    "target_update_frequency": 100,
     "batch_size": 64,
     "max_grad_norm": 10.0,
     "epsilon_start": 1.0,
     "epsilon_decay": 0.995,
     "epsilon_min": 0.01,
     "sequence_length": 8,
-    "use_double_dqn": False,
+    # target_update_frequency, use_double_dqn managed by brain.yaml
 }
 
 VALID_ENVIRONMENT_PARAMS = {
@@ -61,11 +60,9 @@ VALID_ENVIRONMENT_PARAMS = {
 
 VALID_POPULATION_PARAMS = {
     "num_agents": 1,
-    "learning_rate": 0.00025,
-    "gamma": 0.99,
-    "replay_buffer_capacity": 10000,
     "network_type": "simple",
     "mask_unused_obs": False,
+    # learning_rate, gamma, replay_buffer_capacity managed by brain.yaml
 }
 
 VALID_CURRICULUM_PARAMS = {

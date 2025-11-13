@@ -1,0 +1,66 @@
+# Brain-As-Code Configuration for L3_temporal_mechanics
+#
+# Architecture: Recurrent with LSTM (RecurrentSpatialQNetwork)
+# Schedule: Exponential decay (gradual LR reduction over long training)
+#
+# L3 adds temporal mechanics (24-tick day/night cycle, operating hours).
+# LSTM memory helps agent learn time-dependent patterns.
+
+version: "1.0"
+
+description: "Recurrent Q-network for temporal mechanics with LSTM"
+
+architecture:
+  type: recurrent
+  recurrent:
+    vision_encoder:
+      channels: [16, 32]
+      kernel_sizes: [3, 3]
+      strides: [1, 1]
+      padding: [1, 1]
+      activation: relu
+
+    position_encoder:
+      hidden_sizes: [32]
+      activation: relu
+
+    meter_encoder:
+      hidden_sizes: [32]
+      activation: relu
+
+    affordance_encoder:
+      hidden_sizes: [32]
+      activation: relu
+
+    lstm:
+      hidden_size: 256
+      num_layers: 1
+      dropout: 0.0
+
+    q_head:
+      hidden_sizes: [128]
+      activation: relu
+
+optimizer:
+  type: adam
+  learning_rate: 0.0001
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+  schedule:
+    type: exponential  # Gradual LR decay over long training
+    gamma: 0.9999      # Very slow decay (reaches 0.5× LR after ~6900 episodes)
+
+loss:
+  type: huber
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
+
+replay:
+  capacity: 10000  # Standard capacity for temporal mechanics
+  prioritized: false  # PER not yet supported for recurrent

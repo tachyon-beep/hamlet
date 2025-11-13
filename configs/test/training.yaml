@@ -22,9 +22,6 @@ environment:
 # Population configuration
 population:
   num_agents: 1
-  learning_rate: 0.00025
-  gamma: 0.99
-  replay_buffer_capacity: 2000  # Reduced for lite version
   network_type: simple  # Standard MLP Q-Network
   mask_unused_obs: false  # Don't mask observations (standard behavior)
 
@@ -49,11 +46,9 @@ training:
   device: cuda
   max_episodes: 200  # Integration test: ~5 minutes
   train_frequency: 4
-  target_update_frequency: 100
   batch_size: 64
   sequence_length: 8
   max_grad_norm: 10.0
-  use_double_dqn: false  # Vanilla DQN for test baseline
 
   epsilon_start: 1.0
   epsilon_decay: 0.99

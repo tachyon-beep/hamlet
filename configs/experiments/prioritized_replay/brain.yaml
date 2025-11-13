@@ -1,0 +1,50 @@
+# Experimental: Prioritized Experience Replay
+#
+# Tests TD-error-based prioritized sampling.
+#
+# Architecture: Standard feedforward
+# Optimizer: Adam
+# Loss: MSE
+# Q-learning: Double DQN
+# Replay: Prioritized (alpha=0.6, beta=0.4→1.0)
+#
+# Hypothesis: PER improves sample efficiency by prioritizing
+# high TD-error transitions (more informative experiences).
+
+version: "1.0"
+
+description: "Experimental prioritized experience replay"
+
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+    dropout: 0.0
+    layer_norm: true
+
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+  schedule:
+    type: constant
+
+loss:
+  type: mse
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
+
+replay:
+  capacity: 50000  # Larger buffer for PER
+  prioritized: true
+  priority_alpha: 0.6
+  priority_beta: 0.4
+  priority_beta_annealing: true

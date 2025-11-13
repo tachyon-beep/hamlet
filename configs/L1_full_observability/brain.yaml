@@ -1,0 +1,47 @@
+# Brain Configuration for L1_full_observability
+#
+# Standard feedforward Q-network for full observability baseline.
+#
+# Network: 29→256→128→8 (3-layer MLP)
+# Optimizer: Adam with Atari DQN standard learning rate
+# Loss: MSE (baseline)
+# Q-learning: Double DQN (reduces Q-value overestimation)
+# Schedule: Constant learning rate
+#
+# This is the reference architecture for full observability.
+# Checkpoint transfer works across all Grid2D configs (constant obs_dim=29).
+
+version: "1.0"
+
+description: "Standard MLP Q-network for full observability baseline"
+
+architecture:
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+    dropout: 0.0
+    layer_norm: true
+
+optimizer:
+  type: adam
+  learning_rate: 0.00025  # Atari DQN standard
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+  schedule:
+    type: constant
+
+loss:
+  type: mse
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true  # Use Double DQN for better value estimates
+
+replay:
+  capacity: 10000  # Standard capacity for 8×8 grid, full observability
+  prioritized: false

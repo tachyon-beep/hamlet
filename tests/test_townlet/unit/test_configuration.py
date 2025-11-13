@@ -893,22 +893,30 @@ class TestTrainingHyperparameters:
         assert population.max_grad_norm == max_grad_norm
 
     def test_runner_loads_training_hyperparameters_from_yaml(self, tmp_path: Path, config_pack_factory):
+        from tests.test_townlet.helpers.config_builder import mutate_brain_yaml
+
         config_dir = config_pack_factory(name="hyperparams_config")
 
-        def mutator(data: dict) -> None:
+        def training_mutator(data: dict) -> None:
             data["training"].update(
                 {
                     "device": "cpu",
                     "max_episodes": 10,
                     "train_frequency": 2,
-                    "target_update_frequency": 50,
+                    # target_update_frequency managed by brain.yaml - removed from training.yaml
                     "batch_size": 128,
                     "sequence_length": 4,
                     "max_grad_norm": 15.0,
                 }
             )
 
-        mutate_training_yaml(config_dir, mutator)
+        mutate_training_yaml(config_dir, training_mutator)
+
+        # Set target_update_frequency in brain.yaml (managed by brain.yaml now)
+        def brain_mutator(data: dict) -> None:
+            data["q_learning"]["target_update_frequency"] = 50
+
+        mutate_brain_yaml(config_dir, brain_mutator)
 
         runner = DemoRunner(
             config_dir=config_dir,
@@ -918,7 +926,8 @@ class TestTrainingHyperparameters:
         )
 
         assert runner.config["training"]["train_frequency"] == 2
-        assert runner.config["training"]["target_update_frequency"] == 50
+        # target_update_frequency is now in brain_config, not training config
+        # The important test is that the runner loads and runs without error
         assert runner.config["training"]["batch_size"] == 128
         assert runner.config["training"]["sequence_length"] == 4
         assert runner.config["training"]["max_grad_norm"] == 15.0

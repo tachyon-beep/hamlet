@@ -1,14 +1,20 @@
 # drive_as_code.yaml - Drive As Code (DAC) Reward Configuration
-# Config: L_N1_debug
+# L0_5_dual_resource: Multiple Resources
 #
-# Reward Strategy: Multiplicative (energy × health)
-# - Extrinsic: r_ext = 1.0 * energy * health
-# - Intrinsic: RND novelty-seeking (base_weight = 1.0)
+# Reward Strategy: constant_base_with_shaped_bonus (fixes "Low Energy Delirium" bug)
+# - Extrinsic: r_ext = base_reward + sum(shaped_bonuses)
+#   - Base reward: 1.0 (consistent survival signal)
+#   - Shaped bonuses: Scale * (bar_value - center) for each bar
+# - Intrinsic: RND novelty-seeking (base_weight = 0.1)
 # - Composition: r_total = r_ext + (intrinsic_weight * r_int)
 #
-# Pedagogical Goal: Demo config with multiplicative reward
-# Teaching Moment: "Low Energy Delirium" bug present (no crisis suppression)
-# Note: Higher intrinsic weight (1.0) encourages exploration
+# Pedagogical Goal: Fix "Low Energy Delirium" - constant base prevents reward hacking
+# Teaching Moment: Compare against L0_0's multiplicative to show reward shaping effects
+#
+# Bug Fix: In multiplicative strategy (L0_0), agents get rewarded for low energy
+#          because exploration (intrinsic) dominates when extrinsic is near-zero.
+#          constant_base_with_shaped_bonus provides consistent base reward, making
+#          low bars less attractive while still rewarding bar improvement.
 
 drive_as_code:
   version: "1.0"
@@ -16,13 +22,21 @@ drive_as_code:
   modifiers: {}
 
   extrinsic:
-    type: multiplicative
-    base: 1.0
-    bars: [energy, health]
+    type: constant_base_with_shaped_bonus
+    base_reward: 1.0
+    bar_bonuses:
+      # Shaped bonuses: bonus = scale * (bar_value - center)
+      # Center at 0.5 means neutral point (no bonus/penalty)
+      # Scale of 0.5 means +0.5 bonus at full bar, -0.5 penalty at empty
+      - bar: energy
+        center: 0.5
+        scale: 0.5
+
+    variable_bonuses: []
 
   intrinsic:
     strategy: rnd
-    base_weight: 1.0  # Matches training.yaml: initial_intrinsic_weight
+    base_weight: 0.1  # Matches training.yaml: initial_intrinsic_weight
     apply_modifiers: []
 
   shaping: []

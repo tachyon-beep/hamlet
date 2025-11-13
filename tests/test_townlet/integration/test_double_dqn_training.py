@@ -13,6 +13,7 @@ import sqlite3
 
 import torch
 
+from tests.test_townlet.helpers.config_builder import mutate_brain_yaml
 from townlet.demo.runner import DemoRunner
 
 
@@ -28,7 +29,7 @@ class TestDoubleDoubleTraining:
             data["environment"]["vision_range"] = 8
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 10
-            data["training"]["use_double_dqn"] = use_double_dqn
+            # use_double_dqn managed by brain.yaml - removed from training.yaml
             data["training"]["allow_unfeasible_universe"] = True
             data["curriculum"]["max_steps_per_episode"] = 50
 
@@ -44,6 +45,13 @@ class TestDoubleDoubleTraining:
         - Replay buffer fills
         """
         config_dir = config_pack_factory(modifier=self._create_fast_test_config(use_double_dqn=True))
+
+        # Set use_double_dqn in brain.yaml (managed by brain.yaml now)
+        def brain_mutator(data: dict) -> None:
+            data["q_learning"]["use_double_dqn"] = True
+
+        mutate_brain_yaml(config_dir, brain_mutator)
+
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -88,6 +96,13 @@ class TestDoubleDoubleTraining:
         - Q-learning still functions
         """
         config_dir = config_pack_factory(modifier=self._create_fast_test_config(use_double_dqn=False))
+
+        # Set use_double_dqn in brain.yaml (managed by brain.yaml now)
+        def brain_mutator(data: dict) -> None:
+            data["q_learning"]["use_double_dqn"] = False
+
+        mutate_brain_yaml(config_dir, brain_mutator)
+
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -134,11 +149,18 @@ class TestDoubleDoubleTraining:
             data["environment"]["vision_range"] = 8
             data["exploration"]["survival_window"] = 10
             data["training"]["max_episodes"] = 5
-            data["training"]["use_double_dqn"] = True
+            # use_double_dqn managed by brain.yaml - removed from training.yaml
             data["training"]["allow_unfeasible_universe"] = True
             data["curriculum"]["max_steps_per_episode"] = 50
 
         config_dir = config_pack_factory(modifier=modifier)
+
+        # Set use_double_dqn in brain.yaml (managed by brain.yaml now)
+        def brain_mutator(data: dict) -> None:
+            data["q_learning"]["use_double_dqn"] = True
+
+        mutate_brain_yaml(config_dir, brain_mutator)
+
         db_path = tmp_path / "test.db"
         checkpoint_dir = tmp_path / "checkpoints"
 
@@ -155,16 +177,14 @@ class TestDoubleDoubleTraining:
         checkpoints = list(checkpoint_dir.glob("checkpoint_ep*.pt"))
         assert len(checkpoints) > 0, "Checkpoint should be saved"
 
-        # Load checkpoint and verify use_double_dqn persisted
+        # Load checkpoint and verify brain_hash persisted (use_double_dqn is managed by brain.yaml)
         checkpoint_path = checkpoints[0]
         checkpoint_data = torch.load(checkpoint_path, weights_only=False)
 
-        # Check if use_double_dqn is in checkpoint
-        # Note: checkpoint["training_config"] contains the full YAML with all sections
-        assert "training_config" in checkpoint_data, "Checkpoint should contain training_config"
-        assert "training" in checkpoint_data["training_config"], "training_config should contain training section"
-        assert "use_double_dqn" in checkpoint_data["training_config"]["training"], "training section should contain use_double_dqn"
-        assert checkpoint_data["training_config"]["training"]["use_double_dqn"] is True, "use_double_dqn should be True in checkpoint"
+        # Check that checkpoint contains brain_hash (proof brain.yaml was used)
+        assert "brain_hash" in checkpoint_data, "Checkpoint should contain brain_hash (from brain.yaml)"
+        # Note: use_double_dqn is no longer in training_config (moved to brain.yaml)
+        # The important test is that it's restored correctly when loading (tested below)
 
         # Phase 2: Load checkpoint and resume training
         runner2 = DemoRunner(

@@ -5,6 +5,9 @@ No implicit defaults. Operator accountability.
 
 Design: Validates Q-learning hyperparameters, epsilon-greedy exploration,
 and training infrastructure settings. Warnings guide operators without blocking.
+
+IMPORTANT: When brain.yaml exists, target_update_frequency/use_double_dqn
+MUST NOT be specified in training.yaml - they are managed by brain.yaml.
 """
 
 import logging
@@ -26,6 +29,11 @@ class TrainingConfig(BaseModel):
     Operator must explicitly specify all parameters that affect training.
 
     Philosophy: If it affects the universe, it's in the config. No exceptions.
+
+    BREAKING CHANGE (Brain As Code): When brain.yaml exists, these fields
+    are FORBIDDEN in training.yaml:training section:
+    - target_update_frequency → Use brain.yaml:q_learning.target_update_frequency
+    - use_double_dqn → Use brain.yaml:q_learning.use_double_dqn
 
     Example:
         >>> config = TrainingConfig(
@@ -53,18 +61,23 @@ class TrainingConfig(BaseModel):
 
     # Q-learning hyperparameters (ALL REQUIRED)
     train_frequency: int = Field(gt=0, description="Train Q-network every N steps")
-    target_update_frequency: int = Field(gt=0, description="Update target network every N training steps")
+    target_update_frequency: int | None = Field(
+        default=None,
+        description="Update target network every N steps. None when managed by brain.yaml:q_learning.target_update_frequency",
+    )
     batch_size: int = Field(gt=0, description="Experience replay batch size")
     max_grad_norm: float = Field(gt=0, description="Gradient clipping threshold (prevents exploding gradients)")
 
-    # Q-learning algorithm variant (REQUIRED)
-    use_double_dqn: bool = Field(
+    # Q-learning algorithm variant (OPTIONAL when brain.yaml exists, REQUIRED otherwise)
+    use_double_dqn: bool | None = Field(
+        default=None,
         description=(
-            "Use Double DQN algorithm (van Hasselt et al. 2016) instead of vanilla DQN. "
+            "[LEGACY] Use Double DQN algorithm (van Hasselt et al. 2016) instead of vanilla DQN. "
+            "REQUIRED when brain.yaml absent. FORBIDDEN when brain.yaml present (use brain.yaml:q_learning.use_double_dqn). "
             "Double DQN reduces Q-value overestimation by using online network for action selection. "
             "True: Q_target = r + γ * Q_target(s', argmax_a Q_online(s', a)) [Double DQN] "
             "False: Q_target = r + γ * max_a Q_target(s', a) [Vanilla DQN]"
-        )
+        ),
     )
 
     # Epsilon-greedy exploration (ALL REQUIRED)
@@ -112,6 +125,57 @@ class TrainingConfig(BaseModel):
             dup_list = ", ".join(sorted(set(duplicates)))
             raise ValueError(f"enabled_actions must not contain duplicate names: {dup_list}.")
         return stripped
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_brain_managed_fields(cls, data: dict) -> dict:
+        """Reject brain-managed fields when present.
+
+        BREAKING CHANGE: Enforces single source of truth for Q-learning parameters.
+
+        brain.yaml is REQUIRED for all config packs (no backwards compatibility).
+        These fields MUST NOT be in training.yaml:training:
+        - target_update_frequency → Use brain.yaml:q_learning.target_update_frequency
+        - use_double_dqn → Use brain.yaml:q_learning.use_double_dqn
+
+        When brain.yaml is loaded, these fields will be None in TrainingConfig.
+        This prevents silent overrides that create non-reproducible configs.
+        """
+        # Check if brain.yaml exists (passed via _config_dir sentinel)
+        config_dir = data.get("_config_dir")
+        if config_dir is not None:
+            # Remove sentinel before validation
+            data = {k: v for k, v in data.items() if k != "_config_dir"}
+
+            brain_yaml_path = Path(config_dir) / "brain.yaml"
+            if not brain_yaml_path.exists():
+                # brain.yaml is REQUIRED - fail if missing
+                raise FileNotFoundError(
+                    f"brain.yaml is REQUIRED but not found at: {brain_yaml_path}\n\n"
+                    f"HAMLET requires all config packs to have brain.yaml (no backwards compatibility).\n"
+                    f"brain.yaml defines the neural network architecture and Q-learning hyperparameters.\n\n"
+                    f"Fix: Create brain.yaml in {config_dir}/ using the template at configs/_default_brain.yaml\n"
+                    f"Then calibrate the hyperparameters for your specific config pack."
+                )
+
+            # brain.yaml exists - reject brain-managed fields if present
+            conflicting_fields = []
+            if "target_update_frequency" in data and data["target_update_frequency"] is not None:
+                conflicting_fields.append("target_update_frequency (use brain.yaml:q_learning.target_update_frequency)")
+            if "use_double_dqn" in data and data["use_double_dqn"] is not None:
+                conflicting_fields.append("use_double_dqn (use brain.yaml:q_learning.use_double_dqn)")
+
+            if conflicting_fields:
+                raise ValueError(
+                    f"training.yaml:training section contains fields managed by brain.yaml.\n"
+                    f"These fields MUST be removed:\n"
+                    f"  - {'\n  - '.join(conflicting_fields)}\n\n"
+                    f"Reason: brain.yaml provides the single source of truth for Q-learning parameters.\n"
+                    f"Having duplicate values in training.yaml creates non-reproducible configs.\n\n"
+                    f"Fix: Delete these fields from training.yaml:training section."
+                )
+
+        return data
 
     @model_validator(mode="after")
     def validate_epsilon_order(self) -> "TrainingConfig":
@@ -217,6 +281,8 @@ def load_training_config(config_dir: Path, training_config_path: Path | None = N
 
     try:
         data = load_yaml_section(section_dir, filename, "training")
+        # Pass config_dir as sentinel for brain.yaml existence check
+        data["_config_dir"] = str(config_dir)
         return TrainingConfig(**data)
     except ValidationError as e:
         raise ValueError(format_validation_error(e, context_label)) from e
