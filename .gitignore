@@ -86,6 +86,7 @@ test_mlruns/
 # Data
 data/
 *.csv
+!.claude/skills/**/*.json
 *.json
 *.pkl
 *.pickle
