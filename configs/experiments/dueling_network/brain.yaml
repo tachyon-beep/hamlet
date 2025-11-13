@@ -1,0 +1,53 @@
+# Experimental: Dueling DQN Architecture
+#
+# Tests value/advantage decomposition for improved learning.
+#
+# Architecture: Dueling DQN with separate value/advantage streams
+# Optimizer: Adam
+# Loss: MSE
+# Q-learning: Double DQN + Dueling DQN
+# Replay: Standard (non-prioritized)
+#
+# Hypothesis: Dueling architecture improves learning by separating
+# state value V(s) from action advantages A(s,a).
+
+version: "1.0"
+
+description: "Experimental dueling DQN architecture"
+
+architecture:
+  type: dueling
+  dueling:
+    shared_layers: [256, 128]
+    value_stream:
+      hidden_layers: [128]
+      activation: relu
+    advantage_stream:
+      hidden_layers: [128]
+      activation: relu
+    activation: relu
+    dropout: 0.0
+    layer_norm: true
+
+optimizer:
+  type: adam
+  learning_rate: 0.00025
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.0
+  schedule:
+    type: constant
+
+loss:
+  type: mse
+  huber_delta: 1.0
+
+q_learning:
+  gamma: 0.99
+  target_update_frequency: 100
+  use_double_dqn: true
+
+replay:
+  capacity: 10000
+  prioritized: false
