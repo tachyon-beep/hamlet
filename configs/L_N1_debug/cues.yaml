@@ -1,18 +1,5 @@
 # cues.yaml - Public Cue Definitions (Observable Signals)
 # This defines how internal meter states map to observable "tells" (public cues).
-#
-# PURPOSE: Enable Module C (Social Model) to learn opponent modeling
-# STATUS: TEMPLATE (Will be implemented after Level 4 multi-agent)
-#
-# Architecture:
-# - Agents have HIDDEN meter states (bars) that opponents can't see directly
-# - When certain conditions are met, agents emit PUBLIC CUES (observable tells)
-# - Module C learns to infer hidden states from these cues (theory of mind)
-#
-# Teaching Value:
-# - Demonstrates information asymmetry in multi-agent systems
-# - Shows how AI can do "theory of mind" reasoning
-# - Enables strategic deception and cooperation behaviors
 
 version: "1.0"
 description: "Public cue mappings for multi-agent opponent modeling"
@@ -44,26 +31,28 @@ simple_cues:
 # ============================================================================
 
 compound_cues:
-
+  false
 # ============================================================================
 # SPECIAL CUES (Derived from Multiple Meters)
 # ============================================================================
 
 derived_cues:
-
+  false
 # ============================================================================
 # BEHAVIORAL CUES (Based on Action Patterns)
 # ============================================================================
 
 behavioral_cues:
-
+  false
 # ============================================================================
 # CUE RELIABILITY & DECEPTION
 # ============================================================================
 
 cue_reliability:
-  # Not all cues are 100% reliable - introduces uncertainty
+  false
 
-  noisy_cues:
+noisy_cues:
+  false
 
-  deception_potential:
+deception_potential:
+  false

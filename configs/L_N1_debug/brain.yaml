@@ -1,8 +1,5 @@
 # Default Brain Configuration
 #
-# TEMPORARY: This is a placeholder brain.yaml for configs that don't have one yet.
-# TODO: Calibrate these hyperparameters for the specific config pack.
-#
 # Network: Standard feedforward MLP (256→128 hidden layers)
 # Optimizer: Adam with Atari DQN standard learning rate
 # Loss: MSE (baseline)

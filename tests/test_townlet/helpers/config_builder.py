@@ -110,3 +110,12 @@ def mutate_training_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> N
     data = yaml.safe_load(training_yaml.read_text())
     mutator(data)
     write_training_yaml(config_dir, data)
+
+
+def mutate_brain_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> None:
+    """Load brain.yaml, apply mutator, and write back."""
+    brain_yaml = config_dir / "brain.yaml"
+    data = yaml.safe_load(brain_yaml.read_text())
+    mutator(data)
+    with open(brain_yaml, "w") as handle:
+        yaml.safe_dump(data, handle, sort_keys=False)
