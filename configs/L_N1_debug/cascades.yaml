@@ -20,10 +20,10 @@ math_type: "gradient_penalty"
 
 # Special modulation: Fitness modulates health depletion rate
 # This is NOT a threshold cascade - it's a continuous multiplicative modulation
-modulations:
-  false
-cascades:
+modulations: []
+
+# No cascades for debugging level - explicitly disabled
+cascades: []
 
 # Cascade execution order (important for deterministic behavior)
-execution_order:
-  false
+execution_order: []

@@ -86,6 +86,9 @@ def load_cascades_config(config_dir: Path) -> list[CascadeConfig]:
     """
     try:
         data = load_yaml_section(config_dir, "cascades.yaml", "cascades")
+        # Handle disabled cascades (cascades: [] or cascades: null)
+        if data is None:
+            return []
         return [CascadeConfig(**cascade_data) for cascade_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "cascades.yaml")) from e

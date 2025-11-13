@@ -120,6 +120,9 @@ def load_affordances_config(config_dir: Path) -> list[AffordanceConfig]:
     """
     try:
         data = load_yaml_section(config_dir, "affordances.yaml", "affordances")
+        # Handle disabled affordances (affordances: [] or affordances: null)
+        if data is None:
+            return []
         return [AffordanceConfig(**affordance_data) for affordance_data in data]
     except ValidationError as e:
         raise ValueError(format_validation_error(e, "affordances.yaml")) from e
