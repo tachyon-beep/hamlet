@@ -13,6 +13,7 @@ import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from townlet.agent.brain_config import compute_brain_hash, load_brain_config
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -327,7 +328,19 @@ class LiveInferenceServer:
             active_mask=active_mask,
         )
 
-        # Create population (use compiled configuration for all hyperparameters)
+        # Load brain.yaml (REQUIRED for all config packs)
+        brain_yaml_path = self.config_dir / "brain.yaml"
+        logger.info(f"Loading brain configuration from {brain_yaml_path}")
+        brain_config = load_brain_config(self.config_dir)
+        brain_hash = compute_brain_hash(brain_config)
+        logger.info(f"Brain config loaded: {brain_config.description}")
+        logger.info(f"Brain hash: {brain_hash[:16]}... (SHA256)")
+
+        # Store brain_config for checkpoint provenance
+        self.brain_config = brain_config
+        self.brain_hash = brain_hash
+
+        # Create population (brain_config provides network/optimizer/Q-learning parameters)
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
         self.population = VectorizedPopulation(
             env=self.env,
@@ -337,16 +350,20 @@ class LiveInferenceServer:
             device=self.device,
             obs_dim=obs_dim,
             action_dim=self.env.action_dim,
-            learning_rate=population_cfg.learning_rate,
-            gamma=population_cfg.gamma,
-            replay_buffer_capacity=population_cfg.replay_buffer_capacity,
+            learning_rate=population_cfg.learning_rate,  # None (managed by brain.yaml)
+            gamma=population_cfg.gamma,  # None (managed by brain.yaml)
+            replay_buffer_capacity=population_cfg.replay_buffer_capacity,  # None (managed by brain.yaml)
             network_type=network_type,
             vision_window_size=vision_window_size,
             train_frequency=training_cfg.train_frequency,
-            target_update_frequency=training_cfg.target_update_frequency,
+            target_update_frequency=training_cfg.target_update_frequency,  # None (managed by brain.yaml)
             batch_size=training_cfg.batch_size,
             sequence_length=training_cfg.sequence_length,
             max_grad_norm=training_cfg.max_grad_norm,
+            use_double_dqn=training_cfg.use_double_dqn,  # None (managed by brain.yaml)
+            brain_config=brain_config,
+            max_episodes=None,  # Not used by live inference
+            max_steps_per_episode=None,  # Not used by live inference
         )
 
         self.curriculum.initialize_population(num_agents)

@@ -160,6 +160,10 @@ class NetworkFactory:
             value_dims=config.value_stream.hidden_layers,
             advantage_dims=config.advantage_stream.hidden_layers,
             activation=config.activation,
+            value_activation=config.value_stream.activation,
+            advantage_activation=config.advantage_stream.activation,
+            dropout=config.dropout,
+            layer_norm=config.layer_norm,
         )
 
         return network

@@ -1,17 +1,7 @@
 # bars.yaml - Meter Definitions & Base Depletion Rates
-# This defines the meters that exist in the Hamlet environment and their passive decay.
-#
-# Hierarchy (following SDW structure):
-# - PIVOTAL: Death conditions (health, energy)
-# - PRIMARY: Major needs that strongly affect pivotal (satiation, fitness, mood)
-# - SECONDARY: Quality of life needs (hygiene, social)
-# - RESOURCE: Enables actions but doesn't cascade (money)
-#
-# Key Insight: Satiation is THE foundational need - affects BOTH pivotal meters.
-# Food must be prioritized above all else: hungry → sick AND exhausted.
 
 version: "1.0"
-description: "Default meter configuration for Hamlet Level 1.5 (8 meters)"
+description: "Default meter configuration for Hamlet Level N1 - Debugging with energy."
 
 bars:
   # PIVOTAL METERS: Death if <= 0
@@ -24,72 +14,6 @@ bars:
     base_depletion: 0.005  # 0.5% per step
     description: "Can you move? Death if depleted. Affected by satiation (fundamental) and mood (specialized)."
 
-  - name: "health"
-    index: 6
-    tier: "pivotal"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.0  # No base depletion - entirely handled by fitness modulation (see cascades.yaml)
-    description: "Are you alive? Death if depleted. Affected by satiation (fundamental) and fitness (modulation)."
-
-  # PRIMARY METERS: Strong effects on pivotal meters
-
-  - name: "satiation"
-    index: 2
-    tier: "primary"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.00  # Disabled for debugging
-    description: "Hunger level. FUNDAMENTAL need - affects BOTH pivotal meters when low."
-    key_insight: "Food first! Low satiation causes both health decline AND energy exhaustion."
-
-  - name: "fitness"
-    index: 7
-    tier: "primary"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.000  # Disabled for debugging
-    description: "Physical fitness. Modulates health depletion rate (0.5x at 100%, 3.0x at 0%)."
-    special: "Uses multiplicative modulation, not threshold cascade."
-
-  - name: "mood"
-    index: 4
-    tier: "primary"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.000  # Disabled for debugging
-    description: "Mental well-being. Affects energy when low (depression → exhaustion)."
-
-  # SECONDARY METERS: Quality of life (affect primary meters)
-
-  - name: "hygiene"
-    index: 1
-    tier: "secondary"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.000  # Disabled for debugging
-    description: "Cleanliness. Affects appetite (satiation), exercise ability (fitness), and mood."
-    cascade_pattern: "Strong → Primary, Weak → Pivotal"
-
-  - name: "social"
-    index: 5
-    tier: "secondary"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.000  # Disabled for debugging
-    description: "Social connection. Strongly affects mood (loneliness → depression)."
-    cascade_pattern: "Strong → Mood, Weak → Energy"
-
-  # RESOURCE METERS: Enables affordances
-
-  - name: "money"
-    index: 3
-    tier: "resource"
-    range: [0.0, 1.0]  # $0-$100 normalized to [0.0, 1.0]
-    initial: 0.25       # Start with $25 so they run out and learn that money is important.
-    base_depletion: 0.0  # No passive decay
-    description: "Currency for purchasing affordances. No cascade effects."
-
 # Terminal conditions (death)
 terminal_conditions:
   - meter: "health"
@@ -97,15 +21,6 @@ terminal_conditions:
     value: 0.0
     description: "Agent dies if health depletes to zero"
 
-  - meter: "energy"
-    operator: "<="
-    value: 0.0
-    description: "Agent dies if energy depletes to zero"
-
 # Metadata
 notes:
-  - "All depletion rates are per-step (applied every timestep)"
-  - "Values normalized to [0.0, 1.0] range"
-  - "Fitness uses special modulation (see cascades.yaml)"
-  - "Satiation is THE foundational need - prioritize food above all else"
-  - "Social decays fastest (0.6%/step) - requires constant maintenance"
+  - "Simple linear depletion for baseline."

@@ -66,6 +66,8 @@ class VectorizedPopulation(PopulationManager):
         max_grad_norm: float = 10.0,
         use_double_dqn: bool = False,
         brain_config: BrainConfig | None = None,
+        max_episodes: int | None = None,
+        max_steps_per_episode: int | None = None,
     ):
         """
         Initialize vectorized population.
@@ -91,6 +93,8 @@ class VectorizedPopulation(PopulationManager):
             max_grad_norm: Gradient clipping threshold (default: 10.0)
             use_double_dqn: Use Double DQN algorithm (default: False for vanilla DQN)
             brain_config: Optional BrainConfig for architecture, optimizer, loss (TASK-005 Phase 1)
+            max_episodes: Maximum training episodes (for PER beta annealing)
+            max_steps_per_episode: Maximum steps per episode (for PER beta annealing)
         """
         self.env = env
         self.curriculum = curriculum
@@ -101,6 +105,8 @@ class VectorizedPopulation(PopulationManager):
         self.network_type = network_type
         self.tb_logger = tb_logger
         self.brain_config = brain_config
+        self.max_episodes = max_episodes
+        self.max_steps_per_episode = max_steps_per_episode
 
         # TASK-005 Phase 2: Set Q-learning parameters from brain_config or constructor
         if brain_config is not None:
@@ -276,8 +282,13 @@ class VectorizedPopulation(PopulationManager):
         if brain_config is not None:
             # TASK-005 Phase 1: Build loss function from brain_config using LossFactory
             self.loss_fn = LossFactory.build(config=brain_config.loss)
+            # Store loss config for PER path (needs functional API with reduction='none')
+            self.loss_type = brain_config.loss.type
+            self.loss_delta = brain_config.loss.huber_delta if brain_config.loss.type == "huber" else 1.0
         else:
             self.loss_fn = nn.MSELoss()  # Default to MSE (matches current hardcoded behavior)
+            self.loss_type = "mse"
+            self.loss_delta = 1.0
 
         # Replay buffer (dual system: sequential for recurrent, standard/PER for feedforward)
         # TASK-005 Phase 3: Support PrioritizedReplayBuffer
@@ -291,9 +302,14 @@ class VectorizedPopulation(PopulationManager):
         if brain_config is not None and hasattr(brain_config, "replay"):
             self.use_per = brain_config.replay.prioritized
 
+        # Determine replay capacity: use brain_config.replay.capacity if available, else legacy parameter
+        effective_replay_capacity = (
+            brain_config.replay.capacity if (brain_config is not None and hasattr(brain_config, "replay")) else replay_buffer_capacity
+        )
+
         if self.is_recurrent:
             # Recurrent networks use sequential buffer (PER not yet supported for sequences)
-            self.replay_buffer = SequentialReplayBuffer(capacity=replay_buffer_capacity, device=device)
+            self.replay_buffer = SequentialReplayBuffer(capacity=effective_replay_capacity, device=device)
             # Episode tracking for sequential buffer
             self.current_episodes = [self._new_episode_container() for _ in range(self.num_agents)]
 
@@ -310,14 +326,14 @@ class VectorizedPopulation(PopulationManager):
                 # use_per is True only if brain_config is not None (set at line 290-291)
                 assert brain_config is not None, "use_per requires brain_config"
                 self.replay_buffer = PrioritizedReplayBuffer(
-                    capacity=brain_config.replay.capacity,
+                    capacity=effective_replay_capacity,
                     alpha=brain_config.replay.priority_alpha,
                     beta=brain_config.replay.priority_beta,
                     beta_annealing=brain_config.replay.priority_beta_annealing,
                     device=device,
                 )
             else:
-                self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity, device=device)
+                self.replay_buffer = ReplayBuffer(capacity=effective_replay_capacity, device=device)
 
         # Training hyperparameters (configurable)
         self.total_steps = 0
@@ -865,7 +881,16 @@ class VectorizedPopulation(PopulationManager):
                 # TASK-005 Phase 3: Weighted loss for importance sampling correction
                 if self.use_per:
                     # PER: Apply importance sampling weights to loss
-                    loss = (weights * F.mse_loss(q_pred, q_target, reduction="none")).mean()
+                    # Use functional API with reduction='none' to get per-sample losses
+                    if self.loss_type == "mse":
+                        per_sample_loss = F.mse_loss(q_pred, q_target, reduction="none")
+                    elif self.loss_type == "huber":
+                        per_sample_loss = F.huber_loss(q_pred, q_target, reduction="none", delta=self.loss_delta)
+                    elif self.loss_type == "smooth_l1":
+                        per_sample_loss = F.smooth_l1_loss(q_pred, q_target, reduction="none")
+                    else:
+                        raise ValueError(f"Unsupported loss type for PER: {self.loss_type}")
+                    loss = (weights * per_sample_loss).mean()
                 else:
                     # Standard: Use configured loss function
                     loss = self.loss_fn(q_pred, q_target)
@@ -892,9 +917,9 @@ class VectorizedPopulation(PopulationManager):
 
                     # Anneal beta toward 1.0 over training
                     if per_buffer.beta_annealing:
-                        # Estimate total steps from config (if available)
-                        if hasattr(self, "hamlet_config"):
-                            total_steps = self.hamlet_config.training.max_episodes * self.hamlet_config.curriculum.max_steps_per_episode
+                        # Estimate total steps from constructor params (if available)
+                        if self.max_episodes is not None and self.max_steps_per_episode is not None:
+                            total_steps = self.max_episodes * self.max_steps_per_episode
                             per_buffer.anneal_beta(total_steps, self.total_steps)
 
                 # Periodically sync target network for stability

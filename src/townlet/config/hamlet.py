@@ -61,7 +61,15 @@ class HamletConfig(BaseModel):
         """Ensure batch_size <= replay_buffer_capacity.
 
         Can't sample more transitions than buffer holds.
+
+        Note: When brain.yaml exists, replay_buffer_capacity is None in PopulationConfig
+        (managed by brain.yaml:replay.capacity). In this case, skip validation here since
+        brain.yaml validation will ensure capacity is reasonable.
         """
+        # Skip validation if replay_buffer_capacity is None (brain.yaml manages it)
+        if self.population.replay_buffer_capacity is None:
+            return self
+
         if self.training.batch_size > self.population.replay_buffer_capacity:
             raise ValueError(
                 f"training.batch_size ({self.training.batch_size}) cannot exceed "

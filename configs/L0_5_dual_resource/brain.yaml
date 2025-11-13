@@ -32,15 +32,13 @@ architecture:
 
 optimizer:
   type: adam
-  learning_rate: 0.00025  # Atari DQN standard
+  learning_rate: 0.0003  # Constant LR (matches training.yaml line 42)
   adam_beta1: 0.9
   adam_beta2: 0.999
   adam_eps: 1.0e-8
   weight_decay: 0.0
   schedule:
-    type: step_decay
-    step_size: 1000
-    gamma: 0.5
+    type: constant  # FIX: No decay - agent needs stable learning
 
 loss:
   type: mse
@@ -52,5 +50,5 @@ q_learning:
   use_double_dqn: true
 
 replay:
-  capacity: 5000  # Moderate capacity for 7×7 grid with dual resources
+  capacity: 50000  # Match training.yaml - needed for multi-step credit assignment (Job→money→Bed)
   prioritized: false
