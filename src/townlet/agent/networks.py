@@ -327,7 +327,7 @@ class DuelingQNetwork(nn.Module):
         self.activation = self._get_activation(activation)
 
         # Shared layers
-        shared_layers = []
+        shared_layers: list[nn.Module] = []
         in_features = obs_dim
         for dim in shared_dims:
             shared_layers.append(nn.Linear(in_features, dim))
@@ -337,7 +337,7 @@ class DuelingQNetwork(nn.Module):
         self.shared = nn.Sequential(*shared_layers)
 
         # Value stream: feature → V(s)
-        value_layers = []
+        value_layers: list[nn.Module] = []
         in_features = shared_dims[-1]
         for dim in value_dims:
             value_layers.append(nn.Linear(in_features, dim))
@@ -348,7 +348,7 @@ class DuelingQNetwork(nn.Module):
         self.value_stream = nn.Sequential(*value_layers)
 
         # Advantage stream: feature → A(s,a)
-        advantage_layers = []
+        advantage_layers: list[nn.Module] = []
         in_features = shared_dims[-1]
         for dim in advantage_dims:
             advantage_layers.append(nn.Linear(in_features, dim))
@@ -380,7 +380,7 @@ class DuelingQNetwork(nn.Module):
         # Dueling aggregation: Q(s,a) = V(s) + (A(s,a) - mean(A(s,:)))
         # Mean subtraction ensures identifiability
         advantage_mean = advantage.mean(dim=1, keepdim=True)  # [batch, 1]
-        q_values = value + (advantage - advantage_mean)  # [batch, action_dim]
+        q_values: torch.Tensor = value + (advantage - advantage_mean)  # [batch, action_dim]
 
         return q_values
 

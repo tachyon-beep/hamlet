@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
@@ -306,6 +307,8 @@ class VectorizedPopulation(PopulationManager):
             # Feedforward networks support both standard and prioritized replay
             if self.use_per:
                 # TASK-005 Phase 3: Instantiate PrioritizedReplayBuffer
+                # use_per is True only if brain_config is not None (set at line 290-291)
+                assert brain_config is not None, "use_per requires brain_config"
                 self.replay_buffer = PrioritizedReplayBuffer(
                     capacity=brain_config.replay.capacity,
                     alpha=brain_config.replay.priority_alpha,
@@ -655,7 +658,8 @@ class VectorizedPopulation(PopulationManager):
         else:
             # For feedforward networks: store individual transitions
             # Both ReplayBuffer and PrioritizedReplayBuffer share same push() signature
-            self.replay_buffer.push(
+            # SequentialReplayBuffer is only used for recurrent (not in this branch)
+            self.replay_buffer.push(  # type: ignore[union-attr]
                 observations=self.current_obs,
                 actions=actions,
                 rewards_extrinsic=rewards,  # Actually total rewards from DAC
@@ -680,7 +684,8 @@ class VectorizedPopulation(PopulationManager):
         # For recurrent: need enough episodes (16+) for sequence sampling
         # For feedforward: need enough transitions (>= batch_size) for batch sampling
         min_buffer_size = 16 if self.is_recurrent else self.batch_size
-        if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:
+        # All buffer types implement __len__, but mypy doesn't infer it for unions
+        if self.total_steps % self.train_frequency == 0 and len(self.replay_buffer) >= min_buffer_size:  # type: ignore[arg-type]
             # Note: intrinsic_weight is 1.0 because DAC already composed rewards.
             # The replay buffer stores total rewards (not separate extrinsic/intrinsic).
             intrinsic_weight = 1.0
@@ -833,7 +838,7 @@ class VectorizedPopulation(PopulationManager):
                     per_buffer = cast(PrioritizedReplayBuffer, self.replay_buffer)
                     batch = per_buffer.sample(batch_size=self.batch_size)
                     weights = batch["weights"]  # Importance sampling weights
-                    indices = batch["indices"]  # For priority updates
+                    indices = cast(np.ndarray, batch["indices"])  # For priority updates
                 else:
                     standard_buffer = cast(ReplayBuffer, self.replay_buffer)
                     batch = standard_buffer.sample(batch_size=self.batch_size, intrinsic_weight=intrinsic_weight)
@@ -1045,7 +1050,8 @@ class VectorizedPopulation(PopulationManager):
             checkpoint["training_step_counter"] = 0
 
         # Replay buffer
-        checkpoint["replay_buffer"] = self.replay_buffer.serialize()
+        # All buffer types implement serialize(), but mypy doesn't infer it for unions
+        checkpoint["replay_buffer"] = self.replay_buffer.serialize()  # type: ignore[union-attr]
 
         return checkpoint
 
@@ -1115,7 +1121,8 @@ class VectorizedPopulation(PopulationManager):
 
         # Restore replay buffer
         if "replay_buffer" in checkpoint:
-            self.replay_buffer.load_from_serialized(checkpoint["replay_buffer"])
+            # All buffer types implement load_from_serialized(), but mypy doesn't infer it for unions
+            self.replay_buffer.load_from_serialized(checkpoint["replay_buffer"])  # type: ignore[union-attr]
 
         # Restore exploration state
         if "exploration_state" in checkpoint:

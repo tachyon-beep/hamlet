@@ -39,11 +39,11 @@ class PrioritizedReplayBuffer:
         self.device = device if device else torch.device("cpu")
 
         # Storage
-        self.observations = []
-        self.actions = []
-        self.rewards = []
-        self.next_observations = []
-        self.dones = []
+        self.observations: list[torch.Tensor] = []
+        self.actions: list[torch.Tensor] = []
+        self.rewards: list[torch.Tensor] = []
+        self.next_observations: list[torch.Tensor] = []
+        self.dones: list[torch.Tensor] = []
 
         # Priorities (TD errors)
         self.priorities = np.zeros(capacity, dtype=np.float32)

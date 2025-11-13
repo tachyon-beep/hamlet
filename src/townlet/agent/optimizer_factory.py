@@ -51,6 +51,7 @@ class OptimizerFactory:
             True
         """
         # Build optimizer (store in variable instead of returning immediately)
+        optimizer: optim.Optimizer
         if config.type == "adam":
             # Type assertions: validator ensures these are not None
             assert config.adam_beta1 is not None
