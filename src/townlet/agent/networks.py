@@ -289,6 +289,114 @@ class RecurrentSpatialQNetwork(nn.Module):
         return self.hidden_state
 
 
+class DuelingQNetwork(nn.Module):
+    """Dueling Q-Network with value and advantage streams.
+
+    Architecture (Wang et al. 2016):
+    - Shared layers: obs → feature representation
+    - Value stream: feature → V(s) [scalar]
+    - Advantage stream: feature → A(s,a) [action_dim]
+    - Aggregation: Q(s,a) = V(s) + (A(s,a) - mean(A(s,:)))
+
+    The mean subtraction ensures identifiability: V(s) represents
+    state value, A(s,a) represents relative action advantage.
+    """
+
+    def __init__(
+        self,
+        obs_dim: int,
+        action_dim: int,
+        shared_dims: list[int],
+        value_dims: list[int],
+        advantage_dims: list[int],
+        activation: str = "relu",
+    ):
+        """Initialize Dueling Q-Network.
+
+        Args:
+            obs_dim: Observation dimension
+            action_dim: Number of actions
+            shared_dims: Shared layer sizes (e.g., [256, 128])
+            value_dims: Value stream layer sizes (e.g., [128])
+            advantage_dims: Advantage stream layer sizes (e.g., [128])
+            activation: Activation function ('relu', 'gelu', 'swish', 'tanh', 'elu')
+        """
+        super().__init__()
+
+        # Activation function
+        self.activation = self._get_activation(activation)
+
+        # Shared layers
+        shared_layers = []
+        in_features = obs_dim
+        for dim in shared_dims:
+            shared_layers.append(nn.Linear(in_features, dim))
+            shared_layers.append(nn.LayerNorm(dim))
+            shared_layers.append(self._get_activation(activation))
+            in_features = dim
+        self.shared = nn.Sequential(*shared_layers)
+
+        # Value stream: feature → V(s)
+        value_layers = []
+        in_features = shared_dims[-1]
+        for dim in value_dims:
+            value_layers.append(nn.Linear(in_features, dim))
+            value_layers.append(nn.LayerNorm(dim))
+            value_layers.append(self._get_activation(activation))
+            in_features = dim
+        value_layers.append(nn.Linear(in_features, 1))  # Scalar value
+        self.value_stream = nn.Sequential(*value_layers)
+
+        # Advantage stream: feature → A(s,a)
+        advantage_layers = []
+        in_features = shared_dims[-1]
+        for dim in advantage_dims:
+            advantage_layers.append(nn.Linear(in_features, dim))
+            advantage_layers.append(nn.LayerNorm(dim))
+            advantage_layers.append(self._get_activation(activation))
+            in_features = dim
+        advantage_layers.append(nn.Linear(in_features, action_dim))
+        self.advantage_stream = nn.Sequential(*advantage_layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass with dueling decomposition.
+
+        Args:
+            x: [batch, obs_dim] observations
+
+        Returns:
+            q_values: [batch, action_dim]
+                Q(s,a) = V(s) + (A(s,a) - mean(A(s,:)))
+        """
+        # Shared feature extraction
+        features = self.shared(x)  # [batch, shared_dims[-1]]
+
+        # Value stream: V(s)
+        value = self.value_stream(features)  # [batch, 1]
+
+        # Advantage stream: A(s,a)
+        advantage = self.advantage_stream(features)  # [batch, action_dim]
+
+        # Dueling aggregation: Q(s,a) = V(s) + (A(s,a) - mean(A(s,:)))
+        # Mean subtraction ensures identifiability
+        advantage_mean = advantage.mean(dim=1, keepdim=True)  # [batch, 1]
+        q_values = value + (advantage - advantage_mean)  # [batch, action_dim]
+
+        return q_values
+
+    @staticmethod
+    def _get_activation(activation: str) -> nn.Module:
+        """Get activation function module."""
+        activations = {
+            "relu": nn.ReLU(),
+            "gelu": nn.GELU(),
+            "swish": nn.SiLU(),
+            "tanh": nn.Tanh(),
+            "elu": nn.ELU(),
+        }
+        return activations[activation]
+
+
 class StructuredQNetwork(nn.Module):
     """
     Structured Q-Network with group encoders for semantic observation groups.
