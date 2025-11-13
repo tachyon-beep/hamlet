@@ -53,32 +53,49 @@ class PrioritizedReplayBuffer:
 
     def push(
         self,
-        obs: torch.Tensor,
-        action: torch.Tensor,
-        reward: torch.Tensor,
-        next_obs: torch.Tensor,
-        done: torch.Tensor,
+        observations: torch.Tensor,
+        actions: torch.Tensor,
+        rewards_extrinsic: torch.Tensor,
+        rewards_intrinsic: torch.Tensor,
+        next_observations: torch.Tensor,
+        dones: torch.Tensor,
     ) -> None:
-        """Add transition to buffer with max priority."""
-        if self.size_current < self.capacity:
-            self.observations.append(obs.cpu())
-            self.actions.append(action.cpu())
-            self.rewards.append(reward.cpu())
-            self.next_observations.append(next_obs.cpu())
-            self.dones.append(done.cpu())
-            self.size_current += 1
-        else:
-            # Overwrite oldest transition
-            self.observations[self.position] = obs.cpu()
-            self.actions[self.position] = action.cpu()
-            self.rewards[self.position] = reward.cpu()
-            self.next_observations[self.position] = next_obs.cpu()
-            self.dones[self.position] = done.cpu()
+        """Add batch of transitions to buffer with max priority.
 
-        # Assign max priority to new transition
-        self.priorities[self.position] = self.max_priority
+        Args:
+            observations: [batch, obs_dim] observations
+            actions: [batch] actions
+            rewards_extrinsic: [batch] extrinsic rewards
+            rewards_intrinsic: [batch] intrinsic rewards
+            next_observations: [batch, obs_dim] next observations
+            dones: [batch] done flags
+        """
+        batch_size = observations.shape[0]
 
-        self.position = (self.position + 1) % self.capacity
+        # Combine extrinsic + intrinsic rewards
+        rewards = rewards_extrinsic + rewards_intrinsic
+
+        # Loop over batch and store each transition
+        for i in range(batch_size):
+            if self.size_current < self.capacity:
+                self.observations.append(observations[i].cpu())
+                self.actions.append(actions[i].cpu())
+                self.rewards.append(rewards[i].cpu())
+                self.next_observations.append(next_observations[i].cpu())
+                self.dones.append(dones[i].cpu())
+                self.size_current += 1
+            else:
+                # Overwrite oldest transition
+                self.observations[self.position] = observations[i].cpu()
+                self.actions[self.position] = actions[i].cpu()
+                self.rewards[self.position] = rewards[i].cpu()
+                self.next_observations[self.position] = next_observations[i].cpu()
+                self.dones[self.position] = dones[i].cpu()
+
+            # Assign max priority to new transition
+            self.priorities[self.position] = self.max_priority
+
+            self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size: int) -> dict:
         """Sample batch with priority-based sampling.
@@ -140,3 +157,49 @@ class PrioritizedReplayBuffer:
     def size(self) -> int:
         """Return current buffer size."""
         return self.size_current
+
+    def __len__(self) -> int:
+        """Return current buffer size (required by VectorizedPopulation)."""
+        return self.size_current
+
+    def serialize(self) -> dict:
+        """Serialize buffer contents for checkpointing.
+
+        Returns:
+            Dictionary containing buffer state (observations, priorities, metadata)
+        """
+        return {
+            "capacity": self.capacity,
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "beta_annealing": self.beta_annealing,
+            "observations": [obs.cpu() for obs in self.observations],
+            "actions": [act.cpu() for act in self.actions],
+            "rewards": [rew.cpu() for rew in self.rewards],
+            "next_observations": [next_obs.cpu() for next_obs in self.next_observations],
+            "dones": [done.cpu() for done in self.dones],
+            "priorities": self.priorities.copy(),
+            "max_priority": self.max_priority,
+            "position": self.position,
+            "size_current": self.size_current,
+        }
+
+    def load_from_serialized(self, state: dict) -> None:
+        """Restore buffer from serialized state.
+
+        Args:
+            state: Dictionary from serialize()
+        """
+        self.capacity = state["capacity"]
+        self.alpha = state["alpha"]
+        self.beta = state["beta"]
+        self.beta_annealing = state["beta_annealing"]
+        self.observations = [obs.to(self.device) for obs in state["observations"]]
+        self.actions = [act.to(self.device) for act in state["actions"]]
+        self.rewards = [rew.to(self.device) for rew in state["rewards"]]
+        self.next_observations = [next_obs.to(self.device) for next_obs in state["next_observations"]]
+        self.dones = [done.to(self.device) for done in state["dones"]]
+        self.priorities = state["priorities"].copy()
+        self.max_priority = state["max_priority"]
+        self.position = state["position"]
+        self.size_current = state["size_current"]

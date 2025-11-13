@@ -654,8 +654,8 @@ class VectorizedPopulation(PopulationManager):
                 self.current_episodes[i]["dones"].append(dones[i].cpu())
         else:
             # For feedforward networks: store individual transitions
-            standard_buffer = cast(ReplayBuffer, self.replay_buffer)
-            standard_buffer.push(
+            # Both ReplayBuffer and PrioritizedReplayBuffer share same push() signature
+            self.replay_buffer.push(
                 observations=self.current_obs,
                 actions=actions,
                 rewards_extrinsic=rewards,  # Actually total rewards from DAC
