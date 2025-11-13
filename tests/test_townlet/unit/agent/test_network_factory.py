@@ -4,6 +4,8 @@ import torch
 
 from townlet.agent.brain_config import (
     CNNEncoderConfig,
+    DuelingConfig,
+    DuelingStreamConfig,
     FeedforwardConfig,
     LSTMConfig,
     MLPEncoderConfig,
@@ -289,3 +291,60 @@ def test_build_recurrent_aspatial():
     assert q_values.shape == (batch_size, 4)
     assert hidden[0].shape == (1, batch_size, 256)
     assert hidden[1].shape == (1, batch_size, 256)
+
+
+def test_build_dueling_basic():
+    """NetworkFactory builds DuelingQNetwork from DuelingConfig."""
+    config = DuelingConfig(
+        shared_layers=[256, 128],
+        value_stream=DuelingStreamConfig(
+            hidden_layers=[128],
+            activation="relu",
+        ),
+        advantage_stream=DuelingStreamConfig(
+            hidden_layers=[128],
+            activation="relu",
+        ),
+        activation="relu",
+        dropout=0.0,
+        layer_norm=True,
+    )
+
+    network = NetworkFactory.build_dueling(
+        config=config,
+        obs_dim=29,
+        action_dim=8,
+    )
+
+    # Test forward pass
+    obs = torch.randn(4, 29)
+    q_values = network(obs)
+    assert q_values.shape == (4, 8)
+
+
+def test_build_dueling_with_dropout():
+    """NetworkFactory handles dropout in dueling networks."""
+    config = DuelingConfig(
+        shared_layers=[128],
+        value_stream=DuelingStreamConfig(
+            hidden_layers=[64],
+            activation="gelu",
+        ),
+        advantage_stream=DuelingStreamConfig(
+            hidden_layers=[64],
+            activation="gelu",
+        ),
+        activation="gelu",
+        dropout=0.1,
+        layer_norm=False,
+    )
+
+    network = NetworkFactory.build_dueling(
+        config=config,
+        obs_dim=54,
+        action_dim=10,
+    )
+
+    obs = torch.randn(2, 54)
+    q_values = network(obs)
+    assert q_values.shape == (2, 10)

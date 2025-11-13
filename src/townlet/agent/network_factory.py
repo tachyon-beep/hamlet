@@ -6,8 +6,8 @@ Forward-compatible with future SDA (Software Defined Agent) architecture.
 
 import torch.nn as nn
 
-from townlet.agent.brain_config import FeedforwardConfig, RecurrentConfig
-from townlet.agent.networks import RecurrentSpatialQNetwork
+from townlet.agent.brain_config import DuelingConfig, FeedforwardConfig, RecurrentConfig
+from townlet.agent.networks import DuelingQNetwork, RecurrentSpatialQNetwork
 
 
 class NetworkFactory:
@@ -122,6 +122,44 @@ class NetworkFactory:
             num_affordance_types=num_affordance_types,
             enable_temporal_features=False,  # Will be determined by environment
             hidden_dim=lstm_hidden_size,  # From config instead of hardcoded!
+        )
+
+        return network
+
+    @staticmethod
+    def build_dueling(
+        config: DuelingConfig,
+        obs_dim: int,
+        action_dim: int,
+    ) -> DuelingQNetwork:
+        """Build Dueling Q-network from configuration.
+
+        Args:
+            config: Dueling architecture configuration
+            obs_dim: Observation dimension
+            action_dim: Action dimension
+
+        Returns:
+            DuelingQNetwork
+
+        Example:
+            >>> config = DuelingConfig(
+            ...     shared_layers=[256, 128],
+            ...     value_stream=DuelingStreamConfig(...),
+            ...     advantage_stream=DuelingStreamConfig(...),
+            ...     activation="relu",
+            ...     dropout=0.0,
+            ...     layer_norm=True,
+            ... )
+            >>> network = NetworkFactory.build_dueling(config, 29, 8)
+        """
+        network = DuelingQNetwork(
+            obs_dim=obs_dim,
+            action_dim=action_dim,
+            shared_dims=config.shared_layers,
+            value_dims=config.value_stream.hidden_layers,
+            advantage_dims=config.advantage_stream.hidden_layers,
+            activation=config.activation,
         )
 
         return network
