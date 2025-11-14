@@ -18,6 +18,7 @@ import pytest
 import torch
 import yaml
 
+from townlet.agent.brain_config import load_brain_config
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.demo.database import DemoDatabase
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -69,8 +70,7 @@ def run_training_pipeline(
         checkpoint_interval = max(int(checkpoint_interval_value), 0)
 
     # Load brain.yaml (Brain As Code architecture)
-    brain_config_path = config_path.parent / "brain.yaml"
-    brain_config = load_config(brain_config_path)
+    brain_config = load_brain_config(config_path.parent)
 
     # Initialize database
     db = DemoDatabase(db_path)
@@ -115,7 +115,6 @@ def run_training_pipeline(
         obs_dim=env.observation_dim,
         action_dim=env.action_dim,
         brain_config=brain_config,
-        network_type=config["population"]["network_type"],
     )
 
     # Initialize curriculum for all agents
@@ -427,7 +426,7 @@ def test_all_configs_valid():
     """
     required_fields = {
         "environment": ["partial_observability"],
-        "population": ["num_agents", "network_type"],
+        "population": ["num_agents"],
         "curriculum": ["max_steps_per_episode"],
         "exploration": ["embed_dim", "initial_intrinsic_weight"],
         "training": ["device", "max_episodes"],

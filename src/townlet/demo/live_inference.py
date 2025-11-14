@@ -354,7 +354,6 @@ class LiveInferenceServer:
             batch_size=training_cfg.batch_size,
             sequence_length=training_cfg.sequence_length,
             max_grad_norm=training_cfg.max_grad_norm,
-            use_double_dqn=training_cfg.use_double_dqn,  # None (managed by brain.yaml)
             brain_config=brain_config,
             max_episodes=None,  # Not used by live inference
             max_steps_per_episode=None,  # Not used by live inference
