@@ -43,13 +43,23 @@ def epsilon_greedy_action_selection(
 
     # Apply action masking to Q-values if provided
     if action_masks is not None:
+        # Detect rows with no valid actions (all False) - BUG-23
+        valid_count = action_masks.sum(dim=1)  # [batch]
+        all_invalid = valid_count == 0  # [batch] bool
+
         masked_q_values = q_values.clone()
         masked_q_values[~action_masks] = float("-inf")
     else:
         masked_q_values = q_values
+        all_invalid = None
 
     # Greedy actions (argmax of masked Q-values)
     greedy_actions = torch.argmax(masked_q_values, dim=1)
+
+    # For rows with all invalid actions, use argmax of unmasked Q-values (BUG-23)
+    if all_invalid is not None and all_invalid.any():
+        unmasked_greedy = torch.argmax(q_values, dim=1)
+        greedy_actions = torch.where(all_invalid, unmasked_greedy, greedy_actions)
 
     # Random actions (sample only from valid actions)
     if action_masks is not None:
@@ -65,6 +75,10 @@ def epsilon_greedy_action_selection(
 
         # Vectorized sampling (10-100× faster than Python loop)
         random_actions = torch.multinomial(probs, num_samples=1).squeeze(1)
+
+        # For rows with all invalid actions, fall back to greedy action (BUG-23)
+        # (all_invalid was computed earlier when detecting invalid rows)
+        random_actions = torch.where(all_invalid, greedy_actions, random_actions)
     else:
         # No masking: sample uniformly from all actions
         random_actions = torch.randint(0, num_actions, (batch_size,), device=device)

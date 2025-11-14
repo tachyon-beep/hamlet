@@ -26,6 +26,7 @@ class TestPrerequisiteValidation:
 affordances:
   - id: "Foundation"
     name: "Foundation Course"
+    operating_hours: [0, 24]
     effect_pipeline:
       on_completion:
         - meter: energy
@@ -33,6 +34,7 @@ affordances:
 
   - id: "Advanced"
     name: "Advanced Course"
+    operating_hours: [0, 24]
     capabilities:
       - type: prerequisite
         required_affordances: ["Foundation"]
@@ -67,6 +69,7 @@ affordances:
 affordances:
   - id: "Advanced"
     name: "Advanced Course"
+    operating_hours: [0, 24]
     capabilities:
       - type: prerequisite
         required_affordances: ["NonExistentCourse"]
@@ -105,6 +108,7 @@ affordances:
 affordances:
   - id: "Advanced"
     name: "Advanced Course"
+    operating_hours: [0, 24]
     capabilities:
       - type: prerequisite
         required_affordances: ["Missing1", "Missing2", "Missing3"]
@@ -147,6 +151,7 @@ class TestProbabilisticValidation:
 affordances:
   - id: "Casino"
     name: "Slot Machine"
+    operating_hours: [0, 24]
     capabilities:
       - type: probabilistic
         success_probability: 0.3
@@ -187,6 +192,7 @@ affordances:
 affordances:
   - id: "Casino"
     name: "Slot Machine"
+    operating_hours: [0, 24]
     capabilities:
       - type: probabilistic
         success_probability: 0.3
@@ -225,6 +231,7 @@ affordances:
 affordances:
   - id: "Casino"
     name: "Slot Machine"
+    operating_hours: [0, 24]
     capabilities:
       - type: probabilistic
         success_probability: 0.3
@@ -267,6 +274,7 @@ class TestSkillScalingValidation:
 affordances:
   - id: "Training"
     name: "Gym Training"
+    operating_hours: [0, 24]
     capabilities:
       - type: skill_scaling
         skill: fitness
@@ -303,6 +311,7 @@ affordances:
 affordances:
   - id: "Training"
     name: "Gym Training"
+    operating_hours: [0, 24]
     capabilities:
       - type: skill_scaling
         skill: nonexistent_meter

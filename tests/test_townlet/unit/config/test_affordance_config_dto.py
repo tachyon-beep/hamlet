@@ -15,6 +15,7 @@ class TestAffordanceConfigValidation:
             id="0",
             name="Bed",
             category="energy_restoration",
+            operating_hours=[0, 24],
             costs=[{"meter": "money", "amount": 0.05}],
             effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="energy", amount=0.50)]),
         )
@@ -33,7 +34,7 @@ class TestAffordanceConfigValidation:
         from townlet.config.effect_pipeline import EffectPipeline
 
         # This should not raise - empty effects are valid
-        config = AffordanceConfig(id="0", name="Bed", effect_pipeline=EffectPipeline())
+        config = AffordanceConfig(id="0", name="Bed", operating_hours=[0, 24], effect_pipeline=EffectPipeline())
         assert config.effect_pipeline is not None
         assert not config.effect_pipeline.has_effects()
 
@@ -44,6 +45,7 @@ class TestAffordanceConfigValidation:
         config = AffordanceConfig(
             id="staged",
             name="StagedEffects",
+            operating_hours=[0, 24],
             effect_pipeline=EffectPipeline(
                 on_completion=[AffordanceEffect(meter="energy", amount=0.2)],
                 per_tick=[AffordanceEffect(meter="money", amount=0.1)],
@@ -73,6 +75,22 @@ class TestAffordanceConfigValidation:
                 effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="mood", amount=0.1)]),
             )
 
+    def test_operating_hours_required(self):
+        """BUG-30: operating_hours must be required field (no-defaults principle)."""
+        from townlet.config.affordance import AffordanceConfig
+
+        # Missing operating_hours should fail validation
+        with pytest.raises(ValidationError, match="operating_hours"):
+            AffordanceConfig(id="missing_hours", name="MissingHours")
+
+        # Explicit None should also fail
+        with pytest.raises(ValidationError, match="operating_hours"):
+            AffordanceConfig(id="none_hours", name="NoneHours", operating_hours=None)
+
+        # For 24/7 availability, operators must explicitly specify [0, 24]
+        config_247 = AffordanceConfig(id="always_open", name="AlwaysOpen", operating_hours=[0, 24])
+        assert config_247.operating_hours == [0, 24]
+
     def test_capabilities_parsed(self):
         from townlet.config.affordance import AffordanceConfig
         from townlet.config.effect_pipeline import AffordanceEffect, EffectPipeline
@@ -80,6 +98,7 @@ class TestAffordanceConfigValidation:
         config = AffordanceConfig(
             id="job",
             name="Job",
+            operating_hours=[9, 17],
             duration_ticks=5,
             capabilities=[
                 {"type": "multi_tick"},
@@ -98,6 +117,7 @@ class TestAffordanceConfigValidation:
             AffordanceConfig(
                 id="gym",
                 name="Gym",
+                operating_hours=[6, 22],
                 availability=[{"meter": "energy"}],
                 effect_pipeline=EffectPipeline(on_completion=[AffordanceEffect(meter="fitness", amount=0.1)]),
             )
@@ -106,10 +126,10 @@ class TestAffordanceConfigValidation:
         from townlet.config.affordance import AffordanceConfig
 
         with pytest.raises(ValidationError):
-            AffordanceConfig(id="", name="Bed")
+            AffordanceConfig(id="", name="Bed", operating_hours=[0, 24])
 
         with pytest.raises(ValidationError):
-            AffordanceConfig(id="123", name="")
+            AffordanceConfig(id="123", name="", operating_hours=[0, 24])
 
     def test_negative_effects_and_costs_supported(self):
         from townlet.config.affordance import AffordanceConfig
@@ -118,6 +138,7 @@ class TestAffordanceConfigValidation:
         config = AffordanceConfig(
             id="fastfood",
             name="FastFood",
+            operating_hours=[0, 24],
             costs=[{"meter": "money", "amount": 0.1}],
             effect_pipeline=EffectPipeline(
                 on_completion=[
@@ -145,6 +166,7 @@ affordances:
   - id: "0"
     name: "Bed"
     category: "energy_restoration"
+    operating_hours: [0, 24]
     costs:
       - { meter: "money", amount: 0.05 }
     effect_pipeline:
@@ -155,6 +177,7 @@ affordances:
   - id: "10"
     name: "Job"
     category: "income"
+    operating_hours: [9, 17]
     costs: []
     effect_pipeline:
       on_completion:

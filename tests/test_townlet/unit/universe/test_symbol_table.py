@@ -88,6 +88,7 @@ def test_duplicate_affordance_registration_raises():
         interaction_type="instant",
         costs=[],
         effect_pipeline={"instant": [{"meter": "energy", "amount": 0.5}]},
+        operating_hours=[0, 24],  # Required by BUG-30 fix
     )
 
     table.register_affordance(affordance)

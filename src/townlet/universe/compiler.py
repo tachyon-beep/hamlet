@@ -386,8 +386,8 @@ class UniverseCompiler:
             # Otherwise use a fixed POMDP vision range (2 for 2D → 5×5, 1 for 3D → 3×3×3)
             # to ensure constant obs_dim across full/partial obs configs
             if raw_configs.environment.partial_observability:
-                # POMDP mode: use actual vision_range
-                vision_range = raw_configs.environment.vision_range or 3
+                # POMDP mode: use actual vision_range (no hidden defaults - BUG-18 fix)
+                vision_range = raw_configs.environment.vision_range
             else:
                 # Full obs mode: use fixed POMDP standard (matches typical POMDP configs)
                 vision_range = 1 if is_3d else 2  # 3×3×3 for 3D, 5×5 for 2D
@@ -1135,9 +1135,10 @@ class UniverseCompiler:
         self._validate_capacity_and_sustainability(raw_configs, errors, _format_error, allow_unfeasible)
 
     def _validate_spatial_feasibility(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
-        """Validate that substrate has enough space for all affordances + agent.
+        """Validate that substrate has enough space for all affordances + agents.
 
         Reads spatial dimensions from substrate.yaml (single source of truth).
+        Accounts for population.num_agents from training.yaml.
         Only applies to discrete grid substrates (grid, gridnd).
         """
         substrate = raw_configs.substrate
@@ -1185,11 +1186,13 @@ class UniverseCompiler:
         else:
             required = len(enabled_affordances)
 
-        required_cells = required + 1  # +1 for the agent
+        num_agents = raw_configs.population.num_agents
+        required_cells = required + num_agents
         if required_cells > grid_cells:
+            agent_label = "agent" if num_agents == 1 else "agents"
             message = (
                 f"Spatial impossibility: Grid has {grid_cells} cells ({dimensions_str}) but need {required_cells} "
-                f"({required} affordances + 1 agent)."
+                f"({required} affordances + {num_agents} {agent_label})."
             )
             errors.add(formatter("UAC-VAL-001", message, "substrate.yaml:grid"))
 
@@ -1273,9 +1276,8 @@ class UniverseCompiler:
 
     def _validate_operating_hours(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
         for affordance in raw_configs.affordances:
-            operating_hours = getattr(affordance, "operating_hours", None)
-            if not operating_hours:
-                continue
+            operating_hours = affordance.operating_hours
+            # operating_hours is now required by schema - no None check needed
             if len(operating_hours) != 2:
                 errors.add(
                     formatter(
@@ -1657,9 +1659,7 @@ class UniverseCompiler:
         if not raw_configs.environment.enable_temporal_mechanics:
             return 24.0
 
-        if any(getattr(aff, "operating_hours", None) is None for aff in income_affordances):
-            return 24.0
-
+        # operating_hours is now required by schema - no None check needed
         hours_with_income = 0
         for hour in range(24):
             if any(self._affordance_open_for_hour(aff, hour) for aff in income_affordances):
@@ -1667,10 +1667,8 @@ class UniverseCompiler:
         return float(hours_with_income)
 
     def _affordance_open_for_hour(self, affordance: AffordanceConfig, hour: int) -> bool:
-        operating_hours = getattr(affordance, "operating_hours", None)
-        if not operating_hours:
-            return True
-        return is_affordance_open(hour, operating_hours)
+        # operating_hours is now required by schema - no None check needed
+        return is_affordance_open(hour, affordance.operating_hours)
 
     def _affordance_positive_amount_for_meter(self, affordance: AffordanceConfig, meter_name: str) -> float:
         pipeline = getattr(affordance, "effect_pipeline", None)
@@ -2104,11 +2102,8 @@ class UniverseCompiler:
         if affordance_count > 0:
             for hour in range(24):
                 for affordance_idx, affordance in enumerate(raw_configs.affordances):
-                    hours = getattr(affordance, "operating_hours", None)
-                    if not hours:
-                        action_mask_table[hour, affordance_idx] = True
-                        continue
-                    action_mask_table[hour, affordance_idx] = is_affordance_open(hour, hours)
+                    # operating_hours is now required by schema - no None check needed
+                    action_mask_table[hour, affordance_idx] = is_affordance_open(hour, affordance.operating_hours)
 
         affordance_position_map = {
             aff.id: self._tensorize_affordance_position(getattr(aff, "position", None), torch_device) for aff in raw_configs.affordances
