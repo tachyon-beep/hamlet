@@ -96,6 +96,14 @@ class VectorizedPopulation(PopulationManager):
             max_episodes: Maximum training episodes (for PER beta annealing)
             max_steps_per_episode: Maximum steps per episode (for PER beta annealing)
         """
+        # ✅ WP-C2: Validate brain_config required (no legacy fallback)
+        if brain_config is None:
+            raise ValueError(
+                "brain_config is required. Legacy initialization path removed in WP-C2. "
+                "Provide brain.yaml configuration for all training runs. "
+                "See docs/config-schemas/brain.md for examples."
+            )
+
         self.env = env
         self.curriculum = curriculum
         self.exploration = exploration

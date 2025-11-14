@@ -1011,3 +1011,20 @@ class TestSchedulerIntegration:
 
         # Scheduler should remain at initial state (step 0)
         assert population2.scheduler.last_epoch == 0
+
+
+def test_brain_config_none_raises_valueerror(basic_env, adversarial_curriculum, epsilon_greedy_exploration, cpu_device):
+    """VectorizedPopulation should reject brain_config=None per WP-C2."""
+    import pytest
+
+    from townlet.population.vectorized import VectorizedPopulation
+
+    with pytest.raises(ValueError, match="brain_config is required"):
+        VectorizedPopulation(
+            env=basic_env,
+            curriculum=adversarial_curriculum,
+            exploration=epsilon_greedy_exploration,
+            agent_ids=["agent_0"],
+            device=cpu_device,
+            brain_config=None,  # Should raise ValueError
+        )
