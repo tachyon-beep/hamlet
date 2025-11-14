@@ -14,45 +14,45 @@ class TestPopulationConfigValidation:
         with pytest.raises(ValidationError):
             PopulationConfig()
 
-    def test_valid_config(self):
+    def test_valid_config(self, minimal_brain_config):
         """Valid config loads successfully."""
         config = PopulationConfig(
             num_agents=1,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=10000,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             mask_unused_obs=False,
         )
         assert config.num_agents == 1
         assert config.learning_rate == 0.00025
         assert config.network_type == "simple"
 
-    def test_network_type_simple(self):
+    def test_network_type_simple(self, minimal_brain_config):
         """network_type='simple' is valid."""
         config = PopulationConfig(
             num_agents=1,
             learning_rate=0.001,
             gamma=0.95,
             replay_buffer_capacity=5000,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             mask_unused_obs=False,
         )
         assert config.network_type == "simple"
 
-    def test_network_type_recurrent(self):
+    def test_network_type_recurrent(self, recurrent_brain_config):
         """network_type='recurrent' is valid."""
         config = PopulationConfig(
             num_agents=1,
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=10000,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             mask_unused_obs=False,
         )
         assert config.network_type == "recurrent"
 
-    def test_num_agents_must_be_positive(self):
+    def test_num_agents_must_be_positive(self, minimal_brain_config):
         """num_agents must be > 0."""
         with pytest.raises(ValidationError):
             PopulationConfig(
@@ -60,10 +60,10 @@ class TestPopulationConfigValidation:
                 learning_rate=0.00025,
                 gamma=0.99,
                 replay_buffer_capacity=10000,
-                network_type="simple",
+                brain_config=minimal_brain_config,
             )
 
-    def test_learning_rate_must_be_positive(self):
+    def test_learning_rate_must_be_positive(self, minimal_brain_config):
         """learning_rate must be > 0."""
         with pytest.raises(ValidationError):
             PopulationConfig(
@@ -71,10 +71,10 @@ class TestPopulationConfigValidation:
                 learning_rate=0.0,
                 gamma=0.99,
                 replay_buffer_capacity=10000,
-                network_type="simple",
+                brain_config=minimal_brain_config,
             )
 
-    def test_gamma_must_be_in_range(self):
+    def test_gamma_must_be_in_range(self, minimal_brain_config):
         """gamma must be in (0, 1]."""
         with pytest.raises(ValidationError):
             PopulationConfig(
@@ -82,10 +82,10 @@ class TestPopulationConfigValidation:
                 learning_rate=0.00025,
                 gamma=1.5,  # Out of range
                 replay_buffer_capacity=10000,
-                network_type="simple",
+                brain_config=minimal_brain_config,
             )
 
-    def test_replay_buffer_must_be_positive(self):
+    def test_replay_buffer_must_be_positive(self, minimal_brain_config):
         """replay_buffer_capacity must be > 0."""
         with pytest.raises(ValidationError):
             PopulationConfig(
@@ -93,7 +93,7 @@ class TestPopulationConfigValidation:
                 learning_rate=0.00025,
                 gamma=0.99,
                 replay_buffer_capacity=0,
-                network_type="simple",
+                brain_config=minimal_brain_config,
             )
 
 

@@ -35,7 +35,7 @@ class TestGreedyActionSelection:
     """Test greedy action selection with Q-value masking."""
 
     @pytest.fixture
-    def simple_setup(self, cpu_env_factory):
+    def simple_setup(self, cpu_env_factory, minimal_brain_config):
         """Create simple network + environment."""
         env = cpu_env_factory(num_agents=2)
 
@@ -54,7 +54,7 @@ class TestGreedyActionSelection:
             obs_dim=obs_dim,
             learning_rate=0.001,
             gamma=0.99,
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         population.reset()
@@ -136,7 +136,7 @@ class TestEpsilonGreedyActionSelection:
     """Test epsilon-greedy action selection."""
 
     @pytest.fixture
-    def simple_setup(self, cpu_env_factory):
+    def simple_setup(self, cpu_env_factory, minimal_brain_config):
         """Create simple network + environment."""
         env = cpu_env_factory(num_agents=2)
 
@@ -154,7 +154,7 @@ class TestEpsilonGreedyActionSelection:
             obs_dim=obs_dim,
             learning_rate=0.001,
             gamma=0.99,
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         population.reset()
@@ -244,7 +244,7 @@ class TestRecurrentNetworkActionSelection:
     """Test action selection with recurrent networks."""
 
     @pytest.fixture
-    def recurrent_setup(self, custom_env_builder):
+    def recurrent_setup(self, custom_env_builder, recurrent_brain_config):
         """Create recurrent network + environment."""
         env = custom_env_builder(
             num_agents=2,
@@ -266,7 +266,7 @@ class TestRecurrentNetworkActionSelection:
             # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
         )
 
         population.reset()
@@ -323,7 +323,7 @@ class TestActionSelectionEdgeCases:
         env.reset()
         return env
 
-    def test_single_agent_at_corner(self, minimal_env):
+    def test_single_agent_at_corner(self, minimal_env, minimal_brain_config):
         """Should handle case where some actions are masked at corner."""
         obs_dim = minimal_env.observation_dim
 
@@ -340,7 +340,7 @@ class TestActionSelectionEdgeCases:
             # action_dim defaults to env.action_dim
             learning_rate=0.001,
             gamma=0.99,
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         population.reset()

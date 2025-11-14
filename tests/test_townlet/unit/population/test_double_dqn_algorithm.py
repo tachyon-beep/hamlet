@@ -14,6 +14,7 @@ class TestDoubleDQNFeedforward:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Vanilla DQN: Q_target = r + γ * max_a Q_target(s', a)."""
         # Use cpu_env_factory to ensure env and population use same device
@@ -27,7 +28,7 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -73,6 +74,7 @@ class TestDoubleDQNFeedforward:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Double DQN: Q_target = r + γ * Q_target(s', argmax_a Q_online(s', a))."""
         # Use cpu_env_factory to ensure env and population use same device
@@ -86,7 +88,7 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -132,6 +134,7 @@ class TestDoubleDQNFeedforward:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Double DQN should produce different Q-targets than vanilla DQN."""
         # Use cpu_env_factory to ensure env and population use same device
@@ -147,7 +150,7 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -164,7 +167,7 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -224,6 +227,7 @@ class TestDoubleDQNRecurrent:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        recurrent_brain_config,
     ):
         """Recurrent Double DQN should use online network for action selection."""
         # Create POMDP environment on CPU
@@ -244,7 +248,7 @@ class TestDoubleDQNRecurrent:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -263,6 +267,7 @@ class TestDoubleDQNRecurrent:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        recurrent_brain_config,
     ):
         """Recurrent vanilla and Double DQN should use different action selection."""
         # This test verifies the mechanism is in place
@@ -284,7 +289,7 @@ class TestDoubleDQNRecurrent:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -299,7 +304,7 @@ class TestDoubleDQNRecurrent:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,

@@ -57,7 +57,7 @@ def cpu_env_factory(env_factory, cpu_device):
 class TestRecurrentNetworkInitialization:
     """Test recurrent network setup and initialization."""
 
-    def test_recurrent_network_creates_sequential_buffer(self, recurrent_env_builder):
+    def test_recurrent_network_creates_sequential_buffer(self, recurrent_env_builder, recurrent_brain_config):
         """Recurrent networks should use SequentialReplayBuffer, not standard ReplayBuffer.
 
         Coverage target: Initialization path for recurrent networks
@@ -74,7 +74,7 @@ class TestRecurrentNetworkInitialization:
             agent_ids=["agent_0", "agent_1"],
             device=env.device,
             obs_dim=env.observation_dim,
-            network_type="recurrent",  # Use RecurrentSpatialQNetwork
+            brain_config=recurrent_brain_config,  # Use RecurrentSpatialQNetwork
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -95,7 +95,7 @@ class TestRecurrentNetworkInitialization:
         assert population.current_episodes is not None, "Should have episode containers"
         assert len(population.current_episodes) == 2, "Should have container for each agent"
 
-    def test_recurrent_network_initializes_hidden_states(self, recurrent_env_builder):
+    def test_recurrent_network_initializes_hidden_states(self, recurrent_env_builder, recurrent_brain_config):
         """Recurrent networks should initialize LSTM hidden states.
 
         Coverage target: LSTM hidden state initialization
@@ -112,7 +112,7 @@ class TestRecurrentNetworkInitialization:
             agent_ids=["agent_0"],
             device=env.device,
             obs_dim=env.observation_dim,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -141,7 +141,7 @@ class TestRecurrentNetworkInitialization:
 class TestLSTMHiddenStateManagement:
     """Test LSTM hidden state reset and management."""
 
-    def test_reset_hidden_state_zeros_specific_agent(self, cpu_device, recurrent_env_builder):
+    def test_reset_hidden_state_zeros_specific_agent(self, cpu_device, recurrent_env_builder, recurrent_brain_config):
         """_reset_hidden_state() should zero hidden state for specific agent only.
 
         This is called when an agent dies or episode ends, to clear its memory.
@@ -160,7 +160,7 @@ class TestLSTMHiddenStateManagement:
             agent_ids=["agent_0", "agent_1", "agent_2"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -200,7 +200,7 @@ class TestLSTMHiddenStateManagement:
 class TestEpisodeBuffering:
     """Test episode storage for sequential replay buffer."""
 
-    def test_store_episode_and_reset_adds_to_buffer(self, cpu_device, recurrent_env_builder):
+    def test_store_episode_and_reset_adds_to_buffer(self, cpu_device, recurrent_env_builder, recurrent_brain_config):
         """_store_episode_and_reset() should store episode sequence and reset container.
 
         Coverage target: lines 212-232 (_store_episode_and_reset)
@@ -217,7 +217,7 @@ class TestEpisodeBuffering:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -250,7 +250,7 @@ class TestEpisodeBuffering:
         # Verify buffer size increased (use len() for SequentialReplayBuffer)
         assert len(population.replay_buffer) > 0, "Replay buffer should contain stored episode"
 
-    def test_store_episode_skips_empty_episodes(self, cpu_device, recurrent_env_builder):
+    def test_store_episode_skips_empty_episodes(self, cpu_device, recurrent_env_builder, recurrent_brain_config):
         """_store_episode_and_reset() should skip empty episodes.
 
         Coverage target: lines 216-217 (empty episode check)
@@ -267,7 +267,7 @@ class TestEpisodeBuffering:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -285,7 +285,7 @@ class TestEpisodeBuffering:
         assert result is False, "Should return False for empty episode"
         assert len(population.replay_buffer) == 0, "Buffer should remain empty"
 
-    def test_flush_episode_stores_and_finalizes(self, cpu_device, recurrent_env_builder):
+    def test_flush_episode_stores_and_finalizes(self, cpu_device, recurrent_env_builder, recurrent_brain_config):
         """flush_episode() should store episode and finalize agent state.
 
         Coverage target: lines 341-348 (flush_episode for recurrent)
@@ -302,7 +302,7 @@ class TestEpisodeBuffering:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -338,7 +338,7 @@ class TestEpisodeBuffering:
 class TestRecurrentTraining:
     """Test LSTM training loop."""
 
-    def test_recurrent_training_path_via_step_population(self, cpu_device, recurrent_env_builder):
+    def test_recurrent_training_path_via_step_population(self, cpu_device, recurrent_env_builder, recurrent_brain_config):
         """step_population() should trigger LSTM training when buffer has enough episodes.
 
         This indirectly tests the recurrent training path (lines 529-616) by ensuring
@@ -358,7 +358,7 @@ class TestRecurrentTraining:
             agent_ids=["agent_0"],
             device=cpu_device,
             obs_dim=env.observation_dim,
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             learning_rate=0.0001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -401,7 +401,7 @@ class TestRecurrentTraining:
 class TestAdaptiveIntrinsicExplorationIntegration:
     """Test AdaptiveIntrinsicExploration integration."""
 
-    def test_adaptive_exploration_updates_on_episode_end(self, cpu_env_factory, cpu_device):
+    def test_adaptive_exploration_updates_on_episode_end(self, cpu_env_factory, cpu_device, minimal_brain_config):
         """Episode end should trigger AdaptiveIntrinsicExploration update.
 
         Coverage target: lines 318-322 (AdaptiveIntrinsicExploration integration)
@@ -428,7 +428,7 @@ class TestAdaptiveIntrinsicExplorationIntegration:
             agent_ids=["agent_0"],
             device=env.device,
             obs_dim=env.observation_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -453,7 +453,7 @@ class TestAdaptiveIntrinsicExplorationIntegration:
 class TestSnapshotAndMetrics:
     """Test snapshot generation and metrics tracking."""
 
-    def test_build_telemetry_snapshot_generates_runtime_data(self, cpu_env_factory, cpu_device):
+    def test_build_telemetry_snapshot_generates_runtime_data(self, cpu_env_factory, cpu_device, minimal_brain_config):
         """build_telemetry_snapshot() should generate runtime data for all agents.
 
         Coverage target: lines 703-709 (snapshot generation)
@@ -470,7 +470,7 @@ class TestSnapshotAndMetrics:
             agent_ids=["agent_0", "agent_1"],
             device=env.device,
             obs_dim=env.observation_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -495,7 +495,7 @@ class TestSnapshotAndMetrics:
         assert "agent_id" in agent_snapshot
         assert "survival_time" in agent_snapshot  # Actual field, not total_episodes
 
-    def test_update_curriculum_tracker_when_tracker_exists(self, cpu_env_factory, cpu_device):
+    def test_update_curriculum_tracker_when_tracker_exists(self, cpu_env_factory, cpu_device, minimal_brain_config):
         """update_curriculum_tracker() should update when tracker exists.
 
         Coverage target: lines 713-714 (curriculum tracker update)
@@ -521,7 +521,7 @@ class TestSnapshotAndMetrics:
             agent_ids=["agent_0"],
             device=env.device,
             obs_dim=env.observation_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -543,7 +543,7 @@ class TestSnapshotAndMetrics:
         # Verify tracker exists and was initialized
         assert curriculum.tracker is not None, "Tracker should be initialized"
 
-    def test_get_training_metrics_returns_dict(self, cpu_env_factory, cpu_device):
+    def test_get_training_metrics_returns_dict(self, cpu_env_factory, cpu_device, minimal_brain_config):
         """get_training_metrics() should return metrics dictionary.
 
         Coverage target: line 723 (get_training_metrics)
@@ -560,7 +560,7 @@ class TestSnapshotAndMetrics:
             agent_ids=["agent_0"],
             device=env.device,
             obs_dim=env.observation_dim,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,

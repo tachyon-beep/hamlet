@@ -829,15 +829,15 @@ class TestTrainingHyperparameters:
     """Test training hyperparameter configuration from YAML."""
 
     @pytest.mark.parametrize(
-        ("train_frequency", "target_update_frequency", "batch_size", "sequence_length", "max_grad_norm"),
-        [(8, 200, 32, 16, 5.0)],
+        ("train_frequency", "batch_size", "sequence_length", "max_grad_norm"),
+        [(8, 32, 16, 5.0)],
     )
     def test_population_uses_train_frequency_from_config(
         self,
         test_config_pack_path: Path,
         cpu_device: torch.device,
+        minimal_brain_config,
         train_frequency: int,
-        target_update_frequency: int,
         batch_size: int,
         sequence_length: int,
         max_grad_norm: float,
@@ -877,17 +877,17 @@ class TestTrainingHyperparameters:
             learning_rate=0.001,
             gamma=0.95,
             replay_buffer_capacity=1000,
-            network_type="simple",
+            brain_config=minimal_brain_config,
             vision_window_size=5,
             train_frequency=train_frequency,
-            target_update_frequency=target_update_frequency,
             batch_size=batch_size,
             sequence_length=sequence_length,
             max_grad_norm=max_grad_norm,
         )
 
         assert population.train_frequency == train_frequency
-        assert population.target_update_frequency == target_update_frequency
+        # target_update_frequency comes from brain_config (100), not constructor parameter
+        assert population.target_update_frequency == minimal_brain_config.q_learning.target_update_frequency
         assert population.batch_size == batch_size
         assert population.sequence_length == sequence_length
         assert population.max_grad_norm == max_grad_norm

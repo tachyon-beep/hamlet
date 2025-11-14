@@ -24,20 +24,50 @@ class TestDoubleDQNConfiguration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
-        """VectorizedPopulation should accept use_double_dqn parameter."""
+        """VectorizedPopulation should read use_double_dqn from brain_config."""
+        # Create brain_config with use_double_dqn=True
+        brain_config = BrainConfig(
+            version="1.0",
+            description="Test Double DQN",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128, 64],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=True,  # Double DQN enabled
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
+            ),
+        )
+
         population = VectorizedPopulation(
             env=basic_env,
             curriculum=adversarial_curriculum,
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
-            batch_size=32,
-            use_double_dqn=True,  # NEW PARAMETER
+            brain_config=brain_config,
         )
 
         assert population.use_double_dqn is True
@@ -48,20 +78,17 @@ class TestDoubleDQNConfiguration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
-        """VectorizedPopulation with use_double_dqn=False uses vanilla DQN."""
+        """VectorizedPopulation with use_double_dqn=False in brain_config uses vanilla DQN."""
+        # minimal_brain_config has use_double_dqn: false
         population = VectorizedPopulation(
             env=basic_env,
             curriculum=adversarial_curriculum,
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
-            batch_size=32,
-            use_double_dqn=False,
+            brain_config=minimal_brain_config,
         )
 
         assert population.use_double_dqn is False
@@ -72,20 +99,84 @@ class TestDoubleDQNConfiguration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
-        """use_double_dqn should be stored as instance attribute."""
+        """use_double_dqn should be stored as instance attribute from brain_config."""
+        # Create brain_config with use_double_dqn=False
+        brain_config_vanilla = BrainConfig(
+            version="1.0",
+            description="Test Vanilla DQN",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128, 64],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=False,  # Vanilla DQN
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
+            ),
+        )
+
+        # Create brain_config with use_double_dqn=True
+        brain_config_double = BrainConfig(
+            version="1.0",
+            description="Test Double DQN",
+            architecture=ArchitectureConfig(
+                type="feedforward",
+                feedforward=FeedforwardConfig(
+                    hidden_layers=[128, 64],
+                    activation="relu",
+                    dropout=0.0,
+                    layer_norm=False,
+                ),
+            ),
+            optimizer=OptimizerConfig(
+                type="adam",
+                learning_rate=0.001,
+                adam_beta1=0.9,
+                adam_beta2=0.999,
+                adam_eps=1e-8,
+                weight_decay=0.0,
+                schedule=ScheduleConfig(type="constant"),
+            ),
+            loss=LossConfig(type="mse"),
+            q_learning=QLearningConfig(
+                gamma=0.99,
+                target_update_frequency=100,
+                use_double_dqn=True,  # Double DQN
+            ),
+            replay=ReplayConfig(
+                capacity=10000,
+                prioritized=False,
+            ),
+        )
+
         pop_vanilla = VectorizedPopulation(
             env=basic_env,
             curriculum=adversarial_curriculum,
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
-            batch_size=32,
-            use_double_dqn=False,
+            brain_config=brain_config_vanilla,
         )
 
         pop_double = VectorizedPopulation(
@@ -94,12 +185,7 @@ class TestDoubleDQNConfiguration:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
-            batch_size=32,
-            use_double_dqn=True,
+            brain_config=brain_config_double,
         )
 
         assert pop_vanilla.use_double_dqn is False
@@ -161,7 +247,6 @@ class TestBrainConfigIntegration:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
             learning_rate=0.001,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -186,7 +271,6 @@ class TestBrainConfigIntegration:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
             brain_config=simple_brain_config,
         )
 
@@ -215,7 +299,6 @@ class TestBrainConfigIntegration:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
             brain_config=simple_brain_config,
         )
 
@@ -232,6 +315,7 @@ class TestBrainConfigIntegration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """brain_config q_learning fields should override constructor parameters."""
         # Create brain_config with specific q_learning values
@@ -275,7 +359,6 @@ class TestBrainConfigIntegration:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
             gamma=0.99,  # Constructor says 0.99
             target_update_frequency=100,  # Constructor says 100
             use_double_dqn=False,  # Constructor says False
@@ -293,6 +376,7 @@ class TestBrainConfigIntegration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Configured loss function should be used in training."""
         import torch.nn as nn
@@ -337,7 +421,6 @@ class TestBrainConfigIntegration:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
             brain_config=brain_config,
         )
 
@@ -355,6 +438,7 @@ class TestRecurrentNetworkSupport:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """VectorizedPopulation should build RecurrentSpatialQNetwork from recurrent config."""
         from townlet.agent.brain_config import (
@@ -428,7 +512,6 @@ class TestRecurrentNetworkSupport:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",  # Should be ignored when brain_config present
             brain_config=brain_config,
         )
 
@@ -443,6 +526,7 @@ class TestRecurrentNetworkSupport:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """CRITICAL: is_recurrent flag must come from brain_config.architecture.type, not network_type parameter."""
         from townlet.agent.brain_config import (
@@ -510,20 +594,19 @@ class TestRecurrentNetworkSupport:
             ),
         )
 
-        # Pass network_type="simple" but brain_config with recurrent architecture
-        # The is_recurrent flag should come from brain_config, not network_type
+        # Pass brain_config with recurrent architecture
+        # The is_recurrent flag should come from brain_config.architecture.type
         population = VectorizedPopulation(
             env=basic_env,
             curriculum=adversarial_curriculum,
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",  # MISLEADING - should be ignored!
             brain_config=recurrent_config,
         )
 
         # CRITICAL: is_recurrent should be True (from brain_config.architecture.type)
-        # NOT False (from network_type="simple")
+        # NOT False (from brain_config=minimal_brain_config)
         assert population.is_recurrent is True, (
             "is_recurrent flag must come from brain_config.architecture.type, not network_type parameter. "
             f"Expected True (from brain_config), got {population.is_recurrent} (from network_type)"
@@ -535,8 +618,10 @@ class TestRecurrentNetworkSupport:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
+        recurrent_brain_config,
     ):
-        """When brain_config is None, is_recurrent should come from network_type parameter."""
+        """is_recurrent should be inferred from brain_config architecture type."""
         # Test feedforward network
         population_feedforward = VectorizedPopulation(
             env=basic_env,
@@ -544,8 +629,7 @@ class TestRecurrentNetworkSupport:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="simple",
-            brain_config=None,
+            brain_config=minimal_brain_config,
         )
         assert population_feedforward.is_recurrent is False
 
@@ -556,8 +640,7 @@ class TestRecurrentNetworkSupport:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="recurrent",
-            brain_config=None,
+            brain_config=recurrent_brain_config,
         )
         assert population_recurrent.is_recurrent is True
 
@@ -567,6 +650,7 @@ class TestRecurrentNetworkSupport:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Recurrent network should have dimensions from config."""
         from townlet.agent.brain_config import (
@@ -655,6 +739,7 @@ class TestSchedulerIntegration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """VectorizedPopulation should unpack (optimizer, scheduler) tuple."""
         from torch.optim.lr_scheduler import StepLR
@@ -715,6 +800,7 @@ class TestSchedulerIntegration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """VectorizedPopulation should have scheduler=None for constant schedule."""
         brain_config = BrainConfig(
@@ -769,6 +855,7 @@ class TestSchedulerIntegration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """VectorizedPopulation should support ExponentialLR scheduler."""
         from torch.optim.lr_scheduler import ExponentialLR
@@ -827,6 +914,7 @@ class TestSchedulerIntegration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Scheduler state should be saved and restored in checkpoints."""
         from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -943,6 +1031,7 @@ class TestSchedulerIntegration:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Loading old checkpoints without scheduler state should not crash."""
         brain_config = BrainConfig(
