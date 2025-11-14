@@ -112,6 +112,10 @@ class AspatialSubstrate(SpatialSubstrate):
         """Return empty list (aspatial has no positions)."""
         return []
 
+    def get_capacity(self) -> None:
+        """Return None (aspatial has no positions)."""
+        return None
+
     def encode_partial_observation(
         self,
         positions: torch.Tensor,

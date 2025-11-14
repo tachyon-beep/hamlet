@@ -1,7 +1,23 @@
-Title: Affordance operating hours implemented three times (config, engine, env) with drift risk
+Title: Affordance operating hours implemented three times with ACTUAL INCONSISTENCIES
 
-Severity: medium
-Status: open
+Severity: HIGH (upgraded from medium)
+Status: FIXED
+Confirmed Date: 2025-11-14
+Fixed Date: 2025-11-14
+Resolution: Consolidated all three implementations into canonical temporal_utils.is_affordance_open()
+
+Bugs Found (pre-fix):
+  - affordance_config.py: Failed on "18-28" notation (returned False at 2am, should be True)
+  - affordance_engine.py: Failed on "22-6" notation (returned False at 23:00, should be True)
+  - compiler.py: Correct implementation (handled both notations)
+
+Fix Applied:
+  - Created src/townlet/environment/temporal_utils.py with canonical implementation
+  - Deleted affordance_config.is_affordance_open() - now import from temporal_utils
+  - Updated AffordanceEngine.is_affordance_open() to delegate to canonical
+  - Updated UniverseCompiler to use canonical directly (no wrapper)
+  - Added comprehensive test suite (9 tests, 100% coverage)
+  - All existing tests pass, configs compile successfully
 
 Ticket Type: JANK
 Subsystem: environment/affordances + universe/compiler

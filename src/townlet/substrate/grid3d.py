@@ -461,6 +461,10 @@ class Grid3DSubstrate(SpatialSubstrate):
                     positions.append([x, y, z])
         return positions
 
+    def get_capacity(self) -> int:
+        """Calculate total positions analytically (width × height × depth)."""
+        return self.width * self.height * self.depth
+
     def get_valid_neighbors(self, position: torch.Tensor) -> list[torch.Tensor]:
         """Get 6 cardinal neighbors in 3D (±x, ±y, ±z).
 

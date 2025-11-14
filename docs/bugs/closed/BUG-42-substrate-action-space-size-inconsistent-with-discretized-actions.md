@@ -1,7 +1,9 @@
 Title: Continuous2D discretized actions can exceed substrate.action_space_size contract
 
 Severity: medium
-Status: open
+Status: CLOSED - Already Fixed
+Resolution Date: 2025-11-14
+Resolution: ContinuousSubstrate overrides action_space_size (line 119) to dynamically return len(cached_actions), correctly handling discretization
 
 Subsystem: substrate/continuous + environment/action_builder
 Affected Version/Branch: main

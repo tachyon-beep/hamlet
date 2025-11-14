@@ -360,6 +360,10 @@ class ContinuousSubstrate(SpatialSubstrate):
             f"See vectorized_env.py randomize_affordance_positions()."
         )
 
+    def get_capacity(self) -> None:
+        """Return None for infinite capacity (continuous space)."""
+        return None
+
     def get_valid_neighbors(self, position: torch.Tensor) -> list[torch.Tensor]:
         """Raise error - continuous space has no discrete neighbors.
 

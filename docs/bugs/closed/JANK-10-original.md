@@ -1,7 +1,10 @@
-Title: GridND.get_all_positions can generate huge position lists without compiler-side guard
+Title: GridND.get_all_positions wasteful for random sampling (generates all positions unnecessarily)
 
 Severity: medium
-Status: open
+Status: CONFIRMED
+Confirmed Date: 2025-11-14
+Guards Present: MemoryError at 10M positions, Warning at 100K
+Issue: Wasteful design - generates all positions when only sampling a few for affordance placement
 
 Ticket Type: JANK
 Subsystem: substrate/gridnd + compiler

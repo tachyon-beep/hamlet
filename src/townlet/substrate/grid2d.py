@@ -480,6 +480,10 @@ class Grid2DSubstrate(SpatialSubstrate):
         """Return all grid positions."""
         return [[x, y] for x in range(self.width) for y in range(self.height)]
 
+    def get_capacity(self) -> int:
+        """Calculate total positions analytically (width × height)."""
+        return self.width * self.height
+
     def encode_partial_observation(
         self,
         positions: torch.Tensor,

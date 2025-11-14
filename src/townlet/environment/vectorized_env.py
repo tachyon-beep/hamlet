@@ -1501,31 +1501,46 @@ class VectorizedHamletEnv:
                 self.affordances[name] = empty.clone()
             return
 
-        try:
-            all_positions = self.substrate.get_all_positions()
-        except NotImplementedError:
-            all_positions = None
+        # Check capacity analytically without enumerating positions (JANK-10 fix)
+        capacity = self.substrate.get_capacity()
 
-        if all_positions:
-            total_positions = len(all_positions)
+        # If capacity is finite, validate there's enough space
+        if capacity is not None:
             required_slots = len(self.affordances) + self.num_agents
-            if required_slots > total_positions:
+            if required_slots > capacity:
                 raise ValueError(
-                    f"Substrate exposes {total_positions} positions but {len(self.affordances)} affordances + "
+                    f"Substrate has {capacity} positions but {len(self.affordances)} affordances + "
                     f"{self.num_agents} agents require more space."
                 )
 
-            random.shuffle(all_positions)
-            for idx, name in enumerate(self.affordances.keys()):
-                tensor_pos = torch.tensor(
-                    all_positions[idx],
-                    dtype=self.substrate.position_dtype,
-                    device=self.device,
-                )
-                self.affordances[name] = tensor_pos
-            return
+        # Sample positions efficiently with collision detection (JANK-10 fix)
+        # For discrete grids: retry on collision to guarantee unique positions
+        # For continuous: collisions are acceptable (infinite positions)
+        sampled = None
+        if capacity is not None:
+            # Discrete grid: try random sampling with collision detection
+            max_attempts = 10
+            for attempt in range(max_attempts):
+                sampled = self.substrate.initialize_positions(len(self.affordances), self.device)
 
-        # Continuous substrates expose infinite positions; sample using initializer
-        sampled = self.substrate.initialize_positions(len(self.affordances), self.device)
+                # Convert positions to tuples for uniqueness check
+                positions_as_tuples = [tuple(sampled[i].tolist()) for i in range(len(self.affordances))]
+                if len(positions_as_tuples) == len(set(positions_as_tuples)):
+                    break  # No collisions, we're done
+            else:
+                # Retries exhausted (very rare for large grids, possible for small grids)
+                # Fall back to enumeration to guarantee collision-free placement
+                all_positions = self.substrate.get_all_positions()
+                random.shuffle(all_positions)
+                sampled = torch.stack(
+                    [
+                        torch.tensor(all_positions[idx], dtype=self.substrate.position_dtype, device=self.device)
+                        for idx in range(len(self.affordances))
+                    ]
+                )
+        else:
+            # Continuous/aspatial: sample directly (infinite positions, collisions OK)
+            sampled = self.substrate.initialize_positions(len(self.affordances), self.device)
+
         for idx, name in enumerate(self.affordances.keys()):
             self.affordances[name] = sampled[idx].clone()
