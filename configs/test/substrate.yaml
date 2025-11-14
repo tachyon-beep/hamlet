@@ -27,3 +27,6 @@ grid:
 
   # Distance metric: "manhattan" (L1 norm)
   distance_metric: "manhattan"
+
+  # Observation encoding: "relative" (normalized coordinates)
+  observation_encoding: "relative"

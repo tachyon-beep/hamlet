@@ -24,6 +24,7 @@ def test_grid2d_config_valid():
         "height": 8,
         "boundary": "clamp",
         "distance_metric": "manhattan",
+        "observation_encoding": "relative",
     }
 
     config = Grid2DSubstrateConfig(**config_data)
@@ -41,6 +42,7 @@ def test_grid2d_config_invalid_dimensions():
         "height": 8,
         "boundary": "clamp",
         "distance_metric": "manhattan",
+        "observation_encoding": "relative",
     }
 
     with pytest.raises(ValueError, match="greater than 0"):
@@ -69,6 +71,7 @@ def test_substrate_config_grid2d():
             "height": 8,
             "boundary": "clamp",
             "distance_metric": "manhattan",
+            "observation_encoding": "relative",
         },
     }
 
@@ -104,6 +107,7 @@ def test_factory_build_grid2d():
             "height": 8,
             "boundary": "clamp",
             "distance_metric": "manhattan",
+            "observation_encoding": "relative",
         },
     }
 
@@ -149,18 +153,20 @@ def test_grid_config_observation_encoding_valid():
 
 
 def test_grid_config_observation_encoding_default():
-    """Test Grid config defaults to relative for backward compatibility."""
+    """Test Grid config requires observation_encoding (no defaults)."""
+    import pydantic_core
+
     from townlet.substrate.config import GridConfig
 
-    config = GridConfig(
-        topology="square",
-        width=8,
-        height=8,
-        boundary="clamp",
-        distance_metric="manhattan",
-        # observation_encoding NOT provided
-    )
-    assert config.observation_encoding == "relative"
+    with pytest.raises((ValueError, pydantic_core._pydantic_core.ValidationError)):
+        GridConfig(
+            topology="square",
+            width=8,
+            height=8,
+            boundary="clamp",
+            distance_metric="manhattan",
+            # observation_encoding NOT provided - should fail!
+        )
 
 
 def test_grid_config_observation_encoding_invalid():
@@ -196,23 +202,25 @@ def test_continuous_config_observation_encoding_valid():
 
 
 def test_continuous_config_observation_encoding_default():
-    """Test Continuous config defaults to relative for backward compatibility."""
+    """Test Continuous config requires observation_encoding (no defaults)."""
+    import pydantic_core
+
     from townlet.substrate.config import ContinuousConfig
 
-    config = ContinuousConfig(
-        dimensions=2,
-        bounds=[(0.0, 10.0), (0.0, 10.0)],
-        boundary="clamp",
-        movement_delta=0.5,
-        interaction_radius=1.0,
-        distance_metric="euclidean",
-        # observation_encoding NOT provided
-    )
-    assert config.observation_encoding == "relative"
+    with pytest.raises((ValueError, pydantic_core._pydantic_core.ValidationError)):
+        ContinuousConfig(
+            dimensions=2,
+            bounds=[(0.0, 10.0), (0.0, 10.0)],
+            boundary="clamp",
+            movement_delta=0.5,
+            interaction_radius=1.0,
+            distance_metric="euclidean",
+            # observation_encoding NOT provided - should fail!
+        )
 
 
 def test_gridnd_config_includes_topology_field():
-    """GridNDConfig should include topology field with default 'hypercube'."""
+    """GridNDConfig should require topology field (no defaults)."""
     from townlet.substrate.config import GridNDConfig
 
     config = GridNDConfig(
@@ -220,6 +228,7 @@ def test_gridnd_config_includes_topology_field():
         boundary="clamp",
         distance_metric="manhattan",
         observation_encoding="relative",
+        topology="hypercube",
     )
     assert hasattr(config, "topology")
     assert config.topology == "hypercube"
@@ -433,6 +442,7 @@ grid:
   height: 5
   boundary: "clamp"
   distance_metric: "manhattan"
+  observation_encoding: "relative"
 """
     non_square_path = Path("/tmp/non_square_substrate.yaml")
     non_square_path.write_text(non_square_yaml)

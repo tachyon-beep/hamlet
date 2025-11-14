@@ -72,17 +72,17 @@ def test_factory_propagates_gridnd_topology():
 
 
 def test_factory_sets_gridnd_topology_when_config_uses_default():
-    """Factory should use GridND topology default when not specified in config."""
+    """Factory should use GridND topology when specified in config."""
     config = SubstrateConfig(
         version="1.0",
-        description="Test GridND config with default topology",
+        description="Test GridND config with topology",
         type="gridnd",
         gridnd=GridNDConfig(
             dimension_sizes=[5, 5, 5, 5],
             boundary="clamp",
             distance_metric="manhattan",
             observation_encoding="relative",
-            # topology not specified, uses default
+            topology="hypercube",
         ),
     )
     substrate = SubstrateFactory.build(config, torch.device("cpu"))

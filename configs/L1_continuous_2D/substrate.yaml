@@ -26,6 +26,9 @@ continuous:
   # Distance metric
   distance_metric: "euclidean"
 
+  # Observation encoding
+  observation_encoding: "relative"  # Normalized coordinates [0,1]
+
   # Action discretization (Option A: Discretized Continuous Actions)
   # Enables fine-grained directional movement with variable speed
   # If not specified, uses legacy 4-way directional actions

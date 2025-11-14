@@ -305,6 +305,8 @@ class TestGrid3DConfiguration:
                 height=8,
                 depth=3,
                 boundary="clamp",
+                distance_metric="manhattan",
+                observation_encoding="relative",
             ),
         )
 

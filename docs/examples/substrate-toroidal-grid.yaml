@@ -18,3 +18,4 @@ grid:
   height: 8
   boundary: "wrap"  # ← Different! Agents wrap around edges
   distance_metric: "manhattan"
+  observation_encoding: "relative"

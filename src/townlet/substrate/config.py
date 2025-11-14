@@ -28,11 +28,10 @@ class GridConfig(BaseModel):
     height: int = Field(gt=0, description="Grid height (Y dimension)")
     depth: int | None = Field(None, gt=0, description="Grid depth (Z dimension) - required for cubic topology")
     boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(description="Boundary handling mode")
-    distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(default="manhattan", description="Distance calculation method")
+    distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(description="Distance calculation method")
 
     # NEW: Phase 5C addition
     observation_encoding: Literal["relative", "scaled", "absolute"] = Field(
-        default="relative",
         description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + ranges), absolute (raw coordinates)",
     )
 
@@ -70,17 +69,15 @@ class GridNDConfig(BaseModel):
 
     boundary: Literal["clamp", "wrap", "bounce", "sticky"] = Field(description="Boundary handling mode")
 
-    distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(default="manhattan", description="Distance calculation method")
+    distance_metric: Literal["manhattan", "euclidean", "chebyshev"] = Field(description="Distance calculation method")
 
     # NEW: Phase 5C addition
     observation_encoding: Literal["relative", "scaled", "absolute"] = Field(
-        default="relative",
         description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + sizes), absolute (raw coordinates)",
     )
 
     # NEW: Topology field (always 'hypercube' for now, explicit in config)
     topology: Literal["hypercube"] = Field(
-        default="hypercube",
         description="Grid topology (hypercube for N-dimensional Cartesian grid)",
     )
 
@@ -145,11 +142,10 @@ class ContinuousConfig(BaseModel):
 
     interaction_radius: float = Field(gt=0, description="Distance threshold for affordance interaction")
 
-    distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = Field(default="euclidean", description="Distance calculation method")
+    distance_metric: Literal["euclidean", "manhattan", "chebyshev"] = Field(description="Distance calculation method")
 
     # NEW: Phase 5C addition
     observation_encoding: Literal["relative", "scaled", "absolute"] = Field(
-        default="relative",
         description="Position encoding strategy: relative (normalized [0,1]), scaled (normalized + ranges), absolute (raw coordinates)",
     )
 
