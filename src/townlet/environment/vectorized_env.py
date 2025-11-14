@@ -606,13 +606,18 @@ class VectorizedHamletEnv:
             observations: [num_agents, observation_dim]
         """
         # Refresh affordance layout each episode so randomization/configured layouts stay in sync
+        # BUG-15 fix: randomize_affordance_positions() now returns agent positions to prevent collisions
         if self.randomize_affordances:
-            self.randomize_affordance_positions()
+            agent_positions = self.randomize_affordance_positions()
+            # Use returned positions (guaranteed collision-free with affordances)
+            self.positions = (
+                agent_positions if agent_positions is not None else self.substrate.initialize_positions(self.num_agents, self.device)
+            )
         else:
             self._apply_configured_affordance_positions()
-
-        # Use substrate for position initialization (supports grid and aspatial)
-        self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
+            # When using configured positions, agents still spawn randomly (could still collide)
+            # TODO: Consider also handling configured affordance case for complete collision-free guarantee
+            self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
 
         # Initial meter values (normalized to [0, 1]) from compiled bars config
         self.meters = self.initial_meter_values.unsqueeze(0).expand(self.num_agents, -1).clone()
@@ -1485,21 +1490,31 @@ class VectorizedHamletEnv:
         # Clamp meters to [0, 1]
         self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
-    def randomize_affordance_positions(self) -> None:
-        """Randomize affordance positions using substrate-provided layouts."""
+    def randomize_affordance_positions(self) -> torch.Tensor | None:
+        """Randomize affordance positions and return agent spawn positions.
+
+        Returns:
+            Agent spawn positions [num_agents, position_dim] or None if not randomizing.
+            Positions are guaranteed collision-free with affordances.
+
+        Note:
+            BUG-15 fix: Samples (affordances + agents) positions together to prevent
+            agents spawning on top of affordances.
+        """
 
         if not self.randomize_affordances:
-            return
+            return None
 
         if not self.affordances:
-            return
+            return None
 
         # Aspatial universes have no coordinates; store empty tensors for consistency
         if self.substrate.position_dim == 0:
             empty = torch.zeros(0, dtype=self.substrate.position_dtype, device=self.device)
             for name in self.affordances.keys():
                 self.affordances[name] = empty.clone()
-            return
+            # Return empty agent positions for aspatial
+            return torch.zeros(self.num_agents, 0, dtype=self.substrate.position_dtype, device=self.device)
 
         # Check capacity analytically without enumerating positions (JANK-10 fix)
         capacity = self.substrate.get_capacity()
@@ -1513,18 +1528,20 @@ class VectorizedHamletEnv:
                     f"{self.num_agents} agents require more space."
                 )
 
-        # Sample positions efficiently with collision detection (JANK-10 fix)
+        # Sample (affordances + agents) positions together (BUG-15 fix)
         # For discrete grids: retry on collision to guarantee unique positions
         # For continuous: collisions are acceptable (infinite positions)
+        total_positions_needed = len(self.affordances) + self.num_agents
         sampled = None
+
         if capacity is not None:
             # Discrete grid: try random sampling with collision detection
             max_attempts = 10
             for attempt in range(max_attempts):
-                sampled = self.substrate.initialize_positions(len(self.affordances), self.device)
+                sampled = self.substrate.initialize_positions(total_positions_needed, self.device)
 
                 # Convert positions to tuples for uniqueness check
-                positions_as_tuples = [tuple(sampled[i].tolist()) for i in range(len(self.affordances))]
+                positions_as_tuples = [tuple(sampled[i].tolist()) for i in range(total_positions_needed)]
                 if len(positions_as_tuples) == len(set(positions_as_tuples)):
                     break  # No collisions, we're done
             else:
@@ -1535,12 +1552,18 @@ class VectorizedHamletEnv:
                 sampled = torch.stack(
                     [
                         torch.tensor(all_positions[idx], dtype=self.substrate.position_dtype, device=self.device)
-                        for idx in range(len(self.affordances))
+                        for idx in range(total_positions_needed)
                     ]
                 )
         else:
             # Continuous/aspatial: sample directly (infinite positions, collisions OK)
-            sampled = self.substrate.initialize_positions(len(self.affordances), self.device)
+            sampled = self.substrate.initialize_positions(total_positions_needed, self.device)
+
+        # Split: first N for affordances, remaining M for agents
+        affordance_positions = sampled[: len(self.affordances)]
+        agent_positions = sampled[len(self.affordances) :]
 
         for idx, name in enumerate(self.affordances.keys()):
-            self.affordances[name] = sampled[idx].clone()
+            self.affordances[name] = affordance_positions[idx].clone()
+
+        return agent_positions
