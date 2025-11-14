@@ -1,46 +1,56 @@
-version: "2.0"
-description: "Aspatial test universe - 4 meters for fast testing"
-
+version: '2.0'
+description: Aspatial test universe - 4 meters for fast testing
 bars:
-  - name: "energy"
-    index: 0
-    tier: "pivotal"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.005
-    description: "Energy level"
-
-  - name: "health"
-    index: 1
-    tier: "pivotal"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.0
-    description: "Health status"
-
-  - name: "money"
-    index: 2
-    tier: "resource"
-    range: [0.0, 1.0]
-    initial: 0.5
-    base_depletion: 0.0
-    description: "Financial resources"
-
-  - name: "mood"
-    index: 3
-    tier: "secondary"
-    range: [0.0, 1.0]
-    initial: 0.7
-    base_depletion: 0.001
-    description: "Mood state"
-
+- name: energy
+  index: 0
+  tier: pivotal
+  range:
+  - 0.0
+  - 1.0
+  initial: 1.0
+  base_depletion: 0.005
+  description: Energy level
+  base_move_depletion: 0.005
+  base_interaction_cost: 0.005
+- name: health
+  index: 1
+  tier: pivotal
+  range:
+  - 0.0
+  - 1.0
+  initial: 1.0
+  base_depletion: 0.0
+  description: Health status
+  base_move_depletion: 0.0
+  base_interaction_cost: 0.0
+- name: money
+  index: 2
+  tier: resource
+  range:
+  - 0.0
+  - 1.0
+  initial: 0.5
+  base_depletion: 0.0
+  description: Financial resources
+  base_move_depletion: 0.0
+  base_interaction_cost: 0.0
+- name: mood
+  index: 3
+  tier: secondary
+  range:
+  - 0.0
+  - 1.0
+  initial: 0.7
+  base_depletion: 0.001
+  description: Mood state
+  base_move_depletion: 0.0
+  base_interaction_cost: 0.0
 terminal_conditions:
-  - meter: "energy"
-    operator: "<="
-    value: 0.0
-    description: "Death by energy depletion"
-
-  - meter: "health"
-    operator: "<="
-    value: 0.0
-    description: "Death by health failure"
+- meter: energy
+  operator: <=
+  value: 0.0
+  description: Death by energy depletion
+- meter: health
+  operator: <=
+  value: 0.0
+  description: Death by health failure

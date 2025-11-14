@@ -19,6 +19,8 @@ class TestBarConfigValidation:
             range=[0.0, 1.0],
             initial=1.0,
             base_depletion=0.005,
+            base_move_depletion=0.003,
+            base_interaction_cost=0.002,
         )
         assert config.name == "energy"
         assert config.initial == 1.0
@@ -45,6 +47,8 @@ class TestBarConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
             )
 
     def test_range_must_have_two_elements(self):
@@ -60,6 +64,8 @@ class TestBarConfigValidation:
                 range=[0.0],  # Only 1 element
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
             )
 
         # Too many elements
@@ -71,6 +77,8 @@ class TestBarConfigValidation:
                 range=[0.0, 0.5, 1.0],  # 3 elements
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
             )
 
     def test_initial_must_be_in_range(self):
@@ -86,6 +94,8 @@ class TestBarConfigValidation:
                 range=[0.0, 1.0],
                 initial=-0.5,  # Below min
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
             )
         assert "initial" in str(exc_info.value).lower()
 
@@ -98,6 +108,8 @@ class TestBarConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.5,  # Above max
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
             )
         assert "initial" in str(exc_info.value).lower()
 
@@ -113,6 +125,8 @@ class TestBarConfigValidation:
                 range=[1.0, 0.0],  # min > max (reversed)
                 initial=0.5,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
             )
         assert "range" in str(exc_info.value).lower()
 
@@ -128,6 +142,8 @@ class TestBarConfigValidation:
             range=[0.0, 1.0],
             initial=1.0,
             base_depletion=0.005,
+            base_move_depletion=0.0,
+            base_interaction_cost=0.0,
         )
         assert config1.description is None
 
@@ -139,9 +155,77 @@ class TestBarConfigValidation:
             range=[0.0, 1.0],
             initial=1.0,
             base_depletion=0.005,
+            base_move_depletion=0.0,
+            base_interaction_cost=0.0,
             description="Energy meter",
         )
         assert config2.description == "Energy meter"
+
+    def test_action_cost_fields_accepted(self):
+        """BarConfig accepts base_move_depletion and base_interaction_cost fields."""
+        from townlet.config.bar import BarConfig
+
+        # Test with all three action cost fields
+        config = BarConfig(
+            name="energy",
+            index=0,
+            tier="pivotal",
+            range=[0.0, 1.0],
+            initial=1.0,
+            base_depletion=0.01,  # Passive decay (existence)
+            base_move_depletion=0.005,  # Movement cost
+            base_interaction_cost=0.005,  # Interaction cost
+            description="Energy with three action types",
+        )
+        assert config.base_depletion == 0.01
+        assert config.base_move_depletion == 0.005
+        assert config.base_interaction_cost == 0.005
+
+    def test_action_cost_fields_are_required(self):
+        """base_move_depletion and base_interaction_cost are required fields."""
+        from townlet.config.bar import BarConfig
+
+        # Missing base_move_depletion and base_interaction_cost should fail
+        with pytest.raises(ValidationError):
+            BarConfig(
+                name="energy",
+                index=0,
+                tier="pivotal",
+                range=[0.0, 1.0],
+                initial=1.0,
+                base_depletion=0.01,
+                # Missing base_move_depletion and base_interaction_cost
+            )
+
+    def test_action_cost_fields_must_be_non_negative(self):
+        """Action cost fields must be >= 0."""
+        from townlet.config.bar import BarConfig
+
+        # Negative base_move_depletion
+        with pytest.raises(ValidationError):
+            BarConfig(
+                name="energy",
+                index=0,
+                tier="pivotal",
+                range=[0.0, 1.0],
+                initial=1.0,
+                base_depletion=0.01,
+                base_move_depletion=-0.005,  # Negative!
+                base_interaction_cost=0.005,
+            )
+
+        # Negative base_interaction_cost
+        with pytest.raises(ValidationError):
+            BarConfig(
+                name="energy",
+                index=0,
+                tier="pivotal",
+                range=[0.0, 1.0],
+                initial=1.0,
+                base_depletion=0.01,
+                base_move_depletion=0.005,
+                base_interaction_cost=-0.005,  # Negative!
+            )
 
 
 class TestBarConfigLoading:
@@ -163,6 +247,8 @@ bars:
     range: [0.0, 1.0]
     initial: 1.0
     base_depletion: 0.005
+    base_move_depletion: 0.003
+    base_interaction_cost: 0.002
     description: "Energy level"
 
   - name: "health"
@@ -171,6 +257,8 @@ bars:
     range: [0.0, 1.0]
     initial: 1.0
     base_depletion: 0.0
+    base_move_depletion: 0.0
+    base_interaction_cost: 0.0
     description: "Health level"
 """
         )
