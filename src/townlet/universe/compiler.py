@@ -27,6 +27,7 @@ from townlet.environment.cascade_config import (
     load_cascades_config as load_full_cascades_config,
 )
 from townlet.environment.substrate_action_validator import SubstrateActionValidator
+from townlet.environment.temporal_utils import is_affordance_open
 from townlet.substrate.config import SubstrateConfig
 from townlet.universe.adapters.vfs_adapter import VFSAdapter, vfs_to_observation_spec
 from townlet.universe.compiled import CompiledUniverse
@@ -1656,8 +1657,7 @@ class UniverseCompiler:
         operating_hours = getattr(affordance, "operating_hours", None)
         if not operating_hours:
             return True
-        open_hour, close_hour = operating_hours
-        return self._is_open(hour, open_hour, close_hour)
+        return is_affordance_open(hour, operating_hours)
 
     def _affordance_positive_amount_for_meter(self, affordance: AffordanceConfig, meter_name: str) -> float:
         pipeline = getattr(affordance, "effect_pipeline", None)
@@ -2095,8 +2095,7 @@ class UniverseCompiler:
                     if not hours:
                         action_mask_table[hour, affordance_idx] = True
                         continue
-                    open_hour, close_hour = hours
-                    action_mask_table[hour, affordance_idx] = self._is_open(hour, open_hour, close_hour)
+                    action_mask_table[hour, affordance_idx] = is_affordance_open(hour, hours)
 
         affordance_position_map = {
             aff.id: self._tensorize_affordance_position(getattr(aff, "position", None), torch_device) for aff in raw_configs.affordances
@@ -2525,18 +2524,5 @@ class UniverseCompiler:
 
         return None
 
-    @staticmethod
-    def _is_open(hour: int, open_hour: int, close_hour: int) -> bool:
-        """Return True if an affordance is open for the given hour."""
 
-        hour %= 24
-        open_mod = open_hour % 24
-        close_mod = close_hour % 24
-
-        # 24/7 if interval covers full day
-        if (close_hour - open_hour) % 24 == 0:
-            return True
-
-        if open_mod < close_mod:
-            return open_mod <= hour < close_mod
-        return hour >= open_mod or hour < close_mod
+# DELETED: _is_open() wrapper - now using temporal_utils.is_affordance_open() directly (JANK-09 fix)

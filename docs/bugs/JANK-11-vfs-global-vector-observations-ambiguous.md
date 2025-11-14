@@ -1,7 +1,9 @@
-Title: VFS global vector variables used in observations cause shape mismatches in env
+Title: VFS global vector variables in observations have ambiguous semantics (should be forbidden)
 
 Severity: medium
-Status: open
+Status: CONFIRMED (reclassified from BUG-41 to JANK-11)
+Confirmed Date: 2025-11-14
+Recommendation: Implement Policy A (forbid global vectors in observations with compile-time error)
 
 Subsystem: environment/vectorized_env + VFS
 Affected Version/Branch: main
