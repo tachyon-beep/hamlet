@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 import torch
 
-from tests.test_townlet._fixtures.constants import FULL_OBS_DIM_8X8
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.curriculum.static import StaticCurriculum
 from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -26,7 +25,7 @@ __all__ = [
 def replay_buffer(device: torch.device) -> ReplayBuffer:
     """Create a basic replay buffer."""
 
-    return ReplayBuffer(capacity=1000, obs_dim=FULL_OBS_DIM_8X8, device=device)
+    return ReplayBuffer(capacity=1000, device=device)
 
 
 @pytest.fixture

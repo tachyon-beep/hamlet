@@ -133,6 +133,63 @@ class ReplayBuffer:
         """Return current buffer size."""
         return self.size
 
+    def clear(self) -> None:
+        """Reset buffer to empty state and deallocate storage.
+
+        Resets size and position to 0 and sets all storage tensors to None,
+        allowing garbage collection to reclaim memory. Buffer can be reused
+        after clearing.
+        """
+        self.size = 0
+        self.position = 0
+        self.observations = None
+        self.actions = None
+        self.rewards_extrinsic = None
+        self.rewards_intrinsic = None
+        self.next_observations = None
+        self.dones = None
+
+    def stats(self) -> dict[str, Any]:
+        """Return buffer statistics for introspection.
+
+        Returns:
+            Dictionary with keys:
+                - size: Current number of transitions stored
+                - capacity: Maximum buffer capacity
+                - occupancy_ratio: size / capacity (0.0 to 1.0)
+                - memory_bytes: Approximate memory usage in bytes
+                - device: Device string (e.g., 'cpu', 'cuda:0')
+        """
+        # Calculate memory usage
+        memory_bytes = 0
+        if self.observations is not None:
+            # All tensors are preallocated to capacity
+            assert self.actions is not None
+            assert self.rewards_extrinsic is not None
+            assert self.rewards_intrinsic is not None
+            assert self.next_observations is not None
+            assert self.dones is not None
+
+            memory_bytes = (
+                self.observations.element_size() * self.observations.numel()
+                + self.actions.element_size() * self.actions.numel()
+                + self.rewards_extrinsic.element_size() * self.rewards_extrinsic.numel()
+                + self.rewards_intrinsic.element_size() * self.rewards_intrinsic.numel()
+                + self.next_observations.element_size() * self.next_observations.numel()
+                + self.dones.element_size() * self.dones.numel()
+            )
+
+        # Calculate occupancy ratio
+        occupancy_ratio = self.size / self.capacity if self.capacity > 0 else 0.0
+
+        return {
+            "size": self.size,
+            "capacity": self.capacity,
+            "occupancy_ratio": occupancy_ratio,
+            "memory_bytes": memory_bytes,
+            "device": str(self.device),
+        }
+
     def serialize(self) -> dict[str, Any]:
         """
         Serialize buffer contents for checkpointing (P1.1).

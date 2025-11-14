@@ -222,21 +222,37 @@ class RawConfigs:
             enabled_lookup = set(training_enabled)
 
         meter_names = {bar.name for bar in hamlet_config.bars}
-        meter_trim_hint_added = False
 
-        def _trim_meter_payload(payload: dict[str, float]) -> dict[str, float]:
-            nonlocal meter_trim_hint_added
+        def _validate_meter_payload(
+            payload: dict[str, float],
+            action_name: str,
+            field_name: str,  # "costs" or "effects"
+        ) -> dict[str, float] | None:
+            """Validate that all meters in payload are defined in bars.yaml.
+
+            Args:
+                payload: Dictionary of meter -> amount
+                action_name: Name of the action being validated
+                field_name: "costs" or "effects"
+
+            Returns:
+                The payload dict if valid, None if any unknown meters found (compilation error)
+            """
             if not payload:
                 return payload
+
             missing = [meter for meter in payload if meter not in meter_names]
             if missing:
-                if not meter_trim_hint_added:
-                    errors.add_hint(
-                        "Action costs/effects referencing meters absent from bars.yaml were ignored for this config. "
-                        "Ensure variable-meter configs define compatible action costs."
+                # Emit UAC-ACT-002 error for each unknown meter
+                for meter in missing:
+                    errors.add(
+                        f"Action '{action_name}' references unknown meter '{meter}' in {field_name}. "
+                        f"Ensure all meters are defined in bars.yaml.",
+                        code="UAC-ACT-002",
+                        location=f"global_actions.yaml:{action_name}",
                     )
-                    meter_trim_hint_added = True
-                payload = {meter: amount for meter, amount in payload.items() if meter in meter_names}
+                return None  # Signal compilation failure
+
             return payload
 
         def _is_enabled(action_name: str, base_enabled: bool) -> bool:
@@ -246,29 +262,54 @@ class RawConfigs:
                 return True
             return action_name in enabled_lookup
 
-        def _clone(action: ActionConfig) -> ActionConfig:
+        def _clone(action: ActionConfig) -> ActionConfig | None:
+            """Clone action with validated meter references.
+
+            Returns:
+                Cloned ActionConfig if valid, None if validation fails
+            """
             nonlocal next_id
             base_enabled = getattr(action, "enabled", True)
+
+            # Validate costs and effects - None signals validation failure
+            validated_costs = _validate_meter_payload(dict(action.costs), action.name, "costs")
+            validated_effects = _validate_meter_payload(dict(action.effects), action.name, "effects")
+
+            if validated_costs is None or validated_effects is None:
+                return None  # Validation failed, errors already added
+
             cloned = action.model_copy(
                 update={
                     "id": next_id,
-                    "costs": _trim_meter_payload(dict(action.costs)),
-                    "effects": _trim_meter_payload(dict(action.effects)),
+                    "costs": validated_costs,
+                    "effects": validated_effects,
                     "enabled": _is_enabled(action.name, base_enabled),
                 }
             )
             next_id += 1
             return cloned
 
+        validation_failed = False
+
         for action in substrate_actions:
             cloned = _clone(action)
+            if cloned is None:
+                validation_failed = True
+                continue  # Skip this action, errors already added
             combined.append(cloned)
             available_names.add(cloned.name)
 
         for action in custom_actions.actions:
             cloned = _clone(action)
+            if cloned is None:
+                validation_failed = True
+                continue  # Skip this action, errors already added
             combined.append(cloned)
             available_names.add(cloned.name)
+
+        # If any action validation failed, abort compilation
+        if validation_failed:
+            return None
 
         if enabled_lookup is not None:
             missing = sorted(name for name in enabled_lookup if name not in available_names)

@@ -1,5 +1,6 @@
 """Tests for prioritized experience replay buffer."""
 
+import pytest
 import torch
 
 from townlet.training.prioritized_replay_buffer import PrioritizedReplayBuffer
@@ -282,3 +283,312 @@ def test_prioritized_replay_buffer_sample_size_guard():
     # Should work when batch_size <= size
     batch = buffer.sample(batch_size=5)
     assert batch["observations"].shape == (5, 10)
+
+
+class TestPrioritizedReplayBufferClearAPI:
+    """Test clear() method for prioritized buffer."""
+
+    def test_clear_resets_counters(self):
+        """clear() should reset size and position to zero."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=50,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Add transitions
+        obs = torch.randn(10, 5)
+        actions = torch.zeros(10, dtype=torch.long)
+        rewards_extrinsic = torch.ones(10)
+        rewards_intrinsic = torch.zeros(10)
+        next_obs = torch.randn(10, 5)
+        dones = torch.zeros(10, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        assert buffer.size_current == 10
+        assert buffer.position == 10
+
+        buffer.clear()
+
+        assert buffer.size_current == 0
+        assert buffer.position == 0
+        assert len(buffer) == 0
+
+    def test_clear_deallocates_storage(self):
+        """clear() should set storage tensors to None to free memory."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=50,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Initialize storage
+        obs = torch.randn(5, 3)
+        actions = torch.zeros(5, dtype=torch.long)
+        rewards_extrinsic = torch.ones(5)
+        rewards_intrinsic = torch.zeros(5)
+        next_obs = torch.randn(5, 3)
+        dones = torch.zeros(5, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        assert buffer.observations is not None
+        assert buffer.actions is not None
+
+        buffer.clear()
+
+        assert buffer.observations is None
+        assert buffer.actions is None
+        assert buffer.rewards is None
+        assert buffer.next_observations is None
+        assert buffer.dones is None
+
+    def test_clear_resets_priorities(self):
+        """clear() should reset priorities array and max_priority."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=50,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Add transitions and update priorities
+        obs = torch.randn(10, 5)
+        actions = torch.zeros(10, dtype=torch.long)
+        rewards_extrinsic = torch.ones(10)
+        rewards_intrinsic = torch.zeros(10)
+        next_obs = torch.randn(10, 5)
+        dones = torch.zeros(10, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        # Sample and update priorities to change max_priority
+        batch = buffer.sample(batch_size=5)
+        buffer.update_priorities(batch["indices"], torch.tensor([10.0, 5.0, 8.0, 3.0, 12.0]))
+
+        assert buffer.max_priority > 1.0  # Should have increased
+
+        buffer.clear()
+
+        # Priorities should be reset
+        assert buffer.max_priority == 1.0
+        # All priorities should be zero
+        import numpy as np
+
+        assert np.allclose(buffer.priorities, np.zeros(50))
+
+    def test_clear_idempotence(self):
+        """Calling clear() multiple times should be safe."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=50,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Clear empty buffer
+        buffer.clear()
+        assert len(buffer) == 0
+
+        # Add data and clear
+        obs = torch.randn(5, 3)
+        actions = torch.zeros(5, dtype=torch.long)
+        rewards_extrinsic = torch.ones(5)
+        rewards_intrinsic = torch.zeros(5)
+        next_obs = torch.randn(5, 3)
+        dones = torch.zeros(5, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+        buffer.clear()
+
+        # Clear again
+        buffer.clear()
+        assert len(buffer) == 0
+        assert buffer.observations is None
+
+    def test_buffer_works_after_clear(self):
+        """Buffer should work normally after clear()."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=50,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Fill buffer
+        obs = torch.randn(20, 5)
+        actions = torch.zeros(20, dtype=torch.long)
+        rewards_extrinsic = torch.ones(20)
+        rewards_intrinsic = torch.zeros(20)
+        next_obs = torch.randn(20, 5)
+        dones = torch.zeros(20, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        buffer.clear()
+
+        # Should be able to push again
+        obs = torch.randn(5, 3)
+        actions = torch.zeros(5, dtype=torch.long)
+        rewards_extrinsic = torch.ones(5)
+        rewards_intrinsic = torch.zeros(5)
+        next_obs = torch.randn(5, 3)
+        dones = torch.zeros(5, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        assert len(buffer) == 5
+        assert buffer.observations is not None
+        assert buffer.observations.shape == (50, 3)  # New obs_dim
+
+
+class TestPrioritizedReplayBufferStatsAPI:
+    """Test stats() method for prioritized buffer."""
+
+    def test_stats_empty_buffer(self):
+        """stats() should work on empty buffer with unallocated storage."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=100,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        stats = buffer.stats()
+
+        assert stats["size"] == 0
+        assert stats["capacity"] == 100
+        assert stats["occupancy_ratio"] == 0.0
+        assert stats["memory_bytes"] == 0  # No tensors allocated
+        assert stats["device"] == "cpu"
+
+    def test_stats_partially_filled(self):
+        """stats() should report correct values for partially filled buffer."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=100,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Add 10 transitions with obs_dim=5
+        obs = torch.randn(10, 5)
+        actions = torch.zeros(10, dtype=torch.long)
+        rewards_extrinsic = torch.ones(10)
+        rewards_intrinsic = torch.zeros(10)
+        next_obs = torch.randn(10, 5)
+        dones = torch.zeros(10, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        stats = buffer.stats()
+
+        assert stats["size"] == 10
+        assert stats["capacity"] == 100
+        assert stats["occupancy_ratio"] == 0.1
+        assert stats["memory_bytes"] > 0  # Should have allocated memory
+        assert stats["device"] == "cpu"
+
+    def test_stats_full_buffer(self):
+        """stats() should show full occupancy when buffer is full."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=10,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Fill to capacity
+        obs = torch.randn(10, 5)
+        actions = torch.zeros(10, dtype=torch.long)
+        rewards_extrinsic = torch.ones(10)
+        rewards_intrinsic = torch.zeros(10)
+        next_obs = torch.randn(10, 5)
+        dones = torch.zeros(10, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        stats = buffer.stats()
+
+        assert stats["size"] == 10
+        assert stats["capacity"] == 10
+        assert stats["occupancy_ratio"] == 1.0
+
+    def test_stats_memory_calculation(self):
+        """stats() should calculate approximate memory usage including priorities."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=10,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Empty buffer should report 0 bytes (tensors not allocated)
+        assert buffer.stats()["memory_bytes"] == 0
+
+        # Add data (obs_dim=5)
+        obs = torch.randn(5, 5)
+        actions = torch.zeros(5, dtype=torch.long)
+        rewards_extrinsic = torch.ones(5)
+        rewards_intrinsic = torch.zeros(5)
+        next_obs = torch.randn(5, 5)
+        dones = torch.zeros(5, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        stats = buffer.stats()
+
+        # Calculate expected memory (tensors preallocated + NumPy priorities)
+        # observations: 10*5 floats, actions: 10 longs, rewards: 10 floats,
+        # next_observations: 10*5 floats, dones: 10 bools, priorities: 10 float32
+        expected_bytes = (
+            10 * 5 * 4  # observations (float32)
+            + 10 * 8  # actions (int64)
+            + 10 * 4  # rewards (float32, combined)
+            + 10 * 5 * 4  # next_observations (float32)
+            + 10 * 1  # dones (bool)
+            + 10 * 4  # priorities (numpy float32)
+        )
+
+        assert stats["memory_bytes"] == expected_bytes
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_stats_cuda_device(self):
+        """stats() should report correct device string for CUDA buffers."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=10,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cuda"),
+        )
+
+        obs = torch.randn(5, 3)
+        actions = torch.zeros(5, dtype=torch.long)
+        rewards_extrinsic = torch.ones(5)
+        rewards_intrinsic = torch.zeros(5)
+        next_obs = torch.randn(5, 3)
+        dones = torch.zeros(5, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        stats = buffer.stats()
+
+        assert "cuda" in stats["device"]
+
+    def test_stats_after_clear(self):
+        """stats() should show empty buffer after clear()."""
+        buffer = PrioritizedReplayBuffer(
+            capacity=50,
+            alpha=0.6,
+            beta=0.4,
+            device=torch.device("cpu"),
+        )
+
+        # Fill buffer
+        obs = torch.randn(20, 3)
+        actions = torch.zeros(20, dtype=torch.long)
+        rewards_extrinsic = torch.ones(20)
+        rewards_intrinsic = torch.zeros(20)
+        next_obs = torch.randn(20, 3)
+        dones = torch.zeros(20, dtype=torch.bool)
+        buffer.push(obs, actions, rewards_extrinsic, rewards_intrinsic, next_obs, dones)
+
+        buffer.clear()
+        stats = buffer.stats()
+
+        assert stats["size"] == 0
+        assert stats["occupancy_ratio"] == 0.0
+        assert stats["memory_bytes"] == 0

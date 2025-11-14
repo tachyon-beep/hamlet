@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch
 
@@ -192,6 +194,63 @@ class PrioritizedReplayBuffer:
     def __len__(self) -> int:
         """Return current buffer size (required by VectorizedPopulation)."""
         return self.size_current
+
+    def clear(self) -> None:
+        """Reset buffer to empty state and deallocate storage.
+
+        Resets size and position to 0, sets all storage tensors to None,
+        resets priorities array to zeros, and resets max_priority to 1.0.
+        Buffer can be reused after clearing.
+        """
+        self.size_current = 0
+        self.position = 0
+        self.observations = None
+        self.actions = None
+        self.rewards = None
+        self.next_observations = None
+        self.dones = None
+        self.priorities = np.zeros(self.capacity, dtype=np.float32)
+        self.max_priority = 1.0
+
+    def stats(self) -> dict[str, Any]:
+        """Return buffer statistics for introspection.
+
+        Returns:
+            Dictionary with keys:
+                - size: Current number of transitions stored
+                - capacity: Maximum buffer capacity
+                - occupancy_ratio: size / capacity (0.0 to 1.0)
+                - memory_bytes: Approximate memory usage in bytes (includes priorities)
+                - device: Device string (e.g., 'cpu', 'cuda:0')
+        """
+        # Calculate memory usage
+        memory_bytes = 0
+        if self.observations is not None:
+            # All tensors are preallocated to capacity
+            assert self.actions is not None
+            assert self.rewards is not None
+            assert self.next_observations is not None
+            assert self.dones is not None
+
+            memory_bytes = (
+                self.observations.element_size() * self.observations.numel()
+                + self.actions.element_size() * self.actions.numel()
+                + self.rewards.element_size() * self.rewards.numel()
+                + self.next_observations.element_size() * self.next_observations.numel()
+                + self.dones.element_size() * self.dones.numel()
+                + self.priorities.nbytes  # NumPy array
+            )
+
+        # Calculate occupancy ratio
+        occupancy_ratio = self.size_current / self.capacity if self.capacity > 0 else 0.0
+
+        return {
+            "size": self.size_current,
+            "capacity": self.capacity,
+            "occupancy_ratio": occupancy_ratio,
+            "memory_bytes": memory_bytes,
+            "device": str(self.device),
+        }
 
     def serialize(self) -> dict:
         """Serialize buffer contents for checkpointing.
