@@ -88,17 +88,6 @@ class TestVectorizedHamletEnvInitialization:
         with pytest.raises(CompilationError, match="Config directory does not exist"):
             compile_universe(Path("/nonexistent/path"))
 
-    def test_env_init_does_not_construct_cascade_engine(self, monkeypatch, cpu_env_factory):
-        """VectorizedHamletEnv should rely on optimization tensors, not CascadeEngine."""
-
-        def _boom(self, *args, **kwargs):  # pragma: no cover - executed on regression
-            raise AssertionError("CascadeEngine should not be instantiated at runtime")
-
-        monkeypatch.setattr("townlet.environment.cascade_engine.CascadeEngine.__init__", _boom)
-
-        env = cpu_env_factory()
-        env.reset()
-
     def test_env_defaults_to_test_config_pack(self, cpu_env_factory, test_config_pack_path: Path):
         """Env factory defaults to configs/test pack (compiled path)."""
 

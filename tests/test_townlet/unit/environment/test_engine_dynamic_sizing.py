@@ -1,15 +1,10 @@
 """Unit tests for dynamic tensor sizing in engine layer (TASK-001 Phase 2).
 
-Tests that CascadeEngine and VectorizedHamletEnv create correctly-sized
+Tests that VectorizedHamletEnv creates correctly-sized
 tensors based on meter_count from config instead of hardcoded 8.
 """
 
 from typing import TYPE_CHECKING
-
-import torch
-
-from townlet.environment.cascade_config import load_environment_config
-from townlet.environment.cascade_engine import CascadeEngine
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from townlet.environment.vectorized_env import VectorizedHamletEnv
@@ -19,57 +14,6 @@ def _expected_observation_dim(env: "VectorizedHamletEnv") -> int:
     """Helper to use compiled metadata for observation dimension."""
 
     return env.metadata.observation_dim
-
-
-class TestCascadeEngineDynamicSizing:
-    """Test that CascadeEngine creates correct-sized tensors."""
-
-    def test_4meter_depletions_tensor_size(self, cpu_device, task001_config_4meter):
-        """CascadeEngine should create 4-element depletion tensor for 4-meter config."""
-        config = load_environment_config(task001_config_4meter)
-        engine = CascadeEngine(config, device=cpu_device)
-
-        # Depletion tensor should be [4] not [8]
-        assert engine._base_depletions.shape == (
-            4,
-        ), f"Expected depletion tensor shape (4,) for 4-meter config, got {engine._base_depletions.shape}"
-
-    def test_12meter_depletions_tensor_size(self, cpu_device, task001_config_12meter):
-        """CascadeEngine should create 12-element depletion tensor for 12-meter config."""
-        config = load_environment_config(task001_config_12meter)
-        engine = CascadeEngine(config, device=cpu_device)
-
-        # Depletion tensor should be [12] not [8]
-        assert engine._base_depletions.shape == (
-            12,
-        ), f"Expected depletion tensor shape (12,) for 12-meter config, got {engine._base_depletions.shape}"
-
-    def test_4meter_initial_values_tensor_size(self, cpu_device, task001_config_4meter):
-        """CascadeEngine should create 4-element initial_values tensor for 4-meter config."""
-        config = load_environment_config(task001_config_4meter)
-        engine = CascadeEngine(config, device=cpu_device)
-
-        # Initial values tensor should be [4] not [8]
-        initial = engine.get_initial_meter_values()
-        assert initial.shape == (4,), f"Expected initial_values tensor shape (4,) for 4-meter config, got {initial.shape}"
-
-    def test_12meter_initial_values_tensor_size(self, cpu_device, task001_config_12meter):
-        """CascadeEngine should create 12-element initial_values tensor for 12-meter config."""
-        config = load_environment_config(task001_config_12meter)
-        engine = CascadeEngine(config, device=cpu_device)
-
-        # Initial values tensor should be [12] not [8]
-        initial = engine.get_initial_meter_values()
-        assert initial.shape == (12,), f"Expected initial_values tensor shape (12,) for 12-meter config, got {initial.shape}"
-
-    def test_depletions_contain_correct_values(self, cpu_device, task001_config_4meter):
-        """Depletion tensor should contain actual base_depletion values from config."""
-        config = load_environment_config(task001_config_4meter)
-        engine = CascadeEngine(config, device=cpu_device)
-
-        # Expected: energy=0.005, health=0.0, money=0.0, mood=0.001
-        expected = torch.tensor([0.005, 0.0, 0.0, 0.001], device=cpu_device)
-        assert torch.allclose(engine._base_depletions, expected), f"Expected base_depletions {expected}, got {engine._base_depletions}"
 
 
 class TestVectorizedEnvDynamicSizing:

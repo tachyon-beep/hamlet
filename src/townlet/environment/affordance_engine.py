@@ -2,7 +2,7 @@
 AffordanceEngine: Config-driven affordance interaction system.
 
 This module processes affordance interactions using YAML configuration instead
-of hardcoded logic. Follows the same pattern as CascadeEngine (ACTION #1).
+of hardcoded logic. Follows the same pattern as MeterDynamics (ACTION #1).
 
 Architecture:
 - Load affordance configs at initialization
