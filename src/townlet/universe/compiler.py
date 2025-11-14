@@ -361,6 +361,10 @@ class UniverseCompiler:
                 position_default = [0.0, 0.0]
                 position_desc = "Normalized agent position (x, y) in [0, 1] range"
 
+            # BUG-43 FIX: Always create BOTH grid_encoding and local_window variables
+            # Use curriculum_active masking to control which is observed (not variable creation)
+            # This enables transfer learning with constant obs_dim across full/partial observability
+
             # Grid encoding for full observability
             variables.append(
                 VariableDef(
@@ -376,33 +380,42 @@ class UniverseCompiler:
                 )
             )
 
-            # Local window for POMDP (if partial observability enabled)
+            # Local window for partial observability (POMDP)
+            # Always create this variable (even in full obs) for curriculum consistency
+            # BUG-43 FIX: Use vision_range ONLY when partial_observability=True
+            # Otherwise use a fixed POMDP vision range (2 for 2D → 5×5, 1 for 3D → 3×3×3)
+            # to ensure constant obs_dim across full/partial obs configs
             if raw_configs.environment.partial_observability:
+                # POMDP mode: use actual vision_range
                 vision_range = raw_configs.environment.vision_range or 3
-                if is_3d:
-                    # 3D POMDP: (2r+1)³ window
-                    window_size = (2 * vision_range + 1) ** 3
-                    window_dim = 2 * vision_range + 1
-                    window_desc = f"{window_dim}×{window_dim}×{window_dim} local observation window (POMDP 3D)"
-                else:
-                    # 2D POMDP: (2r+1)² window
-                    window_size = (2 * vision_range + 1) ** 2
-                    window_dim = 2 * vision_range + 1
-                    window_desc = f"{window_dim}×{window_dim} local observation window (POMDP)"
+            else:
+                # Full obs mode: use fixed POMDP standard (matches typical POMDP configs)
+                vision_range = 1 if is_3d else 2  # 3×3×3 for 3D, 5×5 for 2D
 
-                variables.append(
-                    VariableDef(
-                        id="local_window",
-                        scope="agent",
-                        type="vecNf",
-                        dims=window_size,
-                        lifetime="tick",
-                        readable_by=["agent", "engine"],
-                        writable_by=["engine"],
-                        default=[0.0] * window_size,
-                        description=window_desc,
-                    )
+            if is_3d:
+                # 3D POMDP: (2r+1)³ window
+                window_size = (2 * vision_range + 1) ** 3
+                window_dim = 2 * vision_range + 1
+                window_desc = f"{window_dim}×{window_dim}×{window_dim} local observation window (POMDP 3D)"
+            else:
+                # 2D POMDP: (2r+1)² window
+                window_size = (2 * vision_range + 1) ** 2
+                window_dim = 2 * vision_range + 1
+                window_desc = f"{window_dim}×{window_dim} local observation window (POMDP)"
+
+            variables.append(
+                VariableDef(
+                    id="local_window",
+                    scope="agent",
+                    type="vecNf",
+                    dims=window_size,
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=[0.0] * window_size,
+                    description=window_desc,
                 )
+            )
 
             # Position (normalized coordinates)
             variables.append(
@@ -2130,39 +2143,11 @@ class UniverseCompiler:
         all_variables = list(symbol_table.variables.values())
 
         # Build observation activity metadata for masking
-        # Convert observation_spec fields back to VFS format for activity building
-        from typing import Literal
-
-        from townlet.vfs.schema import ObservationField as VFSObservField
-
-        vfs_fields_for_activity = []
-        for field in observation_spec.fields:
-            # Map semantic_type from observation spec to VFS field
-            semantic_map: dict[str | None, Literal["bars", "spatial", "affordance", "temporal", "custom"]] = {
-                "position": "spatial",
-                "meter": "bars",
-                "affordance": "affordance",
-                "temporal": "temporal",
-                None: "custom",
-            }
-            semantic_type = semantic_map.get(field.semantic_type, "custom")
-
-            # Create VFS field with curriculum_active=True (all fields in observation_spec are active)
-            vfs_fields_for_activity.append(
-                VFSObservField(
-                    id=field.name,
-                    source_variable=field.description or field.name,
-                    exposed_to=["agent"],
-                    shape=[field.dims] if field.dims > 0 else [],
-                    normalization=None,
-                    semantic_type=semantic_type,
-                    curriculum_active=True,  # All fields in observation_spec are active
-                )
-            )
-
+        # BUG-43 FIX: Use the original vfs_observation_fields which preserve curriculum_active
+        # instead of reconstructing them from observation_spec (which loses that information)
         field_uuids = {field.name: field.uuid for field in observation_spec.fields if field.uuid is not None}
         observation_activity = VFSAdapter.build_observation_activity(
-            observation_spec=vfs_fields_for_activity,
+            observation_spec=list(vfs_observation_fields),
             field_uuids=field_uuids,
         )
 
@@ -2305,18 +2290,46 @@ class UniverseCompiler:
 
         Design principle: All variables (standard + custom) are automatically observable.
         The exposed_observations field in variables_reference.yaml is deprecated/ignored.
+
+        BUG-43 FIX: Instead of filtering out grid_encoding or local_window, we keep BOTH
+        and mark them with curriculum_active to enable transfer learning across full/partial obs.
         """
         # Auto-generate exposures for ALL variables (standard system + custom computed)
         exposures = self._auto_generate_standard_exposures(symbol_table)
 
-        # Filter based on POMDP mode (only keep grid_encoding OR local_window, not both)
-        if raw_configs.environment.partial_observability:
-            # POMDP mode: use local window instead of full grid
-            # Keep affordance_at_position for transfer learning (padded with zeros in environment)
-            exposures = [obs for obs in exposures if obs.get("source_variable") != "grid_encoding"]
-        else:
-            # Full observability: use grid encoding instead of local window
-            exposures = [obs for obs in exposures if obs.get("source_variable") != "local_window"]
+        # Mark spatial observation fields with curriculum_active based on partial_observability
+        # This creates a superset observation contract where obs_dim stays constant across levels
+        # Also set semantic_type for proper group_slices organization
+        partial_obs = raw_configs.environment.partial_observability
+
+        # Get meter names for semantic_type inference
+        meter_names = {bar.name for bar in raw_configs.bars}
+
+        for exposure in exposures:
+            source_var = exposure.get("source_variable")
+
+            if source_var == "grid_encoding":
+                # grid_encoding active in full obs, inactive in partial obs
+                exposure["curriculum_active"] = not partial_obs
+                exposure["semantic_type"] = "spatial"  # BUG-43: Mark as spatial for group_slices
+            elif source_var == "local_window":
+                # local_window active in partial obs, inactive in full obs
+                exposure["curriculum_active"] = partial_obs
+                exposure["semantic_type"] = "spatial"  # BUG-43: Mark as spatial for group_slices
+            else:
+                # All other fields are always active
+                exposure["curriculum_active"] = True
+
+                # Infer semantic_type from source_variable name (same logic as _semantic_from_name)
+                if "position" in source_var.lower():
+                    exposure["semantic_type"] = "spatial"
+                elif source_var in meter_names:
+                    exposure["semantic_type"] = "bars"
+                elif "affordance" in source_var.lower():
+                    exposure["semantic_type"] = "affordance"
+                elif "time" in source_var.lower() or "temporal" in source_var.lower() or "lifetime" in source_var.lower():
+                    exposure["semantic_type"] = "temporal"
+                # else: default to "custom" (handled by ObservationField schema default)
 
         return exposures
 

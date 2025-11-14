@@ -48,9 +48,10 @@ def test_stage5_computes_metadata_and_observation_spec(base_config_dir: Path, ba
 
 SNAPSHOT_CASES: dict[str, dict[str, object]] = {
     "L0_0_minimal": {
-        "expected_dim": 41,
+        "expected_dim": 66,  # BUG-43: Superset contract includes both grid_encoding (9) + local_window (25) + rest (32)
         "fields": [
             ("obs_grid_encoding", "agent", 9),
+            ("obs_local_window", "agent", 25),  # BUG-43: Always present for curriculum consistency
             ("obs_position", "agent", 2),
             ("obs_velocity_x", "agent", 1),
             ("obs_velocity_y", "agent", 1),
@@ -71,9 +72,10 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L0_5_dual_resource": {
-        "expected_dim": 57,  # Updated from 81: config changed from 7×7 to 5×5
+        "expected_dim": 82,  # BUG-43: Superset contract includes both grid_encoding (25) + local_window (25) + rest (32)
         "fields": [
-            ("obs_grid_encoding", "agent", 25),  # Updated from 49: 5×5 = 25
+            ("obs_grid_encoding", "agent", 25),  # 5×5 grid
+            ("obs_local_window", "agent", 25),  # BUG-43: Always present for curriculum consistency
             ("obs_position", "agent", 2),
             ("obs_velocity_x", "agent", 1),
             ("obs_velocity_y", "agent", 1),
@@ -94,9 +96,14 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L1_full_observability": {
-        "expected_dim": 96,
+        "expected_dim": 121,  # BUG-43: Superset contract includes both grid_encoding (64) + local_window (25) + rest (32)
         "fields": [
             ("obs_grid_encoding", "agent", 64),
+            (
+                "obs_local_window",
+                "agent",
+                25,
+            ),  # BUG-43: Always present for curriculum consistency (grid_encoding active, local_window inactive)
             ("obs_position", "agent", 2),
             ("obs_velocity_x", "agent", 1),
             ("obs_velocity_y", "agent", 1),
@@ -117,8 +124,13 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L2_partial_observability": {
-        "expected_dim": 57,
+        "expected_dim": 121,  # BUG-43: Superset contract includes both grid_encoding (64) + local_window (25) + rest (32)
         "fields": [
+            (
+                "obs_grid_encoding",
+                "agent",
+                64,
+            ),  # BUG-43: Always present for curriculum consistency (grid_encoding inactive, local_window active)
             ("obs_local_window", "agent", 25),  # 5×5 POMDP window (vision_range=2)
             ("obs_position", "agent", 2),
             ("obs_velocity_x", "agent", 1),  # NEW: velocity observations
@@ -140,8 +152,13 @@ SNAPSHOT_CASES: dict[str, dict[str, object]] = {
         ],
     },
     "L3_temporal_mechanics": {
-        "expected_dim": 57,
+        "expected_dim": 121,  # BUG-43: Superset contract includes both grid_encoding (64) + local_window (25) + rest (32)
         "fields": [
+            (
+                "obs_grid_encoding",
+                "agent",
+                64,
+            ),  # BUG-43: Always present for curriculum consistency (grid_encoding inactive, local_window active)
             ("obs_local_window", "agent", 25),  # 5×5 POMDP window (vision_range=2)
             ("obs_position", "agent", 2),
             ("obs_velocity_x", "agent", 1),  # NEW: velocity observations
