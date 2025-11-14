@@ -11,9 +11,10 @@ environment:
   energy_wait_depletion: 0.0
   energy_interact_depletion: 0.0
 
+# Network architecture is managed by brain.yaml:architecture.type
+# ("feedforward" → SimpleQNetwork, "recurrent" → RecurrentSpatialQNetwork)
 population:
   num_agents: 1
-  network_type: simple  # MLP for aspatial (no LSTM needed)
   mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 curriculum:

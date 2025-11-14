@@ -84,9 +84,6 @@ class TestMaskedLossIntegration:
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,  # LSTM for masked loss
             vision_window_size=5,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=4,  # Small batch for fast test
             sequence_length=8,
             train_frequency=4,
@@ -157,9 +154,6 @@ class TestMaskedLossIntegration:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -216,9 +210,6 @@ class TestMaskedLossIntegration:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -289,9 +280,6 @@ class TestMultiEpisodeTraining:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
             train_frequency=4,
         )
@@ -368,9 +356,6 @@ class TestMultiEpisodeTraining:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -434,9 +419,6 @@ class TestMultiEpisodeTraining:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=500,  # Small capacity for testing
             batch_size=16,
         )
 
@@ -493,9 +475,6 @@ class TestMultiEpisodeTraining:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
             train_frequency=4,
             target_update_frequency=10,  # Update every 10 training steps
@@ -562,9 +541,6 @@ class TestMultiEpisodeTraining:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=brain_cfg,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
             train_frequency=4,
         )

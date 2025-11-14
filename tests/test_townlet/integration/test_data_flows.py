@@ -75,9 +75,6 @@ class TestObservationPipeline:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -127,9 +124,6 @@ class TestObservationPipeline:
             # action_dim defaults to env.action_dim
             brain_config=recurrent_brain_config,  # POMDP uses recurrent network
             vision_window_size=5,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=8,
             train_frequency=10000,  # Disable training (test focuses on observation structure)
         )
@@ -187,9 +181,6 @@ class TestRewardPipeline:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -247,9 +238,6 @@ class TestRewardPipeline:
             obs_dim=obs_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -320,9 +308,6 @@ class TestRewardPipeline:
             obs_dim=obs_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -391,9 +376,6 @@ class TestActionPipeline:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -450,9 +432,6 @@ class TestActionPipeline:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -509,9 +488,6 @@ class TestActionPipeline:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 

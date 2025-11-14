@@ -85,7 +85,7 @@ class TrainingConfig(BaseModel):
     epsilon_decay: float = Field(gt=0.0, lt=1.0, description="Decay per episode (< 1.0)")
     epsilon_min: float = Field(ge=0.0, le=1.0, description="Minimum exploration rate (floor)")
 
-    # Recurrent-specific (REQUIRED for all configs, used when network_type=recurrent)
+    # Recurrent-specific (REQUIRED for all configs, used when brain.yaml:architecture.type=recurrent)
     sequence_length: int = Field(gt=0, description="Length of sequences for LSTM training (recurrent networks only)")
 
     allow_unfeasible_universe: bool = Field(

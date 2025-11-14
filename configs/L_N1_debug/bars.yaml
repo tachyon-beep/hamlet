@@ -12,7 +12,7 @@ bars:
     range: [0.0, 1.0]
     initial: 1.0
     base_depletion: 0.01  # 1% per step
-    description: "Can you move? Death if depleted. Affected by satiation (fundamental) and mood (specialized)."
+    description: "Can you move? Death if depleted."
 
   - name: "money"
     index: 1

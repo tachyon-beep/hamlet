@@ -80,9 +80,6 @@ class TestLSTMHiddenStatePersistence:
             # action_dim defaults to env.action_dim
             brain_config=recurrent_brain_config,
             vision_window_size=5,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=8,
             train_frequency=10000,  # Disable training (test focuses on hidden state persistence)
         )

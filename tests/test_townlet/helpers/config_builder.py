@@ -37,9 +37,8 @@ BASE_CONFIG = {
     },
     "population": {
         "num_agents": 1,
-        "network_type": "simple",
         "mask_unused_obs": False,
-        # learning_rate, gamma, replay_buffer_capacity managed by brain.yaml
+        # learning_rate, gamma, replay_buffer_capacity, network_type managed by brain.yaml
     },
     "curriculum": {
         "max_steps_per_episode": 50,

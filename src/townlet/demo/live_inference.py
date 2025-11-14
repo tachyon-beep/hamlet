@@ -277,7 +277,6 @@ class LiveInferenceServer:
         training_cfg = hamlet_config.training
 
         num_agents = population_cfg.num_agents
-        network_type = population_cfg.network_type
         vision_range = env_cfg.vision_range
         partial_observability = env_cfg.partial_observability
         enable_temporal_mechanics = env_cfg.enable_temporal_mechanics
@@ -291,7 +290,6 @@ class LiveInferenceServer:
             enable_temporal_mechanics,
             env_cfg.enabled_affordances if env_cfg.enabled_affordances else "all",
         )
-        logger.info("Network type: %s (num_agents=%s)", network_type, num_agents)
 
         self.env = VectorizedHamletEnv.from_universe(
             self.compiled_universe,
@@ -342,6 +340,7 @@ class LiveInferenceServer:
 
         # Create population (brain_config provides network/optimizer/Q-learning parameters)
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
+        logger.info("Network architecture: %s (num_agents=%s)", brain_config.architecture.type, num_agents)
         self.population = VectorizedPopulation(
             env=self.env,
             curriculum=self.curriculum,
@@ -350,13 +349,8 @@ class LiveInferenceServer:
             device=self.device,
             obs_dim=obs_dim,
             action_dim=self.env.action_dim,
-            learning_rate=population_cfg.learning_rate,  # None (managed by brain.yaml)
-            gamma=population_cfg.gamma,  # None (managed by brain.yaml)
-            replay_buffer_capacity=population_cfg.replay_buffer_capacity,  # None (managed by brain.yaml)
-            network_type=network_type,
             vision_window_size=vision_window_size,
             train_frequency=training_cfg.train_frequency,
-            target_update_frequency=training_cfg.target_update_frequency,  # None (managed by brain.yaml)
             batch_size=training_cfg.batch_size,
             sequence_length=training_cfg.sequence_length,
             max_grad_norm=training_cfg.max_grad_norm,

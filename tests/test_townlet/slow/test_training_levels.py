@@ -114,9 +114,7 @@ def run_training_pipeline(
         device=device,
         obs_dim=env.observation_dim,
         action_dim=env.action_dim,
-        learning_rate=brain_config["optimizer"]["learning_rate"],
-        gamma=brain_config["q_learning"]["gamma"],
-        replay_buffer_capacity=brain_config["replay"]["capacity"],
+        brain_config=brain_config,
         network_type=config["population"]["network_type"],
     )
 

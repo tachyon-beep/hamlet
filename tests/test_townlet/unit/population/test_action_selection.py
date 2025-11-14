@@ -52,8 +52,6 @@ class TestGreedyActionSelection:
             agent_ids=[0, 1],
             device=env.device,
             obs_dim=obs_dim,
-            learning_rate=0.001,
-            gamma=0.99,
             brain_config=minimal_brain_config,
         )
 
@@ -152,8 +150,6 @@ class TestEpsilonGreedyActionSelection:
             agent_ids=[0, 1],
             device=env.device,
             obs_dim=obs_dim,
-            learning_rate=0.001,
-            gamma=0.99,
             brain_config=minimal_brain_config,
         )
 
@@ -264,8 +260,6 @@ class TestRecurrentNetworkActionSelection:
             device=env.device,
             obs_dim=obs_dim,
             # action_dim defaults to env.action_dim
-            learning_rate=0.001,
-            gamma=0.99,
             brain_config=recurrent_brain_config,
         )
 
@@ -338,8 +332,6 @@ class TestActionSelectionEdgeCases:
             device=torch.device("cpu"),
             obs_dim=obs_dim,
             # action_dim defaults to env.action_dim
-            learning_rate=0.001,
-            gamma=0.99,
             brain_config=minimal_brain_config,
         )
 

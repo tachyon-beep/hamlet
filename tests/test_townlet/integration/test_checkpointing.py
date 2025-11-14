@@ -303,7 +303,6 @@ class TestPopulationCheckpointing:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            replay_buffer_capacity=1000,
         )
 
         # Fill replay buffer with experiences
@@ -328,7 +327,6 @@ class TestPopulationCheckpointing:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            replay_buffer_capacity=1000,
         )
 
         # Before load, buffer should be empty

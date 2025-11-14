@@ -10,7 +10,6 @@ MUST NOT be specified in training.yaml - they are managed by brain.yaml.
 """
 
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -22,8 +21,9 @@ class PopulationConfig(BaseModel):
 
     ALL FIELDS REQUIRED (no defaults) - enforces operator accountability.
 
-    BREAKING CHANGE (Brain As Code): When brain.yaml exists, these fields
-    are FORBIDDEN in training.yaml:population section:
+    BREAKING CHANGE (Brain As Code): Network architecture and Q-learning parameters
+    are managed by brain.yaml (not training.yaml:population):
+    - Network type → Use brain.yaml:architecture.type
     - learning_rate → Use brain.yaml:optimizer.learning_rate
     - gamma → Use brain.yaml:q_learning.gamma
     - replay_buffer_capacity → Use brain.yaml:replay.capacity
@@ -31,10 +31,7 @@ class PopulationConfig(BaseModel):
     Example:
         >>> config = PopulationConfig(
         ...     num_agents=1,
-        ...     learning_rate=0.00025,
-        ...     gamma=0.99,
-        ...     replay_buffer_capacity=10000,
-        ...     network_type="simple",
+        ...     mask_unused_obs=False,
         ... )
     """
 
@@ -55,11 +52,6 @@ class PopulationConfig(BaseModel):
     replay_buffer_capacity: int | None = Field(
         default=None,
         description="Experience replay buffer size. None when managed by brain.yaml:replay.capacity",
-    )
-
-    # Network architecture (REQUIRED)
-    network_type: Literal["simple", "recurrent", "structured"] = Field(
-        description=("'simple' (MLP for full obs), 'recurrent' (LSTM for POMDP), or 'structured' (group encoders for semantic obs)")
     )
 
     # Observation masking (REQUIRED)

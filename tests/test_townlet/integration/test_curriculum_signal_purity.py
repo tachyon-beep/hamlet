@@ -60,8 +60,6 @@ def population(env, adversarial_curriculum, exploration, cpu_device, minimal_bra
         device=cpu_device,
         obs_dim=env.observation_dim,
         action_dim=env.action_dim,  # Use env's actual action dim (6 actions)
-        learning_rate=0.00025,
-        gamma=0.99,
         brain_config=minimal_brain_config,
     )
 
@@ -263,8 +261,6 @@ class TestCurriculumSignalInterpretability:
             device=cpu_device,
             obs_dim=env.observation_dim,
             action_dim=env.action_dim,
-            learning_rate=0.00025,
-            gamma=0.99,
             brain_config=minimal_brain_config,
         )
 
@@ -345,8 +341,6 @@ class TestCurriculumSignalInterpretability:
             device=cpu_device,
             obs_dim=env.observation_dim,
             action_dim=env.action_dim,
-            learning_rate=0.00025,
-            gamma=0.99,
             brain_config=minimal_brain_config,
         )
 

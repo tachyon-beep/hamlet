@@ -55,9 +55,6 @@ class TestRNDLossTracking:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
             train_frequency=4,
             tb_logger=None,  # No TensorBoard for this test (just tracking)
@@ -114,9 +111,6 @@ class TestRNDLossTracking:
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
             train_frequency=4,
         )

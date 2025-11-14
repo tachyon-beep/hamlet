@@ -63,9 +63,6 @@ class TestRNDIntrinsicRewards:
             obs_dim=obs_dim,  # Must match environment's observation dimension
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -122,9 +119,6 @@ class TestRNDIntrinsicRewards:
             obs_dim=obs_dim,  # Must match environment's observation dimension
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -192,9 +186,6 @@ class TestRNDIntrinsicRewards:
             obs_dim=obs_dim,  # Must match environment's observation dimension
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 

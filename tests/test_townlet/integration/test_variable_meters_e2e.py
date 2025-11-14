@@ -42,7 +42,6 @@ class TestVariableMetersEndToEnd:
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            replay_buffer_capacity=100,
             batch_size=32,
         )
 
@@ -78,7 +77,6 @@ class TestVariableMetersEndToEnd:
             obs_dim=basic_env.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=minimal_brain_config,
-            replay_buffer_capacity=100,
             batch_size=32,
         )
 
@@ -341,7 +339,6 @@ class TestVariableMetersEndToEnd:
             obs_dim=task001_env_4meter_pomdp.observation_dim,
             # action_dim defaults to env.action_dim
             brain_config=recurrent_brain_config,  # Use recurrent network
-            replay_buffer_capacity=100,
             batch_size=32,
             train_frequency=10000,  # Disable training (test focuses on network creation with variable meters)
         )

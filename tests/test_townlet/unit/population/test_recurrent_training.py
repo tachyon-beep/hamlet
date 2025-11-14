@@ -75,9 +75,6 @@ class TestRecurrentNetworkInitialization:
             device=env.device,
             obs_dim=env.observation_dim,
             brain_config=recurrent_brain_config,  # Use RecurrentSpatialQNetwork
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=8,
             sequence_length=10,  # Sequence length for LSTM training
         )
@@ -113,9 +110,6 @@ class TestRecurrentNetworkInitialization:
             device=env.device,
             obs_dim=env.observation_dim,
             brain_config=recurrent_brain_config,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=4,
             sequence_length=5,
         )
@@ -161,9 +155,6 @@ class TestLSTMHiddenStateManagement:
             device=cpu_device,
             obs_dim=env.observation_dim,
             brain_config=recurrent_brain_config,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=4,
             sequence_length=5,
         )
@@ -218,9 +209,6 @@ class TestEpisodeBuffering:
             device=cpu_device,
             obs_dim=env.observation_dim,
             brain_config=recurrent_brain_config,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=4,
             sequence_length=5,
         )
@@ -268,9 +256,6 @@ class TestEpisodeBuffering:
             device=cpu_device,
             obs_dim=env.observation_dim,
             brain_config=recurrent_brain_config,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=4,
             sequence_length=5,
         )
@@ -303,9 +288,6 @@ class TestEpisodeBuffering:
             device=cpu_device,
             obs_dim=env.observation_dim,
             brain_config=recurrent_brain_config,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=4,
             sequence_length=5,
         )
@@ -359,9 +341,6 @@ class TestRecurrentTraining:
             device=cpu_device,
             obs_dim=env.observation_dim,
             brain_config=recurrent_brain_config,
-            learning_rate=0.0001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=2,
             sequence_length=5,
             train_frequency=1,  # Train every step
@@ -429,9 +408,6 @@ class TestAdaptiveIntrinsicExplorationIntegration:
             device=env.device,
             obs_dim=env.observation_dim,
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -471,9 +447,6 @@ class TestSnapshotAndMetrics:
             device=env.device,
             obs_dim=env.observation_dim,
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -522,9 +495,6 @@ class TestSnapshotAndMetrics:
             device=env.device,
             obs_dim=env.observation_dim,
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
@@ -561,9 +531,6 @@ class TestSnapshotAndMetrics:
             device=env.device,
             obs_dim=env.observation_dim,
             brain_config=minimal_brain_config,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
             batch_size=16,
         )
 
