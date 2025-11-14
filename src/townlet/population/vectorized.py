@@ -577,9 +577,10 @@ class VectorizedPopulation(PopulationManager):
 
         # 7. Compute intrinsic rewards for logging/tracking only (not added to rewards)
         # DAC engine already includes intrinsic in the rewards tensor above
+        # BUG-22 FIX: Don't update stats here - they're updated in the environment during reward calculation
         intrinsic_rewards = torch.zeros_like(rewards)
         if isinstance(self.exploration, RNDExploration | AdaptiveIntrinsicExploration):
-            intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs, update_stats=True)
+            intrinsic_rewards = self.exploration.compute_intrinsic_rewards(self.current_obs, update_stats=False)
 
         # 7. Store transition in replay buffer
         # Note: Since DAC already composed rewards, we store total rewards and zero intrinsic

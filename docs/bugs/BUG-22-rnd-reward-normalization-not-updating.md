@@ -1,7 +1,7 @@
 Title: RND reward normalization (RunningMeanStd) never updates during env rollout
 
 Severity: high
-Status: open
+Status: fixed
 
 Subsystem: exploration/RND + environment
 Affected Version/Branch: main
@@ -42,3 +42,25 @@ Tests:
 - Add test that `reward_rms.var` changes after multiple steps with update enabled.
 
 Owner: exploration
+
+## Fix Applied (2025-11-15)
+
+**Root Cause Confirmed:**
+- Environment called `compute_intrinsic_rewards(..., update_stats=False)` during training rollouts
+- Population separately called `compute_intrinsic_rewards(old_obs, update_stats=True)` but with stale observations (step N-1)
+- Result: RND normalization stats lagged 2 steps behind the observations being normalized
+
+**Fix:**
+1. Changed `src/townlet/environment/vectorized_env.py:1250` to call with `update_stats=True`
+2. Changed `src/townlet/population/vectorized.py:583` to call with `update_stats=False` (stats now updated in env)
+
+**Verification:**
+- Created diagnostic scripts demonstrating the 2-step lag
+- Created regression tests in `tests/test_townlet/unit/exploration/test_rnd_stats_update_timing.py`
+- All existing RND tests pass (47 tests)
+- All DAC integration tests pass (8 tests)
+
+**Impact:**
+- RND intrinsic rewards now properly normalized using current observation distribution
+- No changes to public APIs or config files
+- Checkpoints remain compatible (stats already tracked)

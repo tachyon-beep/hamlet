@@ -1246,7 +1246,8 @@ class VectorizedHamletEnv:
         if self.exploration_module is not None:
             # Get current observations for intrinsic reward computation
             observations = self._get_observations()
-            intrinsic_raw = self.exploration_module.compute_intrinsic_rewards(observations, update_stats=False)
+            # BUG-22 FIX: Update stats during training rollouts so normalization tracks distribution
+            intrinsic_raw = self.exploration_module.compute_intrinsic_rewards(observations, update_stats=True)
         else:
             # Fallback to zeros if no exploration module is set
             intrinsic_raw = torch.zeros(self.num_agents, device=self.device)
