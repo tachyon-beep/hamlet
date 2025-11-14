@@ -49,6 +49,8 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "range": [0.0, 1.0],
                 "initial": 1.0,
                 "base_depletion": 0.005,
+                "base_move_depletion": 0.0,
+                "base_interaction_cost": 0.0,
                 "description": "Energy level",
             },
             {
@@ -58,6 +60,8 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "range": [0.0, 1.0],
                 "initial": 1.0,
                 "base_depletion": 0.0,
+                "base_move_depletion": 0.0,
+                "base_interaction_cost": 0.0,
                 "description": "Health status",
             },
             {
@@ -67,6 +71,8 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "range": [0.0, 1.0],
                 "initial": 0.5,
                 "base_depletion": 0.0,
+                "base_move_depletion": 0.0,
+                "base_interaction_cost": 0.0,
                 "description": "Financial resources",
             },
             {
@@ -76,6 +82,8 @@ def task001_config_4meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
                 "range": [0.0, 1.0],
                 "initial": 0.7,
                 "base_depletion": 0.001,
+                "base_move_depletion": 0.0,
+                "base_interaction_cost": 0.0,
                 "description": "Mood state",
             },
         ],
@@ -526,6 +534,8 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
             "range": [0.0, 1.0],
             "initial": 0.5,
             "base_depletion": 0.002,
+            "base_move_depletion": 0.0,
+            "base_interaction_cost": 0.0,
             "description": "Social reputation",
         },
         {
@@ -535,6 +545,8 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
             "range": [0.0, 1.0],
             "initial": 0.3,
             "base_depletion": 0.001,
+            "base_move_depletion": 0.0,
+            "base_interaction_cost": 0.0,
             "description": "Professional skills",
         },
         {
@@ -544,6 +556,8 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
             "range": [0.0, 1.0],
             "initial": 0.6,
             "base_depletion": 0.002,
+            "base_move_depletion": 0.0,
+            "base_interaction_cost": 0.0,
             "description": "Spiritual wellbeing",
         },
         {
@@ -553,6 +567,8 @@ def task001_config_12meter(tmp_path: Path, test_config_pack_path: Path) -> Path:
             "range": [0.0, 1.0],
             "initial": 0.7,
             "base_depletion": 0.001,
+            "base_move_depletion": 0.0,
+            "base_interaction_cost": 0.0,
             "description": "Community trust level",
         },
     ]
