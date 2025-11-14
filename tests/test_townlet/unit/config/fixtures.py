@@ -60,9 +60,8 @@ VALID_ENVIRONMENT_PARAMS = {
 
 VALID_POPULATION_PARAMS = {
     "num_agents": 1,
-    "network_type": "simple",
     "mask_unused_obs": False,
-    # learning_rate, gamma, replay_buffer_capacity managed by brain.yaml
+    # learning_rate, gamma, replay_buffer_capacity, network_type managed by brain.yaml
 }
 
 VALID_CURRICULUM_PARAMS = {
