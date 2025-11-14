@@ -247,11 +247,8 @@ class TestBrainConfigIntegration:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
-            batch_size=32,
             brain_config=simple_brain_config,
+            batch_size=32,
         )
 
         assert population.brain_config is simple_brain_config
@@ -309,7 +306,7 @@ class TestBrainConfigIntegration:
         # Verify learning rate matches config
         assert population.optimizer.param_groups[0]["lr"] == 0.001
 
-    def test_brain_config_overrides_q_learning_parameters(
+    def test_brain_config_sets_q_learning_parameters(
         self,
         basic_env,
         adversarial_curriculum,
@@ -317,11 +314,11 @@ class TestBrainConfigIntegration:
         cpu_device,
         minimal_brain_config,
     ):
-        """brain_config q_learning fields should override constructor parameters."""
+        """brain_config q_learning fields should be used for Q-learning parameters."""
         # Create brain_config with specific q_learning values
         brain_config = BrainConfig(
             version="1.0",
-            description="Test Q-learning override",
+            description="Test Q-learning parameters",
             architecture=ArchitectureConfig(
                 type="feedforward",
                 feedforward=FeedforwardConfig(
@@ -342,9 +339,9 @@ class TestBrainConfigIntegration:
             ),
             loss=LossConfig(type="mse"),
             q_learning=QLearningConfig(
-                gamma=0.90,  # Different from constructor
-                target_update_frequency=250,  # Different from constructor
-                use_double_dqn=True,  # Different from constructor
+                gamma=0.90,
+                target_update_frequency=250,
+                use_double_dqn=True,
             ),
             replay=ReplayConfig(
                 capacity=10000,
@@ -352,20 +349,16 @@ class TestBrainConfigIntegration:
             ),
         )
 
-        # Constructor has different values
         population = VectorizedPopulation(
             env=basic_env,
             curriculum=adversarial_curriculum,
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            gamma=0.99,  # Constructor says 0.99
-            target_update_frequency=100,  # Constructor says 100
-            use_double_dqn=False,  # Constructor says False
             brain_config=brain_config,
         )
 
-        # brain_config should win
+        # Verify brain_config values are used
         assert population.gamma == 0.90
         assert population.target_update_frequency == 250
         assert population.use_double_dqn is True

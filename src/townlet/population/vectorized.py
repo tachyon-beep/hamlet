@@ -17,7 +17,7 @@ import torch.nn.functional as F  # noqa: N812
 from townlet.agent.brain_config import BrainConfig
 from townlet.agent.loss_factory import LossFactory
 from townlet.agent.network_factory import NetworkFactory
-from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork, StructuredQNetwork
+from townlet.agent.networks import RecurrentSpatialQNetwork
 from townlet.agent.optimizer_factory import OptimizerFactory
 from townlet.curriculum.base import CurriculumManager
 from townlet.exploration.action_selection import epsilon_greedy_action_selection
@@ -51,21 +51,15 @@ class VectorizedPopulation(PopulationManager):
         exploration: ExplorationStrategy,
         agent_ids: list[str],
         device: torch.device,
+        brain_config: BrainConfig,
         obs_dim: int = 70,
         action_dim: int | None = None,
-        learning_rate: float = 0.00025,
-        gamma: float = 0.99,
-        replay_buffer_capacity: int = 10000,
-        network_type: str = "simple",
         vision_window_size: int = 5,
         tb_logger=None,
         train_frequency: int = 4,
-        target_update_frequency: int = 100,
         batch_size: int | None = None,
         sequence_length: int = 8,
         max_grad_norm: float = 10.0,
-        use_double_dqn: bool = False,
-        brain_config: BrainConfig | None = None,
         max_episodes: int | None = None,
         max_steps_per_episode: int | None = None,
     ):
@@ -80,19 +74,15 @@ class VectorizedPopulation(PopulationManager):
             device: PyTorch device
             obs_dim: Observation dimension
             action_dim: Action dimension (defaults to env.action_dim if not specified)
-            learning_rate: Learning rate for Q-network optimizer
-            gamma: Discount factor
-            replay_buffer_capacity: Maximum number of transitions in replay buffer
-            network_type: Network architecture ('simple' or 'recurrent')
+            brain_config: Brain configuration (REQUIRED). Specifies network architecture,
+                optimizer, loss function, Q-learning parameters, and replay buffer settings.
+                See docs/config-schemas/brain.md for schema.
             vision_window_size: Size of local vision window for recurrent networks (5 for 5×5)
             tb_logger: Optional TensorBoard logger
             train_frequency: Train Q-network every N steps (default: 4)
-            target_update_frequency: Update target network every N training steps (default: 100)
             batch_size: Batch size for experience replay (default: 64 for feedforward, 16 for recurrent)
             sequence_length: Length of sequences for LSTM training (default: 8, recurrent only)
             max_grad_norm: Gradient clipping threshold (default: 10.0)
-            use_double_dqn: Use Double DQN algorithm (default: False for vanilla DQN)
-            brain_config: Optional BrainConfig for architecture, optimizer, loss (TASK-005 Phase 1)
             max_episodes: Maximum training episodes (for PER beta annealing)
             max_steps_per_episode: Maximum steps per episode (for PER beta annealing)
         """
@@ -110,22 +100,15 @@ class VectorizedPopulation(PopulationManager):
         self.agent_ids = agent_ids
         self.num_agents = len(agent_ids)
         self.device = device
-        self.network_type = network_type
         self.tb_logger = tb_logger
         self.brain_config = brain_config
         self.max_episodes = max_episodes
         self.max_steps_per_episode = max_steps_per_episode
 
-        # TASK-005 Phase 2: Set Q-learning parameters from brain_config or constructor
-        if brain_config is not None:
-            # Override Q-learning parameters from brain_config
-            self.gamma = brain_config.q_learning.gamma
-            self.use_double_dqn = brain_config.q_learning.use_double_dqn
-            target_update_frequency = brain_config.q_learning.target_update_frequency
-        else:
-            # Use constructor parameters when no brain_config
-            self.gamma = gamma
-            self.use_double_dqn = use_double_dqn
+        # Brain_config always provided (no else branch needed)
+        self.gamma = brain_config.q_learning.gamma
+        self.use_double_dqn = brain_config.q_learning.use_double_dqn
+        target_update_frequency = brain_config.q_learning.target_update_frequency
 
         # Default action_dim to env.action_dim if not specified (TASK-002B Phase 4.1)
         if action_dim is None:
@@ -148,125 +131,73 @@ class VectorizedPopulation(PopulationManager):
 
         # Q-network (shared across all agents for now)
         self.q_network: nn.Module
-        if brain_config is not None:
-            # TASK-005 Phase 2: Build network from brain_config (feedforward or recurrent)
-            if brain_config.architecture.type == "feedforward":
-                assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
-                self.q_network = NetworkFactory.build_feedforward(
-                    config=brain_config.architecture.feedforward,
-                    obs_dim=obs_dim,
-                    action_dim=action_dim,
-                ).to(device)
-            elif brain_config.architecture.type == "recurrent":
-                assert brain_config.architecture.recurrent is not None, "recurrent config must be present"
-                self.q_network = NetworkFactory.build_recurrent(
-                    config=brain_config.architecture.recurrent,
-                    action_dim=action_dim,
-                    window_size=vision_window_size,
-                    position_dim=env.substrate.position_dim,
-                    num_meters=env.meter_count,
-                    num_affordance_types=env.num_affordance_types,
-                ).to(device)
-            elif brain_config.architecture.type == "dueling":
-                assert brain_config.architecture.dueling is not None, "dueling config must be present"
-                self.q_network = NetworkFactory.build_dueling(
-                    config=brain_config.architecture.dueling,
-                    obs_dim=obs_dim,
-                    action_dim=action_dim,
-                ).to(device)
-            else:
-                raise ValueError(
-                    f"Unsupported architecture type: {brain_config.architecture.type}. Supported: feedforward, recurrent, dueling"
-                )
-        elif network_type == "recurrent":
-            self.q_network = RecurrentSpatialQNetwork(
-                action_dim=action_dim,
-                window_size=vision_window_size,
-                position_dim=env.substrate.position_dim,  # Dynamic: 2 for Grid2D, 3 for Grid3D, 0 for Aspatial
-                num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
-                num_affordance_types=env.num_affordance_types,
-                enable_temporal_features=env.enable_temporal_mechanics,
-                hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
-            ).to(device)
-        elif network_type == "structured":
-            self.q_network = StructuredQNetwork(
+
+        # Build network from brain_config (always provided)
+        if brain_config.architecture.type == "feedforward":
+            assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
+            self.q_network = NetworkFactory.build_feedforward(
+                config=brain_config.architecture.feedforward,
                 obs_dim=obs_dim,
                 action_dim=action_dim,
-                observation_activity=env.observation_activity,
-                group_embed_dim=32,  # TODO(BRAIN_AS_CODE): Should come from config
-                q_head_hidden_dim=128,  # TODO(BRAIN_AS_CODE): Should come from config
+            ).to(device)
+        elif brain_config.architecture.type == "recurrent":
+            assert brain_config.architecture.recurrent is not None, "recurrent config must be present"
+            self.q_network = NetworkFactory.build_recurrent(
+                config=brain_config.architecture.recurrent,
+                action_dim=action_dim,
+                window_size=vision_window_size,
+                position_dim=env.substrate.position_dim,
+                num_meters=env.meter_count,
+                num_affordance_types=env.num_affordance_types,
+            ).to(device)
+        elif brain_config.architecture.type == "dueling":
+            assert brain_config.architecture.dueling is not None, "dueling config must be present"
+            self.q_network = NetworkFactory.build_dueling(
+                config=brain_config.architecture.dueling,
+                obs_dim=obs_dim,
+                action_dim=action_dim,
             ).to(device)
         else:
-            self.q_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(device)  # TODO(BRAIN_AS_CODE): Should come from config
+            raise ValueError(f"Unsupported architecture type: {brain_config.architecture.type}. Supported: feedforward, recurrent, dueling")
 
-        # Set is_recurrent flag based on brain_config or network_type
-        if brain_config is not None:
-            # When brain_config present, use brain_config.architecture.type
-            self.is_recurrent = brain_config.architecture.type == "recurrent"
-        else:
-            # When no brain_config, use network_type parameter
-            self.is_recurrent = network_type == "recurrent"
+        # Set is_recurrent flag from brain_config
+        self.is_recurrent = brain_config.architecture.type == "recurrent"
 
-        # Set is_dueling flag for later reference (TASK-005 Phase 3)
-        if brain_config is not None:
-            self.is_dueling = brain_config.architecture.type == "dueling"
-        else:
-            self.is_dueling = False
+        # Set is_dueling flag from brain_config
+        self.is_dueling = brain_config.architecture.type == "dueling"
 
         # Target network (stabilises training for both feed-forward and recurrent agents)
         self.target_network: nn.Module
-        if brain_config is not None:
-            # TASK-005 Phase 2: Build target network from brain_config (feedforward or recurrent)
-            if brain_config.architecture.type == "feedforward":
-                assert brain_config.architecture.feedforward is not None, "feedforward config must be present"
-                self.target_network = NetworkFactory.build_feedforward(
-                    config=brain_config.architecture.feedforward,
-                    obs_dim=obs_dim,
-                    action_dim=action_dim,
-                ).to(device)
-            elif brain_config.architecture.type == "recurrent":
-                assert brain_config.architecture.recurrent is not None, "recurrent config must be present"
-                self.target_network = NetworkFactory.build_recurrent(
-                    config=brain_config.architecture.recurrent,
-                    action_dim=action_dim,
-                    window_size=vision_window_size,
-                    position_dim=env.substrate.position_dim,
-                    num_meters=env.meter_count,
-                    num_affordance_types=env.num_affordance_types,
-                ).to(device)
-            elif brain_config.architecture.type == "dueling":
-                assert brain_config.architecture.dueling is not None, "dueling config must be present"
-                self.target_network = NetworkFactory.build_dueling(
-                    config=brain_config.architecture.dueling,
-                    obs_dim=obs_dim,
-                    action_dim=action_dim,
-                ).to(device)
-            else:
-                raise ValueError(
-                    f"Unsupported architecture type: {brain_config.architecture.type}. Supported: feedforward, recurrent, dueling"
-                )
-        elif self.is_recurrent:
-            self.target_network = RecurrentSpatialQNetwork(
-                action_dim=action_dim,
-                window_size=vision_window_size,
-                position_dim=env.substrate.position_dim,  # Dynamic: 2 for Grid2D, 3 for Grid3D, 0 for Aspatial
-                num_meters=env.meter_count,  # TASK-001: Use dynamic meter count from environment
-                num_affordance_types=env.num_affordance_types,
-                enable_temporal_features=env.enable_temporal_mechanics,
-                hidden_dim=256,  # TODO(BRAIN_AS_CODE): Should come from config
-            ).to(device)
-        elif network_type == "structured":
-            self.target_network = StructuredQNetwork(
+
+        # Initialize target network (brain_config always provided)
+        if brain_config.architecture.type == "feedforward":
+            assert brain_config.architecture.feedforward is not None
+            self.target_network = NetworkFactory.build_feedforward(
+                config=brain_config.architecture.feedforward,
                 obs_dim=obs_dim,
                 action_dim=action_dim,
-                observation_activity=env.observation_activity,
-                group_embed_dim=32,  # TODO(BRAIN_AS_CODE): Should come from config
-                q_head_hidden_dim=128,  # TODO(BRAIN_AS_CODE): Should come from config
+            ).to(device)
+        elif brain_config.architecture.type == "recurrent":
+            assert brain_config.architecture.recurrent is not None
+            self.target_network = NetworkFactory.build_recurrent(
+                config=brain_config.architecture.recurrent,
+                action_dim=action_dim,
+                window_size=vision_window_size,
+                position_dim=env.substrate.position_dim,
+                num_meters=env.meter_count,
+                num_affordance_types=env.num_affordance_types,
+            ).to(device)
+        elif brain_config.architecture.type == "dueling":
+            assert brain_config.architecture.dueling is not None
+            self.target_network = NetworkFactory.build_dueling(
+                config=brain_config.architecture.dueling,
+                obs_dim=obs_dim,
+                action_dim=action_dim,
             ).to(device)
         else:
-            self.target_network = SimpleQNetwork(obs_dim, action_dim, hidden_dim=128).to(
-                device
-            )  # TODO(BRAIN_AS_CODE): Should come from config
+            raise ValueError(
+                f"Unsupported architecture type: {brain_config.architecture.type}. " f"Supported: feedforward, recurrent, dueling"
+            )
 
         # Initialize common target network state
         self.target_network.load_state_dict(self.q_network.state_dict())
@@ -274,29 +205,17 @@ class VectorizedPopulation(PopulationManager):
         self.target_update_frequency = target_update_frequency
         self.training_step_counter = 0
 
-        # Optimizer and scheduler (from config or hardcoded)
-        if brain_config is not None:
-            # TASK-005 Phase 2: Build optimizer and scheduler from brain_config using OptimizerFactory
-            self.optimizer, self.scheduler = OptimizerFactory.build(
-                config=brain_config.optimizer,
-                parameters=self.q_network.parameters(),
-            )
-        else:
-            self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
-            self.scheduler = None  # No scheduler when brain_config not used
+        # Optimizer and scheduler from brain_config
+        self.optimizer, self.scheduler = OptimizerFactory.build(
+            config=brain_config.optimizer,
+            parameters=self.q_network.parameters(),
+        )
 
-        # Loss function (from config or hardcoded)
-        # Note: Currently not used in train_batch() but stored for future use
-        if brain_config is not None:
-            # TASK-005 Phase 1: Build loss function from brain_config using LossFactory
-            self.loss_fn = LossFactory.build(config=brain_config.loss)
-            # Store loss config for PER path (needs functional API with reduction='none')
-            self.loss_type = brain_config.loss.type
-            self.loss_delta = brain_config.loss.huber_delta if brain_config.loss.type == "huber" else 1.0
-        else:
-            self.loss_fn = nn.MSELoss()  # Default to MSE (matches current hardcoded behavior)
-            self.loss_type = "mse"
-            self.loss_delta = 1.0
+        # Loss function from brain_config
+        self.loss_fn = LossFactory.build(config=brain_config.loss)
+        # Store loss config for PER path (needs functional API with reduction='none')
+        self.loss_type = brain_config.loss.type
+        self.loss_delta = brain_config.loss.huber_delta if brain_config.loss.type == "huber" else 1.0
 
         # Replay buffer (dual system: sequential for recurrent, standard/PER for feedforward)
         # TASK-005 Phase 3: Support PrioritizedReplayBuffer
@@ -306,18 +225,14 @@ class VectorizedPopulation(PopulationManager):
         self.current_episodes: list[EpisodeContainer] = []
 
         # Determine if PER is enabled from brain_config
-        self.use_per = False
-        if brain_config is not None and hasattr(brain_config, "replay"):
-            self.use_per = brain_config.replay.prioritized
+        self.use_per = brain_config.replay.prioritized
 
-        # Determine replay capacity: use brain_config.replay.capacity if available, else legacy parameter
-        effective_replay_capacity = (
-            brain_config.replay.capacity if (brain_config is not None and hasattr(brain_config, "replay")) else replay_buffer_capacity
-        )
+        # Replay buffer capacity from brain_config
+        replay_capacity = brain_config.replay.capacity
 
         if self.is_recurrent:
             # Recurrent networks use sequential buffer (PER not yet supported for sequences)
-            self.replay_buffer = SequentialReplayBuffer(capacity=effective_replay_capacity, device=device)
+            self.replay_buffer = SequentialReplayBuffer(capacity=replay_capacity, device=device)
             # Episode tracking for sequential buffer
             self.current_episodes = [self._new_episode_container() for _ in range(self.num_agents)]
 
@@ -331,17 +246,15 @@ class VectorizedPopulation(PopulationManager):
             # Feedforward networks support both standard and prioritized replay
             if self.use_per:
                 # TASK-005 Phase 3: Instantiate PrioritizedReplayBuffer
-                # use_per is True only if brain_config is not None (set at line 290-291)
-                assert brain_config is not None, "use_per requires brain_config"
                 self.replay_buffer = PrioritizedReplayBuffer(
-                    capacity=effective_replay_capacity,
+                    capacity=replay_capacity,
                     alpha=brain_config.replay.priority_alpha,
                     beta=brain_config.replay.priority_beta,
                     beta_annealing=brain_config.replay.priority_beta_annealing,
                     device=device,
                 )
             else:
-                self.replay_buffer = ReplayBuffer(capacity=effective_replay_capacity, device=device)
+                self.replay_buffer = ReplayBuffer(capacity=replay_capacity, device=device)
 
         # Training hyperparameters (configurable)
         self.total_steps = 0
