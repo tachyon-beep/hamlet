@@ -1,10 +1,12 @@
 Title: VectorizedPopulation requires brain_config but still exposes unused legacy parameters and branches
 
 Severity: medium
-Status: open
+Status: closed
+Date Closed: 2025-11-15
+Resolution: Fixed in commit 02ebe3b (Nov 14, 2025)
 
 Subsystem: training/population (VectorizedPopulation)
-Affected Version/Branch: main
+Affected Version/Branch: main (fixed)
 
 Affected Files:
 - `src/townlet/population/vectorized.py:90`
@@ -56,3 +58,11 @@ Tests:
 Owner: training/population
 Links:
 - `docs/tasks/TASK-005-BRAIN-AS-CODE.md`
+
+Fix Summary:
+Commit 02ebe3b (Nov 14, 2025) "refactor(wpc2): delete legacy dual initialization paths" removed:
+- Constructor parameters: learning_rate, gamma, replay_buffer_capacity, network_type, target_update_frequency, use_double_dqn
+- All dual path logic (if brain_config / else branches)
+- Q-network, optimizer, loss, and replay buffer fallback paths
+- Net deletion: 84 lines of dead code
+- All 18 tests passing after cleanup
