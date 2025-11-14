@@ -1,10 +1,12 @@
 Title: Energy depletion has four conflicting sources of truth
 
 Severity: high
-Status: OPEN
+Status: CLOSED
 Ticket Type: JANK
 Subsystem: environment/meter-dynamics
 Affected Version/Branch: main
+Resolution: Implemented Option A - bars.yaml with three action cost fields
+Closed Date: 2025-11-14
 
 Affected Files:
 - `src/townlet/config/environment.py:67-69`

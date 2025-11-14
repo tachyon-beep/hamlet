@@ -34,9 +34,9 @@ class TestMovementCosts:
         # One step includes: base_depletion + movement cost
         obs, rewards, dones, info = env.step(actions)
 
-        # Expected depletion:
-        # base_depletion (from bars.yaml): 0.005 (for energy)
-        # base_move_depletion (from bars.yaml): 0.005 (for energy)
+        # Expected depletion (from configs/test/bars.yaml):
+        # base_depletion: 0.003 (DIFFERENT from training.yaml to force RED phase)
+        # base_move_depletion: 0.007 (DIFFERENT from training.yaml to force RED phase)
         # Total: 0.01 (1% per movement tick)
 
         expected_energy = initial_energy - 0.01
@@ -63,12 +63,12 @@ class TestMovementCosts:
         meter_deltas = initial_meters - env.meters
 
         # Expected: Only energy (index 0) should have base_move_depletion applied
-        # Energy: base_depletion (0.005) + base_move_depletion (0.005) = 0.01
+        # Energy: base_depletion (0.003) + base_move_depletion (0.007) = 0.01
         # Others: only base_depletion (various rates)
 
-        # Energy should have depleted more than just base_depletion
+        # Energy should have depleted more than just base_depletion (0.003)
         energy_delta = meter_deltas[0, 0].item()
-        assert energy_delta > 0.005, f"Energy should deplete by base_depletion + base_move_depletion. " f"Got delta: {energy_delta:.4f}"
+        assert energy_delta > 0.003, f"Energy should deplete by base_depletion + base_move_depletion. " f"Got delta: {energy_delta:.4f}"
 
 
 class TestInteractionCosts:
@@ -90,12 +90,12 @@ class TestInteractionCosts:
         # One step includes: base_depletion + interaction cost
         obs, rewards, dones, info = env.step(actions)
 
-        # Expected depletion:
-        # base_depletion (from bars.yaml): 0.005 (for energy)
-        # base_interaction_cost (from bars.yaml): 0.005 (for energy)
-        # Total: 0.01 (1% per interaction tick)
+        # Expected depletion (from configs/test/bars.yaml):
+        # base_depletion: 0.005 (production value)
+        # base_interaction_cost: 0.005 (production value)
+        # Total: 0.010 (1.0% per interaction tick)
 
-        expected_energy = initial_energy - 0.01
+        expected_energy = initial_energy - 0.010
         actual_energy = env.meters[0, 0].item()
 
         assert abs(actual_energy - expected_energy) < 1e-4, (
@@ -122,8 +122,8 @@ class TestWaitActionIsolation:
         # One step includes: only base_depletion (no action costs)
         obs, rewards, dones, info = env.step(actions)
 
-        # Expected depletion:
-        # base_depletion (from bars.yaml): 0.005 (for energy)
+        # Expected depletion (from configs/test/bars.yaml):
+        # base_depletion: 0.005 (production value)
         # NO base_move_depletion (WAIT doesn't move)
         # NO base_interaction_cost (WAIT doesn't interact)
         # Total: 0.005 (0.5% per WAIT tick)
@@ -161,5 +161,6 @@ class TestWaitActionIsolation:
         actual_difference = move_energy_cost - wait_energy_cost
 
         assert abs(actual_difference - expected_difference) < 1e-4, (
-            f"Movement should cost 0.005 more than WAIT. " f"Expected difference: {expected_difference:.4f}, got: {actual_difference:.4f}"
+            f"Movement should cost {expected_difference:.3f} more than WAIT. "
+            f"Expected difference: {expected_difference:.4f}, got: {actual_difference:.4f}"
         )

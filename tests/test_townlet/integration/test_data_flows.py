@@ -41,6 +41,9 @@ class TestObservationPipeline:
 
         NOTE: After TASK-002A, grid_size is loaded from substrate.yaml (8×8),
               not from the grid_size parameter (which is now ignored).
+
+        NOTE: After BUG-43, both grid_encoding and local_window are always present
+              (one active, one masked), so we use env.observation_dim as the source of truth.
         """
         # Create environment - grid_size parameter ignored, loaded from substrate.yaml (8×8)
         env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
@@ -48,12 +51,9 @@ class TestObservationPipeline:
         # Reset environment to build observations
         obs = env.reset()
 
-        # Verify observation dimension calculation (programmatic, not hardcoded)
-        # Full obs: substrate + meters + affordances + temporal + velocity
-        velocity_vars = env.substrate.position_dim + 1  # position_dim velocity components + magnitude
-        affordance_obs_dim = env.num_affordance_types + 1  # +1 for "none"
-        temporal_dims = 4  # time_sin, time_cos, interaction_progress, lifetime_progress
-        expected_dim = env.substrate.get_observation_dim() + env.meter_count + affordance_obs_dim + temporal_dims + velocity_vars
+        # Use env.observation_dim as the authoritative source (from compiled observation spec)
+        # BUG-43: observation dimension is now constant across curriculum levels
+        expected_dim = env.observation_dim
         assert obs.shape == (1, expected_dim), f"Observation should be [1, {expected_dim}], got {obs.shape}"
 
         # Verify observation matches environment's reported dimension

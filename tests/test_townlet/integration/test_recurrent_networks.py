@@ -50,9 +50,6 @@ class TestLSTMHiddenStatePersistence:
                     "partial_observability": True,
                     "vision_range": 2,
                     "enable_temporal_mechanics": False,
-                    "energy_move_depletion": 0.0,
-                    "energy_wait_depletion": 0.0,
-                    "energy_interact_depletion": 0.0,
                 }
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})
@@ -262,9 +259,6 @@ class TestLSTMHiddenStatePersistence:
                     "partial_observability": True,
                     "vision_range": 2,
                     "enable_temporal_mechanics": False,
-                    "energy_move_depletion": 0.0001,
-                    "energy_wait_depletion": 0.00001,
-                    "energy_interact_depletion": 0.0,
                 }
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})

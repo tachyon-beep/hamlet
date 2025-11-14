@@ -101,23 +101,17 @@ class TestConfigPackLoading:
     def test_vectorized_env_uses_pack_specific_bars(self, temp_config_pack: Path, cpu_device: torch.device):
         """Ensure VectorizedHamletEnv reads bars.yaml from the selected pack."""
         bars_path = temp_config_pack / "bars.yaml"
-        original = bars_path.read_text()
+        bars_config = yaml.safe_load(bars_path.read_text())
 
-        if "base_depletion: 0.005" not in original:
-            pytest.fail("Unexpected bars.yaml fixture content: missing base_depletion 0.005")
+        # Modify energy costs to verify they're being read from bars.yaml
+        for bar in bars_config["bars"]:
+            if bar["name"] == "energy":
+                bar["base_depletion"] = 0.010  # Changed from 0.005
+                bar["base_move_depletion"] = 0.02  # Changed from 0.0
+                bar["base_interaction_cost"] = 0.015  # Changed from 0.0
+                break
 
-        # Modify energy base depletion to verify it's being read
-        modified = original.replace("base_depletion: 0.005", "base_depletion: 0.010", 1)
-        bars_path.write_text(modified)
-
-        # Update training config with custom energy costs
-        training_path = temp_config_pack / "training.yaml"
-        training_config = yaml.safe_load(training_path.read_text())
-        env_cfg = training_config.setdefault("environment", {})
-        env_cfg["energy_move_depletion"] = 0.02
-        env_cfg["energy_wait_depletion"] = 0.015
-        env_cfg["energy_interact_depletion"] = 0.001
-        training_path.write_text(yaml.safe_dump(training_config))
+        bars_path.write_text(yaml.safe_dump(bars_config))
 
         env = make_vectorized_env_from_pack(
             temp_config_pack,
@@ -125,14 +119,14 @@ class TestConfigPackLoading:
             device=cpu_device,
         )
 
-        # Verify modified base depletion was loaded
+        # Verify modified costs were loaded from bars.yaml
         energy_base = env.meter_dynamics.get_base_depletion("energy")
         assert energy_base == pytest.approx(0.010, rel=1e-6)
 
-        # Verify action costs were set correctly
-        assert env.move_energy_cost == pytest.approx(0.02, rel=1e-6)
-        assert env.wait_energy_cost == pytest.approx(0.015, rel=1e-6)
-        assert env.interact_energy_cost == pytest.approx(0.001, rel=1e-6)
+        # Verify action costs from bars.yaml (read from compiled universe)
+        energy_bar = next(bar for bar in env.universe.bars if bar.name == "energy")
+        assert energy_bar.base_move_depletion == pytest.approx(0.02, rel=1e-6)
+        assert energy_bar.base_interaction_cost == pytest.approx(0.015, rel=1e-6)
 
 
 # =============================================================================
@@ -235,6 +229,8 @@ class TestBarsConfig:
                     "range": [0.0, 1.0],
                     "initial": 1.0,
                     "base_depletion": 0.01,
+                    "base_move_depletion": 0.0,
+                    "base_interaction_cost": 0.0,
                     "description": "Bar 1",
                 },
                 {
@@ -244,6 +240,8 @@ class TestBarsConfig:
                     "range": [0.0, 1.0],
                     "initial": 1.0,
                     "base_depletion": 0.01,
+                    "base_move_depletion": 0.0,
+                    "base_interaction_cost": 0.0,
                     "description": "Bar 2",
                 },
             ]
@@ -255,6 +253,8 @@ class TestBarsConfig:
                     "range": [0.0, 1.0],
                     "initial": 1.0,
                     "base_depletion": 0.01,
+                    "base_move_depletion": 0.0,
+                    "base_interaction_cost": 0.0,
                     "description": f"Bar {i}",
                 }
                 for i in range(2, 8)

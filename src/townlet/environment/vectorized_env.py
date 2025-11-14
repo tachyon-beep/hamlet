@@ -159,9 +159,8 @@ class VectorizedHamletEnv:
         self.partial_observability = env_cfg.partial_observability
         self.vision_range = env_cfg.vision_range
         self.enable_temporal_mechanics = env_cfg.enable_temporal_mechanics
-        self.move_energy_cost = env_cfg.energy_move_depletion
-        self.wait_energy_cost = env_cfg.energy_wait_depletion
-        self.interact_energy_cost = env_cfg.energy_interact_depletion
+        # NOTE: Action costs now read from bars.yaml (base_move_depletion, base_interaction_cost)
+        # Removed: self.move_energy_cost, self.wait_energy_cost, self.interact_energy_cost
         self.agent_lifespan = curriculum.max_steps_per_episode
         partial_observability = self.partial_observability
         vision_range = self.vision_range
@@ -1055,29 +1054,17 @@ class VectorizedHamletEnv:
         if substrate_mask.any():
             movement_mask[substrate_mask] = movement_actions[actions[substrate_mask]]
         if movement_mask.any():
-            # TASK-001: Create dynamic cost tensor based on meter_count
+            # Create dynamic cost tensor from bars.yaml (base_move_depletion per meter)
             movement_costs = torch.zeros(self.meter_count, device=self.device)
-            movement_costs[self.energy_idx] = self.move_energy_cost  # Energy (configurable, default 0.5%)
-            if self.hygiene_idx is not None:
-                movement_costs[self.hygiene_idx] = 0.003  # Hygiene: -0.3%
-            if self.satiation_idx is not None:
-                movement_costs[self.satiation_idx] = 0.004  # Satiation: -0.4%
+            for bar in self.universe.bars:
+                movement_costs[bar.index] = bar.base_move_depletion
 
             self.meters[movement_mask] -= movement_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
-        # WAIT action - lighter energy cost
-        # Use cached WAIT index (from ActionSpaceBuilder)
-        wait_action_idx = self.wait_action_idx
-
-        wait_mask = (actions == wait_action_idx) & substrate_mask
-        if wait_mask.any():
-            # TASK-001: Create dynamic cost tensor based on meter_count
-            wait_costs = torch.zeros(self.meter_count, device=self.device)
-            wait_costs[self.energy_idx] = self.wait_energy_cost  # Energy (configurable, default 0.1%)
-
-            self.meters[wait_mask] -= wait_costs.unsqueeze(0)
-            self.meters = torch.clamp(self.meters, 0.0, 1.0)
+        # WAIT action - NO additional cost
+        # WAIT only pays base_depletion (handled by MeterDynamics), no action-specific cost
+        # This is architecturally correct: WAIT = existence without action
 
         # Handle INTERACT actions
         # Use cached INTERACT index (from ActionSpaceBuilder)
@@ -1086,6 +1073,14 @@ class VectorizedHamletEnv:
         successful_interactions = {}
         interact_mask = (actions == interact_action_idx) & substrate_mask
         if interact_mask.any():
+            # Apply interaction costs from bars.yaml (base_interaction_cost per meter)
+            interaction_costs = torch.zeros(self.meter_count, device=self.device)
+            for bar in self.universe.bars:
+                interaction_costs[bar.index] = bar.base_interaction_cost
+
+            self.meters[interact_mask] -= interaction_costs.unsqueeze(0)
+            self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
             successful_interactions = self._handle_interactions(interact_mask)
 
         return successful_interactions

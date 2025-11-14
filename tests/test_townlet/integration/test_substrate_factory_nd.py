@@ -26,6 +26,7 @@ class TestGridNDFactoryFromConfig:
                 "boundary": "clamp",
                 "distance_metric": "manhattan",
                 "observation_encoding": "relative",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -50,6 +51,7 @@ class TestGridNDFactoryFromConfig:
                 "boundary": "wrap",
                 "distance_metric": "euclidean",
                 "observation_encoding": "scaled",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -74,6 +76,7 @@ class TestGridNDFactoryFromConfig:
                 "boundary": "bounce",
                 "distance_metric": "chebyshev",
                 "observation_encoding": "absolute",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -94,6 +97,8 @@ class TestGridNDFactoryFromConfig:
                 "dimension_sizes": [5, 6, 7, 8],
                 "boundary": "clamp",
                 "distance_metric": "manhattan",
+                "observation_encoding": "relative",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -117,7 +122,9 @@ class TestGridNDFactoryFromConfig:
             "gridnd": {
                 "dimension_sizes": [10, 10, 10, 10],
                 "boundary": "clamp",
+                "distance_metric": "manhattan",
                 "observation_encoding": "relative",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -143,6 +150,8 @@ class TestGridNDFactoryFromConfig:
                 "dimension_sizes": [5, 6, 7, 8],
                 "boundary": "clamp",
                 "observation_encoding": "scaled",
+                "distance_metric": "manhattan",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -239,6 +248,8 @@ class TestContinuousNDFactoryFromConfig:
                 "boundary": "clamp",
                 "movement_delta": 0.5,
                 "interaction_radius": 1.0,
+                "distance_metric": "euclidean",
+                "observation_encoding": "relative",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -267,6 +278,7 @@ class TestContinuousNDFactoryFromConfig:
                 "movement_delta": 0.5,
                 "interaction_radius": 1.0,
                 "observation_encoding": "relative",
+                "distance_metric": "euclidean",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -298,6 +310,7 @@ class TestContinuousNDFactoryFromConfig:
                 "movement_delta": 0.5,
                 "interaction_radius": 1.0,
                 "observation_encoding": "absolute",
+                "distance_metric": "euclidean",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -347,6 +360,9 @@ class TestFactoryConfigValidation:
             "gridnd": {
                 "dimension_sizes": [8, 8, 8],  # Only 3D
                 "boundary": "clamp",
+                "observation_encoding": "relative",
+                "distance_metric": "manhattan",
+                "topology": "hypercube",
             },
         }
         with pytest.raises(ValueError, match="GridND requires at least 4 dimensions"):
@@ -365,6 +381,8 @@ class TestFactoryConfigValidation:
                 "boundary": "clamp",
                 "movement_delta": 0.5,
                 "interaction_radius": 1.0,
+                "distance_metric": "euclidean",
+                "observation_encoding": "relative",
             },
         }
         with pytest.raises(ValueError, match="type='continuousnd' expects 4\\+ dimensions"):
@@ -385,6 +403,7 @@ gridnd:
   boundary: clamp
   distance_metric: manhattan
   observation_encoding: relative
+  topology: hypercube
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
@@ -445,6 +464,9 @@ class TestFactoryEdgeCases:
             "gridnd": {
                 "dimension_sizes": [2] * 100,  # 100D grid
                 "boundary": "clamp",
+                "observation_encoding": "relative",
+                "distance_metric": "manhattan",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -466,6 +488,8 @@ class TestFactoryEdgeCases:
                 "boundary": "clamp",
                 "movement_delta": 0.01,
                 "interaction_radius": 0.1,
+                "distance_metric": "euclidean",
+                "observation_encoding": "relative",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -483,6 +507,9 @@ class TestFactoryEdgeCases:
                 "gridnd": {
                     "dimension_sizes": [8, 8, 8, 8],
                     "boundary": boundary_mode,
+                    "observation_encoding": "relative",
+                    "distance_metric": "manhattan",
+                    "topology": "hypercube",
                 },
             }
             config = SubstrateConfig(**config_dict)
@@ -502,6 +529,8 @@ class TestFactoryEdgeCases:
                     "boundary": boundary_mode,
                     "movement_delta": 0.5,
                     "interaction_radius": 1.0,
+                    "distance_metric": "euclidean",
+                    "observation_encoding": "relative",
                 },
             }
             config = SubstrateConfig(**config_dict)
@@ -519,6 +548,8 @@ class TestFactoryEdgeCases:
                     "dimension_sizes": [8, 8, 8, 8],
                     "boundary": "clamp",
                     "distance_metric": metric,
+                    "observation_encoding": "relative",
+                    "topology": "hypercube",
                 },
             }
             config = SubstrateConfig(**config_dict)
@@ -539,6 +570,7 @@ class TestFactoryEdgeCases:
                     "movement_delta": 0.5,
                     "interaction_radius": 1.0,
                     "distance_metric": metric,
+                    "observation_encoding": "relative",
                 },
             }
             config = SubstrateConfig(**config_dict)
@@ -559,6 +591,9 @@ class TestFactoryIntegration:
                 "gridnd": {
                     "dimension_sizes": [8, 8, 8, 8],
                     "boundary": "clamp",
+                    "observation_encoding": "relative",
+                    "distance_metric": "manhattan",
+                    "topology": "hypercube",
                 },
                 "expected_type": GridNDSubstrate,
             },
@@ -572,6 +607,8 @@ class TestFactoryIntegration:
                     "boundary": "clamp",
                     "movement_delta": 0.5,
                     "interaction_radius": 1.0,
+                    "distance_metric": "euclidean",
+                    "observation_encoding": "relative",
                 },
                 "expected_type": ContinuousNDSubstrate,
             },

@@ -42,28 +42,6 @@ def test_grid2d_movement_actions_have_deltas():
     assert actions_by_name["RIGHT"].delta == [1, 0]
 
 
-def test_grid2d_action_costs():
-    """Grid2D actions should have default costs."""
-    substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")
-
-    actions = substrate.get_default_actions()
-    actions_by_name = {a.name: a for a in actions}
-
-    # Movement costs energy + hygiene + satiation
-    up = actions_by_name["UP"]
-    assert up.costs["energy"] == 0.005
-    assert up.costs["hygiene"] == 0.003
-    assert up.costs["satiation"] == 0.004
-
-    # INTERACT costs energy only
-    interact = actions_by_name["INTERACT"]
-    assert interact.costs["energy"] == 0.003
-
-    # WAIT costs energy only
-    wait = actions_by_name["WAIT"]
-    assert wait.costs["energy"] == 0.004
-
-
 def test_grid2d_all_actions_enabled_by_default():
     """Grid2D actions should default to enabled=True."""
     substrate = Grid2DSubstrate(width=8, height=8, boundary="clamp", distance_metric="manhattan")

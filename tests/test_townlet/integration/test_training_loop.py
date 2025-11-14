@@ -54,9 +54,6 @@ class TestMaskedLossIntegration:
                     "partial_observability": True,
                     "vision_range": 2,
                     "enable_temporal_mechanics": False,
-                    "energy_move_depletion": 0.1,
-                    "energy_wait_depletion": 0.05,
-                    "energy_interact_depletion": 0.0,
                 }
             )
             cfg["curriculum"].update({"max_steps_per_episode": 1000})

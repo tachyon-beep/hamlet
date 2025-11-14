@@ -26,9 +26,6 @@ environment:
   enable_temporal_mechanics: false  # LEVEL 2: No time-of-day (added in L3)
   enabled_affordances: null  # null = all 14 affordances enabled
   randomize_affordances: true
-  energy_move_depletion: 0.005
-  energy_wait_depletion: 0.001
-  energy_interact_depletion: 0.0
 
 # Network architecture is managed by brain.yaml:architecture.type
 # ("feedforward" → SimpleQNetwork, "recurrent" → RecurrentSpatialQNetwork)

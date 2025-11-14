@@ -21,9 +21,6 @@ environment:
 
   # NEW: Temporal mechanics
   enable_temporal_mechanics: true
-  energy_move_depletion: 0.005
-  energy_wait_depletion: 0.001
-  energy_interact_depletion: 0.0
 
 # Network architecture is managed by brain.yaml:architecture.type
 # ("feedforward" → SimpleQNetwork, "recurrent" → RecurrentSpatialQNetwork)

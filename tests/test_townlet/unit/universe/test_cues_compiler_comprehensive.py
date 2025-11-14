@@ -21,9 +21,42 @@ from townlet.universe.symbol_table import UniverseSymbolTable
 def symbol_table() -> UniverseSymbolTable:
     """Create symbol table with test meters."""
     table = UniverseSymbolTable()
-    table.register_meter(BarConfig(name="energy", index=0, tier="pivotal", range=[0.0, 1.0], initial=1.0, base_depletion=0.1))
-    table.register_meter(BarConfig(name="health", index=1, tier="pivotal", range=[0.0, 1.0], initial=1.0, base_depletion=0.05))
-    table.register_meter(BarConfig(name="mood", index=2, tier="secondary", range=[0.0, 1.0], initial=1.0, base_depletion=0.02))
+    table.register_meter(
+        BarConfig(
+            name="energy",
+            index=0,
+            tier="pivotal",
+            range=[0.0, 1.0],
+            initial=1.0,
+            base_depletion=0.1,
+            base_move_depletion=0.01,
+            base_interaction_cost=0.01,
+        )
+    )
+    table.register_meter(
+        BarConfig(
+            name="health",
+            index=1,
+            tier="pivotal",
+            range=[0.0, 1.0],
+            initial=1.0,
+            base_depletion=0.05,
+            base_move_depletion=0.005,
+            base_interaction_cost=0.005,
+        )
+    )
+    table.register_meter(
+        BarConfig(
+            name="mood",
+            index=2,
+            tier="secondary",
+            range=[0.0, 1.0],
+            initial=1.0,
+            base_depletion=0.02,
+            base_move_depletion=0.002,
+            base_interaction_cost=0.002,
+        )
+    )
     return table
 
 

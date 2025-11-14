@@ -25,9 +25,6 @@ environment:
   enable_temporal_mechanics: false  # LEVEL 1: No time-of-day complexity
   enabled_affordances: null  # null = all 14 affordances enabled
   randomize_affordances: true
-  energy_move_depletion: 0.005  # Energy cost per movement action
-  energy_wait_depletion: 0.001  # Energy cost per WAIT action
-  energy_interact_depletion: 0.0  # Energy cost per INTERACT action
 
 # Network architecture is managed by brain.yaml:architecture.type
 # ("feedforward" → SimpleQNetwork, "recurrent" → RecurrentSpatialQNetwork)

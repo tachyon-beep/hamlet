@@ -228,6 +228,8 @@ def make_bars_config(
                 range=(0.0, 1.0),
                 initial=1.0,
                 base_depletion=0.001,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description=f"Test meter {i}",
             )
         )
@@ -287,6 +289,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Energy level",
             ),
             BarConfig(
@@ -296,6 +300,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=1.0,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Health status",
             ),
             BarConfig(
@@ -305,6 +311,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=0.8,
                 base_depletion=0.004,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Hunger level",
             ),
             BarConfig(
@@ -314,6 +322,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=0.5,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Financial resources",
             ),
             BarConfig(
@@ -323,6 +333,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=0.7,
                 base_depletion=0.001,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Mood state",
             ),
             BarConfig(
@@ -332,6 +344,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=0.6,
                 base_depletion=0.002,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Social wellbeing",
             ),
             BarConfig(
@@ -341,6 +355,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=0.5,
                 base_depletion=0.003,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Physical fitness",
             ),
             BarConfig(
@@ -350,6 +366,8 @@ def make_standard_8meter_config() -> BarsConfig:
                 range=(0.0, 1.0),
                 initial=0.9,
                 base_depletion=0.006,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Hygiene level",
             ),
         ],
@@ -449,6 +467,8 @@ def make_test_bar(
     tier: Literal["pivotal", "primary", "secondary", "resource"] = "pivotal",
     initial: float = 1.0,
     base_depletion: float = 0.01,
+    base_move_depletion: float = 0.0,
+    base_interaction_cost: float = 0.0,
     description: str | None = None,
 ) -> BarConfig:
     """Construct a single BarConfig with sensible defaults."""
@@ -462,6 +482,8 @@ def make_test_bar(
         tier=tier,
         initial=initial,
         base_depletion=base_depletion,
+        base_move_depletion=base_move_depletion,
+        base_interaction_cost=base_interaction_cost,
         description=description,
     )
 

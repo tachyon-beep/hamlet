@@ -88,14 +88,9 @@ class TestFullObservability:
         """Affordance encoding should be one-hot (15 dims: 14 types + 1 "none")."""
         obs = basic_env.reset()
 
-        # substrate.get_observation_dim() includes position (grid_encoding + position)
-        substrate_dim = basic_env.substrate.get_observation_dim()
-        velocity_dim = 3  # velocity_x, velocity_y, velocity_magnitude
-
-        # Affordance encoding sits after substrate + velocity + meters
-        start = substrate_dim + velocity_dim + basic_env.meter_count
-        end = start + basic_env.num_affordance_types + 1
-        affordance = obs[0, start:end]
+        # Get affordance field from observation spec (BUG-43: can't use hardcoded indices)
+        affordance_field = next(f for f in basic_env.universe.observation_spec.fields if f.name == "obs_affordance_at_position")
+        affordance = obs[0, affordance_field.start_index : affordance_field.end_index]
 
         # Should have 15 values (14 affordance types + 1 "none")
         assert affordance.shape[0] == basic_env.num_affordance_types + 1
@@ -410,14 +405,19 @@ class TestObservationUpdates:
         env.positions[0] = torch.tensor([4, 4], device=env.device, dtype=torch.long)
 
         obs1 = env._get_observations()
-        _local_grid1 = obs1[0, :25]
-        position1 = obs1[0, 25:27]
+
+        # Get field indices from observation_spec (BUG-43: can't use hardcoded indices)
+        local_window_field = next(f for f in env.universe.observation_spec.fields if f.name == "obs_local_window")
+        position_field = next(f for f in env.universe.observation_spec.fields if f.name == "obs_position")
+
+        _local_grid1 = obs1[0, local_window_field.start_index : local_window_field.end_index]
+        position1 = obs1[0, position_field.start_index : position_field.end_index]
 
         # Move RIGHT (guaranteed valid from center)
         actions = torch.tensor([3], device=env.device)  # RIGHT
         obs2, _, _, _ = env.step(actions)
-        _local_grid2 = obs2[0, :25]
-        position2 = obs2[0, 25:27]
+        _local_grid2 = obs2[0, local_window_field.start_index : local_window_field.end_index]
+        position2 = obs2[0, position_field.start_index : position_field.end_index]
 
         # Position MUST change (moved from (4,4) to (4,5))
         assert not torch.equal(position1, position2), "Position should update"
@@ -425,14 +425,11 @@ class TestObservationUpdates:
     def test_meters_update_after_interactions(self, basic_env):
         """Interacting with affordances should change meter values."""
         obs1 = basic_env.reset()
-        # substrate.get_observation_dim() includes position (grid_encoding + position)
-        substrate_dim = basic_env.substrate.get_observation_dim()
-        velocity_dim = 3  # velocity_x, velocity_y, velocity_magnitude
 
-        # Meters sit after substrate + velocity
-        meter_start = substrate_dim + velocity_dim
-        meter_slice = slice(meter_start, meter_start + basic_env.meter_count)
-        meters1 = obs1[0, meter_slice]
+        # Get energy field from observation_spec (BUG-43: can't use hardcoded indices)
+        # Note: Meters are exposed as individual fields (obs_energy, obs_health, etc.)
+        energy_field = next(f for f in basic_env.universe.observation_spec.fields if f.name == "obs_energy")
+        energy1 = obs1[0, energy_field.start_index]
 
         # Take several steps to allow interactions
         for _ in range(10):
@@ -440,11 +437,10 @@ class TestObservationUpdates:
             if dones[0]:
                 break
 
-        meters_final = obs[0, meter_slice]
+        energy_final = obs[0, energy_field.start_index]
 
-        # Meters should have changed (energy cost, possible interactions)
-        # At minimum, energy should have decreased
-        assert meters_final[0] < meters1[0]  # Energy decreased
+        # Energy should have decreased (movement costs energy)
+        assert energy_final < energy1, f"Energy should decrease after interactions: {energy1} -> {energy_final}"
 
     def test_lifetime_progress_increases_linearly(
         self,
@@ -588,8 +584,10 @@ class TestDimensionConsistency:
         cpu_device: torch.device,
         env_factory,
     ):
-        """POMDP + temporal: 25 local + 2 pos + 3 velocity + 8 meters + 15 affordance + 4 temporal = 57.
+        """POMDP + temporal: observation dimension is constant across curriculum levels.
 
+        NOTE: After BUG-43, both grid_encoding and local_window are always present
+              (one active, one masked), so we use env.observation_dim as the source of truth.
         NOTE: affordance_at_position included in POMDP (padded with zeros) for transfer learning.
         """
 
@@ -615,8 +613,9 @@ class TestDimensionConsistency:
 
         obs = env.reset()
 
-        # 25 local window + 2 position + 3 velocity + 8 meters + 15 affordance + 4 temporal = 57
-        expected_dim = 25 + 2 + 3 + 8 + 15 + 4
+        # Use env.observation_dim as the authoritative source (from compiled observation spec)
+        # BUG-43: observation dimension is now constant across curriculum levels
+        expected_dim = env.observation_dim
         assert obs.shape == (1, expected_dim)
 
     def test_observation_dim_matches_across_resets(self, basic_env):

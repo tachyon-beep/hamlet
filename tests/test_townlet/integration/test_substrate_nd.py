@@ -31,6 +31,7 @@ class TestGridNDIntegration:
                 "boundary": "clamp",
                 "distance_metric": "manhattan",
                 "observation_encoding": "relative",
+                "topology": "hypercube",
             },
         }
         config = SubstrateConfig(**config_dict)
@@ -739,6 +740,7 @@ class TestNDSubstrateConfigRoundtrip:
                 "boundary": "wrap",
                 "distance_metric": "euclidean",
                 "observation_encoding": "scaled",
+                "topology": "hypercube",
             },
         }
 
