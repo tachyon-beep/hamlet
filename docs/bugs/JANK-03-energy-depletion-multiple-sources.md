@@ -88,9 +88,16 @@ Expected Behavior:
 - Operators can reason about depletion rates from config files alone
 
 Semantic Clarification:
-- **base_depletion**: Occurs EVERY tick regardless of action (passive decay + movement)
-- **action costs**: Should ONLY exist for action-specific costs (e.g., INTERACT drains extra energy)
-- Current system conflates these: movement cost is defined separately but movement happens every tick
+- **base_depletion**: Occurs EVERY tick regardless of action (passive decay - breathing, existing)
+- **base_move_depletion**: Additional cost for movement actions (MOVE, UP, DOWN, LEFT, RIGHT, etc.)
+- **base_interaction_cost**: Additional cost for INTERACT action (interacting with affordances)
+- Current system conflates these: movement/interaction costs are defined in training.yaml but should be in bars.yaml
+
+**Three Fundamental Action Types**:
+1. **Existence** → Always pay `base_depletion` (happens every tick)
+2. **Movement** → Pay `base_depletion + base_move_depletion` (when moving)
+3. **Interaction** → Pay `base_depletion + base_interaction_cost` (when interacting with affordances)
+4. **Wait** → Only pay `base_depletion` (optional, do nothing)
 
 Actual Behavior:
 - Four different definitions across three subsystems
@@ -115,18 +122,21 @@ Proposed Solution:
 
 **Architecture Decision: Single Source of Truth**
 
-**Option A: `bars.yaml` with base_depletion + base_move_depletion** (RECOMMENDED)
+**Option A: `bars.yaml` with three action cost fields** (RECOMMENDED)
 - Semantics:
   - `base_depletion`: Passive decay every tick (breathing, existence)
   - `base_move_depletion`: Additional cost for movement actions specifically
+  - `base_interaction_cost`: Additional cost for INTERACT action specifically
   - WAIT action: only pays base_depletion
-  - Movement actions: pays base_depletion + base_move_depletion
+  - Movement actions: pay base_depletion + base_move_depletion
+  - INTERACT action: pays base_depletion + base_interaction_cost
 - Benefits:
-  - Agents have meaningful choice between WAIT vs MOVE
-  - Clear separation of passive decay vs movement cost
+  - Agents have meaningful choice between WAIT vs MOVE vs INTERACT
+  - Clear separation of passive decay vs action-specific costs
   - All costs in bars.yaml (single source of truth)
+  - Models the three fundamental things an agent does: exist, move, interact
 - Changes:
-  - Add `base_move_depletion` field to BarConfig
+  - Add `base_move_depletion` and `base_interaction_cost` fields to BarConfig
   - Delete `training.yaml` energy_*_depletion fields
   - Delete `EnvironmentConfig` energy cost fields
   - Update `vectorized_env.py` to read from bars.yaml instead of training.yaml
@@ -147,13 +157,15 @@ Proposed Solution:
 **Recommendation: Option A**
 
 Rationale:
-- Simplest mental model: "Energy depletes X per tick, period"
-- No special-casing for movement vs wait vs interact
+- Simplest mental model: "Three fundamental actions with clear costs"
+- Models exactly what agents do: exist (base), move (base + movement), interact (base + interaction)
+- WAIT is optional/strategic (only pays existence cost)
 - Aligns with current HAMLET pedagogy (resource management over action optimization)
 - Works with all substrate types (Grid2D, Continuous, Aspatial)
 - No hidden costs in Python
+- Single source of truth in bars.yaml
 
-Implementation Plan (Option A - with base_move_depletion):
+Implementation Plan (Option A - with three action cost fields):
 
 1. **Add to `BarConfig`:** (`src/townlet/config/bar.py`)
    ```python
@@ -162,6 +174,13 @@ Implementation Plan (Option A - with base_move_depletion):
        description="Additional depletion per movement action (on top of base_depletion). "
                    "Total movement cost = base_depletion + base_move_depletion. "
                    "WAIT action only pays base_depletion.",
+   )
+
+   base_interaction_cost: float = Field(
+       ge=0.0,
+       description="Additional depletion per INTERACT action (on top of base_depletion). "
+                   "Total interaction cost = base_depletion + base_interaction_cost. "
+                   "Models the three fundamental actions: exist, move, interact.",
    )
    ```
 
@@ -189,6 +208,7 @@ Implementation Plan (Option A - with base_move_depletion):
    self.interact_energy_cost = env_cfg.energy_interact_depletion
 
    # REPLACE lines 1046-1080 with:
+   # Movement costs
    if movement_mask.any():
        # Read movement costs from bars.yaml per meter
        movement_costs = torch.zeros(self.meter_count, device=self.device)
@@ -197,6 +217,17 @@ Implementation Plan (Option A - with base_move_depletion):
                movement_costs[i] = bar.base_move_depletion
 
        self.meters[movement_mask] -= movement_costs.unsqueeze(0)
+       self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
+   # Interaction costs
+   if interaction_mask.any():
+       # Read interaction costs from bars.yaml per meter
+       interaction_costs = torch.zeros(self.meter_count, device=self.device)
+       for i, bar in enumerate(self.universe.bars):
+           if hasattr(bar, 'base_interaction_cost'):
+               interaction_costs[i] = bar.base_interaction_cost
+
+       self.meters[interaction_mask] -= interaction_costs.unsqueeze(0)
        self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
    # DELETE WAIT-specific costs (WAIT only pays base_depletion, no extra cost)
@@ -209,16 +240,18 @@ Implementation Plan (Option A - with base_move_depletion):
    - name: "energy"
      base_depletion: 0.01
 
-   # AFTER (separate passive vs movement):
+   # AFTER (three fundamental action types):
    - name: "energy"
-     base_depletion: 0.01          # Passive decay every tick
-     base_move_depletion: 0.005    # Additional cost for movement
-     description: "Energy: 1% passive per tick, +0.5% per movement"
+     base_depletion: 0.01           # Passive decay every tick (existence)
+     base_move_depletion: 0.005     # Additional cost for movement
+     base_interaction_cost: 0.005   # Additional cost for INTERACT
+     description: "Energy: 1% passive per tick, +0.5% per movement, +0.5% per interaction"
 
-   # For meters without movement cost:
+   # For meters without action costs:
    - name: "money"
      base_depletion: 0.0
-     base_move_depletion: 0.0  # Money doesn't deplete from movement
+     base_move_depletion: 0.0         # Money doesn't deplete from movement
+     base_interaction_cost: 0.0       # Money doesn't deplete from interaction
    ```
 
 6. **Remove Grid2D substrate action costs** (already done in JANK-02 follow-up):
@@ -228,7 +261,7 @@ Implementation Plan (Option A - with base_move_depletion):
    ```
 
 7. **Update documentation:**
-   - `docs/config-schemas/bars.md`: Document base_depletion and base_move_depletion
+   - `docs/config-schemas/bars.md`: Document base_depletion, base_move_depletion, and base_interaction_cost
    - `docs/config-schemas/training.md`: Remove energy_*_depletion fields
 
 Migration Impact:
@@ -237,15 +270,17 @@ Migration Impact:
 
 **Config Migration Required**:
 - All `training.yaml` files: Remove energy_*_depletion fields
-- All `bars.yaml` files: Add base_move_depletion field per meter
+- All `bars.yaml` files: Add base_move_depletion and base_interaction_cost fields per meter
 - Code: Update VectorizedHamletEnv to read from bars instead of training.yaml
 
 **Behavioral Change**:
 - Energy depletion rate stays THE SAME:
   - WAIT: 0.01 (base_depletion only)
   - MOVE: 0.015 (base_depletion 0.01 + base_move_depletion 0.005)
-- Semantics are now explicit: base vs movement
-- Students see clearer cost model and meaningful WAIT vs MOVE choice
+  - INTERACT: 0.015 (base_depletion 0.01 + base_interaction_cost 0.005)
+- Semantics are now explicit: existence vs movement vs interaction
+- Students see clearer cost model and meaningful WAIT vs MOVE vs INTERACT choice
+- Models the three fundamental actions: exist, move, interact
 
 **Test Updates Required**:
 - Update tests that parse `training.yaml` expecting energy cost fields
@@ -281,3 +316,9 @@ Investigation revealed four-way conflict and double depletion.
 **Pedagogical Impact:**
 Current confusion teaches students that RL environments are messy and hard to reason about.
 Clean architecture teaches that good design makes systems transparent.
+
+**Future Architectural Direction:**
+- Non-move and non-interact commands (like WAIT) should eventually be defined in config
+- Example: WAIT as a configurable noop action with its own cost structure
+- This ticket focuses on the three fundamental "intrinsics": exist, move, interact
+- WAIT configurability is a separate future task
