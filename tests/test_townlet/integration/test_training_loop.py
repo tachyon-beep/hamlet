@@ -35,7 +35,7 @@ class TestMaskedLossIntegration:
     components instead of synthetic tensors.
     """
 
-    def test_masked_loss_during_training(self, cpu_device, cpu_env_factory, config_pack_factory):
+    def test_masked_loss_during_training(self, cpu_device, cpu_env_factory, config_pack_factory, recurrent_brain_config):
         """Verify masked loss computed correctly during LSTM training.
 
         This test validates the critical contract:
@@ -51,7 +51,6 @@ class TestMaskedLossIntegration:
             env_cfg = cfg["environment"]
             env_cfg.update(
                 {
-                    "grid_size": 5,
                     "partial_observability": True,
                     "vision_range": 2,
                     "enable_temporal_mechanics": False,
@@ -64,6 +63,9 @@ class TestMaskedLossIntegration:
 
         config_dir = config_pack_factory(modifier=_modifier, name="masked_loss")
         env = cpu_env_factory(config_dir=config_dir, num_agents=1)
+
+        # Brain config loaded from fixture
+        brain_cfg = recurrent_brain_config
 
         # Create population with recurrent network
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -80,7 +82,7 @@ class TestMaskedLossIntegration:
             agent_ids=["agent_0"],
             device=cpu_device,
             # action_dim defaults to env.action_dim
-            network_type="recurrent",  # LSTM for masked loss
+            brain_config=brain_cfg,  # LSTM for masked loss
             vision_window_size=5,
             learning_rate=0.0001,
             gamma=0.99,
@@ -122,7 +124,7 @@ class TestMaskedLossIntegration:
         if population.last_td_error is not None:
             assert torch.isfinite(torch.tensor(population.last_td_error)), f"TD error should be finite, got {population.last_td_error}"
 
-    def test_action_masking_enforced_in_q_values(self, cpu_device, cpu_env_factory):
+    def test_action_masking_enforced_in_q_values(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify action masking enforced in Q-values during action selection.
 
         This test validates the critical contract:
@@ -134,6 +136,9 @@ class TestMaskedLossIntegration:
         env.get_action_masks() and passes masks to exploration.select_actions().
         """
         env = cpu_env_factory(num_agents=1)
+
+        # Brain config loaded from fixture
+        brain_cfg = minimal_brain_config
 
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -151,7 +156,7 @@ class TestMaskedLossIntegration:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=brain_cfg,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -177,7 +182,7 @@ class TestMaskedLossIntegration:
         # Verify actions were taken (not all zeros)
         assert len(set(actions_taken)) > 1, "Should have variety of actions (not all zeros)"
 
-    def test_boundary_masking_during_training(self, cpu_device, cpu_env_factory):
+    def test_boundary_masking_during_training(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify boundary masking prevents out-of-bounds movement.
 
         This test validates the critical contract:
@@ -190,6 +195,9 @@ class TestMaskedLossIntegration:
         """
         # Create small environment to easily hit boundaries
         env = cpu_env_factory(num_agents=1)
+
+        # Brain config loaded from fixture
+        brain_cfg = minimal_brain_config
 
         # Create population with random exploration to test boundaries
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -207,7 +215,7 @@ class TestMaskedLossIntegration:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=brain_cfg,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -247,7 +255,7 @@ class TestMultiEpisodeTraining:
     target network updates.
     """
 
-    def test_train_10_episodes_with_learning_progression(self, cpu_device, cpu_env_factory):
+    def test_train_10_episodes_with_learning_progression(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify agents improve over 10 episodes (survival time or Q-values).
 
         This test validates the critical contract:
@@ -260,6 +268,9 @@ class TestMultiEpisodeTraining:
         called repeatedly across episodes.
         """
         env = cpu_env_factory(num_agents=1)
+
+        # Brain config loaded from fixture
+        brain_cfg = minimal_brain_config
 
         # Create population with epsilon decay
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -277,7 +288,7 @@ class TestMultiEpisodeTraining:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=brain_cfg,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -323,7 +334,7 @@ class TestMultiEpisodeTraining:
         # Verify episodes completed
         assert len(survival_times) == 10, "Should complete 10 episodes"
 
-    def test_epsilon_decay_over_episodes(self, cpu_device, cpu_env_factory):
+    def test_epsilon_decay_over_episodes(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify epsilon decreases over episodes according to decay schedule.
 
         This test validates the critical contract:
@@ -336,6 +347,9 @@ class TestMultiEpisodeTraining:
         by training loop after each episode.
         """
         env = cpu_env_factory(num_agents=1)
+
+        # Brain config loaded from fixture
+        brain_cfg = minimal_brain_config
 
         # Create exploration with known decay parameters
         exploration = EpsilonGreedyExploration(
@@ -353,7 +367,7 @@ class TestMultiEpisodeTraining:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=brain_cfg,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -390,7 +404,7 @@ class TestMultiEpisodeTraining:
             abs(epsilon_history[10] - expected_epsilon_10) < 0.05
         ), f"Epsilon at episode 10 should be ~{expected_epsilon_10}, got {epsilon_history[10]}"
 
-    def test_replay_buffer_accumulation_during_training(self, cpu_device, cpu_env_factory):
+    def test_replay_buffer_accumulation_during_training(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify replay buffer accumulates transitions during training.
 
         This test validates the critical contract:
@@ -404,6 +418,9 @@ class TestMultiEpisodeTraining:
         """
         env = cpu_env_factory(num_agents=1)
 
+        # Brain config loaded from fixture
+        brain_cfg = minimal_brain_config
+
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)
         exploration = EpsilonGreedyExploration(epsilon=0.1, epsilon_min=0.1, epsilon_decay=1.0)
@@ -416,7 +433,7 @@ class TestMultiEpisodeTraining:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=brain_cfg,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=500,  # Small capacity for testing
@@ -447,7 +464,7 @@ class TestMultiEpisodeTraining:
                 buffer_sizes[i] >= buffer_sizes[i - 1] or buffer_sizes[i] == 500
             ), f"Buffer size should increase or stay at capacity: {buffer_sizes}"
 
-    def test_target_network_updates_at_frequency(self, cpu_device, cpu_env_factory):
+    def test_target_network_updates_at_frequency(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify target network updated at specified frequency.
 
         This test validates the critical contract:
@@ -459,6 +476,9 @@ class TestMultiEpisodeTraining:
         target network every target_update_frequency training steps.
         """
         env = cpu_env_factory(num_agents=1)
+
+        # Brain config loaded from fixture
+        brain_cfg = minimal_brain_config
 
         # Create population with short target update frequency
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -472,7 +492,7 @@ class TestMultiEpisodeTraining:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=brain_cfg,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -509,7 +529,7 @@ class TestMultiEpisodeTraining:
         if population.training_step_counter >= 10:
             assert target_weights_changed, f"Target network should update after {population.training_step_counter} training steps"
 
-    def test_q_values_improve_over_time(self, cpu_device, cpu_env_factory):
+    def test_q_values_improve_over_time(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify Q-values become more certain over time (reduced variance).
 
         This test validates the critical contract:
@@ -521,6 +541,9 @@ class TestMultiEpisodeTraining:
         Q-network, causing Q-values to become more certain over time.
         """
         env = cpu_env_factory(num_agents=1)
+
+        # Brain config loaded from fixture
+        brain_cfg = minimal_brain_config
 
         # Create population
         curriculum = StaticCurriculum(difficulty_level=0.5)
@@ -538,7 +561,7 @@ class TestMultiEpisodeTraining:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=brain_cfg,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,

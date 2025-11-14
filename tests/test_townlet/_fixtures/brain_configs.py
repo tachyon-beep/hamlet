@@ -7,10 +7,12 @@ Provides standardized brain.yaml fixtures for all test scenarios:
 
 Usage:
     def test_something(minimal_brain_config):
-        population = VectorizedPopulation(..., brain_config_path=minimal_brain_config)
+        population = VectorizedPopulation(..., brain_config=minimal_brain_config)
 """
 
 import pytest
+
+from townlet.agent.brain_config import load_brain_config
 
 
 @pytest.fixture
@@ -23,32 +25,42 @@ def minimal_brain_config(tmp_path):
     brain_yaml = tmp_path / "brain.yaml"
     brain_yaml.write_text(
         """
+version: "1.0"
+description: "Minimal brain config for testing"
+
 architecture:
-  type: simple_q
-  hidden_dims: [128, 64]
-  activation: relu
+  type: feedforward
+  feedforward:
+    hidden_layers: [128, 64]
+    activation: relu
+    dropout: 0.0
+    layer_norm: false
 
 optimizer:
   type: adam
-  learning_rate: 1e-3
+  learning_rate: 0.001
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
   weight_decay: 0.0
+  schedule:
+    type: constant
+
+loss:
+  type: smooth_l1
+  huber_delta: 1.0
 
 q_learning:
   gamma: 0.99
   use_double_dqn: false
   target_update_frequency: 100
 
-loss:
-  type: smooth_l1
-  beta: 1.0
-
 replay:
-  type: standard
   capacity: 10000
-  batch_size: 32
+  prioritized: false
 """
     )
-    return brain_yaml
+    return load_brain_config(tmp_path)
 
 
 @pytest.fixture
@@ -61,33 +73,60 @@ def recurrent_brain_config(tmp_path):
     brain_yaml = tmp_path / "brain.yaml"
     brain_yaml.write_text(
         """
+version: "1.0"
+description: "Recurrent brain config for POMDP tests"
+
 architecture:
-  type: recurrent_spatial_q
-  lstm_hidden_size: 256
-  activation: relu
+  type: recurrent
+  recurrent:
+    vision_encoder:
+      channels: [16, 32]
+      kernel_sizes: [3, 3]
+      strides: [1, 1]
+      padding: [1, 1]
+      activation: relu
+    position_encoder:
+      hidden_sizes: [32]
+      activation: relu
+    meter_encoder:
+      hidden_sizes: [32]
+      activation: relu
+    affordance_encoder:
+      hidden_sizes: [32]
+      activation: relu
+    lstm:
+      hidden_size: 256
+      num_layers: 1
+      dropout: 0.0
+    q_head:
+      hidden_sizes: [128]
+      activation: relu
 
 optimizer:
   type: adam
-  learning_rate: 3e-4
-  weight_decay: 1e-5
+  learning_rate: 0.0003
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
+  weight_decay: 0.00001
+  schedule:
+    type: constant
+
+loss:
+  type: huber
+  huber_delta: 1.0
 
 q_learning:
   gamma: 0.99
   use_double_dqn: true
   target_update_frequency: 200
 
-loss:
-  type: huber
-  delta: 1.0
-
 replay:
-  type: sequential
   capacity: 5000
-  batch_size: 16
-  sequence_length: 8
+  prioritized: false
 """
     )
-    return brain_yaml
+    return load_brain_config(tmp_path)
 
 
 @pytest.fixture
@@ -100,28 +139,39 @@ def legacy_compatible_brain_config(tmp_path):
     brain_yaml = tmp_path / "brain.yaml"
     brain_yaml.write_text(
         """
+version: "1.0"
+description: "Legacy-compatible brain config"
+
 architecture:
-  type: simple_q
-  hidden_dims: [256, 128]
-  activation: relu
+  type: feedforward
+  feedforward:
+    hidden_layers: [256, 128]
+    activation: relu
+    dropout: 0.0
+    layer_norm: false
 
 optimizer:
   type: adam
-  learning_rate: 3e-4
+  learning_rate: 0.0003
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_eps: 1.0e-8
   weight_decay: 0.0
+  schedule:
+    type: constant
+
+loss:
+  type: mse
+  huber_delta: 1.0
 
 q_learning:
   gamma: 0.99
   use_double_dqn: false
   target_update_frequency: 100
 
-loss:
-  type: mse
-
 replay:
-  type: standard
   capacity: 50000
-  batch_size: 64
+  prioritized: false
 """
     )
-    return brain_yaml
+    return load_brain_config(tmp_path)

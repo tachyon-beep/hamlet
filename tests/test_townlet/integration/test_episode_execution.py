@@ -33,7 +33,7 @@ class TestEpisodeLifecycle:
     5. Both feedforward and recurrent networks work correctly
     """
 
-    def test_single_episode_feedforward_network(self, cpu_device, cpu_env_factory):
+    def test_single_episode_feedforward_network(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify single episode with feedforward network completes correctly.
 
         This test validates the most basic episode execution flow:
@@ -64,7 +64,7 @@ class TestEpisodeLifecycle:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -107,7 +107,7 @@ class TestEpisodeLifecycle:
         assert step_count <= 50, "Episode should not exceed max_steps"
 
     @pytest.mark.skip(reason="Flaky test - agent dies from cascade effects intermittently (see git history: c6dbd12, 930b201, 3158cd7)")
-    def test_single_episode_recurrent_network_with_lstm(self, cpu_device, cpu_env_factory):
+    def test_single_episode_recurrent_network_with_lstm(self, cpu_device, cpu_env_factory, recurrent_brain_config):
         """Verify single episode with LSTM network completes correctly.
 
         This test validates episode execution with recurrent networks:
@@ -141,7 +141,7 @@ class TestEpisodeLifecycle:
             agent_ids=["agent_0"],
             device=cpu_device,
             # action_dim defaults to env.action_dim
-            network_type="recurrent",
+            brain_config=recurrent_brain_config,
             vision_window_size=5,
             learning_rate=0.0001,
             gamma=0.99,
@@ -194,7 +194,7 @@ class TestEpisodeLifecycle:
         assert step_count > 0, "Episode should run at least 1 step"
         assert step_count <= 10, "Episode should not exceed max_steps"
 
-    def test_multi_agent_episode_with_partial_dones(self, cpu_device, cpu_env_factory):
+    def test_multi_agent_episode_with_partial_dones(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify multi-agent episode where agents die at different times.
 
         This test validates partial done handling in multi-agent settings:
@@ -225,7 +225,7 @@ class TestEpisodeLifecycle:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -256,7 +256,7 @@ class TestEpisodeLifecycle:
         # At least some agents should have participated in episode
         assert step > 0, "Episode should run at least 1 step"
 
-    def test_episode_observation_action_reward_cycle(self, cpu_device, cpu_env_factory):
+    def test_episode_observation_action_reward_cycle(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify obs → action → reward → next_obs cycle works correctly.
 
         This test validates the core data flow through an episode:
@@ -288,7 +288,7 @@ class TestEpisodeLifecycle:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,

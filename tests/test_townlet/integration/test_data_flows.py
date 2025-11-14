@@ -28,7 +28,7 @@ class TestObservationPipeline:
     and flow to VectorizedPopulation with correct dimensions and structure.
     """
 
-    def test_environment_builds_observation_correct_dims(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_environment_builds_observation_correct_dims(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify environment builds observations with correct dimensions.
 
         This test validates the critical observation pipeline:
@@ -74,7 +74,7 @@ class TestObservationPipeline:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -89,7 +89,7 @@ class TestObservationPipeline:
             expected_dim,
         ), f"Population obs should be [1, {expected_dim}], got {population.current_obs.shape}"
 
-    def test_partial_observability_5x5_window_correct(self, cpu_device, cpu_env_factory):
+    def test_partial_observability_5x5_window_correct(self, cpu_device, cpu_env_factory, recurrent_brain_config):
         """Verify partial observability produces correct 5×5 local window.
 
         This test validates the POMDP observation pipeline:
@@ -125,7 +125,7 @@ class TestObservationPipeline:
             agent_ids=["agent_0"],
             device=cpu_device,
             # action_dim defaults to env.action_dim
-            network_type="recurrent",  # POMDP uses recurrent network
+            brain_config=recurrent_brain_config,  # POMDP uses recurrent network
             vision_window_size=5,
             learning_rate=0.0001,
             gamma=0.99,
@@ -161,7 +161,7 @@ class TestRewardPipeline:
     are computed by RND, rewards are combined correctly, and stored in replay buffer.
     """
 
-    def test_environment_extrinsic_reward_to_population(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_environment_extrinsic_reward_to_population(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify extrinsic rewards flow from environment to population.
 
         This test validates the extrinsic reward pipeline:
@@ -186,7 +186,7 @@ class TestRewardPipeline:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -212,7 +212,7 @@ class TestRewardPipeline:
             alive_rewards = agent_state.rewards[alive_agents]
             assert (alive_rewards > 0).all(), f"Alive agents should have positive rewards, got {alive_rewards}"
 
-    def test_exploration_intrinsic_reward_combined(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_exploration_intrinsic_reward_combined(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify intrinsic rewards are combined with extrinsic rewards.
 
         This test validates the intrinsic reward pipeline:
@@ -246,7 +246,7 @@ class TestRewardPipeline:
             device=cpu_device,
             obs_dim=obs_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -285,7 +285,7 @@ class TestRewardPipeline:
         # At least some intrinsic rewards should be positive (RND detects novelty)
         assert sum(intrinsic_rewards_collected) > 0, "RND should produce non-zero novelty rewards over 10 steps"
 
-    def test_combined_reward_stored_in_replay_buffer(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_combined_reward_stored_in_replay_buffer(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify combined rewards are stored in replay buffer (not separate rewards).
 
         This test validates the replay buffer storage contract:
@@ -319,7 +319,7 @@ class TestRewardPipeline:
             device=cpu_device,
             obs_dim=obs_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -364,7 +364,7 @@ class TestActionPipeline:
     selection works with action masking, and actions execute in environment.
     """
 
-    def test_qnetwork_qvalues_to_exploration(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_qnetwork_qvalues_to_exploration(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify Q-values flow from Q-network to exploration strategy.
 
         This test validates the Q-value pipeline:
@@ -390,7 +390,7 @@ class TestActionPipeline:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -421,7 +421,7 @@ class TestActionPipeline:
         for action in agent_state.actions:
             assert 0 <= action < env.action_dim, f"Action should be in [0, {env.action_dim}), got {action}"
 
-    def test_exploration_epsilon_greedy_with_masking(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_exploration_epsilon_greedy_with_masking(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify epsilon-greedy selects actions with masking correctly.
 
         This test validates the action selection pipeline:
@@ -449,7 +449,7 @@ class TestActionPipeline:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -482,7 +482,7 @@ class TestActionPipeline:
         # Verify action variety (not all same action)
         assert len(set(actions_taken)) > 1, "Should have variety of actions (not all same)"
 
-    def test_actions_to_environment_execution(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_actions_to_environment_execution(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify actions execute in environment and cause state changes.
 
         This test validates the action execution pipeline:
@@ -508,7 +508,7 @@ class TestActionPipeline:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,

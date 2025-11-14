@@ -165,7 +165,7 @@ class TestPopulationCheckpointing:
     is preserved across save/load cycles.
     """
 
-    def test_population_checkpoint_contains_required_keys(self, cpu_device, basic_env):
+    def test_population_checkpoint_contains_required_keys(self, cpu_device, basic_env, minimal_brain_config):
         """Population checkpoint should contain all required keys for full restoration."""
         curriculum = AdversarialCurriculum(
             max_steps_per_episode=100,
@@ -187,7 +187,7 @@ class TestPopulationCheckpointing:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Get checkpoint
@@ -211,7 +211,7 @@ class TestPopulationCheckpointing:
         # Verify version
         assert checkpoint["version"] >= 2, "Checkpoint version should be >= 2"
 
-    def test_population_checkpoint_preserves_network_weights(self, cpu_device, test_config_pack_path, env_builder):
+    def test_population_checkpoint_preserves_network_weights(self, cpu_device, test_config_pack_path, env_builder, minimal_brain_config):
         """Q-network weights should be exactly preserved across checkpoint cycle."""
         # Create environment with CPU device (avoiding basic_env fixture which may use CUDA)
         env = env_builder(config_dir=test_config_pack_path, num_agents=1)
@@ -238,7 +238,7 @@ class TestPopulationCheckpointing:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Train for a bit to change weights
@@ -267,7 +267,7 @@ class TestPopulationCheckpointing:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         pop2.load_checkpoint_state(checkpoint)
@@ -279,7 +279,7 @@ class TestPopulationCheckpointing:
                 original_weights[key], restored_weights[key], atol=1e-6
             ), f"Q-network weights for {key} should match exactly"
 
-    def test_population_checkpoint_preserves_replay_buffer(self, cpu_device, test_config_pack_path, env_builder):
+    def test_population_checkpoint_preserves_replay_buffer(self, cpu_device, test_config_pack_path, env_builder, minimal_brain_config):
         """Replay buffer should be preserved with exact contents across checkpoint cycle."""
         # Create environment with CPU device (avoiding basic_env fixture which may use CUDA)
         env = env_builder(config_dir=test_config_pack_path, num_agents=1)
@@ -302,7 +302,7 @@ class TestPopulationCheckpointing:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             replay_buffer_capacity=1000,
         )
 
@@ -327,7 +327,7 @@ class TestPopulationCheckpointing:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             replay_buffer_capacity=1000,
         )
 
@@ -536,7 +536,7 @@ class TestRunnerCheckpointing:
     (environment, population, curriculum, exploration) correctly.
     """
 
-    def test_runner_checkpoint_includes_all_components(self, cpu_device, env_builder, config_pack_factory):
+    def test_runner_checkpoint_includes_all_components(self, cpu_device, env_builder, config_pack_factory, minimal_brain_config):
         """Runner checkpoint should include state from all components."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -575,7 +575,7 @@ class TestRunnerCheckpointing:
                     device=cpu_device,
                     obs_dim=runner.env.observation_dim,
                     # action_dim defaults to env.action_dim
-                    network_type="simple",
+                    brain_config=minimal_brain_config,
                 )
 
                 # Save checkpoint
@@ -598,7 +598,7 @@ class TestRunnerCheckpointing:
                 # Verify checkpoint has curriculum state
                 assert "curriculum_state" in checkpoint, "Should have curriculum_state"
 
-    def test_runner_checkpoint_preserves_episode_number(self, cpu_device, env_builder, config_pack_factory):
+    def test_runner_checkpoint_preserves_episode_number(self, cpu_device, env_builder, config_pack_factory, minimal_brain_config):
         """Runner should preserve episode counter across checkpoint cycle."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -624,7 +624,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner1.env.observation_dim,
-                    network_type="simple",
+                    brain_config=minimal_brain_config,
                 )
                 runner1.current_episode = 42
                 runner1.save_checkpoint()
@@ -646,12 +646,14 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner2.env.observation_dim,
-                    network_type="simple",
+                    brain_config=minimal_brain_config,
                 )
                 runner2.load_checkpoint()
                 assert runner2.current_episode == 42, "Episode number should be preserved after load"
 
-    def test_runner_checkpoint_round_trip_preserves_training_state(self, cpu_device, env_builder, config_pack_factory):
+    def test_runner_checkpoint_round_trip_preserves_training_state(
+        self, cpu_device, env_builder, config_pack_factory, minimal_brain_config
+    ):
         """Runner checkpoint round-trip should preserve complete training state."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -677,7 +679,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner1.env.observation_dim,
-                    network_type="simple",
+                    brain_config=minimal_brain_config,
                 )
 
                 runner1.population.reset()
@@ -709,7 +711,7 @@ class TestRunnerCheckpointing:
                     agent_ids=["agent_0"],
                     device=cpu_device,
                     obs_dim=runner2.env.observation_dim,
-                    network_type="simple",
+                    brain_config=minimal_brain_config,
                 )
 
                 runner2.load_checkpoint()
@@ -740,7 +742,7 @@ class TestCheckpointRoundTrip:
     with no state degradation or loss.
     """
 
-    def test_checkpoint_roundtrip_training_resumption(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_checkpoint_roundtrip_training_resumption(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Training should produce identical results when resumed from checkpoint."""
         # Create environment and components
         env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=1)
@@ -765,7 +767,7 @@ class TestCheckpointRoundTrip:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Train first population
@@ -798,7 +800,7 @@ class TestCheckpointRoundTrip:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         pop2.load_checkpoint_state(checkpoint)
@@ -824,7 +826,9 @@ class TestCheckpointRoundTrip:
 
         assert weights_changed, "Network weights should have changed after resumed training"
 
-    def test_checkpoint_roundtrip_multi_component_consistency(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_checkpoint_roundtrip_multi_component_consistency(
+        self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config
+    ):
         """All components should maintain consistency across checkpoint round-trip."""
         # Setup
         env = cpu_env_factory(config_dir=test_config_pack_path, num_agents=2)
@@ -845,7 +849,7 @@ class TestCheckpointRoundTrip:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Train for some steps
@@ -887,7 +891,7 @@ class TestCheckpointRoundTrip:
             device=cpu_device,
             obs_dim=env2.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Load all checkpoints
@@ -926,7 +930,7 @@ class TestVariableMeterCheckpoints:
     Verifies that checkpoints include meter metadata and validate compatibility.
     """
 
-    def test_checkpoint_includes_meter_metadata(self, cpu_device, task001_env_4meter):
+    def test_checkpoint_includes_meter_metadata(self, cpu_device, task001_env_4meter, minimal_brain_config):
         """Saved checkpoint should include meter count and names in metadata."""
         curriculum = StaticCurriculum(
             difficulty_level=0.5,
@@ -948,7 +952,7 @@ class TestVariableMeterCheckpoints:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Get checkpoint
@@ -972,7 +976,7 @@ class TestVariableMeterCheckpoints:
             "mood",
         ], f"Should have correct meter names, got {metadata['meter_names']}"
 
-    def test_loading_checkpoint_validates_meter_count(self, cpu_device, task001_env_4meter, basic_env, tmp_path):
+    def test_loading_checkpoint_validates_meter_count(self, cpu_device, task001_env_4meter, basic_env, tmp_path, minimal_brain_config):
         """Loading checkpoint should fail if meter counts don't match."""
         # Create 4-meter population and save checkpoint (no training needed)
         curriculum = StaticCurriculum(
@@ -990,7 +994,7 @@ class TestVariableMeterCheckpoints:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Save checkpoint (no training needed for metadata test)
@@ -1015,14 +1019,14 @@ class TestVariableMeterCheckpoints:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Loading should raise ValueError
         with pytest.raises(ValueError, match="meter count mismatch"):
             pop_8meter.load_checkpoint_state(checkpoint_4meter)
 
-    def test_loading_checkpoint_with_matching_meters_succeeds(self, cpu_device, task001_env_4meter):
+    def test_loading_checkpoint_with_matching_meters_succeeds(self, cpu_device, task001_env_4meter, minimal_brain_config):
         """Loading checkpoint should succeed if meter counts match."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
         _init_curriculum(curriculum, 1)
@@ -1036,7 +1040,7 @@ class TestVariableMeterCheckpoints:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Save checkpoint (no training needed)
@@ -1058,7 +1062,7 @@ class TestVariableMeterCheckpoints:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Load should succeed (no exception)
@@ -1067,7 +1071,7 @@ class TestVariableMeterCheckpoints:
         # Verify metadata matched
         assert checkpoint["universe_metadata"]["meter_count"] == 4
 
-    def test_checkpoint_rejects_missing_universe_metadata(self, cpu_device, basic_env):
+    def test_checkpoint_rejects_missing_universe_metadata(self, cpu_device, basic_env, minimal_brain_config):
         """Checkpoints without universe_metadata should be strictly rejected (pre-release, 0 users)."""
         # Create a real checkpoint first to get proper network state
         curriculum = AdversarialCurriculum(max_steps_per_episode=100)
@@ -1082,7 +1086,7 @@ class TestVariableMeterCheckpoints:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Get a real checkpoint and remove universe_metadata to simulate legacy
@@ -1105,7 +1109,7 @@ class TestVariableMeterCheckpoints:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Loading checkpoint without universe_metadata should raise ValueError

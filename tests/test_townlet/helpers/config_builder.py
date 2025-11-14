@@ -119,3 +119,12 @@ def mutate_brain_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> None
     mutator(data)
     with open(brain_yaml, "w") as handle:
         yaml.safe_dump(data, handle, sort_keys=False)
+
+
+def mutate_substrate_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> None:
+    """Load substrate.yaml, apply mutator, and write back."""
+    substrate_yaml = config_dir / "substrate.yaml"
+    data = yaml.safe_load(substrate_yaml.read_text())
+    mutator(data)
+    with open(substrate_yaml, "w") as handle:
+        yaml.safe_dump(data, handle, sort_keys=False)

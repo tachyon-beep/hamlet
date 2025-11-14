@@ -17,7 +17,7 @@ from townlet.population.vectorized import VectorizedPopulation
 class TestRNDLossTracking:
     """Test RND loss is tracked during training with AdaptiveIntrinsicExploration."""
 
-    def test_rnd_loss_tracked_during_training(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_rnd_loss_tracked_during_training(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify RND predictor loss is tracked when using AdaptiveIntrinsicExploration.
 
         This test validates the critical contract:
@@ -54,7 +54,7 @@ class TestRNDLossTracking:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,
@@ -82,7 +82,7 @@ class TestRNDLossTracking:
         # Verify RND loss is reasonable (should be > 0 since predictor is training)
         assert population.last_rnd_loss >= 0.0, f"RND loss should be non-negative, got {population.last_rnd_loss}"
 
-    def test_rnd_loss_tracks_latest_value(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_rnd_loss_tracks_latest_value(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify RND loss updates with latest training value.
 
         This test validates that last_rnd_loss is updated each time RND
@@ -113,7 +113,7 @@ class TestRNDLossTracking:
             device=cpu_device,
             obs_dim=env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
             learning_rate=0.00025,
             gamma=0.99,
             replay_buffer_capacity=1000,

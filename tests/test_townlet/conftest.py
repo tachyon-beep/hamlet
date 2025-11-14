@@ -18,6 +18,7 @@ pytest_plugins = [
     "tests.test_townlet._fixtures.variable_meters",
     "tests.test_townlet._fixtures.database",
     "tests.test_townlet._fixtures.utils",
+    "tests.test_townlet._fixtures.brain_configs",
 ]
 
 # Re-export for tests that import from the legacy location
