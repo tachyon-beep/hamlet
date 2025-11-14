@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+# WP-C2: BrainConfig fixtures
 from tests.test_townlet._fixtures.environment import SUBSTRATE_FIXTURES as _SUBSTRATE_FIXTURES
 
 pytest_plugins = [
