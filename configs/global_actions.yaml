@@ -25,14 +25,14 @@ custom_actions:
     icon: "😴"
 
   # Mental health action
-  - name: "MEDITATE"
-    type: "passive"
-    costs:
-      energy: 0.001   # Costs 0.1% energy
-    effects:
-      mood: 0.02      # Restores 2% mood
-    description: "Meditate to improve mood without sleeping"
-    icon: "🧘"
+  #- name: "MEDITATE"
+  #  type: "passive"
+  #  costs:
+  #    energy: 0.001   # Costs 0.1% energy
+  #  effects:
+  #    mood: 0.02      # Restores 2% mood
+  #  description: "Meditate to improve mood without sleeping"
+  #  icon: "🧘"
 
 # Notes:
 # - REST enables gradual recovery without finding Bed
