@@ -1,0 +1,989 @@
+# HAMLET Configuration System v2.1 - Complete Reference
+# =======================================================
+# This file shows ALL configuration options in the v2.1 design.
+# In practice, these would be split across multiple files in the hierarchy.
+# Use this as a reference guide for available options and their semantics.
+#
+# REVISION HISTORY:
+# - v2.1.0: Initial complete reference
+# - v2.1.1: Clarifications based on structured review:
+#   * Vision support dimension formulas now show grid-size dependency explicitly
+#   * VFS normalization method semantics documented (clip, normalize, standardize, none)
+#   * Hyperparameter override hierarchy clarified (agent.yaml defaults, training.yaml overrides)
+#   * Implicit substrate fields (position, velocity) now explicitly documented
+#   * Curriculum-level action control added to training.yaml
+#   * Future v3.0 enhancements noted (hidden affordances)
+#
+# Directory Structure:
+# configs/my_experiment/
+# ├── experiment.yaml      # Section 1
+# ├── stratum.yaml         # Section 2
+# ├── environment.yaml     # Section 3
+# ├── actions.yaml         # Section 4
+# ├── agent.yaml           # Section 5
+# └── levels/
+#     ├── L1_full_obs/
+#     │   ├── curriculum.yaml    # Section 6
+#     │   ├── bars.yaml          # Section 7
+#     │   ├── affordances.yaml   # Section 8
+#     │   └── training.yaml      # Section 9
+#     └── L2_partial_obs/
+#         └── ...
+
+# =============================================================================
+# SECTION 1: experiment.yaml (Experiment-Level Metadata)
+# =============================================================================
+# Location: configs/my_experiment/experiment.yaml
+# Purpose: High-level metadata about the experiment
+# Breaking: NO (metadata doesn't affect obs_dim or checkpoint compatibility)
+
+experiment:
+  version: "1.0"
+
+  metadata:
+    name: "Complete Reference Example"
+    description: "Comprehensive demonstration of all v2.1 config options"
+    author: "HAMLET Team"
+    created: "2025-11-15"
+    tags: ["reference", "tutorial", "complete"]
+
+  # Experiment-level settings
+  curriculum_levels:
+    - L0_0_minimal
+    - L0_5_dual_resource
+    - L1_full_observability
+    - L2_partial_observability
+    - L3_temporal_mechanics
+
+# =============================================================================
+# SECTION 2: stratum.yaml (World Shape + Support Declarations)
+# =============================================================================
+# Location: configs/my_experiment/stratum.yaml
+# Purpose: Defines the "shape" of the world and which observation fields are SUPPORTED
+# Breaking: YES - Changes here affect obs_dim and break checkpoints
+# Key Principle: Support = "which fields CAN exist"
+
+stratum:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Substrate Definition (BREAKING - defines world topology)
+  # --------------------------------------------------------------------------
+  substrate:
+    type: grid  # Options: grid, grid3d, gridnd, continuous, continuousnd, aspatial
+
+    grid:
+      topology: square  # Options: square, hexagonal
+      width: 8          # Grid width (BREAKING - affects window calculations)
+      height: 8         # Grid height (BREAKING - affects window calculations)
+
+      # Behavioral parameters (experiment-level, must match across curriculum)
+      # These are MANDATORY (no defaults) but NOT BREAKING (don't affect obs_dim)
+
+      boundary: clamp  # Options: clamp (hard walls), wrap (toroidal), bounce (elastic), sticky
+      # - clamp: Agent stops at edges
+      # - wrap: Agent teleports to opposite edge (pac-man style)
+      # - bounce: Agent reflects back
+      # - sticky: Agent gets stuck at edges
+
+      distance_metric: manhattan  # Options: manhattan (L1), euclidean (L2), chebyshev (L∞)
+      # Used for: Distance calculations, pathfinding, spatial reasoning
+
+      observation_encoding: relative  # Options: relative, scaled, absolute
+      # - relative: Normalized [0,1] coordinates (grid-size-agnostic, best for transfer learning)
+      # - scaled: Coordinates in [0, grid_size] (value range conveys grid size implicitly)
+      # - absolute: Raw unnormalized coordinates (for physical simulation)
+      # NOTE: All modes produce IDENTICAL obs_dim (2 dims for position)
+      #       Only value ranges differ, not dimensions!
+
+  # --------------------------------------------------------------------------
+  # Vision Support (BREAKING - controls which vision fields exist in obs_dim)
+  # --------------------------------------------------------------------------
+  vision_support: both  # Options: global, partial, both, none
+  # - global: Only grid_encoding field exists (full observability)
+  # - partial: Only local_window field exists (POMDP)
+  # - both: BOTH fields exist (enables curriculum transfer learning via masking)
+  # - none: No vision fields (blind agents, bars/meters only)
+  #
+  # BREAKING: Changes affect obs_dim
+  # Dimension additions depend on grid size and vision_range:
+  # - global: +width*height dims (example: 8×8 = +64 dims)
+  # - partial: +window_width*window_height dims (example: vision_range=0.5 on 8×8 = 5×5 window = +25 dims)
+  # - both: +grid_dims + +window_dims (example: 8×8 grid + 5×5 window = +89 dims)
+
+  # --------------------------------------------------------------------------
+  # Temporal Support (BREAKING - controls whether temporal fields exist)
+  # --------------------------------------------------------------------------
+  temporal_support: enabled  # Options: enabled, disabled
+  # - enabled: Creates time_sin, time_cos fields in obs_dim (+2 dims)
+  # - disabled: No temporal fields
+  #
+  # BREAKING: Changes affect obs_dim
+  # Curriculum controls which levels have temporal ACTIVE vs MASKED
+
+  # --------------------------------------------------------------------------
+  # Implicit Substrate Observation Fields (always present, substrate-dependent)
+  # --------------------------------------------------------------------------
+  # The substrate automatically adds observation fields based on its type:
+  #
+  # Grid2D / Grid3D / GridND:
+  #   - agent_position: 2 dims for Grid2D (x, y), 3 dims for Grid3D (x, y, z), N dims for GridND
+  #   - agent_velocity: 2 dims for Grid2D (dx, dy), 3 dims for Grid3D, N dims for GridND
+  #
+  # Continuous / ContinuousND:
+  #   - agent_position: N dims based on space dimensionality
+  #   - agent_velocity: N dims based on space dimensionality
+  #
+  # Aspatial:
+  #   - No position or velocity fields (0 dims)
+  #
+  # These fields are NOT configurable - they are determined by substrate.type
+  # For this reference config (Grid2D):
+  #   - agent_position: +2 dims
+  #   - agent_velocity: +2 dims
+
+# =============================================================================
+# SECTION 3: environment.yaml (World Vocabulary)
+# =============================================================================
+# Location: configs/my_experiment/environment.yaml
+# Purpose: Defines WHAT exists in the world (vocabulary)
+# Breaking: YES - Adding/removing items breaks checkpoints
+# Key Principle: WHAT vs HOW split - this defines WHAT, levels/* define HOW
+
+environment:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Meters (BREAKING - meter vocabulary affects obs_dim)
+  # --------------------------------------------------------------------------
+  # Each meter adds 1 dimension to observation space
+  meters:
+    - name: energy
+      description: "Physical energy for movement and actions"
+      range_type: normalized  # Options: normalized, unbounded, integer
+      # range_type is METADATA ONLY (UI display hint), does NOT affect obs_dim
+      # - normalized: UI displays as 0-100%
+      # - unbounded: UI displays raw value (can exceed 1.0)
+      # - integer: UI displays as 0-100 points
+
+    - name: health
+      description: "Physical health, death at 0"
+      range_type: normalized
+
+    - name: satiation
+      description: "Hunger level, affects health cascade"
+      range_type: normalized
+
+    - name: hygiene
+      description: "Cleanliness, affects mood and social"
+      range_type: normalized
+
+    - name: money
+      description: "Economic resource for purchasing"
+      range_type: unbounded  # Can exceed 1.0 with job income
+
+    - name: fitness
+      description: "Physical conditioning from exercise"
+      range_type: normalized
+
+    - name: mood
+      description: "Mental state, affects energy cascade"
+      range_type: normalized
+
+    - name: social
+      description: "Social connection level"
+      range_type: normalized
+
+  # BREAKING: Adding/removing meters changes obs_dim (+1 per meter)
+  # Current: 8 meters = +8 dims
+
+  # --------------------------------------------------------------------------
+  # Cascade Graph (BREAKING - defines which meter relationships exist)
+  # --------------------------------------------------------------------------
+  # Defines the STRUCTURE of meter cascades (which cascades CAN exist)
+  # Parameters (threshold, strength) are defined in levels/*/bars.yaml
+  cascade_graph:
+    - source: satiation
+      target: health
+      description: "Low hunger damages health over time"
+
+    - source: satiation
+      target: energy
+      description: "Low hunger drains energy"
+
+    - source: mood
+      target: energy
+      description: "Low mood reduces energy recovery"
+
+    - source: hygiene
+      target: mood
+      description: "Poor hygiene damages mood"
+
+    - source: hygiene
+      target: social
+      description: "Poor hygiene damages social connection"
+
+  # Validation: All curriculum levels MUST implement all cascades
+  # To disable: Set strength: 0.0 in bars.yaml (explicit disable)
+
+  # --------------------------------------------------------------------------
+  # Modulation Graph (defines bar → affordance modulation relationships)
+  # --------------------------------------------------------------------------
+  modulation_graph:
+    - bar: energy
+      affordances: [WORK]
+      description: "Low energy reduces work effectiveness"
+
+    - bar: mood
+      affordances: [SOCIALIZE, WORK]
+      description: "Low mood reduces social and work quality"
+
+  # --------------------------------------------------------------------------
+  # Affordances (BREAKING - affordance vocabulary affects obs_dim)
+  # --------------------------------------------------------------------------
+  # Each affordance adds 1 dimension to observation space (binary: visible or not)
+  # Parameters (costs, effects, opening_hours) defined in levels/*/affordances.yaml
+  #
+  # Future Enhancement (v3.0): Add `hidden: true` flag to allow affordances
+  # that exist in the world but never appear in observations at certain levels.
+  # For v2.1, all affordances are always observable (binary visibility flag).
+  affordances:
+    - name: EAT
+      description: "Consume food to restore satiation"
+      category: sustenance
+
+    - name: SLEEP
+      description: "Rest to restore energy"
+      category: sustenance
+
+    - name: SHOWER
+      description: "Clean to restore hygiene"
+      category: hygiene
+
+    - name: EXERCISE
+      description: "Physical activity for fitness"
+      category: fitness
+
+    - name: WORK
+      description: "Employment for money income"
+      category: economic
+
+    - name: SOCIALIZE
+      description: "Social interaction"
+      category: social
+
+    - name: MEDITATE
+      description: "Mental restoration for mood"
+      category: mental
+
+    - name: DRINK_WATER
+      description: "Hydration (combined with satiation)"
+      category: sustenance
+
+    - name: BRUSH_TEETH
+      description: "Dental hygiene"
+      category: hygiene
+
+    - name: LAUNDRY
+      description: "Clothing hygiene"
+      category: hygiene
+
+    - name: COOK
+      description: "Food preparation"
+      category: sustenance
+
+    - name: CLEAN_HOUSE
+      description: "Environmental hygiene"
+      category: hygiene
+
+    - name: ENTERTAINMENT
+      description: "Leisure for mood"
+      category: mental
+
+    - name: DOCTOR
+      description: "Medical care for health"
+      category: health
+
+  # BREAKING: Adding/removing affordances changes obs_dim (+1 per affordance)
+  # Current: 14 affordances = +14 dims
+
+  # --------------------------------------------------------------------------
+  # VFS Variables (BREAKING - variable vocabulary affects obs_dim)
+  # --------------------------------------------------------------------------
+  # Variable & Feature System - declarative state space configuration
+  variables:
+    - name: deficit_energy
+      type: scalar
+      dims: 1
+      scope: agent  # Options: global (shared), agent (per-agent), agent_private (hidden)
+      description: "How far below target energy (0.0 = at/above target)"
+      normalization:
+        method: clip  # Options: clip, normalize, standardize, none
+        # Normalization method semantics:
+        # - clip: Clamp values to [range[0], range[1]], no scaling
+        # - normalize: Divide by range[1] to map [0, range[1]] → [0, 1]
+        # - standardize: (value - mean) / std (requires mean/std tracking)
+        # - none: Pass through raw values
+        range: [0.0, 1.0]
+
+    - name: deficit_satiation
+      type: scalar
+      dims: 1
+      scope: agent
+      description: "How far below target satiation"
+      normalization:
+        method: clip
+        range: [0.0, 1.0]
+
+    - name: time_since_last_eat
+      type: scalar
+      dims: 1
+      scope: agent
+      description: "Timesteps since last EAT action"
+      normalization:
+        method: normalize
+        range: [0.0, 100.0]  # Normalize to [0, 1] assuming max 100 steps
+
+    - name: time_since_last_sleep
+      type: scalar
+      dims: 1
+      scope: agent
+      description: "Timesteps since last SLEEP action"
+      normalization:
+        method: normalize
+        range: [0.0, 100.0]
+
+  # BREAKING: Adding/removing variables changes obs_dim (dims per variable)
+  # Current: 4 variables = +4 dims
+
+  # --------------------------------------------------------------------------
+  # Cues (NOT BREAKING - UI metadata only)
+  # --------------------------------------------------------------------------
+  # Cues provide UI hints for visualization, do NOT affect observations
+  cues:
+    - name: low_energy_warning
+      trigger:
+        bar: energy
+        threshold: 0.2
+        direction: below
+      display:
+        icon: "⚠️"
+        color: "#FF6B6B"
+        message: "Energy critically low!"
+
+    - name: high_money_celebration
+      trigger:
+        bar: money
+        threshold: 100.0
+        direction: above
+      display:
+        icon: "💰"
+        color: "#51CF66"
+        message: "Financial milestone reached!"
+
+# =============================================================================
+# SECTION 4: actions.yaml (Action Vocabulary)
+# =============================================================================
+# Location: configs/my_experiment/actions.yaml
+# Purpose: Defines which actions exist (vocabulary)
+# Breaking: YES - action vocabulary affects action_dim
+
+actions:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Substrate Actions (automatically inherited from substrate type)
+  # --------------------------------------------------------------------------
+  substrate_actions:
+    inherit: true  # Inherit actions from substrate (UP, DOWN, LEFT, RIGHT, etc.)
+    # Grid2D: UP, DOWN, LEFT, RIGHT, UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT (8 actions)
+    # Grid3D: + UP_Z, DOWN_Z (10 actions)
+    # Aspatial: No movement actions (0 actions)
+
+  # --------------------------------------------------------------------------
+  # Custom Actions (experiment-specific actions)
+  # --------------------------------------------------------------------------
+  custom_actions:
+    - name: INTERACT
+      description: "Interact with affordance at current position"
+      enabled_by_default: true
+
+    - name: WAIT
+      description: "Do nothing (pass turn)"
+      enabled_by_default: true
+
+    - name: REST
+      description: "Passive energy recovery (slower than SLEEP)"
+      enabled_by_default: false  # Optional action, can be enabled in curriculum
+
+    - name: MEDITATE
+      description: "Passive mood boost (slower than MEDITATE affordance)"
+      enabled_by_default: false
+
+  # BREAKING: Adding/removing actions changes action_dim
+  # Current (Grid2D): 8 substrate + 2 enabled custom = 10 actions
+
+  # --------------------------------------------------------------------------
+  # Action Labels (UI terminology preset)
+  # --------------------------------------------------------------------------
+  # NOT BREAKING - just UI labels for actions
+  labels:
+    preset: gaming  # Options: gaming, 6dof, cardinal, math
+    # gaming: UP, DOWN, LEFT, RIGHT, JUMP, CROUCH, ...
+    # 6dof: FORWARD, BACK, LEFT, RIGHT, UP, DOWN, ROLL_LEFT, ...
+    # cardinal: NORTH, SOUTH, EAST, WEST, ...
+    # math: +X, -X, +Y, -Y, +Z, -Z, ...
+
+# =============================================================================
+# SECTION 5: agent.yaml (Agent Perception + Drive + Brain)
+# =============================================================================
+# Location: configs/my_experiment/agent.yaml
+# Purpose: Defines how agent perceives and processes information
+# Breaking: Depends on subsection
+
+agent:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Perception (NOT BREAKING - doesn't add dimensions, just encoding behavior)
+  # --------------------------------------------------------------------------
+  perception:
+    # Note: observation_encoding moved to stratum.yaml (substrate behavioral param)
+    # This section is for perception-specific settings that don't affect obs_dim
+
+  # --------------------------------------------------------------------------
+  # Drive (Reward Function Configuration)
+  # --------------------------------------------------------------------------
+  # Drive As Code (DAC) - declarative reward function
+  # NOT BREAKING - reward structure doesn't affect obs_dim
+  drive:
+    version: "1.0"
+
+    # Modifiers (context-sensitive reward adjustment)
+    modifiers:
+      energy_crisis:
+        type: range_multiplier
+        source: energy  # Bar or VFS variable
+        ranges:
+          - min: 0.0
+            max: 0.2
+            multiplier: 0.0  # Suppress intrinsic when energy critical
+          - min: 0.2
+            max: 1.0
+            multiplier: 1.0  # Normal intrinsic weight
+
+    # Extrinsic Strategies (base reward from bar states)
+    extrinsic:
+      type: constant_base_with_shaped_bonus  # Options: multiplicative, additive_unweighted, weighted_sum, etc.
+      base: 0.01  # Small positive baseline (prevents "low energy delirium")
+      bonuses:
+        - bar: energy
+          weight: 0.5
+          transform: linear  # Options: linear, quadratic, exponential
+        - bar: health
+          weight: 0.5
+          transform: linear
+
+    # Intrinsic Strategies (exploration drive)
+    intrinsic:
+      strategy: adaptive_rnd  # Options: rnd, icm, count_based, adaptive_rnd, none
+      base_weight: 0.1
+      apply_modifiers: [energy_crisis]  # Apply crisis suppression
+
+      # Adaptive RND specific settings
+      annealing:
+        enabled: true
+        threshold: 100.0  # Start annealing when mean survival > 100 steps
+        decay_rate: 0.995
+        min_weight: 0.01
+
+    # Shaping Bonuses (behavioral incentives)
+    shaping:
+      - type: approach_reward
+        target: EAT
+        weight: 0.01
+        max_distance: 5.0
+
+      - type: completion_bonus
+        action: INTERACT
+        affordance: SLEEP
+        bonus: 0.1
+
+    # Composition
+    composition:
+      normalize: false
+      clip: null
+      log_components: true  # Log reward breakdown for debugging
+      log_modifiers: true
+
+  # --------------------------------------------------------------------------
+  # Brain (Network Architecture)
+  # --------------------------------------------------------------------------
+  # NOT BREAKING - network architecture doesn't affect obs_dim (must match though!)
+  #
+  # HYPERPARAMETER OVERRIDE HIERARCHY:
+  # - This section defines EXPERIMENT-LEVEL DEFAULTS for hyperparameters
+  # - training.yaml can override these on a PER-CURRICULUM-LEVEL basis
+  # - In case of conflict, training.yaml wins
+  brain:
+    architecture: feedforward  # Options: feedforward, recurrent
+
+    # Feedforward-specific settings
+    feedforward:
+      hidden_sizes: [256, 128]
+      activation: relu  # Options: relu, tanh, elu, gelu
+
+    # Recurrent-specific settings (when architecture: recurrent)
+    recurrent:
+      vision_encoder:
+        conv_channels: [32, 64]
+        kernel_size: 3
+        stride: 1
+        output_dim: 128
+
+      position_encoder:
+        hidden_size: 32
+
+      meter_encoder:
+        hidden_size: 32
+
+      lstm:
+        hidden_size: 256
+        num_layers: 1
+
+      q_head:
+        hidden_sizes: [128]
+
+    # Optimizer settings (experiment-level defaults)
+    optimizer:
+      type: adam  # Options: adam, sgd, rmsprop
+      learning_rate: 0.0001  # Can be overridden in training.yaml per level
+
+    # Q-Learning algorithm (experiment-level defaults)
+    q_learning:
+      algorithm: double_dqn  # Options: dqn (vanilla), double_dqn
+      gamma: 0.99              # Can be overridden in training.yaml per level
+      target_update_frequency: 1000  # Can be overridden in training.yaml per level
+
+# =============================================================================
+# SECTION 6: curriculum.yaml (Curriculum-Level Active Field Control)
+# =============================================================================
+# Location: configs/my_experiment/levels/L1_full_observability/curriculum.yaml
+# Purpose: Controls which observation fields are ACTIVE vs MASKED
+# Breaking: NO - masking doesn't change obs_dim, just which fields are zeros
+# Key Principle: Active = "which fields ARE used" (support must declare them first)
+
+curriculum:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Vision Control (which vision fields are active vs masked)
+  # --------------------------------------------------------------------------
+  active_vision: global  # Options: global, partial
+  # - global: grid_encoding ACTIVE, local_window MASKED
+  # - partial: local_window ACTIVE, grid_encoding MASKED
+  #
+  # Requires: stratum.yaml vision_support includes the chosen mode
+  # - active_vision: global requires vision_support: global or both
+  # - active_vision: partial requires vision_support: partial or both
+
+  vision_range: 0.5  # Normalized float [0.0, 1.0]
+  # Used when active_vision: partial
+  # Ignored when active_vision: global (but still required by no-defaults principle)
+  #
+  # Formula: radius = ceil(vision_range * (grid_size / 2))
+  # Examples (8×8 grid):
+  # - 0.25: radius=1, window=3×3 (9 dims)
+  # - 0.5:  radius=2, window=5×5 (25 dims)
+  # - 0.75: radius=3, window=7×7 (49 dims)
+  # - 1.0:  radius=4, window=9×9 (81 dims, full grid coverage)
+
+  # --------------------------------------------------------------------------
+  # Temporal Control (which temporal fields are active vs masked)
+  # --------------------------------------------------------------------------
+  active_temporal: false  # Options: true, false
+  # - true: time_sin, time_cos ACTIVE
+  # - false: time_sin, time_cos MASKED (all zeros)
+  #
+  # Requires: stratum.yaml temporal_support: enabled
+
+  day_length: null  # MANDATORY field (no-defaults principle)
+  # - When active_temporal: true → MUST be integer > 0 (e.g., 24)
+  # - When active_temporal: false → MUST be null
+  #
+  # Validation:
+  # if active_temporal == true:
+  #     assert day_length is not None and day_length > 0
+  # if active_temporal == false:
+  #     assert day_length is None
+
+# Example curriculum variations:
+#
+# L1_full_observability/curriculum.yaml:
+#   active_vision: global
+#   vision_range: 0.5  # Not used but required
+#   active_temporal: false
+#   day_length: null
+#
+# L2_partial_observability/curriculum.yaml:
+#   active_vision: partial
+#   vision_range: 0.5  # 5×5 window on 8×8 grid
+#   active_temporal: false
+#   day_length: null
+#
+# L3_temporal_mechanics/curriculum.yaml:
+#   active_vision: global
+#   vision_range: 0.5  # Not used
+#   active_temporal: true
+#   day_length: 24
+
+# =============================================================================
+# SECTION 7: bars.yaml (Meter Behavioral Parameters)
+# =============================================================================
+# Location: configs/my_experiment/levels/L1_full_observability/bars.yaml
+# Purpose: Defines HOW meters behave (parameters, not vocabulary)
+# Breaking: NO - parameter changes don't affect obs_dim
+
+bars:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Meter Parameters (how meters behave in this curriculum level)
+  # --------------------------------------------------------------------------
+  meters:
+    - name: energy  # Must match environment.yaml meter name
+      initial: 1.0  # Starting value [0.0, 1.0]
+
+      depletion:
+        passive: 0.01  # Passive drain per timestep
+        move: 0.02     # Drain per movement action
+        interact: 0.05 # Drain per INTERACT action
+
+      recovery:
+        natural: 0.0  # Natural recovery per timestep (usually 0)
+
+      bounds:
+        min: 0.0
+        max: 1.0
+        lethal_min: true  # Death if reaches min
+        lethal_max: false
+
+    - name: health
+      initial: 1.0
+      depletion:
+        passive: 0.005
+        move: 0.0
+        interact: 0.0
+      recovery:
+        natural: 0.001  # Slow natural healing
+      bounds:
+        min: 0.0
+        max: 1.0
+        lethal_min: true
+        lethal_max: false
+
+    - name: satiation
+      initial: 1.0
+      depletion:
+        passive: 0.008
+        move: 0.01
+        interact: 0.0
+      recovery:
+        natural: 0.0
+      bounds:
+        min: 0.0
+        max: 1.0
+        lethal_min: false  # Hunger alone doesn't kill (cascades do)
+        lethal_max: false
+
+    # ... (repeat for all 8 meters)
+
+  # --------------------------------------------------------------------------
+  # Cascade Parameters (how meter relationships behave)
+  # --------------------------------------------------------------------------
+  # Must implement ALL cascades from environment.yaml cascade_graph
+  cascades:
+    - source: satiation  # Must match cascade_graph
+      target: health
+      threshold: 0.3    # Trigger when source < threshold
+      strength: 0.004   # Damage rate (0.0 = explicit disable)
+
+    - source: satiation
+      target: energy
+      threshold: 0.3
+      strength: 0.006
+
+    - source: mood
+      target: energy
+      threshold: 0.2
+      strength: 0.001
+
+    - source: hygiene
+      target: mood
+      threshold: 0.4
+      strength: 0.003
+
+    - source: hygiene
+      target: social
+      threshold: 0.4
+      strength: 0.0  # DISABLED (explicit disable with strength: 0.0)
+
+  # Validation:
+  # - All cascades from environment.yaml MUST be present
+  # - Cannot add cascades not in environment.yaml
+  # - To disable: Set strength: 0.0 (explicit disable, not omission)
+
+# =============================================================================
+# SECTION 8: affordances.yaml (Affordance Behavioral Parameters)
+# =============================================================================
+# Location: configs/my_experiment/levels/L1_full_observability/affordances.yaml
+# Purpose: Defines HOW affordances behave (parameters, not vocabulary)
+# Breaking: NO - parameter changes don't affect obs_dim
+
+affordances:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Affordance Parameters (how affordances behave in this curriculum level)
+  # --------------------------------------------------------------------------
+  affordances:
+    - name: EAT  # Must match environment.yaml affordance name
+
+      # Costs (bar decreases when action executes)
+      costs:
+        energy: 0.05    # Using EAT costs 5% energy
+        money: 5.0      # Costs $5 (can exceed 1.0 for unbounded meters)
+
+      # Effects (bar increases when action executes)
+      effects:
+        satiation: 0.4  # Restores 40% satiation
+        mood: 0.05      # Small mood boost from eating
+
+      # Availability (when affordance is visible/usable)
+      opening_hours:
+        enabled: true
+        schedule:
+          - start: 6   # 6 AM (if day_length: 24)
+            end: 22    # 10 PM
+      # If opening_hours.enabled: false, affordance always available
+
+      # Deployment (spatial placement for grid substrates)
+      deployment:
+        type: fixed  # Options: fixed, random, procedural
+        positions: [[2, 2], [5, 5]]  # Grid positions
+
+    - name: SLEEP
+      costs:
+        energy: 0.0  # Sleeping is free
+      effects:
+        energy: 0.8  # Massive energy restoration
+        mood: 0.1
+      opening_hours:
+        enabled: false  # Always available
+      deployment:
+        type: fixed
+        positions: [[0, 0], [7, 7]]
+
+    - name: WORK
+      costs:
+        energy: 0.3   # Work is exhausting
+        mood: 0.1     # Work damages mood
+      effects:
+        money: 22.5   # Job pays $22.50 (economically balanced)
+      opening_hours:
+        enabled: true
+        schedule:
+          - start: 9   # 9 AM - 5 PM (standard work hours)
+            end: 17
+      deployment:
+        type: fixed
+        positions: [[4, 4]]
+
+    # ... (repeat for all 14 affordances)
+
+  # --------------------------------------------------------------------------
+  # Modulation Parameters (how bars affect affordance effectiveness)
+  # --------------------------------------------------------------------------
+  # Must implement ALL modulations from environment.yaml modulation_graph
+  modulations:
+    - bar: energy
+      affordances: [WORK]
+      type: linear_multiplier
+      threshold: 0.3  # Below 30% energy, work effectiveness drops
+      min_multiplier: 0.5  # At 0% energy, only 50% effective
+
+    - bar: mood
+      affordances: [SOCIALIZE, WORK]
+      type: linear_multiplier
+      threshold: 0.4
+      min_multiplier: 0.7
+
+# =============================================================================
+# SECTION 9: training.yaml (Runtime Orchestration)
+# =============================================================================
+# Location: configs/my_experiment/levels/L1_full_observability/training.yaml
+# Purpose: Controls training process and runtime behavior
+# Breaking: NO - training hyperparameters don't affect obs_dim
+
+training:
+  version: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Population Settings
+  # --------------------------------------------------------------------------
+  population:
+    size: 512  # Number of parallel agents
+
+  # --------------------------------------------------------------------------
+  # Curriculum-Level Action Control (optional)
+  # --------------------------------------------------------------------------
+  # Enable actions that have enabled_by_default: false in actions.yaml
+  # This allows different curriculum levels to have different action sets
+  # Note: Cannot disable actions that have enabled_by_default: true
+  enabled_actions:
+    custom:
+      - REST       # Enable REST action for this level
+      - MEDITATE   # Enable MEDITATE action for this level
+  # If omitted, only enabled_by_default: true actions are available
+
+  # --------------------------------------------------------------------------
+  # Q-Learning Hyperparameters (curriculum-level overrides)
+  # --------------------------------------------------------------------------
+  # These override agent.yaml brain settings for this curriculum level
+  q_learning:
+    use_double_dqn: true      # Enable Double DQN for this level
+    gamma: 0.99               # Discount factor
+    learning_rate: 0.0001     # Adam learning rate
+    target_update_frequency: 1000  # Update target network every N steps
+
+  # --------------------------------------------------------------------------
+  # Replay Buffer
+  # --------------------------------------------------------------------------
+  replay_buffer:
+    capacity: 100000
+    batch_size: 256
+    min_size: 1000  # Start training after N transitions
+
+  # --------------------------------------------------------------------------
+  # Exploration (epsilon-greedy)
+  # --------------------------------------------------------------------------
+  exploration:
+    epsilon_start: 1.0
+    epsilon_end: 0.01
+    epsilon_decay: 0.995
+
+  # --------------------------------------------------------------------------
+  # Intrinsic Exploration (if using adaptive_rnd)
+  # --------------------------------------------------------------------------
+  intrinsic:
+    rnd:
+      feature_dim: 128
+      learning_rate: 0.0001
+
+    annealing:
+      threshold: 100.0   # Survivors metric threshold
+      decay_rate: 0.995
+      min_weight: 0.01
+
+  # --------------------------------------------------------------------------
+  # Training Loop
+  # --------------------------------------------------------------------------
+  training_loop:
+    max_episodes: 100000
+    max_steps_per_episode: 1000
+
+    evaluation:
+      interval: 1000  # Evaluate every N episodes
+      num_episodes: 10
+
+    checkpointing:
+      interval: 5000  # Save checkpoint every N episodes
+      keep_last: 5    # Keep last 5 checkpoints
+
+  # --------------------------------------------------------------------------
+  # Curriculum Progression (if using curriculum strategy)
+  # --------------------------------------------------------------------------
+  curriculum:
+    strategy: static  # Options: static, adversarial
+
+    # Adversarial curriculum settings (when strategy: adversarial)
+    adversarial:
+      difficulty_metric: survival_rate
+      adaptation_rate: 0.1
+      min_difficulty: 0.2
+      max_difficulty: 1.0
+
+# =============================================================================
+# COMPUTED OBSERVATION DIMENSIONS (for reference)
+# =============================================================================
+# This section shows what obs_dim would be for this complete config.
+# The compiler calculates this automatically - shown here for documentation.
+#
+# Given:
+# - vision_support: both
+# - temporal_support: enabled
+# - 8 meters
+# - 14 affordances
+# - 4 VFS variables
+# - Grid2D substrate (2 position dims)
+# - Grid2D velocity (2 dims)
+#
+# Calculation:
+# grid_encoding:   64 dims (8×8 grid)
+# local_window:    25 dims (5×5 window with vision_range=0.5)
+# position:         2 dims (x, y)
+# velocity:         2 dims (dx, dy)
+# meters:           8 dims (1 per meter)
+# affordances:     14 dims (1 per affordance, binary visibility)
+# vfs_variables:    4 dims (1 per variable)
+# temporal:         2 dims (time_sin, time_cos)
+#
+# TOTAL obs_dim: 121 dims
+#
+# With curriculum masking:
+# L1 (active_vision: global, active_temporal: false):
+#   - grid_encoding: ACTIVE (64 dims)
+#   - local_window: MASKED (25 dims of zeros)
+#   - temporal: MASKED (2 dims of zeros)
+#   - obs_dim: 121 (same as L2, enabling checkpoint transfer!)
+#
+# L2 (active_vision: partial, active_temporal: false):
+#   - grid_encoding: MASKED (64 dims of zeros)
+#   - local_window: ACTIVE (25 dims)
+#   - temporal: MASKED (2 dims of zeros)
+#   - obs_dim: 121 (same as L1!)
+#
+# L3 (active_vision: global, active_temporal: true):
+#   - grid_encoding: ACTIVE (64 dims)
+#   - local_window: MASKED (25 dims of zeros)
+#   - temporal: ACTIVE (2 dims)
+#   - obs_dim: 121 (same as L1 and L2!)
+
+# =============================================================================
+# BREAKING vs NON-BREAKING SUMMARY
+# =============================================================================
+# Use this checklist to determine if a config change breaks checkpoints:
+#
+# BREAKING (changes obs_dim or action_dim):
+# ✅ substrate.type, substrate.grid.width/height (affects grid_encoding size)
+# ✅ vision_support (affects which vision fields exist)
+# ✅ temporal_support (affects whether temporal fields exist)
+# ✅ meters (adding/removing changes obs_dim)
+# ✅ affordances (adding/removing changes obs_dim)
+# ✅ vfs variables (adding/removing changes obs_dim)
+# ✅ actions (adding/removing changes action_dim)
+#
+# NOT BREAKING (behavior only):
+# ❌ substrate.boundary, distance_metric, observation_encoding (same dims, different values)
+# ❌ active_vision, active_temporal (masking doesn't change dims)
+# ❌ vision_range, day_length (parameters, not structure)
+# ❌ meter parameters (depletion, recovery, bounds)
+# ❌ cascade parameters (threshold, strength)
+# ❌ affordance parameters (costs, effects, opening_hours)
+# ❌ training hyperparameters (learning_rate, gamma, etc.)
+# ❌ drive configuration (reward function)
+# ❌ cues, labels, metadata
+
+# =============================================================================
+# END OF REFERENCE CONFIG
+# =============================================================================

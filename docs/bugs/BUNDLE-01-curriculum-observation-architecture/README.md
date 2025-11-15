@@ -2,7 +2,7 @@
 
 **Common Concern**: Observation structure, curriculum masking, and transfer learning across curriculum levels
 
-**Status**: Partially Complete (BUG-43 resolved, ENH-28 open)
+**Status**: Design Complete (BUG-43 resolved, ENH-28 design v2.1 approved for implementation)
 
 ## Overview
 
@@ -21,13 +21,20 @@ This bundle addresses the architectural tension between:
 - **Status**: Resolved in commit fe7f29d
 - **Tests**: `tests/test_townlet/unit/universe/test_partial_obs_curriculum_masking.py`
 
-### ENH-28: Experiment-level configuration hierarchy 🔨 OPEN
+### ENH-28: Experiment-level configuration hierarchy ✅ DESIGN v2.1 COMPLETE
 - **Problem**: BUG-43 forces all configs to pay obs_dim cost of curriculum superset, even single-level experiments
-- **Solution**: Three-tier observation policy (curriculum_superset, minimal, explicit) configured at experiment level
-- **Architecture**: Separate `experiments/` hierarchy with `experiment.yaml` for cross-curriculum settings
+- **Solution**: Four-layer architecture + Support/Active pattern for observation field control
+- **Architecture**: experiment.yaml + stratum.yaml + environment.yaml + actions.yaml + agent.yaml + curriculum.yaml per level
+- **Key Pattern**: Support (experiment: which fields exist) vs Active (curriculum: which fields active vs masked)
 - **Migration**: Backwards compatible with existing flat `configs/` structure (legacy mode)
-- **Status**: Design documented, awaiting implementation
+- **Status**: Design v2.1 complete (code review approved 100/100 confidence), ready for implementation
+- **Implementation Reference**: `reference-config-v2.1-complete.yaml` (600+ line complete example)
 - **Owner**: compiler + config
+- **Key Insights**:
+  - Support/Active pattern preserves BUG-43 masking while enabling power user optimization
+  - WHAT vs HOW split: vocabulary (breaking) vs parameters (non-breaking)
+  - Normalized vision_range (0.0-1.0) eliminates validation complexity
+  - All observation_encoding modes produce identical obs_dim (value ranges differ)
 
 ### Test Fixes: Observation structure adaptation ✅ COMPLETE
 - **Problem**: 10 tests had hardcoded observation dimension calculations that broke after BUG-43
@@ -109,6 +116,23 @@ affordance = obs[0, field.start_index:field.end_index]
 2. **Observation policy validation**: Compiler errors if policy conflicts with curriculum requirements
 3. **Dynamic observation masking**: Runtime control over which fields are active (beyond curriculum)
 4. **Observation compression**: Automatic field removal for deployment (strip masked dims)
+
+## Documentation
+
+### Active Documents
+
+- **BUG-43**: `BUG-43-partial-observability-global-view-masking-and-obs-dim.md` - Closed issue that enabled this work
+- **ENH-28**: `ENH-28-experiment-level-configuration-hierarchy.md` - Enhancement tracker
+- **Target Design v2**: `target-config-design-v2.md` - Complete design specification (v2 + v2.1 integrated)
+- **Reference Config**: `reference-config-v2.1-complete.yaml` - 600+ line implementation reference with all options
+
+### Historical Documents
+
+See `archive/README.md` for design iteration history:
+- Design v1 (superseded by v2)
+- v2.1 patch notes (merged into v2)
+- v1 → v2 changes summary
+- Brainstorming artifacts (semantic categories, settings audit)
 
 ## Contact
 

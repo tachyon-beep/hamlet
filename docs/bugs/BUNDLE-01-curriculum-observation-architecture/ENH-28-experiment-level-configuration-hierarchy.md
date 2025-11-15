@@ -1,164 +1,111 @@
 Title: Experiment-level configuration hierarchy for observation policy and cross-curriculum settings
 
 Severity: medium
-Status: open
+Status: design-v2.1-complete
 
 Subsystem: universe/compiler + config
 Affected Version/Branch: main
 
+**DESIGN v2.1 COMPLETE**: See `target-config-design-v2.md` for complete architecture.
+**Implementation Reference**: See `reference-config-v2.1-complete.yaml` for comprehensive example with all options.
+**Code Review**: Approved 100/100 confidence, ready for implementation.
+
 Affected Files:
-- `src/townlet/universe/compiler.py` (Stage 5: metadata generation)
-- `src/townlet/config/hamlet.py` (HamletConfig loader)
-- `configs/L*/` (all curriculum level directories)
+- `src/townlet/universe/compiler.py` (Stage 1: load experiment structure, Stage 2: cross-curriculum validation, Stage 5: observation spec)
+- `src/townlet/config/` (new schema files: ExperimentConfig, StratumConfig, EnvironmentConfig, AgentConfig)
+- `configs/` (entire hierarchy restructured)
 
-Description:
-- After BUG-43 (curriculum masking), all curriculum levels share a common observation superset (both grid_encoding and local_window always present, one masked).
-- This enables transfer learning (train on L1, transfer to L2) but forces ALL configs to pay the obs_dim cost of the superset, even single-level experiments that don't need transfer.
-- Example waste: L1 full obs has obs_dim=121 but only 96 active dims (25 dims wasted on masked local_window).
-- Power users may want to optimize obs_dim for a single level rather than maintain curriculum compatibility.
-- Additionally, some settings are fundamentally **experiment-level concerns** (apply to entire curriculum sequence) vs **curriculum-level concerns** (vary per level):
-  - Experiment concerns: observation_policy, stratum.yaml, curriculum sequence/ordering, experiment metadata
-  - Curriculum concerns: substrate.yaml, bars.yaml, affordances.yaml, training.yaml (per-level hyperparameters)
+## Summary
 
-Current Structure (flat curriculum levels):
+After BUG-43 enabled curriculum masking for transfer learning, we identified the need for experiment-level configuration hierarchy. Through brainstorming, we developed a clean four-layer architecture separating **what exists** (vocabulary, breaks checkpoints) from **how it behaves** (parameters, curriculum-safe).
+
+**Core Principle**: WHAT vs HOW split enables curriculum progression without breaking checkpoint portability.
+
+## Problem Statement
+
+- BUG-43 forces all configs to pay obs_dim cost of curriculum superset, even single-level experiments
+- Some settings are **experiment-level concerns** (apply to entire curriculum) vs **curriculum-level concerns** (vary per level)
+- Current flat structure doesn't enforce vocabulary consistency across curriculum levels
+- Unclear where cross-curriculum settings like grid size and meter names should live
+
+## Target Architecture
+
+**See `target-config-design.md` for complete specification.**
+
+### Four-Layer Hierarchy
+
+1. **Experiment** (`experiment.yaml`) - Metadata
+2. **Stratum** (`stratum.yaml`) - World shape (substrate type, grid size, temporal mechanics)
+3. **Environment** (`environment.yaml`) - World vocabulary (bars, affordances, VFS variables)
+4. **Agent** (`agent.yaml`) - Perception + Drive + Brain
+5. **Curriculum** (`levels/L*/`) - Behavioral parameters (depletion rates, costs, effects)
+
+### Example Structure
+
 ```
-configs/
-├── L0_0_minimal/
-│   ├── substrate.yaml
-│   ├── bars.yaml
-│   └── ...
-├── L1_full_observability/
-├── L2_partial_observability/
-└── stratum.yaml  # shared across levels, but location is ambiguous
-```
-
-Proposed Structure (experiment hierarchy):
-```
-experiments/
-└── default_curriculum/
-    ├── experiment.yaml         # NEW: experiment-level settings
-    │   ├── observation_policy: "curriculum_superset" (default) | "minimal" | "explicit"
-    │   ├── stratum: "../shared/stratum.yaml"
-    │   ├── curriculum_sequence: [L0_0, L0_5, L1, L2, L3]
-    │   └── metadata: (name, description, author)
-    └── levels/
-        ├── L0_0_minimal/
-        │   ├── substrate.yaml
-        │   ├── bars.yaml
-        │   └── ...
-        ├── L1_full_observability/
-        └── L2_partial_observability/
-```
-
-Proposed Enhancement:
-
-**1. Observation Policy Modes**
-
-Add `observation_policy` to experiment.yaml with three modes:
-
-**a) curriculum_superset (default, current BUG-43 behavior)**
-- Includes all fields from all levels (both grid_encoding and local_window)
-- Enables checkpoint transfer across curriculum levels
-- obs_dim constant across levels (e.g., L1 and L2 both have 121)
-- Example: L1 has obs_dim=121 (96 active + 25 masked local_window)
-
-**b) minimal (power user optimization)**
-- Only includes curriculum_active=True fields for each level
-- Filters out masked fields before building ObservationSpec
-- obs_dim varies per level (optimized for each)
-- Example: L1 has obs_dim=96 (no masked local_window)
-- **Cannot transfer checkpoints between levels** (different obs_dim)
-
-**c) explicit (manual field specification)**
-- User explicitly lists which fields to include
-- Ignores curriculum_active entirely
-- Complete control over observation vector
-- Example:
-  ```yaml
-  observation_policy:
-    mode: explicit
-    fields:
-      - grid_encoding
-      - position
-      - meters  # shorthand for all meter obs fields
-      - affordances
-      # (omit local_window, velocity, temporal)
-  ```
-
-**2. Experiment-Level Settings**
-
-Move cross-curriculum concerns from per-level configs to experiment.yaml:
-- `observation_policy` (new)
-- `stratum.yaml` reference (currently lives in configs/ ambiguously)
-- `curriculum_sequence` (ordering of levels for training)
-- `shared_resources` (paths to shared configs like global_actions.yaml)
-- Experiment metadata (name, description, author, tags)
-
-**3. Backwards Compatibility**
-
-- Default mode is "curriculum_superset" (current BUG-43 behavior)
-- If no experiment.yaml exists, compiler infers from existing structure
-- Existing flat configs/ directory structure continues to work
-- Power users opt into experiment/ hierarchy explicitly
-
-Implementation Notes:
-
-**Compiler Changes (Stage 5: Metadata)**:
-```python
-# In compiler.py, Stage 5 metadata generation
-if experiment_config.observation_policy.mode == "minimal":
-    # Filter out curriculum_active=False fields before building ObservationSpec
-    active_fields = [f for f in vfs_observation_fields if f.curriculum_active]
-    observation_spec = ObservationSpec(fields=active_fields)
-elif experiment_config.observation_policy.mode == "explicit":
-    # Use only explicitly listed fields
-    explicit_fields = filter_by_names(vfs_observation_fields, experiment_config.observation_policy.fields)
-    observation_spec = ObservationSpec(fields=explicit_fields)
-else:  # curriculum_superset (default)
-    # Current BUG-43 behavior - include all fields (some masked)
-    observation_spec = ObservationSpec(fields=vfs_observation_fields)
+configs/default_curriculum/
+├── experiment.yaml      # Metadata (name, description, author)
+├── stratum.yaml         # World shape (Grid2D 8×8, temporal enabled)
+├── environment.yaml     # Vocabulary (8 bars, 14 affordances, VFS vars)
+├── agent.yaml           # Perception + Drive + Brain
+└── levels/
+    ├── L0_0_minimal/
+    │   ├── bars.yaml         # Bar parameters + cascades
+    │   ├── affordances.yaml  # Affordance parameters
+    │   └── training.yaml     # Runtime orchestration
+    ├── L1_full_observability/
+    └── L2_partial_observability/
 ```
 
-**Config Loader Changes**:
-```python
-# HamletConfig needs to understand experiment vs curriculum hierarchy
-if (config_dir / "experiment.yaml").exists():
-    # New experiment hierarchy
-    experiment_config = load_experiment_yaml(config_dir / "experiment.yaml")
-    curriculum_level = load_curriculum_level(config_dir / "levels" / level_name)
-else:
-    # Legacy flat hierarchy - infer defaults
-    experiment_config = ExperimentConfig(observation_policy={"mode": "curriculum_superset"})
-    curriculum_level = load_curriculum_level(config_dir)
-```
+### Key Design Decisions
 
-Migration Impact:
-- Existing configs/ directory structure continues to work (legacy mode)
-- New experiments/ directory structure enables experiment-level control
-- Power users can optimize obs_dim by switching to "minimal" mode
-- Multi-experiment projects can share curriculum levels with different observation policies
+**WHAT vs HOW Split**:
+- `environment.yaml` defines WHAT exists (vocabulary - breaks checkpoints)
+- `levels/L*/bars.yaml` defines HOW bars behave (parameters - doesn't break)
+- `levels/L*/affordances.yaml` defines HOW affordances behave (parameters - doesn't break)
 
-Alternatives Considered:
-- Add observation_policy to each curriculum level's substrate.yaml:
-  - Rejected; observation policy is inherently cross-curriculum (affects transfer learning)
-- Keep current flat structure, add observation_policy to each level's config:
-  - Rejected; doesn't solve the "stratum.yaml location" problem or enable experiment metadata
+**Observation Control Simplified**:
+- No need for `observation_policy` modes (curriculum_superset, minimal, explicit)
+- `agent.yaml: perception.partial_observability` handles this directly:
+  - `false` → full grid_encoding (no local_window)
+  - `true` → local_window only (no grid_encoding)
 
-Tests:
-- Unit tests for ExperimentConfig schema validation
-- Compiler tests for each observation_policy mode (superset, minimal, explicit)
-- Integration tests verifying obs_dim for each mode:
-  - Superset: L1 and L2 have same obs_dim (121)
-  - Minimal: L1 has obs_dim=96, L2 has obs_dim=57
-  - Explicit: obs_dim matches listed fields only
-- Backwards compatibility test: existing flat configs/ directory still compiles
+**File Consolidation**:
+- `brain.yaml` + `drive_as_code.yaml` → `agent.yaml`
+- `cascades.yaml` → merged into `bars.yaml`
+- `substrate.yaml` → split into `stratum.yaml` (shape) + removed
 
-Owner: compiler + config
-Links:
-- BUG-43: Partial observability global view masking (curriculum masking implementation)
-- docs/config-schemas/substrate.md (current observation encoding docs)
-- src/townlet/universe/compiler.py:2303-2332 (curriculum_active marking)
+**Compiler Validation**:
+- Cross-curriculum vocabulary consistency enforced
+- All levels must have same bars/affordances as `environment.yaml`
+- Compiler error if vocabulary mismatch detected
 
-Related Enhancements:
-- ENH-XX: Stratum.yaml as experiment-level configuration (currently ambiguous location)
-- ENH-XX: Multi-experiment workspace support (multiple experiment.yaml files in experiments/ dir)
+## Implementation Plan
+
+See `target-config-design.md` for:
+- Complete file schemas
+- Compiler changes (load structure, validate vocabulary, build observation spec)
+- Migration path (legacy support → migration script → deprecation)
+- Benefits and open questions
+
+## Status
+
+- **Design v2.1**: COMPLETE (2025-11-15)
+  - Code review round 1: Addressed (Support/Active pattern)
+  - Code review round 2: Addressed (normalized vision_range, observation_encoding clarification)
+  - Code review round 3: APPROVED 100/100 confidence
+- **Implementation Reference**: COMPLETE (`reference-config-v2.1-complete.yaml`)
+- **Implementation**: Not started (ready to begin)
+- **Migration Script**: Not started
+- **Tests**: Not started
+
+## Owner
+
+compiler + config subsystems
+
+## Links
+
+- **Design Document**: `target-config-design-v2.md` (complete v2.1 architecture)
+- **Implementation Reference**: `reference-config-v2.1-complete.yaml` (600+ line complete example)
+- **BUG-43**: Partial observability global view masking (enabled this work)
+- **Historical Documents**: `archive/README.md` (design iterations, brainstorming artifacts)
