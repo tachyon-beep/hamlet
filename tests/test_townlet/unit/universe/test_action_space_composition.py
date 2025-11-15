@@ -20,7 +20,8 @@ def temp_config_with_global_actions():
         config_path = Path(tmpdir)
 
         # Copy L0_0_minimal as the base (known to compile successfully)
-        source_config = Path("/home/john/hamlet/configs/L0_0_minimal")
+        repo_root = Path(__file__).parent.parent.parent.parent.parent
+        source_config = repo_root / "configs" / "L0_0_minimal"
 
         # Copy all files from L0_0_minimal
         for file in source_config.glob("*.yaml"):
@@ -28,7 +29,7 @@ def temp_config_with_global_actions():
 
         # Backup original global_actions.yaml (restore after test)
         # Note: No cleanup needed - CI environment is ephemeral
-        global_actions_path = Path("/home/john/hamlet/configs/global_actions.yaml")
+        global_actions_path = repo_root / "configs" / "global_actions.yaml"
         backup_content = global_actions_path.read_text() if global_actions_path.exists() else None
 
         try:
