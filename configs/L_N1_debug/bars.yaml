@@ -23,6 +23,17 @@ bars:
   description: Currency for purchasing affordances. No cascade effects.
   base_move_depletion: 0.0
   base_interaction_cost: 0.0
+- name: mood
+  index: 2
+  tier: secondary
+  range:
+  - 0.0
+  - 1.0
+  initial: 0.7
+  base_depletion: 0.001
+  description: Mental well-being meter
+  base_move_depletion: 0.0
+  base_interaction_cost: 0.0
 terminal_conditions:
 - meter: energy
   operator: <=
