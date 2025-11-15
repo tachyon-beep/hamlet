@@ -26,10 +26,10 @@ def temp_config_with_global_actions():
         for file in source_config.glob("*.yaml"):
             shutil.copy(file, config_path / file.name)
 
-        # Backup original global_actions.yaml
+        # Backup original global_actions.yaml (restore after test)
+        # Note: No cleanup needed - CI environment is ephemeral
         global_actions_path = Path("/home/john/hamlet/configs/global_actions.yaml")
-        file_existed_before = global_actions_path.exists()
-        backup_content = global_actions_path.read_text() if file_existed_before else None
+        backup_content = global_actions_path.read_text() if global_actions_path.exists() else None
 
         try:
             yield {
@@ -37,16 +37,10 @@ def temp_config_with_global_actions():
                 "global_actions_path": global_actions_path,
             }
         finally:
-            # Restore original global_actions.yaml
+            # Restore original content if we had a backup
             if backup_content is not None:
-                # File existed and we have backup - restore it
                 global_actions_path.write_text(backup_content)
-            elif file_existed_before:
-                # File existed but backup failed - leave it alone (safer than deleting)
-                pass
-            elif global_actions_path.exists():
-                # File didn't exist before - clean up if test created it
-                global_actions_path.unlink()
+            # No cleanup/deletion - CI environment is transitory
 
 
 class TestActionMeterValidation:
