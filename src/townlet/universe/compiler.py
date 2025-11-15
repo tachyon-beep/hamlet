@@ -1668,7 +1668,10 @@ class UniverseCompiler:
 
     def _affordance_open_for_hour(self, affordance: AffordanceConfig, hour: int) -> bool:
         # operating_hours is now required by schema - no None check needed
-        return is_affordance_open(hour, affordance.operating_hours)
+        # Convert list[int] to tuple[int, int] for is_affordance_open
+        # Pydantic ensures exactly 2 elements (Field(min_length=2, max_length=2))
+        open_hour, close_hour = affordance.operating_hours
+        return is_affordance_open(hour, (open_hour, close_hour))
 
     def _affordance_positive_amount_for_meter(self, affordance: AffordanceConfig, meter_name: str) -> float:
         pipeline = getattr(affordance, "effect_pipeline", None)
@@ -2103,7 +2106,10 @@ class UniverseCompiler:
             for hour in range(24):
                 for affordance_idx, affordance in enumerate(raw_configs.affordances):
                     # operating_hours is now required by schema - no None check needed
-                    action_mask_table[hour, affordance_idx] = is_affordance_open(hour, affordance.operating_hours)
+                    # Convert list[int] to tuple[int, int] for is_affordance_open
+                    # Pydantic ensures exactly 2 elements (Field(min_length=2, max_length=2))
+                    open_hour, close_hour = affordance.operating_hours
+                    action_mask_table[hour, affordance_idx] = is_affordance_open(hour, (open_hour, close_hour))
 
         affordance_position_map = {
             aff.id: self._tensorize_affordance_position(getattr(aff, "position", None), torch_device) for aff in raw_configs.affordances
@@ -2316,15 +2322,17 @@ class UniverseCompiler:
                 exposure["curriculum_active"] = True
 
                 # Infer semantic_type from source_variable name (same logic as _semantic_from_name)
-                if "position" in source_var.lower():
-                    exposure["semantic_type"] = "spatial"
-                elif source_var in meter_names:
-                    exposure["semantic_type"] = "bars"
-                elif "affordance" in source_var.lower():
-                    exposure["semantic_type"] = "affordance"
-                elif "time" in source_var.lower() or "temporal" in source_var.lower() or "lifetime" in source_var.lower():
-                    exposure["semantic_type"] = "temporal"
-                # else: default to "custom" (handled by ObservationField schema default)
+                # Add None check to avoid AttributeError
+                if source_var is not None:
+                    if "position" in source_var.lower():
+                        exposure["semantic_type"] = "spatial"
+                    elif source_var in meter_names:
+                        exposure["semantic_type"] = "bars"
+                    elif "affordance" in source_var.lower():
+                        exposure["semantic_type"] = "affordance"
+                    elif "time" in source_var.lower() or "temporal" in source_var.lower() or "lifetime" in source_var.lower():
+                        exposure["semantic_type"] = "temporal"
+                    # else: default to "custom" (handled by ObservationField schema default)
 
         return exposures
 

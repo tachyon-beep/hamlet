@@ -78,6 +78,7 @@ def epsilon_greedy_action_selection(
 
         # For rows with all invalid actions, fall back to greedy action (BUG-23)
         # (all_invalid was computed earlier when detecting invalid rows)
+        assert all_invalid is not None  # Type guard: all_invalid is Tensor when action_masks is not None
         random_actions = torch.where(all_invalid, greedy_actions, random_actions)
     else:
         # No masking: sample uniformly from all actions
