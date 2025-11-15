@@ -222,12 +222,12 @@ class ReplayBuffer:
             "size": self.size,
             "position": self.position,
             "capacity": self.capacity,
-            "observations": self.observations[: self.size].cpu(),
-            "actions": self.actions[: self.size].cpu(),
-            "rewards_extrinsic": self.rewards_extrinsic[: self.size].cpu(),
-            "rewards_intrinsic": self.rewards_intrinsic[: self.size].cpu(),
-            "next_observations": self.next_observations[: self.size].cpu(),
-            "dones": self.dones[: self.size].cpu(),
+            "observations": self.observations[: self.size].cpu().clone(),
+            "actions": self.actions[: self.size].cpu().clone(),
+            "rewards_extrinsic": self.rewards_extrinsic[: self.size].cpu().clone(),
+            "rewards_intrinsic": self.rewards_intrinsic[: self.size].cpu().clone(),
+            "next_observations": self.next_observations[: self.size].cpu().clone(),
+            "dones": self.dones[: self.size].cpu().clone(),
         }
 
     def load_from_serialized(self, state: dict[str, Any]) -> None:
