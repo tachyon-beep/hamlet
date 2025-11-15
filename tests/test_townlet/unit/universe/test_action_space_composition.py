@@ -28,7 +28,8 @@ def temp_config_with_global_actions():
 
         # Backup original global_actions.yaml
         global_actions_path = Path("/home/john/hamlet/configs/global_actions.yaml")
-        backup_content = global_actions_path.read_text() if global_actions_path.exists() else None
+        file_existed_before = global_actions_path.exists()
+        backup_content = global_actions_path.read_text() if file_existed_before else None
 
         try:
             yield {
@@ -38,9 +39,14 @@ def temp_config_with_global_actions():
         finally:
             # Restore original global_actions.yaml
             if backup_content is not None:
+                # File existed and we have backup - restore it
                 global_actions_path.write_text(backup_content)
+            elif file_existed_before:
+                # File existed but backup failed - leave it alone (safer than deleting)
+                pass
             elif global_actions_path.exists():
-                global_actions_path.unlink()  # Remove if it didn't exist before
+                # File didn't exist before - clean up if test created it
+                global_actions_path.unlink()
 
 
 class TestActionMeterValidation:
