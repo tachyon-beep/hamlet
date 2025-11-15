@@ -32,14 +32,11 @@ environment:
   # Bed, Hospital, HomeMeal, and Job (agent can earn money!)
   enabled_affordances: ["Bed", "Hospital","HomeMeal","Job"]
   randomize_affordances: true
-  energy_move_depletion: 0.005
-  energy_wait_depletion: 0.005
-  energy_interact_depletion: 0.005
 
-# Population configuration
+# Network architecture is managed by brain.yaml:architecture.type
+# ("feedforward" → SimpleQNetwork, "recurrent" → RecurrentSpatialQNetwork)
 population:
   num_agents: 1  # Single agent
-  network_type: simple  # Standard MLP Q-Network
   mask_unused_obs: true  # Apply active_mask to RND (zeros out padding dimensions)
 
 # Curriculum configuration (simpler than Level 1)

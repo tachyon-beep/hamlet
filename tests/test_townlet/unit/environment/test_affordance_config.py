@@ -27,10 +27,10 @@ from pydantic import ValidationError
 from townlet.environment.affordance_config import (
     AffordanceConfig,
     AffordanceConfigCollection,
-    is_affordance_open,
     load_affordance_config,
 )
 from townlet.environment.cascade_config import BarConfig, BarsConfig, TerminalCondition
+from townlet.environment.temporal_utils import is_affordance_open
 
 # =============================================================================
 # PYDANTIC MODEL VALIDATION TESTS
@@ -403,6 +403,8 @@ class TestLoadAffordanceConfig:
                     tier="pivotal",
                     initial=1.0,
                     base_depletion=0.01,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Energy meter",
                 ),
             ],
@@ -431,6 +433,8 @@ class TestLoadAffordanceConfig:
                     tier="pivotal",
                     initial=1.0,
                     base_depletion=0.01,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Energy meter",
                 ),
                 BarConfig(
@@ -439,6 +443,8 @@ class TestLoadAffordanceConfig:
                     tier="resource",
                     initial=0.5,  # Normalized (0-1)
                     base_depletion=0.0,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Money resource",
                 ),
             ],
@@ -492,6 +498,8 @@ class TestLoadAffordanceConfig:
                     tier="pivotal",
                     initial=1.0,
                     base_depletion=0.01,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Energy meter",
                 ),
             ],
@@ -542,6 +550,8 @@ class TestLoadAffordanceConfig:
                     tier="pivotal",
                     initial=1.0,
                     base_depletion=0.01,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Energy meter",
                 ),
             ],
@@ -592,6 +602,8 @@ class TestLoadAffordanceConfig:
                     tier="pivotal",
                     initial=1.0,
                     base_depletion=0.01,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Energy meter",
                 ),
             ],
@@ -644,6 +656,8 @@ class TestLoadAffordanceConfig:
                     tier="pivotal",
                     initial=1.0,
                     base_depletion=0.01,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Energy meter",
                 ),
             ],

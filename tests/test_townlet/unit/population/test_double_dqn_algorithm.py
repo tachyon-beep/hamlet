@@ -1,5 +1,7 @@
 """Tests for Double DQN algorithm implementation."""
 
+import copy
+
 import torch
 
 from townlet.population.vectorized import VectorizedPopulation
@@ -14,10 +16,15 @@ class TestDoubleDQNFeedforward:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Vanilla DQN: Q_target = r + γ * max_a Q_target(s', a)."""
         # Use cpu_env_factory to ensure env and population use same device
         basic_env = cpu_env_factory()
+
+        # Create modified brain_config with use_double_dqn=False
+        vanilla_brain_config = copy.deepcopy(minimal_brain_config)
+        vanilla_brain_config.q_learning.use_double_dqn = False
 
         population = VectorizedPopulation(
             env=basic_env,
@@ -27,12 +34,8 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=vanilla_brain_config,
             batch_size=4,
-            use_double_dqn=False,  # Vanilla DQN
         )
 
         # Populate replay buffer with transitions
@@ -73,10 +76,15 @@ class TestDoubleDQNFeedforward:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Double DQN: Q_target = r + γ * Q_target(s', argmax_a Q_online(s', a))."""
         # Use cpu_env_factory to ensure env and population use same device
         basic_env = cpu_env_factory()
+
+        # Create modified brain_config with use_double_dqn=True
+        double_brain_config = copy.deepcopy(minimal_brain_config)
+        double_brain_config.q_learning.use_double_dqn = True
 
         population = VectorizedPopulation(
             env=basic_env,
@@ -86,12 +94,8 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=double_brain_config,
             batch_size=4,
-            use_double_dqn=True,  # Double DQN
         )
 
         # Populate replay buffer
@@ -132,10 +136,18 @@ class TestDoubleDQNFeedforward:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        minimal_brain_config,
     ):
         """Double DQN should produce different Q-targets than vanilla DQN."""
         # Use cpu_env_factory to ensure env and population use same device
         basic_env = cpu_env_factory()
+
+        # Create modified brain_configs
+        vanilla_brain_config = copy.deepcopy(minimal_brain_config)
+        vanilla_brain_config.q_learning.use_double_dqn = False
+
+        double_brain_config = copy.deepcopy(minimal_brain_config)
+        double_brain_config.q_learning.use_double_dqn = True
 
         # Create two populations with same initialization
         torch.manual_seed(42)
@@ -147,12 +159,8 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=vanilla_brain_config,
             batch_size=4,
-            use_double_dqn=False,
         )
 
         torch.manual_seed(42)
@@ -164,12 +172,8 @@ class TestDoubleDQNFeedforward:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,  # Use actual obs_dim from env
             action_dim=basic_env.action_dim,
-            network_type="simple",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=double_brain_config,
             batch_size=4,
-            use_double_dqn=True,
         )
 
         # Populate both with same transitions
@@ -224,6 +228,7 @@ class TestDoubleDQNRecurrent:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        recurrent_brain_config,
     ):
         """Recurrent Double DQN should use online network for action selection."""
         # Create POMDP environment on CPU
@@ -238,19 +243,19 @@ class TestDoubleDQNRecurrent:
             device=cpu_device,
         )
 
+        # Create modified brain_config with use_double_dqn=True
+        double_brain_config = copy.deepcopy(recurrent_brain_config)
+        double_brain_config.q_learning.use_double_dqn = True
+
         population = VectorizedPopulation(
             env=env,
             curriculum=adversarial_curriculum,
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="recurrent",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=double_brain_config,
             batch_size=2,
             sequence_length=8,
-            use_double_dqn=True,  # Double DQN
         )
 
         # Verify Double DQN flag is set
@@ -263,6 +268,7 @@ class TestDoubleDQNRecurrent:
         adversarial_curriculum,
         epsilon_greedy_exploration,
         cpu_device,
+        recurrent_brain_config,
     ):
         """Recurrent vanilla and Double DQN should use different action selection."""
         # This test verifies the mechanism is in place
@@ -278,19 +284,22 @@ class TestDoubleDQNRecurrent:
             device=cpu_device,
         )
 
+        # Create modified brain_configs
+        vanilla_brain_config = copy.deepcopy(recurrent_brain_config)
+        vanilla_brain_config.q_learning.use_double_dqn = False
+
+        double_brain_config = copy.deepcopy(recurrent_brain_config)
+        double_brain_config.q_learning.use_double_dqn = True
+
         pop_vanilla = VectorizedPopulation(
             env=env,
             curriculum=adversarial_curriculum,
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="recurrent",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=vanilla_brain_config,
             batch_size=2,
             sequence_length=8,
-            use_double_dqn=False,
         )
 
         pop_double = VectorizedPopulation(
@@ -299,13 +308,9 @@ class TestDoubleDQNRecurrent:
             exploration=epsilon_greedy_exploration,
             agent_ids=["agent_0"],
             device=cpu_device,
-            network_type="recurrent",
-            learning_rate=0.001,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=double_brain_config,
             batch_size=2,
             sequence_length=8,
-            use_double_dqn=True,
         )
 
         assert pop_vanilla.use_double_dqn is False

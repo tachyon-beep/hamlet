@@ -47,6 +47,47 @@ class SequentialReplayBuffer:
         """Return number of episodes stored."""
         return len(self.episodes)
 
+    def clear(self) -> None:
+        """Reset buffer to empty state and deallocate all episode storage.
+
+        Clears the episode list and resets transition count to 0.
+        Buffer can be reused after clearing.
+        """
+        self.episodes = []
+        self.num_transitions = 0
+
+    def stats(self) -> dict[str, Any]:
+        """Return buffer statistics for introspection.
+
+        Returns:
+            Dictionary with keys:
+                - size: Total number of transitions stored (same as num_transitions)
+                - capacity: Maximum buffer capacity in transitions
+                - occupancy_ratio: num_transitions / capacity (0.0 to 1.0)
+                - memory_bytes: Approximate memory usage in bytes
+                - device: Device string (e.g., 'cpu', 'cuda:0')
+                - num_episodes: Number of episodes stored
+                - num_transitions: Total transitions across all episodes
+        """
+        # Calculate memory usage across all episodes
+        memory_bytes = 0
+        for episode in self.episodes:
+            for tensor in episode.values():
+                memory_bytes += tensor.element_size() * tensor.numel()
+
+        # Calculate occupancy ratio
+        occupancy_ratio = self.num_transitions / self.capacity if self.capacity > 0 else 0.0
+
+        return {
+            "size": self.num_transitions,
+            "capacity": self.capacity,
+            "occupancy_ratio": occupancy_ratio,
+            "memory_bytes": memory_bytes,
+            "device": str(self.device),
+            "num_episodes": len(self.episodes),
+            "num_transitions": self.num_transitions,
+        }
+
     def store_episode(self, episode: Episode) -> None:
         """
         Store a complete episode.

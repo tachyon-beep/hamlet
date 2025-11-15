@@ -18,8 +18,7 @@ version: "1.0"
 description: "No Cascades for Debugging Level N1 with Energy Only"
 math_type: "gradient_penalty"
 
-# Special modulation: Fitness modulates health depletion rate
-# This is NOT a threshold cascade - it's a continuous multiplicative modulation
+# No modulations for debugging level
 modulations: []
 
 # No cascades for debugging level - explicitly disabled

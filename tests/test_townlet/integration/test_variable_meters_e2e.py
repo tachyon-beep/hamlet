@@ -21,7 +21,7 @@ from townlet.population.vectorized import VectorizedPopulation
 class TestVariableMetersEndToEnd:
     """End-to-end integration tests for variable meter system."""
 
-    def test_4meter_training_basic(self, cpu_device, task001_env_4meter):
+    def test_4meter_training_basic(self, cpu_device, task001_env_4meter, minimal_brain_config):
         """Train agent on 4-meter config for basic episode."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=50)
         if hasattr(curriculum, "initialize_population"):
@@ -41,8 +41,7 @@ class TestVariableMetersEndToEnd:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
-            replay_buffer_capacity=100,
+            brain_config=minimal_brain_config,
             batch_size=32,
         )
 
@@ -57,7 +56,7 @@ class TestVariableMetersEndToEnd:
         obs = task001_env_4meter.reset()
         assert obs.shape[1] == task001_env_4meter.observation_dim, "Observation should match obs_dim"
 
-    def test_8meter_backward_compatibility(self, cpu_device, basic_env):
+    def test_8meter_backward_compatibility(self, cpu_device, basic_env, minimal_brain_config):
         """Verify 8-meter configs still work (backward compatibility)."""
         curriculum = AdversarialCurriculum(max_steps_per_episode=50)
         if hasattr(curriculum, "initialize_population"):
@@ -77,8 +76,7 @@ class TestVariableMetersEndToEnd:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
-            replay_buffer_capacity=100,
+            brain_config=minimal_brain_config,
             batch_size=32,
         )
 
@@ -93,7 +91,7 @@ class TestVariableMetersEndToEnd:
         obs = basic_env.reset()
         assert obs.shape[1] == basic_env.observation_dim, "Observation should match obs_dim"
 
-    def test_checkpoint_save_load_4meter(self, cpu_device, task001_env_4meter, tmp_path):
+    def test_checkpoint_save_load_4meter(self, cpu_device, task001_env_4meter, tmp_path, minimal_brain_config):
         """Test checkpoint save/load with 4-meter config."""
         curriculum = StaticCurriculum(
             difficulty_level=0.5,
@@ -117,7 +115,7 @@ class TestVariableMetersEndToEnd:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Save checkpoint
@@ -154,7 +152,7 @@ class TestVariableMetersEndToEnd:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Load checkpoint
@@ -164,7 +162,7 @@ class TestVariableMetersEndToEnd:
         # Verify load succeeded
         assert pop2.total_steps == pop1.total_steps, "Training steps should match"
 
-    def test_cross_meter_count_rejection(self, cpu_device, task001_env_4meter, basic_env):
+    def test_cross_meter_count_rejection(self, cpu_device, task001_env_4meter, basic_env, minimal_brain_config):
         """Test that loading 4-meter checkpoint into 8-meter env fails."""
         curriculum = StaticCurriculum(
             difficulty_level=0.5,
@@ -184,7 +182,7 @@ class TestVariableMetersEndToEnd:
             device=cpu_device,
             obs_dim=task001_env_4meter.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         checkpoint_4meter = pop_4meter.get_checkpoint_state()
@@ -207,7 +205,7 @@ class TestVariableMetersEndToEnd:
             device=cpu_device,
             obs_dim=basic_env.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Loading should fail
@@ -309,7 +307,7 @@ class TestVariableMetersEndToEnd:
         assert torch.all(env.meters >= 0.0), "Meters should not go below 0"
         assert torch.all(env.meters <= 1.0), "Meters should not exceed 1"
 
-    def test_recurrent_network_with_4meters(self, cpu_device, task001_env_4meter_pomdp):
+    def test_recurrent_network_with_4meters(self, cpu_device, task001_env_4meter_pomdp, recurrent_brain_config):
         """Test that recurrent networks work with 4-meter POMDP config.
 
         This test verifies that RecurrentSpatialQNetwork is initialized with
@@ -340,8 +338,7 @@ class TestVariableMetersEndToEnd:
             device=cpu_device,
             obs_dim=task001_env_4meter_pomdp.observation_dim,
             # action_dim defaults to env.action_dim
-            network_type="recurrent",  # Use recurrent network
-            replay_buffer_capacity=100,
+            brain_config=recurrent_brain_config,  # Use recurrent network
             batch_size=32,
             train_frequency=10000,  # Disable training (test focuses on network creation with variable meters)
         )

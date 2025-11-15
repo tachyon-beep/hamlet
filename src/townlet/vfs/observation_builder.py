@@ -83,6 +83,12 @@ class VFSObservationSpecBuilder:
             # Build normalization spec if provided
             norm_spec = self._build_normalization_spec(exposure_config.get("normalization"))
 
+            # Get curriculum_active flag (defaults to True if not specified)
+            curriculum_active = exposure_config.get("curriculum_active", True)
+
+            # Get semantic_type (defaults to "custom" if not specified)
+            semantic_type = exposure_config.get("semantic_type", "custom")
+
             # Create observation field
             field = ObservationField(
                 id=field_id,
@@ -90,6 +96,8 @@ class VFSObservationSpecBuilder:
                 exposed_to=exposed_to,
                 shape=shape,
                 normalization=norm_spec,
+                curriculum_active=curriculum_active,
+                semantic_type=semantic_type,
             )
 
             self._validate_normalization_shape(field_id, shape, norm_spec)

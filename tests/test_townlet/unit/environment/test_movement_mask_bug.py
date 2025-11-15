@@ -19,12 +19,13 @@ def _action_tensor(env, action_name: str) -> torch.Tensor:
 
 
 def test_aspatial_interact_should_not_pay_movement_cost(aspatial_env):
-    """Aspatial INTERACT should pay base_depletion only (not movement-specific costs).
+    """Aspatial INTERACT should pay base_depletion + interaction cost (not movement costs).
 
-    Energy costs breakdown:
-    - Base depletion: 0.5% (from bars.yaml, happens every step)
+    Energy costs breakdown (JANK-03):
+    - Base depletion: 0.5% (existence cost)
+    - Interaction cost: 0.5% (from bars.yaml: base_interaction_cost)
     - Movement cost: 0% (INTERACT is not movement)
-    - Total: 0.5%
+    - Total: 1.0%
 
     This test verifies the movement mask bug is fixed - INTERACT no longer
     flagged as movement for aspatial substrates.
@@ -32,7 +33,7 @@ def test_aspatial_interact_should_not_pay_movement_cost(aspatial_env):
     env = aspatial_env
     env.reset()
 
-    # Remove affordance side-effects so we isolate pure movement costs.
+    # Remove affordance side-effects so we isolate pure action costs.
     env._handle_interactions = lambda interact_mask: {}
 
     # Record initial energy
@@ -46,22 +47,20 @@ def test_aspatial_interact_should_not_pay_movement_cost(aspatial_env):
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    # Should only pay base_depletion + interact cost (if any), NOT movement costs
-    base_depletion = env.base_depletions[env.energy_idx].item()
-    expected_cost = base_depletion + env.interact_energy_cost
+    # Should pay base_depletion + base_interaction_cost (from bars.yaml)
+    expected_cost = 0.010  # 0.005 base + 0.005 interaction
     actual_cost = energy_cost
 
     assert abs(actual_cost - expected_cost) < 1e-6, f"INTERACT should cost {expected_cost:.3%}, but cost {actual_cost:.3%}"
 
 
 def test_aspatial_wait_should_not_pay_movement_cost(aspatial_env):
-    """Aspatial WAIT should pay base_depletion + wait_energy_cost (not movement costs).
+    """Aspatial WAIT should pay base_depletion only (not movement costs).
 
-    Energy costs breakdown:
-    - Base depletion: 0.5% (from bars.yaml)
-    - Wait cost: 0.1% (wait_energy_cost)
+    Energy costs breakdown (JANK-03):
+    - Base depletion: 0.5% (from bars.yaml - existence cost)
     - Movement cost: 0% (WAIT is not movement)
-    - Total: 0.6%
+    - Total: 0.5%
 
     This test verifies WAIT no longer pays movement costs for aspatial substrates.
     """
@@ -79,21 +78,22 @@ def test_aspatial_wait_should_not_pay_movement_cost(aspatial_env):
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    # Should pay base_depletion + wait_cost, NOT movement costs
+    # Should pay only base_depletion (WAIT has no additional cost - JANK-03)
     base_depletion = env.base_depletions[env.energy_idx].item()
-    expected_cost = base_depletion + env.wait_energy_cost
+    expected_cost = base_depletion  # 0.005
     actual_cost = energy_cost
 
     assert abs(actual_cost - expected_cost) < 1e-6, f"WAIT should cost {expected_cost:.3%}, but cost {actual_cost:.3%}"
 
 
 def test_1d_interact_should_not_pay_movement_cost(continuous1d_env):
-    """1D INTERACT should pay base_depletion only (not movement costs).
+    """1D INTERACT should pay base_depletion + interaction cost (not movement costs).
 
-    Energy costs breakdown:
-    - Base depletion: 0.5%
+    Energy costs breakdown (JANK-03):
+    - Base depletion: 0.5% (existence cost)
+    - Interaction cost: 0.5% (from bars.yaml: base_interaction_cost)
     - Movement cost: 0% (INTERACT is not movement)
-    - Total: 0.5%
+    - Total: 1.0%
 
     This test verifies INTERACT no longer pays movement costs for 1D substrates.
     """
@@ -113,21 +113,20 @@ def test_1d_interact_should_not_pay_movement_cost(continuous1d_env):
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    # Should only pay base_depletion, NOT movement costs
-    expected_cost = 0.005  # base_depletion
+    # Should pay base_depletion + base_interaction_cost (from bars.yaml)
+    expected_cost = 0.010  # 0.005 base + 0.005 interaction
     actual_cost = energy_cost
 
     assert abs(actual_cost - expected_cost) < 1e-6, f"INTERACT should cost {expected_cost:.3%}, but cost {actual_cost:.3%}"
 
 
 def test_1d_wait_should_not_pay_movement_cost(continuous1d_env):
-    """1D WAIT should pay base_depletion + wait_energy_cost (not movement costs).
+    """1D WAIT should pay base_depletion only (not movement costs).
 
-    Energy costs breakdown:
-    - Base depletion: 0.5%
-    - Wait cost: 0.1%
+    Energy costs breakdown (JANK-03):
+    - Base depletion: 0.5% (existence cost)
     - Movement cost: 0% (WAIT is not movement)
-    - Total: 0.6%
+    - Total: 0.5%
 
     This test verifies WAIT no longer pays movement costs for 1D substrates.
     """
@@ -145,8 +144,8 @@ def test_1d_wait_should_not_pay_movement_cost(continuous1d_env):
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    # Should pay base_depletion + wait_cost, NOT movement costs
-    expected_cost = 0.006  # 0.005 base + 0.001 wait
+    # Should pay only base_depletion (WAIT has no additional cost - JANK-03)
+    expected_cost = 0.005  # base_depletion only
     actual_cost = energy_cost
 
     assert abs(actual_cost - expected_cost) < 1e-6, f"WAIT should cost {expected_cost:.3%}, but cost {actual_cost:.3%}"
@@ -224,9 +223,12 @@ def test_1d_movement_should_pay_movement_cost(continuous1d_env):
 
 
 def test_3d_interact_should_not_pay_movement_cost(continuous3d_env):
-    """3D INTERACT (action 6) should only pay base depletion."""
+    """3D INTERACT (action 6) should pay base depletion + interaction cost (JANK-03)."""
     env = continuous3d_env
     env.reset()
+
+    # Remove affordance side-effects to isolate action costs
+    env._handle_interactions = lambda interact_mask: {}
 
     initial_energy = env.meters[0, env.energy_idx].item()
 
@@ -236,12 +238,12 @@ def test_3d_interact_should_not_pay_movement_cost(continuous3d_env):
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    expected_cost = 0.005  # base_depletion
+    expected_cost = 0.010  # 0.005 base + 0.005 interaction
     assert abs(energy_cost - expected_cost) < 1e-6, f"3D INTERACT should cost {expected_cost:.3%}, but cost {energy_cost:.3%}"
 
 
 def test_3d_wait_should_not_pay_movement_cost(continuous3d_env):
-    """3D WAIT (action 7) should pay base depletion + wait cost only."""
+    """3D WAIT (action 7) should pay base depletion only (JANK-03)."""
     env = continuous3d_env
     env.reset()
 
@@ -253,7 +255,7 @@ def test_3d_wait_should_not_pay_movement_cost(continuous3d_env):
     final_energy = env.meters[0, env.energy_idx].item()
     energy_cost = initial_energy - final_energy
 
-    expected_cost = 0.006  # 0.005 base + 0.001 wait
+    expected_cost = 0.005  # base_depletion only (WAIT has no additional cost)
     assert abs(energy_cost - expected_cost) < 1e-6, f"3D WAIT should cost {expected_cost:.3%}, but cost {energy_cost:.3%}"
 
 

@@ -29,6 +29,8 @@ class TestVariableMeterConfigValidation:
                     range=[0.0, 1.0],
                     initial=1.0,
                     base_depletion=0.005,
+                    base_move_depletion=0.0,
+                    base_interaction_cost=0.0,
                     description="Energy level",
                 ),
             ],
@@ -48,6 +50,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Energy level",
             ),
             BarConfig(
@@ -57,6 +61,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Health status",
             ),
             BarConfig(
@@ -66,6 +72,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.5,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Financial resources",
             ),
             BarConfig(
@@ -75,6 +83,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.7,
                 base_depletion=0.001,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Mood state",
             ),
         ]
@@ -100,6 +110,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.5,
                 base_depletion=0.001,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description=f"Meter {i} description",
             )
             for i in range(12)
@@ -125,6 +137,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.5,
                 base_depletion=0.001,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description=f"Meter {i} description",
             )
             for i in range(32)
@@ -165,6 +179,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.5,
                 base_depletion=0.001,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description=f"Meter {i} description",
             )
             for i in range(33)
@@ -188,6 +204,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Energy level",
             ),
             BarConfig(
@@ -197,6 +215,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Health status",
             ),
         ]
@@ -219,6 +239,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Energy level",
             ),
             BarConfig(
@@ -228,6 +250,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Health status",
             ),
         ]
@@ -250,6 +274,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.5,
                 base_depletion=0.001,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description=f"Meter {i} description",
             )
             for i in range(7)
@@ -275,6 +301,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Health status",
             ),
             BarConfig(
@@ -284,6 +312,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Energy level",
             ),
             BarConfig(
@@ -293,6 +323,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.5,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Financial resources",
             ),
         ]
@@ -317,6 +349,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.005,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Energy level",
             ),
             BarConfig(
@@ -326,6 +360,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=1.0,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Health status",
             ),
             BarConfig(
@@ -335,6 +371,8 @@ class TestVariableMeterConfigValidation:
                 range=[0.0, 1.0],
                 initial=0.5,
                 base_depletion=0.0,
+                base_move_depletion=0.0,
+                base_interaction_cost=0.0,
                 description="Financial resources",
             ),
         ]

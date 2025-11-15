@@ -284,6 +284,27 @@ class SpatialSubstrate(ABC):
         pass
 
     @abstractmethod
+    def get_capacity(self) -> int | None:
+        """Return total number of positions without enumerating them.
+
+        Returns:
+            Total positions for finite substrates (discrete grids).
+            None for infinite substrates (continuous spaces, aspatial).
+
+        This is more efficient than len(get_all_positions()) for large discrete grids,
+        as it calculates capacity analytically without generating all positions.
+
+        Examples:
+            - Grid2D (10×10): returns 100
+            - GridND ([5,5,5,5]): returns 625
+            - Continuous: returns None (infinite positions)
+            - Aspatial: returns None (no positions)
+
+        Used for capacity validation in affordance placement.
+        """
+        pass
+
+    @abstractmethod
     def encode_partial_observation(
         self,
         positions: torch.Tensor,

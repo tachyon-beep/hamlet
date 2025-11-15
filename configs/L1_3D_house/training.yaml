@@ -25,14 +25,11 @@ environment:
   enable_temporal_mechanics: false  # No time-based mechanics
   enabled_affordances: null  # null = all 14 affordances enabled
   randomize_affordances: true
-  energy_move_depletion: 0.005  # Energy cost per movement action
-  energy_wait_depletion: 0.001  # Energy cost per WAIT action
-  energy_interact_depletion: 0.0  # Energy cost per INTERACT action
 
-# Population configuration
+# Network architecture is managed by brain.yaml:architecture.type
+# ("feedforward" → SimpleQNetwork, "recurrent" → RecurrentSpatialQNetwork)
 population:
   num_agents: 1  # Single agent for now
-  network_type: simple  # Standard MLP Q-Network
   mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 # Curriculum configuration (adversarial difficulty adjustment)

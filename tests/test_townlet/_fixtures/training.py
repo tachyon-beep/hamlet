@@ -2,21 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
-
 import pytest
 import torch
 
-from tests.test_townlet._fixtures.constants import FULL_OBS_DIM_8X8
 from townlet.curriculum.adversarial import AdversarialCurriculum
 from townlet.curriculum.static import StaticCurriculum
 from townlet.environment.vectorized_env import VectorizedHamletEnv
 from townlet.exploration.adaptive_intrinsic import AdaptiveIntrinsicExploration
 from townlet.exploration.epsilon_greedy import EpsilonGreedyExploration
-from townlet.population.vectorized import VectorizedPopulation
 from townlet.training.replay_buffer import ReplayBuffer
-from townlet.universe.compiled import CompiledUniverse
 
 __all__ = [
     "replay_buffer",
@@ -24,8 +18,6 @@ __all__ = [
     "static_curriculum",
     "epsilon_greedy_exploration",
     "adaptive_intrinsic_exploration",
-    "vectorized_population",
-    "non_training_recurrent_population",
 ]
 
 
@@ -33,7 +25,7 @@ __all__ = [
 def replay_buffer(device: torch.device) -> ReplayBuffer:
     """Create a basic replay buffer."""
 
-    return ReplayBuffer(capacity=1000, obs_dim=FULL_OBS_DIM_8X8, device=device)
+    return ReplayBuffer(capacity=1000, device=device)
 
 
 @pytest.fixture
@@ -79,66 +71,4 @@ def adaptive_intrinsic_exploration(basic_env: VectorizedHamletEnv, device: torch
         variance_threshold=100.0,
         survival_window=50,
         device=device,
-    )
-
-
-@pytest.fixture
-def vectorized_population(
-    basic_env: VectorizedHamletEnv,
-    adversarial_curriculum: AdversarialCurriculum,
-    epsilon_greedy_exploration: EpsilonGreedyExploration,
-    device: torch.device,
-) -> VectorizedPopulation:
-    """Vectorized population for standard training tests."""
-
-    return VectorizedPopulation(
-        env=basic_env,
-        curriculum=adversarial_curriculum,
-        exploration=epsilon_greedy_exploration,
-        network_type="simple",
-        learning_rate=0.00025,
-        gamma=0.99,
-        replay_buffer_capacity=1000,
-        batch_size=32,
-        device=device,
-        use_double_dqn=False,
-    )
-
-
-@pytest.fixture
-def non_training_recurrent_population(
-    compile_universe: Callable[[Path | str], CompiledUniverse],
-    cpu_device: torch.device,
-) -> VectorizedPopulation:
-    """Recurrent population with training disabled for deterministic tests."""
-
-    pomdp_universe = compile_universe(Path("configs/L2_partial_observability"))
-    env = VectorizedHamletEnv.from_universe(
-        pomdp_universe,
-        num_agents=1,
-        device=cpu_device,
-    )
-
-    curriculum = StaticCurriculum()
-    exploration = EpsilonGreedyExploration(
-        epsilon=0.1,
-        epsilon_min=0.1,
-        epsilon_decay=1.0,
-        device=cpu_device,
-    )
-
-    return VectorizedPopulation(
-        env=env,
-        curriculum=curriculum,
-        exploration=exploration,
-        agent_ids=["agent_0"],
-        device=cpu_device,
-        network_type="recurrent",
-        learning_rate=0.00025,
-        gamma=0.99,
-        replay_buffer_capacity=1000,
-        batch_size=8,
-        train_frequency=10000,
-        sequence_length=8,
-        use_double_dqn=False,
     )

@@ -63,17 +63,6 @@ class TestWhitelistPattern:
         assert pattern.class_pattern == "SimpleQNetwork"
         assert pattern.rule_id is None
 
-    def test_parse_structural_function_specific(self):
-        pattern = no_defaults_lint.parse_whitelist_pattern(
-            "src/townlet/environment/cascade_engine.py::CascadeEngine::apply_base_depletions:DEF001"
-        )
-        assert pattern is not None
-        assert pattern.is_structural()
-        assert pattern.filepath_pattern == "src/townlet/environment/cascade_engine.py"
-        assert pattern.class_pattern == "CascadeEngine"
-        assert pattern.function_pattern == "apply_base_depletions"
-        assert pattern.rule_id == "DEF001"
-
     def test_parse_line_based(self):
         pattern = no_defaults_lint.parse_whitelist_pattern("src/townlet/config.py:42:DEF001")
         assert pattern is not None

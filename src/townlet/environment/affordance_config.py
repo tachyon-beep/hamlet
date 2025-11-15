@@ -229,26 +229,7 @@ def load_default_affordances() -> AffordanceConfigCollection:
 
 
 # ============================================================================
-
-
-def is_affordance_open(time_of_day: int, operating_hours: tuple[int, int]) -> bool:
-    """
-    Check if affordance is open at given time.
-
-    Handles midnight wraparound (e.g., Bar: 18-4 means 6pm to 4am).
-
-    Args:
-        time_of_day: Current tick [0-23]
-        operating_hours: (open_tick, close_tick)
-
-    Returns:
-        True if open, False if closed
-    """
-    open_tick, close_tick = operating_hours
-
-    if open_tick < close_tick:
-        # Normal hours (e.g., 8-18)
-        return open_tick <= time_of_day < close_tick
-    else:
-        # Wraparound hours (e.g., 18-4 = 6pm to 4am)
-        return time_of_day >= open_tick or time_of_day < close_tick
+# DELETED: is_affordance_open() moved to temporal_utils.py (JANK-09 fix)
+# If you get an ImportError, update your import to:
+#   from townlet.environment.temporal_utils import is_affordance_open
+# ============================================================================

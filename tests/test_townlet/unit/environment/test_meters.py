@@ -2,7 +2,6 @@
 
 This file consolidates meter-related tests from:
 - test_meter_dynamics.py (422 lines) - Meter depletion, terminal conditions
-- test_cascade_engine.py (417 lines) - CascadeEngine and equivalence tests
 
 Tests cover:
 - Base depletion (per-step meter decay)
@@ -11,7 +10,6 @@ Tests cover:
 - Terminal conditions (death when energy ≤ 0 OR health ≤ 0)
 - Meter clamping (values stay in [0, 1])
 - Multi-agent meter independence
-- CascadeEngine equivalence with MeterDynamics
 
 All tests use CPU device for determinism.
 """
@@ -22,7 +20,6 @@ import pytest
 import torch
 
 from townlet.environment.cascade_config import load_environment_config
-from townlet.environment.cascade_engine import CascadeEngine
 
 # =============================================================================
 # Fixtures
@@ -31,14 +28,8 @@ from townlet.environment.cascade_engine import CascadeEngine
 
 @pytest.fixture
 def cascade_config(test_config_pack_path: Path):
-    """Load environment configuration for CascadeEngine tests."""
+    """Load environment configuration for cascade tests."""
     return load_environment_config(test_config_pack_path)
-
-
-@pytest.fixture
-def cascade_engine(cascade_config, cpu_device):
-    """Create CascadeEngine with test config."""
-    return CascadeEngine(cascade_config, cpu_device)
 
 
 @pytest.fixture
@@ -83,44 +74,6 @@ class TestBaseDepletion:
         expected = torch.tensor([[0.995, 0.997, 0.996, 1.0, 0.999, 0.994, 0.9995, 0.998]])
         assert torch.allclose(env.meters, expected, atol=1e-4)
 
-    def test_base_depletions_via_cascade_engine(self, cascade_engine, cpu_device):
-        """Base depletions applied correctly via CascadeEngine."""
-        # 4 agents with various meter states
-        meters = torch.tensor(
-            [
-                # Agent 0: All meters at 100%
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],
-                # Agent 1: Low satiation
-                [1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0],
-                # Agent 2: Low fitness
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 0.1],
-                # Agent 3: Multiple low meters
-                [0.8, 0.2, 0.2, 0.5, 0.2, 0.2, 0.8, 0.2],
-            ],
-            device=cpu_device,
-        )
-        initial_meters = meters.clone()
-        result = cascade_engine.apply_base_depletions(meters)
-
-        # Check shape preserved
-        assert result.shape == initial_meters.shape
-
-        # Check depletions applied (agent 0, all at 100%)
-        assert result[0, 0] < initial_meters[0, 0]  # energy depleted
-        # health NOT depleted by base_depletions (handled by fitness modulation)
-        assert result[0, 6] == initial_meters[0, 6]
-
-        # Check specific values (agent 0)
-        expected_energy = 1.0 - 0.005
-        expected_health = 1.0  # No base depletion for health
-        assert torch.isclose(result[0, 0], torch.tensor(expected_energy))
-        assert torch.isclose(result[0, 6], torch.tensor(expected_health))
-
-    def test_base_depletions_match_config(self, cascade_engine, cascade_config):
-        """Depletion rates match config exactly."""
-        for bar in cascade_config.bars.bars:
-            assert cascade_engine._base_depletions[bar.index] == bar.base_depletion
-
     def test_clamping_at_zero(self, cpu_env_factory):
         """Meters clamped at 0.0 (no negative values)."""
         env = cpu_env_factory()
@@ -135,21 +88,6 @@ class TestBaseDepletion:
         # All should be 0.0 or near-zero (except money which doesn't deplete)
         assert torch.all(env.meters[:, [0, 1, 2, 4, 5, 6, 7]] >= 0.0)
         assert torch.all(env.meters[:, [0, 1, 2, 4, 5, 6, 7]] <= 0.001)
-
-    def test_base_depletions_respect_bounds(self, cascade_engine, cpu_device):
-        """Base depletions clamp to [0, 1] via CascadeEngine."""
-        # Create meters near 0
-        meters = torch.zeros(2, 8, device=cpu_device)
-        result = cascade_engine.apply_base_depletions(meters)
-
-        # Should clamp to 0, not go negative
-        assert (result >= 0.0).all()
-        assert (result <= 1.0).all()
-
-
-# =============================================================================
-# Modulation Tests
-# =============================================================================
 
 
 class TestModulation:
@@ -180,53 +118,6 @@ class TestModulation:
         assert torch.isclose(env.meters[0, 6], torch.tensor(0.9995), atol=1e-4)  # fit
         assert torch.isclose(env.meters[1, 6], torch.tensor(0.99825), atol=1e-4)  # moderate
         assert torch.isclose(env.meters[2, 6], torch.tensor(0.997), atol=1e-4)  # unfit
-
-    def test_fitness_modulation_healthy_agent(self, cascade_engine, cpu_device):
-        """Fitness modulation when agent is healthy (fitness=100%)."""
-        # Agent with 100% fitness
-        meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-
-        initial_health = meters[0, 6].item()
-        result = cascade_engine.apply_modulations(meters)
-
-        # Health should deplete at 0.5x rate (base_multiplier=0.5)
-        # depletion = 0.001 * 0.5 = 0.0005
-        expected_health = initial_health - 0.0005
-        assert torch.isclose(result[0, 6], torch.tensor(expected_health), atol=1e-5)
-
-    def test_fitness_modulation_unfit_agent(self, cascade_engine, cpu_device):
-        """Fitness modulation when agent is unfit (fitness=0%)."""
-        # Agent with 0% fitness
-        meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 0.0]], device=cpu_device)
-
-        initial_health = meters[0, 6].item()
-        result = cascade_engine.apply_modulations(meters)
-
-        # Health should deplete at 3.0x rate (base + range = 0.5 + 2.5)
-        # depletion = 0.001 * 3.0 = 0.003
-        expected_health = initial_health - 0.003
-        assert torch.isclose(result[0, 6], torch.tensor(expected_health), atol=1e-5)
-
-    def test_fitness_modulation_gradient(self, cascade_engine, cpu_device):
-        """Fitness modulation is smooth gradient."""
-        # Test multiple fitness levels
-        fitness_levels = [1.0, 0.75, 0.5, 0.25, 0.0]
-        expected_multipliers = [0.5, 1.125, 1.75, 2.375, 3.0]
-
-        for fitness, expected_mult in zip(fitness_levels, expected_multipliers):
-            meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, fitness]], device=cpu_device)
-            initial_health = meters[0, 6].item()
-            result = cascade_engine.apply_modulations(meters)
-
-            expected_depletion = 0.001 * expected_mult
-            expected_health = initial_health - expected_depletion
-
-            assert torch.isclose(result[0, 6], torch.tensor(expected_health), atol=1e-5), f"fitness={fitness}, mult={expected_mult}"
-
-
-# =============================================================================
-# Cascade Effects Tests
-# =============================================================================
 
 
 class TestCascadeEffects:
@@ -389,85 +280,6 @@ class TestCascadeEffects:
         expected_energy = 1.0 - (0.0008 * (0.3 - 0.1) / 0.3)
         assert torch.isclose(env.meters[0, 0], torch.tensor(expected_energy), atol=1e-5)
 
-    # CascadeEngine cascade tests
-
-    def test_threshold_cascade_above_threshold(self, cascade_engine, cpu_device):
-        """Cascades don't apply when source is above threshold."""
-        # Agent with satiation at 50% (above 30% threshold)
-        meters = torch.tensor([[1.0, 1.0, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-
-        initial_health = meters[0, 6].item()
-        result = cascade_engine.apply_threshold_cascades(meters, ["primary_to_pivotal"])
-
-        # Health should be unchanged (no cascade)
-        assert result[0, 6] == initial_health
-
-    def test_threshold_cascade_below_threshold(self, cascade_engine, cpu_device):
-        """Cascades apply when source is below threshold."""
-        # Agent with satiation at 20% (below 30% threshold)
-        meters = torch.tensor([[1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-
-        initial_health = meters[0, 6].item()
-        result = cascade_engine.apply_threshold_cascades(meters, ["primary_to_pivotal"])
-
-        # Health should decrease (cascade applied)
-        assert result[0, 6] < initial_health
-
-    def test_threshold_cascade_gradient_penalty(self, cascade_engine, cpu_device):
-        """Cascade penalty is proportional to deficit."""
-        # Test satiation_to_health cascade (threshold=0.3, strength=0.004)
-
-        # Case 1: satiation = 0.2 (deficit = 0.1 / 0.3 = 0.333)
-        meters1 = torch.tensor([[1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        result1 = cascade_engine.apply_threshold_cascades(meters1, ["primary_to_pivotal"])
-        deficit1 = (0.3 - 0.2) / 0.3
-        expected_penalty1 = 0.004 * deficit1
-        expected_health1 = 1.0 - expected_penalty1
-        assert torch.isclose(result1[0, 6], torch.tensor(expected_health1), atol=1e-5)
-
-        # Case 2: satiation = 0.1 (deficit = 0.2 / 0.3 = 0.667)
-        meters2 = torch.tensor([[1.0, 1.0, 0.1, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        result2 = cascade_engine.apply_threshold_cascades(meters2, ["primary_to_pivotal"])
-        deficit2 = (0.3 - 0.1) / 0.3
-        expected_penalty2 = 0.004 * deficit2
-        expected_health2 = 1.0 - expected_penalty2
-        assert torch.isclose(result2[0, 6], torch.tensor(expected_health2), atol=1e-5)
-
-        # Penalty should be larger for lower satiation
-        assert expected_penalty2 > expected_penalty1
-
-    def test_threshold_cascade_categories(self, cascade_engine, cpu_device):
-        """Different cascade categories work."""
-        # Test primary_to_pivotal (satiation → health/energy)
-        meters = torch.tensor([[1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        result = cascade_engine.apply_threshold_cascades(meters, ["primary_to_pivotal"])
-        assert result[0, 6] < 1.0  # health affected
-        assert result[0, 0] < 1.0  # energy affected
-
-        # Test secondary_to_primary (hygiene → mood)
-        meters = torch.tensor([[1.0, 0.2, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        result = cascade_engine.apply_threshold_cascades(meters, ["secondary_to_primary"])
-        assert result[0, 4] < 1.0  # mood affected
-
-    def test_threshold_cascade_multiple_sources(self, cascade_engine, cpu_device):
-        """Multiple cascades from different sources accumulate."""
-        # Agent with low satiation AND low mood (both affect energy)
-        meters = torch.tensor([[1.0, 1.0, 0.2, 0.5, 0.2, 1.0, 1.0, 1.0]], device=cpu_device)
-
-        result = cascade_engine.apply_threshold_cascades(meters, ["primary_to_pivotal"])
-
-        # Energy should be affected by BOTH satiation and mood
-        # satiation→energy: deficit=0.333, penalty=0.005*0.333=0.00167
-        # mood→energy: deficit=0.333, penalty=0.005*0.333=0.00167
-        # Total: ~0.00334
-        expected_energy = 1.0 - 0.00167 - 0.00167
-        assert torch.isclose(result[0, 0], torch.tensor(expected_energy), atol=1e-4)
-
-
-# =============================================================================
-# Terminal Conditions Tests
-# =============================================================================
-
 
 class TestTerminalConditions:
     """Test death conditions (energy ≤ 0, health ≤ 0)."""
@@ -512,64 +324,6 @@ class TestTerminalConditions:
 
         assert not env.dones[0]
 
-    def test_terminal_conditions_healthy_agent(self, cascade_engine, cpu_device):
-        """Healthy agent is not terminal."""
-        meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        dones = torch.zeros(1, dtype=torch.bool, device=cpu_device)
-
-        result = cascade_engine.check_terminal_conditions(meters, dones)
-        assert not result[0]  # Not dead
-
-    def test_terminal_conditions_zero_health(self, cascade_engine, cpu_device):
-        """Zero health triggers death."""
-        meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0]], device=cpu_device)
-        dones = torch.zeros(1, dtype=torch.bool, device=cpu_device)
-
-        result = cascade_engine.check_terminal_conditions(meters, dones)
-        assert result[0]  # Dead (health=0)
-
-    def test_terminal_conditions_zero_energy(self, cascade_engine, cpu_device):
-        """Zero energy triggers death."""
-        meters = torch.tensor([[0.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        dones = torch.zeros(1, dtype=torch.bool, device=cpu_device)
-
-        result = cascade_engine.check_terminal_conditions(meters, dones)
-        assert result[0]  # Dead (energy=0)
-
-    def test_terminal_conditions_preserve_done_state(self, cascade_engine, cpu_device):
-        """Once done, stays done even if meters recover (monotonic property)."""
-        # Agent already dead, but all meters are healthy
-        meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        dones = torch.ones(1, dtype=torch.bool, device=cpu_device)  # Already done
-
-        result = cascade_engine.check_terminal_conditions(meters, dones)
-        assert result[0]  # Must stay done (monotonic property)
-
-    def test_terminal_conditions_monotonic_batch(self, cascade_engine, cpu_device):
-        """Terminal state is monotonic across batch of agents."""
-        meters = torch.tensor(
-            [
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Healthy but already done
-                [0.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Dead (energy=0)
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0],  # Dead (health=0)
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Alive
-            ],
-            device=cpu_device,
-        )
-        dones = torch.tensor([True, False, False, False], dtype=torch.bool, device=cpu_device)
-
-        result = cascade_engine.check_terminal_conditions(meters, dones)
-
-        assert result[0]  # Agent 0: stays done (was already done)
-        assert result[1]  # Agent 1: newly dead (energy=0)
-        assert result[2]  # Agent 2: newly dead (health=0)
-        assert not result[3]  # Agent 3: alive
-
-
-# =============================================================================
-# Meter Clamping Tests
-# =============================================================================
-
 
 class TestMeterClamping:
     """Test that meters stay within [0, 1] bounds."""
@@ -600,21 +354,6 @@ class TestMeterClamping:
         # Meters should stay at or below 1.0
         assert torch.all(env.meters <= 1.0)
 
-    def test_cascade_engine_respects_bounds(self, cascade_engine, cpu_device):
-        """CascadeEngine clamps to [0, 1]."""
-        # Create meters near 0
-        meters = torch.zeros(2, 8, device=cpu_device)
-        result = cascade_engine.apply_base_depletions(meters)
-
-        # Should clamp to 0, not go negative
-        assert (result >= 0.0).all()
-        assert (result <= 1.0).all()
-
-
-# =============================================================================
-# Multi-Agent Meter Tests
-# =============================================================================
-
 
 class TestMultiAgentMeters:
     """Test that agents have independent meter states."""
@@ -635,26 +374,6 @@ class TestMultiAgentMeters:
         assert env.dones[0]  # dead (health=0)
         assert env.dones[1]  # dead (energy=0)
         assert not env.dones[2]  # alive
-
-    def test_terminal_conditions_batch(self, cascade_engine, cpu_device):
-        """Terminal conditions on batch of agents."""
-        meters = torch.tensor(
-            [
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Healthy
-                [0.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Dead (energy=0)
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0],  # Dead (health=0)
-                [0.0, 1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0],  # Dead (both=0)
-            ],
-            device=cpu_device,
-        )
-        dones = torch.zeros(4, dtype=torch.bool, device=cpu_device)
-
-        result = cascade_engine.check_terminal_conditions(meters, dones)
-
-        assert not result[0]  # Agent 0 alive
-        assert result[1]  # Agent 1 dead
-        assert result[2]  # Agent 2 dead
-        assert result[3]  # Agent 3 dead
 
     def test_agents_have_independent_meters(self, multi_agent_env):
         """Different agents have independent meter states."""
@@ -706,21 +425,6 @@ class TestCascadeIntegration:
         # Agent should still be alive (primaries not at 0 yet)
         assert not env.dones[0]
 
-    def test_full_cascade_via_engine(self, cascade_engine, cpu_device):
-        """Full cascade applies all stages in order via CascadeEngine."""
-        # Agent with low satiation
-        meters = torch.tensor([[1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-        initial_meters = meters.clone()
-
-        result = cascade_engine.apply_full_cascade(meters)
-
-        # Meters should change
-        assert not torch.equal(result, initial_meters)
-
-        # Health and energy should be affected by satiation cascade
-        assert result[0, 6] < initial_meters[0, 6]  # health
-        assert result[0, 0] < initial_meters[0, 0]  # energy
-
     def test_full_cascade_respects_execution_order(self, cascade_config):
         """Cascades execute in config-specified order."""
         # Execution order should be: modulations, primary_to_pivotal, secondary_to_primary, secondary_to_pivotal_weak
@@ -730,131 +434,3 @@ class TestCascadeIntegration:
             "secondary_to_primary",
             "secondary_to_pivotal_weak",
         ]
-
-
-# =============================================================================
-# CascadeEngine Equivalence Tests
-# =============================================================================
-
-
-class TestCascadeEngineEquivalence:
-    """Test that CascadeEngine produces same results as MeterDynamics."""
-
-    def test_equivalence_with_meter_dynamics_healthy(self, cascade_engine, cpu_device, cpu_env_factory):
-        """CascadeEngine produces same results as MeterDynamics for healthy agent."""
-        # Healthy agent
-        meters = torch.tensor([[1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-
-        # Apply with MeterDynamics
-        md = cpu_env_factory(num_agents=1).meter_dynamics
-        meters_md = meters.clone()
-        meters_md = md.deplete_meters(meters_md)  # Includes base depletions + fitness modulation
-        meters_md = md.apply_secondary_to_primary_effects(meters_md)
-        meters_md = md.apply_tertiary_to_secondary_effects(meters_md)
-        meters_md = md.apply_tertiary_to_primary_effects(meters_md)
-
-        # Apply with CascadeEngine
-        meters_ce = meters.clone()
-        meters_ce = cascade_engine.apply_base_depletions(meters_ce)  # Base depletions
-        meters_ce = cascade_engine.apply_full_cascade(meters_ce)  # Modulations + cascades
-
-        # Results should be very close (within floating point tolerance)
-        assert torch.allclose(meters_md, meters_ce, atol=1e-5)
-
-    def test_equivalence_with_meter_dynamics_low_satiation(self, cascade_engine, cpu_device, cpu_env_factory):
-        """Equivalence for agent with low satiation."""
-        # Agent with low satiation (triggers cascades)
-        meters = torch.tensor([[1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0]], device=cpu_device)
-
-        # Apply with MeterDynamics
-        md = cpu_env_factory(num_agents=1).meter_dynamics
-        meters_md = meters.clone()
-        meters_md = md.deplete_meters(meters_md)
-        meters_md = md.apply_secondary_to_primary_effects(meters_md)
-        meters_md = md.apply_tertiary_to_secondary_effects(meters_md)
-        meters_md = md.apply_tertiary_to_primary_effects(meters_md)
-
-        # Apply with CascadeEngine (base depletions + full cascade)
-        meters_ce = meters.clone()
-        meters_ce = cascade_engine.apply_base_depletions(meters_ce)
-        meters_ce = cascade_engine.apply_full_cascade(meters_ce)
-
-        # Results should match
-        assert torch.allclose(meters_md, meters_ce, atol=1e-5)
-
-    def test_equivalence_multi_agent_batch(self, cascade_engine, cpu_device, cpu_env_factory):
-        """Equivalence for batch of multiple agents."""
-        # Multiple agents with different states
-        meters = torch.tensor(
-            [
-                [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 1.0],  # Healthy
-                [1.0, 1.0, 0.2, 0.5, 1.0, 1.0, 1.0, 1.0],  # Low satiation
-                [1.0, 0.1, 1.0, 0.5, 0.1, 1.0, 1.0, 0.1],  # Multiple low
-                [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  # All moderate
-            ],
-            device=cpu_device,
-        )
-
-        # Apply with MeterDynamics
-        md = cpu_env_factory(num_agents=4).meter_dynamics
-        meters_md = meters.clone()
-        meters_md = md.deplete_meters(meters_md)
-        meters_md = md.apply_secondary_to_primary_effects(meters_md)
-        meters_md = md.apply_tertiary_to_secondary_effects(meters_md)
-        meters_md = md.apply_tertiary_to_primary_effects(meters_md)
-
-        # Apply with CascadeEngine
-        meters_ce = meters.clone()
-        meters_ce = cascade_engine.apply_base_depletions(meters_ce)
-        meters_ce = cascade_engine.apply_full_cascade(meters_ce)
-
-        # Results should match for all agents
-        assert torch.allclose(meters_md, meters_ce, atol=1e-5)
-
-
-# =============================================================================
-# CascadeEngine Initialization Tests
-# =============================================================================
-
-
-class TestCascadeEngineInitialization:
-    """Test CascadeEngine initialization and data structures."""
-
-    def test_engine_initialization(self, cascade_engine, cascade_config):
-        """Engine initializes correctly with config."""
-        assert cascade_engine.config == cascade_config
-        assert cascade_engine.device is not None
-
-        # Check lookup maps built
-        assert len(cascade_engine._bar_name_to_idx) == 8
-        assert len(cascade_engine._bar_idx_to_name) == 8
-        assert cascade_engine._bar_name_to_idx["energy"] == 0
-        assert cascade_engine._bar_name_to_idx["health"] == 6
-
-        # Check base depletions tensor built
-        assert cascade_engine._base_depletions.shape == (8,)
-        assert cascade_engine._base_depletions[0] == 0.005  # energy
-        # health (handled by fitness modulation, not base depletion)
-        assert torch.isclose(cascade_engine._base_depletions[6], torch.tensor(0.0, device=cascade_engine.device))
-
-        # Check cascade data built
-        assert len(cascade_engine._cascade_data) > 0
-        assert "primary_to_pivotal" in cascade_engine._cascade_data
-        # satiation→health, satiation→energy, mood→energy
-        assert len(cascade_engine._cascade_data["primary_to_pivotal"]) == 3
-
-        # Check modulation data built
-        assert len(cascade_engine._modulation_data) == 1
-        assert cascade_engine._modulation_data[0]["source_idx"] == 7  # fitness
-        assert cascade_engine._modulation_data[0]["target_idx"] == 6  # health
-
-        # Check terminal data built
-        assert len(cascade_engine._terminal_data) == 2
-
-    def test_engine_helper_methods(self, cascade_engine):
-        """Bar name/index lookup helpers work."""
-        assert cascade_engine.get_bar_name(0) == "energy"
-        assert cascade_engine.get_bar_name(6) == "health"
-
-        assert cascade_engine.get_bar_index("energy") == 0
-        assert cascade_engine.get_bar_index("health") == 6

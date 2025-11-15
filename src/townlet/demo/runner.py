@@ -417,19 +417,13 @@ class DemoRunner:
         )
 
         # Get population parameters from config (all required per PDR-002)
-        learning_rate = self.hamlet_config.population.learning_rate
-        gamma = self.hamlet_config.population.gamma
-        replay_buffer_capacity = self.hamlet_config.population.replay_buffer_capacity
-        network_type = self.hamlet_config.population.network_type  # 'simple' or 'recurrent'
         vision_window_size = 2 * vision_range + 1  # 5 for vision_range=2
 
         # Get training hyperparameters from config (all required per PDR-002)
         train_frequency = self.hamlet_config.training.train_frequency
-        target_update_frequency = self.hamlet_config.training.target_update_frequency
         batch_size = self.hamlet_config.training.batch_size
         sequence_length = self.hamlet_config.training.sequence_length
         max_grad_norm = self.hamlet_config.training.max_grad_norm
-        use_double_dqn = self.hamlet_config.training.use_double_dqn
 
         # Create agent IDs
         agent_ids = [f"agent_{i}" for i in range(num_agents)]
@@ -455,18 +449,12 @@ class DemoRunner:
             device=device,
             obs_dim=obs_dim,
             action_dim=action_dim,
-            learning_rate=learning_rate,  # None (managed by brain.yaml)
-            gamma=gamma,  # None (managed by brain.yaml)
-            replay_buffer_capacity=replay_buffer_capacity,  # None (managed by brain.yaml)
-            network_type=network_type,
             vision_window_size=vision_window_size,
             tb_logger=self.tb_logger,
             train_frequency=train_frequency,
-            target_update_frequency=target_update_frequency,  # None (managed by brain.yaml)
             batch_size=batch_size,
             sequence_length=sequence_length,
             max_grad_norm=max_grad_norm,
-            use_double_dqn=use_double_dqn,  # None (managed by brain.yaml)
             brain_config=brain_config,
             max_episodes=self.max_episodes,  # For PER beta annealing
             max_steps_per_episode=self.hamlet_config.curriculum.max_steps_per_episode,  # For PER beta annealing
@@ -500,10 +488,10 @@ class DemoRunner:
 
         # Phase 4 - Log hyperparameters to TensorBoard
         self.hparams = {
-            "learning_rate": learning_rate,
-            "gamma": gamma,
-            "network_type": network_type,
-            "replay_buffer_capacity": replay_buffer_capacity,
+            "learning_rate": brain_config.optimizer.learning_rate,
+            "gamma": brain_config.q_learning.gamma,
+            "network_architecture": brain_config.architecture.type,  # 'feedforward' or 'recurrent'
+            "replay_buffer_capacity": brain_config.replay.capacity,
             "grid_size": grid_size,
             "partial_observability": partial_observability,
             "vision_range": vision_range,

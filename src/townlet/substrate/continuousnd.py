@@ -371,6 +371,10 @@ class ContinuousNDSubstrate(SpatialSubstrate):
             "See vectorized_env.py randomize_affordance_positions()."
         )
 
+    def get_capacity(self) -> None:
+        """Return None for infinite capacity (continuous space)."""
+        return None
+
     def supports_enumerable_positions(self) -> bool:
         """Continuous substrates have infinite positions."""
         return False

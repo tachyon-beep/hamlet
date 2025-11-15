@@ -186,6 +186,8 @@ class TestHamletConfigProductionPacks:
     @pytest.mark.parametrize("pack_name", sorted(PRODUCTION_CONFIG_PACKS.keys()))
     def test_load_pack(self, pack_name):
         """Ensure each config pack compiles via HamletConfig."""
+        from townlet.agent.brain_config import load_brain_config
+
         config_dir = PRODUCTION_CONFIG_PACKS[pack_name]
         if not config_dir.exists():
             pytest.skip(f"Config pack not found: {config_dir}")
@@ -204,13 +206,18 @@ class TestHamletConfigProductionPacks:
             assert config.environment.enable_temporal_mechanics is True
         if pack_name == "aspatial_test":
             assert config.substrate.type == "aspatial"
+
+        # network_type is now in brain.yaml, not PopulationConfig
+        brain_config = load_brain_config(config_dir)
         if pack_name in {"L2_partial_observability", "L3_temporal_mechanics"}:
-            assert config.population.network_type == "recurrent"
+            assert brain_config.architecture.type == "recurrent"
         else:
-            assert config.population.network_type == "simple"
+            assert brain_config.architecture.type == "feedforward"
 
     def test_load_L2_partial_observability(self):  # noqa: N802
         """Load L2_partial_observability config pack."""
+        from townlet.agent.brain_config import load_brain_config
+
         config_dir = PRODUCTION_CONFIG_PACKS["L2_partial_observability"]
         if not config_dir.exists():
             pytest.skip(f"Config pack not found: {config_dir}")
@@ -218,17 +225,25 @@ class TestHamletConfigProductionPacks:
         config = HamletConfig.load(config_dir)
         assert config.environment.partial_observability is True  # L2 is POMDP
         assert config.environment.vision_range == 2  # 5×5 window
-        assert config.population.network_type == "recurrent"  # L2 uses LSTM
+
+        # network_type is now in brain.yaml
+        brain_config = load_brain_config(config_dir)
+        assert brain_config.architecture.type == "recurrent"  # L2 uses LSTM
 
     def test_load_L3_temporal_mechanics(self):  # noqa: N802
         """Load L3_temporal_mechanics config pack."""
+        from townlet.agent.brain_config import load_brain_config
+
         config_dir = PRODUCTION_CONFIG_PACKS["L3_temporal_mechanics"]
         if not config_dir.exists():
             pytest.skip(f"Config pack not found: {config_dir}")
 
         config = HamletConfig.load(config_dir)
         assert config.environment.enable_temporal_mechanics is True  # L3 has temporal
-        assert config.population.network_type == "recurrent"  # L3 uses LSTM
+
+        # network_type is now in brain.yaml
+        brain_config = load_brain_config(config_dir)
+        assert brain_config.architecture.type == "recurrent"  # L3 uses LSTM
 
     def test_all_production_configs_load_successfully(self):
         """Verify all production config packs load without errors."""

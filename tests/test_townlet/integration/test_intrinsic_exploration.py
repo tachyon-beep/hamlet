@@ -29,7 +29,7 @@ class TestRNDIntrinsicRewards:
     intrinsic/extrinsic rewards are combined correctly for training.
     """
 
-    def test_rnd_computes_novelty_for_observations(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_rnd_computes_novelty_for_observations(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify RND produces novelty rewards for observations during episode steps.
 
         This test validates the critical contract:
@@ -62,10 +62,7 @@ class TestRNDIntrinsicRewards:
             device=cpu_device,
             obs_dim=obs_dim,  # Must match environment's observation dimension
             # action_dim defaults to env.action_dim
-            network_type="simple",
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=minimal_brain_config,
             batch_size=16,
         )
 
@@ -88,7 +85,7 @@ class TestRNDIntrinsicRewards:
         # At least some rewards should be positive (RND should detect novelty)
         assert sum(intrinsic_rewards_collected) > 0, "RND should produce non-zero novelty rewards"
 
-    def test_intrinsic_rewards_combined_with_extrinsic(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_intrinsic_rewards_combined_with_extrinsic(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify intrinsic and extrinsic rewards are combined correctly during step.
 
         This test validates the critical contract:
@@ -121,10 +118,7 @@ class TestRNDIntrinsicRewards:
             device=cpu_device,
             obs_dim=obs_dim,  # Must match environment's observation dimension
             # action_dim defaults to env.action_dim
-            network_type="simple",
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=minimal_brain_config,
             batch_size=16,
         )
 
@@ -158,7 +152,7 @@ class TestRNDIntrinsicRewards:
         # The combined reward exists and is a float
         assert isinstance(combined, float), "Combined reward should be a float"
 
-    def test_combined_reward_stored_in_replay_buffer(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_combined_reward_stored_in_replay_buffer(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify combined rewards are stored in replay buffer (not separate rewards).
 
         This test validates the critical contract:
@@ -191,10 +185,7 @@ class TestRNDIntrinsicRewards:
             device=cpu_device,
             obs_dim=obs_dim,  # Must match environment's observation dimension
             # action_dim defaults to env.action_dim
-            network_type="simple",
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=1000,
+            brain_config=minimal_brain_config,
             batch_size=16,
         )
 
@@ -236,7 +227,9 @@ class TestAdaptiveAnnealing:
     performance (low variance + high survival).
     """
 
-    def test_intrinsic_weight_decreases_after_consistent_performance(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_intrinsic_weight_decreases_after_consistent_performance(
+        self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config
+    ):
         """Verify intrinsic weight decreases when agent performs consistently well.
 
         This test validates the critical contract:
@@ -286,7 +279,7 @@ class TestAdaptiveAnnealing:
         # Verify weight respects minimum floor
         assert final_weight >= 0.1, f"Weight should not go below minimum (0.1), got {final_weight}"
 
-    def test_annealing_requires_survival_above_50_steps(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_annealing_requires_survival_above_50_steps(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify annealing requires mean survival > 50 steps (prevents premature annealing).
 
         This test validates the critical fix for the "consistent failure" bug:
@@ -329,7 +322,7 @@ class TestAdaptiveAnnealing:
         weight_after = exploration.get_intrinsic_weight()
         assert weight_after < 1.0, f"Weight should decrease for consistent success: expected < 1.0, got {weight_after}"
 
-    def test_annealing_requires_low_variance(self, cpu_device, test_config_pack_path, cpu_env_factory):
+    def test_annealing_requires_low_variance(self, cpu_device, test_config_pack_path, cpu_env_factory, minimal_brain_config):
         """Verify annealing requires variance < threshold (prevents annealing during exploration).
 
         This test validates the critical contract:

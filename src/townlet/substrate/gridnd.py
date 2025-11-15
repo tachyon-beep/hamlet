@@ -481,6 +481,22 @@ class GridNDSubstrate(SpatialSubstrate):
         ranges = [range(dim_size) for dim_size in self.dimension_sizes]
         return [list(coords) for coords in itertools.product(*ranges)]
 
+    def get_capacity(self) -> int:
+        """Calculate total positions analytically (product of dimension sizes).
+
+        This is O(N) where N is number of dimensions, compared to O(∏ dimension_sizes)
+        for get_all_positions(). For a 7D grid with [5,5,5,5,5,5,5], this is:
+        - get_capacity(): 7 multiplications → instant
+        - len(get_all_positions()): Generate 78,125 positions → ~50ms
+
+        Returns:
+            Total number of positions in the N-dimensional grid
+        """
+        capacity = 1
+        for dim_size in self.dimension_sizes:
+            capacity *= dim_size
+        return capacity
+
     def supports_enumerable_positions(self) -> bool:
         return True
 

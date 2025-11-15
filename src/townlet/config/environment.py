@@ -25,16 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 class TrainingEnvironmentConfig(BaseModel):
-    """Environment configuration for training (observability, affordances, energy costs).
+    """Environment configuration for training (observability, affordances, placement).
 
     ALL FIELDS REQUIRED (no defaults) - enforces operator accountability.
     Operator must explicitly specify all parameters that affect the environment.
 
     Philosophy: If it affects the universe, it's in the config. No exceptions.
 
-    NOTE: This is for training hyperparameters (vision_range, energy costs).
+    NOTE: This is for training hyperparameters (vision_range, enabled_affordances).
     For spatial config (grid dimensions), use substrate.yaml.
     For game mechanics (bars, cascades), use cascade_config.EnvironmentConfig.
+    For action costs (base_move_depletion, base_interaction_cost), use bars.yaml.
 
     Example:
         >>> config = TrainingEnvironmentConfig(
@@ -42,9 +43,7 @@ class TrainingEnvironmentConfig(BaseModel):
         ...     vision_range=8,
         ...     enable_temporal_mechanics=False,
         ...     enabled_affordances=None,
-        ...     energy_move_depletion=0.005,
-        ...     energy_wait_depletion=0.001,
-        ...     energy_interact_depletion=0.0,
+        ...     randomize_affordances=False,
         ... )
     """
 
@@ -63,10 +62,7 @@ class TrainingEnvironmentConfig(BaseModel):
     # Placement control (REQUIRED)
     randomize_affordances: bool = Field(description="true = shuffle affordance positions each episode, false = use config positions")
 
-    # Action energy costs (ALL REQUIRED)
-    energy_move_depletion: float = Field(ge=0.0, description="Energy cost per movement action (as fraction of energy meter)")
-    energy_wait_depletion: float = Field(ge=0.0, description="Energy cost per WAIT action (as fraction of energy meter)")
-    energy_interact_depletion: float = Field(ge=0.0, description="Energy cost per INTERACT action (as fraction of energy meter)")
+    # NOTE: Action costs (base_move_depletion, base_interaction_cost) moved to bars.yaml (JANK-03)
 
     @model_validator(mode="after")
     def validate_enabled_affordances(self) -> "TrainingEnvironmentConfig":

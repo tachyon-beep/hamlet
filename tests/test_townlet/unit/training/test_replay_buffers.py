@@ -412,6 +412,199 @@ class TestReplayBufferDeviceHandling:
         assert batch["rewards"].device.type == "cuda"
 
 
+class TestReplayBufferClearAPI:
+    """Test clear() method for resetting buffer state."""
+
+    def test_clear_resets_counters(self):
+        """clear() should reset size and position to zero."""
+        buffer = ReplayBuffer(capacity=10)
+
+        # Add some transitions
+        for i in range(5):
+            obs = torch.tensor([[float(i)]])
+            buffer.push(
+                obs, torch.tensor([i]), torch.tensor([1.0]), torch.tensor([0.1]), torch.tensor([[float(i + 1)]]), torch.tensor([False])
+            )
+
+        assert buffer.size == 5
+        assert buffer.position == 5
+
+        buffer.clear()
+
+        assert buffer.size == 0
+        assert buffer.position == 0
+        assert len(buffer) == 0
+
+    def test_clear_deallocates_storage(self):
+        """clear() should set storage tensors to None to free memory."""
+        buffer = ReplayBuffer(capacity=10)
+
+        # Initialize storage
+        obs = torch.randn(2, 5)
+        buffer.push(
+            obs, torch.tensor([0, 1]), torch.tensor([1.0, 2.0]), torch.tensor([0.1, 0.2]), torch.randn(2, 5), torch.tensor([False, True])
+        )
+
+        assert buffer.observations is not None
+        assert buffer.actions is not None
+
+        buffer.clear()
+
+        assert buffer.observations is None
+        assert buffer.actions is None
+        assert buffer.rewards_extrinsic is None
+        assert buffer.rewards_intrinsic is None
+        assert buffer.next_observations is None
+        assert buffer.dones is None
+
+    def test_clear_idempotence(self):
+        """Calling clear() multiple times should be safe."""
+        buffer = ReplayBuffer(capacity=10)
+
+        # Clear empty buffer
+        buffer.clear()
+        assert buffer.size == 0
+
+        # Add data and clear
+        obs = torch.randn(3, 5)
+        buffer.push(
+            obs,
+            torch.tensor([0, 1, 2]),
+            torch.tensor([1.0, 2.0, 3.0]),
+            torch.tensor([0.1, 0.2, 0.3]),
+            torch.randn(3, 5),
+            torch.tensor([False, False, True]),
+        )
+        buffer.clear()
+
+        # Clear again (should be safe)
+        buffer.clear()
+        assert buffer.size == 0
+        assert buffer.observations is None
+
+    def test_buffer_works_after_clear(self):
+        """Buffer should work normally after clear()."""
+        buffer = ReplayBuffer(capacity=10)
+
+        # Fill buffer
+        for i in range(5):
+            obs = torch.tensor([[float(i)]])
+            buffer.push(
+                obs, torch.tensor([i]), torch.tensor([1.0]), torch.tensor([0.1]), torch.tensor([[float(i + 1)]]), torch.tensor([False])
+            )
+
+        buffer.clear()
+
+        # Should be able to push again
+        obs = torch.randn(2, 3)
+        buffer.push(
+            obs, torch.tensor([0, 1]), torch.tensor([1.0, 2.0]), torch.tensor([0.1, 0.2]), torch.randn(2, 3), torch.tensor([False, True])
+        )
+
+        assert buffer.size == 2
+        assert buffer.observations is not None
+        assert buffer.observations.shape == (10, 3)  # New obs_dim
+
+
+class TestReplayBufferStatsAPI:
+    """Test stats() method for buffer introspection."""
+
+    def test_stats_empty_buffer(self):
+        """stats() should work on empty buffer with unallocated storage."""
+        buffer = ReplayBuffer(capacity=100, device=torch.device("cpu"))
+
+        stats = buffer.stats()
+
+        assert stats["size"] == 0
+        assert stats["capacity"] == 100
+        assert stats["occupancy_ratio"] == 0.0
+        assert stats["memory_bytes"] == 0
+        assert stats["device"] == "cpu"
+
+    def test_stats_partially_filled(self):
+        """stats() should report correct values for partially filled buffer."""
+        buffer = ReplayBuffer(capacity=100, device=torch.device("cpu"))
+
+        # Add 10 transitions with obs_dim=5
+        obs = torch.randn(10, 5)
+        buffer.push(obs, torch.randint(0, 6, (10,)), torch.randn(10), torch.randn(10), torch.randn(10, 5), torch.rand(10) > 0.5)
+
+        stats = buffer.stats()
+
+        assert stats["size"] == 10
+        assert stats["capacity"] == 100
+        assert stats["occupancy_ratio"] == 0.1
+        assert stats["memory_bytes"] > 0  # Should have allocated memory
+        assert stats["device"] == "cpu"
+
+    def test_stats_full_buffer(self):
+        """stats() should show full occupancy when buffer is full."""
+        buffer = ReplayBuffer(capacity=10, device=torch.device("cpu"))
+
+        # Fill to capacity
+        obs = torch.randn(10, 5)
+        buffer.push(obs, torch.randint(0, 6, (10,)), torch.randn(10), torch.randn(10), torch.randn(10, 5), torch.rand(10) > 0.5)
+
+        stats = buffer.stats()
+
+        assert stats["size"] == 10
+        assert stats["capacity"] == 10
+        assert stats["occupancy_ratio"] == 1.0
+
+    def test_stats_memory_calculation(self):
+        """stats() should calculate approximate memory usage."""
+        buffer = ReplayBuffer(capacity=10, device=torch.device("cpu"))
+
+        # Empty buffer should report 0 bytes
+        assert buffer.stats()["memory_bytes"] == 0
+
+        # Add data (obs_dim=5)
+        obs = torch.randn(5, 5)
+        buffer.push(obs, torch.randint(0, 6, (5,)), torch.randn(5), torch.randn(5), torch.randn(5, 5), torch.rand(5) > 0.5)
+
+        stats = buffer.stats()
+
+        # Calculate expected memory (all tensors preallocated to capacity)
+        # observations: 10*5 floats, actions: 10 longs, etc.
+        expected_bytes = (
+            10 * 5 * 4  # observations (float32)
+            + 10 * 8  # actions (int64)
+            + 10 * 4  # rewards_extrinsic (float32)
+            + 10 * 4  # rewards_intrinsic (float32)
+            + 10 * 5 * 4  # next_observations (float32)
+            + 10 * 1  # dones (bool)
+        )
+
+        assert stats["memory_bytes"] == expected_bytes
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_stats_cuda_device(self):
+        """stats() should report correct device string for CUDA buffers."""
+        buffer = ReplayBuffer(capacity=10, device=torch.device("cuda"))
+
+        obs = torch.randn(5, 3)
+        buffer.push(obs, torch.randint(0, 6, (5,)), torch.randn(5), torch.randn(5), torch.randn(5, 3), torch.rand(5) > 0.5)
+
+        stats = buffer.stats()
+
+        assert "cuda" in stats["device"]
+
+    def test_stats_after_clear(self):
+        """stats() should show empty buffer after clear()."""
+        buffer = ReplayBuffer(capacity=10, device=torch.device("cpu"))
+
+        # Fill buffer
+        obs = torch.randn(5, 3)
+        buffer.push(obs, torch.randint(0, 6, (5,)), torch.randn(5), torch.randn(5), torch.randn(5, 3), torch.rand(5) > 0.5)
+
+        buffer.clear()
+        stats = buffer.stats()
+
+        assert stats["size"] == 0
+        assert stats["occupancy_ratio"] == 0.0
+        assert stats["memory_bytes"] == 0
+
+
 class TestReplayBufferEdgeCases:
     """Test edge cases and boundary conditions."""
 

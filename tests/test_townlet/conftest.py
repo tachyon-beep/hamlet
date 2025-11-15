@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+# WP-C2: BrainConfig fixtures
 from tests.test_townlet._fixtures.environment import SUBSTRATE_FIXTURES as _SUBSTRATE_FIXTURES
 
 pytest_plugins = [
@@ -17,6 +18,7 @@ pytest_plugins = [
     "tests.test_townlet._fixtures.variable_meters",
     "tests.test_townlet._fixtures.database",
     "tests.test_townlet._fixtures.utils",
+    "tests.test_townlet._fixtures.brain_configs",
 ]
 
 # Re-export for tests that import from the legacy location

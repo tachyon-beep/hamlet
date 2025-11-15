@@ -24,6 +24,9 @@ continuous:
   # Distance metric
   distance_metric: "euclidean"
 
+  # Observation encoding
+  observation_encoding: "relative"  # Normalized coordinates [0,1]
+
 # Use cases:
 # - 3D continuous navigation
 # - Drone/robot simulation

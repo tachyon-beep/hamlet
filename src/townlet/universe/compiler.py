@@ -27,6 +27,7 @@ from townlet.environment.cascade_config import (
     load_cascades_config as load_full_cascades_config,
 )
 from townlet.environment.substrate_action_validator import SubstrateActionValidator
+from townlet.environment.temporal_utils import is_affordance_open
 from townlet.substrate.config import SubstrateConfig
 from townlet.universe.adapters.vfs_adapter import VFSAdapter, vfs_to_observation_spec
 from townlet.universe.compiled import CompiledUniverse
@@ -360,6 +361,10 @@ class UniverseCompiler:
                 position_default = [0.0, 0.0]
                 position_desc = "Normalized agent position (x, y) in [0, 1] range"
 
+            # BUG-43 FIX: Always create BOTH grid_encoding and local_window variables
+            # Use curriculum_active masking to control which is observed (not variable creation)
+            # This enables transfer learning with constant obs_dim across full/partial observability
+
             # Grid encoding for full observability
             variables.append(
                 VariableDef(
@@ -375,33 +380,42 @@ class UniverseCompiler:
                 )
             )
 
-            # Local window for POMDP (if partial observability enabled)
+            # Local window for partial observability (POMDP)
+            # Always create this variable (even in full obs) for curriculum consistency
+            # BUG-43 FIX: Use vision_range ONLY when partial_observability=True
+            # Otherwise use a fixed POMDP vision range (2 for 2D → 5×5, 1 for 3D → 3×3×3)
+            # to ensure constant obs_dim across full/partial obs configs
             if raw_configs.environment.partial_observability:
-                vision_range = raw_configs.environment.vision_range or 3
-                if is_3d:
-                    # 3D POMDP: (2r+1)³ window
-                    window_size = (2 * vision_range + 1) ** 3
-                    window_dim = 2 * vision_range + 1
-                    window_desc = f"{window_dim}×{window_dim}×{window_dim} local observation window (POMDP 3D)"
-                else:
-                    # 2D POMDP: (2r+1)² window
-                    window_size = (2 * vision_range + 1) ** 2
-                    window_dim = 2 * vision_range + 1
-                    window_desc = f"{window_dim}×{window_dim} local observation window (POMDP)"
+                # POMDP mode: use actual vision_range (no hidden defaults - BUG-18 fix)
+                vision_range = raw_configs.environment.vision_range
+            else:
+                # Full obs mode: use fixed POMDP standard (matches typical POMDP configs)
+                vision_range = 1 if is_3d else 2  # 3×3×3 for 3D, 5×5 for 2D
 
-                variables.append(
-                    VariableDef(
-                        id="local_window",
-                        scope="agent",
-                        type="vecNf",
-                        dims=window_size,
-                        lifetime="tick",
-                        readable_by=["agent", "engine"],
-                        writable_by=["engine"],
-                        default=[0.0] * window_size,
-                        description=window_desc,
-                    )
+            if is_3d:
+                # 3D POMDP: (2r+1)³ window
+                window_size = (2 * vision_range + 1) ** 3
+                window_dim = 2 * vision_range + 1
+                window_desc = f"{window_dim}×{window_dim}×{window_dim} local observation window (POMDP 3D)"
+            else:
+                # 2D POMDP: (2r+1)² window
+                window_size = (2 * vision_range + 1) ** 2
+                window_dim = 2 * vision_range + 1
+                window_desc = f"{window_dim}×{window_dim} local observation window (POMDP)"
+
+            variables.append(
+                VariableDef(
+                    id="local_window",
+                    scope="agent",
+                    type="vecNf",
+                    dims=window_size,
+                    lifetime="tick",
+                    readable_by=["agent", "engine"],
+                    writable_by=["engine"],
+                    default=[0.0] * window_size,
+                    description=window_desc,
                 )
+            )
 
             # Position (normalized coordinates)
             variables.append(
@@ -1121,9 +1135,10 @@ class UniverseCompiler:
         self._validate_capacity_and_sustainability(raw_configs, errors, _format_error, allow_unfeasible)
 
     def _validate_spatial_feasibility(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
-        """Validate that substrate has enough space for all affordances + agent.
+        """Validate that substrate has enough space for all affordances + agents.
 
         Reads spatial dimensions from substrate.yaml (single source of truth).
+        Accounts for population.num_agents from training.yaml.
         Only applies to discrete grid substrates (grid, gridnd).
         """
         substrate = raw_configs.substrate
@@ -1171,11 +1186,13 @@ class UniverseCompiler:
         else:
             required = len(enabled_affordances)
 
-        required_cells = required + 1  # +1 for the agent
+        num_agents = raw_configs.population.num_agents
+        required_cells = required + num_agents
         if required_cells > grid_cells:
+            agent_label = "agent" if num_agents == 1 else "agents"
             message = (
                 f"Spatial impossibility: Grid has {grid_cells} cells ({dimensions_str}) but need {required_cells} "
-                f"({required} affordances + 1 agent)."
+                f"({required} affordances + {num_agents} {agent_label})."
             )
             errors.add(formatter("UAC-VAL-001", message, "substrate.yaml:grid"))
 
@@ -1259,9 +1276,8 @@ class UniverseCompiler:
 
     def _validate_operating_hours(self, raw_configs: RawConfigs, errors: CompilationErrorCollector, formatter) -> None:
         for affordance in raw_configs.affordances:
-            operating_hours = getattr(affordance, "operating_hours", None)
-            if not operating_hours:
-                continue
+            operating_hours = affordance.operating_hours
+            # operating_hours is now required by schema - no None check needed
             if len(operating_hours) != 2:
                 errors.add(
                     formatter(
@@ -1643,9 +1659,7 @@ class UniverseCompiler:
         if not raw_configs.environment.enable_temporal_mechanics:
             return 24.0
 
-        if any(getattr(aff, "operating_hours", None) is None for aff in income_affordances):
-            return 24.0
-
+        # operating_hours is now required by schema - no None check needed
         hours_with_income = 0
         for hour in range(24):
             if any(self._affordance_open_for_hour(aff, hour) for aff in income_affordances):
@@ -1653,11 +1667,11 @@ class UniverseCompiler:
         return float(hours_with_income)
 
     def _affordance_open_for_hour(self, affordance: AffordanceConfig, hour: int) -> bool:
-        operating_hours = getattr(affordance, "operating_hours", None)
-        if not operating_hours:
-            return True
-        open_hour, close_hour = operating_hours
-        return self._is_open(hour, open_hour, close_hour)
+        # operating_hours is now required by schema - no None check needed
+        # Convert list[int] to tuple[int, int] for is_affordance_open
+        # Pydantic ensures exactly 2 elements (Field(min_length=2, max_length=2))
+        open_hour, close_hour = affordance.operating_hours
+        return is_affordance_open(hour, (open_hour, close_hour))
 
     def _affordance_positive_amount_for_meter(self, affordance: AffordanceConfig, meter_name: str) -> float:
         pipeline = getattr(affordance, "effect_pipeline", None)
@@ -2091,12 +2105,11 @@ class UniverseCompiler:
         if affordance_count > 0:
             for hour in range(24):
                 for affordance_idx, affordance in enumerate(raw_configs.affordances):
-                    hours = getattr(affordance, "operating_hours", None)
-                    if not hours:
-                        action_mask_table[hour, affordance_idx] = True
-                        continue
-                    open_hour, close_hour = hours
-                    action_mask_table[hour, affordance_idx] = self._is_open(hour, open_hour, close_hour)
+                    # operating_hours is now required by schema - no None check needed
+                    # Convert list[int] to tuple[int, int] for is_affordance_open
+                    # Pydantic ensures exactly 2 elements (Field(min_length=2, max_length=2))
+                    open_hour, close_hour = affordance.operating_hours
+                    action_mask_table[hour, affordance_idx] = is_affordance_open(hour, (open_hour, close_hour))
 
         affordance_position_map = {
             aff.id: self._tensorize_affordance_position(getattr(aff, "position", None), torch_device) for aff in raw_configs.affordances
@@ -2131,39 +2144,11 @@ class UniverseCompiler:
         all_variables = list(symbol_table.variables.values())
 
         # Build observation activity metadata for masking
-        # Convert observation_spec fields back to VFS format for activity building
-        from typing import Literal
-
-        from townlet.vfs.schema import ObservationField as VFSObservField
-
-        vfs_fields_for_activity = []
-        for field in observation_spec.fields:
-            # Map semantic_type from observation spec to VFS field
-            semantic_map: dict[str | None, Literal["bars", "spatial", "affordance", "temporal", "custom"]] = {
-                "position": "spatial",
-                "meter": "bars",
-                "affordance": "affordance",
-                "temporal": "temporal",
-                None: "custom",
-            }
-            semantic_type = semantic_map.get(field.semantic_type, "custom")
-
-            # Create VFS field with curriculum_active=True (all fields in observation_spec are active)
-            vfs_fields_for_activity.append(
-                VFSObservField(
-                    id=field.name,
-                    source_variable=field.description or field.name,
-                    exposed_to=["agent"],
-                    shape=[field.dims] if field.dims > 0 else [],
-                    normalization=None,
-                    semantic_type=semantic_type,
-                    curriculum_active=True,  # All fields in observation_spec are active
-                )
-            )
-
+        # BUG-43 FIX: Use the original vfs_observation_fields which preserve curriculum_active
+        # instead of reconstructing them from observation_spec (which loses that information)
         field_uuids = {field.name: field.uuid for field in observation_spec.fields if field.uuid is not None}
         observation_activity = VFSAdapter.build_observation_activity(
-            observation_spec=vfs_fields_for_activity,
+            observation_spec=list(vfs_observation_fields),
             field_uuids=field_uuids,
         )
 
@@ -2306,18 +2291,48 @@ class UniverseCompiler:
 
         Design principle: All variables (standard + custom) are automatically observable.
         The exposed_observations field in variables_reference.yaml is deprecated/ignored.
+
+        BUG-43 FIX: Instead of filtering out grid_encoding or local_window, we keep BOTH
+        and mark them with curriculum_active to enable transfer learning across full/partial obs.
         """
         # Auto-generate exposures for ALL variables (standard system + custom computed)
         exposures = self._auto_generate_standard_exposures(symbol_table)
 
-        # Filter based on POMDP mode (only keep grid_encoding OR local_window, not both)
-        if raw_configs.environment.partial_observability:
-            # POMDP mode: use local window instead of full grid
-            # Keep affordance_at_position for transfer learning (padded with zeros in environment)
-            exposures = [obs for obs in exposures if obs.get("source_variable") != "grid_encoding"]
-        else:
-            # Full observability: use grid encoding instead of local window
-            exposures = [obs for obs in exposures if obs.get("source_variable") != "local_window"]
+        # Mark spatial observation fields with curriculum_active based on partial_observability
+        # This creates a superset observation contract where obs_dim stays constant across levels
+        # Also set semantic_type for proper group_slices organization
+        partial_obs = raw_configs.environment.partial_observability
+
+        # Get meter names for semantic_type inference
+        meter_names = {bar.name for bar in raw_configs.bars}
+
+        for exposure in exposures:
+            source_var = exposure.get("source_variable")
+
+            if source_var == "grid_encoding":
+                # grid_encoding active in full obs, inactive in partial obs
+                exposure["curriculum_active"] = not partial_obs
+                exposure["semantic_type"] = "spatial"  # BUG-43: Mark as spatial for group_slices
+            elif source_var == "local_window":
+                # local_window active in partial obs, inactive in full obs
+                exposure["curriculum_active"] = partial_obs
+                exposure["semantic_type"] = "spatial"  # BUG-43: Mark as spatial for group_slices
+            else:
+                # All other fields are always active
+                exposure["curriculum_active"] = True
+
+                # Infer semantic_type from source_variable name (same logic as _semantic_from_name)
+                # Add None check to avoid AttributeError
+                if source_var is not None:
+                    if "position" in source_var.lower():
+                        exposure["semantic_type"] = "spatial"
+                    elif source_var in meter_names:
+                        exposure["semantic_type"] = "bars"
+                    elif "affordance" in source_var.lower():
+                        exposure["semantic_type"] = "affordance"
+                    elif "time" in source_var.lower() or "temporal" in source_var.lower() or "lifetime" in source_var.lower():
+                        exposure["semantic_type"] = "temporal"
+                    # else: default to "custom" (handled by ObservationField schema default)
 
         return exposures
 
@@ -2525,18 +2540,5 @@ class UniverseCompiler:
 
         return None
 
-    @staticmethod
-    def _is_open(hour: int, open_hour: int, close_hour: int) -> bool:
-        """Return True if an affordance is open for the given hour."""
 
-        hour %= 24
-        open_mod = open_hour % 24
-        close_mod = close_hour % 24
-
-        # 24/7 if interval covers full day
-        if (close_hour - open_hour) % 24 == 0:
-            return True
-
-        if open_mod < close_mod:
-            return open_mod <= hour < close_mod
-        return hour >= open_mod or hour < close_mod
+# DELETED: _is_open() wrapper - now using temporal_utils.is_affordance_open() directly (JANK-09 fix)

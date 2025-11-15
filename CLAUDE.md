@@ -171,8 +171,10 @@ src/townlet/
 **Observation Encoding Modes** (configurable via `substrate.yaml`):
 
 - **relative** (default): Normalized [0,1] coordinates - best for transfer learning, required for POMDP
-- **scaled**: Normalized + range metadata - network learns grid size matters
+- **scaled**: Coordinates scaled to grid dimensions [0, grid_size] - value range conveys grid size implicitly
 - **absolute**: Raw unnormalized coordinates - for physical simulation
+
+**Note**: All encoding modes produce **identical obs_dim** (2 dims for position). Only the value range changes, not the number of dimensions.
 
 **Observation Dimensions** (Grid2D with "relative" encoding):
 

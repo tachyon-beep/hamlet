@@ -50,7 +50,7 @@ def exploration(env, cpu_device):
 
 
 @pytest.fixture
-def population(env, adversarial_curriculum, exploration, cpu_device):
+def population(env, adversarial_curriculum, exploration, cpu_device, minimal_brain_config):
     """Population with adversarial curriculum."""
     return VectorizedPopulation(
         env=env,
@@ -60,9 +60,7 @@ def population(env, adversarial_curriculum, exploration, cpu_device):
         device=cpu_device,
         obs_dim=env.observation_dim,
         action_dim=env.action_dim,  # Use env's actual action dim (6 actions)
-        learning_rate=0.00025,
-        gamma=0.99,
-        network_type="simple",
+        brain_config=minimal_brain_config,
     )
 
 
@@ -232,7 +230,7 @@ class TestCurriculumSignalInterpretability:
         # Or if it's just the last value, 150 > 50
         assert reward_150 > reward_50
 
-    def test_signal_purity_across_multiple_episodes_with_active_rnd(self, cpu_device, cpu_env_factory):
+    def test_signal_purity_across_multiple_episodes_with_active_rnd(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify curriculum receives pure survival time over 10 episodes with active RND.
 
         Critical integration test: Run multiple episodes with active RND exploration
@@ -263,9 +261,7 @@ class TestCurriculumSignalInterpretability:
             device=cpu_device,
             obs_dim=env.observation_dim,
             action_dim=env.action_dim,
-            learning_rate=0.00025,
-            gamma=0.99,
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Run 10 episodes, tracking curriculum rewards
@@ -308,7 +304,7 @@ class TestCurriculumSignalInterpretability:
         for i, curr_r in enumerate(curriculum_rewards_log):
             assert curr_r > 0, f"Episode {i}: Curriculum should see survival time > 0"
 
-    def test_curriculum_stage_advancement_uses_survival_rate_not_rewards(self, cpu_device, cpu_env_factory):
+    def test_curriculum_stage_advancement_uses_survival_rate_not_rewards(self, cpu_device, cpu_env_factory, minimal_brain_config):
         """Verify stage transitions based on survival rate, not reward magnitude.
 
         Critical integration test: Run episodes with varying survival times
@@ -345,9 +341,7 @@ class TestCurriculumSignalInterpretability:
             device=cpu_device,
             obs_dim=env.observation_dim,
             action_dim=env.action_dim,
-            learning_rate=0.00025,
-            gamma=0.99,
-            network_type="simple",
+            brain_config=minimal_brain_config,
         )
 
         # Scenario 1: High survival rate (90 steps) should consider advancement

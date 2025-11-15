@@ -105,37 +105,6 @@ class HamletConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def validate_recurrent_network_consistency(self) -> "HamletConfig":
-        """Warn if network_type doesn't match observability mode.
-
-        NOTE: This is a HINT, not enforcement. Operator may intentionally
-        use recurrent networks with full observability for experimentation.
-
-        Follows permissive semantics: allow unusual combinations but warn.
-        """
-        if self.population.network_type == "recurrent" and not self.environment.partial_observability:
-            logger.warning(
-                "Using recurrent network (LSTM) with full observability. "
-                "Recurrent networks are typically for POMDP (partial_observability=true). "
-                "This configuration is allowed but unusual. "
-                "Typical combinations:\n"
-                "  - Simple network + Full obs (L0, L0.5, L1)\n"
-                "  - Recurrent network + POMDP (L2)\n"
-                "This may be intentional for your experiment."
-            )
-
-        if self.population.network_type == "simple" and self.environment.partial_observability:
-            logger.warning(
-                "Using simple network (MLP) with partial observability (POMDP). "
-                "POMDP typically requires recurrent networks (LSTM) to build memory. "
-                "Simple networks are memoryless and may struggle with POMDP. "
-                "This configuration is allowed but may perform poorly. "
-                "Consider: network_type='recurrent' for POMDP environments."
-            )
-
-        return self
-
-    @model_validator(mode="after")
     def validate_grid_capacity(self) -> "HamletConfig":
         """Warn if grid may be too small for agents + affordances.
 

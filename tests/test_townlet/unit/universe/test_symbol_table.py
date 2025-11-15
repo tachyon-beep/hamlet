@@ -13,7 +13,16 @@ from townlet.vfs.schema import VariableDef
 
 def test_duplicate_meter_registration_raises():
     table = UniverseSymbolTable()
-    bar = BarConfig(name="energy", index=0, tier="pivotal", range=[0.0, 1.0], initial=1.0, base_depletion=0.1)
+    bar = BarConfig(
+        name="energy",
+        index=0,
+        tier="pivotal",
+        range=[0.0, 1.0],
+        initial=1.0,
+        base_depletion=0.1,
+        base_move_depletion=0.0,
+        base_interaction_cost=0.0,
+    )
 
     table.register_meter(bar)
     with pytest.raises(CompilationError):
@@ -88,6 +97,7 @@ def test_duplicate_affordance_registration_raises():
         interaction_type="instant",
         costs=[],
         effect_pipeline={"instant": [{"meter": "energy", "amount": 0.5}]},
+        operating_hours=[0, 24],  # Required by BUG-30 fix
     )
 
     table.register_affordance(affordance)

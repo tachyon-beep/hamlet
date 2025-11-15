@@ -2,7 +2,7 @@
 AffordanceEngine: Config-driven affordance interaction system.
 
 This module processes affordance interactions using YAML configuration instead
-of hardcoded logic. Follows the same pattern as CascadeEngine (ACTION #1).
+of hardcoded logic. Follows the same pattern as MeterDynamics (ACTION #1).
 
 Architecture:
 - Load affordance configs at initialization
@@ -28,6 +28,7 @@ from townlet.environment.affordance_config import (
     AffordanceConfigCollection,
     load_affordance_config,
 )
+from townlet.environment.temporal_utils import is_affordance_open as canonical_is_affordance_open
 
 
 class AffordanceEngine:
@@ -94,8 +95,7 @@ class AffordanceEngine:
         return self.affordance_map_by_id.get(affordance_id)
 
     def is_affordance_open(self, affordance_name: str, time_of_day: int) -> bool:
-        """
-        Check if affordance is open at given time.
+        """Check if affordance is open at given time.
 
         Args:
             affordance_name: Name of affordance (e.g., "Job", "Bar")
@@ -103,21 +103,16 @@ class AffordanceEngine:
 
         Returns:
             True if open, False if closed
+
+        Note:
+            Delegates to canonical temporal_utils.is_affordance_open() to avoid
+            logic drift (see JANK-09). Do not re-implement this logic.
         """
         affordance = self.affordance_map.get(affordance_name)
         if affordance is None:
             return False
 
-        open_hour, close_hour = affordance.operating_hours
-
-        # Handle midnight wraparound (e.g., Bar: [18, 28] = 6pm-4am)
-        if close_hour > 24:
-            close_hour_adjusted = close_hour % 24
-            # Open if: time >= open_hour OR time < close_hour_adjusted
-            return bool(time_of_day >= open_hour or time_of_day < close_hour_adjusted)
-        else:
-            # Normal hours: time >= open_hour AND time < close_hour
-            return bool(open_hour <= time_of_day < close_hour)
+        return canonical_is_affordance_open(time_of_day, affordance.operating_hours)
 
     def apply_instant_interaction(
         self,

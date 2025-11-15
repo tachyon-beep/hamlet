@@ -167,7 +167,7 @@ class Grid2DSubstrate(SpatialSubstrate):
                 type="movement",
                 delta=[0, -1],
                 teleport_to=None,
-                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                costs={"energy": 0.005},  # JANK-02: Only energy cost (works with all meter configs)
                 effects={},
                 description="Move one cell upward (north)",
                 icon=None,
@@ -181,7 +181,7 @@ class Grid2DSubstrate(SpatialSubstrate):
                 type="movement",
                 delta=[0, 1],
                 teleport_to=None,
-                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                costs={"energy": 0.005},  # JANK-02: Only energy cost (works with all meter configs)
                 effects={},
                 description="Move one cell downward (south)",
                 icon=None,
@@ -195,7 +195,7 @@ class Grid2DSubstrate(SpatialSubstrate):
                 type="movement",
                 delta=[-1, 0],
                 teleport_to=None,
-                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                costs={"energy": 0.005},  # JANK-02: Only energy cost (works with all meter configs)
                 effects={},
                 description="Move one cell left (west)",
                 icon=None,
@@ -209,7 +209,7 @@ class Grid2DSubstrate(SpatialSubstrate):
                 type="movement",
                 delta=[1, 0],
                 teleport_to=None,
-                costs={"energy": 0.005, "hygiene": 0.003, "satiation": 0.004},
+                costs={"energy": 0.005},  # JANK-02: Only energy cost (works with all meter configs)
                 effects={},
                 description="Move one cell right (east)",
                 icon=None,
@@ -479,6 +479,10 @@ class Grid2DSubstrate(SpatialSubstrate):
     def get_all_positions(self) -> list[list[int]]:
         """Return all grid positions."""
         return [[x, y] for x in range(self.width) for y in range(self.height)]
+
+    def get_capacity(self) -> int:
+        """Calculate total positions analytically (width × height)."""
+        return self.width * self.height
 
     def encode_partial_observation(
         self,

@@ -31,15 +31,11 @@ BASE_CONFIG = {
         "enable_temporal_mechanics": False,
         "enabled_affordances": None,
         "randomize_affordances": True,
-        "energy_move_depletion": 0.005,
-        "energy_wait_depletion": 0.001,
-        "energy_interact_depletion": 0.0,
     },
     "population": {
         "num_agents": 1,
-        "network_type": "simple",
         "mask_unused_obs": False,
-        # learning_rate, gamma, replay_buffer_capacity managed by brain.yaml
+        # learning_rate, gamma, replay_buffer_capacity, network_type managed by brain.yaml
     },
     "curriculum": {
         "max_steps_per_episode": 50,
@@ -118,4 +114,13 @@ def mutate_brain_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> None
     data = yaml.safe_load(brain_yaml.read_text())
     mutator(data)
     with open(brain_yaml, "w") as handle:
+        yaml.safe_dump(data, handle, sort_keys=False)
+
+
+def mutate_substrate_yaml(config_dir: Path, mutator: Callable[[dict], None]) -> None:
+    """Load substrate.yaml, apply mutator, and write back."""
+    substrate_yaml = config_dir / "substrate.yaml"
+    data = yaml.safe_load(substrate_yaml.read_text())
+    mutator(data)
+    with open(substrate_yaml, "w") as handle:
         yaml.safe_dump(data, handle, sort_keys=False)

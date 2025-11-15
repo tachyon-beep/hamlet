@@ -6,12 +6,11 @@
 # Q-learning: Double DQN
 # Schedule: Constant learning rate
 #
-# This configuration is NOT optimized - it's just to satisfy the requirement
-# that all config packs must have brain.yaml (no backwards compatibility).
+
 
 version: "1.0"
 
-description: "Default brain config - NEEDS CALIBRATION"
+description: "N1 Brain config for debugging - adjusted learning rate"
 
 architecture:
   type: feedforward

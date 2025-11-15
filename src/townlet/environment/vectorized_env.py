@@ -159,9 +159,8 @@ class VectorizedHamletEnv:
         self.partial_observability = env_cfg.partial_observability
         self.vision_range = env_cfg.vision_range
         self.enable_temporal_mechanics = env_cfg.enable_temporal_mechanics
-        self.move_energy_cost = env_cfg.energy_move_depletion
-        self.wait_energy_cost = env_cfg.energy_wait_depletion
-        self.interact_energy_cost = env_cfg.energy_interact_depletion
+        # NOTE: Action costs now read from bars.yaml (base_move_depletion, base_interaction_cost)
+        # Removed: self.move_energy_cost, self.wait_energy_cost, self.interact_energy_cost
         self.agent_lifespan = curriculum.max_steps_per_episode
         partial_observability = self.partial_observability
         vision_range = self.vision_range
@@ -606,13 +605,18 @@ class VectorizedHamletEnv:
             observations: [num_agents, observation_dim]
         """
         # Refresh affordance layout each episode so randomization/configured layouts stay in sync
+        # BUG-15 fix: randomize_affordance_positions() now returns agent positions to prevent collisions
         if self.randomize_affordances:
-            self.randomize_affordance_positions()
+            agent_positions = self.randomize_affordance_positions()
+            # Use returned positions (guaranteed collision-free with affordances)
+            self.positions = (
+                agent_positions if agent_positions is not None else self.substrate.initialize_positions(self.num_agents, self.device)
+            )
         else:
             self._apply_configured_affordance_positions()
-
-        # Use substrate for position initialization (supports grid and aspatial)
-        self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
+            # When using configured positions, agents still spawn randomly (could still collide)
+            # TODO: Consider also handling configured affordance case for complete collision-free guarantee
+            self.positions = self.substrate.initialize_positions(self.num_agents, self.device)
 
         # Initial meter values (normalized to [0, 1]) from compiled bars config
         self.meters = self.initial_meter_values.unsqueeze(0).expand(self.num_agents, -1).clone()
@@ -1050,29 +1054,17 @@ class VectorizedHamletEnv:
         if substrate_mask.any():
             movement_mask[substrate_mask] = movement_actions[actions[substrate_mask]]
         if movement_mask.any():
-            # TASK-001: Create dynamic cost tensor based on meter_count
+            # Create dynamic cost tensor from bars.yaml (base_move_depletion per meter)
             movement_costs = torch.zeros(self.meter_count, device=self.device)
-            movement_costs[self.energy_idx] = self.move_energy_cost  # Energy (configurable, default 0.5%)
-            if self.hygiene_idx is not None:
-                movement_costs[self.hygiene_idx] = 0.003  # Hygiene: -0.3%
-            if self.satiation_idx is not None:
-                movement_costs[self.satiation_idx] = 0.004  # Satiation: -0.4%
+            for bar in self.universe.bars:
+                movement_costs[bar.index] = bar.base_move_depletion
 
             self.meters[movement_mask] -= movement_costs.unsqueeze(0)
             self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
-        # WAIT action - lighter energy cost
-        # Use cached WAIT index (from ActionSpaceBuilder)
-        wait_action_idx = self.wait_action_idx
-
-        wait_mask = (actions == wait_action_idx) & substrate_mask
-        if wait_mask.any():
-            # TASK-001: Create dynamic cost tensor based on meter_count
-            wait_costs = torch.zeros(self.meter_count, device=self.device)
-            wait_costs[self.energy_idx] = self.wait_energy_cost  # Energy (configurable, default 0.1%)
-
-            self.meters[wait_mask] -= wait_costs.unsqueeze(0)
-            self.meters = torch.clamp(self.meters, 0.0, 1.0)
+        # WAIT action - NO additional cost
+        # WAIT only pays base_depletion (handled by MeterDynamics), no action-specific cost
+        # This is architecturally correct: WAIT = existence without action
 
         # Handle INTERACT actions
         # Use cached INTERACT index (from ActionSpaceBuilder)
@@ -1081,6 +1073,14 @@ class VectorizedHamletEnv:
         successful_interactions = {}
         interact_mask = (actions == interact_action_idx) & substrate_mask
         if interact_mask.any():
+            # Apply interaction costs from bars.yaml (base_interaction_cost per meter)
+            interaction_costs = torch.zeros(self.meter_count, device=self.device)
+            for bar in self.universe.bars:
+                interaction_costs[bar.index] = bar.base_interaction_cost
+
+            self.meters[interact_mask] -= interaction_costs.unsqueeze(0)
+            self.meters = torch.clamp(self.meters, 0.0, 1.0)
+
             successful_interactions = self._handle_interactions(interact_mask)
 
         return successful_interactions
@@ -1241,7 +1241,8 @@ class VectorizedHamletEnv:
         if self.exploration_module is not None:
             # Get current observations for intrinsic reward computation
             observations = self._get_observations()
-            intrinsic_raw = self.exploration_module.compute_intrinsic_rewards(observations, update_stats=False)
+            # BUG-22 FIX: Update stats during training rollouts so normalization tracks distribution
+            intrinsic_raw = self.exploration_module.compute_intrinsic_rewards(observations, update_stats=True)
         else:
             # Fallback to zeros if no exploration module is set
             intrinsic_raw = torch.zeros(self.num_agents, device=self.device)
@@ -1485,47 +1486,80 @@ class VectorizedHamletEnv:
         # Clamp meters to [0, 1]
         self.meters = torch.clamp(self.meters, 0.0, 1.0)
 
-    def randomize_affordance_positions(self) -> None:
-        """Randomize affordance positions using substrate-provided layouts."""
+    def randomize_affordance_positions(self) -> torch.Tensor | None:
+        """Randomize affordance positions and return agent spawn positions.
+
+        Returns:
+            Agent spawn positions [num_agents, position_dim] or None if not randomizing.
+            Positions are guaranteed collision-free with affordances.
+
+        Note:
+            BUG-15 fix: Samples (affordances + agents) positions together to prevent
+            agents spawning on top of affordances.
+        """
 
         if not self.randomize_affordances:
-            return
+            return None
 
         if not self.affordances:
-            return
+            return None
 
         # Aspatial universes have no coordinates; store empty tensors for consistency
         if self.substrate.position_dim == 0:
             empty = torch.zeros(0, dtype=self.substrate.position_dtype, device=self.device)
             for name in self.affordances.keys():
                 self.affordances[name] = empty.clone()
-            return
+            # Return empty agent positions for aspatial
+            return torch.zeros(self.num_agents, 0, dtype=self.substrate.position_dtype, device=self.device)
 
-        try:
-            all_positions = self.substrate.get_all_positions()
-        except NotImplementedError:
-            all_positions = None
+        # Check capacity analytically without enumerating positions (JANK-10 fix)
+        capacity = self.substrate.get_capacity()
 
-        if all_positions:
-            total_positions = len(all_positions)
+        # If capacity is finite, validate there's enough space
+        if capacity is not None:
             required_slots = len(self.affordances) + self.num_agents
-            if required_slots > total_positions:
+            if required_slots > capacity:
                 raise ValueError(
-                    f"Substrate exposes {total_positions} positions but {len(self.affordances)} affordances + "
+                    f"Substrate has {capacity} positions but {len(self.affordances)} affordances + "
                     f"{self.num_agents} agents require more space."
                 )
 
-            random.shuffle(all_positions)
-            for idx, name in enumerate(self.affordances.keys()):
-                tensor_pos = torch.tensor(
-                    all_positions[idx],
-                    dtype=self.substrate.position_dtype,
-                    device=self.device,
-                )
-                self.affordances[name] = tensor_pos
-            return
+        # Sample (affordances + agents) positions together (BUG-15 fix)
+        # For discrete grids: retry on collision to guarantee unique positions
+        # For continuous: collisions are acceptable (infinite positions)
+        total_positions_needed = len(self.affordances) + self.num_agents
+        sampled = None
 
-        # Continuous substrates expose infinite positions; sample using initializer
-        sampled = self.substrate.initialize_positions(len(self.affordances), self.device)
+        if capacity is not None:
+            # Discrete grid: try random sampling with collision detection
+            max_attempts = 10
+            for attempt in range(max_attempts):
+                sampled = self.substrate.initialize_positions(total_positions_needed, self.device)
+
+                # Convert positions to tuples for uniqueness check
+                positions_as_tuples = [tuple(sampled[i].tolist()) for i in range(total_positions_needed)]
+                if len(positions_as_tuples) == len(set(positions_as_tuples)):
+                    break  # No collisions, we're done
+            else:
+                # Retries exhausted (very rare for large grids, possible for small grids)
+                # Fall back to enumeration to guarantee collision-free placement
+                all_positions = self.substrate.get_all_positions()
+                random.shuffle(all_positions)
+                sampled = torch.stack(
+                    [
+                        torch.tensor(all_positions[idx], dtype=self.substrate.position_dtype, device=self.device)
+                        for idx in range(total_positions_needed)
+                    ]
+                )
+        else:
+            # Continuous/aspatial: sample directly (infinite positions, collisions OK)
+            sampled = self.substrate.initialize_positions(total_positions_needed, self.device)
+
+        # Split: first N for affordances, remaining M for agents
+        affordance_positions = sampled[: len(self.affordances)]
+        agent_positions = sampled[len(self.affordances) :]
+
         for idx, name in enumerate(self.affordances.keys()):
-            self.affordances[name] = sampled[idx].clone()
+            self.affordances[name] = affordance_positions[idx].clone()
+
+        return agent_positions

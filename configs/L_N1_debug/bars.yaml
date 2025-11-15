@@ -1,34 +1,43 @@
-# bars.yaml - Meter Definitions & Base Depletion Rates
-
-version: "1.0"
-description: "Default meter configuration for Hamlet Level N1 - Debugging with energy."
-
+version: '1.0'
+description: Default meter configuration for Hamlet Level N1 - Debugging with energy.
 bars:
-  # PIVOTAL METERS: Death if <= 0
-
-  - name: "energy"
-    index: 0
-    tier: "pivotal"
-    range: [0.0, 1.0]
-    initial: 1.0
-    base_depletion: 0.01  # 1% per step
-    description: "Can you move? Death if depleted. Affected by satiation (fundamental) and mood (specialized)."
-
-  - name: "money"
-    index: 1
-    tier: "resource"
-    range: [0.0, 1.0]  # $0-$100 normalized to [0.0, 1.0]
-    initial: 0.25       # Start with $25 so they run out and learn that money is important.
-    base_depletion: 0.0  # No passive decay
-    description: "Currency for purchasing affordances. No cascade effects."
-
-# Terminal conditions (death)
+- name: energy
+  index: 0
+  tier: pivotal
+  range:
+  - 0.0
+  - 1.0
+  initial: 1.0
+  base_depletion: 0.01
+  description: Can you move? Death if depleted.
+  base_move_depletion: 0.005
+  base_interaction_cost: 0.005
+- name: money
+  index: 1
+  tier: resource
+  range:
+  - 0.0
+  - 1.0
+  initial: 0.25
+  base_depletion: 0.0
+  description: Currency for purchasing affordances. No cascade effects.
+  base_move_depletion: 0.0
+  base_interaction_cost: 0.0
+- name: mood
+  index: 2
+  tier: secondary
+  range:
+  - 0.0
+  - 1.0
+  initial: 0.7
+  base_depletion: 0.001
+  description: Mental well-being meter
+  base_move_depletion: 0.0
+  base_interaction_cost: 0.0
 terminal_conditions:
-  - meter: "energy"
-    operator: "<="
-    value: 0.0
-    description: "Agent dies if energy depletes to zero"
-
-# Metadata
+- meter: energy
+  operator: <=
+  value: 0.0
+  description: Agent dies if energy depletes to zero
 notes:
-  - "Simple linear depletion for baseline."
+- Simple linear depletion for baseline.

@@ -29,7 +29,9 @@ class BarConfig(BaseModel):
         ...     tier="pivotal",
         ...     range=[0.0, 1.0],
         ...     initial=1.0,
-        ...     base_depletion=0.005,
+        ...     base_depletion=0.01,
+        ...     base_move_depletion=0.005,
+        ...     base_interaction_cost=0.005,
         ... )
     """
 
@@ -48,8 +50,18 @@ class BarConfig(BaseModel):
     # Initial state (REQUIRED)
     initial: float = Field(description="Starting value (must be within range)")
 
-    # Decay rate (REQUIRED)
-    base_depletion: float = Field(description="Passive depletion per step")
+    # Decay rates (REQUIRED)
+    base_depletion: float = Field(description="Passive depletion per step (existence cost)")
+    base_move_depletion: float = Field(
+        ge=0.0,
+        description="Additional depletion per movement action (on top of base_depletion). "
+        "Total movement cost = base_depletion + base_move_depletion.",
+    )
+    base_interaction_cost: float = Field(
+        ge=0.0,
+        description="Additional depletion per INTERACT action (on top of base_depletion). "
+        "Total interaction cost = base_depletion + base_interaction_cost.",
+    )
 
     # Metadata (OPTIONAL)
     description: str | None = None

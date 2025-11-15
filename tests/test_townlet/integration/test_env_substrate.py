@@ -102,27 +102,21 @@ def test_env_randomizes_affordances_via_substrate(cpu_env_factory):
     ],
 )
 def test_env_observation_dim_unchanged(cpu_env_factory, config_name):
-    """Environment with substrate.yaml using coordinate encoding (all same dims)."""
+    """Environment observation_dim should match compiled universe metadata (BUG-43)."""
     config_path = Path("configs") / config_name
     env = cpu_env_factory(config_dir=config_path, num_agents=1)
 
-    # Calculate expected observation dimension based on observability mode
-    # Note: VFS adds velocity variables (velocity_x, velocity_y, velocity_magnitude)
-    velocity_dims = 3  # Grid2D velocity components
+    # BUG-43: After curriculum masking fix, obs_dim comes from compiled universe metadata
+    # The environment should use the obs_dim from the compiled universe, not calculate it
+    # This obs_dim is constant across curriculum levels (e.g., L1 and L2 both have 121)
+    # because both spatial views (grid_encoding and local_window) are always present (one masked)
 
-    if env.partial_observability:
-        # POMDP: local_window + position + velocity + meters + affordances + temporal
-        window_size = 2 * env.vision_range + 1
-        local_window_dim = window_size**env.substrate.position_dim
-        expected_obs_dim = (
-            local_window_dim + env.substrate.position_dim + velocity_dims + env.meter_count + (env.num_affordance_types + 1) + 4
-        )
-    else:
-        # Full observability: grid_encoding + position + velocity + meters + affordances + temporal
-        expected_obs_dim = env.substrate.get_observation_dim() + velocity_dims + env.meter_count + (env.num_affordance_types + 1) + 4
+    # Environment obs_dim should match universe metadata
+    assert env.observation_dim == env.universe.metadata.observation_dim
 
-    # Observation dimension should match expected breakdown
-    assert env.observation_dim == expected_obs_dim
+    # Observation shape should match obs_dim
+    obs = env.reset()
+    assert obs.shape[1] == env.observation_dim
 
     # Verify substrate loaded correctly
     assert env.substrate is not None

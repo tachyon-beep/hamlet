@@ -24,16 +24,11 @@ environment:
   enable_temporal_mechanics: false
   enabled_affordances: null
   randomize_affordances: true
-  energy_move_depletion: 0.005
-  energy_wait_depletion: 0.001
-  energy_interact_depletion: 0.0
 
+# Network architecture is managed by brain.yaml:architecture.type
+# ("feedforward" → SimpleQNetwork, "recurrent" → RecurrentSpatialQNetwork)
 population:
   num_agents: 1
-  learning_rate: 0.00025
-  gamma: 0.99
-  replay_buffer_capacity: 10000
-  network_type: simple
   mask_unused_obs: false  # Don't mask observations (standard behavior)
 
 curriculum:

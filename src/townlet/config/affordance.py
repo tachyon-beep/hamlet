@@ -49,7 +49,9 @@ class AffordanceConfig(BaseModel):
 
     # Temporal metadata
     duration_ticks: int | None = None
-    operating_hours: list[int] | None = Field(default=None, description="Operating hours [open, close] or None for always open")
+    operating_hours: list[int] = Field(
+        min_length=2, max_length=2, description="Operating hours [open_hour, close_hour]. For 24/7 availability, use [0, 24]"
+    )
     modes: dict[str, ModeConfig] = Field(default_factory=dict, description="Optional operating modes (coffee vs bar, etc.)")
     availability: list[BarConstraint] = Field(default_factory=list, description="Meter-based availability constraints")
 
@@ -62,11 +64,8 @@ class AffordanceConfig(BaseModel):
 
     @field_validator("operating_hours")
     @classmethod
-    def validate_operating_hours(cls, value: list[int] | None) -> list[int] | None:
-        if value is None:
-            return None
-        if len(value) != 2:
-            raise ValueError("operating_hours must contain [open_hour, close_hour]")
+    def validate_operating_hours(cls, value: list[int]) -> list[int]:
+        # Length validation handled by Field(min_length=2, max_length=2)
         open_hour, close_hour = value
         if not (0 <= open_hour <= 23):
             raise ValueError(f"open_hour must be 0-23, got {open_hour}")

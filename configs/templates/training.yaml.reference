@@ -52,10 +52,11 @@ environment:
   # Enabled affordances (REQUIRED)
   enabled_affordances: null  # null = all affordances, or list: ["Bed", "Hospital", "Job"]
 
-  # Action energy costs (REQUIRED)
-  energy_move_depletion: 0.005     # Energy cost per movement action (0.5%)
-  energy_wait_depletion: 0.001     # Energy cost per WAIT action (0.1%)
-  energy_interact_depletion: 0.0   # Energy cost per INTERACT action (0%)
+  # NOTE: Action costs moved to bars.yaml (JANK-03)
+  # - base_move_depletion: Additional cost per movement action
+  # - base_interaction_cost: Additional cost per INTERACT action
+  # - WAIT action has NO additional cost (only base_depletion)
+  # See: configs/templates/bars.yaml.reference for examples
 
 # Note: grid_size, partial_observability, vision_range control observation space
 # Enable all affordances (null) or specify subset for curriculum learning

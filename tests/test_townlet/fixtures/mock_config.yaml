@@ -25,9 +25,6 @@ environment:
   enable_temporal_mechanics: false
 
   # Energy costs (FROZEN)
-  energy_move_depletion: 0.005   # Move costs 0.5% energy
-  energy_wait_depletion: 0.001   # Wait costs 0.1% energy
-  energy_interact_depletion: 0.0  # Interact costs 0% energy
 
 # Meter base depletion rates (FROZEN)
 meters:

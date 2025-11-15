@@ -1,53 +1,9 @@
-"""Test network selection based on population config (mask_unused_obs, network_type)."""
+"""Test network instantiation patterns for different architectures."""
 
 from pathlib import Path
 
 from townlet.agent.networks import RecurrentSpatialQNetwork, SimpleQNetwork, StructuredQNetwork
-from townlet.config.population import PopulationConfig
 from townlet.universe.compiler import UniverseCompiler
-
-
-class TestNetworkTypeSelection:
-    def test_population_config_accepts_structured_network_type(self):
-        """PopulationConfig should accept 'structured' as a valid network_type."""
-        config = PopulationConfig(
-            num_agents=1,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=10000,
-            network_type="structured",
-            mask_unused_obs=True,
-        )
-
-        assert config.network_type == "structured"
-
-    def test_population_config_accepts_mask_unused_obs_flag(self):
-        """PopulationConfig should accept mask_unused_obs boolean flag."""
-        config = PopulationConfig(
-            num_agents=1,
-            learning_rate=0.00025,
-            gamma=0.99,
-            replay_buffer_capacity=10000,
-            network_type="simple",
-            mask_unused_obs=True,
-        )
-
-        assert config.mask_unused_obs is True
-
-    def test_population_config_requires_mask_unused_obs(self):
-        """PopulationConfig should require explicit mask_unused_obs (no defaults)."""
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="mask_unused_obs"):
-            PopulationConfig(
-                num_agents=1,
-                learning_rate=0.00025,
-                gamma=0.99,
-                replay_buffer_capacity=10000,
-                network_type="simple",
-                # Missing mask_unused_obs - should fail
-            )
 
 
 class TestStructuredNetworkInstantiation:

@@ -28,7 +28,17 @@ class BarConfig(BaseModel):
     tier: Literal["pivotal", "primary", "secondary", "resource"] = Field(description="Tier in cascade hierarchy")
     range: tuple[float, float] = Field(default=(0.0, 1.0), description="Min and max values")
     initial: float = Field(ge=0.0, le=1.0, description="Initial value at spawn")
-    base_depletion: float = Field(ge=0.0, description="Passive decay per step")
+    base_depletion: float = Field(ge=0.0, description="Passive decay per step (existence cost)")
+    base_move_depletion: float = Field(
+        ge=0.0,
+        description="Additional depletion per movement action (on top of base_depletion). "
+        "Total movement cost = base_depletion + base_move_depletion.",
+    )
+    base_interaction_cost: float = Field(
+        ge=0.0,
+        description="Additional depletion per INTERACT action (on top of base_depletion). "
+        "Total interaction cost = base_depletion + base_interaction_cost.",
+    )
     description: str = Field(description="Human-readable description")
 
     # Optional fields for documentation

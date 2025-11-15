@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch
 
@@ -38,12 +40,12 @@ class PrioritizedReplayBuffer:
         self.beta_annealing = beta_annealing
         self.device = device if device else torch.device("cpu")
 
-        # Storage
-        self.observations: list[torch.Tensor] = []
-        self.actions: list[torch.Tensor] = []
-        self.rewards: list[torch.Tensor] = []
-        self.next_observations: list[torch.Tensor] = []
-        self.dones: list[torch.Tensor] = []
+        # Storage tensors (initialized on first push)
+        self.observations: torch.Tensor | None = None
+        self.actions: torch.Tensor | None = None
+        self.rewards: torch.Tensor | None = None
+        self.next_observations: torch.Tensor | None = None
+        self.dones: torch.Tensor | None = None
 
         # Priorities (TD errors)
         self.priorities = np.zeros(capacity, dtype=np.float32)
@@ -71,31 +73,48 @@ class PrioritizedReplayBuffer:
             dones: [batch] done flags
         """
         batch_size = observations.shape[0]
+        obs_dim = observations.shape[1]
 
-        # Combine extrinsic + intrinsic rewards
-        rewards = rewards_extrinsic + rewards_intrinsic
+        # Initialize storage on first push
+        if self.observations is None:
+            self.observations = torch.zeros(self.capacity, obs_dim, device=self.device)
+            self.actions = torch.zeros(self.capacity, dtype=torch.long, device=self.device)
+            self.rewards = torch.zeros(self.capacity, device=self.device)
+            self.next_observations = torch.zeros(self.capacity, obs_dim, device=self.device)
+            self.dones = torch.zeros(self.capacity, dtype=torch.bool, device=self.device)
+
+        # Mypy: guard attributes after allocation
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
+
+        # Move tensors to device
+        observations = observations.to(self.device)
+        actions = actions.to(self.device)
+        next_observations = next_observations.to(self.device)
+        dones = dones.to(self.device)
+
+        # Combine extrinsic + intrinsic rewards (PER needs combined rewards for TD error)
+        rewards = (rewards_extrinsic + rewards_intrinsic).to(self.device)
 
         # Loop over batch and store each transition
         for i in range(batch_size):
-            if self.size_current < self.capacity:
-                self.observations.append(observations[i].cpu())
-                self.actions.append(actions[i].cpu())
-                self.rewards.append(rewards[i].cpu())
-                self.next_observations.append(next_observations[i].cpu())
-                self.dones.append(dones[i].cpu())
-                self.size_current += 1
-            else:
-                # Overwrite oldest transition
-                self.observations[self.position] = observations[i].cpu()
-                self.actions[self.position] = actions[i].cpu()
-                self.rewards[self.position] = rewards[i].cpu()
-                self.next_observations[self.position] = next_observations[i].cpu()
-                self.dones[self.position] = dones[i].cpu()
+            idx = self.position % self.capacity
+
+            # Direct tensor indexing (no list operations, no device churn)
+            self.observations[idx] = observations[i]
+            self.actions[idx] = actions[i]
+            self.rewards[idx] = rewards[i]
+            self.next_observations[idx] = next_observations[i]
+            self.dones[idx] = dones[i]
 
             # Assign max priority to new transition
-            self.priorities[self.position] = self.max_priority
+            self.priorities[idx] = self.max_priority
 
             self.position = (self.position + 1) % self.capacity
+            self.size_current = min(self.size_current + 1, self.capacity)
 
     def sample(self, batch_size: int) -> dict:
         """Sample batch with priority-based sampling.
@@ -104,6 +123,10 @@ class PrioritizedReplayBuffer:
             Batch dict with keys: observations, actions, rewards,
             next_observations, dones, weights, indices
         """
+        # Guard: buffer must have enough transitions
+        if self.size_current < batch_size:
+            raise ValueError(f"Buffer size ({self.size_current}) < batch_size ({batch_size})")
+
         # Compute sampling probabilities from priorities
         priorities = self.priorities[: self.size_current]
         probs = priorities**self.alpha
@@ -116,13 +139,23 @@ class PrioritizedReplayBuffer:
         weights = (self.size_current * probs[indices]) ** (-self.beta)
         weights /= weights.max()  # Normalize by max weight
 
-        # Gather batch
+        # Mypy: guard attributes
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
+
+        # Convert indices to tensor for vectorized gathering
+        indices_tensor = torch.tensor(indices, dtype=torch.long, device=self.device)
+
+        # Gather batch (direct tensor indexing, no stacking or device transfer)
         batch = {
-            "observations": torch.stack([self.observations[i] for i in indices]).to(self.device),
-            "actions": torch.stack([self.actions[i] for i in indices]).to(self.device),
-            "rewards": torch.stack([self.rewards[i] for i in indices]).to(self.device),
-            "next_observations": torch.stack([self.next_observations[i] for i in indices]).to(self.device),
-            "dones": torch.stack([self.dones[i] for i in indices]).to(self.device),
+            "observations": self.observations[indices_tensor],
+            "actions": self.actions[indices_tensor],
+            "rewards": self.rewards[indices_tensor],
+            "next_observations": self.next_observations[indices_tensor],
+            "dones": self.dones[indices_tensor],
             "weights": torch.tensor(weights, dtype=torch.float32, device=self.device),
             "indices": indices,
         }
@@ -162,22 +195,103 @@ class PrioritizedReplayBuffer:
         """Return current buffer size (required by VectorizedPopulation)."""
         return self.size_current
 
+    def clear(self) -> None:
+        """Reset buffer to empty state and deallocate storage.
+
+        Resets size and position to 0, sets all storage tensors to None,
+        resets priorities array to zeros, and resets max_priority to 1.0.
+        Buffer can be reused after clearing.
+        """
+        self.size_current = 0
+        self.position = 0
+        self.observations = None
+        self.actions = None
+        self.rewards = None
+        self.next_observations = None
+        self.dones = None
+        self.priorities = np.zeros(self.capacity, dtype=np.float32)
+        self.max_priority = 1.0
+
+    def stats(self) -> dict[str, Any]:
+        """Return buffer statistics for introspection.
+
+        Returns:
+            Dictionary with keys:
+                - size: Current number of transitions stored
+                - capacity: Maximum buffer capacity
+                - occupancy_ratio: size / capacity (0.0 to 1.0)
+                - memory_bytes: Approximate memory usage in bytes (includes priorities)
+                - device: Device string (e.g., 'cpu', 'cuda:0')
+        """
+        # Calculate memory usage
+        memory_bytes = 0
+        if self.observations is not None:
+            # All tensors are preallocated to capacity
+            assert self.actions is not None
+            assert self.rewards is not None
+            assert self.next_observations is not None
+            assert self.dones is not None
+
+            memory_bytes = (
+                self.observations.element_size() * self.observations.numel()
+                + self.actions.element_size() * self.actions.numel()
+                + self.rewards.element_size() * self.rewards.numel()
+                + self.next_observations.element_size() * self.next_observations.numel()
+                + self.dones.element_size() * self.dones.numel()
+                + self.priorities.nbytes  # NumPy array
+            )
+
+        # Calculate occupancy ratio
+        occupancy_ratio = self.size_current / self.capacity if self.capacity > 0 else 0.0
+
+        return {
+            "size": self.size_current,
+            "capacity": self.capacity,
+            "occupancy_ratio": occupancy_ratio,
+            "memory_bytes": memory_bytes,
+            "device": str(self.device),
+        }
+
     def serialize(self) -> dict:
         """Serialize buffer contents for checkpointing.
 
         Returns:
             Dictionary containing buffer state (observations, priorities, metadata)
         """
+        if self.observations is None:
+            # Empty buffer
+            return {
+                "capacity": self.capacity,
+                "alpha": self.alpha,
+                "beta": self.beta,
+                "beta_annealing": self.beta_annealing,
+                "observations": None,
+                "actions": None,
+                "rewards": None,
+                "next_observations": None,
+                "dones": None,
+                "priorities": self.priorities.copy(),
+                "max_priority": self.max_priority,
+                "position": self.position,
+                "size_current": self.size_current,
+            }
+
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
+
         return {
             "capacity": self.capacity,
             "alpha": self.alpha,
             "beta": self.beta,
             "beta_annealing": self.beta_annealing,
-            "observations": [obs.cpu() for obs in self.observations],
-            "actions": [act.cpu() for act in self.actions],
-            "rewards": [rew.cpu() for rew in self.rewards],
-            "next_observations": [next_obs.cpu() for next_obs in self.next_observations],
-            "dones": [done.cpu() for done in self.dones],
+            "observations": self.observations[: self.size_current].cpu().clone(),
+            "actions": self.actions[: self.size_current].cpu().clone(),
+            "rewards": self.rewards[: self.size_current].cpu().clone(),
+            "next_observations": self.next_observations[: self.size_current].cpu().clone(),
+            "dones": self.dones[: self.size_current].cpu().clone(),
             "priorities": self.priorities.copy(),
             "max_priority": self.max_priority,
             "position": self.position,
@@ -194,12 +308,38 @@ class PrioritizedReplayBuffer:
         self.alpha = state["alpha"]
         self.beta = state["beta"]
         self.beta_annealing = state["beta_annealing"]
-        self.observations = [obs.to(self.device) for obs in state["observations"]]
-        self.actions = [act.to(self.device) for act in state["actions"]]
-        self.rewards = [rew.to(self.device) for rew in state["rewards"]]
-        self.next_observations = [next_obs.to(self.device) for next_obs in state["next_observations"]]
-        self.dones = [done.to(self.device) for done in state["dones"]]
         self.priorities = state["priorities"].copy()
         self.max_priority = state["max_priority"]
         self.position = state["position"]
         self.size_current = state["size_current"]
+
+        if state["observations"] is None:
+            # Empty buffer
+            self.observations = None
+            self.actions = None
+            self.rewards = None
+            self.next_observations = None
+            self.dones = None
+            return
+
+        # Initialize storage if needed
+        obs_dim = state["observations"].shape[1]
+        if self.observations is None:
+            self.observations = torch.zeros(self.capacity, obs_dim, device=self.device)
+            self.actions = torch.zeros(self.capacity, dtype=torch.long, device=self.device)
+            self.rewards = torch.zeros(self.capacity, device=self.device)
+            self.next_observations = torch.zeros(self.capacity, obs_dim, device=self.device)
+            self.dones = torch.zeros(self.capacity, dtype=torch.bool, device=self.device)
+
+        assert self.observations is not None
+        assert self.actions is not None
+        assert self.rewards is not None
+        assert self.next_observations is not None
+        assert self.dones is not None
+
+        # Restore data
+        self.observations[: self.size_current] = state["observations"].to(self.device)
+        self.actions[: self.size_current] = state["actions"].to(self.device)
+        self.rewards[: self.size_current] = state["rewards"].to(self.device)
+        self.next_observations[: self.size_current] = state["next_observations"].to(self.device)
+        self.dones[: self.size_current] = state["dones"].to(self.device)
